@@ -24,7 +24,11 @@ struct FOwnershipResponse {
 
 struct UTBLCharacterMovement {};
 
-struct ATBLPlayerController { };
+struct ATBLPlayerController { 
+	uint8_t  ph[0x1328];
+	bool bOnlineInventoryInitialized;
+	bool bPlayerCustomizationReceived;
+};
 
 struct ATBLGameMode { };
 

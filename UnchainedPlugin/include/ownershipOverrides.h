@@ -20,3 +20,9 @@ DECL_HOOK(FOwnershipResponse*, CanUseCharacter, (ATBLPlayerController* _this, FO
 	response->owned = true;
 	return response;
 }
+
+DECL_HOOK(void, ConditionalInitializeCustomizationOnServer, (ATBLPlayerController* _this, const void* unknown)) {
+	_this->bOnlineInventoryInitialized = true;
+	_this->bPlayerCustomizationReceived = true;
+	o_ConditionalInitializeCustomizationOnServer(_this, unknown);
+}
