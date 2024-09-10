@@ -5,7 +5,7 @@
 DECL_HOOK(FString*, GetGameInfo, (FString* ret_ptr, void* uWorld))
 {
 	auto val = o_GetGameInfo(ret_ptr, uWorld);
-#ifndef NDEBUG
+#ifdef _DEBUG_CONSOLE
 	std::wcout << "GetGameInfo: " << *val->str << std::endl;
 #endif
 	return val;

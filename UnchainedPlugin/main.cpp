@@ -12,7 +12,7 @@
 #include <direct.h>
 
 //always open output window
-//#define _DEBUG
+// #define _DEBUG
 #include "constants.h"
 #include "main.h"
 #include "Chivalry2.h"
@@ -250,7 +250,7 @@ unsigned long main_thread(void* lpParameter) {
 }
 
 int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-	#ifndef NDEBUG
+	#ifdef _DEBUG_CONSOLE
 	if (!GetConsoleWindow()) {
 		AllocConsole();
 		FILE* file_pointer{};

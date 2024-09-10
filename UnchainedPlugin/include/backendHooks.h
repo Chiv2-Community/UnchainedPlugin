@@ -80,7 +80,7 @@ DECL_HOOK(void*, GetCurrentGames, (GCGObj* this_ptr, void* a2, GetCurrentGamesRe
 		void* res = o_GetCurrentGames(this_ptr, a2, request, a4);
 		this_ptr->url_base = old_base;
 		request->token = originalToken;
-		log("GetMotd returned");
+		log("GetCurrentGames returned");
 		return res;
 	}
 	catch (...) {
