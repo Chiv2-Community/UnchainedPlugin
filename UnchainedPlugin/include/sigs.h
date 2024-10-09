@@ -27,6 +27,7 @@
 	etype(GetTBLGameMode) \
 	etype(FText_AsCultureInvariant) \
 	etype(BroadcastLocalizedChat) \
+	etype(ConditionalInitializeCustomizationOnServer) \
 	etype(MaxFuncType) //this always needs to be last
 
 #define etype(x) uint32_t x = 0x0;
@@ -124,7 +125,10 @@ static const char* signatures[F_MaxFuncType + 1] =
 	/*FText_AsCultureInvariant*/
 	"48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63",
 	/*BroadcastLocalizedChat*/
-	"48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ? ? ? ? ? ? 48 8B C8 48 8D"
+	"48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ? ? ? ? ? ? 48 8B C8 48 8D",
+	/*ATBLPlayerController::ConditionalInitializeCustomizationOnServer*/
+	"48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6",
+
 	/*MaxFuncType*/
 	""
 };

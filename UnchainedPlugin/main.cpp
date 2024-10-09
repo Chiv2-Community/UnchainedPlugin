@@ -201,6 +201,7 @@ unsigned long main_thread(void* lpParameter) {
 	HOOK_ATTACH(module_base, CanUseCharacter);
 	HOOK_ATTACH(module_base, UGameplay__IsDedicatedServer);
 	HOOK_ATTACH(module_base, InternalGetNetMode);
+	HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);
 
 	bool useBackendBanList = CmdGetParam(L"--use-backend-banlist") != -1;
 	if (useBackendBanList) {
