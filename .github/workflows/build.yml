@@ -2,9 +2,14 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*.*.*'  # Trigger on version tags, e.g., v1.0.0
-  workflow_dispatch:  # Allow manual trigger of the workflow
+  pull_request:
+    branches:
+      - master
+      
 
 jobs:
   build:
@@ -21,8 +26,15 @@ jobs:
         id: extract_version
         shell: bash
         run: |
+          # if workflow_dispatch input is provided, use it as the version
+          if [ -n "$GITHUB_EVENT_NAME" ] && [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
+            NEW_VERSION=v${{ github.event.inputs.version }}
+          else
+            NEW_VERSION=$GITHUB_REF
+          fi
+
           VERSION_REGEX="^refs/tags/v([0-9]+)\.([0-9]+)\.([0-9]+)$"
-          if [[ "$GITHUB_REF" =~ $VERSION_REGEX ]]; then
+          if [[ "$NEW_VERSION" =~ $VERSION_REGEX ]]; then
             echo "MAJOR=${BASH_REMATCH[1]}" >> $GITHUB_ENV
             echo "MINOR=${BASH_REMATCH[2]}" >> $GITHUB_ENV
             echo "PATCH=${BASH_REMATCH[3]}" >> $GITHUB_ENV
@@ -57,6 +69,7 @@ jobs:
   create_release:
     needs: build
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
