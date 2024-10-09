@@ -45,6 +45,7 @@ jobs:
           fi
 
       - name: Configure CMake
+        shell: bash
         run: |
           VERSION_CONF=""
           if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
