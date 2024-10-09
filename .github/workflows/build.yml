@@ -24,6 +24,7 @@ jobs:
 
       - name: Extract Version Components
         id: extract_version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           # if workflow_dispatch input is provided, use it as the version
@@ -44,7 +45,13 @@ jobs:
           fi
 
       - name: Configure CMake
-        run: cmake -B build -S . -G "Visual Studio 17 2022" -DVER_MAJOR=${{ env.MAJOR }} -DVER_MINOR=${{ env.MINOR }} -DVER_PATCH=${{ env.PATCH }}
+        run: |
+          VERSION_CONF=""
+          if [ -n "$MAJOR" ] && [ -n "$MINOR" ] && [ -n "$PATCH" ]; then
+            VERSION_CONF="-DVER_MAJOR=$MAJOR -DVER_MINOR=$MINOR -DVER_PATCH=$PATCH"
+          fi
+
+          cmake -B build -S . -G "Visual Studio 17 2022" $VERSION_CONF
 
       - name: Build with CMake - Debug
         run: cmake --build build --config Debug
