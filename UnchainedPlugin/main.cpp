@@ -213,6 +213,7 @@ unsigned long main_thread(void* lpParameter) {
 	bool IsHeadless = CmdGetParam(L"-nullrhi") != -1;
 	if (IsHeadless) {
 		HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
+		HOOK_ATTACH(module_base, UNetDriver__GetNetMode);
 	}
 
 #ifdef PRINT_CLIENT_MSG

@@ -61,6 +61,14 @@ struct FString2 {
 	int max_letters;
 };
 
+enum ENetMode: uint8_t {
+	STANDALONE = 0,
+	DEDICATED_SERVER = 1,
+	LISTEN_SERVER = 2,
+	CLIENT = 3,
+	MAX = 4
+};
+
 //FViewport* __thiscall FViewport::FViewport(FViewport* this, FViewportClient* param_1)
 struct FViewport_C
 {

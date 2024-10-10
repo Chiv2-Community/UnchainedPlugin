@@ -28,6 +28,7 @@
 	etype(FText_AsCultureInvariant) \
 	etype(BroadcastLocalizedChat) \
 	etype(ConditionalInitializeCustomizationOnServer) \
+    etype(UNetDriver__GetNetMode) \
 	etype(MaxFuncType) //this always needs to be last
 
 #define etype(x) uint32_t x = 0x0;
@@ -128,7 +129,8 @@ static const char* signatures[F_MaxFuncType + 1] =
 	"48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ? ? ? ? ? ? 48 8B C8 48 8D",
 	/*ATBLPlayerController::ConditionalInitializeCustomizationOnServer*/
 	"48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6",
-
+	/*UNetDriver::GetNetMode*/
+	"48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4",
 	/*MaxFuncType*/
 	""
 };
