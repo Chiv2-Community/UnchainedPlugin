@@ -53,7 +53,7 @@ DECL_HOOK(bool, LoadFrontEndMap, (void* this_ptr, FString* param_1))
 }
 
 void* UWORLD = nullptr;
-DECL_HOOK(uint8_t, InternalGetNetMode, (void* world))
+DECL_HOOK(ENetMode, InternalGetNetMode, (void* world))
 {
 	UWORLD = world;
 	return o_InternalGetNetMode(world);
@@ -61,7 +61,8 @@ DECL_HOOK(uint8_t, InternalGetNetMode, (void* world))
 
 DECL_HOOK(ENetMode, UNetDriver__GetNetMode, (void* this_ptr)) {
 	ENetMode mode = o_UNetDriver__GetNetMode(this_ptr);
-	return mode == 2 ? DEDICATED_SERVER : mode;
+	ENetMode result = mode == LISTEN_SERVER ? DEDICATED_SERVER : mode;
+	return result;
 }
 
 
@@ -69,8 +70,9 @@ bool playableListen = CmdGetParam(L"--playable-listen") != -1;
 DECL_HOOK(bool, UGameplay__IsDedicatedServer, (long long param_1))
 {
 	if (UWORLD != nullptr && !playableListen) {
-		bool isHosting = o_InternalGetNetMode(UWORLD) == 2;
-		return o_InternalGetNetMode(UWORLD) == 2;
+		ENetMode mode = o_InternalGetNetMode(UWORLD);
+		bool isHosting = mode == DEDICATED_SERVER || mode == LISTEN_SERVER;
+		return isHosting;
 	}
 	else return o_UGameplay__IsDedicatedServer(param_1);
 }
