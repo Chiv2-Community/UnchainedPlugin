@@ -209,10 +209,14 @@ unsigned long main_thread(void* lpParameter) {
 
 	}
 
+	bool applyDesyncPatch = CmdGetParam(L"--desync-patch") != -1;
+	if (applyDesyncPatch) {
+		HOOK_ATTACH(module_base, UNetDriver__GetNetMode);
+	}
+
 	bool IsHeadless = CmdGetParam(L"-nullrhi") != -1;
 	if (IsHeadless) {
 		HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
-		HOOK_ATTACH(module_base, UNetDriver__GetNetMode);
 		HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);
 	}
 
