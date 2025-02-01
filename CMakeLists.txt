@@ -4,7 +4,7 @@ set(TARGET UnchainedPlugin)
 
 set(VER_MAJOR 0 CACHE STRING "MAJOR.minor.patch.build")
 set(VER_MINOR 4 CACHE STRING "major.MINOR.patch.build")
-set(VER_PATCH 5 CACHE STRING "major.minor.PATCH.build")
+set(VER_PATCH 6 CACHE STRING "major.minor.PATCH.build")
 set(VER_BUILD 0 CACHE STRING "major.minor.patch.BUILD")
 
 option(PRINT_CLIENT_MSG "Output chat messages to CLI" OFF)
