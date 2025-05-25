@@ -29,26 +29,25 @@ std::map<Platform, std::string> platform_to_string = {
 
 template<typename RetType, typename... Args>
 class FunctionHook {
+public:
+    using OriginalFunctionType = RetType(*)(Args...);
+    using HookFunctionType = RetType(*)(OriginalFunctionType, Args...);
 private:
-    using FunctionType = RetType(*)(Args...);
     std::string name;
     std::function<std::optional<std::string>(Platform)> select_signature_for_platform;
-    std::function<RetType(FunctionType, Args...)> hook_function;
-    uint64_t offset;
-    FunctionType original_function;
-    bool hook_enabled;
-
+    std::function<RetType(OriginalFunctionType, Args...)> hook_function;
+    OriginalFunctionType original_function;
+    
 public:
+
     // Constructor - note the parameter types match your usage
     FunctionHook(const std::string& name, 
                  std::function<std::optional<std::string>(Platform)> select_signature_for_platform, 
-                 std::function<RetType(FunctionType, Args...)> hook_function)
+                 HookFunctionType hook_function)
         : name(name), 
           select_signature_for_platform(select_signature_for_platform), 
           hook_function(hook_function),
-          offset(0), 
-          original_function(nullptr),
-          hook_enabled(false) {}
+          original_function(nullptr) {}
 
     inline std::function<RetType(Args...)> get_hook_function() const {
         auto original_func = this->original_function;
@@ -58,7 +57,8 @@ public:
         };
     }
     
-    inline FunctionType get_original() const {
+    
+    inline OriginalFunctionType get_original() const {
         return original_function;
     }
     
@@ -66,26 +66,8 @@ public:
         return name;
     }
 
-    inline void set_hook_enabled(uint64_t offset, FunctionType original, bool enabled = true) {
-        this->offset = offset;
-        this->original_function = original;
-        this->hook_enabled = enabled;
-    }
-
-    inline bool is_hook_enabled() const {
-        return hook_enabled;
-    }
-
-    inline std::string get_signature(std::string platform) const {
+    inline std::optional<std::string> get_signature(Platform platform) const {
         return select_signature_for_platform(platform);
-    }
-
-    inline void set_offset(uint64_t offset) {
-        this->offset = offset;
-    }
-
-    inline uint64_t get_offset() const {
-        return offset;
     }
 };
 

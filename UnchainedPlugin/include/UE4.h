@@ -46,7 +46,7 @@ struct FString2 {
 		this->max_letters = this->letter_count;
 		this->str = const_cast<wchar_t*>(str);
 	}*/
-	FString2(const wchar_t const* str) {
+	FString2(const wchar_t* str) {
 		this->letter_count = lstrlenW(str) + 1;
 		this->max_letters = this->letter_count;
 		this->str = new wchar_t[this->max_letters];

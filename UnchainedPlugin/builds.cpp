@@ -2,10 +2,14 @@
 #include <stdint.h>
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <filesystem>
+#include "logging.hpp"
 
 #include "tiny-json.h"
 
 #include <nmmintrin.h> // SSE4.2 intrinsics
+#include <functional>
 uint32_t calculateCRC32(const std::string& filename) {
 	std::ifstream file(filename, std::ios::binary);
 	if (!file.is_open()) {
@@ -36,78 +40,128 @@ bool jsonDone = false;
 bool offsetsLoaded = false;
 bool needsSerialization = true;
 
-void serializeBuilds()
-{
-	char buff[2048];
-	char* dest = buff;
-	if (curBuild.buildId > 0)
-	{
+const char* quot = "\"";
 
-		char* pValue;
-		size_t len;
-		char ladBuff[512];
-		errno_t err = _dupenv_s(&pValue, &len, "LOCALAPPDATA");
-		if (err != 0) {
-			return;
-		}
-		//TODO: Ensure pValue is not null, or make a note here explaining why it couldn't possibly be null
-		strncpy_s(ladBuff, 512 * sizeof(char), pValue, len);
-		strncpy_s(ladBuff + len - 1, 256 - len, "\\Chivalry 2\\Saved\\Config\\c2uc.builds.json", 42);
-
-		printf("Config written to:\n\t%s\n", ladBuff);
-		std::ofstream out(ladBuff);
-
-		out << "\n{\n\"" << ((curBuild.nameStr.length() > 0) ? curBuild.nameStr.c_str() : "") << "\": {";
-		out << "\n\"Build\" : " << curBuild.buildId;
-		out << ",\n\"FileHash\" : " << curBuild.fileHash;
-		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
-			out << ",\n\"" << strFunc[i] << "\": " << curBuild.offsets[i];
-
-		for (auto build : configBuilds)
-		{
-			out << "\n},\n\"" << ((build->nameStr.length() > 0) ? build->nameStr.c_str() : "") << "\": {";
-			out << "\n\"Build\" : " << build->buildId;
-			out << ",\n\"FileHash\" : " << build->fileHash;
-			for (uint8_t i = 0; i < F_MaxFuncType; ++i)
-				out << ",\n\"" << strFunc[i] << "\": " << build->offsets[i];
-		}
-		out << "\n}";
-		out << "\n}";
-
-	}
-
+std::string ws(int indent) {
+	return "\n" + std::string(indent * 2, ' ');
 }
 
-int LoadBuildConfig()
+std::filesystem::path getConfigPath() {
+    const char* localAppData = std::getenv("LOCALAPPDATA");
+    return std::filesystem::path(localAppData) / 
+           "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
+}
+
+bool serializeBuilds()
 {
-	// load config file
-	char* pValue;
-	size_t len;
-	char ladBuff[256];
-	errno_t err = _dupenv_s(&pValue, &len, "LOCALAPPDATA");
-	strncpy_s(ladBuff, 256, pValue, len);
-	strncpy_s(ladBuff + len - 1, 256 - len, "\\Chivalry 2\\Saved\\Config\\c2uc.builds.json", 42);
+	std::function<bool(BuildType&, std::ofstream&, int)> SerializeBuild = [](BuildType& build, std::ofstream& out, int indent)
+	{
+		if (build.buildId == 0) {
+			LOG_WARNING("No build ID set, cannot serialize build.\n");
+			return false;
+		}
 
-	std::ifstream file(ladBuff, std::ios::binary);
-	if (!file.is_open()) {
-		std::cout << "Error opening build config" << std::endl;
-		return 0;
+		if (build.nameStr.length() == 0) {
+			LOG_WARNING("No build name set, cannot serialize build.\n");
+			return false;
+		}
+
+		const char* buildKey = build.nameStr.c_str();
+
+		out	<< ws(indent  ) << buildKey << "\": {"
+			<< ws(indent+1) << quot << "Build"    << quot << ": " << curBuild.buildId << ","
+			<< ws(indent+1) << quot << "FileHash" << quot << ": " << curBuild.fileHash << ","
+			<< ws(indent+1) << quot << "Offsets"  << quot << ": {";
+
+		for (auto it = build.offsets.begin(); it != build.offsets.end(); ++it) {
+			out << ws(indent + 2) << quot << it->first << quot << ": " << it->second;
+
+			if (std::next(it) != build.offsets.end()) {
+				out << ",";
+			}
+		}
+
+		out << ws(indent+1) << "}" 
+			<< ws(indent  ) << "}";
+
+		return true;
+	};
+
+	auto configPath = getConfigPath();
+	if (!std::filesystem::exists(configPath.parent_path())) {
+		std::filesystem::create_directories(configPath.parent_path());
 	}
-	std::string buffer;
-	file.seekg(0, std::ios::end);
-	buffer.reserve(file.tellg());
-	file.seekg(0, std::ios::beg);
 
-	buffer.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	file.close();
+	std::ofstream out(configPath);
 
-	// parse json
-	json_t mem[128];
-	const json_t* json = json_create(const_cast<char*>(buffer.c_str()), mem, 128);
+	out << "{";
+
+	SerializeBuild(curBuild, out, 1);
+
+	if(configBuilds.size() != 0) {
+		out << ",";
+	}
+
+	for (auto build : configBuilds)
+	{
+		SerializeBuild(*build, out, 1);
+	}
+
+	out << "}";
+
+	return true;
+}
+
+
+bool LoadBuildConfig()
+{
+    auto configPath = getConfigPath();
+    
+	LOG_DEBUG("Loading build config from: %s", configPath.string());
+
+    if (!std::filesystem::exists(configPath)) {
+        LOG_WARNING("Config file (%s) does not exist. This is normal on first start.", configPath);
+        return false;
+    }
+    
+    std::ifstream file(configPath);  // Open in binary mode
+    if (!file.is_open()) {
+        LOG_ERROR("Error opening build config: %s", configPath);
+        return false;
+    }
+    
+    std::string file_content{
+        std::istreambuf_iterator<char>(file), 
+        std::istreambuf_iterator<char>()
+    };
+    
+    // Check for and remove UTF-8 BOM
+    if (file_content.size() >= 3 && 
+        static_cast<unsigned char>(file_content[0]) == 0xEF &&
+        static_cast<unsigned char>(file_content[1]) == 0xBB &&
+        static_cast<unsigned char>(file_content[2]) == 0xBF) {
+        file_content.erase(0, 3);
+        LOG_DEBUG("Removed UTF-8 BOM from config file");
+    }
+    
+    // Check for UTF-16 BOM
+    if (file_content.size() >= 2 && 
+        ((static_cast<unsigned char>(file_content[0]) == 0xFF && 
+          static_cast<unsigned char>(file_content[1]) == 0xFE) ||
+         (static_cast<unsigned char>(file_content[0]) == 0xFE && 
+          static_cast<unsigned char>(file_content[1]) == 0xFF))) {
+        LOG_ERROR("Config file appears to be UTF-16 encoded. Please save as UTF-8.");
+        return false;
+    }
+    
+    LOG_DEBUG("File content preview: %.50s", file_content.c_str());
+    
+    json_t mem[128];
+    const json_t* json = json_create(const_cast<char *>(file_content.c_str()), mem, 128);
 
 	if (!json) {
-		puts("Failed to create json parser");
-		return EXIT_FAILURE;
+		LOG_ERROR("Failed to create json parser");
+		return false;
 	}
 	uint32_t curFileHash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
 
@@ -120,15 +174,15 @@ int LoadBuildConfig()
 			char const* fileSize = json_getPropertyValue(buildEntry, "FileSize");
 			json_t const* build = json_getProperty(buildEntry, "Build");
 			char const* buildName = json_getName(buildEntry);
-			printf("parsing %s\n", buildName);
+			LOG_DEBUG("parsing %s\n", buildName);
 
 			json_t const* fileHash = json_getProperty(buildEntry, "FileHash");
 			if (!fileHash || JSON_INTEGER != json_getType(fileHash)) {
-				puts("Error, the FileHash property is not found.");
+				LOG_ERROR("Error, the 'FileHash' property is not found.");
 				return EXIT_FAILURE;
 			}
 			if (!build || JSON_INTEGER != json_getType(build)) {
-				puts("Error, the Build property is not found.");
+				LOG_ERROR("Error, the 'Build' property is not found.");
 				return EXIT_FAILURE;
 			}
 			// compare hash
@@ -143,10 +197,10 @@ int LoadBuildConfig()
 			{
 				bd = curBuild;
 				needsSerialization = false;
-				printf("Found matching Build: %s\n", buildName);
+				LOG_INFO("Found matching Build: %s\n", buildName);
 			}
 
-			printf("%s : %u\n", buildName, strlen(buildName));
+			LOG_INFO("%s : %u\n", buildName, strlen(buildName));
 
 			if (strlen(buildName) > 0)
 			{
@@ -155,16 +209,23 @@ int LoadBuildConfig()
 
 			bd.buildId = (uint32_t)json_getInteger(build);
 			bd.fileHash = (uint32_t)fileHashVal;
-			for (uint8_t i = 0; i < F_MaxFuncType; ++i)
+
+			auto offsetsProperty = json_getProperty(buildEntry, "Offsets");
+
+			if (!offsetsProperty || JSON_OBJ != json_getType(offsetsProperty)) {
+				LOG_ERROR("Error, the 'Offsets' property is not found.");
+				return false;
+			}
+
+			for (json_t const* offsetEntry = json_getChild(offsetsProperty); offsetEntry != 0; offsetEntry = json_getSibling(offsetEntry))
 			{
-				if (const json_t* GetMotd_j = json_getProperty(buildEntry, strFunc[i]))
-				{
-					if (JSON_INTEGER == json_getType(GetMotd_j))
-						if (uint32_t offsetVal = (uint32_t)json_getInteger(GetMotd_j))
-							bd.offsets[i] = offsetVal;
-					// offsets not found here will be scanned later
+				if (JSON_INTEGER == json_getType(offsetEntry)) {
+					const char* offsetName = json_getName(offsetEntry);
+					if (offsetName && strlen(offsetName) > 0) {
+						uint64_t offsetVal = (uint64_t)json_getInteger(offsetEntry);
+						bd.offsets.emplace(std::string(offsetName), offsetVal);
+					}
 				}
-				else if (hashMatch) needsSerialization = true;
 			}
 
 			if (hashMatch)
@@ -175,5 +236,5 @@ int LoadBuildConfig()
 		buildEntry = json_getSibling(buildEntry);
 	}
 
-	return 0;
+	return true;
 }

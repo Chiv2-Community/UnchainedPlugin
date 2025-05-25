@@ -7,34 +7,135 @@
 #include <string>
 
 
-class FunctionHookEnabler {
+class FunctionHookManager {
 private: 
-    std::vector<std::string&> failed_hooks;
+    std::vector<std::string> failed_hooks;
+    std::vector<std::tuple<std::string, std::function<void()>>> pending_hooks;
+    std::map<std::string, uint64_t> hook_offsets;
+    BuildType build;
     HMODULE base_addr;
     MODULEINFO module_info;
+    Platform platform;
 
 public:
-    FunctionHookEnabler(HMODULE base_addr, MODULEINFO module_info) {
+    FunctionHookManager(HMODULE base_addr, MODULEINFO module_info, BuildType build, Platform platform) {
         this->base_addr = base_addr;
         this->module_info = module_info;
-        this->failed_hooks = std::vector<std::string&>();
+        this->failed_hooks = std::vector<std::string>();
+        this->pending_hooks = std::vector<std::tuple<std::string, std::function<void()>>>();
+        this->platform = platform;
+        this->build = build;
     };
 
+    /**
+     * Registers a hook for the specified platform. 
+     * This function finds the signature for the hook, calculates the address, and sets up the hook.
+     * If the signature is not found or the address is null, it logs an error and returns false.
+     * If the hook is successfully prepared, it adds the hook to a list of hooks pending to be enabled.
+     * Call enable_hooks() to enable all prepared hooks.
+     * 
+     * @param hook The FunctionHook object containing the hook details.
+     */
     template<typename RetType, typename... Args>
-    static inline bool enable_hook(std::string platform, FunctionHook<RetType, Args...>& hook) {
-        auto address = Sig::find(baseAddr, moduleInfo.SizeOfImage, hook.get_signature(platform));
-        if (address == nullptr) {
-		    printf("!! -> %s : nullptr\n", hook.get_name().c_str());
-            failed_hooks.push_back(hook.get_name());
+    inline bool register_hook(FunctionHook<RetType, Args...>& hook) {
+        const auto signature = hook.get_signature(platform);
+        if (!signature.has_value()) {
+            printf("!! -> %s : no signature for platform '%s'\n", hook.get_name().c_str(), platform_to_string.at(platform).c_str());
             return false;
         }
 
-        auto offset = reinterpret_cast<uint64_t>(address) - reinterpret_cast<uint64_t>(baseAddr);
-        auto hook_function = hook.call_original;
-        hook.set_hook_enabled(offset, reinterpret_cast<typename FunctionHook<RetType, Args...>::FunctionType>(address), true);
+        uint64_t address = 0;
+        uint64_t offset = build.offsets.at(hook.get_name());
+        if (offset == 0) {
+            address = (uint64_t)Sig::find(baseAddr, moduleInfo.SizeOfImage, signature.value().c_str());
+
+            if (address == 0) {
+                printf("!! -> %s : nullptr. Signature requires updating\n", hook.get_name().c_str());
+                failed_hooks.push_back(hook.get_name());
+                return false;
+            }
+
+            offset = address - (uint64_t)(baseAddr);
+            build.offsets[hook.get_name()] = offset;
+        } else {
+            address = (uint64_t)(baseAddr) + offset;
+        }
+
         printf("?? -> %s : 0x%llx\n", hook.get_name().c_str(), offset);
-        MH_CreateHook(reinterpret_cast<void*>(address), &FunctionHook<RetType, Args...>::call, reinterpret_cast<void**>(&hook.call_original));
-        MH_EnableHook(reinterpret_cast<void*>(address));
+
+        auto hook_function = hook.get_hook_function();
+        auto original_function = hook.get_original();
+
+        pending_hooks.push_back(std::make_tuple(hook.get_name(), [&hook_function, &original_function, &address]() {
+            MH_CreateHook(reinterpret_cast<void*>(address), &hook_function, reinterpret_cast<void**>(&original_function));
+            MH_EnableHook(reinterpret_cast<void*>(address));
+        }));
+    
         return true;
     }
-}
+
+    /**
+     * Enables a specific hook that has been registered using register_hook().
+     * 
+     * @return true if all hooks were successfully enabled, false otherwise.
+     */
+    template<typename RetType, typename... Args>
+    inline bool enable_hook(const FunctionHook<RetType, Args...>& hook) {
+        auto hook_name = hook.get_name();
+        auto it = std::find_if(pending_hooks.begin(), pending_hooks.end(),
+            [&hook_name](const auto& enabler) {
+                return std::get<0>(enabler) == hook_name;
+            });
+
+        if (it != pending_hooks.end()) {
+            auto hook_enabler = std::get<1>(*it);
+            try {
+                hook_enabler();
+                printf("Successfully hooked '%s'\n", hook_name.c_str());
+                pending_hooks.erase(it);
+                return true;
+            } catch (const std::exception& e) {
+                printf("Failed to enable hook '%s': %s\n", hook_name.c_str(), e.what());
+                pending_hooks.erase(it);
+                return false;
+            }
+        } else {
+            printf("Hook '%s' not found in enablers.\n", hook_name.c_str());
+            return false;
+        }
+    }
+
+    /**
+     * Enables all hooks that have been registered using register_hook().
+     * It iterates through the list of hook enablers, attempts to enable each hook,
+     * and logs any failures.
+     * 
+     * @return true if all hooks were successfully enabled, false otherwise.
+     */
+    inline bool enable_hooks() {
+        for (const auto& [name, enabler] : pending_hooks) {
+            try {
+                enabler();
+                printf("Successfully hooked '%s'", name.c_str());
+            } catch (const std::exception& e) {
+                printf("Failed to enable hook '%s': %s\n", name.c_str(), e.what());
+                failed_hooks.push_back(name);
+            }
+        }
+
+        pending_hooks.clear();
+
+        if (!failed_hooks.empty()) {
+            printf("Failed to enable the following hooks:\n");
+            for (const auto& hook_name : failed_hooks) {
+                printf(" - %s\n", hook_name.c_str());
+            }
+
+            failed_hooks.clear();
+
+            return false;
+        }
+
+        return true;
+    }
+};

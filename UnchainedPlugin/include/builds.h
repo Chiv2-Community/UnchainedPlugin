@@ -1,7 +1,9 @@
 #pragma once
+
+#include <cstdint>
 #include <deque>
 #include <string>
-#include "sigs.h" //TODO: this may cause issues; included only for F_MaxFuncType on BuildType
+#include <map>
 
 struct BuildType {
 
@@ -20,7 +22,7 @@ struct BuildType {
 
 	uint32_t fileHash = 0;
 	uint32_t buildId = 0;
-	uint32_t offsets[F_MaxFuncType] = {};
+	std::map<std::string, uint64_t> offsets = {};
 	std::string nameStr = "";
 private:
 	char* name = nullptr;
@@ -38,6 +40,5 @@ extern bool jsonDone;
 extern bool offsetsLoaded;
 extern bool needsSerialization;
 
-void serializeBuilds();
-
-int LoadBuildConfig();
+bool serializeBuilds();
+bool LoadBuildConfig();

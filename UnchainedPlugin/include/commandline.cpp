@@ -25,7 +25,5 @@ std::wstring CmdParseParam(const wchar_t* param, const wchar_t* addPrefix, const
 		return L"";
 	std::wstring res = commandLine.substr(offset, paramEnd - offset);
 
-	/*logWideString(const_cast<wchar_t*>(param));
-	logWideString(const_cast<wchar_t*>(res.c_str()));*/
 	return (addPrefix + res + addSuffix).c_str();
 }

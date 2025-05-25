@@ -15,24 +15,20 @@ DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b))
 		}
 	}
 
-	log("[RCON][DEBUG]: PlayerController Exec called with:");
-	logWideString(str.str);
+	LOG_DEBUG("[RCON]: PlayerController Exec called with: %s", str);
 
 	const wchar_t* interceptPrefix = L"RCON_INTERCEPT";
 	//if the command starts with the intercept prefix
 	//TODO: clean up mutex stuff here. Way too sloppy to be final
 	if (wcslen(str.str) >= 14 && memcmp(str.str, interceptPrefix, lstrlenW(interceptPrefix) * sizeof(wchar_t)) == 0) {
-
-		log("[RCON][DEBUG]: Intercept command detected");
+		LOG_DEBUG("[RCON]: Intercept command detected");
 	}
 #endif
-
 	return o_ConsoleCommand(this_ptr, str, b);
 }
 
 DECL_HOOK(void, ExecuteConsoleCommand, (FString2* param)) {
-	log("EXECUTECONSOLECMD:");
-	logWideString(param->str);
+	LOG_INFO("EXECUTECONSOLECMD: %s", param->str);
 	o_ExecuteConsoleCommand(param);
 }
 
@@ -49,7 +45,7 @@ DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString2* input)) {
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 DECL_HOOK(void, BroadcastLocalizedChat, (void* game_mode, FText* text, uint8_t chat_type)) {
-	log("BroadcastLocalizedChat");
+	LOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
 
@@ -92,7 +88,7 @@ bool IsServerStart()
 void* CurGameMode = NULL;
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 DECL_HOOK(void*, GetTBLGameMode, (void* uobj)) {
-	//log("GetTBLGameMode");
+	//LOG_DEBUG("GetTBLGameMode");
 	CurGameMode = o_GetTBLGameMode(uobj);
 	return CurGameMode;
 }
@@ -108,7 +104,7 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	size_t flagLoc = commandLine.find(L"--next-map");
 	bool egs = CmdGetParam(L"-epicapp=Peppermint") != -1;
 	static uint64_t init = false;
-	//log("ClientMessage");
+	LOG_DEBUG("ClientMessage");
 
 	char* pValue;
 	size_t len;
@@ -123,13 +119,13 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	sprintf_s(ladBuff, 256, "%s\\Chivalry 2\\Saved\\Logs\\Unchained\\ClientMessage%s%s.log",
 		pValue, (IsServerStart() ? "-server" : "-client"), (egs ? "-egs" : "-steam"));
 	if (!init)
-		log(ladBuff);
-	//log(ladBuff);
+		LOG_DEBUG(ladBuff);
+
 	std::wofstream  out(ladBuff, init++ ? std::ios_base::app : std::ios_base::trunc);
 	if (out.is_open())
 		out << init << L":: " << param_1->str << std::endl;
 	else
-		log("Can't open ClientMessage log for writing.");
+		LOG_ERROR("Can't open ClientMessage log for writing.");
 
 	/*if (flagLoc == std::wstring::npos) {
 		o_ClientMessage(this_ptr, param_1, param_2, param_3);
@@ -147,12 +143,11 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 		void* res = o_FText_AsCultureInvariant(&txt, new FString2(L"Command detected"));
 		if (res != NULL && CurGameMode != NULL)
 		{
-			log("[ChatCommands] Could print server text");
+			LOG_DEBUG("[ChatCommands] Could print server text");
 			o_BroadcastLocalizedChat(CurGameMode, (FText*)res, 3);
 		}
 
-		log("[ChatCommands] Executing command");
-		logWideString(const_cast<wchar_t*>(command->c_str()));
+		LOG_INFO("[ChatCommands] Executing command", command->c_str());
 
 		auto empty = FString2(command->c_str());
 
@@ -177,7 +172,7 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	size_t flagLoc = commandLine.find(L"--next-map");
 	bool egs = CmdGetParam(L"-epicapp=Peppermint") != -1;
 	static uint64_t init = false;
-	log("ClientMessage");
+	LOG_DEBUG("ClientMessage");
 
 	wprintf(L"CLIENT_MESSAGE: %ls %.2f\n", param_1->str, param_3);
 

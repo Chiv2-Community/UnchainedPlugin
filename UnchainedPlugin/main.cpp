@@ -8,6 +8,7 @@
 #include <io.h>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include <direct.h>
 
@@ -17,7 +18,7 @@
 #include "main.h"
 #include "Chivalry2.h"
 #include "UE4.h"
-#include "logging.h"
+#include "logging.hpp"
 #include "nettools.h"
 #include "commandline.h"
 #include "builds.h" 
@@ -34,6 +35,9 @@
 #include "unchainedIntegration.h"
 #include "adminControl.h"
 #include "etcHooks.h"
+#include "FunctionHookEnabler.hpp"
+#include "StringUtil.h"
+#include <share.h>
 
 // end hooks
 
@@ -52,8 +56,8 @@ int parsePortParams(std::wstring commandLine, size_t flagLoc) {
 		? commandLine.substr(portStart, portEnd - portStart)
 		: commandLine.substr(portStart);
 
-	//log("found port:");
-	//logWideString(const_cast<wchar_t*>(port.c_str()));
+	LOG_DEBUG("found port: %s", port.c_str());
+
 	try {
 		return std::stoi(port);
 	}
@@ -72,7 +76,7 @@ void handleRCON() {
 		return;
 	}
 
-	log("[RCON]: Found -rcon flag. RCON will be enabled.");
+	LOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
 
 	int port = parsePortParams(commandLine, flagLoc);
 	if (port == -1) {
@@ -81,12 +85,12 @@ void handleRCON() {
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		log("[RCON][FATAL]: Failed to initialize Winsock!");
+		LOG_ERROR("[RCON]: Failed to initialize Winsock!");
 		ExitThread(0);
 		return;
 	}
 
-	log((std::string("[RCON][INFO]: Opening RCON server socket on TCP/") + std::to_string(port)).c_str());
+	LOG_INFO((std::string("[RCON]: Opening RCON server socket on TCP/") + std::to_string(port)).c_str());
 
 	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -102,13 +106,13 @@ void handleRCON() {
 	while (true) {
 		//set up a new command string
 		auto command = std::make_unique<std::wstring>();
-		log("[RCON]: Waiting for command");
+		LOG_DEBUG("[RCON]: Waiting for command");
 		//get a command from a socket
 		int addrLen = sizeof(addr);
 		SOCKET remote = accept(listenSock, (sockaddr*)&addr, &addrLen);
-		log("[RCON]: Accepted connection");
+		LOG_DEBUG("[RCON]: Accepted connection");
 		if (remote == INVALID_SOCKET) {
-			log("[RCON][FATAL]: invalid socket error");
+			LOG_ERROR("[RCON]: invalid socket error");
 			return;
 		}
 		const int BUFFER_SIZE = 256;
@@ -142,22 +146,40 @@ void handleRCON() {
 }
 
 unsigned long main_thread(void* lpParameter) {
-	log(UNCHAINED_LOGO);
-	log("Chivalry 2 Unchained Plugin");
-	log("\nCommand line args:\n");
-	logWideString(GetCommandLineW());
-	log("\n");
+	LOG_LEVEL = LogLevel::DEBUG;
+	getLogger().addConsoleOutput();
+	getLogger().addFileOutput(L"UnchainedPlugin.log");
+
+	auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
+	for (const auto& part : logo_parts) {
+		LOG_ERROR(part);
+	}
+
+	LOG_ERROR("Chivalry 2 Unchained Plugin");
+
+	LOG_INFO("Command line args:");
+	LOG_INFO(GetCommandLineW());
+	LOG_INFO("\n");
 
 	MH_Initialize();
 
 	// https://github.com/HoShiMin/Sig
 	const void* found = nullptr;
-	LoadBuildConfig();
+	bool loaded = LoadBuildConfig();
+	
+	if(!loaded) {
+		LOG_INFO("Continuing with empty build config.");
+	}
+
+
 	baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+
+	LOG_DEBUG("Base address: 0x%p\n", baseAddr);
+
 
 	int file_descript;
 	//unsigned long file_size;
-	errno_t err = _sopen_s(&file_descript, "Chivalry2-Win64-Shipping.exe", O_RDONLY, _SH_DENYNO, 0);
+	auto err = _sopen_s(&file_descript, "Chivalry2-Win64-Shipping.exe", O_RDONLY, _SH_DENYNO, 0);
 	if (err)
 		std::cout << "error " << err << std::endl;
 
@@ -167,23 +189,37 @@ unsigned long main_thread(void* lpParameter) {
 	//MODULEINFO moduleInfo;	
 	GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-	unsigned char* module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
+	auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
+
+	FunctionHookManager hookEnabler(baseAddr, moduleInfo, curBuild, STEAM);
+
+	hookEnabler.register_hook(FViewport_Hook);
+	hookEnabler.register_hook(LoadFrontEndMapHook);
+	hookEnabler.register_hook(InternalGetNetMode_Hook);
+	hookEnabler.register_hook(UGameplay__IsDedicatedServer_Hook);
+
+	bool applyDesyncPatch = CmdGetParam(L"--desync-patch") != -1;
+	if (applyDesyncPatch) {
+		hookEnabler.register_hook(UNetDriver__GetNetMode_Hook);
+	}
+
+	
+	hookEnabler.enable_hooks();
 
 	for (uint8_t i = 0; i < F_MaxFuncType; ++i)
 	{
-		if (curBuild.offsets[i] == 0)
-			curBuild.offsets[i] = FindSignature(baseAddr, moduleInfo.SizeOfImage, strFunc[i], signatures[i]);
-		else printf("ok -> %s : (conf)\n", strFunc[i]);
-		if (i == F_FViewport)
-		{
-			HOOK_ATTACH(module_base, FViewport);
-		}
+		if (curBuild.offsets.at(strFunc[i]) == 0)
+			curBuild.offsets.emplace(strFunc[i], FindSignature(baseAddr, moduleInfo.SizeOfImage, strFunc[i], signatures[i]));
+		else LOG_INFO("ok -> %s : (conf)\n", strFunc[i]);
 	}
+
+	// Explicitly enable the FViewport hook before the others, because it is used in some other places.
+	hookEnabler.enable_hook(FViewport_Hook);
 
 	char buff[512];
 	char* dest = buff;
 
-	log("Serializing builds");
+	LOG_INFO("Serializing builds");
 	offsetsLoaded = true;
 	serializeBuilds();
 
@@ -196,22 +232,14 @@ unsigned long main_thread(void* lpParameter) {
 	HOOK_ATTACH(module_base, FindFileInPakFiles_2);
 	HOOK_ATTACH(module_base, GetGameInfo);
 	HOOK_ATTACH(module_base, ConsoleCommand);
-	HOOK_ATTACH(module_base, LoadFrontEndMap);
 	HOOK_ATTACH(module_base, CanUseLoadoutItem);
 	HOOK_ATTACH(module_base, CanUseCharacter);
-	HOOK_ATTACH(module_base, UGameplay__IsDedicatedServer);
-	HOOK_ATTACH(module_base, InternalGetNetMode);
 
 	bool useBackendBanList = CmdGetParam(L"--use-backend-banlist") != -1;
 	if (useBackendBanList) {
 		HOOK_ATTACH(module_base, FString_AppendChars);
 		HOOK_ATTACH(module_base, PreLogin);
 
-	}
-
-	bool applyDesyncPatch = CmdGetParam(L"--desync-patch") != -1;
-	if (applyDesyncPatch) {
-		HOOK_ATTACH(module_base, UNetDriver__GetNetMode);
 	}
 
 	bool IsHeadless = CmdGetParam(L"-nullrhi") != -1;
@@ -230,24 +258,24 @@ unsigned long main_thread(void* lpParameter) {
 	HOOK_ATTACH(module_base, FText_AsCultureInvariant);
 	HOOK_ATTACH(module_base, BroadcastLocalizedChat);
 	
-	if (curBuild.offsets[F_UTBLLocalPlayer_Exec])
+	if (curBuild.offsets[strFunc[F_UTBLLocalPlayer_Exec]])
 	{
 		// ServerPlugin
-		auto cmd_permission{ module_base + curBuild.offsets[F_UTBLLocalPlayer_Exec] }; // Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
+		auto cmd_permission{ module_base + curBuild.offsets[strFunc[F_UTBLLocalPlayer_Exec]] }; // Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
 
 		// From ServerPlugin
 		// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
-		Ptch_Repl(module_base + curBuild.offsets[F_UTBLLocalPlayer_Exec], 0xEB);
+		Ptch_Repl(module_base + curBuild.offsets[strFunc[F_UTBLLocalPlayer_Exec]], 0xEB);
 	}
 	else
-		log("F_UTBLLocalPlayer_Exec missing");
+		LOG_ERROR("F_UTBLLocalPlayer_Exec missing");
 	
-	/*printf("offset dedicated: 0x%08X", curBuild.offsets[F_UGameplay__IsDedicatedServer] + 0x22);
-	Ptch_Repl(module_base + curBuild.offsets[F_UGameplay__IsDedicatedServer] + 0x22, 0x2);*/
+	/*printf("offset dedicated: 0x%08X", curBuild.offsets[strFunc[F_UGameplay__IsDedicatedServer]] + 0x22);
+	Ptch_Repl(module_base + curBuild.offsets[strFunc[F_UGameplay__IsDedicatedServer]] + 0x22, 0x2);*/
 	// Dedicated server hook in ApproveLogin
-	//Nop(module_base + curBuild.offsets[F_ApproveLogin] + 0x46, 6);
+	//Nop(module_base + curBuild.offsets[strFunc[F_ApproveLogin]] + 0x46, 6);
 
-	log("Functions hooked. Continuing to RCON");
+	LOG_INFO("Functions hooked. Continuing to RCON");
 	handleRCON(); //this has an infinite loop for commands! Keep this at the end!
 
 	ExitThread(0);

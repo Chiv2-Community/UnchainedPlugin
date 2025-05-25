@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 
-project(${TARGET})
+project(DEBUG)
 
 file(GLOB SOURCES "*.cpp" "include/*.cpp")
 file(GLOB HEADERS "*.h" "include/*.h")
+file(GLOB HEADERS "*.hpp" "include/*.hpp")
 
 source_group("Source Files\\Utils" FILES
     logging.cpp
@@ -14,8 +15,9 @@ source_group("Source Files\\Utils" FILES
 source_group("Header Files\\Utils" FILES
     include/resource.h
     include/commandline.h
-    include/logging.h
+    include/logging.hpp
     include/nettools.h
+    include/builds.h
 )
 
 source_group("Header Files\\Hooks" FILES
@@ -38,8 +40,6 @@ configure_file(
 add_library(${TARGET} SHARED ${SOURCES} ${HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
 # add_library(${TARGET} SHARED ${SOURCES} ${HEADERS} Resource.rc)
-target_include_directories(${TARGET} PUBLIC include "Lib/Sig")
-
 set_target_properties(${TARGET} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "../../Output"
 )
@@ -67,4 +67,9 @@ endif()
 add_subdirectory(Lib/MinHook)
 add_subdirectory(Lib/tiny-json)
 
-target_link_libraries(${TARGET} MinHook tiny-json winhttp)
+target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/Lib/Sig
+)
+
+target_link_libraries(${TARGET} MinHook tiny-json Sig)

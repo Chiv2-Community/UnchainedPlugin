@@ -3,6 +3,7 @@
 
 #pragma once
 #include <Sig.hpp>
+#include <logging.hpp>
 // TODO: this include gives HMODULE and stuff, for when this file eventually gets
 // deleted and its contents moved elsewhere
 //#include <windows.h> 
@@ -20,12 +21,12 @@ long long FindSignature(HMODULE baseAddr, DWORD size, const char* title, const c
 		diff = (long long)found - (long long)baseAddr;
 #ifdef _DEBUG_CONSOLE
 		//std::cout << title << ": 0x" << std::hex << diff << std::endl;
-		printf("?? -> %s : 0x%llx\n", title, diff);
+		LOG_INFO("?? -> %s : 0x%llx\n", title, diff);
 #endif
 	}
 #ifdef _DEBUG_CONSOLE
 	else
-		printf("!! -> %s : nullptr\n", title);
+		LOG_WARNING("!! -> %s : nullptr\n", title);
 		//std::cout << title << ": nullptr" << std::endl;
 #endif
 
@@ -50,21 +51,22 @@ inline static void Ptch_Repl(unsigned char* address, DWORD newVal)
 }
 
 // Hook macros
-
 HMODULE baseAddr;
 MODULEINFO moduleInfo;
 
+
+
 #define DECL_HOOK(retType, funcType, args)    \
-	typedef retType (*funcType##_t) args;		\
-	funcType##_t o_##funcType;					\
+	typedef retType (*funcType##_t) args;	  \
+	funcType##_t o_##funcType;				  \
 	retType hk_##funcType args
 
 #define HOOK_ATTACH(moduleBase, funcType) \
-	MH_CreateHook(moduleBase + curBuild.offsets[F_##funcType], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
-	MH_EnableHook(moduleBase + curBuild.offsets[F_##funcType]); 
+	MH_CreateHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
+	MH_EnableHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]]); 
 
 #define HOOK_FIND_SIG(funcType) \
-	if (curBuild.offsets[F_##funcType] == 0)\
-		curBuild.offsets[F_##funcType] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
-	else printf("-> %s : (conf)\n", #funcType);
+	if (curBuild.offsets[strFunc[F_##funcType]] == 0)\
+		curBuild.offsets[strFunc[F_##funcType]] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
+	else LOG_INFO("-> %s : (conf)\n", #funcType);
 	//long long sig_##funcType = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]);
