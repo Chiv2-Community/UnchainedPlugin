@@ -26,6 +26,8 @@ source_group("Header Files\\Hooks" FILES
     include/ownershipOverrides.h
     include/sigs.h
     include/unchainedIntegration.h
+    include/FunctionHook.hpp
+    include/FunctionHookEnabler.hpp
 )
 
 configure_file(
