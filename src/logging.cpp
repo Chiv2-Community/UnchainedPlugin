@@ -7,18 +7,18 @@
 // Global variable definitions
 LogLevel LOG_LEVEL = LogLevel::ERR;
 
-std::map<LogLevel, std::string> log_level_to_string = {
-    {INFO, "INFO"},
-    {WARNING, "WARNING"},
-    {ERR, "ERROR"},
-    {DEBUG, "DEBUG"}
+std::map<LogLevel, std::wstring> log_level_to_string = {
+    {INFO, L"INFO"},
+    {WARNING, L"WARNING"},
+    {ERR, L"ERROR"},
+    {DEBUG, L"DEBUG"}
 };
 
-std::map<std::string, LogLevel> string_to_log_level = {
-    {"INFO", INFO},
-    {"WARNING", WARNING},
-    {"ERROR", ERR},
-    {"DEBUG", DEBUG}
+std::map<std::wstring, LogLevel> string_to_log_level = {
+    {L"INFO", INFO},
+    {L"WARNING", WARNING},
+    {L"ERROR", ERR},
+    {L"DEBUG", DEBUG}
 };
 
 Logger g_logger;
@@ -29,50 +29,48 @@ bool isLogLevelEnabled(LogLevel level) {
 }
 
 // StringConverter implementations
-std::wstring StringConverter::toWideString(const StringVariant& str) {
-    if (std::holds_alternative<std::wstring>(str)) {
-        return std::get<std::wstring>(str);
+std::wstring StringConverter::toWideString(const StringVariant& in_str) {
+    if (std::holds_alternative<std::wstring>(in_str)) {
+        return std::get<std::wstring>(in_str);
     } else {
-        return toWideString(std::get<std::string>(str));
+        auto str = std::get<std::string>(in_str);
+        int count = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), NULL, 0);
+        std::wstring wstr(count, 0);
+        MultiByteToWideChar(CP_UTF8, 0, str.c_str(), str.length(), &wstr[0], count);
+        return wstr;
     }
-}
-
-std::wstring StringConverter::toWideString(const std::string& str) {
-    if (str.empty()) return std::wstring();
-    
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), nullptr, 0);
-    if (size_needed == 0) {
-        // Handle error - could throw or return empty string
-        return {};
-    }
-    
-    std::wstring result(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &result[0], size_needed);
-    return result;
-}
-
-std::wstring StringConverter::toWideString(const std::wstring& str) {
-    return str;
-}
-
-std::string StringConverter::toNarrowString(const std::wstring& str) {
-    if (str.empty()) return std::string();
-    
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0, NULL, NULL);
-    if (size_needed == 0) {
-        // Handle error - could throw or return empty string
-        return std::string();
-    }
-    
-    std::string result(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, str.c_str(), (int)str.size(), &result[0], size_needed, NULL, NULL);
-    return result;
 }
 
 // ConsoleOutput implementation
 void ConsoleOutput::write(LogLevel level, const std::wstring& timestamp, const std::wstring& message) {
-    std::wstring levelStr = StringConverter::toWideString(log_level_to_string[level]);
-    std::wcout << L"[" << timestamp << L"] [" << levelStr << L"] " << message << std::endl;
+    wprintf(L"[%s] [%s] %s\n", timestamp.c_str(), log_level_to_string[level].c_str(), message.c_str());
+}
+
+FileOutput::FileOutput(const std::wstring& filename)
+    : filename(filename), isOpen(false) {
+    open();
+}
+
+FileOutput::FileOutput(const std::string& filename)
+    : filename(StringConverter::toWideString(filename)), isOpen(false) {
+    open();
+}
+
+FileOutput::~FileOutput() {
+    if (file.is_open()) {
+        file.close();
+    }
+}
+
+bool FileOutput::reopen() {
+    if (file.is_open()) {
+        file.close();
+    }
+    return open();
+}
+
+bool FileOutput::isEnabled() const {
+    return isOpen;
 }
 
 bool FileOutput::open() {
@@ -86,16 +84,23 @@ bool FileOutput::open() {
             file.put(0xFE);
         }
 
-        // Set UTF-16 locale
-        file.imbue(std::locale(file.getloc(),
-            new std::codecvt_utf16<wchar_t, 0x10ffff, std::little_endian>));
-
         isOpen = true;
         return true;
     }
     isOpen = false;
     return false;
 }
+
+void FileOutput::write(LogLevel level, const std::wstring& timestamp, const std::wstring& message) {
+    if (!isOpen && !open()) {
+        return;
+    }
+
+    std::wstring msg = L"[" + timestamp + L"] [" + log_level_to_string[level] + L"] " + message + L"\n";
+    file.write(msg.c_str(), msg.length());
+    file.flush();
+}
+
 CallbackOutput::CallbackOutput(std::function<void(LogLevel, const std::wstring&, const std::wstring&)> cb)
     : callback(std::move(cb)) {}
 
@@ -128,18 +133,6 @@ void Logger::logMessage(LogLevel level, const std::wstring& message) {
             output->write(level, timestamp, message);
         }
     }
-}
-
-std::wstring Logger::convertArg(const StringVariant& arg) {
-    return StringConverter::toWideString(arg);
-}
-
-std::wstring Logger::convertArg(const std::string& arg) {
-    return StringConverter::toWideString(arg);
-}
-
-const std::wstring& Logger::convertArg(const std::wstring& arg) {
-    return arg;
 }
 
 void Logger::addOutput(std::unique_ptr<LogOutput> output) {

@@ -1,15 +1,18 @@
-#include "builds.h"
+#include "../include/builds.h"
+
+#include <cstring>
 #include <stdint.h>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <filesystem>
-#include "logging.hpp"
+#include "../include/logging.hpp"
 
 #include "tiny-json.h"
 
 #include <nmmintrin.h> // SSE4.2 intrinsics
 #include <functional>
+
 uint32_t calculateCRC32(const std::string& filename) {
 	std::ifstream file(filename, std::ios::binary);
 	if (!file.is_open()) {
@@ -42,8 +45,8 @@ bool needsSerialization = true;
 
 const char* quot = "\"";
 
-std::string ws(int indent) {
-	return "\n" + std::string(indent * 2, ' ');
+std::wstring ws(int indent) {
+	return L"\n" + std::wstring(indent * 2, ' ');
 }
 
 std::filesystem::path getConfigPath() {
@@ -54,35 +57,35 @@ std::filesystem::path getConfigPath() {
 
 bool serializeBuilds()
 {
-	std::function<bool(BuildType&, std::ofstream&, int)> SerializeBuild = [](BuildType& build, std::ofstream& out, int indent)
+	std::function<bool(BuildType&, std::wofstream&, int)> SerializeBuild = [](BuildType& build, std::wofstream& out, int indent)
 	{
 		if (build.buildId == 0) {
-			LOG_WARNING("No build ID set, cannot serialize build.\n");
+			LOG_WARNING(L"No build ID set, cannot serialize build.");
 			return false;
 		}
 
 		if (build.nameStr.length() == 0) {
-			LOG_WARNING("No build name set, cannot serialize build.\n");
+			LOG_WARNING(L"No build name set, cannot serialize build.");
 			return false;
 		}
 
 		const char* buildKey = build.nameStr.c_str();
 
-		out	<< ws(indent  ) << buildKey << "\": {"
-			<< ws(indent+1) << quot << "Build"    << quot << ": " << curBuild.buildId << ","
-			<< ws(indent+1) << quot << "FileHash" << quot << ": " << curBuild.fileHash << ","
-			<< ws(indent+1) << quot << "Offsets"  << quot << ": {";
+		out	<< ws(indent  ) << quot << buildKey << quot << L": {"
+			<< ws(indent+1) << quot << L"Build"    << quot << L": " << curBuild.buildId << L","
+			<< ws(indent+1) << quot << L"FileHash" << quot << L": " << curBuild.fileHash << L","
+			<< ws(indent+1) << quot << L"Offsets"  << quot << L": {";
 
 		for (auto it = build.offsets.begin(); it != build.offsets.end(); ++it) {
 			out << ws(indent + 2) << quot << it->first << quot << ": " << it->second;
 
 			if (std::next(it) != build.offsets.end()) {
-				out << ",";
+				out << L",";
 			}
 		}
 
-		out << ws(indent+1) << "}" 
-			<< ws(indent  ) << "}";
+		out << ws(indent+1) << L"}"
+			<< ws(indent  ) << L"}";
 
 		return true;
 	};
@@ -92,14 +95,14 @@ bool serializeBuilds()
 		std::filesystem::create_directories(configPath.parent_path());
 	}
 
-	std::ofstream out(configPath);
+	std::wofstream out(configPath);
 
-	out << "{";
+	out << L"{";
 
 	SerializeBuild(curBuild, out, 1);
 
 	if(configBuilds.size() != 0) {
-		out << ",";
+		out << L",";
 	}
 
 	for (auto build : configBuilds)
@@ -107,7 +110,7 @@ bool serializeBuilds()
 		SerializeBuild(*build, out, 1);
 	}
 
-	out << "}";
+	out << L"}";
 
 	return true;
 }
@@ -117,16 +120,16 @@ bool LoadBuildConfig()
 {
     auto configPath = getConfigPath();
     
-	LOG_DEBUG("Loading build config from: %s", configPath.string());
+	LOG_DEBUG(L"Loading build config from: %s", configPath.string());
 
     if (!std::filesystem::exists(configPath)) {
-        LOG_WARNING("Config file (%s) does not exist. This is normal on first start.", configPath);
+        LOG_WARNING(L"Config file (%s) does not exist. This is normal on first start.", configPath);
         return false;
     }
     
     std::ifstream file(configPath);  // Open in binary mode
     if (!file.is_open()) {
-        LOG_ERROR("Error opening build config: %s", configPath);
+        LOG_ERROR(L"Error opening build config: %s", configPath);
         return false;
     }
     
@@ -135,32 +138,22 @@ bool LoadBuildConfig()
         std::istreambuf_iterator<char>()
     };
     
-    // Check for and remove UTF-8 BOM
-    if (file_content.size() >= 3 && 
-        static_cast<unsigned char>(file_content[0]) == 0xEF &&
-        static_cast<unsigned char>(file_content[1]) == 0xBB &&
-        static_cast<unsigned char>(file_content[2]) == 0xBF) {
-        file_content.erase(0, 3);
-        LOG_DEBUG("Removed UTF-8 BOM from config file");
-    }
-    
-    // Check for UTF-16 BOM
-    if (file_content.size() >= 2 && 
-        ((static_cast<unsigned char>(file_content[0]) == 0xFF && 
+    if (file_content.size() >= 2 &&
+        ((static_cast<unsigned char>(file_content[0]) == 0xFF &&
           static_cast<unsigned char>(file_content[1]) == 0xFE) ||
          (static_cast<unsigned char>(file_content[0]) == 0xFE && 
           static_cast<unsigned char>(file_content[1]) == 0xFF))) {
-        LOG_ERROR("Config file appears to be UTF-16 encoded. Please save as UTF-8.");
+        LOG_ERROR(L"Config file appears to be UTF-16 encoded. Please save as UTF-8.");
         return false;
     }
     
-    LOG_DEBUG("File content preview: %.50s", file_content.c_str());
+    LOG_DEBUG(L"File content preview: %.50s", file_content);
     
     json_t mem[128];
     const json_t* json = json_create(const_cast<char *>(file_content.c_str()), mem, 128);
 
 	if (!json) {
-		LOG_ERROR("Failed to create json parser");
+		LOG_ERROR(L"Failed to create json parser");
 		return false;
 	}
 	uint32_t curFileHash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
@@ -174,15 +167,15 @@ bool LoadBuildConfig()
 			char const* fileSize = json_getPropertyValue(buildEntry, "FileSize");
 			json_t const* build = json_getProperty(buildEntry, "Build");
 			char const* buildName = json_getName(buildEntry);
-			LOG_DEBUG("parsing %s\n", buildName);
+			LOG_DEBUG(L"parsing %s\n", buildName);
 
 			json_t const* fileHash = json_getProperty(buildEntry, "FileHash");
 			if (!fileHash || JSON_INTEGER != json_getType(fileHash)) {
-				LOG_ERROR("Error, the 'FileHash' property is not found.");
+				LOG_ERROR(L"Error, the 'FileHash' property is not found.");
 				return EXIT_FAILURE;
 			}
 			if (!build || JSON_INTEGER != json_getType(build)) {
-				LOG_ERROR("Error, the 'Build' property is not found.");
+				LOG_ERROR(L"Error, the 'Build' property is not found.");
 				return EXIT_FAILURE;
 			}
 			// compare hash
@@ -197,10 +190,10 @@ bool LoadBuildConfig()
 			{
 				bd = curBuild;
 				needsSerialization = false;
-				LOG_INFO("Found matching Build: %s\n", buildName);
+				LOG_INFO(L"Found matching Build: %s", buildName);
 			}
 
-			LOG_INFO("%s : %u\n", buildName, strlen(buildName));
+			LOG_INFO(L"%s : %u", buildName, strlen(buildName));
 
 			if (strlen(buildName) > 0)
 			{
@@ -213,7 +206,7 @@ bool LoadBuildConfig()
 			auto offsetsProperty = json_getProperty(buildEntry, "Offsets");
 
 			if (!offsetsProperty || JSON_OBJ != json_getType(offsetsProperty)) {
-				LOG_ERROR("Error, the 'Offsets' property is not found.");
+				LOG_ERROR(L"Error, the 'Offsets' property is not found.");
 				return false;
 			}
 
@@ -223,7 +216,7 @@ bool LoadBuildConfig()
 					const char* offsetName = json_getName(offsetEntry);
 					if (offsetName && strlen(offsetName) > 0) {
 						uint64_t offsetVal = (uint64_t)json_getInteger(offsetEntry);
-						bd.offsets.emplace(std::string(offsetName), offsetVal);
+						bd.offsets[StringConverter::toWideString(offsetName)] = offsetVal;
 					}
 				}
 			}

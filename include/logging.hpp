@@ -24,8 +24,8 @@ enum LogLevel {
 extern LogLevel LOG_LEVEL;
 
 // Log level mappings
-extern std::map<LogLevel, std::string> log_level_to_string;
-extern std::map<std::string, LogLevel> string_to_log_level;
+extern std::map<LogLevel, std::wstring> log_level_to_string;
+extern std::map<std::wstring, LogLevel> string_to_log_level;
 
 // Check if log level is enabled
 bool isLogLevelEnabled(LogLevel level);
@@ -37,9 +37,6 @@ using StringVariant = std::variant<std::string, std::wstring>;
 class StringConverter {
 public:
     static std::wstring toWideString(const StringVariant& str);
-    static std::wstring toWideString(const std::string& str);
-    static std::wstring toWideString(const std::wstring& str);
-    static std::string toNarrowString(const std::wstring& str);
 };
 
 // Abstract base class for log outputs
@@ -93,37 +90,43 @@ private:
     std::wstring getCurrentTimestamp();
     void logMessage(LogLevel level, const std::wstring& message);
     
-    // Helper functions for argument conversion
-    std::wstring convertArg(const StringVariant& arg);
-    std::wstring convertArg(const std::string& arg);
-    const std::wstring& convertArg(const std::wstring& arg);
-    
-    template<typename T>
-    T&& convertArg(T&& arg) {
-        return std::forward<T>(arg);
-    }
-    
-    // Implementation of formatting using swprintf
     template<typename... Args>
     std::wstring formatMessageImpl(const std::wstring& format, Args&&... args) {
-        // Calculate required buffer size
-        int size = std::swprintf(nullptr, 0, format.c_str(), args...);
-        if (size <= 0) {
+        // Start with a reasonable buffer size
+        std::vector<wchar_t> buffer(1024);
+
+        int size = std::swprintf(buffer.data(), buffer.size(), format.c_str(), args...);
+
+        if (size < 0) {
             return format; // Return original format if formatting fails
         }
-        
-        // Create buffer and format the string
-        std::vector<wchar_t> buffer(size + 1);
-        std::swprintf(buffer.data(), buffer.size(), format.c_str(), args...);
-        
+
+        if (size >= static_cast<int>(buffer.size())) {
+            // Buffer was too small, resize and try again
+            buffer.resize(size + 1);
+            std::swprintf(buffer.data(), buffer.size(), format.c_str(), args...);
+        }
+
         return std::wstring(buffer.data());
     }
+
+    // Helper function to convert arguments to wide strings
+    template<typename T>
+    std::wstring convertArg(T&& arg) {
+        if constexpr (std::is_convertible_v<T, StringVariant>) {
+            // If it can be converted to StringVariant, use toWideString
+            return StringConverter::toWideString(static_cast<StringVariant>(std::forward<T>(arg)));
+        } else if constexpr (std::is_same_v<std::decay_t<T>, std::wstring>) {
+            // Already a wide string, return as is
+            return std::forward<T>(arg);
+        }
+
+        return L"";
+    }
     
-    // Helper function to format messages using swprintf
     template<typename... Args>
     std::wstring formatMessage(const std::wstring& format, Args&&... args) {
-        // Convert string variants to wide strings for formatting
-        return formatMessageImpl(format, convertArg(args)...);
+        return formatMessageImpl(format, convertArg(std::forward<Args>(args))...);
     }
 
 public:

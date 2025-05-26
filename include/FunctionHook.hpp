@@ -13,16 +13,16 @@ enum Platform {
     GAMEPASS
 };
 
-std::map<std::string, Platform> string_to_platform = {
-    {"STEAM", STEAM},
-    {"EGS", EGS},
-    {"GAMEPASS", GAMEPASS}
+std::map<std::wstring, Platform> string_to_platform = {
+    {L"STEAM", STEAM},
+    {L"EGS", EGS},
+    {L"GAMEPASS", GAMEPASS}
 };
 
-std::map<Platform, std::string> platform_to_string = {
-    {STEAM, "STEAM"},
-    {EGS, "EGS"},
-    {GAMEPASS, "GAMEPASS"}
+std::map<Platform, std::wstring> platform_to_string = {
+    {STEAM, L"STEAM"},
+    {EGS, L"EGS"},
+    {GAMEPASS, L"GAMEPASS"}
 };
 
 
@@ -33,7 +33,7 @@ public:
     using OriginalFunctionType = RetType(*)(Args...);
     using HookFunctionType = RetType(*)(OriginalFunctionType, Args...);
 private:
-    std::string name;
+    std::wstring name;
     std::function<std::optional<std::string>(Platform)> select_signature_for_platform;
     std::function<RetType(OriginalFunctionType, Args...)> hook_function;
     OriginalFunctionType original_function;
@@ -41,7 +41,7 @@ private:
 public:
 
     // Constructor - note the parameter types match your usage
-    FunctionHook(const std::string& name, 
+    FunctionHook(const std::wstring& name,
                  std::function<std::optional<std::string>(Platform)> select_signature_for_platform, 
                  HookFunctionType hook_function)
         : name(name), 
@@ -62,7 +62,7 @@ public:
         return original_function;
     }
     
-    inline std::string get_name() const {
+    inline std::wstring get_name() const {
         return name;
     }
 

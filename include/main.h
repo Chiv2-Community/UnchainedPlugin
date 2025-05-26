@@ -62,11 +62,11 @@ MODULEINFO moduleInfo;
 	retType hk_##funcType args
 
 #define HOOK_ATTACH(moduleBase, funcType) \
-	MH_CreateHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
-	MH_EnableHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]]); 
+	MH_CreateHook(moduleBase + curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
+	MH_EnableHook(moduleBase + curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])]);
 
 #define HOOK_FIND_SIG(funcType) \
-	if (curBuild.offsets[strFunc[F_##funcType]] == 0)\
-		curBuild.offsets[strFunc[F_##funcType]] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
-	else LOG_INFO("-> %s : (conf)\n", #funcType);
+	if (curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])] == 0)\
+		curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
+	else LOG_INFO(L"-> %s : (conf)\n", #funcType);
 	//long long sig_##funcType = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]);

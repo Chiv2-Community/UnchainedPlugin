@@ -2,15 +2,15 @@
 #pragma once
 
 #include "FunctionHook.hpp"
-#include <Sigs.h>
+#include <sigs.h>
 #include <vector>
 #include <string>
 
 
 class FunctionHookManager {
 private: 
-    std::vector<std::string> failed_hooks;
-    std::vector<std::tuple<std::string, std::function<void()>>> pending_hooks;
+    std::vector<std::wstring> failed_hooks;
+    std::vector<std::tuple<std::wstring, std::function<void()>>> pending_hooks;
     std::map<std::string, uint64_t> hook_offsets;
     BuildType build;
     HMODULE base_addr;
@@ -21,8 +21,8 @@ public:
     FunctionHookManager(HMODULE base_addr, MODULEINFO module_info, BuildType build, Platform platform) {
         this->base_addr = base_addr;
         this->module_info = module_info;
-        this->failed_hooks = std::vector<std::string>();
-        this->pending_hooks = std::vector<std::tuple<std::string, std::function<void()>>>();
+        this->failed_hooks = std::vector<std::wstring>();
+        this->pending_hooks = std::vector<std::tuple<std::wstring, std::function<void()>>>();
         this->platform = platform;
         this->build = build;
     };
@@ -38,9 +38,11 @@ public:
      */
     template<typename RetType, typename... Args>
     inline bool register_hook(FunctionHook<RetType, Args...>& hook) {
+        LOG_DEBUG(L"Registering hook %s", hook.get_name());
+
         const auto signature = hook.get_signature(platform);
         if (!signature.has_value()) {
-            printf("!! -> %s : no signature for platform '%s'\n", hook.get_name().c_str(), platform_to_string.at(platform).c_str());
+            LOG_WARNING(L"!! -> %s : no signature for platform '%s'", hook.get_name().c_str(), platform_to_string.at(platform).c_str());
             return false;
         }
 
@@ -50,7 +52,7 @@ public:
             address = (uint64_t)Sig::find(baseAddr, moduleInfo.SizeOfImage, signature.value().c_str());
 
             if (address == 0) {
-                printf("!! -> %s : nullptr. Signature requires updating\n", hook.get_name().c_str());
+                LOG_WARNING(L"!! -> %s : nullptr. Signature requires updating", hook.get_name().c_str());
                 failed_hooks.push_back(hook.get_name());
                 return false;
             }
@@ -61,7 +63,7 @@ public:
             address = (uint64_t)(baseAddr) + offset;
         }
 
-        printf("?? -> %s : 0x%llx\n", hook.get_name().c_str(), offset);
+        LOG_INFO(L"?? -> %s : 0x%llx", hook.get_name().c_str(), offset);
 
         auto hook_function = hook.get_hook_function();
         auto original_function = hook.get_original();
@@ -91,16 +93,16 @@ public:
             auto hook_enabler = std::get<1>(*it);
             try {
                 hook_enabler();
-                printf("Successfully hooked '%s'\n", hook_name.c_str());
+                LOG_INFO("Successfully hooked '%s'\n", hook_name.c_str());
                 pending_hooks.erase(it);
                 return true;
             } catch (const std::exception& e) {
-                printf("Failed to enable hook '%s': %s\n", hook_name.c_str(), e.what());
+                LOG_ERROR("Failed to enable hook '%s': %s\n", hook_name.c_str(), e.what());
                 pending_hooks.erase(it);
                 return false;
             }
         } else {
-            printf("Hook '%s' not found in enablers.\n", hook_name.c_str());
+            LOG_WARNING("Hook '%s' not found in enablers.\n", hook_name.c_str());
             return false;
         }
     }
@@ -116,9 +118,9 @@ public:
         for (const auto& [name, enabler] : pending_hooks) {
             try {
                 enabler();
-                printf("Successfully hooked '%s'", name.c_str());
+                LOG_INFO("Successfully hooked '%s'", name.c_str());
             } catch (const std::exception& e) {
-                printf("Failed to enable hook '%s': %s\n", name.c_str(), e.what());
+                LOG_ERROR("Failed to enable hook '%s': %s\n", name.c_str(), e.what());
                 failed_hooks.push_back(name);
             }
         }
@@ -126,9 +128,9 @@ public:
         pending_hooks.clear();
 
         if (!failed_hooks.empty()) {
-            printf("Failed to enable the following hooks:\n");
+            LOG_ERROR("Failed to enable the following hooks:\n");
             for (const auto& hook_name : failed_hooks) {
-                printf(" - %s\n", hook_name.c_str());
+                LOG_ERROR(" - %s\n", hook_name.c_str());
             }
 
             failed_hooks.clear();

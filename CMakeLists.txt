@@ -1,27 +1,80 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
-set(TARGET UnchainedPlugin)
+# Project name and language
+project(UnchainedPlugin VERSION 1.0.0 LANGUAGES CXX C)
 
-set(VER_MAJOR 0 CACHE STRING "MAJOR.minor.patch.build")
-set(VER_MINOR 4 CACHE STRING "major.MINOR.patch.build")
-set(VER_PATCH 6 CACHE STRING "major.minor.PATCH.build")
-set(VER_BUILD 0 CACHE STRING "major.minor.patch.BUILD")
 
-option(PRINT_CLIENT_MSG "Output chat messages to CLI" OFF)
-option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
-set(POST_BUILD_COPY_DIR "I:\\Epic Games\\Chivalry2_c\\TBL\\Binaries\\Win64\\Plugins" CACHE STRING "Directory to copy to")
-
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# logging
-#set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG_CONSOLE")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG_CONSOLE")
-#set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -D_DEBUG_CONSOLE")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -D_DEBUG_CONSOLE")
+# Set output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-project(${TARGET} VERSION 1)
+# Conditionally enable debug features
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(DEBUG_BUILD)
+    add_compile_definitions(_DEBUG_CONSOLE)
+endif()
 
-include_directories(${PROJECT_SOURCE_DIR}/${TARGET}/include)
+# Add include directories
+include_directories(
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/lib/MinHook/include
+        ${PROJECT_SOURCE_DIR}/lib/Sig
+        ${PROJECT_SOURCE_DIR}/lib/tiny-json
+)
 
-add_subdirectory(${TARGET})
+# Collect source files
+file(GLOB_RECURSE SOURCES
+        "src/*.cpp"
+        "src/*.c"
+)
+
+# Handle .cpp files in include directory
+file(GLOB INCLUDE_CPPS
+        "include/*.cpp"
+)
+list(APPEND SOURCES ${INCLUDE_CPPS})
+
+# Build libraries
+add_subdirectory(lib/MinHook)
+add_subdirectory(lib/tiny-json)
+
+# Configure version resource file
+configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/version.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+        @ONLY
+)
+
+# Create the main target as a shared library (DLL)
+add_library(${PROJECT_NAME} SHARED
+        ${SOURCES}
+        ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+)
+
+# Link libraries
+target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+        MinHook
+        tiny-json
+        winhttp.lib
+)
+
+# Set additional compiler flags
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -fpermissive -msse4.2)
+endif()
+
+# Install rules (optional)
+install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+)
