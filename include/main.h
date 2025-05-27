@@ -20,14 +20,12 @@ long long FindSignature(HMODULE baseAddr, DWORD size, const char* title, const c
 	{
 		diff = (long long)found - (long long)baseAddr;
 #ifdef _DEBUG_CONSOLE
-		//std::cout << title << ": 0x" << std::hex << diff << std::endl;
-		LOG_INFO("?? -> %s : 0x%llx\n", title, diff);
+		LOG_INFO(g_logger, "?? -> {} : 0x{:X}\n", title, diff);
 #endif
 	}
 #ifdef _DEBUG_CONSOLE
 	else
-		LOG_WARNING("!! -> %s : nullptr\n", title);
-		//std::cout << title << ": nullptr" << std::endl;
+		LOG_WARNING(g_logger, "!! -> {} : nullptr\n", title);
 #endif
 
 		return diff;
@@ -62,11 +60,11 @@ MODULEINFO moduleInfo;
 	retType hk_##funcType args
 
 #define HOOK_ATTACH(moduleBase, funcType) \
-	MH_CreateHook(moduleBase + curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
-	MH_EnableHook(moduleBase + curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])]);
+	MH_CreateHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]], hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
+	MH_EnableHook(moduleBase + curBuild.offsets[strFunc[F_##funcType]]);
 
 #define HOOK_FIND_SIG(funcType) \
-	if (curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])] == 0)\
-		curBuild.offsets[StringConverter::toWideString(strFunc[F_##funcType])] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
-	else LOG_INFO(L"-> %s : (conf)\n", #funcType);
+	if (curBuild.offsets[strFunc[F_##funcType]] == 0)\
+		curBuild.offsets[strFunc[F_##funcType]] = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]); \
+	else LOG_INFO(g_logger, "-> {} : (conf)", #funcType);
 	//long long sig_##funcType = FindSignature(baseAddr, moduleInfo.SizeOfImage, #funcType, signatures[F_##funcType]);

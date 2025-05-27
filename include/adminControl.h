@@ -1,6 +1,7 @@
 #pragma once
 
 #include <regex>
+#include "Logging.hpp"
 
 DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b)) {
 #ifdef _DEBUG_
@@ -15,25 +16,25 @@ DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b))
 		}
 	}
 
-	LOG_DEBUG("[RCON]: PlayerController Exec called with: %s", str);
+	LOG_DEBUG(g_logger, "[RCON]: PlayerController Exec called with: {}", str);
 
 	const wchar_t* interceptPrefix = L"RCON_INTERCEPT";
 	//if the command starts with the intercept prefix
 	//TODO: clean up mutex stuff here. Way too sloppy to be final
 	if (wcslen(str.str) >= 14 && memcmp(str.str, interceptPrefix, lstrlenW(interceptPrefix) * sizeof(wchar_t)) == 0) {
-		LOG_DEBUG("[RCON]: Intercept command detected");
+		LOG_DEBUG(g_logger, "[RCON]: Intercept command detected");
 	}
 #endif
 	return o_ConsoleCommand(this_ptr, str, b);
 }
 
-DECL_HOOK(void, ExecuteConsoleCommand, (FString2* param)) {
-	LOG_INFO("EXECUTECONSOLECMD: %s", param->str);
+DECL_HOOK(void, ExecuteConsoleCommand, (FString* param)) {
+	LOG_INFO(g_logger, "EXECUTECONSOLECMD: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
 
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString2* input)) {
+DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString* input)) {
 	// This is extremely loud in the console
 	//if (input->str != NULL) {
 	//	printf("FText_AsCultureInvariant: ");
@@ -45,7 +46,7 @@ DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString2* input)) {
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 DECL_HOOK(void, BroadcastLocalizedChat, (void* game_mode, FText* text, uint8_t chat_type)) {
-	LOG_DEBUG("BroadcastLocalizedChat");
+	LOG_DEBUG(g_logger, "BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
 
@@ -104,7 +105,7 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	size_t flagLoc = commandLine.find(L"--next-map");
 	bool egs = CmdGetParam(L"-epicapp=Peppermint") != -1;
 	static uint64_t init = false;
-	LOG_DEBUG("ClientMessage");
+	LOG_DEBUG(g_logger, "ClientMessage");
 
 	char* pValue;
 	size_t len;
@@ -119,13 +120,13 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	sprintf_s(ladBuff, 256, "%s\\Chivalry 2\\Saved\\Logs\\Unchained\\ClientMessage%s%s.log",
 		pValue, (IsServerStart() ? "-server" : "-client"), (egs ? "-egs" : "-steam"));
 	if (!init)
-		LOG_DEBUG(ladBuff);
+		LOG_DEBUG(g_logger, "{}", ladBuff);
 
 	std::wofstream  out(ladBuff, init++ ? std::ios_base::app : std::ios_base::trunc);
 	if (out.is_open())
 		out << init << L":: " << param_1->str << std::endl;
 	else
-		LOG_ERROR("Can't open ClientMessage log for writing.");
+		LOG_ERROR(g_logger, "Can't open ClientMessage log for writing.");
 
 	/*if (flagLoc == std::wstring::npos) {
 		o_ClientMessage(this_ptr, param_1, param_2, param_3);
@@ -136,20 +137,20 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	auto command = std::make_unique<std::wstring>();
 
 	if (extractPlayerCommand(param_1->str, playerName, *command)) {
-		std::wcout << L"Player Name: " << playerName << std::endl;
-		std::wcout << L"Command: " << command->c_str() << std::endl;
+		LOG_DEBUG(g_logger, "[ChatCommands] Extracted player name: {}", playerName);
+		LOG_DEBUG(g_logger, "[ChatCommands] Extracted command: {}", *command);
 
 		FText txt;
-		void* res = o_FText_AsCultureInvariant(&txt, new FString2(L"Command detected"));
+		void* res = o_FText_AsCultureInvariant(&txt, new FString(L"Command detected"));
 		if (res != NULL && CurGameMode != NULL)
 		{
-			LOG_DEBUG("[ChatCommands] Could print server text");
+			LOG_DEBUG(g_logger, "[ChatCommands] Could print server text");
 			o_BroadcastLocalizedChat(CurGameMode, (FText*)res, 3);
 		}
 
-		LOG_INFO("[ChatCommands] Executing command", command->c_str());
+		LOG_INFO(g_logger, "[ChatCommands] Executing command {}", *command);
 
-		auto empty = FString2(command->c_str());
+		auto empty = FString(command->c_str());
 
 		o_ExecuteConsoleCommand(&empty);
 	}

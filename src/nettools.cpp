@@ -53,22 +53,22 @@ std::wstring HTTPGet(const std::wstring* url) {
 	bool success = WinHttpCrackUrl(url->c_str(), url->length(), 0, &lpUrlComponents);
 
 	if (!success) {
-		LOG_ERROR("Failed to crack URL");
+		LOG_ERROR(g_logger, "Failed to crack URL");
 		DWORD error = GetLastError();
 
 		switch (error)
 		{
 		case ERROR_WINHTTP_INTERNAL_ERROR:
-			LOG_ERROR("ERROR_WINHTTP_INTERNAL_ERROR");
+			LOG_ERROR(g_logger, "ERROR_WINHTTP_INTERNAL_ERROR");
 			break;
 		case ERROR_WINHTTP_INVALID_URL:
-			LOG_ERROR("ERROR_WINHTTP_INVALID_URL");
+			LOG_ERROR(g_logger, "ERROR_WINHTTP_INVALID_URL");
 			break;
 		case ERROR_WINHTTP_UNRECOGNIZED_SCHEME:
-			LOG_ERROR("ERROR_WINHTTP_UNRECOGNIZED_SCHEME");
+			LOG_ERROR(g_logger, "ERROR_WINHTTP_UNRECOGNIZED_SCHEME");
 			break;
 		case ERROR_NOT_ENOUGH_MEMORY:
-			LOG_ERROR("ERROR_NOT_ENOUGH_MEMORY");
+			LOG_ERROR(g_logger, "ERROR_NOT_ENOUGH_MEMORY");
 			break;
 		default:
 			break;
@@ -102,7 +102,7 @@ std::wstring HTTPGet(const std::wstring* url) {
 			hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
 		}
 		else {
-			LOG_ERROR("Failed to open WinHttp session");
+			LOG_ERROR(g_logger, "Failed to open WinHttp session");
 		}
 
 		// Create an HTTP request handle.
@@ -112,7 +112,7 @@ std::wstring HTTPGet(const std::wstring* url) {
 				WINHTTP_DEFAULT_ACCEPT_TYPES,
 				tls ? WINHTTP_FLAG_SECURE : 0);
 		else
-			LOG_ERROR("Failed to connect to WinHttp target");
+			LOG_ERROR(g_logger, "Failed to connect to WinHttp target");
 
 		// Send a request.
 		if (hRequest)
@@ -121,13 +121,13 @@ std::wstring HTTPGet(const std::wstring* url) {
 				WINHTTP_NO_REQUEST_DATA, 0,
 				0, 0);
 		else
-			LOG_ERROR("Failed to open WinHttp request");
+			LOG_ERROR(g_logger, "Failed to open WinHttp request");
 
 		// End the request.
 		if (bResults)
 			bResults = WinHttpReceiveResponse(hRequest, NULL);
 		else
-			LOG_ERROR("Failed to send WinHttp request");
+			LOG_ERROR(g_logger, "Failed to send WinHttp request");
 
 		// Keep checking for data until there is nothing left.
 		if (bResults) {
@@ -135,14 +135,14 @@ std::wstring HTTPGet(const std::wstring* url) {
 				// Check for available data.
 				dwSize = 0;
 				if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
-					LOG_ERROR("Error %u in WinHttpQueryDataAvailable.\n", GetLastError());
+					LOG_ERROR(g_logger, "Error %u in WinHttpQueryDataAvailable.\n", GetLastError());
 					break;
 				}
 
 				// Allocate space for the buffer.
 				pszOutBuffer = new char[dwSize + 1];
 				if (!pszOutBuffer) {
-					LOG_ERROR("Out of memory");
+					LOG_ERROR(g_logger, "Out of memory");
 					dwSize = 0;
 					break;
 				}
@@ -152,7 +152,7 @@ std::wstring HTTPGet(const std::wstring* url) {
 
 					if (!WinHttpReadData(hRequest, (LPVOID)pszOutBuffer,
 						dwSize, &dwDownloaded)) {
-						LOG_ERROR("Error %u in WinHttpReadData.", GetLastError());
+						LOG_ERROR(g_logger, "Error %u in WinHttpReadData.", GetLastError());
 					}
 					else {
 						// Data has been read successfully.
@@ -166,20 +166,20 @@ std::wstring HTTPGet(const std::wstring* url) {
 			} while (dwSize > 0);
 		}
 		else
-			LOG_ERROR("Failed to receive WinHttp response");
+			LOG_ERROR(g_logger, "Failed to receive WinHttp response");
 
 		if (!hRequest || !hConnect || !hSession) {
-			LOG_ERROR("Failed to open WinHttp handles");
+			LOG_ERROR(g_logger, "Failed to open WinHttp handles");
 			std::wstring message =
 				L"Host: " + host + L"\n" +
 				L"Port: " + std::to_wstring(port) + L"\n" +
 				L"Path: " + path + L"\n" +
 				L"TLS: " + std::to_wstring(tls);
-			LOG_ERROR(message.c_str());
+			LOG_ERROR(g_logger, "{}", message);
 		}
 	}
 	catch (...) {
-		LOG_ERROR("Exception in HTTPGet");
+		LOG_ERROR(g_logger, "Exception in HTTPGet");
 		delete[] schemeBuf;
 		delete[] hostNameBuf;
 		delete[] urlPathBuf;

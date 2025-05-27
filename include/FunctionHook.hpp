@@ -33,7 +33,7 @@ public:
     using OriginalFunctionType = RetType(*)(Args...);
     using HookFunctionType = RetType(*)(OriginalFunctionType, Args...);
 private:
-    std::wstring name;
+    std::string name;
     std::function<std::optional<std::string>(Platform)> select_signature_for_platform;
     std::function<RetType(OriginalFunctionType, Args...)> hook_function;
     OriginalFunctionType original_function;
@@ -41,7 +41,7 @@ private:
 public:
 
     // Constructor - note the parameter types match your usage
-    FunctionHook(const std::wstring& name,
+    FunctionHook(const std::string& name,
                  std::function<std::optional<std::string>(Platform)> select_signature_for_platform, 
                  HookFunctionType hook_function)
         : name(name), 
@@ -62,7 +62,7 @@ public:
         return original_function;
     }
     
-    inline std::wstring get_name() const {
+    inline std::string get_name() const {
         return name;
     }
 

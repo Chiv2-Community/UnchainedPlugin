@@ -37,30 +37,6 @@ struct FText
 
 };
 
-// TODO: it's probably ok to make all references to this FString,
-// but I'm leaving it as-is right now.
-// the difference is between a copy vs a reference
-struct FString2 {
-	/*FString(const wchar_t* str) {
-		this->letter_count = lstrlenW(str) + 1;
-		this->max_letters = this->letter_count;
-		this->str = const_cast<wchar_t*>(str);
-	}*/
-	FString2(const wchar_t* str) {
-		this->letter_count = lstrlenW(str) + 1;
-		this->max_letters = this->letter_count;
-		this->str = new wchar_t[this->max_letters];
-		wcscpy_s(this->str, this->max_letters, str);
-	}
-	~FString2() {
-		delete[] this->str;
-	}
-
-	wchar_t* str;
-	int letter_count;
-	int max_letters;
-};
-
 enum ENetMode: uint8_t {
 	STANDALONE = 0,
 	DEDICATED_SERVER = 1,

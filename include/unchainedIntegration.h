@@ -1,10 +1,11 @@
 #pragma once
 
 #include "FunctionHook.hpp"
+#include "Logging.hpp"
 #include <optional>
 
 auto FViewport_Hook = FunctionHook<FString*, FViewport_C*, void*>(
-    L"FViewport",
+    "FViewport",
     PLATFORM_SIGNATURES(
 		PLATFORM_SIGNATURE(STEAM, "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6")
 		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED C7")
@@ -25,7 +26,7 @@ auto FViewport_Hook = FunctionHook<FString*, FViewport_C*, void*>(
             }
             if (curBuild.nameStr.length() > 0)
             {
-                LOG_INFO(L"Build String found!%s\n\t%s\n", (curBuild.buildId == 0) ? L"" : L" (loaded)", curBuild.nameStr.c_str());
+                LOG_INFO(g_logger, "Build String found!{}\n\t{}\n", (curBuild.buildId == 0) ? L"" : L" (loaded)", curBuild.nameStr.c_str());
 
                 if (offsetsLoaded && needsSerialization)
                     serializeBuilds();
@@ -36,7 +37,7 @@ auto FViewport_Hook = FunctionHook<FString*, FViewport_C*, void*>(
 );
 
 auto LoadFrontEndMapHook = FunctionHook<bool, void*, FString*>(
-	L"LoadFrontEndMap",
+	"LoadFrontEndMap",
 	UNIVERSAL_SIGNATURE("48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"),
 	[](auto o_LoadFrontEndMap, auto this_ptr, auto param_1) -> bool {
 		static wchar_t szBuffer[512];
@@ -45,9 +46,9 @@ auto LoadFrontEndMapHook = FunctionHook<bool, void*, FString*>(
 		if (true) {
 			auto pwdStr = CmdParseParam(L"ServerPassword", L"?Password=");
 
-			LOG_INFO(L"Frontend Map params: ");
+			LOG_INFO(g_logger, "Frontend Map params: ");
 			wsprintfW(szBuffer, L"Frontend%ls%ls%ls", (CmdGetParam(L"-rcon") == -1) ? L"" : L"?rcon", pwdStr.c_str(), init ? L"" : L"?startup");
-			LOG_INFO(szBuffer);
+			LOG_INFO(g_logger, "{}", std::wstring(szBuffer));
 			std::wstring ws(param_1->str);
 			std::string nameStr = std::string(ws.begin(), ws.end());
 			//printf("LoadFrontEndMap: %s %d\n", nameStr.c_str(), param_1->max_letters);
@@ -69,7 +70,7 @@ void SetWorld(void* world) {
 }
 
 auto InternalGetNetMode_Hook = FunctionHook<ENetMode, void*>( // FunctionHook<ENetMode, void*>
-	L"InternalGetNetMode",
+	"InternalGetNetMode",
 	UNIVERSAL_SIGNATURE("40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"),
 	[](auto o_InternalGetNetMode, auto world) -> ENetMode {
 		SetWorld(world);
@@ -77,12 +78,8 @@ auto InternalGetNetMode_Hook = FunctionHook<ENetMode, void*>( // FunctionHook<EN
 	}
 );
 
-const auto GetInternalGetNetModeHook() {
-	return InternalGetNetMode_Hook;
-}
-
 auto UNetDriver__GetNetMode_Hook = FunctionHook<ENetMode, void*>(
-	L"UNetDriver::GetNetMode",
+	"UNetDriver::GetNetMode",
 	UNIVERSAL_SIGNATURE("48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4"),
 	[](auto o_UNetDriver__GetNetMode, auto this_ptr) -> ENetMode {
 		ENetMode mode = o_UNetDriver__GetNetMode(this_ptr);
@@ -94,17 +91,13 @@ auto UNetDriver__GetNetMode_Hook = FunctionHook<ENetMode, void*>(
 
 
 const bool playableListen = CmdGetParam(L"--playable-listen") != -1;
-const bool GetPlayableListen()
-{
-	return playableListen;
-}
 
 auto UGameplay__IsDedicatedServer_Hook = FunctionHook<bool, long long>(
-	L"UGameplay::IsDedicatedServer",
+	"UGameplay::IsDedicatedServer",
 	UNIVERSAL_SIGNATURE("48 83 EC 28 48 85 C9 ? ? BA 01 00 00 00 ? ? ? ? ? 48 85 C0 ? ? 48 8B C8 ? ? ? ? ? 83 F8 01 0F 94 C0 48"),
 	[](auto o_UGameplay__IsDedicatedServer, auto param_1) -> bool {
-		if (UWORLD != nullptr && !GetPlayableListen()) {
-			ENetMode mode = GetInternalGetNetModeHook().get_original()(UWORLD);
+		if (UWORLD != nullptr && !playableListen) {
+			ENetMode mode = InternalGetNetMode_Hook.get_original()(UWORLD);
 			bool isHosting = mode == DEDICATED_SERVER || mode == LISTEN_SERVER;
 			return isHosting;
 		}

@@ -22,7 +22,7 @@ struct BuildType {
 
 	uint32_t fileHash = 0;
 	uint32_t buildId = 0;
-	std::map<std::wstring, uint64_t> offsets = {};
+	std::map<std::string, uint64_t> offsets = {};
 	std::string nameStr = "";
 private:
 	char* name = nullptr;

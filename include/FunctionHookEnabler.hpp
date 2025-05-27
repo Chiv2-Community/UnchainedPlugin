@@ -7,10 +7,11 @@
 #include <string>
 
 
+
 class FunctionHookManager {
 private: 
-    std::vector<std::wstring> failed_hooks;
-    std::vector<std::tuple<std::wstring, std::function<void()>>> pending_hooks;
+    std::vector<std::string> failed_hooks;
+    std::vector<std::tuple<std::string, std::function<void()>>> pending_hooks;
     std::map<std::string, uint64_t> hook_offsets;
     BuildType build;
     HMODULE base_addr;
@@ -21,8 +22,8 @@ public:
     FunctionHookManager(HMODULE base_addr, MODULEINFO module_info, BuildType build, Platform platform) {
         this->base_addr = base_addr;
         this->module_info = module_info;
-        this->failed_hooks = std::vector<std::wstring>();
-        this->pending_hooks = std::vector<std::tuple<std::wstring, std::function<void()>>>();
+        this->failed_hooks = std::vector<std::string>();
+        this->pending_hooks = std::vector<std::tuple<std::string, std::function<void()>>>();
         this->platform = platform;
         this->build = build;
     };
@@ -38,21 +39,24 @@ public:
      */
     template<typename RetType, typename... Args>
     inline bool register_hook(FunctionHook<RetType, Args...>& hook) {
-        LOG_DEBUG(L"Registering hook %s", hook.get_name());
+        LOG_DEBUG(g_logger, "Registering hook %s", hook.get_name());
 
         const auto signature = hook.get_signature(platform);
         if (!signature.has_value()) {
-            LOG_WARNING(L"!! -> %s : no signature for platform '%s'", hook.get_name().c_str(), platform_to_string.at(platform).c_str());
+            LOG_WARNING(g_logger, "!! -> {} : no signature for platform '{}'", hook.get_name(), platform_to_string.at(platform));
             return false;
         }
 
         uint64_t address = 0;
-        uint64_t offset = build.offsets.at(hook.get_name());
+        uint64_t offset = 0;
+        if (build.offsets.find(hook.get_name()) != build.offsets.end())
+            offset = build.offsets.at(hook.get_name());
+
         if (offset == 0) {
             address = (uint64_t)Sig::find(baseAddr, moduleInfo.SizeOfImage, signature.value().c_str());
 
             if (address == 0) {
-                LOG_WARNING(L"!! -> %s : nullptr. Signature requires updating", hook.get_name().c_str());
+                LOG_WARNING(g_logger, "!! -> {} : nullptr. Signature requires updating", hook.get_name());
                 failed_hooks.push_back(hook.get_name());
                 return false;
             }
@@ -63,7 +67,7 @@ public:
             address = (uint64_t)(baseAddr) + offset;
         }
 
-        LOG_INFO(L"?? -> %s : 0x%llx", hook.get_name().c_str(), offset);
+        LOG_INFO(g_logger, "?? -> {} : 0x{:X}", hook.get_name().c_str(), offset);
 
         auto hook_function = hook.get_hook_function();
         auto original_function = hook.get_original();
@@ -93,16 +97,16 @@ public:
             auto hook_enabler = std::get<1>(*it);
             try {
                 hook_enabler();
-                LOG_INFO("Successfully hooked '%s'\n", hook_name.c_str());
+                LOG_INFO(g_logger, "Successfully hooked '{}'", hook_name);
                 pending_hooks.erase(it);
                 return true;
             } catch (const std::exception& e) {
-                LOG_ERROR("Failed to enable hook '%s': %s\n", hook_name.c_str(), e.what());
+                LOG_ERROR(g_logger, "Failed to enable hook: '{}': {}", hook_name, e.what());
                 pending_hooks.erase(it);
                 return false;
             }
         } else {
-            LOG_WARNING("Hook '%s' not found in enablers.\n", hook_name.c_str());
+            LOG_WARNING(g_logger, "Hook '{}' not found in enablers.", hook_name);
             return false;
         }
     }
@@ -118,9 +122,9 @@ public:
         for (const auto& [name, enabler] : pending_hooks) {
             try {
                 enabler();
-                LOG_INFO("Successfully hooked '%s'", name.c_str());
+                LOG_INFO(g_logger, "Successfully hooked '{}'", name);
             } catch (const std::exception& e) {
-                LOG_ERROR("Failed to enable hook '%s': %s\n", name.c_str(), e.what());
+                LOG_ERROR(g_logger, "Failed to enable hook '{}': {}", name, e.what());
                 failed_hooks.push_back(name);
             }
         }
@@ -128,9 +132,9 @@ public:
         pending_hooks.clear();
 
         if (!failed_hooks.empty()) {
-            LOG_ERROR("Failed to enable the following hooks:\n");
+            LOG_ERROR(g_logger, "Failed to enable the following hooks:");
             for (const auto& hook_name : failed_hooks) {
-                LOG_ERROR(" - %s\n", hook_name.c_str());
+                LOG_ERROR(g_logger, " - {}", hook_name);
             }
 
             failed_hooks.clear();

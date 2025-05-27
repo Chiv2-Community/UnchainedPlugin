@@ -1,80 +1,101 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.10)
 
-# Project name and language
-project(UnchainedPlugin VERSION 1.0.0 LANGUAGES CXX C)
+set(TARGET UnchainedPlugin)
 
+set(VER_MAJOR 0 CACHE STRING "MAJOR.minor.patch.build")
+set(VER_MINOR 4 CACHE STRING "major.MINOR.patch.build")
+set(VER_PATCH 6 CACHE STRING "major.minor.PATCH.build")
+set(VER_BUILD 0 CACHE STRING "major.minor.patch.BUILD")
 
-# Set C++ standard
+option(PRINT_CLIENT_MSG "Output chat messages to CLI" OFF)
+option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
+set(POST_BUILD_COPY_DIR "I:\\Epic Games\\Chivalry2_c\\TBL\\Binaries\\Win64\\Plugins" CACHE STRING "Directory to copy to")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Set output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+project(${TARGET} VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_PATCH}" LANGUAGES CXX C)
 
-# Conditionally enable debug features
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(DEBUG_BUILD)
-    add_compile_definitions(_DEBUG_CONSOLE)
-endif()
+# Adjust include directories for the new structure
+include_directories(include)
 
-# Add include directories
-include_directories(
-        ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/lib/MinHook/include
-        ${PROJECT_SOURCE_DIR}/lib/Sig
-        ${PROJECT_SOURCE_DIR}/lib/tiny-json
+# Update file glob patterns to match the new directory structure
+file(GLOB SOURCES "src/*.cpp" "include/*.cpp")
+file(GLOB HEADERS "include/*.h" "include/*.hpp")
+
+# Update source groups to match the new file paths
+source_group("Source Files\\Utils" FILES
+    src/logging.cpp
+    src/commandline.cpp
+    src/nettools.cpp
 )
 
-# Collect source files
-file(GLOB_RECURSE SOURCES
-        "src/*.cpp"
-        "src/*.c"
+source_group("Header Files\\Utils" FILES
+    include/resource.h
+    include/commandline.h
+    include/logging.hpp
+    include/nettools.h
 )
 
-# Handle .cpp files in include directory
-file(GLOB INCLUDE_CPPS
-        "include/*.cpp"
+source_group("Header Files\\Hooks" FILES
+    include/adminControl.h
+    include/assetLoading.h
+    include/backendHooks.h
+    include/etcHooks.h
+    include/ownershipOverrides.h
+    include/sigs.h
+    include/unchainedIntegration.h
 )
-list(APPEND SOURCES ${INCLUDE_CPPS})
 
-# Build libraries
+# Fix the path for version.rc.in
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/version.rc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+    @ONLY)
+
 add_subdirectory(lib/MinHook)
 add_subdirectory(lib/tiny-json)
+add_subdirectory(lib/quill)
 
-# Configure version resource file
-configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/version.rc.in
-        ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-        @ONLY
+add_library(${TARGET} SHARED ${SOURCES} ${HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
+
+target_compile_definitions(${TARGET} PRIVATE
+    NOMINMAX                     # Prevent Windows.h from defining min/max macros
+    $<$<CONFIG:Debug>:_DEBUG>    # Define _DEBUG in Debug configuration
+    $<$<CONFIG:Debug>:_DEBUG_CONSOLE>
+    $<$<CONFIG:Release>:_DEBUG_CONSOLE>
 )
 
-# Create the main target as a shared library (DLL)
-add_library(${PROJECT_NAME} SHARED
-        ${SOURCES}
-        ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+# Use QUILL_STATIC_LIB instead of QUILL_DLL_IMPORT
+target_compile_definitions(${TARGET} PRIVATE QUILL_STATIC_LIB)
+
+# Update include directories
+target_include_directories(${TARGET} PUBLIC 
+    include 
+    lib/Sig
 )
 
-# Link libraries
-target_link_libraries(${PROJECT_NAME}
-        PRIVATE
-        MinHook
-        tiny-json
-        winhttp.lib
+# Set output directory if needed
+set_target_properties(${TARGET} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Output"
 )
 
-# Set additional compiler flags
-if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
-else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -fpermissive -msse4.2)
+if(PRINT_CLIENT_MSG)
+    target_compile_definitions(${TARGET} PUBLIC PRINT_CLIENT_MSG)
 endif()
 
-# Install rules (optional)
-install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
+if(POST_BUILD_COPY)
+    add_custom_command(
+        TARGET ${TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:${TARGET}>
+        ${POST_BUILD_COPY_DIR}/${TARGET}.dll && echo
+        ${TARGET}.dll copied to ${POST_BUILD_COPY_DIR}
+    )
+endif()
+
+# Link against libraries - the order matters
+target_link_libraries(${TARGET}
+    PRIVATE MinHook tiny-json winhttp
+    PUBLIC quill::quill
 )
