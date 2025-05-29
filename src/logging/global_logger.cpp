@@ -2,7 +2,7 @@
 
 #include <csignal>
 
-#include "../Chivalry2.h"
+#include "../stubs/Chivalry2.h"
 #include "sinks/ConsoleSink.hpp"
 #include "sinks/FileSink.hpp"
 

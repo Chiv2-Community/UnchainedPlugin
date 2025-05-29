@@ -2,7 +2,7 @@
 
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
-#include "../UE4.h"
+#include "../stubs/UE4.h"
 #include "../hooking/AutoHook.hpp"
 #include <optional>
 
@@ -41,8 +41,8 @@ CREATE_HOOK(
 			{
 				GLOG_INFO("Build String found!{} {}", (g_state->GetBuildMetadata().GetBuildId() == 0) ? L"" : L" (loaded)", g_state->GetBuildMetadata().GetName());
 
-				if (offsetsLoaded && needsSerialization)
-					serializeBuilds();
+				if (needsSerialization)
+					SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 		}
 		return val;

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "legacy_hooks.h"
+#include "../stubs/UE4.h"
+
 //FString* __cdecl
 //UUserFeedbackAndBugReportsLibrary::GetGameInfo(FString* __return_storage_ptr__, UWorld* param_1)
 DECL_HOOK(FString*, GetGameInfo, (FString* ret_ptr, void* uWorld))

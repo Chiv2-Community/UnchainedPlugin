@@ -1,5 +1,8 @@
 #pragma once
 
+#include "legacy_hooks.h"
+#include "../stubs/Chivalry2.h"
+
 DECL_HOOK(FOwnershipResponse*, GetOwnershipFromPlayerControllerAndState, (FOwnershipResponse* result, void* PlayerController, void* PlayerState, void* AssetIdToCheck, bool BaseOnly)) {
 	FOwnershipResponse* response = o_GetOwnershipFromPlayerControllerAndState(result, PlayerController, PlayerState, AssetIdToCheck, BaseOnly);
 	response->owned = true;

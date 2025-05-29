@@ -5,11 +5,13 @@
 
 class State {
     CLIArgs& args;
-    BuildMetadata& build;
+    BuildMetadata& current_build;
     void* uworld = nullptr;
 
+    std::map<std::string, BuildMetadata> saved_build_metadata;
+
 public:
-    State(CLIArgs& args, BuildMetadata& build) : args(args), build(build) {
+    State(CLIArgs& args, BuildMetadata& build) : args(args), current_build(build) {
         this->uworld = nullptr;
     }
 
@@ -26,10 +28,18 @@ public:
     }
     
     inline BuildMetadata& GetBuildMetadata() const {
-        return this->build;
+        return this->current_build;
     }
 
     inline void SetBuildMetadata(BuildMetadata& build) {
-        this->build = build;
+        this->current_build = build;
+    }
+
+    inline void SetSavedBuildMetadata(std::map<std::string, BuildMetadata> build) {
+        this->saved_build_metadata = build;
+    }
+
+    inline std::map<std::string, BuildMetadata> GetSavedBuildMetadata() const {
+        return this->saved_build_metadata;
     }
 };

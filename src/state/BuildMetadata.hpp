@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#include "tiny-json.h"
+
 /**
  * Build metadata is loaded from a json file at start, and then any unknown
  * signatures are added as they are found.
@@ -22,6 +24,9 @@ class BuildMetadata {
 public:
     ~BuildMetadata();
 
+    std::optional<std::string> Serialize(int indent) const;
+    static std::optional<BuildMetadata> Parse(const json_t* json, const char* buildName);
+
     void SetOffset(std::string name, uint64_t offset);
     std::optional<uint64_t> GetOffset(const std::string &name) const;
     std::vector<std::pair<std::string, uint64_t>> GetOffsets() const;
@@ -35,5 +40,4 @@ public:
     void SetName(std::string* newName);
     void SetName(std::wstring* newName);
     std::string GetName() const;
-    std::string Serialize() const;
 };

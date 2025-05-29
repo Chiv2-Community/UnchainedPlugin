@@ -1,5 +1,10 @@
 #pragma once
 
+#include "legacy_hooks.h"
+#include "../stubs/UE4.h"
+#include "../stubs/Chivalry2.h"
+#include "../nettools.hpp"
+
 DECL_HOOK(void, FString_AppendChars, (FString* this_ptr, const wchar_t* Str, int Count)) {
 	o_FString_AppendChars(this_ptr, Str, Count);
 }
@@ -19,7 +24,7 @@ DECL_HOOK(void, PreLogin, (ATBLGameMode* this_ptr, const FString& Options, const
 
 	std::wstring path = L"/api/v1/check-banned/";
 	path.append(addressString);
-	std::wstring apiUrl = GetApiUrl(path.c_str());
+	std::wstring apiUrl = GetServerBrowserBackendApiUrl(path.c_str());
 	std::wstring result = HTTPGet(&apiUrl);
 
 	if (result.empty()) {
@@ -51,7 +56,7 @@ DECL_HOOK(void*, GetMotd, (GCGObj* this_ptr, void* a2, GetMotdRequest* request, 
 	auto emptyToken = FString(L"");
 
 	try {
-		this_ptr->url_base = FString(GetApiUrl(L"/api/tbio").c_str());
+		this_ptr->url_base = FString(GetServerBrowserBackendApiUrl(L"/api/tbio").c_str());
 		request->token = emptyToken;
 		void* res = o_GetMotd(this_ptr, a2, request, a4);
 		this_ptr->url_base = old_base;
@@ -75,7 +80,7 @@ DECL_HOOK(void*, GetCurrentGames, (GCGObj* this_ptr, void* a2, GetCurrentGamesRe
 	auto emptyToken = FString(L"");
 
 	try {
-		this_ptr->url_base = FString(GetApiUrl(L"/api/tbio").c_str());
+		this_ptr->url_base = FString(GetServerBrowserBackendApiUrl(L"/api/tbio").c_str());
 		request->token = emptyToken;
 		void* res = o_GetCurrentGames(this_ptr, a2, request, a4);
 		this_ptr->url_base = old_base;
@@ -95,7 +100,7 @@ DECL_HOOK(void*, SendRequest, (GCGObj* this_ptr, FString* fullUrlInputPtr, FStri
 		wcscmp(L"https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version", fullUrlInputPtr->str) == 0)
 	{
 		FString original = *fullUrlInputPtr; //save original string and buffer information
-		*fullUrlInputPtr = FString(GetApiUrl(L"/api/playfab/Client/Matchmake").c_str()); //overwrite with new string
+		*fullUrlInputPtr = FString(GetServerBrowserBackendApiUrl(L"/api/playfab/Client/Matchmake").c_str()); //overwrite with new string
 		GLOG_DEBUG("hk_SendRequest Client/Matchmake");
 
 		auto empty = FString(L""); // Send empty string for auth, so that our backend isn't getting user tokens.

@@ -1,9 +1,7 @@
-#pragma once
-
 #include <vector>
 #include <string>
 
-inline std::vector<std::string> split(std::string_view str, std::string_view delimiter) {
+std::vector<std::string> split(std::string_view str, std::string_view delimiter) {
     std::vector<std::string> result;
     
     if (str.empty()) {
@@ -23,4 +21,8 @@ inline std::vector<std::string> split(std::string_view str, std::string_view del
     result.emplace_back(str.substr(start));
     
     return result;
+}
+
+std::string ws(int indent) {
+    return "\n" + std::string(indent * 2, ' ');
 }

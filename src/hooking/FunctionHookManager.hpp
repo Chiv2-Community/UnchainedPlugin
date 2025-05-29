@@ -1,11 +1,12 @@
 #pragma once
 
-#include "FunctionHook.hpp"
-#include "../hooks/sigs.h"
 #include <vector>
 #include <string>
+#include <Sig.hpp>
 
+#include "FunctionHook.hpp"
 #include "HookData.hpp"
+#include "../logging/global_logger.hpp"
 #include "../state/global_state.hpp"
 
 /**

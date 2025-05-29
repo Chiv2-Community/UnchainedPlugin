@@ -44,7 +44,7 @@ generate_include_all_header("src/logging/formatters" "all_formatters.h")
 
 # File collection
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
-file(GLOB_RECURSE HEADERS "src/*.hpp" "src/*.h")
+file(GLOB_RECURSE HEADERS CONFIGUE_DEPENDS "src/*.hpp" "src/*.h")
 
 # Configure version resource
 configure_file(

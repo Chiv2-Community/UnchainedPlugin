@@ -17,19 +17,6 @@ struct FString {
 	int max_letters;
 };
 
-/*
-0x0	0x8	ITextData *	ITextData *	Object
-
-0x8	0x8	FSharedReferencer<1>	/Chivalry2-Win64-Shipping.pdb/SharedPointerInternals/FSharedReferencer<1>
-pack()
-Structure FSharedReferencer<1> {
-   0   FReferenceControllerBase *   8   ReferenceController   ""
-}
-Size = 8   Actual Alignment = 8
-	SharedReferenceCount
-
-0x10	0x4	uint	uint	Flags
-*/
 struct FText
 {
 	uint8_t text_data[0x10];

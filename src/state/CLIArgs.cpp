@@ -51,7 +51,7 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
             try {
                 auto port_str = tokens.at(++i);
                 rcon_port = std::stoi(port_str);
-            } catch (const std::exception& e) {
+            } catch (const std::exception&) {
                 GLOG_ERROR("Invalid port.  Expected an integer. RCON will not be enabled.");
             }
         }

@@ -12,30 +12,34 @@
 
 #include <direct.h>
 
-//always open output window
-// #define _DEBUG
-#include "constants.h"
-#include "Chivalry2.h"
-#include "UE4.h"
-#include "logging/Logger.hpp"
-#include "nettools.h"
-#include "builds.h"
+
 
 //black magic for the linker to get winsock2 to work
 //TODO: properly add this to the linker settings
 #pragma comment(lib, "Ws2_32.lib")
 
-// hooks
-// TODO? figure out a better/cleaner way to do this
-#include <csignal>
+#include <string_view>
+
+#include "constants.h"
+#include "builds.h"
+#include "patch.hpp"
+#include "string_util.hpp"
+
+#include "logging/global_logger.hpp"
+#include "stubs/UE4.h"
+#include "state/global_state.hpp"
+#include "hooking/FunctionHookManager.hpp"
 
 #include "hooks/all_hooks.h"
-#include "hooking/FunctionHookManager.hpp"
-#include "StringUtil.h"
-#include <share.h>
-#include "logging/global_logger.hpp"
-#include "state/global_state.hpp"
-#include <string_view>
+
+#include "legacy_hooks/legacy_hooks.h"
+#include "legacy_hooks/adminControl.h"
+#include "legacy_hooks/assetLoading.h"
+#include "legacy_hooks/backendHooks.h"
+#include "legacy_hooks/etcHooks.h"
+#include "legacy_hooks/ownershipOverrides.h"
+#include "legacy_hooks/sigs.h"
+
 
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
@@ -136,8 +140,6 @@ void CreateDebugConsole() {
 }
 
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
-
-
 	try {
 		initialize_global_logger(LogLevel::DEBUG);
 		GLOG_INFO("Logger initialized");
@@ -167,28 +169,19 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		}
 		GLOG_DEBUG("MinHook initialized");
 
-		// https://github.com/HoShiMin/Sig
-		const void* found = nullptr;
-		bool loaded = LoadBuildConfig();
-
-		if(!loaded) {
-			GLOG_INFO("Continuing with empty build config.");
-		}
-
+		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
+		state.SetSavedBuildMetadata(loaded);
 
 		baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
 
 		GLOG_DEBUG("Base address: 0x{:X}", reinterpret_cast<uintptr_t>(baseAddr));
 
-
 		int file_descript;
-
 		auto err = _sopen_s(&file_descript, "Chivalry2-Win64-Shipping.exe", O_RDONLY, _SH_DENYNO, 0);
 		if (err) GLOG_ERROR("Error {}", err);
 
 		off_t file_size = _filelength(file_descript);
 
-		//MODULEINFO moduleInfo;
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
@@ -197,6 +190,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		register_auto_hooks(hook_manager);
 
 		hook_manager.enable_hook(&FViewport_Hook);
+
 		hook_manager.enable_hooks();
 
 		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
@@ -214,8 +208,8 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		char* dest = buff;
 
 		GLOG_INFO("Serializing builds");
-		offsetsLoaded = true;
-		serializeBuilds();
+
+		SaveBuildMetadata(loaded);
 
 		HOOK_ATTACH(module_base, GetMotd);
 		HOOK_ATTACH(module_base, GetCurrentGames);
@@ -260,11 +254,10 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		}
 		else
 			GLOG_ERROR("F_UTBLLocalPlayer_Exec missing");
-
-		/*printf("offset dedicated: 0x%08X", curBuild.offsets[strFunc[F_UGameplay__IsDedicatedServer]] + 0x22);
-		Ptch_Repl(module_base + curBuild.offsets[strFunc[F_UGameplay__IsDedicatedServer]] + 0x22, 0x2);*/
+		/*printf("offset dedicated: 0x%08X", g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22);
+		Ptch_Repl(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22, 0x2);*/
 		// Dedicated server hook in ApproveLogin
-		//Nop(module_base + curBuild.offsets[strFunc[F_ApproveLogin]] + 0x46, 6);
+		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
 
 		GLOG_INFO("Functions hooked. Continuing to RCON");
 		handleRCON(); //this has an infinite loop for commands! Keep this at the end!

@@ -36,18 +36,7 @@ uint32_t calculateCRC32(const std::string& filename) {
 	return crc ^ 0xFFFFFFFF; // Final XOR value for CRC-32
 }
 
-std::deque<BuildMetadata*> configBuilds;
-//BuildInfo* curBuildInfo = nullptr;
-BuildType curBuild;
-bool jsonDone = false;
-bool offsetsLoaded = false;
 bool needsSerialization = true;
-
-const char* quot = "\"";
-
-std::string ws(int indent) {
-	return "\n" + std::string(indent * 2, ' ');
-}
 
 std::filesystem::path getConfigPath() {
     const char* localAppData = std::getenv("LOCALAPPDATA");
@@ -55,97 +44,86 @@ std::filesystem::path getConfigPath() {
            "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
 }
 
-bool serializeBuilds()
+bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 {
-	auto SerializeBuild = [](BuildMetadata& build, std::ofstream& out, int indent)
-	{
-		if (build.GetBuildId() == 0) {
-			GLOG_WARNING("No build ID set, cannot serialize build.");
-			return false;
-		}
-
-		if (build.GetName().empty()) {
-			GLOG_WARNING("No build name set, cannot serialize build.");
-			return false;
-		}
-
-		out	<< ws(indent  ) << quot << build.GetName() << quot << ": {"
-			<< ws(indent+1) << quot << "Build"         << quot << ": " << build.GetBuildId() << ","
-			<< ws(indent+1) << quot << "FileHash"      << quot << ": " << build.GetFileHash() << ","
-			<< ws(indent+1) << quot << "Offsets"       << quot << ": {";
-
-		auto offsets = build.GetOffsets();
-		const auto offsets_length = offsets.size();
-		for (size_t i = 0; i < offsets_length; i++) {
-			auto [name, offset] = offsets[i];
-			out << ws(indent + 2) << quot << name << quot << ": " << offset;
-			if (i != offsets_length - 1) {
-				out << ",";
-			}
-		}
-
-		out << ws(indent+1) << "}"
-			<< ws(indent  ) << "}";
-
-		return true;
-	};
-
 	auto configPath = getConfigPath();
 	if (!std::filesystem::exists(configPath.parent_path())) {
 		std::filesystem::create_directories(configPath.parent_path());
 	}
 
-	std::ofstream out(configPath);
-
+	std::stringstream out("");
 	out << "{";
 
-	SerializeBuild(g_state->GetBuildMetadata(), out, 1);
-
-	if(configBuilds.size() != 0) {
-		out << ",";
+	// First, serialize the current build from global state
+	auto currentBuild = g_state->GetBuildMetadata();
+	auto serialized = currentBuild.Serialize(1);
+	if (!serialized.has_value()) {
+		GLOG_ERROR("Failed to serialize current build");
+		return false;
 	}
+	out << serialized.value();
 
-	for (auto build : configBuilds)
-	{
-		SerializeBuild(*build, out, 1);
+	// Add builds from the provided map
+	if (!builds.empty()) {
+		bool firstEntry = true;
+		for (const auto& [buildName, buildData] : builds) {
+			// Skip the current build if it's already in the map
+			if (buildData.GetFileHash() == currentBuild.GetFileHash() && 
+				buildData.GetBuildId() == currentBuild.GetBuildId()) {
+				continue;
+			}
+			
+			if (firstEntry) {
+				out << ",";
+				firstEntry = false;
+			} else {
+				out << ",";
+			}
+			
+			auto buildSerialized = buildData.Serialize(1);
+			if (buildSerialized.has_value()) {
+				out << buildSerialized.value();
+			} else {
+				GLOG_WARNING("Failed to serialize build: {}", buildName);
+			}
+		}
 	}
 
 	out << "}";
 
+	std::ofstream file(configPath);
+	if (!file.is_open()) {
+		GLOG_ERROR("Error opening build config: {}", configPath);
+		return false;
+	}
+
+	file << out.str();
+	GLOG_INFO("Successfully saved build config to: {}", configPath.string());
 	return true;
 }
 
-
-bool LoadBuildConfig()
+std::map<std::string, BuildMetadata> LoadBuildMetadata()
 {
     auto configPath = getConfigPath();
+    std::map<std::string, BuildMetadata> buildMap;
     
 	GLOG_DEBUG("Loading build config from: {}", configPath.string());
 
     if (!std::filesystem::exists(configPath)) {
         GLOG_WARNING("Config file ({}) does not exist. This is normal on first start.", configPath);
-        return false;
+        return buildMap;
     }
     
-    std::ifstream file(configPath);  // Open in binary mode
+    std::ifstream file(configPath);
     if (!file.is_open()) {
         GLOG_ERROR("Error opening build config: {}", configPath);
-        return false;
+        return buildMap;
     }
     
     std::string file_content{
         std::istreambuf_iterator<char>(file), 
         std::istreambuf_iterator<char>()
     };
-    
-    if (file_content.size() >= 2 &&
-        ((static_cast<unsigned char>(file_content[0]) == 0xFF &&
-          static_cast<unsigned char>(file_content[1]) == 0xFE) ||
-         (static_cast<unsigned char>(file_content[0]) == 0xFE && 
-          static_cast<unsigned char>(file_content[1]) == 0xFF))) {
-        GLOG_ERROR("Config file appears to be UTF-16 encoded. Please save as UTF-8.");
-        return false;
-    }
     
     GLOG_DEBUG("File content preview: {}", file_content);
     
@@ -154,7 +132,7 @@ bool LoadBuildConfig()
 
 	if (!json) {
 		GLOG_ERROR("Failed to create json parser");
-		return false;
+		return buildMap;
 	}
 	uint32_t curFileHash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
 
@@ -163,66 +141,33 @@ bool LoadBuildConfig()
 	buildEntry = json_getChild(json);
 	while (buildEntry != nullptr) {
 		if (JSON_OBJ == json_getType(buildEntry)) {
-			json_t const* build = json_getProperty(buildEntry, "Build");
-			std::string buildName(json_getName(buildEntry));
-			GLOG_DEBUG("parsing {}", buildName);
+			const char* buildName = json_getName(buildEntry);
+			GLOG_DEBUG("Parsing build: {}", buildName);
 
-			json_t const* fileHash = json_getProperty(buildEntry, "FileHash");
-			if (!fileHash || JSON_INTEGER != json_getType(fileHash)) {
-				GLOG_ERROR("Error, the 'FileHash' property is not found.");
-				return EXIT_FAILURE;
-			}
-			if (!build || JSON_INTEGER != json_getType(build)) {
-				GLOG_ERROR("Error, the 'Build' property is not found.");
-				return EXIT_FAILURE;
-			}
-			// compare hash
-			uint64_t fileHashVal = json_getInteger(fileHash);
-			bool hashMatch = fileHashVal == curFileHash;
+            // Parse the build metadata
+            auto parsedBuild = BuildMetadata::Parse(buildEntry, buildName);
+            if (!parsedBuild.has_value()) {
+                GLOG_ERROR("Failed to parse build metadata for {}", buildName);
+                buildEntry = json_getSibling(buildEntry);
+                continue;
+            }
 
-			// Create Build Config entry
-			BuildMetadata bd_;
-			BuildMetadata& bd = bd_;
+            BuildMetadata bd = parsedBuild.value();
+            
+            // Add the parsed build to the map
+            buildMap[buildName] = bd;
 
-			if (hashMatch)
-			{
-				bd = g_state->GetBuildMetadata();
-				needsSerialization = false;
-				GLOG_INFO("Found matching Build: {}", buildName);
-			}
+            // Check if this build matches the current executable
+            bool hashMatch = bd.GetFileHash() == curFileHash;
 
-			if (!buildName.empty())
-			{
-				bd.SetName(&buildName);
-			}
-
-			bd.SetBuildId(static_cast<uint32_t>(json_getInteger(build)));
-			bd.SetFileHash(static_cast<uint32_t>(fileHashVal));
-
-			auto offsetsProperty = json_getProperty(buildEntry, "Offsets");
-
-			if (!offsetsProperty || JSON_OBJ != json_getType(offsetsProperty)) {
-				GLOG_ERROR("Error, the 'Offsets' property is not found.");
-				return false;
-			}
-
-			for (json_t const* offsetEntry = json_getChild(offsetsProperty); offsetEntry != 0; offsetEntry = json_getSibling(offsetEntry))
-			{
-				if (JSON_INTEGER == json_getType(offsetEntry)) {
-					if (const char* offsetName = json_getName(offsetEntry); offsetName && strlen(offsetName) > 0) {
-						const auto offsetVal = static_cast<uint64_t>(json_getInteger(offsetEntry));
-						bd.SetOffset(offsetName, offsetVal);
-					}
-				}
-			}
-
-			if (hashMatch)
-				g_state->SetBuildMetadata(bd);
-			else
-				configBuilds.push_back(new BuildMetadata(bd));
+            if (hashMatch) {
+                g_state->SetBuildMetadata(bd);
+                needsSerialization = false;
+                GLOG_INFO("Found matching build: {}", buildName);
+            }
 		}
 		buildEntry = json_getSibling(buildEntry);
 	}
 
-	return true;
+	return buildMap;
 }

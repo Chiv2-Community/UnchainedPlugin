@@ -1,5 +1,5 @@
 #include "constants.h"
-#include "nettools.h"
+#include "nettools.hpp"
 #include "logging/global_logger.hpp"
 #include <windows.h>
 #include <vector>
@@ -19,29 +19,25 @@ const wchar_t* Utf8ToTChar(const char* utf8bytes)
     return buffer.data();
 }
 
-std::wstring GetApiUrl(const wchar_t* path) {
+std::wstring GetServerBrowserBackendApiUrl(const wchar_t* path) {
 	return g_state->GetCLIArgs().server_browser_backend + path;
 }
 
 std::wstring HTTPGet(const std::wstring* url) {
 	std::wstring response = L"";
 
-	URL_COMPONENTSW lpUrlComponents = { 0 }; // Initialize the structure to zero.
+	URL_COMPONENTSW lpUrlComponents = { 0 };
 	lpUrlComponents.dwStructSize = sizeof(URL_COMPONENTSW);
-	lpUrlComponents.dwSchemeLength = (DWORD)-1;    // Let WinHttpCrackUrl allocate memory.
-	lpUrlComponents.dwHostNameLength = (DWORD)-1;  // Let WinHttpCrackUrl allocate memory.
-	lpUrlComponents.dwUrlPathLength = (DWORD)-1;   // Let WinHttpCrackUrl allocate memory.
+	lpUrlComponents.dwSchemeLength = (DWORD)-1;
+	lpUrlComponents.dwHostNameLength = (DWORD)-1;
+	lpUrlComponents.dwUrlPathLength = (DWORD)-1;
 
 	// TODO: these are probably allocated unnecessarily.
-	// Previous statements suggest that the Crack call will
-	// allocate those buffers itself
 
-	// Allocate buffers for the URL components
 	wchar_t* schemeBuf = new wchar_t[url->length() + 1];
 	wchar_t* hostNameBuf = new wchar_t[url->length() + 1];
 	wchar_t* urlPathBuf = new wchar_t[url->length() + 1];
 
-	// Assign buffers to the structure
 	lpUrlComponents.lpszScheme = schemeBuf;
 	lpUrlComponents.lpszHostName = hostNameBuf;
 	lpUrlComponents.lpszUrlPath = urlPathBuf;
@@ -92,8 +88,6 @@ std::wstring HTTPGet(const std::wstring* url) {
 			WINHTTP_NO_PROXY_NAME,
 			WINHTTP_NO_PROXY_BYPASS, 0);
 
-		// Specify an HTTP server.
-
 		if (hSession) {
 			hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
 		}
@@ -101,7 +95,6 @@ std::wstring HTTPGet(const std::wstring* url) {
 			GLOG_ERROR("Failed to open WinHttp session");
 		}
 
-		// Create an HTTP request handle.
 		if (hConnect)
 			hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(),
 				NULL, WINHTTP_NO_REFERER,
@@ -110,7 +103,6 @@ std::wstring HTTPGet(const std::wstring* url) {
 		else
 			GLOG_ERROR("Failed to connect to WinHttp target");
 
-		// Send a request.
 		if (hRequest)
 			bResults = WinHttpSendRequest(hRequest,
 				WINHTTP_NO_ADDITIONAL_HEADERS, 0,
@@ -119,23 +111,19 @@ std::wstring HTTPGet(const std::wstring* url) {
 		else
 			GLOG_ERROR("Failed to open WinHttp request");
 
-		// End the request.
 		if (bResults)
 			bResults = WinHttpReceiveResponse(hRequest, NULL);
 		else
 			GLOG_ERROR("Failed to send WinHttp request");
 
-		// Keep checking for data until there is nothing left.
 		if (bResults) {
 			do {
-				// Check for available data.
 				dwSize = 0;
 				if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
 					GLOG_ERROR("Error %u in WinHttpQueryDataAvailable.\n", GetLastError());
 					break;
 				}
 
-				// Allocate space for the buffer.
 				pszOutBuffer = new char[dwSize + 1];
 				if (!pszOutBuffer) {
 					GLOG_ERROR("Out of memory");
@@ -143,7 +131,6 @@ std::wstring HTTPGet(const std::wstring* url) {
 					break;
 				}
 				else {
-					// Read the data.
 					ZeroMemory(pszOutBuffer, dwSize + 1);
 
 					if (!WinHttpReadData(hRequest, (LPVOID)pszOutBuffer,
@@ -151,12 +138,10 @@ std::wstring HTTPGet(const std::wstring* url) {
 						GLOG_ERROR("Error %u in WinHttpReadData.", GetLastError());
 					}
 					else {
-						// Data has been read successfully.
 						std::wstring chunk = Utf8ToTChar(pszOutBuffer);
 						response.append(chunk);
 					}
 
-					// Free the memory allocated to the buffer.
 					delete[] pszOutBuffer;
 				}
 			} while (dwSize > 0);
@@ -187,7 +172,7 @@ std::wstring HTTPGet(const std::wstring* url) {
 	delete[] schemeBuf;
 	delete[] hostNameBuf;
 	delete[] urlPathBuf;
-	// Close any open handles.
+
 	if (hRequest) WinHttpCloseHandle(hRequest);
 	if (hConnect) WinHttpCloseHandle(hConnect);
 	if (hSession) WinHttpCloseHandle(hSession);
