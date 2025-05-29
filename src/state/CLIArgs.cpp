@@ -6,11 +6,11 @@
 
 #include "../logging/global_logger.hpp"
 
-CLIArgs::CLIArgs(bool enable_rcon, bool apply_desync_patch, bool use_backend_banlist,
-                 bool is_headless, bool is_server, bool playable_listen,
+CLIArgs::CLIArgs(std::optional<uint8_t> rcon_port, bool apply_desync_patch, bool use_backend_banlist,
+                 bool is_headless, bool is_server, bool playable_listen, std::optional<std::wstring> next_map,
                  std::wstring server_browser_backend, std::optional<std::wstring> server_password,
                  Platform platform)
-    : enable_rcon(enable_rcon)
+    : rcon_port(rcon_port)
     , apply_desync_patch(apply_desync_patch)
     , use_backend_banlist(use_backend_banlist)
     , is_headless(is_headless)
@@ -19,19 +19,21 @@ CLIArgs::CLIArgs(bool enable_rcon, bool apply_desync_patch, bool use_backend_ban
     , server_browser_backend(server_browser_backend)
     , server_password(server_password)
     , platform(platform)
+    , next_map(next_map)
 {
 }
 
 CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
 {
-    bool enable_rcon = false;
+    std::optional<uint8_t> rcon_port = std::nullopt;
     bool apply_desync_patch = false;
     bool use_backend_banlist = false;
     bool is_headless = false;
     bool is_server = false;
     bool playable_listen = false;
-    std::wstring server_browser_backend = L"";
+    std::wstring server_browser_backend = L"https://servers.polehammer.net";
     std::optional<std::wstring> server_password = std::nullopt;
+    std::optional<std::wstring> next_map = std::nullopt;
     Platform platform = Platform::STEAM;
 
     std::wistringstream iss(cli_param_string);
@@ -46,8 +48,13 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
         const auto& arg = tokens[i];
 
         if (arg == L"-rcon") {
-            enable_rcon = true;
-        } 
+            try {
+                auto port_str = tokens.at(++i);
+                rcon_port = std::stoi(port_str);
+            } catch (const std::exception& e) {
+                GLOG_ERROR("Invalid port.  Expected an integer. RCON will not be enabled.");
+            }
+        }
         else if (arg == L"--desync-patch") {
             apply_desync_patch = true;
         } 
@@ -59,7 +66,11 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
             is_server = true;
         } 
         else if (arg == L"--next-map-name") {
-            is_server = true;
+            try {
+                next_map = tokens.at(++i);
+            } catch (const std::exception& e) {
+                GLOG_ERROR("Expected a map name following arg '--next-map-name'. Got nothing.");
+            }
         } 
         else if (arg == L"--playable-listen") {
             playable_listen = true;
@@ -84,7 +95,7 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
         }
     }
 
-    return CLIArgs(enable_rcon, apply_desync_patch, use_backend_banlist,
-                  is_headless, is_server, playable_listen, 
+    return CLIArgs(rcon_port, apply_desync_patch, use_backend_banlist,
+                  is_headless, is_server, playable_listen, next_map,
                   server_browser_backend, server_password, platform);
 }

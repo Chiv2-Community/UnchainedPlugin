@@ -1,11 +1,12 @@
 #include "constants.h"
 #include "nettools.h"
 #include "logging/global_logger.hpp"
-#include "commandline.h"
 #include <windows.h>
 #include <vector>
 #include <winhttp.h>
 #include <stringapiset.h>
+
+#include "state/global_state.hpp"
 
 const wchar_t* Utf8ToTChar(const char* utf8bytes)
 {
@@ -19,13 +20,7 @@ const wchar_t* Utf8ToTChar(const char* utf8bytes)
 }
 
 std::wstring GetApiUrl(const wchar_t* path) {
-	if (CmdGetParam(SERVER_BROWSER_BACKEND_CLI_ARG) != -1) {
-		return CmdParseParam(SERVER_BROWSER_BACKEND_CLI_ARG, L"", path);
-	}
-	else {
-		std::wstring baseUrl(DEFAULT_SERVER_BROWSER_BACKEND);
-		return baseUrl + path;
-	}
+	return g_state->GetCLIArgs().server_browser_backend + path;
 }
 
 std::wstring HTTPGet(const std::wstring* url) {

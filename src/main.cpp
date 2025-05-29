@@ -19,7 +19,6 @@
 #include "UE4.h"
 #include "logging/Logger.hpp"
 #include "nettools.h"
-#include "commandline.h"
 #include "builds.h"
 
 //black magic for the linker to get winsock2 to work
@@ -38,49 +37,17 @@
 #include "state/global_state.hpp"
 #include <string_view>
 
-inline void AppendToFile(const std::string& message) {
-	OutputDebugStringA(message.c_str());
-}
-
-// parse the command line for the rcon flag, and return the port specified
-// if not port was specified, or the string that was supposed to be a port number 
-// was invalid, then -1 is returned
-// TODO: swap this out for more generalized commandline parsing introduced in commandline.h
-int parsePortParams(std::wstring commandLine, size_t flagLoc) {
-	size_t portStart = commandLine.find(L" ", flagLoc); //next space
-	if (portStart == std::wstring::npos) {
-		return -1;
-	}
-	size_t portEnd = commandLine.find(L" ", portStart + 1); //space after that
-
-	std::wstring port = portEnd != std::wstring::npos
-		? commandLine.substr(portStart, portEnd - portStart)
-		: commandLine.substr(portStart);
-
-	GLOG_DEBUG("found port: {}", port);
-
-	try {
-		return std::stoi(port);
-	}
-	catch (std::exception e) {
-		return -1;
-	}
-}
-
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
 	size_t flagLoc = commandLine.find(L"-rcon");
-	if (!g_state->GetCLIArgs().enable_rcon) {
+	if (!g_state->GetCLIArgs().rcon_port.has_value()) {
 		ExitThread(0);
 		return;
 	}
 
 	GLOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
 
-	int port = parsePortParams(commandLine, flagLoc);
-	if (port == -1) {
-		port = 9001; //default port
-	}
+	int port = g_state->GetCLIArgs().rcon_port.value();
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -261,14 +228,14 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		HOOK_ATTACH(module_base, CanUseLoadoutItem);
 		HOOK_ATTACH(module_base, CanUseCharacter);
 
-		bool useBackendBanList = CmdGetParam(L"--use-backend-banlist") != -1;
+		bool useBackendBanList = g_state->GetCLIArgs().use_backend_banlist;
 		if (useBackendBanList) {
 			HOOK_ATTACH(module_base, FString_AppendChars);
 			HOOK_ATTACH(module_base, PreLogin);
 
 		}
 
-		bool IsHeadless = CmdGetParam(L"-nullrhi") != -1;
+		bool IsHeadless = g_state->GetCLIArgs().is_headless;
 		if (IsHeadless) {
 			HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
 			HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);

@@ -63,7 +63,7 @@ CREATE_HOOK(
 			: L"";
 
 		wsprintfW(szBuffer, L"Frontend%ls%ls%ls",
-			(CmdGetParam(L"-rcon") == -1) ? L"" : L"?rcon",
+			(g_state->GetCLIArgs().rcon_port.has_value()) ? L"?rcon" : L"",
 			pwd_str.c_str(),
 			init ? L"" : L"?startup");
 

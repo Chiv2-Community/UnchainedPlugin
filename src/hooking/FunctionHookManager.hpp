@@ -4,6 +4,8 @@
 #include "../hooks/sigs.h"
 #include <vector>
 #include <string>
+
+#include "HookData.hpp"
 #include "../state/global_state.hpp"
 
 /**

@@ -3,6 +3,7 @@
 #include <regex>
 #include "../logging/Logger.hpp"
 #include "legacy_hooks.h"
+#include "../state/global_state.hpp"
 
 DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b)) {
 #ifdef _DEBUG_
@@ -51,8 +52,6 @@ DECL_HOOK(void, BroadcastLocalizedChat, (void* game_mode, FText* text, uint8_t c
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
 
-// TODO: make this a proper header-impl file, with other related things
-// maybe put it in commandline.h/cpp??
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
 	std::wregex pattern(L"(.+) <0>: /cmd (.+)");
@@ -78,8 +77,8 @@ bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::w
 // TODO: make this a proper header-impl file, with other related things
 bool IsServerStart()
 {
-	bool isHeadless = CmdGetParam(L"-nullrhi") != -1;
-	bool isSetToTravel = CmdGetParam(L"--next-map-name") != -1;
+	bool isHeadless = g_state->GetCLIArgs().is_headless;
+	bool isSetToTravel = g_state->GetCLIArgs().next_map.has_value();
 	return isHeadless || isSetToTravel;
 }
 
@@ -103,7 +102,7 @@ APlayerController::ClientMessage
 DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2, float param_3))
 {
 	std::wstring commandLine = GetCommandLineW();
-	bool egs = CmdGetParam(L"-epicapp=Peppermint") != -1;
+	bool egs = g_state->GetCLIArgs().platform == EGS;
 	static uint64_t init = false;
 	GLOG_DEBUG("ClientMessage");
 
