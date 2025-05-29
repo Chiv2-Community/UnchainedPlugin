@@ -1,101 +1,108 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(TARGET UnchainedPlugin)
+# Project version information
+set(VER_MAJOR 0 CACHE STRING "MAJOR version component")
+set(VER_MINOR 4 CACHE STRING "MINOR version component")
+set(VER_PATCH 6 CACHE STRING "PATCH version component")
+set(VER_BUILD 0 CACHE STRING "BUILD version component")
 
-set(VER_MAJOR 0 CACHE STRING "MAJOR.minor.patch.build")
-set(VER_MINOR 4 CACHE STRING "major.MINOR.patch.build")
-set(VER_PATCH 6 CACHE STRING "major.minor.PATCH.build")
-set(VER_BUILD 0 CACHE STRING "major.minor.patch.BUILD")
+# Project definition with versioning
+project(UnchainedPlugin 
+        VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_PATCH}" 
+        LANGUAGES CXX C)
 
+# C++ standard requirements
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Options
 option(PRINT_CLIENT_MSG "Output chat messages to CLI" OFF)
 option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
 set(POST_BUILD_COPY_DIR "I:\\Epic Games\\Chivalry2_c\\TBL\\Binaries\\Win64\\Plugins" CACHE STRING "Directory to copy to")
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Generates a header file which includes all the headers of the source dir.
+function(generate_include_all_header SOURCE_DIR FILE_NAME)
+    file(GLOB HEADER_FILES "${SOURCE_DIR}/*.h" "${SOURCE_DIR}/*.hpp")
+    set(INCLUDE_ALL_CONTENT "// GENERATED FILE, DO NOT MODIFY\n")
+    string(APPEND INCLUDE_ALL_CONTENT "// GENERATED FILE, DO NOT MODIFY\n")
+    string(APPEND INCLUDE_ALL_CONTENT "// GENERATED FILE, DO NOT MODIFY\n")
+    string(APPEND INCLUDE_ALL_CONTENT "// GENERATED FILE, DO NOT MODIFY\n")
+    string(APPEND INCLUDE_ALL_CONTENT "\n")
+    string(APPEND INCLUDE_ALL_CONTENT "// Reload the cmake configuration to regenerate this file.\n")
+    string(APPEND INCLUDE_ALL_CONTENT "#pragma once\n")
+    foreach(header ${HEADER_FILES})
+        get_filename_component(header_name ${header} NAME)
+        if(NOT header_name MATCHES ${FILE_NAME})
+            string(APPEND INCLUDE_ALL_CONTENT "#include \"${header_name}\"\n")
+        endif()
+    endforeach()
+    file(WRITE "${SOURCE_DIR}/${FILE_NAME}" "${INCLUDE_ALL_CONTENT}")
+endfunction()
 
-project(${TARGET} VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_PATCH}" LANGUAGES CXX C)
+generate_include_all_header("src/hooks" "all_hooks.h")
+generate_include_all_header("src/logging/formatters" "all_formatters.h")
 
-# Adjust include directories for the new structure
-include_directories(include)
+# File collection
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
+file(GLOB_RECURSE HEADERS "src/*.hpp" "src/*.h")
 
-# Update file glob patterns to match the new directory structure
-file(GLOB SOURCES "src/*.cpp" "include/*.cpp")
-file(GLOB HEADERS "include/*.h" "include/*.hpp")
-
-# Update source groups to match the new file paths
-source_group("Source Files\\Utils" FILES
-    src/logging.cpp
-    src/commandline.cpp
-    src/nettools.cpp
-)
-
-source_group("Header Files\\Utils" FILES
-    include/resource.h
-    include/commandline.h
-    include/logging.hpp
-    include/nettools.h
-)
-
-source_group("Header Files\\Hooks" FILES
-    include/adminControl.h
-    include/assetLoading.h
-    include/backendHooks.h
-    include/etcHooks.h
-    include/ownershipOverrides.h
-    include/sigs.h
-    include/unchainedIntegration.h
-)
-
-# Fix the path for version.rc.in
+# Configure version resource
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/version.rc.in
     ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-    @ONLY)
+    @ONLY
+)
 
+# Add dependencies
 add_subdirectory(lib/MinHook)
 add_subdirectory(lib/tiny-json)
-add_subdirectory(lib/quill)
 
-add_library(${TARGET} SHARED ${SOURCES} ${HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
-
-target_compile_definitions(${TARGET} PRIVATE
-    NOMINMAX                     # Prevent Windows.h from defining min/max macros
-    $<$<CONFIG:Debug>:_DEBUG>    # Define _DEBUG in Debug configuration
-    $<$<CONFIG:Debug>:_DEBUG_CONSOLE>
-    $<$<CONFIG:Release>:_DEBUG_CONSOLE>
+# Define the library
+add_library(${PROJECT_NAME} SHARED 
+    ${SOURCES} 
+    ${HEADERS} 
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
+        src/hooking/HookData.hpp
 )
 
-# Use QUILL_STATIC_LIB instead of QUILL_DLL_IMPORT
-target_compile_definitions(${TARGET} PRIVATE QUILL_STATIC_LIB)
-
-# Update include directories
-target_include_directories(${TARGET} PUBLIC 
-    include 
-    lib/Sig
-)
-
-# Set output directory if needed
-set_target_properties(${TARGET} PROPERTIES
+# Target properties
+set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Output"
 )
 
-if(PRINT_CLIENT_MSG)
-    target_compile_definitions(${TARGET} PUBLIC PRINT_CLIENT_MSG)
-endif()
+# Include directories
+target_include_directories(${PROJECT_NAME} PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/Sig
+)
 
+# Compiler definitions
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    NOMINMAX                      # Prevent Windows.h from defining min/max macros
+    $<$<CONFIG:Debug>:_DEBUG>     # Define _DEBUG in Debug configuration
+    $<$<CONFIG:Debug>:_DEBUG_CONSOLE>
+    $<$<CONFIG:Release>:_DEBUG_CONSOLE>
+    $<$<BOOL:${PRINT_CLIENT_MSG}>:PRINT_CLIENT_MSG>
+)
+
+# Link libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    MinHook
+    tiny-json
+    winhttp
+)
+
+# Source grouping for better organization in IDEs
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES} ${HEADERS})
+
+# Post-build copy
 if(POST_BUILD_COPY)
     add_custom_command(
-        TARGET ${TARGET} POST_BUILD
+        TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-        $<TARGET_FILE:${TARGET}>
-        ${POST_BUILD_COPY_DIR}/${TARGET}.dll && echo
-        ${TARGET}.dll copied to ${POST_BUILD_COPY_DIR}
+            "$<TARGET_FILE:${PROJECT_NAME}>"
+            "${POST_BUILD_COPY_DIR}/${PROJECT_NAME}.dll"
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "${PROJECT_NAME}.dll copied to ${POST_BUILD_COPY_DIR}"
     )
 endif()
-
-# Link against libraries - the order matters
-target_link_libraries(${TARGET}
-    PRIVATE MinHook tiny-json winhttp
-    PUBLIC quill::quill
-)

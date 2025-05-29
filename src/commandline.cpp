@@ -21,9 +21,7 @@ std::wstring CmdParseParam(const wchar_t* param, const wchar_t* addPrefix, const
 
 	size_t offset = paramPos + lstrlenW(param) + 1;
 	size_t paramEnd = commandLine.find(L" ", offset);
-	if (paramPos == -1)
-		return L"";
 	std::wstring res = commandLine.substr(offset, paramEnd - offset);
 
-	return (addPrefix + res + addSuffix).c_str();
+	return addPrefix + res + addSuffix;
 }
