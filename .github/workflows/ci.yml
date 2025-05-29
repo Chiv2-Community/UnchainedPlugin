@@ -1,0 +1,32 @@
+﻿name: C++ CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.build_type}}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: UnchainedPlugin-${{matrix.build_type}}
+          path: ${{github.workspace}}/build/Output/*
