@@ -120,7 +120,8 @@ std::wstring HTTPGet(const std::wstring* url) {
 			do {
 				dwSize = 0;
 				if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
-					GLOG_ERROR("Error %u in WinHttpQueryDataAvailable.\n", GetLastError());
+					auto error = GetLastError();
+					GLOG_ERROR("Error %u in WinHttpQueryDataAvailable.", error);
 					break;
 				}
 
@@ -135,7 +136,9 @@ std::wstring HTTPGet(const std::wstring* url) {
 
 					if (!WinHttpReadData(hRequest, (LPVOID)pszOutBuffer,
 						dwSize, &dwDownloaded)) {
-						GLOG_ERROR("Error %u in WinHttpReadData.", GetLastError());
+						auto error = GetLastError();
+
+						GLOG_ERROR("Error %u in WinHttpReadData.", error);
 					}
 					else {
 						std::wstring chunk = Utf8ToTChar(pszOutBuffer);

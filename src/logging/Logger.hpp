@@ -39,9 +39,9 @@ public:
 
         std::string formatted_message;
         try {
-            formatted_message = std::vformat(fmt, std::make_format_args(std::forward<Args>(args)...));
+            formatted_message = std::vformat(fmt, std::make_format_args(args...));
         } catch (const std::format_error& e) {
-            formatted_message = fmt + " [FORMAT ERROR: " + e.what() + "]";
+            formatted_message = fmt + " [Formatting error: " + e.what() + "]";
         }
 
         std::string timestamp = std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()));
