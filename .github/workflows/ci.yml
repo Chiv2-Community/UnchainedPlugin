@@ -18,18 +18,37 @@ jobs:
         with:
           submodules: recursive
 
+      # Ensure build directory exists
+      - name: Create build directory
+        run: mkdir -p ${{github.workspace}}/build
+
+      # Setup Visual Studio Developer Command Prompt with the latest toolset
       - name: Setup Visual Studio Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
         with:
           vsversion: '2022'
+          toolset: latest
           arch: amd64
 
+      # Display compiler version for debugging
+      - name: Check compiler version
+        run: |
+          cl.exe
 
+      # Use the latest Visual Studio toolset in CMake
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
+
+      # Build the project
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.build_type}}
+        run: |
+          cmake --build ${{github.workspace}}/build --config ${{matrix.build_type}}
 
+      # Upload artifacts if build succeeds
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: UnchainedPlugin-${{matrix.build_type}}
           path: ${{github.workspace}}/build/Output/*
+          if-no-files-found: warn  # Don't fail if no files are found
