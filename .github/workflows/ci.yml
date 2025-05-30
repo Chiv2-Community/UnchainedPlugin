@@ -27,7 +27,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           vsversion: '2022'
-          toolset: latest
+          toolset: 17.XX
           arch: amd64
 
       # Display compiler version for debugging
