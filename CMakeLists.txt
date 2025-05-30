@@ -15,6 +15,8 @@ project(UnchainedPlugin
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_BUILD_PARALLEL_LEVEL ${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT})
+
 # Options
 option(PRINT_CLIENT_MSG "Output chat messages to CLI" OFF)
 option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
@@ -76,6 +78,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Compiler definitions
+target_compile_options(${PROJECT_NAME} PRIVATE /MP)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     NOMINMAX                      # Prevent Windows.h from defining min/max macros
     $<$<CONFIG:Debug>:_DEBUG>     # Define _DEBUG in Debug configuration
