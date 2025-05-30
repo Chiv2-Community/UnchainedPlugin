@@ -24,11 +24,6 @@ jobs:
       - name: Create build directory
         run: mkdir -p ${{github.workspace}}/build
 
-      # Display compiler version for debugging
-      - name: Check compiler version
-        run: |
-          cl.exe
-
       # Use the latest Visual Studio toolset in CMake
       - name: Configure CMake
         run: |
