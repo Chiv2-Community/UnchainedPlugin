@@ -144,9 +144,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		GLOG_INFO("Logger initialized");
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
-		auto buildMetadata = BuildMetadata();
-		auto state = State(cliArgs, buildMetadata);
-		initialize_global_state(&state);
 
 		HMODULE hModule = static_cast<HMODULE>(lpParameter);
 		auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
@@ -169,7 +166,20 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		GLOG_DEBUG("MinHook initialized");
 
 		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
-		state.SetSavedBuildMetadata(loaded);
+
+		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
+		std::string build_hash_string = std::to_string(build_hash);
+		bool needsSerialization = false;
+
+		if (!loaded.contains(build_hash_string)) {
+			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, ""));
+			needsSerialization = true;
+		}
+
+		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
+
+		auto state = new State(cliArgs, loaded, current_build_metadata);
+		initialize_global_state(state);
 
 		baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
 
@@ -185,24 +195,25 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM);
+		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata);
 		register_auto_hooks(hook_manager);
 
-		hook_manager.enable_hook(&FViewport_Hook);
 		hook_manager.enable_hooks();
 
 		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
 		{
-			auto maybeOffset = state.GetBuildMetadata().GetOffset(strFunc[i]);
-			if (!maybeOffset.has_value())
-				state.GetBuildMetadata().SetOffset(
+			auto maybeOffset = current_build_metadata.GetOffset(strFunc[i]);
+			if (!maybeOffset.has_value()) {
+				needsSerialization = true;
+				current_build_metadata.SetOffset(
 					strFunc[i],
 					FindSignature(baseAddr, moduleInfo.SizeOfImage, strFunc[i], signatures[i])
 				);
-			else GLOG_INFO("ok -> {} : (conf)", strFunc[i]);
+			} else GLOG_INFO("ok -> {} : (conf)", strFunc[i]);
 		}
 
-		SaveBuildMetadata(loaded);
+		if (needsSerialization)
+			SaveBuildMetadata(loaded);
 
 		HOOK_ATTACH(module_base, GetMotd);
 		HOOK_ATTACH(module_base, GetCurrentGames);

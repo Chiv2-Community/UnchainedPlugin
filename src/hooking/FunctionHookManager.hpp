@@ -4,22 +4,19 @@
 #include <string>
 #include <Sig.hpp>
 
-#include "FunctionHook.hpp"
 #include "HookData.hpp"
 #include "../logging/global_logger.hpp"
-#include "../state/global_state.hpp"
 
 /**
  * The FunctionHookManager keeps track of hooks that will need their signatures to be scanned and
  * enabled via minhook.
- *
- * g_state from global_state.hpp is used to track build metadata.
  */
 class FunctionHookManager {
 private:
     std::vector<std::string> failed_hooks;
     std::vector<std::tuple<std::string, std::function<bool()>, std::function<MH_STATUS()>>> pending_hooks;
     std::map<std::string, uint64_t> hook_offsets;
+    BuildMetadata& current_build_metadata;
     HMODULE base_addr;
     MODULEINFO module_info;
     Platform platform;
@@ -36,13 +33,13 @@ private:
     }
 
 public:
-    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, const Platform platform) {
+    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, const Platform platform, BuildMetadata& current_build_metadata): current_build_metadata(current_build_metadata) {
         this->base_addr = base_addr;
         this->module_info = module_info;
         this->failed_hooks = {};
         this->pending_hooks = {};
         this->platform = platform;
-    };
+    } ;
 
     /**
      * Registers a hook using a HookData structure.
@@ -67,7 +64,7 @@ public:
         }
 
         uint64_t address = 0;
-        uint64_t offset = g_state->GetBuildMetadata().GetOffset(hookData.name).value_or(0);
+        uint64_t offset = current_build_metadata.GetOffset(hookData.name).value_or(0);
 
         if (offset == 0) {
             address = (uint64_t)Sig::find(base_addr, module_info.SizeOfImage, signature.value().c_str());
@@ -79,7 +76,7 @@ public:
             }
 
             offset = address - (uint64_t)(base_addr);
-            g_state->GetBuildMetadata().SetOffset(hookData.name, offset);
+            current_build_metadata.SetOffset(hookData.name, offset);
         } else {
             address = (uint64_t)(base_addr) + offset;
         }

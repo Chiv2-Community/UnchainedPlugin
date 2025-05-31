@@ -3,7 +3,7 @@
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
-#include "../hooking/AutoHook.hpp"
+#include "../hooking/hook_macros.hpp"
 #include <optional>
 
 CREATE_HOOK(
@@ -15,34 +15,34 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	FString*, (FViewport_C* this_ptr, void* viewportClient)
 ) {
-		GLOG_DEBUG("FViewport");
 		FString* val = o_FViewport(this_ptr, viewportClient);
+
 
 		wchar_t* buildNr = wcschr(this_ptr->AppVersionString.str, L'+') + 1;
 		if (buildNr != nullptr)
 		{
+			bool needsSerialization = false;
+
 			uint32_t buildId = _wtoi(buildNr);
-			if (g_state->GetBuildMetadata().GetBuildId() == 0 || g_state->GetBuildMetadata().GetName().empty())
+			if (g_state->GetBuildMetadata().GetBuildId() == 0)
 			{
 				needsSerialization = true;
-				wchar_t* build_name = this_ptr->AppVersionString.str + 7;
-				std::wstring build_name_str(build_name);
-				g_state->GetBuildMetadata().SetName(&build_name_str);
+				const wchar_t* build_name = this_ptr->AppVersionString.str + 7;
+				const std::wstring build_name_str(build_name);
+				g_state->GetBuildMetadata().SetName(build_name_str);
 				g_state->GetBuildMetadata().SetBuildId(buildId);
-				g_state->GetBuildMetadata().SetFileHash(calculateCRC32("Chivalry2-Win64-Shipping.exe"));
 
-				GLOG_INFO("Build metadata set - Name: {} BuildId: {} Hash: {:#x}",
+				GLOG_INFO("Build metadata set - Name: {} BuildId: {} Hash: 0x{:X}",
 						  g_state->GetBuildMetadata().GetName(),
 						  g_state->GetBuildMetadata().GetBuildId(),
 						  g_state->GetBuildMetadata().GetFileHash());
+
+				SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 
 			if (!g_state->GetBuildMetadata().GetName().empty())
 			{
 				GLOG_INFO("Build String found!{} {}", (g_state->GetBuildMetadata().GetBuildId() == 0) ? L"" : L" (loaded)", g_state->GetBuildMetadata().GetName());
-
-				if (needsSerialization)
-					SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 		}
 		return val;
