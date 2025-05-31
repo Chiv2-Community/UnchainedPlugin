@@ -36,14 +36,13 @@ CREATE_HOOK(
 						  g_state->GetBuildMetadata().GetName(),
 						  g_state->GetBuildMetadata().GetBuildId(),
 						  g_state->GetBuildMetadata().GetFileHash());
+
+				SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 
 			if (!g_state->GetBuildMetadata().GetName().empty())
 			{
 				GLOG_INFO("Build String found!{} {}", (g_state->GetBuildMetadata().GetBuildId() == 0) ? L"" : L" (loaded)", g_state->GetBuildMetadata().GetName());
-
-				if (needsSerialization)
-					SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 		}
 		return val;

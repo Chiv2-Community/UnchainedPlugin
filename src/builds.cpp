@@ -9,6 +9,7 @@
 #include <tiny-json.h>
 #include <nmmintrin.h> // SSE4.2 intrinsics
 #include <functional>
+#include <Windows.h>
 
 #include "logging/global_logger.hpp"
 #include "state/global_state.hpp"
@@ -37,10 +38,19 @@ uint32_t calculateCRC32(const std::string& filename) {
 }
 
 std::filesystem::path getBuildMetadataPath() {
-    const char* localAppData = std::getenv("LOCALAPPDATA");
-    return std::filesystem::path(localAppData) / 
-           "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
+	char localAppData[MAX_PATH];
+	DWORD result = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
+
+	if (result == 0 || result > MAX_PATH) {
+		// Handle error - environment variable not found or buffer too small
+		GLOG_ERROR("Failed to get LOCALAPPDATA environment variable");
+		return {};
+	}
+
+	return std::filesystem::path(localAppData) /
+		   "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
 }
+
 
 bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 {
