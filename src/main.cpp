@@ -33,7 +33,6 @@
 #include "hooks/all_hooks.h"
 
 #include "legacy_hooks/legacy_hooks.h"
-#include "hooks/etc_hooks.h"
 #include "legacy_hooks/sigs.h"
 
 
@@ -217,11 +216,9 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
 
-		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
+		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(UTBLLocalPlayer_Exec_HookData.name);
 		if (localPlayerOffset.has_value()) {
 			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
-
-			auto cmd_permission{ module_base + localPlayerOffset.value() };
 			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
 		}
 		else

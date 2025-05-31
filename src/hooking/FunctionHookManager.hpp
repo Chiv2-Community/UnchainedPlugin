@@ -87,7 +87,8 @@ public:
         HookData registeredHook = hookData;
         registeredHook.address = address;
 
-        pending_hooks.push_back(registeredHook);
+        if (!registeredHook.scan_only)
+            pending_hooks.push_back(registeredHook);
 
         return true;
     }

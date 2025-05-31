@@ -6,6 +6,8 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
+SCAN_HOOK(UTBLLocalPlayer_Exec, UNIVERSAL_SIGNATURE("75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf"))
+
 CREATE_HOOK(
 	ConsoleCommand,
 	UNIVERSAL_SIGNATURE("40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 \

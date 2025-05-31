@@ -16,14 +16,23 @@ inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 
 template<typename RetType, typename... Args>
 inline HookData register_hook(std::string name,
-		 const std::function<std::optional<std::string>(Platform)> select_signature_for_platform,
-		 const std::function<bool()> should_attach,
-		 RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer
-		 RetType(*hook_function)(Args...)
+     const std::function<std::optional<std::string>(Platform)> select_signature_for_platform,
+     const std::function<bool()> should_attach,
+     RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer
+     RetType(*hook_function)(Args...)
 ) {
 	auto data = HookData(name, select_signature_for_platform, should_attach, reinterpret_cast<void**>(&trampoline), hook_function);
 	g_auto_hooks.push_back(data);
 	return data;
+}
+
+inline HookData register_scan_only_hook(
+    std::string name,
+	const std::function<std::optional<std::string>(Platform)> select_signature_for_platform
+) {
+    auto data = HookData(name, select_signature_for_platform, true);
+    g_auto_hooks.push_back(data);
+    return data;
 }
 
 #define CREATE_HOOK(name, signatures_func, attach_predicate, return_type, arguments) \
@@ -31,6 +40,10 @@ inline HookData register_hook(std::string name,
     static const auto name##_predicate = attach_predicate; \
     return_type(*o_##name)arguments = nullptr; \
     return_type hk_##name arguments
+
+#define SCAN_HOOK(name, signatures_func) \
+    static const auto name##_signature = signatures_func; \
+    auto name##_HookData = register_scan_only_hook(#name, name##_signature);
 
 #define AUTO_HOOK(name) \
     static auto name##_Hook = register_hook( \
