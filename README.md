@@ -2,9 +2,9 @@
 The unchained plugin patches the Chivalry 2 Binary and allows connection to unofficial servers using an unofficial server browser. It also enables the loading of non-vanilla pak files (mods).
 
 ## Adding new hooks
-Hooks are all defined in src/hooks.  New hooks can be created with `CREATE_HOOK(...)` followed by an `AUTO_HOOK` call.
-This should be sufficient for hooking new functionality. CMake will automatically update the `all_hooks.h` file on its
-next configuration run, and `main.h` will automatically initialize/scan/enable any hooks that have an `AUTO_HOOK` call.
+Hooks are all defined in src/hooks.  New hooks can be created with `CREATE_HOOK(...)` followed by an `AUTO_HOOK` call. 
+CMake will automatically update the `all_hooks.h` file on its next configuration run, and `main.h` will automatically 
+initialize/scan/enable any hooks that have an `AUTO_HOOK` call.
 
 Hook addresses/offsets are found by performing a search for a binary signature. Some signatures are the same across all
 platforms, and those may be defined with `UNIVERSAL_SIGNATURE`.  Other signatures may differ between platforms. For 

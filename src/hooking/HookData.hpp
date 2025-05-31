@@ -9,6 +9,7 @@ struct HookData {
     std::string name;
     std::function<std::optional<std::string>(Platform)> select_signature_for_platform;
     std::function<bool()> should_attach;
+    uint64_t address = 0;
     void** trampoline = nullptr;
     void* hook;
 

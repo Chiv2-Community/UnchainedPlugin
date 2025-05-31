@@ -130,10 +130,15 @@ void CreateDebugConsole() {
 
 	freopen_s(&pCout, "CONOUT$", "w", stdout);
 	freopen_s(&pCerr, "CONOUT$", "w", stderr);
-
 	std::ios::sync_with_stdio(true);
 
 	SetConsoleTitleA("Chivalry 2 Unchained Debug");
+
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD consoleMode;
+	GetConsoleMode(hConsole, &consoleMode);
+	SetConsoleMode(hConsole, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
 
 	GLOG_INFO("Debug console created successfully\n");
 }

@@ -26,7 +26,17 @@ private:
     std::mutex mutex_;
 
     static std::string level_to_string(LogLevel level);
-    static std::string wstring_to_string(const std::wstring& wstr);
+
+    // Windows console color codes
+    static constexpr int DARKGRAY = 241;
+    static constexpr int GRAY = 245;
+    static constexpr int WHITE = 15;
+    static constexpr int YELLOW = 226;
+    static constexpr int RED = 196;
+    
+    // Get color for log level
+    static int get_level_color(LogLevel level);
+    
 public:
     explicit Logger(LogLevel level = LogLevel::INFO);
     void add_sink(std::shared_ptr<LogSink> sink);
@@ -45,6 +55,13 @@ public:
         }
 
         std::string timestamp = std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()));
+        std::string level_str = level_to_string(level);
+        
+        ColoredMessage colored_message;
+        colored_message.push_back({std::format("[{}] ", timestamp), DARKGRAY});
+        colored_message.push_back({std::format("[{:<5}] ", level_str), get_level_color(level)});
+        
+#ifdef _SHOW_SOURCE_LOCATION_IN_LOG
         std::string file = location.file_name();
         size_t pos = file.find_last_of("/\\");
         if (pos != std::string::npos) {
@@ -52,13 +69,18 @@ public:
         }
 
         std::string location_str = std::format("{}:{}", file, location.line());
-
-        std::string full_message = std::format("[{}] [{:<7}] [{:<27.27}] {}",
-            timestamp, level_to_string(level), location_str, formatted_message);
-
+        colored_message.push_back({std::format("[{:<27.27}] ", location_str), GRAY});
+#endif
+        colored_message.push_back({formatted_message, WHITE});
+        
+        std::string full_message;
+        for (const auto& segment : colored_message) {
+            full_message += segment.text;
+        }
+        
         std::lock_guard<std::mutex> lock(mutex_);
         for (const auto& sink : sinks_) {
-            sink->write(full_message);
+            sink->write_colored(colored_message);
         }
     }
 

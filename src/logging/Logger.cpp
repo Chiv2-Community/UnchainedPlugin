@@ -1,10 +1,8 @@
-﻿#include <iostream>
-#include <format>
+﻿#include <format>
 #include <chrono>
 
 #include "Logger.hpp"
 
-// Logger implementation
 Logger::Logger(LogLevel level) : level_(level) {}
 
 void Logger::add_sink(std::shared_ptr<LogSink> sink) {
@@ -26,23 +24,19 @@ std::string Logger::level_to_string(LogLevel level) {
         case LogLevel::TRACE:   return "TRACE";
         case LogLevel::DEBUG:   return "DEBUG";
         case LogLevel::INFO:    return "INFO";
-        case LogLevel::WARNING: return "WARNING";
+        case LogLevel::WARNING: return "WARN";
         case LogLevel::ERR:     return "ERROR";
         default: return "UNKNOWN";
     }
 }
 
-std::string Logger::wstring_to_string(const std::wstring& wstr) {
-    std::string result;
-    result.reserve(wstr.size());
-    for (const auto& wc : wstr) {
-        // Simple conversion - note this doesn't handle all Unicode characters properly
-        // For production, you might want to use a proper conversion function
-        if (wc <= 127) {
-            result.push_back(static_cast<char>(wc));
-        } else {
-            result.push_back('?');
-        }
+int Logger::get_level_color(LogLevel level) {
+    switch (level) {
+        case LogLevel::TRACE:   return DARKGRAY;
+        case LogLevel::DEBUG:   return GRAY;
+        case LogLevel::INFO:    return WHITE;
+        case LogLevel::WARNING: return YELLOW;
+        case LogLevel::ERR:     return RED;
+        default: return WHITE;
     }
-    return result;
 }
