@@ -3,7 +3,6 @@
 // https://stackoverflow.com/a/8349281
 
 #define FUNCTYPES \
-	etype(UTBLLocalPlayer_Exec) \
 	etype(MaxFuncType) //this always needs to be last
 
 #define etype(x) uint32_t x = 0x0;
