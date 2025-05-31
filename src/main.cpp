@@ -33,7 +33,6 @@
 #include "hooks/all_hooks.h"
 
 #include "legacy_hooks/legacy_hooks.h"
-#include "legacy_hooks/adminControl.h"
 #include "legacy_hooks/assetLoading.h"
 #include "legacy_hooks/backendHooks.h"
 #include "legacy_hooks/etcHooks.h"
@@ -227,25 +226,14 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		HOOK_ATTACH(module_base, FindFileInPakFiles_1);
 		HOOK_ATTACH(module_base, FindFileInPakFiles_2);
 		HOOK_ATTACH(module_base, GetGameInfo);
-		HOOK_ATTACH(module_base, ConsoleCommand);
 
-		bool useBackendBanList = g_state->GetCLIArgs().use_backend_banlist;
+		bool useBackendBanList = state->GetCLIArgs().use_backend_banlist;
 		if (useBackendBanList) {
 			HOOK_ATTACH(module_base, FString_AppendChars);
 			HOOK_ATTACH(module_base, PreLogin);
 		}
 
-#ifdef PRINT_CLIENT_MSG
-		HOOK_ATTACH(module_base, ClientMessage);
-#endif
-
-		HOOK_ATTACH(module_base, ClientMessage);
-		HOOK_ATTACH(module_base, ExecuteConsoleCommand);
-		HOOK_ATTACH(module_base, GetTBLGameMode);
-		HOOK_ATTACH(module_base, FText_AsCultureInvariant);
-		HOOK_ATTACH(module_base, BroadcastLocalizedChat);
-
-		auto localPlayerOffset = g_state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
+		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
 		if (localPlayerOffset.has_value()) {
 			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
 
