@@ -14,7 +14,7 @@
 class FunctionHookManager {
 private:
     std::vector<std::string> failed_hooks;
-    std::vector<std::tuple<std::string, std::function<bool()>, std::function<MH_STATUS()>>> pending_hooks;
+    std::vector<HookData> pending_hooks;
     std::map<std::string, uint64_t> hook_offsets;
     BuildMetadata& current_build_metadata;
     HMODULE base_addr;
@@ -50,7 +50,7 @@ public:
      *
      * The should_enable function will pass in the current global state at the time of hook enablement.
      * If it returns false, the hook will not be enabled.
-     * 
+     *
      * @param hookData The HookData object containing all hook details.
      * @return true if the hook was successfully registered, false otherwise.
      */
@@ -83,55 +83,55 @@ public:
 
         GLOG_INFO("?? -> {} : 0x{:X}", hookData.name, offset);
 
-        pending_hooks.push_back(std::make_tuple(
-            hookData.name,
-            hookData.should_attach,
-            [hook = hookData.hook, address, trampoline = hookData.trampoline]() {
-                auto result = MH_CreateHook(
-                    reinterpret_cast<void*>(address),
-                    hook,
-                    trampoline
-                );
-                if (result != MH_OK) return result;
+        // Create a copy of hookData that includes the calculated address
+        HookData registeredHook = hookData;
+        registeredHook.address = address;
 
-                return MH_EnableHook(reinterpret_cast<void*>(address));
-            }
-        ));
+        pending_hooks.push_back(registeredHook);
 
         return true;
     }
 
     /**
      * Enables a specific hook that has been registered using register_hook().
-     * 
+     *
      * @return true if all hooks were successfully enabled, false otherwise.
      */
     inline bool enable_hook(const HookData* hook) {
         auto hook_name = hook->name;
         auto it = std::find_if(pending_hooks.begin(), pending_hooks.end(),
-            [&hook_name](const auto& enabler) {
-                std::string name = std::get<0>(enabler);
-                return name == hook_name;
+            [&hook_name](const auto& hookData) {
+                return hookData.name == hook_name;
             });
 
-        if (it != pending_hooks.end()) {
-            auto should_attach = std::get<1>(*it);
-            auto hook_enabler = std::get<2>(*it);
-            try {
-                if (!should_attach()) {
-                    GLOG_DEBUG("Skipping enablement of hook '{}'.  State predicate returned false.", hook_name);
-                    return true;
-                }
-                auto result = log_and_validate_mh_status(hook_name, hook_enabler());
-                pending_hooks.erase(it);
-                return result;
-            } catch (const std::exception& e) {
-                GLOG_ERROR("Failed to enable hook: '{}': {}", hook_name, e.what());
-                pending_hooks.erase(it);
-                return false;
-            }
-        } else {
+        if (it == pending_hooks.end()) {
             GLOG_WARNING("Hook '{}' not registered, but enable_hook was called with it.", hook_name);
+            return false;
+        }
+        try {
+            if (!it->should_attach()) {
+                GLOG_DEBUG("Skipping enablement of hook '{}'.  State predicate returned false.", hook_name);
+                return true;
+            }
+
+            auto result = MH_CreateHook(
+                reinterpret_cast<void*>(it->address),
+                it->hook,
+                it->trampoline
+            );
+
+            if (result != MH_OK) {
+                return log_and_validate_mh_status(hook_name, result);
+            }
+
+            result = MH_EnableHook(reinterpret_cast<void*>(it->address));
+            auto success = log_and_validate_mh_status(hook_name, result);
+
+            pending_hooks.erase(it);
+            return success;
+        } catch (const std::exception& e) {
+            GLOG_ERROR("Failed to enable hook: '{}': {}", hook_name, e.what());
+            pending_hooks.erase(it);
             return false;
         }
     }
@@ -140,23 +140,36 @@ public:
      * Enables all hooks that have been registered using register_hook().
      * It iterates through the list of hook enablers, attempts to enable each hook,
      * and logs any failures.
-     * 
+     *
      * @return true if all hooks were successfully enabled, false otherwise.
      */
     inline bool enable_hooks() {
-        for (const auto& [name, should_attach, enabler] : pending_hooks) {
+        for (const auto& hookData : pending_hooks) {
             try {
-                if (!should_attach()) {
-                    GLOG_DEBUG("Skipping enablement of hook '{}'.  State predicate returned false.", name);
-                    return true;
+                if (!hookData.should_attach()) {
+                    GLOG_DEBUG("Skipping enablement of hook '{}'.  State predicate returned false.", hookData.name);
+                    continue;
                 }
-                auto result = log_and_validate_mh_status(name, enabler());
-                if (!result) {
-                    failed_hooks.push_back(name);
+
+                auto result = MH_CreateHook(
+                    reinterpret_cast<void*>(hookData.address),
+                    hookData.hook,
+                    hookData.trampoline
+                );
+
+                if (result != MH_OK) {
+                    log_and_validate_mh_status(hookData.name, result);
+                    failed_hooks.push_back(hookData.name);
+                    continue;
+                }
+
+                result = MH_EnableHook(reinterpret_cast<void*>(hookData.address));
+                if (!log_and_validate_mh_status(hookData.name, result)) {
+                    failed_hooks.push_back(hookData.name);
                 }
             } catch (const std::exception& e) {
-                GLOG_ERROR("Failed to enable hook '{}': {}", name, e.what());
-                failed_hooks.push_back(name);
+                GLOG_ERROR("Failed to enable hook '{}': {}", hookData.name, e.what());
+                failed_hooks.push_back(hookData.name);
             }
         }
 
@@ -175,6 +188,4 @@ public:
 
         return true;
     }
-
-
 };
