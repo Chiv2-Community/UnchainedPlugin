@@ -58,7 +58,6 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 {
 	std::lock_guard lock(g_saveBuildMutex);
 
-
 	auto buildMetadataPath = getBuildMetadataPath();
 	if (!std::filesystem::exists(buildMetadataPath.parent_path())) {
 		std::filesystem::create_directories(buildMetadataPath.parent_path());
