@@ -36,8 +36,6 @@ uint32_t calculateCRC32(const std::string& filename) {
 	return crc ^ 0xFFFFFFFF; // Final XOR value for CRC-32
 }
 
-bool needsSerialization = true;
-
 std::filesystem::path getBuildMetadataPath() {
     const char* localAppData = std::getenv("LOCALAPPDATA");
     return std::filesystem::path(localAppData) / 
@@ -56,42 +54,24 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 	std::stringstream out("");
 	out << "{";
 
-	// First, serialize the current build from global state
-	auto currentBuild = g_state->GetBuildMetadata();
-	auto serialized = currentBuild.Serialize(1);
-	if (!serialized.has_value()) {
-		GLOG_ERROR("Failed to serialize current build");
-		return false;
-	}
-	out << serialized.value();
-
 	// Add builds from the provided map
 	if (!builds.empty()) {
-		bool firstEntry = true;
+		bool isFirst = true;
 		for (const auto& [buildName, buildData] : builds) {
-			// Skip the current build if it's already in the map
-			if (buildData.GetFileHash() == currentBuild.GetFileHash() && 
-				buildData.GetBuildId() == currentBuild.GetBuildId()) {
-				continue;
-			}
-			
-			if (firstEntry) {
-				out << ",";
-				firstEntry = false;
-			} else {
-				out << ",";
-			}
-			
 			auto buildSerialized = buildData.Serialize(1);
 			if (buildSerialized.has_value()) {
 				out << buildSerialized.value();
+				if (!isFirst)
+					out << ",";
+				else
+					isFirst = false;
 			} else {
 				GLOG_WARNING("Failed to serialize build: {}", buildName);
 			}
 		}
 	}
 
-	out << "}";
+	out << "\n}";
 
 	std::ofstream file(buildMetadataPath);
 	if (!file.is_open()) {
@@ -136,37 +116,24 @@ std::map<std::string, BuildMetadata> LoadBuildMetadata()
 		GLOG_ERROR("Failed to create json parser");
 		return buildMap;
 	}
-	uint32_t curFileHash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
-
 	json_t const* buildEntry;
-	needsSerialization = true;
+
 	buildEntry = json_getChild(json);
 	while (buildEntry != nullptr) {
 		if (JSON_OBJ == json_getType(buildEntry)) {
-			const char* buildName = json_getName(buildEntry);
-			GLOG_DEBUG("Parsing build: {}", buildName);
+			const auto buildKey = std::string(json_getName(buildEntry));
+			GLOG_DEBUG("Parsing build: {}", buildKey);
 
             // Parse the build metadata
-            auto parsedBuild = BuildMetadata::Parse(buildEntry, buildName);
+            auto parsedBuild = BuildMetadata::Parse(buildEntry);
             if (!parsedBuild.has_value()) {
-                GLOG_ERROR("Failed to parse build metadata for {}", buildName);
+                GLOG_ERROR("Failed to parse build metadata for {}", buildKey);
                 buildEntry = json_getSibling(buildEntry);
                 continue;
             }
 
             BuildMetadata bd = parsedBuild.value();
-            
-            // Add the parsed build to the map
-            buildMap[buildName] = bd;
-
-            // Check if this build matches the current executable
-            bool hashMatch = bd.GetFileHash() == curFileHash;
-
-            if (hashMatch) {
-                g_state->SetBuildMetadata(bd);
-                needsSerialization = false;
-                GLOG_INFO("Found matching build: {}", buildName);
-            }
+			buildMap.emplace(buildKey, bd);
 		}
 		buildEntry = json_getSibling(buildEntry);
 	}

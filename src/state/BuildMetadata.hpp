@@ -22,13 +22,14 @@ class BuildMetadata {
     std::map<std::string, uint64_t> offsets = {};
     std::string nameStr;
 public:
+    BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets, std::string nameStr);
     ~BuildMetadata();
 
     std::optional<std::string> Serialize(int indent) const;
-    static std::optional<BuildMetadata> Parse(const json_t* json, const char* buildName);
+    static std::optional<BuildMetadata> Parse(const json_t* json);
 
     void SetOffset(std::string name, uint64_t offset);
-    std::optional<uint64_t> GetOffset(const std::string &name) const;
+    std::optional<uint64_t> GetOffset(const std::string& name) const;
     std::vector<std::pair<std::string, uint64_t>> GetOffsets() const;
 
     void SetFileHash(uint32_t hash);
@@ -37,7 +38,9 @@ public:
     void SetBuildId(uint32_t id);
     uint32_t GetBuildId() const;
 
-    void SetName(std::string* newName);
-    void SetName(std::wstring* newName);
+    std::string GetBuildKey() const;
+
+    void SetName(const std::string &newName);
+    void SetName(std::wstring newName);
     std::string GetName() const;
 };

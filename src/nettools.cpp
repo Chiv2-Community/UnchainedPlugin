@@ -34,15 +34,15 @@ std::wstring HTTPGet(const std::wstring* url) {
 
 	// TODO: these are probably allocated unnecessarily.
 
-	wchar_t* schemeBuf = new wchar_t[url->length() + 1];
-	wchar_t* hostNameBuf = new wchar_t[url->length() + 1];
-	wchar_t* urlPathBuf = new wchar_t[url->length() + 1];
+	auto schemeBuf = new wchar_t[url->length() + 1];
+	auto* hostNameBuf = new wchar_t[url->length() + 1];
+	auto urlPathBuf = new wchar_t[url->length() + 1];
 
 	lpUrlComponents.lpszScheme = schemeBuf;
 	lpUrlComponents.lpszHostName = hostNameBuf;
 	lpUrlComponents.lpszUrlPath = urlPathBuf;
 
-	bool success = WinHttpCrackUrl(url->c_str(), url->length(), 0, &lpUrlComponents);
+	bool success = WinHttpCrackUrl(url->c_str(), static_cast<DWORD>(url->length()), 0, &lpUrlComponents);
 
 	if (!success) {
 		GLOG_ERROR("Failed to crack URL");

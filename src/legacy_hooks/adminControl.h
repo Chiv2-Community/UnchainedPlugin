@@ -101,7 +101,6 @@ APlayerController::ClientMessage
 */
 DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2, float param_3))
 {
-	std::wstring commandLine = GetCommandLineW();
 	bool egs = g_state->GetCLIArgs().platform == EGS;
 	static uint64_t init = false;
 	GLOG_DEBUG("ClientMessage");

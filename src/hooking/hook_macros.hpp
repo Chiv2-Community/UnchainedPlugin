@@ -40,3 +40,29 @@ inline HookData register_hook(std::string name,
         o_##name, \
         hk_##name \
     );
+
+#define UNIVERSAL_SIGNATURE(signature) \
+    [](Platform platform) -> std::optional<std::string> { \
+        return signature; \
+    }
+
+#define UNKNOWN_SIGNATURE() \
+    [](Platform platform) -> std::optional<std::string> { \
+        return std::nullopt; \
+    }
+
+#define PLATFORM_SIGNATURES(...) \
+    [](Platform platform) -> std::optional<std::string> { \
+        switch (platform) { \
+            __VA_ARGS__ \
+            default: \
+                return std::nullopt; \
+        } \
+    }
+
+#define PLATFORM_SIGNATURE(platform, signature) \
+    case platform: \
+        return signature;
+
+#define ATTACH_ALWAYS [](){ return true; }
+#define ATTACH_WHEN(condition) [](){ return condition; }
