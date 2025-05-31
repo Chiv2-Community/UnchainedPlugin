@@ -3,7 +3,7 @@
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/Chivalry2.h"
-#include "../hooking/AutoHook.hpp"
+#include "../hooking/hook_macros.hpp"
 
 CREATE_HOOK(
     ATBLPlayerController__GetOwnershipFromPlayerControllerAndState,
