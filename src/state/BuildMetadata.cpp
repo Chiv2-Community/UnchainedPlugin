@@ -15,6 +15,7 @@
 BuildMetadata::~BuildMetadata() {}
 
 void BuildMetadata::SetOffset(std::string name, uint64_t offset) {
+    if (offset == 0) return;
     offsets[std::move(name)] = offset;
 }
 
@@ -60,7 +61,7 @@ void BuildMetadata::SetName(std::string* newName) {
 
 void BuildMetadata::SetName(std::wstring* newName) {
     if (newName) {
-        nameStr = std::string(newName->begin(), newName->end());
+        nameStr = std::format("{}", newName->c_str());
     }
 }
 

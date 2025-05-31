@@ -68,7 +68,7 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
         else if (arg == L"--next-map-name") {
             try {
                 next_map = tokens.at(++i);
-            } catch (const std::exception& e) {
+            } catch (const std::exception&) {
                 GLOG_ERROR("Expected a map name following arg '--next-map-name'. Got nothing.");
             }
         } 

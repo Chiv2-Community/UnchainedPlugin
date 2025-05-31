@@ -1,15 +1,31 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Project version information
-set(VER_MAJOR 0 CACHE STRING "MAJOR version component")
-set(VER_MINOR 4 CACHE STRING "MINOR version component")
-set(VER_PATCH 6 CACHE STRING "PATCH version component")
-set(VER_BUILD 0 CACHE STRING "BUILD version component")
+# Set default version if not specified
+if(NOT DEFINED VERSION)
+    set(VERSION "0.0.0")
+else()
+    # Remove the 'v' prefix if it exists
+    string(REGEX REPLACE "^v" "" VERSION ${VERSION})
+endif()
 
-# Project definition with versioning
-project(UnchainedPlugin 
-        VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_PATCH}" 
+project(UnchainedPlugin
+        VERSION ${VERSION}
         LANGUAGES CXX C)
+
+# Parse the version into components
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH ${VERSION})
+if(VERSION_MATCH)
+    set(VERSION_MAJOR ${CMAKE_MATCH_1})
+    set(VERSION_MINOR ${CMAKE_MATCH_2})
+    set(VERSION_PATCH ${CMAKE_MATCH_3})
+else()
+    # Fallback if version doesn't match expected format
+    set(VERSION_MAJOR 0)
+    set(VERSION_MINOR 0)
+    set(VERSION_PATCH 0)
+endif()
+
+
 
 # C++ standard requirements
 set(CMAKE_CXX_STANDARD 20)

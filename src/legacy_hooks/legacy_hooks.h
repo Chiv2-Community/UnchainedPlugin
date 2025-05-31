@@ -41,5 +41,9 @@ funcType##_t o_##funcType;				   \
 retType hk_##funcType args
 
 #define HOOK_ATTACH(moduleBase, funcType) \
-MH_CreateHook(moduleBase + g_state->GetBuildMetadata().GetOffset(strFunc[F_##funcType]).value(), hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
-MH_EnableHook(moduleBase + g_state->GetBuildMetadata().GetOffset(strFunc[F_##funcType]).value());
+auto offset_##funcType = g_state->GetBuildMetadata().GetOffset(strFunc[F_##funcType]); \
+if (offset_##funcType.has_value()) { \
+    auto offset = offset_##funcType.value(); \
+    MH_CreateHook(moduleBase + offset, hk_##funcType, reinterpret_cast<void**>(&o_##funcType)); \
+    MH_EnableHook(moduleBase + offset); \
+}

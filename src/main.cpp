@@ -21,7 +21,7 @@
 #include <string_view>
 
 #include "constants.h"
-#include "builds.h"
+#include "builds.hpp"
 #include "patch.hpp"
 #include "string_util.hpp"
 
@@ -37,7 +37,7 @@
 #include "legacy_hooks/assetLoading.h"
 #include "legacy_hooks/backendHooks.h"
 #include "legacy_hooks/etcHooks.h"
-#include "legacy_hooks/ownershipOverrides.h"
+#include "hooks/ownershipOverrides.h"
 #include "legacy_hooks/sigs.h"
 
 
@@ -190,7 +190,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		register_auto_hooks(hook_manager);
 
 		hook_manager.enable_hook(&FViewport_Hook);
-
 		hook_manager.enable_hooks();
 
 		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
@@ -204,11 +203,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 			else GLOG_INFO("ok -> {} : (conf)", strFunc[i]);
 		}
 
-		char buff[512];
-		char* dest = buff;
-
-		GLOG_INFO("Serializing builds");
-
 		SaveBuildMetadata(loaded);
 
 		HOOK_ATTACH(module_base, GetMotd);
@@ -219,20 +213,11 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		HOOK_ATTACH(module_base, FindFileInPakFiles_2);
 		HOOK_ATTACH(module_base, GetGameInfo);
 		HOOK_ATTACH(module_base, ConsoleCommand);
-		HOOK_ATTACH(module_base, CanUseLoadoutItem);
-		HOOK_ATTACH(module_base, CanUseCharacter);
 
 		bool useBackendBanList = g_state->GetCLIArgs().use_backend_banlist;
 		if (useBackendBanList) {
 			HOOK_ATTACH(module_base, FString_AppendChars);
 			HOOK_ATTACH(module_base, PreLogin);
-
-		}
-
-		bool IsHeadless = g_state->GetCLIArgs().is_headless;
-		if (IsHeadless) {
-			HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
-			HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);
 		}
 
 #ifdef PRINT_CLIENT_MSG
@@ -263,7 +248,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
 
 		ExitThread(0);
-		return 0;
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());
 		GLOG_ERROR("std::exception: {}", e.what());

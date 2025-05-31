@@ -69,7 +69,7 @@ CREATE_HOOK(
 
 		GLOG_INFO("{}", szBuffer);
 		std::wstring ws(param_1->str);
-		std::string nameStr = std::string(ws.begin(), ws.end());
+		std::string nameStr = std::convert_wstring_to_string(ws.c_str(), ws.size());
 		//printf("LoadFrontEndMap: %s %d\n", nameStr.c_str(), param_1->max_letters);
 		init = true;
 		return o_LoadFrontEndMap(this_ptr, new FString(szBuffer));

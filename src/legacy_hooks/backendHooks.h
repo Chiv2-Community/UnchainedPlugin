@@ -5,7 +5,7 @@
 #include "../stubs/Chivalry2.h"
 #include "../nettools.hpp"
 
-DECL_HOOK(void, FString_AppendChars, (FString* this_ptr, const wchar_t* Str, int Count)) {
+DECL_HOOK(void, FString_AppendChars, (FString* this_ptr, const wchar_t* Str, uint32_t Count)) {
 	o_FString_AppendChars(this_ptr, Str, Count);
 }
 
@@ -36,7 +36,7 @@ DECL_HOOK(void, PreLogin, (ATBLGameMode* this_ptr, const FString& Options, const
 
 	if (banned) {
 		std::wstring message = L"You are banned from this server.";
-		hk_FString_AppendChars(&ErrorMessage, message.c_str(), message.length());
+		hk_FString_AppendChars(&ErrorMessage, message.c_str(), static_cast<uint32_t>(message.length()));
 	}
 
 

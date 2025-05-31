@@ -1,4 +1,4 @@
-#include "builds.h"
+#include "builds.hpp"
 
 #include <cstring>
 #include <stdint.h>
@@ -38,7 +38,7 @@ uint32_t calculateCRC32(const std::string& filename) {
 
 bool needsSerialization = true;
 
-std::filesystem::path getConfigPath() {
+std::filesystem::path getBuildMetadataPath() {
     const char* localAppData = std::getenv("LOCALAPPDATA");
     return std::filesystem::path(localAppData) / 
            "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
@@ -46,10 +46,12 @@ std::filesystem::path getConfigPath() {
 
 bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 {
-	auto configPath = getConfigPath();
-	if (!std::filesystem::exists(configPath.parent_path())) {
-		std::filesystem::create_directories(configPath.parent_path());
+	auto buildMetadataPath = getBuildMetadataPath();
+	if (!std::filesystem::exists(buildMetadataPath.parent_path())) {
+		std::filesystem::create_directories(buildMetadataPath.parent_path());
 	}
+
+	GLOG_DEBUG("Saving build metadata to: {}", buildMetadataPath.string());
 
 	std::stringstream out("");
 	out << "{";
@@ -91,20 +93,20 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 
 	out << "}";
 
-	std::ofstream file(configPath);
+	std::ofstream file(buildMetadataPath);
 	if (!file.is_open()) {
-		GLOG_ERROR("Error opening build config: {}", configPath);
+		GLOG_ERROR("Error opening build config: {}", buildMetadataPath);
 		return false;
 	}
 
 	file << out.str();
-	GLOG_INFO("Successfully saved build config to: {}", configPath.string());
+	GLOG_INFO("Successfully saved build config to: {}", buildMetadataPath.string());
 	return true;
 }
 
 std::map<std::string, BuildMetadata> LoadBuildMetadata()
 {
-    auto configPath = getConfigPath();
+    auto configPath = getBuildMetadataPath();
     std::map<std::string, BuildMetadata> buildMap;
     
 	GLOG_DEBUG("Loading build config from: {}", configPath.string());

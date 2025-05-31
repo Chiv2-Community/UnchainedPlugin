@@ -4,14 +4,16 @@
 #include "CLIArgs.hpp"
 
 class State {
-    CLIArgs& args;
-    BuildMetadata& current_build;
+    CLIArgs args;                                     // Changed from reference to object
+    BuildMetadata current_build;                      // Changed from reference to object
     void* uworld = nullptr;
 
     std::map<std::string, BuildMetadata> saved_build_metadata;
 
 public:
-    State(CLIArgs& args, BuildMetadata& build) : args(args), current_build(build) {
+    // Updated constructor to take objects by value (copy) or by rvalue reference (move)
+    State(CLIArgs args, BuildMetadata build) 
+        : args(std::move(args)), current_build(std::move(build)) {
         this->uworld = nullptr;
     }
 
@@ -23,20 +25,23 @@ public:
         return this->uworld;
     }
 
-    inline CLIArgs& GetCLIArgs() const {
+    // Updated getter to return const reference
+    inline CLIArgs& GetCLIArgs() {
         return this->args;
     }
     
-    inline BuildMetadata& GetBuildMetadata() const {
+    // Updated getter to return const reference
+    inline BuildMetadata& GetBuildMetadata() {
         return this->current_build;
     }
 
-    inline void SetBuildMetadata(BuildMetadata& build) {
+    // Updated setter to take object by reference
+    inline void SetBuildMetadata(const BuildMetadata& build) {
         this->current_build = build;
     }
 
     inline void SetSavedBuildMetadata(std::map<std::string, BuildMetadata> build) {
-        this->saved_build_metadata = build;
+        this->saved_build_metadata = std::move(build);
     }
 
     inline std::map<std::string, BuildMetadata> GetSavedBuildMetadata() const {
