@@ -33,7 +33,6 @@
 #include "hooks/all_hooks.h"
 
 #include "legacy_hooks/legacy_hooks.h"
-#include "legacy_hooks/backendHooks.h"
 #include "legacy_hooks/etcHooks.h"
 #include "legacy_hooks/sigs.h"
 
@@ -218,16 +217,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
 
-		HOOK_ATTACH(module_base, GetMotd);
-		HOOK_ATTACH(module_base, GetCurrentGames);
-		HOOK_ATTACH(module_base, SendRequest);
 		HOOK_ATTACH(module_base, GetGameInfo);
-
-		bool useBackendBanList = state->GetCLIArgs().use_backend_banlist;
-		if (useBackendBanList) {
-			HOOK_ATTACH(module_base, FString_AppendChars);
-			HOOK_ATTACH(module_base, PreLogin);
-		}
 
 		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
 		if (localPlayerOffset.has_value()) {
