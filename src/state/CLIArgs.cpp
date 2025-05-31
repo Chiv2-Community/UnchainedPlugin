@@ -82,9 +82,10 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
             server_password = tokens[++i];
         } 
         else if (arg == L"--platform" && i + 1 < tokens.size()) {
-            const auto& platform_str = tokens[++i];
+            const auto& platform_wstr = tokens[++i];
+            const auto platform_str = std::format("{}", platform_wstr);
             if (string_to_platform.contains(platform_str))
-                platform = string_to_platform.at(std::wstring(platform_str));
+                platform = string_to_platform.at(platform_str);
             else {
                 GLOG_ERROR("Invalid platform '{}'.  Expected 'STEAM', 'EGS', or 'XBOX'", platform_str);
                 GLOG_WARNING("Defaulting to STEAM");

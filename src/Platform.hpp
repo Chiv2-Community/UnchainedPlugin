@@ -9,14 +9,14 @@ enum Platform {
     XBOX
 };
 
-inline std::map<std::wstring, Platform> string_to_platform = {
-    {L"STEAM", STEAM},
-    {L"EGS", EGS},
-    {L"XBOX", XBOX}
+inline std::map<std::string, Platform> string_to_platform = {
+    {"STEAM", STEAM},
+    {"EGS", EGS},
+    {"XBOX", XBOX}
 };
 
-inline std::map<Platform, std::wstring> platform_to_string = {
-    {STEAM, L"STEAM"},
-    {EGS, L"EGS"},
-    {XBOX, L"XBOX"}
+inline std::map<Platform, std::string> platform_to_string = {
+    {STEAM, "STEAM"},
+    {EGS, "EGS"},
+    {XBOX, "XBOX"}
 };

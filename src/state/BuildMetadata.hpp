@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "tiny-json.h"
+#include "../Platform.hpp"
 
 /**
  * Build metadata is loaded from a json file at start, and then any unknown
@@ -21,8 +22,9 @@ class BuildMetadata {
     uint32_t buildId = 0;
     std::map<std::string, uint64_t> offsets = {};
     std::string nameStr;
+    Platform platform;
 public:
-    BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets, std::string nameStr);
+    BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets, std::string nameStr, Platform platform);
     ~BuildMetadata();
 
     std::optional<std::string> Serialize(int indent) const;
@@ -43,4 +45,6 @@ public:
     void SetName(const std::string &newName);
     void SetName(std::wstring newName);
     std::string GetName() const;
+
+    Platform GetPlatform() const;
 };

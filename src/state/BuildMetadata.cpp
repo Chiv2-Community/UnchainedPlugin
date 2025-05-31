@@ -13,11 +13,12 @@
 #include "../string_util.hpp"
 
 BuildMetadata::BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets,
-    std::string nameStr) {
+    std::string nameStr, Platform platform) {
     this->fileHash = fileHash;
     this->buildId = buildId;
     this->offsets = std::move(offsets);
     this->nameStr = std::move(nameStr);
+    this->platform = platform;
 }
 
 BuildMetadata::~BuildMetadata() {}
@@ -81,6 +82,10 @@ std::string BuildMetadata::GetBuildKey() const {
     return std::format("{}", this->GetFileHash());
 }
 
+Platform BuildMetadata::GetPlatform() const {
+    return platform;
+}
+
 
 std::optional<std::string> BuildMetadata::Serialize(int indent) const {
     std::stringstream ss;
@@ -94,6 +99,7 @@ std::optional<std::string> BuildMetadata::Serialize(int indent) const {
        << ws(indent+1) << quot << "Build"             << quot << ": " << this->GetBuildId() << ","
        << ws(indent+1) << quot << "FileHash"          << quot << ": " << this->GetFileHash() << ","
        << ws(indent+1) << quot << "Name"              << quot << ": " << quot << this->GetName() << quot << ","
+       << ws(indent+1) << quot << "Platform"          << quot << ": " << quot << std::format("{}", platform_to_string.at(this->GetPlatform())) << quot << ","
        << ws(indent+1) << quot << "Offsets"           << quot << ": {";
 
     auto offsets = this->GetOffsets();
@@ -140,6 +146,17 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
     }
     auto file_hash = static_cast<uint32_t>(json_getInteger(fileHashJson));
 
+    const json_t* platformJson = json_getProperty(json, "FileHash");
+    if (!fileHashJson || JSON_INTEGER != json_getType(fileHashJson)) {
+        GLOG_ERROR("Error, the 'FileHash' property is not found or not an integer");
+        return std::nullopt;
+    }
+    std::string platform_string(json_getValue(fileHashJson));
+    Platform platform = STEAM;
+    if (string_to_platform.contains(platform_string))
+        platform = string_to_platform.at(platform_string);
+
+
     const json_t* offsetsJson = json_getProperty(json, "Offsets");
     if (!offsetsJson || JSON_OBJ != json_getType(offsetsJson)) {
         GLOG_ERROR("Error, the 'Offsets' property is not found or not an object");
@@ -157,7 +174,7 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         }
     }
 
-    BuildMetadata metadata(file_hash, buildId, std::move(offsets), std::move(buildName));
+    BuildMetadata metadata(file_hash, buildId, std::move(offsets), std::move(buildName), platform);
 
     return metadata;
 }
