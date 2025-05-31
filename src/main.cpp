@@ -37,7 +37,7 @@
 #include "legacy_hooks/assetLoading.h"
 #include "legacy_hooks/backendHooks.h"
 #include "legacy_hooks/etcHooks.h"
-#include "hooks/ownershipOverrides.h"
+#include "legacy_hooks/ownershipOverrides.h"
 #include "legacy_hooks/sigs.h"
 
 
@@ -213,11 +213,19 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		HOOK_ATTACH(module_base, FindFileInPakFiles_2);
 		HOOK_ATTACH(module_base, GetGameInfo);
 		HOOK_ATTACH(module_base, ConsoleCommand);
+		HOOK_ATTACH(module_base, CanUseLoadoutItem);
+		HOOK_ATTACH(module_base, CanUseCharacter);
 
 		bool useBackendBanList = g_state->GetCLIArgs().use_backend_banlist;
 		if (useBackendBanList) {
 			HOOK_ATTACH(module_base, FString_AppendChars);
 			HOOK_ATTACH(module_base, PreLogin);
+		}
+
+		bool IsHeadless = g_state->GetCLIArgs().is_headless;
+		if (IsHeadless) {
+			HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
+			HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);
 		}
 
 #ifdef PRINT_CLIENT_MSG
