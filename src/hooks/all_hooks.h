@@ -8,5 +8,6 @@
 #include "admin_control.hpp"
 #include "asset_loading.h"
 #include "backend_hooks.h"
+#include "etc_hooks.h"
 #include "ownership_overrides.h"
 #include "unchained_integration.h"

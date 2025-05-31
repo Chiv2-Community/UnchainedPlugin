@@ -33,7 +33,7 @@
 #include "hooks/all_hooks.h"
 
 #include "legacy_hooks/legacy_hooks.h"
-#include "legacy_hooks/etcHooks.h"
+#include "hooks/etc_hooks.h"
 #include "legacy_hooks/sigs.h"
 
 
@@ -216,8 +216,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
-
-		HOOK_ATTACH(module_base, GetGameInfo);
 
 		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
 		if (localPlayerOffset.has_value()) {
