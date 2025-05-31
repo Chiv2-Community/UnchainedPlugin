@@ -12,18 +12,14 @@
 	etype(UTBLLocalPlayer_Exec) \
 	etype(GetGameInfo) \
 	etype(ConsoleCommand) \
-	etype(CanUseLoadoutItem) \
-	etype(CanUseCharacter) \
 	etype(ApproveLogin) \
 	etype(ClientMessage) \
 	etype(PreLogin) \
 	etype(FString_AppendChars) \
-	etype(GetOwnershipFromPlayerControllerAndState) \
 	etype(ExecuteConsoleCommand) \
 	etype(GetTBLGameMode) \
 	etype(FText_AsCultureInvariant) \
 	etype(BroadcastLocalizedChat) \
-	etype(ConditionalInitializeCustomizationOnServer) \
 	etype(MaxFuncType) //this always needs to be last
 
 #define etype(x) uint32_t x = 0x0;
@@ -92,10 +88,6 @@ static const char* signatures[F_MaxFuncType + 1] =
 	/*ConsoleCommand*/
 	"40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 \
 	89 42 08 48 8B C3 48 83 C4 20 5B C3",
-	/*ATBLPlayerController::CanUseLoadoutItem*/
-	"48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00",
-	/*ATBLPlayerController::CanUseCharacter*/
-	"48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 49 8B 18",
 	/*ApproveLogin*/
 	"48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 55 41 56 48 8D 6C 24 C9 48 81 EC A0 00 00 00 8B",
 	/*ClientMessage*/
@@ -104,8 +96,6 @@ static const char* signatures[F_MaxFuncType + 1] =
 	"4C 89 4C 24 20 48 89 54 24 10 48 89 4C 24 08 55 53 57 41 55 41 57 48 8D 6C",
 	/*FString::AppendChars*/
 	"45 85 C0 0F 84 89 00 00 00 48 89 5C 24 18 48 89 6C 24 20 56 48 83 EC 20 48 89 7C 24 30 48 8B EA 48 63 79 08 48 8B D9 4C 89 74 24 38 45 33 F6 85 FF 49 63 F0 41 8B C6 0F 94 C0 03 C7 03 C6 89 41 08 3B 41 0C 7E 07 8B D7 E8 ?? ?? ?? ?? 85 FF 49 8B C6 48 8B CF 48 8B D5 0F 95 C0 48 2B C8 48 8B 03 48 8D 1C 36 4C 8B C3 48 8D 3C 48 48 8B CF E8 ?? ?? ?? ?? 48 8B 6C 24 48 66 44 89 34 3B 4C 8B 74 24 38 48 8B 7C 24 30 48 8B 5C 24 40 48 83 C4 20 5E C3",
-	/*ATBLPlayerController::GetOwnershipFromPlayerControllerAndState*/
-	"40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD",
 	/*ExecuteConsoleCommand*/
 	"40 53 48 83 EC 30 48 8B 05 ? ? ? ? 48 8B D9 48 8B 90 58 0C 00 00",
 	/*GetTBLGameMode*/
@@ -114,8 +104,6 @@ static const char* signatures[F_MaxFuncType + 1] =
 	"48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63",
 	/*BroadcastLocalizedChat*/
 	"48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ? ? ? ? ? ? 48 8B C8 48 8D",
-	/*ATBLPlayerController::ConditionalInitializeCustomizationOnServer*/
-	"48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6",
 	/*MaxFuncType*/
 	""
 };
