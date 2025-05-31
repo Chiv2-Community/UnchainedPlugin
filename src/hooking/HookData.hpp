@@ -12,11 +12,21 @@ struct HookData {
     uint64_t address = 0;
     void** trampoline = nullptr;
     void* hook;
+    bool scan_only;
 
     HookData(std::string name, std::function<std::optional<std::string>(Platform)> select_signature_for_platform, std::function<bool()> should_attach, void** trampoline, void* hook)
         : name(std::move(name)),
           select_signature_for_platform(std::move(select_signature_for_platform)),
           should_attach(should_attach),
           trampoline(trampoline),
-          hook(hook) {}
+          hook(hook),
+          scan_only(false){}
+
+    HookData(std::string name, std::function<std::optional<std::string>(Platform)> select_signature_for_platform, bool scan_only)
+        : name(std::move(name)),
+          select_signature_for_platform(std::move(select_signature_for_platform)),
+          should_attach([]() { return false; }),
+          trampoline(nullptr),
+          hook(nullptr),
+          scan_only(scan_only){}
 };
