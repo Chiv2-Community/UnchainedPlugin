@@ -32,10 +32,6 @@
 
 #include "hooks/all_hooks.h"
 
-#include "legacy_hooks/legacy_hooks.h"
-#include "legacy_hooks/sigs.h"
-
-
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
 	size_t flagLoc = commandLine.find(L"-rcon");
@@ -182,7 +178,8 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		auto state = new State(cliArgs, loaded, current_build_metadata);
 		initialize_global_state(state);
 
-		baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+		auto baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+		MODULEINFO moduleInfo;
 
 		GLOG_DEBUG("Base address: 0x{:X}", reinterpret_cast<uintptr_t>(baseAddr));
 
@@ -198,20 +195,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata);
 		register_auto_hooks(hook_manager);
-
-		hook_manager.enable_hooks();
-
-		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
-		{
-			auto maybeOffset = current_build_metadata.GetOffset(strFunc[i]);
-			if (!maybeOffset.has_value()) {
-				needsSerialization = true;
-				current_build_metadata.SetOffset(
-					strFunc[i],
-					FindSignature(baseAddr, moduleInfo.SizeOfImage, strFunc[i], signatures[i])
-				);
-			} else GLOG_INFO("ok -> {} : (conf)", strFunc[i]);
-		}
+		auto all_hooks_successful = hook_manager.enable_hooks();
 
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
@@ -221,14 +205,16 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
 			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
 		}
-		else
-			GLOG_ERROR("F_UTBLLocalPlayer_Exec missing");
 		/*printf("offset dedicated: 0x%08X", g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22);
 		Ptch_Repl(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22, 0x2);*/
 		// Dedicated server hook in ApproveLogin
 		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
 
-		GLOG_INFO("Functions hooked. Continuing to RCON");
+		if (!all_hooks_successful) {
+			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
+		}
+
+		GLOG_INFO("Continuing to RCON");
 		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
 
 		ExitThread(0);
