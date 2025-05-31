@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../hooking/hook_macros.hpp"
+
 CREATE_HOOK(
 	FindFileInPakFiles_1,
 	UNIVERSAL_SIGNATURE("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 30 33 FF"),
