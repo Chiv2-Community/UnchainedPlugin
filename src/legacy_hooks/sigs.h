@@ -6,7 +6,6 @@
 	etype(SendRequest) \
 	etype(GetMotd) \
 	etype(GetCurrentGames) \
-	etype(IsNonPakFilenameAllowed) \
 	etype(UTBLLocalPlayer_Exec) \
 	etype(GetGameInfo) \
 	etype(ApproveLogin) \
@@ -67,7 +66,6 @@ static const char* signatures[F_MaxFuncType + 1] =
 	C8 48 89 45 ?? 89 75 ?? 48 85 C9 74 ?? E8 ?? ?? ?? ?? 48 8B 4D ?? 48 8B 01 FF 90 ?? ?? ?? ?? 48 8B 45 ?? 49 89 04 24 48 8B \
 	45 ?? 49 89 44 24 ?? 48 85 C0 74 ?? FF 40 ?? 48 8B 5D ?? 48 85 DB 74 ?? 83 6B ?? 01 75 ?? 48 8B 03 48 8B CB FF 10 83 6B ?? \
 	01 75 ?? 48 8B 03 BA 01 00 00 00 48 8B CB FF 50 ?? 48 8B 9C 24 ?? ?? ?? ?? 49 8B C4 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3",
-	/*"IsNonPakFilenameAllowed"*/ 
 	/*"UTBLLocalPlayer::Exec"*/
 	"75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf",
 	/*"GetGameInfo"*/
