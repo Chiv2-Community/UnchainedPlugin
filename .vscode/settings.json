@@ -1,7 +1,0 @@
-{
-    "cmake.configureSettings": {
-        "PRINT_CLIENT_MSG":false,
-        "POST_BUILD_COPY":false,
-        "POST_BUILD_COPY_DIR": "I:\\Epic Games\\Chivalry2_c\\TBL\\Binaries\\Win64\\Plugins"
-    },
-}

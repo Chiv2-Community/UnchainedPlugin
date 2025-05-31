@@ -1,0 +1,309 @@
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <psapi.h>
+#include <MinHook.h>
+#include <iostream>
+#include <fcntl.h>
+#include <io.h>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include <direct.h>
+
+
+
+//black magic for the linker to get winsock2 to work
+//TODO: properly add this to the linker settings
+#pragma comment(lib, "Ws2_32.lib")
+
+#include <string_view>
+
+#include "constants.h"
+#include "builds.hpp"
+#include "patch.hpp"
+#include "string_util.hpp"
+
+#include "logging/global_logger.hpp"
+#include "stubs/UE4.h"
+#include "state/global_state.hpp"
+#include "hooking/FunctionHookManager.hpp"
+
+#include "hooks/all_hooks.h"
+
+#include "legacy_hooks/legacy_hooks.h"
+#include "legacy_hooks/adminControl.h"
+#include "legacy_hooks/assetLoading.h"
+#include "legacy_hooks/backendHooks.h"
+#include "legacy_hooks/etcHooks.h"
+#include "legacy_hooks/ownershipOverrides.h"
+#include "legacy_hooks/sigs.h"
+
+
+void handleRCON() {
+	std::wstring commandLine = GetCommandLineW();
+	size_t flagLoc = commandLine.find(L"-rcon");
+	if (!g_state->GetCLIArgs().rcon_port.has_value()) {
+		ExitThread(0);
+		return;
+	}
+
+	GLOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
+
+	int port = g_state->GetCLIArgs().rcon_port.value();
+
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		GLOG_ERROR("[RCON]: Failed to initialize Winsock!");
+		ExitThread(0);
+		return;
+	}
+
+	GLOG_INFO("[RCON]: Opening RCON server socket on TCP/{}", port);
+
+	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
+	bind(listenSock, (sockaddr*)&addr, sizeof(addr));
+	listen(listenSock, SOMAXCONN);
+
+
+	while (true) {
+		//set up a new command string
+		auto command = std::make_unique<std::wstring>();
+		GLOG_DEBUG("[RCON]: Waiting for command");
+		//get a command from a socket
+		int addrLen = sizeof(addr);
+		SOCKET remote = accept(listenSock, (sockaddr*)&addr, &addrLen);
+		GLOG_DEBUG("[RCON]: Accepted connection");
+		if (remote == INVALID_SOCKET) {
+			GLOG_ERROR("[RCON]: invalid socket error");
+			return;
+		}
+		const int BUFFER_SIZE = 256;
+		//create one-filled buffer
+		char buffer[BUFFER_SIZE + 1];
+		for (int i = 0; i < BUFFER_SIZE + 1; i++) {
+			buffer[i] = 1;
+		}
+		int count; //holds number of received bytes 
+		do {
+			count = recv(remote, (char*)&buffer, BUFFER_SIZE, 0); //receive a chunk (may not be the whole command)
+			buffer[count] = 0; //null-terminate it implicitly
+			//convert to wide string
+			std::string chunkString(buffer, count);
+			std::wstring wideChunkString(chunkString.begin(), chunkString.end() - 1);
+			*command += wideChunkString; //append this chunk to the command
+		} while (buffer[count - 1] != '\n');
+		//we now have the whole command as a wide string
+		closesocket(remote);
+
+		if (command->size() == 0) {
+			continue;
+		}
+
+		//add into command queue
+		FString commandString(command->c_str());
+		o_ExecuteConsoleCommand(&commandString);
+	}
+
+	return;
+}
+
+
+void CreateDebugConsole() {
+	if (GetConsoleWindow()) {
+		return;
+	}
+
+	if (!AllocConsole()) {
+		OutputDebugStringA("[DLL] Failed to allocate console\n");
+		return;
+	}
+
+	FILE* pCout;
+	FILE* pCerr;
+
+	freopen_s(&pCout, "CONOUT$", "w", stdout);
+	freopen_s(&pCerr, "CONOUT$", "w", stderr);
+	std::ios::sync_with_stdio(true);
+
+	SetConsoleTitleA("Chivalry 2 Unchained Debug");
+
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD consoleMode;
+	GetConsoleMode(hConsole, &consoleMode);
+	SetConsoleMode(hConsole, consoleMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
+
+	GLOG_INFO("Debug console created successfully\n");
+}
+
+DWORD WINAPI  main_thread(LPVOID lpParameter) {
+	try {
+		initialize_global_logger(LogLevel::DEBUG);
+		GLOG_INFO("Logger initialized");
+
+		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
+
+		HMODULE hModule = static_cast<HMODULE>(lpParameter);
+		auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
+		for (const auto& part : logo_parts) {
+			GLOG_ERROR("{}", part);
+		}
+
+		GLOG_ERROR("Chivalry 2 Unchained Plugin");
+
+		GLOG_INFO("Command line args:");
+		GLOG_INFO("{}", std::wstring(GetCommandLineW()));
+		GLOG_INFO("");
+
+		GLOG_DEBUG("Initializing MinHook");
+		auto mh_result = MH_Initialize();
+		if (!mh_result == MH_OK) {
+			GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
+			return 1;
+		}
+		GLOG_DEBUG("MinHook initialized");
+
+		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
+
+		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
+		std::string build_hash_string = std::to_string(build_hash);
+		bool needsSerialization = false;
+
+		if (!loaded.contains(build_hash_string)) {
+			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, ""));
+			needsSerialization = true;
+		}
+
+		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
+
+		auto state = new State(cliArgs, loaded, current_build_metadata);
+		initialize_global_state(state);
+
+		baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+
+		GLOG_DEBUG("Base address: 0x{:X}", reinterpret_cast<uintptr_t>(baseAddr));
+
+		int file_descript;
+		auto err = _sopen_s(&file_descript, "Chivalry2-Win64-Shipping.exe", O_RDONLY, _SH_DENYNO, 0);
+		if (err) GLOG_ERROR("Error {}", err);
+
+		off_t file_size = _filelength(file_descript);
+
+		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
+
+		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
+
+		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata);
+		register_auto_hooks(hook_manager);
+
+		hook_manager.enable_hooks();
+
+		for (uint8_t i = 0; i < F_MaxFuncType; ++i)
+		{
+			auto maybeOffset = current_build_metadata.GetOffset(strFunc[i]);
+			if (!maybeOffset.has_value()) {
+				needsSerialization = true;
+				current_build_metadata.SetOffset(
+					strFunc[i],
+					FindSignature(baseAddr, moduleInfo.SizeOfImage, strFunc[i], signatures[i])
+				);
+			} else GLOG_INFO("ok -> {} : (conf)", strFunc[i]);
+		}
+
+		if (needsSerialization)
+			SaveBuildMetadata(loaded);
+
+		HOOK_ATTACH(module_base, GetMotd);
+		HOOK_ATTACH(module_base, GetCurrentGames);
+		HOOK_ATTACH(module_base, SendRequest);
+		HOOK_ATTACH(module_base, IsNonPakFilenameAllowed);
+		HOOK_ATTACH(module_base, FindFileInPakFiles_1);
+		HOOK_ATTACH(module_base, FindFileInPakFiles_2);
+		HOOK_ATTACH(module_base, GetGameInfo);
+		HOOK_ATTACH(module_base, ConsoleCommand);
+		HOOK_ATTACH(module_base, CanUseLoadoutItem);
+		HOOK_ATTACH(module_base, CanUseCharacter);
+
+		bool useBackendBanList = g_state->GetCLIArgs().use_backend_banlist;
+		if (useBackendBanList) {
+			HOOK_ATTACH(module_base, FString_AppendChars);
+			HOOK_ATTACH(module_base, PreLogin);
+		}
+
+		bool IsHeadless = g_state->GetCLIArgs().is_headless;
+		if (IsHeadless) {
+			HOOK_ATTACH(module_base, GetOwnershipFromPlayerControllerAndState);
+			HOOK_ATTACH(module_base, ConditionalInitializeCustomizationOnServer);
+		}
+
+#ifdef PRINT_CLIENT_MSG
+		HOOK_ATTACH(module_base, ClientMessage);
+#endif
+
+		HOOK_ATTACH(module_base, ClientMessage);
+		HOOK_ATTACH(module_base, ExecuteConsoleCommand);
+		HOOK_ATTACH(module_base, GetTBLGameMode);
+		HOOK_ATTACH(module_base, FText_AsCultureInvariant);
+		HOOK_ATTACH(module_base, BroadcastLocalizedChat);
+
+		auto localPlayerOffset = g_state->GetBuildMetadata().GetOffset(strFunc[F_UTBLLocalPlayer_Exec]);
+		if (localPlayerOffset.has_value()) {
+			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
+
+			auto cmd_permission{ module_base + localPlayerOffset.value() };
+			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
+		}
+		else
+			GLOG_ERROR("F_UTBLLocalPlayer_Exec missing");
+		/*printf("offset dedicated: 0x%08X", g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22);
+		Ptch_Repl(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22, 0x2);*/
+		// Dedicated server hook in ApproveLogin
+		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
+
+		GLOG_INFO("Functions hooked. Continuing to RCON");
+		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
+
+		ExitThread(0);
+	} catch (const std::exception& e) {
+		std::string error = "std::exception: " + std::string(e.what());
+		GLOG_ERROR("std::exception: {}", e.what());
+		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		return 1;
+	} catch (...) {
+		GLOG_ERROR("Unknown C++ exception caught");
+		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		return 1;
+	}
+}
+
+
+int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+	CreateDebugConsole();
+	switch (ul_reason_for_call) {
+		case DLL_PROCESS_ATTACH: {
+			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
+			DisableThreadLibraryCalls(hModule);
+			HANDLE thread_handle = CreateThread(NULL, 0, main_thread, hModule, 0, NULL);
+			if (thread_handle) {
+				CloseHandle(thread_handle);
+			} else {
+				OutputDebugStringA("[DLL] Failed to create main thread\n");
+				return FALSE;
+			}
+			break;
+		}
+		case DLL_THREAD_ATTACH:
+		case DLL_THREAD_DETACH:
+		case DLL_PROCESS_DETACH:
+			break;
+	}
+	return 1;
+}
