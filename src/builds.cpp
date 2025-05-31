@@ -10,6 +10,8 @@
 #include <nmmintrin.h> // SSE4.2 intrinsics
 #include <functional>
 #include <Windows.h>
+#include <mutex>
+
 
 #include "logging/global_logger.hpp"
 #include "state/global_state.hpp"
@@ -51,9 +53,12 @@ std::filesystem::path getBuildMetadataPath() {
 		   "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
 }
 
-
+static std::mutex g_saveBuildMutex;
 bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 {
+	std::lock_guard lock(g_saveBuildMutex);
+
+
 	auto buildMetadataPath = getBuildMetadataPath();
 	if (!std::filesystem::exists(buildMetadataPath.parent_path())) {
 		std::filesystem::create_directories(buildMetadataPath.parent_path());
@@ -96,6 +101,8 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 
 std::map<std::string, BuildMetadata> LoadBuildMetadata()
 {
+	std::lock_guard lock(g_saveBuildMutex);
+
     auto configPath = getBuildMetadataPath();
     std::map<std::string, BuildMetadata> buildMap;
     
