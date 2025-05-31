@@ -9,6 +9,7 @@ class State {
     CLIArgs args;                                     // Changed from reference to object
     BuildMetadata& current_build_metadata;                      // Changed from reference to object
     void* uworld = nullptr;
+    void* CurGameMode = nullptr;
 
     std::map<std::string, BuildMetadata> build_metadata;
 
@@ -25,6 +26,14 @@ public:
     
     inline void* GetUWorld() const {
         return this->uworld;
+    }
+
+    inline void SetCurGameMode(void* CurGameMode) {
+        this->CurGameMode = CurGameMode;
+    }
+
+    inline void* GetCurGameMode() const {
+        return this->CurGameMode;
     }
 
     // Updated getter to return const reference

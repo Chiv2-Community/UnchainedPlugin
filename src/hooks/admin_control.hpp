@@ -2,10 +2,17 @@
 
 #include <regex>
 #include "../logging/Logger.hpp"
-#include "legacy_hooks.h"
+#include "../hooking/hook_macros.hpp"
 #include "../state/global_state.hpp"
+#include "../stubs/UE4.h"
 
-DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b)) {
+CREATE_HOOK(
+	ConsoleCommand,
+	UNIVERSAL_SIGNATURE("40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 \
+	89 42 08 48 8B C3 48 83 C4 20 5B C3"),
+	ATTACH_ALWAYS,
+	FString, (void* this_ptr, FString const& str, bool b)
+) {
 #ifdef _DEBUG_
 	static void* cached_this;
 	if (this_ptr == NULL) {
@@ -29,14 +36,26 @@ DECL_HOOK(FString, ConsoleCommand, (void* this_ptr, FString const& str, bool b))
 #endif
 	return o_ConsoleCommand(this_ptr, str, b);
 }
+AUTO_HOOK(ConsoleCommand);
 
-DECL_HOOK(void, ExecuteConsoleCommand, (FString* param)) {
+CREATE_HOOK(
+	ExecuteConsoleCommand,
+	UNIVERSAL_SIGNATURE("40 53 48 83 EC 30 48 8B 05 ? ? ? ? 48 8B D9 48 8B 90 58 0C 00 00"),
+	ATTACH_ALWAYS,
+	void, (FString* param)
+) {
 	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
+AUTO_HOOK(ExecuteConsoleCommand);
 
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString* input)) {
+CREATE_HOOK(
+	FText_AsCultureInvariant,
+	UNIVERSAL_SIGNATURE("48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63"),
+	ATTACH_ALWAYS,
+	void*, (void* ret_ptr, FString* input)
+) {
 	// This is extremely loud in the console
 	//if (input->str != NULL) {
 	//	printf("FText_AsCultureInvariant: ");
@@ -45,12 +64,19 @@ DECL_HOOK(void*, FText_AsCultureInvariant, (void* ret_ptr, FString* input)) {
 	//}
 	return o_FText_AsCultureInvariant(ret_ptr, input);
 }
+AUTO_HOOK(FText_AsCultureInvariant);
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-DECL_HOOK(void, BroadcastLocalizedChat, (void* game_mode, FText* text, uint8_t chat_type)) {
+CREATE_HOOK(
+	BroadcastLocalizedChat,
+	UNIVERSAL_SIGNATURE("48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"),
+	ATTACH_ALWAYS,
+	void, (void* game_mode, FText* text, uint8_t chat_type)
+) {
 	GLOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
+AUTO_HOOK(BroadcastLocalizedChat);
 
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
@@ -82,25 +108,31 @@ bool IsServerStart()
 	return isHeadless || isSetToTravel;
 }
 
-// TODO: nasty global. Make this a static local
-// and use a getter-pattern call to this function to receive it
-// wherever its value is needed. Make sure this pattern will actually
-// work, too
-void* CurGameMode = NULL;
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
-DECL_HOOK(void*, GetTBLGameMode, (void* uobj)) {
+CREATE_HOOK(
+	GetTBLGameMode,
+	UNIVERSAL_SIGNATURE("40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"),
+	ATTACH_ALWAYS,
+	void*, (void* uobj)
+) {
 	//LOG_DEBUG("GetTBLGameMode");
-	CurGameMode = o_GetTBLGameMode(uobj);
-	return CurGameMode;
+	const auto curGameMode = o_GetTBLGameMode(uobj);
+	g_state->SetCurGameMode(curGameMode);
+	return curGameMode;
 }
+AUTO_HOOK(GetTBLGameMode);
 
 /*
 void __thiscall
 APlayerController::ClientMessage
 		  (APlayerController *this,FString *param_1,FName param_2,float param_3)
 */
-DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2, float param_3))
-{
+CREATE_HOOK(
+	ClientMessage,
+	UNIVERSAL_SIGNATURE("4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"),
+	ATTACH_ALWAYS,
+	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
+) {
 	bool egs = g_state->GetCLIArgs().platform == EGS;
 	static uint64_t init = false;
 	GLOG_DEBUG("ClientMessage");
@@ -135,10 +167,10 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 
 		FText txt;
 		void* res = o_FText_AsCultureInvariant(&txt, new FString(L"Command detected"));
-		if (res != NULL && CurGameMode != NULL)
+		if (res != nullptr && g_state->GetCurGameMode() != nullptr)
 		{
 			GLOG_DEBUG("[ChatCommands] Could print server text");
-			o_BroadcastLocalizedChat(CurGameMode, (FText*)res, 3);
+			o_BroadcastLocalizedChat(g_state->GetCurGameMode(), (FText*)res, 3);
 		}
 
 		GLOG_INFO("[ChatCommands] Executing command {}", *command);
@@ -149,20 +181,4 @@ DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2,
 	}
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }
-
-
-#ifdef PRINT_CLIENT_MSG
-DECL_HOOK(void, ClientMessage, (void* this_ptr, FString* param_1, void* param_2, float param_3))
-{
-	std::wstring commandLine = GetCommandLineW();
-	bool egs = CmdGetParam(L"-epicapp=Peppermint") != -1;
-	static uint64_t init = false;
-	LOG_DEBUG("ClientMessage");
-
-	wprintf(L"CLIENT_MESSAGE: %ls %.2f\n", param_1->str, param_3);
-
-	std::wstring ws(param_1->str);
-	std::string msg_str(ws.begin(), ws.end());
-	o_ClientMessage(this_ptr, param_1, param_2, param_3);
-}
-#endif // PRINT_CLIENT_MSG
+AUTO_HOOK(ClientMessage);
