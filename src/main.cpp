@@ -31,6 +31,7 @@
 #include "hooking/FunctionHookManager.hpp"
 
 #include "hooks/all_hooks.h"
+#include "hooking/heuristics/all_heuristics.h"
 
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
@@ -137,7 +138,7 @@ void CreateDebugConsole() {
 
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
-		initialize_global_logger(LogLevel::DEBUG);
+		initialize_global_logger(LogLevel::TRACE);
 		GLOG_INFO("Logger initialized");
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
@@ -193,7 +194,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata);
+		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata, all_heuristics);
 		register_auto_hooks(hook_manager);
 		auto all_hooks_successful = hook_manager.enable_hooks();
 
