@@ -12,10 +12,14 @@ CREATE_HEURISTIC(
     RelativeProcedureCall,
     [](const std::string &signature) {
         if (signature.starts_with("E8 ?? ?? ?? ??") || signature.starts_with("E8 ? ? ? ?"))
-            return 100;
+            return 255;
 
-        if (signature.starts_with("E8"))
-            return 50;
+        if (signature.starts_with("E8")) {
+            // Maybe this matches, but probably not.
+            // If the next 4 bytes aren't wild cards, then this probably is a bad signature.
+            // We can try to use it if no better heuristics match.
+            return 1;
+        }
 
         return 0;
     },
