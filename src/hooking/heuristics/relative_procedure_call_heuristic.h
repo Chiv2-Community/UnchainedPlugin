@@ -2,6 +2,12 @@
 
 #include "../heuristic_macros.hpp"
 
+/**
+ * Procedure calls using the E8 (call rel32) opcode can be used to find the actual location of a function address.
+ *
+ * The 4 bytes following the E8 opcode represent a signed 32-bit relative address location.  This heuristic leverages
+ * that relative address to determine where a function is defined.
+ */
 CREATE_HEURISTIC(
     RelativeProcedureCall,
     [](const std::string &signature) {
