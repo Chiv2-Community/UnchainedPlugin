@@ -169,7 +169,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		bool needsSerialization = false;
 
 		if (!loaded.contains(build_hash_string)) {
-			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, ""));
+			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, "", cliArgs.platform));
 			needsSerialization = true;
 		}
 

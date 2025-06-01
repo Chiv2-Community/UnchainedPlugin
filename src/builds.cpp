@@ -74,11 +74,11 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 		for (const auto& [buildName, buildData] : builds) {
 			auto buildSerialized = buildData.Serialize(1);
 			if (buildSerialized.has_value()) {
-				out << buildSerialized.value();
 				if (!isFirst)
 					out << ",";
 				else
 					isFirst = false;
+				out << buildSerialized.value();
 			} else {
 				GLOG_WARNING("Failed to serialize build: {}", buildName);
 			}
