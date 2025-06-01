@@ -59,6 +59,7 @@ endfunction()
 
 generate_include_all_header("src/hooks" "all_hooks.h")
 generate_include_all_header("src/logging/formatters" "all_formatters.h")
+generate_include_all_header("src/hooking/heuristics" "all_heuristics.h")
 
 # File collection
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
