@@ -126,10 +126,11 @@ CREATE_HOOK(
 	auto old_base = this_ptr->url_base;
 
 	auto originalToken = request->token;
-	auto emptyToken = FString(L"");
+	auto empty_str = L"";
+	auto emptyToken = FString(empty_str);
 
 	try {
-		auto url = GetServerBrowserBackendApiUrl(L"/api/tbio").c_str()
+		auto url = GetServerBrowserBackendApiUrl(L"/api/tbio").c_str();
 		this_ptr->url_base = FString(url);
 		request->token = emptyToken;
 		void* res = o_GetCurrentGames(this_ptr, a2, request, a4);
