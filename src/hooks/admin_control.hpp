@@ -50,7 +50,7 @@ AUTO_HOOK(ConsoleCommand);
 
 CREATE_HOOK(
 	ExecuteConsoleCommand,
-	UNIVERSAL_SIGNATURE("40 53 48 83 EC 30 48 8B 05 ? ? ? ? 48 8B D9 48 8B 90 58 0C 00 00"),
+	UNIVERSAL_SIGNATURE("40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"),
 	ATTACH_ALWAYS,
 	void, (FString* param)
 ) {

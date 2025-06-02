@@ -15,7 +15,8 @@ inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 }
 
 template<typename RetType, typename... Args>
-inline HookData* register_hook(std::string name,
+inline HookData* register_hook(
+     std::string name,
      const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform,
      const std::function<bool()> should_attach,
      RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer

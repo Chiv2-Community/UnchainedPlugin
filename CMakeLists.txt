@@ -91,11 +91,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/Sig
 )
 
 # Compiler definitions
-target_compile_options(${PROJECT_NAME} PRIVATE /MP)
+target_compile_options(${PROJECT_NAME} PRIVATE /MP /arch:AVX2)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     NOMINMAX                      # Prevent Windows.h from defining min/max macros
     $<$<CONFIG:Debug>:_DEBUG>     # Define _DEBUG in Debug configuration
