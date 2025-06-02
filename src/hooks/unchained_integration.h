@@ -10,14 +10,12 @@ CREATE_HOOK(
 	FViewport,
 	PLATFORM_SIGNATURES(
 		PLATFORM_SIGNATURE(STEAM, "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6")
-		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED C7")
+		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED")
 	),
 	ATTACH_ALWAYS,
 	FString*, (FViewport_C* this_ptr, void* viewportClient)
 ) {
 		FString* val = o_FViewport(this_ptr, viewportClient);
-
-
 		wchar_t* buildNr = wcschr(this_ptr->AppVersionString.str, L'+') + 1;
 		if (buildNr != nullptr)
 		{
@@ -81,7 +79,10 @@ AUTO_HOOK(LoadFrontEndMap);
 
 CREATE_HOOK(
 	InternalGetNetMode,
-	UNIVERSAL_SIGNATURE("40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"),
+	PLATFORM_SIGNATURES(
+		PLATFORM_SIGNATURE(EGS, "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9")
+		PLATFORM_SIGNATURE(STEAM, "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B")
+	),
 	ATTACH_ALWAYS,
 	ENetMode, (void* world)
 ) {
