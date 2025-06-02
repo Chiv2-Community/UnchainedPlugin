@@ -126,12 +126,11 @@ CREATE_HOOK(
 	auto old_base = this_ptr->url_base;
 
 	auto originalToken = request->token;
-	auto empty_str = L"";
-	auto emptyToken = FString(empty_str);
+	auto emptyToken = FString(L"");
 
 	try {
-		auto url = GetServerBrowserBackendApiUrl(L"/api/tbio").c_str();
-		this_ptr->url_base = FString(url);
+		auto url = GetServerBrowserBackendApiUrl(L"/api/tbio");
+		this_ptr->url_base = FString(url.c_str());
 		request->token = emptyToken;
 		void* res = o_GetCurrentGames(this_ptr, a2, request, a4);
 		this_ptr->url_base = old_base;
@@ -157,12 +156,11 @@ CREATE_HOOK(
 		wcscmp(L"https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version", fullUrlInputPtr->str) == 0)
 	{
 		FString original = *fullUrlInputPtr; //save original string and buffer information
-		auto url = GetServerBrowserBackendApiUrl(L"/api/playfab/Client/Matchmake").c_str();
-		*fullUrlInputPtr = FString(url); //overwrite with new string
+		auto url = GetServerBrowserBackendApiUrl(L"/api/playfab/Client/Matchmake");
+		*fullUrlInputPtr = FString(url.c_str()); //overwrite with new string
 		GLOG_DEBUG("hk_SendRequest Client/Matchmake");
 
-		auto empty_str = L"";
-		auto empty = FString(empty_str); // Send empty string for auth, so that our backend isn't getting user tokens.
+		auto empty = FString(L""); // Send empty string for auth, so that our backend isn't getting user tokens.
 		try {
 			auto res = o_SendRequest(this_ptr, fullUrlInputPtr, bodyContentPtr, authKeyHeaderPtr, &empty); //run the request as normal with new string
 			*fullUrlInputPtr = original; //set everything back to normal and pretend nothing happened
