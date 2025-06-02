@@ -138,7 +138,7 @@ void CreateDebugConsole() {
 
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
-		initialize_global_logger(LogLevel::TRACE);
+		initialize_global_logger(LogLevel::INFO);
 		GLOG_INFO("Logger initialized");
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
