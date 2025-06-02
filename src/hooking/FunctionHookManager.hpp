@@ -3,10 +3,12 @@
 #include <vector>
 #include <string>
 #include <Sig.hpp>
+#include <variant>
 
 #include "HookData.hpp"
 #include "SignatureHeuristic.hpp"
 #include "../logging/global_logger.hpp"
+
 
 /**
  * The FunctionHookManager keeps track of hooks that will need their signatures to be scanned and
@@ -21,7 +23,6 @@ private:
     BuildMetadata& current_build_metadata;
     HMODULE base_addr;
     MODULEINFO module_info;
-    Platform platform;
 
 
     static bool log_and_validate_mh_status(std::string hook_name, MH_STATUS status) {
@@ -64,14 +65,13 @@ private:
     }
 
 public:
-    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, const Platform platform, BuildMetadata& current_build_metadata, const std::vector<std::unique_ptr<SignatureHeuristic>> &heuristics)
+    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, BuildMetadata& current_build_metadata, const std::vector<std::unique_ptr<SignatureHeuristic>> &heuristics)
         :heuristics(heuristics),
         current_build_metadata(current_build_metadata) {
         this->base_addr = base_addr;
         this->module_info = module_info;
         this->failed_hooks = {};
         this->pending_hooks = {};
-        this->platform = platform;
     } ;
 
     /**
@@ -88,20 +88,40 @@ public:
      * @return true if the hook was successfully registered, false otherwise.
      */
     inline bool register_hook(const HookData& hookData) {
-        GLOG_TRACE("Registering hook '{}'", hookData.name);
+        GLOG_TRACE("Registering hook '{}' for platform '{}'", hookData.name, platform_to_string.at(current_build_metadata.GetPlatform()));
 
-        const auto maybe_signature = hookData.select_signature_for_platform(platform);
-        if (!maybe_signature.has_value()) {
-            GLOG_WARNING("{}: no signature for platform '{}'", hookData.name, platform_to_string.at(platform));
+        const auto maybe_signature_or_offset = hookData.select_signature_for_platform(current_build_metadata.GetPlatform());
+        if (!maybe_signature_or_offset.has_value()) {
+            GLOG_WARNING("{}: no signature for platform '{}'", hookData.name, platform_to_string.at(current_build_metadata.GetPlatform()));
             return false;
         }
 
-        auto signature = maybe_signature.value();
+        auto signature_or_offset = maybe_signature_or_offset.value();
         uint64_t address = 0;
         uint64_t offset = current_build_metadata.GetOffset(hookData.name).value_or(0);
 
         if (offset == 0) {
-            address = (uint64_t)Sig::find(base_addr, module_info.SizeOfImage, signature.c_str());
+
+            if (std::holds_alternative<std::string>(signature_or_offset)) {
+                const auto signature = std::get<std::string>(signature_or_offset);
+                GLOG_TRACE("{} : searching for signature", hookData.name);
+                address = (uint64_t)Sig::find(base_addr, module_info.SizeOfImage, signature.c_str());
+
+                if (address == 0) {
+                    GLOG_WARNING("{} : nullptr. Signature requires updating", hookData.name);
+                    failed_hooks.push_back(hookData.name);
+                    return false;
+                }
+
+                address = apply_heuristics(hookData.name, signature, address);
+
+                offset = address - (uint64_t)(base_addr);
+                current_build_metadata.SetOffset(hookData.name, offset);
+            } else if (std::holds_alternative<uint64_t>(signature_or_offset)) {
+                offset = std::get<uint64_t>(signature_or_offset);
+                GLOG_TRACE("{} : using hardcoded offset 0x{:X}", hookData.name, offset);
+                address = (uint64_t)(base_addr) + offset;
+            }
 
             if (address == 0) {
                 GLOG_WARNING("{} : nullptr. Signature requires updating", hookData.name);
@@ -109,10 +129,6 @@ public:
                 return false;
             }
 
-            address = apply_heuristics(hookData.name, signature, address);
-
-            offset = address - (uint64_t)(base_addr);
-            current_build_metadata.SetOffset(hookData.name, offset);
         } else {
             address = (uint64_t)(base_addr) + offset;
         }
