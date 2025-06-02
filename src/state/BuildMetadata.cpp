@@ -95,12 +95,15 @@ std::optional<std::string> BuildMetadata::Serialize(int indent) const {
         return std::nullopt;
     }
 
-    ss << ws(indent  ) << quot << this->GetBuildKey() << quot << ": {"
-       << ws(indent+1) << quot << "Build"             << quot << ": " << this->GetBuildId() << ","
-       << ws(indent+1) << quot << "FileHash"          << quot << ": " << this->GetFileHash() << ","
-       << ws(indent+1) << quot << "Name"              << quot << ": " << quot << this->GetName() << quot << ","
-       << ws(indent+1) << quot << "Platform"          << quot << ": " << quot << std::format("{}", platform_to_string.at(this->GetPlatform())) << quot << ","
-       << ws(indent+1) << quot << "Offsets"           << quot << ": {";
+    const std::string platform_string = platform_to_string.at(GetPlatform());
+    const std::string build_key = this->GetBuildKey();
+
+    ss << ws(indent  ) << quot << build_key  << quot << ": {"
+       << ws(indent+1) << quot << "Build"    << quot << ": " << this->GetBuildId() << ","
+       << ws(indent+1) << quot << "FileHash" << quot << ": " << this->GetFileHash() << ","
+       << ws(indent+1) << quot << "Name"     << quot << ": " << quot << this->GetName() << quot << ","
+       << ws(indent+1) << quot << "Platform" << quot << ": " << quot << platform_string << quot << ","
+       << ws(indent+1) << quot << "Offsets"  << quot << ": {";
 
     auto offsets = this->GetOffsets();
     const auto offsets_length = offsets.size();
@@ -123,20 +126,6 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         GLOG_ERROR("Invalid JSON object or build name");
         return std::nullopt;
     }
-    
-    const json_t* buildNameJson = json_getProperty(json, "Name");
-    if (!buildNameJson || JSON_TEXT != json_getType(buildNameJson)) {
-        GLOG_WARNING("Error, the 'Name' property is not found or not a string. Serializing build without it.");
-    }
-
-    std::string buildName(json_getValue(buildNameJson));
-
-    // Get Build ID
-    const json_t* buildIdJson = json_getProperty(json, "Build");
-    if (!buildIdJson || JSON_INTEGER != json_getType(buildIdJson)) {
-        GLOG_WARNING("Error, the 'Build' property is not found or not an integer. Serializing build without it.");
-    }
-    auto buildId = static_cast<uint32_t>(json_getInteger(buildIdJson));
 
     // Get File Hash
     const json_t* fileHashJson = json_getProperty(json, "FileHash");
@@ -152,6 +141,7 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         return std::nullopt;
     }
     const char* platform_string = json_getValue(platformJson);
+
     Platform platform = STEAM;
     if (string_to_platform.contains(platform_string))
         platform = string_to_platform.at(platform_string);
@@ -165,13 +155,30 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         GLOG_ERROR("Error, the 'Offsets' property is not found or not an object");
         return std::nullopt;
     }
+    
+    const json_t* buildNameJson = json_getProperty(json, "Name");
+    std::string buildName = "";
+    if (!buildNameJson || JSON_TEXT != json_getType(buildNameJson)) {
+        GLOG_WARNING("Error, the 'Name' property is not found or not a string. Serializing build without it.");
+    } else {
+        buildName = json_getValue(buildNameJson);
+    }
+
+    // Get Build ID
+    const json_t* buildIdJson = json_getProperty(json, "Build");
+    uint32_t buildId = 0;
+    if (!buildIdJson || JSON_INTEGER != json_getType(buildIdJson)) {
+        GLOG_WARNING("Error, the 'Build' property is not found or not an integer. Serializing build without it.");
+    } else {
+        buildId = static_cast<uint32_t>(json_getInteger(buildIdJson));
+    }
 
     std::map<std::string, uint64_t> offsets;
     for (const json_t* offsetEntry = json_getChild(offsetsJson); offsetEntry != nullptr; offsetEntry = json_getSibling(offsetEntry)) {
         if (JSON_INTEGER == json_getType(offsetEntry)) {
             const char* offsetName = json_getName(offsetEntry);
             if (offsetName && strlen(offsetName) > 0) {
-                uint64_t offsetValue = static_cast<uint64_t>(json_getInteger(offsetEntry));
+                auto offsetValue = static_cast<uint64_t>(json_getInteger(offsetEntry));
                 offsets.emplace(offsetName, offsetValue);
             }
         }
