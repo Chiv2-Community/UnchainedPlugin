@@ -1,13 +1,13 @@
-﻿#pragma once
+#pragma once
 
 #include <functional>
 #include "FunctionHookManager.hpp"
-inline std::vector<HookData> g_auto_hooks;
+inline std::vector<std::unique_ptr<HookData>> g_auto_hooks;
 
 inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 	auto any_failed = false;
 	for (const auto& pending_hook : g_auto_hooks) {
-		if (!hook_manager.register_hook(pending_hook))
+		if (!hook_manager.register_hook(*pending_hook))
 			any_failed = true;
 	}
 
@@ -15,24 +15,22 @@ inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 }
 
 template<typename RetType, typename... Args>
-inline HookData register_hook(std::string name,
+inline HookData* register_hook(std::string name,
      const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform,
      const std::function<bool()> should_attach,
      RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer
      RetType(*hook_function)(Args...)
 ) {
-	auto data = HookData(name, select_signature_for_platform, should_attach, reinterpret_cast<void**>(&trampoline), hook_function);
-	g_auto_hooks.push_back(data);
-	return data;
+	g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, select_signature_for_platform, should_attach, reinterpret_cast<void**>(&trampoline), hook_function)));
+	return g_auto_hooks.back().get();
 }
 
-inline HookData register_scan_only_hook(
+inline HookData* register_scan_only_hook(
     std::string name,
 	const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform
 ) {
-    auto data = HookData(name, select_signature_for_platform, true);
-    g_auto_hooks.push_back(data);
-    return data;
+    g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, select_signature_for_platform, true)));
+    return g_auto_hooks.back().get();
 }
 
 #define CREATE_HOOK(name, signatures_func, attach_predicate, return_type, arguments) \

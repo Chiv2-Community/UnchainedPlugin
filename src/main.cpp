@@ -138,7 +138,7 @@ void CreateDebugConsole() {
 
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
-		initialize_global_logger(LogLevel::TRACE);
+		initialize_global_logger(LogLevel::INFO);
 		GLOG_INFO("Logger initialized");
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
@@ -188,8 +188,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		auto err = _sopen_s(&file_descript, "Chivalry2-Win64-Shipping.exe", O_RDONLY, _SH_DENYNO, 0);
 		if (err) GLOG_ERROR("Error {}", err);
 
-		off_t file_size = _filelength(file_descript);
-
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
@@ -201,7 +199,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
 
-		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(UTBLLocalPlayer_Exec_HookData.name);
+		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(UTBLLocalPlayer_Exec_HookData->name);
 		if (localPlayerOffset.has_value()) {
 			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
 			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
