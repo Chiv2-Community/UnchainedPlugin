@@ -80,7 +80,7 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 					isFirst = false;
 				out << buildSerialized.value();
 			} else {
-				GLOG_WARNING("Failed to serialize build: {}", buildName);
+				GLOG_WARNING("Failed to serialize build metadata: {}", buildName);
 			}
 		}
 	}
@@ -89,12 +89,12 @@ bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
 
 	std::ofstream file(buildMetadataPath);
 	if (!file.is_open()) {
-		GLOG_ERROR("Error opening build config: {}", buildMetadataPath);
+		GLOG_ERROR("Error opening build metadata: {}", buildMetadataPath);
 		return false;
 	}
 
 	file << out.str();
-	GLOG_INFO("Successfully saved build config to: {}", buildMetadataPath.string());
+	GLOG_INFO("Successfully saved build metadata to: {}", buildMetadataPath.string());
 	return true;
 }
 
@@ -105,16 +105,16 @@ std::map<std::string, BuildMetadata> LoadBuildMetadata()
     auto configPath = getBuildMetadataPath();
     std::map<std::string, BuildMetadata> buildMap;
     
-	GLOG_DEBUG("Loading build config from: {}", configPath.string());
+	GLOG_DEBUG("Loading build metadata from: {}", configPath.string());
 
     if (!std::filesystem::exists(configPath)) {
-        GLOG_WARNING("Config file ({}) does not exist. This is normal on first start.", configPath);
+        GLOG_WARNING("Build metadata file ({}) does not exist. This is normal on first start.", configPath);
         return buildMap;
     }
     
     std::ifstream file(configPath);
     if (!file.is_open()) {
-        GLOG_ERROR("Error opening build config: {}", configPath);
+        GLOG_ERROR("Error opening build metadata: {}", configPath);
         return buildMap;
     }
     
@@ -138,7 +138,7 @@ std::map<std::string, BuildMetadata> LoadBuildMetadata()
 	while (buildEntry != nullptr) {
 		if (JSON_OBJ == json_getType(buildEntry)) {
 			const auto buildKey = std::string(json_getName(buildEntry));
-			GLOG_DEBUG("Parsing build: {}", buildKey);
+			GLOG_DEBUG("Parsing build metadata: {}", buildKey);
 
             // Parse the build metadata
             auto parsedBuild = BuildMetadata::Parse(buildEntry);

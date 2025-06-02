@@ -146,16 +146,19 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
     }
     auto file_hash = static_cast<uint32_t>(json_getInteger(fileHashJson));
 
-    const json_t* platformJson = json_getProperty(json, "FileHash");
-    if (!fileHashJson || JSON_INTEGER != json_getType(fileHashJson)) {
-        GLOG_ERROR("Error, the 'FileHash' property is not found or not an integer");
+    const json_t* platformJson = json_getProperty(json, "Platform");
+    if (!platformJson || JSON_TEXT != json_getType(platformJson)) {
+        GLOG_ERROR("Error, the 'Platform' property is not found or not a string");
         return std::nullopt;
     }
-    std::string platform_string(json_getValue(fileHashJson));
+    const char* platform_string = json_getValue(platformJson);
     Platform platform = STEAM;
     if (string_to_platform.contains(platform_string))
         platform = string_to_platform.at(platform_string);
-
+    else {
+        GLOG_ERROR("Invalid platform '{}'.  Expected 'STEAM', 'EGS', or 'XBOX'", platform_string);
+        return std::nullopt;
+    }
 
     const json_t* offsetsJson = json_getProperty(json, "Offsets");
     if (!offsetsJson || JSON_OBJ != json_getType(offsetsJson)) {
