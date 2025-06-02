@@ -16,7 +16,7 @@ inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 
 template<typename RetType, typename... Args>
 inline HookData register_hook(std::string name,
-     const std::function<std::optional<std::string>(Platform)> select_signature_for_platform,
+     const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform,
      const std::function<bool()> should_attach,
      RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer
      RetType(*hook_function)(Args...)
@@ -28,7 +28,7 @@ inline HookData register_hook(std::string name,
 
 inline HookData register_scan_only_hook(
     std::string name,
-	const std::function<std::optional<std::string>(Platform)> select_signature_for_platform
+	const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform
 ) {
     auto data = HookData(name, select_signature_for_platform, true);
     g_auto_hooks.push_back(data);
@@ -55,17 +55,17 @@ inline HookData register_scan_only_hook(
     );
 
 #define UNIVERSAL_SIGNATURE(signature) \
-    [](Platform platform) -> std::optional<std::string> { \
+    [](Platform platform) -> std::optional<OffsetOrString> { \
         return signature; \
     }
 
 #define UNKNOWN_SIGNATURE() \
-    [](Platform platform) -> std::optional<std::string> { \
+    [](Platform platform) -> std::optional<OffsetOrString> { \
         return std::nullopt; \
     }
 
 #define PLATFORM_SIGNATURES(...) \
-    [](Platform platform) -> std::optional<std::string> { \
+    [](Platform platform) -> std::optional<OffsetOrString> { \
         switch (platform) { \
             __VA_ARGS__ \
             default: \

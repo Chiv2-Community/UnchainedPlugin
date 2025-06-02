@@ -11,10 +11,14 @@ SCAN_HOOK(UTBLLocalPlayer_Exec, PLATFORM_SIGNATURES(
 	PLATFORM_SIGNATURE(STEAM, "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 68")
 ))
 
+// Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
+// I do not feel like dealing with it right now.
+/*
 CREATE_HOOK(
 	ConsoleCommand,
-	UNIVERSAL_SIGNATURE("40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 \
-	89 42 08 48 8B C3 48 83 C4 20 5B C3"),
+	UNIVERSAL_SIGNATURE(
+		"40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 \
+		    C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"),
 	ATTACH_ALWAYS,
 	FString, (void* this_ptr, FString const& str, bool b)
 ) {
@@ -42,6 +46,7 @@ CREATE_HOOK(
 	return o_ConsoleCommand(this_ptr, str, b);
 }
 AUTO_HOOK(ConsoleCommand);
+*/
 
 CREATE_HOOK(
 	ExecuteConsoleCommand,
@@ -131,7 +136,7 @@ CREATE_HOOK(
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
 }
-AUTO_HOOK(GetTBLGameMode);
+AUTO_HOOK(GetTBLGameMode)
 
 /*
 void __thiscall

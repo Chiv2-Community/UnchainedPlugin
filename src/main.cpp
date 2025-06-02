@@ -194,7 +194,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, STEAM, current_build_metadata, all_heuristics);
+		FunctionHookManager hook_manager(baseAddr, moduleInfo, current_build_metadata, all_heuristics);
 		register_auto_hooks(hook_manager);
 		auto all_hooks_successful = hook_manager.enable_hooks();
 
