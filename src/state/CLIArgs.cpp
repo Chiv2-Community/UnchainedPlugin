@@ -6,7 +6,7 @@
 
 #include "../logging/global_logger.hpp"
 
-CLIArgs::CLIArgs(std::optional<uint8_t> rcon_port, bool apply_desync_patch, bool use_backend_banlist,
+CLIArgs::CLIArgs(std::optional<uint16_t> rcon_port, bool apply_desync_patch, bool use_backend_banlist,
                  bool is_headless, bool is_server, bool playable_listen, std::optional<std::wstring> next_map,
                  std::wstring server_browser_backend, std::optional<std::wstring> server_password,
                  Platform platform)
@@ -25,7 +25,7 @@ CLIArgs::CLIArgs(std::optional<uint8_t> rcon_port, bool apply_desync_patch, bool
 
 CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
 {
-    std::optional<uint8_t> rcon_port = std::nullopt;
+    std::optional<uint16_t> rcon_port = std::nullopt;
     bool apply_desync_patch = false;
     bool use_backend_banlist = false;
     bool is_headless = false;
