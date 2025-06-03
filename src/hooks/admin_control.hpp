@@ -71,7 +71,7 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	void*, (void* ret_ptr, FString* input)
 ) {
-	GLOG_DEBUG("FText_AsCultureInvariant");
+	GLOG_TRACE("FText_AsCultureInvariant");
 
 	// This is extremely loud in the console
 	//if (input->str != NULL) {
@@ -90,7 +90,7 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	void, (void* game_mode, FText* text, uint8_t chat_type)
 ) {
-	GLOG_DEBUG("BroadcastLocalizedChat");
+	GLOG_TRACE("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
 AUTO_HOOK(BroadcastLocalizedChat);
@@ -135,7 +135,7 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	void*, (void* uobj)
 ) {
-	GLOG_DEBUG("GetTBLGameMode");
+	GLOG_TRACE("GetTBLGameMode");
 	const auto curGameMode = o_GetTBLGameMode(uobj);
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
@@ -155,7 +155,7 @@ CREATE_HOOK(
 ) {
 	bool egs = g_state->GetCLIArgs().platform == EGS;
 	static uint64_t init = false;
-	GLOG_DEBUG("ClientMessage");
+	GLOG_TRACE("ClientMessage");
 
 	char* pValue;
 	size_t len;
