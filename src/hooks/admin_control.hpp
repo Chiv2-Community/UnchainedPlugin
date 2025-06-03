@@ -6,9 +6,11 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
+// Note that this signature does not point to the start of the UTBLLocalPlayer::Exec function
+// It points at a specific jnz instruction.
 SCAN_HOOK(UTBLLocalPlayer_Exec, PLATFORM_SIGNATURES(
 	PLATFORM_SIGNATURE(EGS, "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf")
-	PLATFORM_SIGNATURE(STEAM, "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 68")
+	PLATFORM_SIGNATURE(STEAM, "75 17 45 84 ED") // Not the strongest signature, but it ought to do.
 ))
 
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
@@ -69,6 +71,8 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	void*, (void* ret_ptr, FString* input)
 ) {
+	GLOG_DEBUG("FText_AsCultureInvariant");
+
 	// This is extremely loud in the console
 	//if (input->str != NULL) {
 	//	printf("FText_AsCultureInvariant: ");
@@ -131,7 +135,7 @@ CREATE_HOOK(
 	ATTACH_ALWAYS,
 	void*, (void* uobj)
 ) {
-	//LOG_DEBUG("GetTBLGameMode");
+	GLOG_DEBUG("GetTBLGameMode");
 	const auto curGameMode = o_GetTBLGameMode(uobj);
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
