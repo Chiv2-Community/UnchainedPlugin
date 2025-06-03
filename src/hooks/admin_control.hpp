@@ -2,14 +2,21 @@
 
 #include <regex>
 #include "../logging/Logger.hpp"
-#include "../hooking/hook_macros.hpp"
+#include "../hooking/patch_macros.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-SCAN_HOOK(UTBLLocalPlayer_Exec, PLATFORM_SIGNATURES(
-	PLATFORM_SIGNATURE(EGS, "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf")
-	PLATFORM_SIGNATURE(STEAM, "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 68")
-))
+CREATE_PATCH(
+	UTBLLocalPlayer_Exec,
+	PLATFORM_SIGNATURES(
+		PLATFORM_SIGNATURE(EGS, "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf")
+		PLATFORM_SIGNATURE(STEAM, "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 68")
+	),
+	ATTACH_ALWAYS
+) {
+	return Ptch_Repl(reinterpret_cast<void*>(patch->address), 0xEB);
+}
+AUTO_PATCH(UTBLLocalPlayer_Exec)
 
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
 // I do not feel like dealing with it right now.

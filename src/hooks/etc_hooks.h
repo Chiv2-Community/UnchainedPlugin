@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../stubs/UE4.h"
-#include "../hooking/hook_macros.hpp"
+#include "../hooking/patch_macros.hpp"
 
 
 

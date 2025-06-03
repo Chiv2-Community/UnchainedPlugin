@@ -2,7 +2,7 @@
 
 #include "../state/global_state.hpp"
 #include "../stubs/Chivalry2.h"
-#include "../hooking/hook_macros.hpp"
+#include "../hooking/patch_macros.hpp"
 
 CREATE_HOOK(
     ATBLPlayerController__GetOwnershipFromPlayerControllerAndState,

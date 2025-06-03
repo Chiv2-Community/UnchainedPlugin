@@ -2,6 +2,6 @@
 
 #include <Windows.h>
 
-void Ptch_Nop(unsigned char *address, int size);
+bool Ptch_Nop(void *address, int size);
 
-void Ptch_Repl(unsigned char *address, DWORD newVal);
+bool Ptch_Repl(void *address, DWORD newVal);

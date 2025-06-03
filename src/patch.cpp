@@ -1,17 +1,20 @@
 ﻿#include "patch.hpp"
 
-void Ptch_Nop(unsigned char* address, int size)
+bool Ptch_Nop(void* address, int size)
 {
     unsigned long protect[2];
-    VirtualProtect((void*)address, size, PAGE_EXECUTE_READWRITE, &protect[0]);
+    auto res1 = VirtualProtect((void*)address, size, PAGE_EXECUTE_READWRITE, &protect[0]);
+    if (!res1) return false;
+
     memset((void*)address, 0x90, size);
-    VirtualProtect((void*)address, size, protect[0], &protect[1]);
+    return VirtualProtect((void*)address, size, protect[0], &protect[1]);
 }
 
-void Ptch_Repl(unsigned char* address, DWORD newVal)
+bool Ptch_Repl(void* address, DWORD newVal)
 {
     DWORD d;
-    VirtualProtect((void*)address, 1, PAGE_EXECUTE_READWRITE, &d);
-    *address = 0xEB; // Patch to JMP
-    VirtualProtect((void*)address, 1, d, NULL);
+    auto res1 = VirtualProtect(address, 1, PAGE_EXECUTE_READWRITE, &d);
+    if (!res1) return false;
+    *static_cast<unsigned char *>(address) = 0xEB; // Patch to JMP
+    return VirtualProtect(address, 1, d, NULL);
 }

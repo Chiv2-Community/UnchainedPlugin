@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../hooking/hook_macros.hpp"
+#include "../hooking/patch_macros.hpp"
 
 CREATE_HOOK(
 	FindFileInPakFiles_1,

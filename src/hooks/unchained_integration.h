@@ -3,7 +3,7 @@
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
-#include "../hooking/hook_macros.hpp"
+#include "../hooking/patch_macros.hpp"
 #include <optional>
 
 CREATE_HOOK(

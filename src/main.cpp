@@ -28,7 +28,7 @@
 #include "logging/global_logger.hpp"
 #include "stubs/UE4.h"
 #include "state/global_state.hpp"
-#include "hooking/FunctionHookManager.hpp"
+#include "hooking/PatchManager.hpp"
 
 #include "hooks/all_hooks.h"
 #include "hooking/heuristics/all_heuristics.h"
@@ -192,24 +192,14 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, current_build_metadata, all_heuristics);
-		register_auto_hooks(hook_manager);
-		auto all_hooks_successful = hook_manager.enable_hooks();
+		PatchManager hook_manager(baseAddr, moduleInfo, current_build_metadata, all_heuristics);
+		register_auto_patches(hook_manager);
+		auto all_patchess_successful = hook_manager.apply_patches();
 
 		if (needsSerialization)
 			SaveBuildMetadata(loaded);
 
-		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(UTBLLocalPlayer_Exec_HookData->name);
-		if (localPlayerOffset.has_value()) {
-			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
-			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
-		}
-		/*printf("offset dedicated: 0x%08X", g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22);
-		Ptch_Repl(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22, 0x2);*/
-		// Dedicated server hook in ApproveLogin
-		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
-
-		if (!all_hooks_successful) {
+		if (!all_patchess_successful) {
 			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
 		}
 
