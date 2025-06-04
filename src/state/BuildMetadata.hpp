@@ -20,7 +20,7 @@
 class BuildMetadata {
     uint32_t fileHash = 0;
     uint32_t buildId = 0;
-    std::map<std::string, uint64_t> offsets = {};
+    std::map<std::string, uintptr_t> offsets = {};
     std::string nameStr;
     Platform platform;
 public:
@@ -30,9 +30,9 @@ public:
     std::optional<std::string> Serialize(int indent) const;
     static std::optional<BuildMetadata> Parse(const json_t* json);
 
-    void SetOffset(std::string name, uint64_t offset);
-    std::optional<uint64_t> GetOffset(const std::string& name) const;
-    std::vector<std::pair<std::string, uint64_t>> GetOffsets() const;
+    void SetOffset(std::string name, uintptr_t offset);
+    std::optional<uintptr_t> GetOffset(const std::string& name) const;
+    std::vector<std::pair<std::string, uintptr_t>> GetOffsets() const;
 
     void SetFileHash(uint32_t hash);
     uint32_t GetFileHash() const;

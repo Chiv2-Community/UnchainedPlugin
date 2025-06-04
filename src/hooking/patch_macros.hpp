@@ -15,83 +15,73 @@ inline bool register_auto_patches(PatchManager& hook_manager) {
 }
 
 inline Patch* register_patch(
-    std::string name,
-	std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform,
-    std::function<bool()> apply_predicate,
-    bool(*apply_patch)(const Patch*)
+    std::unique_ptr<Patch> patch
 ) {
-    g_auto_hooks.push_back(std::make_unique<Patch>(Patch(name, select_signature_for_platform, apply_predicate, apply_patch)));
+    g_auto_hooks.push_back(std::move(patch));
     return g_auto_hooks.back().get();
 }
 
-static bool log_and_validate_mh_status(const std::string &hook_name, const MH_STATUS status) {
-    if (status == MH_OK) {
-        GLOG_DEBUG("Successfully hooked '{}'", hook_name);
-        return true;
-    }
+static auto IDENTITY = [](uintptr_t ptr) -> uintptr_t { return ptr; };
+static auto FOLLOW_32BIT_RELATIVE_PROCEDURE_CALL = [](const uint64_t procedure_call_opcode_address) -> uintptr_t {
+    std::int32_t relative_call_address;
+    memcpy(&relative_call_address, reinterpret_cast<void*>(procedure_call_opcode_address + 1), sizeof(std::int32_t));
 
-    GLOG_ERROR("Minhook error while hooking '{}': {}", hook_name, MH_StatusToString(status));
-    return false;
-}
+    constexpr std::uint32_t procedure_call_size = 5; // 1 byte for the op code, 4 bytes for the relative address
+    return procedure_call_opcode_address + procedure_call_size + relative_call_address;
+};
 
-#define CREATE_HOOK(name, signatures_func, apply_predicate, return_type, arguments) \
+#define REGISTER_HOOK_PATCH(name, signatures_func, apply_predicate, return_type, arguments) \
     static auto name##_signature = signatures_func; \
     static auto name##_predicate = apply_predicate; \
+    /* A little bit of a hack so we can use a forward declaration here */ \
+    struct name##_hook_struct { static return_type hook_fn arguments; }; \
     return_type(*o_##name)arguments = nullptr; \
-    return_type hk_##name arguments
+    return_type (*hk_##name)arguments = name##_hook_struct::hook_fn; \
+    static auto name##_Patch = register_patch(std::make_unique<HookSignaturePatch>( \
+        HookSignaturePatch( \
+            #name, \
+            name##_signature, \
+            IDENTITY, \
+            name##_predicate, \
+            reinterpret_cast<void**>(o_##name), \
+            reinterpret_cast<void*>(name##_hook_struct::hook_fn) \
+        ) \
+    )); \
+    return_type name##_hook_struct::hook_fn arguments
 
-#define AUTO_HOOK(hook_name) \
-    static bool apply_hook_##hook_name(const Patch* patch) { \
-        auto result = MH_CreateHook( \
-            reinterpret_cast<void*>(patch->address), \
-            reinterpret_cast<void*>(hk_##hook_name), \
-            reinterpret_cast<void**>(o_##hook_name) \
-        ); \
-        if (result != MH_OK) { \
-            log_and_validate_mh_status(patch->name, result); \
-            return false; \
-        } \
-        result = MH_EnableHook(reinterpret_cast<void*>(patch->address)); \
-        return !log_and_validate_mh_status(patch->name, result); \
-    } \
-    static auto hook_name##_Patch = register_patch( \
-        #hook_name, \
-        hook_name##_signature, \
-        hook_name##_predicate, \
-        apply_hook_##hook_name \
-    );
+#define REGISTER_HOOK_PATCH_WITH_INDIRECT_OFFSET(name, signatures_func, handle_signature_address, apply_predicate, return_type, arguments) \
+    static auto name##_signature = signatures_func; \
+    static auto name##_predicate = apply_predicate; \
+    /* A little bit of a hack so we can use a forward declaration here */ \
+    struct name##_hook_struct { static return_type hook_fn arguments; }; \
+    return_type(*o_##name)arguments = nullptr; \
+    return_type (*hk_##name)arguments = name##_hook_struct::hook_fn; \
+    static auto name##_Patch = register_patch(std::make_unique<HookSignaturePatch>( \
+        HookSignaturePatch( \
+            #name, \
+            name##_signature, \
+            handle_signature_address, \
+            name##_predicate, \
+            reinterpret_cast<void**>(o_##name), \
+            reinterpret_cast<void*>(name##_hook_struct::hook_fn) \
+        ) \
+    )); \
+    return_type name##_hook_struct::hook_fn arguments
+
 
 /**
- * Creates a patch with the given functionality. Patches should modify memory in some way
- * .
+ * Creates a patch that replaces a byte at a given address
+ *
  * @param name
  * @param signatures_func
  * @param apply_predicate Predicate returning true when the patch should apply
  */
-#define CREATE_PATCH(name, signatures_func, attach_predicate) \
+#define REGISTER_BYTE_PATCH(name, signatures_func, attach_predicate, replacement_byte) \
     static auto name##_signature = signatures_func; \
     static auto name##_predicate = attach_predicate; \
-    bool patch_##name(const Patch* patch)
-
-#define AUTO_PATCH(name) \
-    static auto name##_Patch = register_patch( \
-        #name, \
-        name##_signature, \
-        name##_predicate, \
-        patch_##name \
-    );
-
-
-/**
- * Registers a "patch" that does nothing. All this really does is scan for the signature.
- *
- * @param name
- * @param signatures_func
- */
-#define AUTO_SCAN(name, signatures_func) \
-    CREATE_PATCH(name, signatures_func, [](){ return false; }) { return true; } \
-    AUTO_PATCH(name)
-
+    static auto name##_patch = register_patch(std::make_unique<ByteReplacementSignaturePatch>(\
+        ByteReplacementSignaturePatch(#name, name##_signature, IDENTITY, name##_predicate, replacement_byte) \
+    ));
 
 
 #define UNIVERSAL_SIGNATURE(signature) \

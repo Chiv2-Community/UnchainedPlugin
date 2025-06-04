@@ -28,7 +28,7 @@ void BuildMetadata::SetOffset(std::string name, uint64_t offset) {
     offsets[std::move(name)] = offset;
 }
 
-std::optional<uint64_t> BuildMetadata::GetOffset(const std::string &name) const {
+std::optional<uintptr_t> BuildMetadata::GetOffset(const std::string &name) const {
     if (auto it = offsets.find(name); it != offsets.end()) {
         return it->second;
     }

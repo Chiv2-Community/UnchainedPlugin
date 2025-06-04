@@ -31,7 +31,6 @@
 #include "hooking/PatchManager.hpp"
 
 #include "hooks/all_hooks.h"
-#include "hooking/heuristics/all_heuristics.h"
 
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
@@ -192,7 +191,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		PatchManager hook_manager(baseAddr, moduleInfo, current_build_metadata, all_heuristics);
+		PatchManager hook_manager(baseAddr, moduleInfo, current_build_metadata);
 		register_auto_patches(hook_manager);
 		auto all_patchess_successful = hook_manager.apply_patches();
 

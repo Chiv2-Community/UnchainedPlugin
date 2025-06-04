@@ -6,22 +6,22 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-CREATE_PATCH(
+
+REGISTER_BYTE_PATCH(
 	UTBLLocalPlayer_Exec,
 	PLATFORM_SIGNATURES(
 		PLATFORM_SIGNATURE(EGS, "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf")
 		PLATFORM_SIGNATURE(STEAM, "4C 89 4C 24 20 4C 89 44 24 18 48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 68")
 	),
-	ATTACH_ALWAYS
-) {
-	return Ptch_Repl(reinterpret_cast<void*>(patch->address), 0xEB);
-}
-AUTO_PATCH(UTBLLocalPlayer_Exec)
+	ATTACH_ALWAYS,
+	0xEB
+)
+
 
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
 // I do not feel like dealing with it right now.
 /*
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ConsoleCommand,
 	UNIVERSAL_SIGNATURE(
 		"40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 \
@@ -52,10 +52,9 @@ CREATE_HOOK(
 #endif
 	return o_ConsoleCommand(this_ptr, str, b);
 }
-AUTO_HOOK(ConsoleCommand);
 */
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
 	UNIVERSAL_SIGNATURE("40 53 48 83 EC 30 48 8B 05 ? ? ? ? 48 8B D9 48 8B 90 58 0C 00 00"),
 	ATTACH_ALWAYS,
@@ -64,10 +63,9 @@ CREATE_HOOK(
 	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
-AUTO_HOOK(ExecuteConsoleCommand);
 
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	FText_AsCultureInvariant,
 	PLATFORM_SIGNATURES(
 		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63")
@@ -84,10 +82,9 @@ CREATE_HOOK(
 	//}
 	return o_FText_AsCultureInvariant(ret_ptr, input);
 }
-AUTO_HOOK(FText_AsCultureInvariant);
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	BroadcastLocalizedChat,
 	UNIVERSAL_SIGNATURE("48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"),
 	ATTACH_ALWAYS,
@@ -96,7 +93,6 @@ CREATE_HOOK(
 	GLOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
-AUTO_HOOK(BroadcastLocalizedChat);
 
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
@@ -129,7 +125,7 @@ bool IsServerStart()
 }
 
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	GetTBLGameMode,
 	PLATFORM_SIGNATURES(
 		PLATFORM_SIGNATURE(EGS, "40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51")
@@ -143,14 +139,13 @@ CREATE_HOOK(
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
 }
-AUTO_HOOK(GetTBLGameMode)
 
 /*
 void __thiscall
 APlayerController::ClientMessage
 		  (APlayerController *this,FString *param_1,FName param_2,float param_3)
 */
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ClientMessage,
 	UNIVERSAL_SIGNATURE("4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"),
 	ATTACH_ALWAYS,
@@ -204,4 +199,3 @@ CREATE_HOOK(
 	}
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }
-AUTO_HOOK(ClientMessage);
