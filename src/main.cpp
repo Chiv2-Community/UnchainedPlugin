@@ -188,15 +188,15 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-		PatchManager hook_manager(baseAddr, moduleInfo, current_build_metadata);
+		PatchManager patch_manager(baseAddr, moduleInfo, current_build_metadata);
 
 		for (auto& patch: ALL_REGISTERED_PATCHES) {
-			hook_manager.register_patch(*patch);
+			patch_manager.register_patch(*patch);
 		}
 
-		auto all_patches_successful = hook_manager.apply_patches();
+		auto all_patches_successful = patch_manager.apply_patches();
 		if (!all_patches_successful) {
-			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
+			GLOG_ERROR("Failed to apply all patches. Unchained may not function as expected.");
 		}
 
 		GLOG_INFO("Continuing to RCON");
@@ -206,11 +206,11 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());
 		GLOG_ERROR("std::exception: {}", e.what());
-		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		GLOG_ERROR("Patching failed. Things are probably broken.");
 		return 1;
 	} catch (...) {
 		GLOG_ERROR("Unknown C++ exception caught");
-		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		GLOG_ERROR("Patching failed. Things are probably broken.");
 		return 1;
 	}
 }
