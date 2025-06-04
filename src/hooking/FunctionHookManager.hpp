@@ -16,14 +16,12 @@
  */
 class FunctionHookManager {
 private:
-    const std::vector<std::unique_ptr<SignatureHeuristic>>& heuristics;
     std::vector<std::string> failed_hooks;
     std::vector<HookData> pending_hooks;
     std::map<std::string, uint64_t> hook_offsets;
     BuildMetadata& current_build_metadata;
     HMODULE base_addr;
     MODULEINFO module_info;
-
 
     static bool log_and_validate_mh_status(std::string hook_name, MH_STATUS status) {
         if (status == MH_OK) {
@@ -35,39 +33,9 @@ private:
         return false;
     }
 
-    uint64_t apply_heuristics(const std::string& hook_name, const std::string& signature, uint64_t address) const {
-        if (heuristics.empty()) {return address;}
-
-        GLOG_TRACE("Running Heuristics checks for {}", hook_name);
-
-        uint8_t best_match = 0;
-        const SignatureHeuristic* current_best = nullptr;
-        for (const auto& heuristic : heuristics) {
-            auto match_confidence = heuristic->matches_signature(signature);
-            if (match_confidence > 0) {
-                GLOG_TRACE("  - '{}' matched signature with confidence {}", heuristic->get_name(), match_confidence);
-            }
-
-            if (match_confidence > best_match) {
-                best_match = match_confidence;
-                current_best = heuristic.get();
-            }
-        }
-
-
-        if (best_match > 0 && current_best != nullptr) {
-            GLOG_TRACE("Using heuristic '{}' with confidence {}", current_best->get_name(), best_match);
-            return current_best->calculate_address(signature, address);
-        }
-
-        GLOG_TRACE("No heuristics matched signature. Using signature address.");
-        return address;
-    }
-
 public:
-    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, BuildMetadata& current_build_metadata, const std::vector<std::unique_ptr<SignatureHeuristic>> &heuristics)
-        :heuristics(heuristics),
-        current_build_metadata(current_build_metadata) {
+    FunctionHookManager(const HMODULE base_addr, const MODULEINFO &module_info, BuildMetadata& current_build_metadata)
+        :current_build_metadata(current_build_metadata) {
         this->base_addr = base_addr;
         this->module_info = module_info;
         this->failed_hooks = {};
@@ -90,48 +58,14 @@ public:
     inline bool register_hook(const HookData& hookData) {
         GLOG_TRACE("Registering hook '{}' for platform '{}'", hookData.name, platform_to_string.at(current_build_metadata.GetPlatform()));
 
-        const auto maybe_signature_or_offset = hookData.select_signature_for_platform(current_build_metadata.GetPlatform());
-        if (!maybe_signature_or_offset.has_value()) {
-            GLOG_WARNING("{}: no signature for platform '{}'", hookData.name, platform_to_string.at(current_build_metadata.GetPlatform()));
-            return false;
-        }
-
-        auto signature_or_offset = maybe_signature_or_offset.value();
-        uint64_t address = 0;
         uint64_t offset = current_build_metadata.GetOffset(hookData.name).value_or(0);
 
         if (offset == 0) {
-
-            if (std::holds_alternative<std::string>(signature_or_offset)) {
-                const auto signature = std::get<std::string>(signature_or_offset);
-                GLOG_TRACE("{} : searching for signature", hookData.name);
-                address = (uint64_t)Sig::find(base_addr, module_info.SizeOfImage, signature.c_str());
-
-                if (address == 0) {
-                    GLOG_WARNING("{} : nullptr. Signature requires updating", hookData.name);
-                    failed_hooks.push_back(hookData.name);
-                    return false;
-                }
-
-                address = apply_heuristics(hookData.name, signature, address);
-
-                offset = address - (uint64_t)(base_addr);
-                current_build_metadata.SetOffset(hookData.name, offset);
-            } else if (std::holds_alternative<uint64_t>(signature_or_offset)) {
-                offset = std::get<uint64_t>(signature_or_offset);
-                GLOG_TRACE("{} : using hardcoded offset 0x{:X}", hookData.name, offset);
-                address = (uint64_t)(base_addr) + offset;
-            }
-
-            if (address == 0) {
-                GLOG_WARNING("{} : nullptr. Signature requires updating", hookData.name);
-                failed_hooks.push_back(hookData.name);
-                return false;
-            }
-
-        } else {
-            address = (uint64_t)(base_addr) + offset;
+            GLOG_ERROR("{} : no offset found for hook", hookData.name);
+            return false;
         }
+
+        const uint64_t address = reinterpret_cast<uint64_t>(base_addr) + offset;
 
         GLOG_INFO("{} : 0x{:X}", hookData.name, offset);
 
