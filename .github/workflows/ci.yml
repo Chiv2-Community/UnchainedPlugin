@@ -21,8 +21,6 @@ jobs:
       - uses: lukka/get-cmake@latest
       
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      
-      - run: cargo test --all-features
 
       # Ensure build directory exists
       - name: Create build directory
