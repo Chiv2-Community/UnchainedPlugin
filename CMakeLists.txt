@@ -104,11 +104,14 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<BOOL:${PRINT_CLIENT_MSG}>:PRINT_CLIENT_MSG>
 )
 
+add_subdirectory(sleuth)
+
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     MinHook
     tiny-json
     winhttp
+    sleuthlib_interface
 )
 
 # Source grouping for better organization in IDEs
