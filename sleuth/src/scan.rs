@@ -22,6 +22,14 @@ use patternsleuth::scanner::Xref;
 use patternsleuth::symbols::Symbol;
 use patternsleuth::{scanner::Pattern, PatternConfig, Resolution};
 
+use std::fs::File;
+use std::io::{BufReader, Read};
+use crc32fast::Hasher;
+use std::io::{BufWriter, Write};
+
+use serde::Serialize;
+use serde_json::to_writer_pretty;
+
 #[derive(Parser)]
 enum Commands {
     Scan(CommandScan),
@@ -31,6 +39,23 @@ enum Commands {
     BuildIndex(CommandBuildIndex),
     ViewSymbol(CommandViewSymbol),
     AutoGen(CommandAutoGen),
+}
+
+fn crc32_from_file(path: &str) -> std::io::Result<u32> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0u8; 8192];
+    let mut hasher = Hasher::new();
+
+    loop {
+        let bytes_read = reader.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+
+    Ok(hasher.finalize())
 }
 
 fn parse_maybe_hex(s: &str) -> Result<usize> {
@@ -325,13 +350,20 @@ fn scan(command: CommandScan) -> Result<()> {
         (Output::Stdout, Box::new(games_vec.iter()))
     };
 
+    let file = File::create("out.json")?;
+    // let writer = BufWriter::new(file);
+    let mut writer = BufWriter::new(file);
+    let mut data = HashMap::new();
+    
     for game in iter {
         #[allow(unused_assignments)]
         let mut bin_data = None;
+        let mut file_path = String::new();
 
         let (name, exe) = match game {
             GameEntry::File(GameFileEntry { name, exe_path }) => {
                 output.println(format!("{:?} {:?}", name, exe_path.display()));
+                file_path = exe_path.display().to_string();
 
                 bin_data = Some(fs::read(exe_path)?);
 
@@ -378,6 +410,8 @@ fn scan(command: CommandScan) -> Result<()> {
 
         let mut table = Table::new();
         table.set_titles(row!["sig", "offline scan"]);
+
+        
 
         for sig in &sigs {
             let mut cells = vec![];
@@ -503,6 +537,84 @@ fn scan(command: CommandScan) -> Result<()> {
         let resolution = tracing::info_span!("scan", game = game_name)
             .in_scope(|| exe.resolve_many(&dyn_resolvers));
 
+        
+        // println!("Hello ({:?})", sigs.len());
+        // for sig in &sigs {
+        //     println!("HelloWORLD");
+        // }
+
+        // use std::collections::HashSet;
+
+
+        // #[derive(Serialize, Hash, Eq, PartialEq, Debug)]
+        // struct MyItem {
+        //     id: String,
+        //     name: String,
+        // }
+
+        // let mut sigs_json: HashSet<MyItem> = HashSet::new();
+
+        // for (resolver, resolution) in resolvers.iter().zip(&resolution) {
+        //     if let Ok(r) = resolution {
+        //         if let Some(hex) = format!("{r:?}")
+        //             .split(['(', ')'])
+        //             .nth(1)
+        //             .and_then(|s| s.parse::<u64>().ok())
+        //             .map(|n| format!("{:#x}", n))
+        //         {
+        //                 sigs_json.insert(MyItem { id: resolver.name.to_string(), name: hex.to_string() });
+        //             println!("{} {}", resolver.name, hex);
+        //         }
+        //     }
+        // }
+
+        
+        #[derive(Serialize)]
+        struct BuildInfo {
+            Build: u32,
+            FileHash: u32,
+            Name: String,
+            Platform: String,
+            Path: String,
+            Offsets: HashMap<String, u64>,
+        }
+        // let crc32: u32 = 1937620090;   
+
+        let crc32 = crc32_from_file(&file_path).unwrap();
+
+        
+        let mut offsets = HashMap::new();
+        for (resolver, resolution) in resolvers.iter().zip(&resolution) {
+            if let Ok(r) = resolution {
+                // FIXME: Less nasty way?
+                if let Some(hex) = format!("{r:?}")
+                    .split(['(', ')'])
+                    .nth(1)
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(|n| format!("{:#x}", n))
+                {
+                    // sigs_json.insert(MyItem { id: resolver.name.to_string(), name: hex.to_string() });
+                    let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16)? & 0xFFFFFFF;
+                    println!("{} {} {}", resolver.name, hex, val);
+                    offsets.insert(resolver.name.to_string(), val);
+                }
+            }
+        } 
+
+        let build_info = BuildInfo {
+            Build: 0,
+            FileHash: crc32,
+            Name: "".to_string(),
+            Platform: game_name.to_uppercase().to_string(),
+            Path: file_path.to_string(),
+            Offsets: offsets,
+        };
+
+        data.insert(crc32.to_string(), build_info);
+
+
+        // serde_json::to_writer(&mut writer, &build_info)?;
+
         for (resolver, resolution) in resolvers.iter().zip(&resolution) {
             table.add_row(Row::new(
                 [
@@ -534,6 +646,9 @@ fn scan(command: CommandScan) -> Result<()> {
             map
         });
     }
+    
+    to_writer_pretty(&mut writer, &data)?;
+    writer.flush()?;
 
     // force any progress output to be dropped
     let output = Output::Stdout;
