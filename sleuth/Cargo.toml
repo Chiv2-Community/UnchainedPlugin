@@ -1,0 +1,36 @@
+[package]
+name = "sleuthlib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-external", "symbols", "serde-resolvers", "image-pe", "image-elf"] }
+anyhow = "1.0.79"
+clap = { version = "4.4.14", features = ["derive"] }
+colored = "2.1.0"
+globset = "0.4.14"
+iced-x86 = "1.20.0"
+itertools = "0.12.0"
+memchr = "2.7.1"
+msvc-demangler = "0.9.0"
+object = "0.32.2"
+pdb = "0.8.0"
+prettytable-rs = "0.10.0"
+rayon = "1.8.0"
+regex = "1.10.2"
+strum = {version = "0.25.0", features = ["strum_macros", "derive"]}
+windows = { version = "0.52.0" }
+indicatif = { version = "0.17.7", features = ["rayon"] }
+rusqlite = { version = "0.30.0", features = ["bundled"] }
+crossbeam = "0.8.4"
+patricia_tree = "0.8.0"
+libc = "0.2.152"
+serde = { version = "1.0.195", features = ["rc"] }
+serde_json = "1.0.111"
+time = { version = "0.3.31", features = ["formatting", "macros", "local-offset"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing = "0.1.40"
+futures = "0.3.31"

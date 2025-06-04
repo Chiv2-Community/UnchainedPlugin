@@ -12,6 +12,7 @@
 
 #include <direct.h>
 
+extern "C" uint8_t generate_json();
 
 
 //black magic for the linker to get winsock2 to work
@@ -138,7 +139,7 @@ void CreateDebugConsole() {
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
 		initialize_global_logger(LogLevel::INFO);
-		GLOG_INFO("Logger initialized");
+		GLOG_INFO("Logger initialized  {}", generate_json());
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
 
