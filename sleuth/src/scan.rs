@@ -12,7 +12,7 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
 
     let name = format!("PID={}", pid.unwrap());
     let game_name = format!("pid={}", pid.unwrap()); // fixme
-    let exe = patternsleuth::process::external::read_image_from_pid(pid.unwrap()).map_err(|e| e.to_string())?;
+    let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string())?;
     println!("GAME '{:?}' '{:x?}'", name, exe.base_address);
 
     let resolution = tracing::info_span!("scan", game = game_name)
