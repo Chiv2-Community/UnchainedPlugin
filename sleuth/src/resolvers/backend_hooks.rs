@@ -1,6 +1,6 @@
 use futures::future::join_all;
 use patternsleuth::{resolvers::{ensure_one, impl_resolver_singleton, try_ensure_one, unreal::util, Result}, MemoryTrait};
-use patternsleuth_scanner::Pattern;
+use patternsleuth::scanner::Pattern;
 
 
 define_pattern_resolver!(FString_AppendChars, [
