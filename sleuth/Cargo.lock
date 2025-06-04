@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "patternsleuth"
 version = "0.1.0"
-source = "git+https://github.com/trumank/patternsleuth.git#eaba77d42251bae2b404b6d25bf9dfc397b8d373"
+source = "git+https://github.com/trumank/patternsleuth.git?rev=5786164#5786164189604fd55f647aa38ef0bfd6f23f7d58"
 dependencies = [
  "anyhow",
  "futures",
@@ -873,7 +873,7 @@ dependencies = [
 [[package]]
 name = "patternsleuth_scanner"
 version = "0.1.0"
-source = "git+https://github.com/trumank/patternsleuth.git#eaba77d42251bae2b404b6d25bf9dfc397b8d373"
+source = "git+https://github.com/trumank/patternsleuth.git?rev=5786164#5786164189604fd55f647aa38ef0bfd6f23f7d58"
 dependencies = [
  "anyhow",
  "memchr",
