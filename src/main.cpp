@@ -29,13 +29,11 @@ extern "C" uint8_t generate_json();
 #include "logging/global_logger.hpp"
 #include "stubs/UE4.h"
 #include "state/global_state.hpp"
-#include "hooking/PatchManager.hpp"
+#include "patching/PatchManager.hpp"
 
 #include "hooks/all_hooks.h"
 
 void handleRCON() {
-	std::wstring commandLine = GetCommandLineW();
-	size_t flagLoc = commandLine.find(L"-rcon");
 	if (!g_state->GetCLIArgs().rcon_port.has_value()) {
 		ExitThread(0);
 		return;
@@ -167,11 +165,11 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
 		std::string build_hash_string = std::to_string(build_hash);
-		bool needsSerialization = false;
 
 		if (!loaded.contains(build_hash_string)) {
-			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, "", cliArgs.platform));
-			needsSerialization = true;
+			GLOG_ERROR("Failed to load build metadata for build hash: {}", build_hash_string);
+			GLOG_ERROR("Something is probably wrong with the rust module invocation");
+			return 1;
 		}
 
 		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
@@ -190,16 +188,14 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
-
 		PatchManager hook_manager(baseAddr, moduleInfo, current_build_metadata);
-		register_auto_patches(hook_manager);
-		auto all_patchess_successful = hook_manager.apply_patches();
 
-		if (needsSerialization)
-			SaveBuildMetadata(loaded);
+		for (auto& patch: ALL_REGISTERED_PATCHES) {
+			hook_manager.register_patch(*patch);
+		}
 
-		if (!all_patchess_successful) {
+		auto all_patches_successful = hook_manager.apply_patches();
+		if (!all_patches_successful) {
 			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
 		}
 

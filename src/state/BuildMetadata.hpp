@@ -27,7 +27,6 @@ public:
     BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets, std::string nameStr, Platform platform);
     ~BuildMetadata();
 
-    std::optional<std::string> Serialize(int indent) const;
     static std::optional<BuildMetadata> Parse(const json_t* json);
 
     void SetOffset(std::string name, uintptr_t offset);

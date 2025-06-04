@@ -1,10 +1,9 @@
 #pragma once
 
-#include "../hooking/patch_macros.hpp"
+#include "../patching/patch_macros.hpp"
 
 REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_1,
-	UNIVERSAL_SIGNATURE("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 30 33 FF"),
 	ATTACH_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
@@ -19,7 +18,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_2,
-	UNIVERSAL_SIGNATURE("48 8B C4 4C 89 48 ?? 4C 89 40 ?? 48 89 48 ?? 55 53 48 8B EC"),
 	ATTACH_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
@@ -34,7 +32,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	IsNonPakFilenameAllowed,
-	UNIVERSAL_SIGNATURE("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 30 48 8B F1 45 33 C0"),
 	ATTACH_ALWAYS,
 	long long, (void* this_ptr, void* InFilename)
 ) {

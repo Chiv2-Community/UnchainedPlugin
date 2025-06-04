@@ -3,15 +3,11 @@
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
-#include "../hooking/patch_macros.hpp"
+#include "../patching/patch_macros.hpp"
 #include <optional>
 
 REGISTER_HOOK_PATCH(
 	FViewport,
-	PLATFORM_SIGNATURES(
-		PLATFORM_SIGNATURE(STEAM, "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6")
-		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED")
-	),
 	ATTACH_ALWAYS,
 	FString*, (FViewport_C* this_ptr, void* viewportClient)
 ) {
@@ -34,8 +30,6 @@ REGISTER_HOOK_PATCH(
 						  g_state->GetBuildMetadata().GetName(),
 						  g_state->GetBuildMetadata().GetBuildId(),
 						  g_state->GetBuildMetadata().GetFileHash());
-
-				SaveBuildMetadata(g_state->GetSavedBuildMetadata());
 			}
 
 			if (!g_state->GetBuildMetadata().GetName().empty())
@@ -48,7 +42,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	LoadFrontEndMap,
-	UNIVERSAL_SIGNATURE("48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"),
 	ATTACH_ALWAYS,
 	bool, (void* this_ptr, FString* param_1)
 ) {
@@ -77,10 +70,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	InternalGetNetMode,
-	PLATFORM_SIGNATURES(
-		PLATFORM_SIGNATURE(EGS, "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9")
-		PLATFORM_SIGNATURE(STEAM, "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B")
-	),
 	ATTACH_ALWAYS,
 	ENetMode, (void* world)
 ) {
@@ -90,7 +79,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	UNetDriver_GetNetMode,
-	UNIVERSAL_SIGNATURE("48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4"),
 	ATTACH_WHEN(g_state->GetCLIArgs().apply_desync_patch),
 	ENetMode, (void* this_ptr)
 ) {
@@ -101,7 +89,6 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	UGameplay_IsDedicatedServer,
-	UNIVERSAL_SIGNATURE("48 83 EC 28 48 85 C9 ? ? BA 01 00 00 00 ? ? ? ? ? 48 85 C0 ? ? 48 8B C8 ? ? ? ? ? 83 F8 01 0F 94 C0 48"),
 	ATTACH_ALWAYS,
 	bool, (long long param_1)
 ) {

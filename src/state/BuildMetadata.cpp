@@ -86,41 +86,6 @@ Platform BuildMetadata::GetPlatform() const {
     return platform;
 }
 
-
-std::optional<std::string> BuildMetadata::Serialize(int indent) const {
-    std::stringstream ss;
-
-    if (this->GetFileHash() == 0) {
-        GLOG_WARNING("No file hash set. Cannot serialize build");
-        return std::nullopt;
-    }
-
-    const std::string platform_string = platform_to_string.at(GetPlatform());
-    const std::string build_key = this->GetBuildKey();
-
-    ss << ws(indent  ) << quot << build_key  << quot << ": {"
-       << ws(indent+1) << quot << "Build"    << quot << ": " << this->GetBuildId() << ","
-       << ws(indent+1) << quot << "FileHash" << quot << ": " << this->GetFileHash() << ","
-       << ws(indent+1) << quot << "Name"     << quot << ": " << quot << this->GetName() << quot << ","
-       << ws(indent+1) << quot << "Platform" << quot << ": " << quot << platform_string << quot << ","
-       << ws(indent+1) << quot << "Offsets"  << quot << ": {";
-
-    auto offsets = this->GetOffsets();
-    const auto offsets_length = offsets.size();
-    for (size_t i = 0; i < offsets_length; i++) {
-        auto [name, offset] = offsets[i];
-        ss << ws(indent + 2) << quot << name << quot << ": " << offset;
-        if (i != offsets_length - 1) {
-            ss << ",";
-        }
-    }
-
-    ss << ws(indent+1) << "}"
-       << ws(indent) << "}";
-
-    return ss.str();
-}
-
 std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
     if (!json) {
         GLOG_ERROR("Invalid JSON object or build name");
