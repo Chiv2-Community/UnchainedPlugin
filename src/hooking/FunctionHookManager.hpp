@@ -62,6 +62,7 @@ public:
 
         if (offset == 0) {
             GLOG_ERROR("{} : no offset found for hook", hookData.name);
+            failed_hooks.push_back(hookData.name);
             return false;
         }
 
