@@ -6,22 +6,17 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-
 REGISTER_BYTE_PATCH(
 	UTBLLocalPlayer_Exec,
 	ATTACH_ALWAYS,
 	0xEB
 )
 
-
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
 // I do not feel like dealing with it right now.
 /*
 REGISTER_HOOK_PATCH(
 	ConsoleCommand,
-	UNIVERSAL_SIGNATURE(
-		"40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 \
-		    C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"),
 	ATTACH_ALWAYS,
 	FString, (void* this_ptr, FString const& str, bool b)
 ) {
