@@ -38,8 +38,7 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     shell32.lib
     user32.lib
     userenv.lib
-    # FIXME: where to find this normally?
-    windows.0.52.0.lib
     winspool.lib
     ws2_32.lib
+    psapi.lib
 )
