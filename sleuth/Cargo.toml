@@ -5,8 +5,6 @@ edition = "2021"
 
 [lib]
 crate-type = ["staticlib"]
-path="sleuthlib.rs"
-
 
 [dependencies]
 patternsleuth = { path = "./patternsleuth/patternsleuth", features = ["process-external", "symbols", "serde-resolvers", "image-pe", "image-elf"] }
