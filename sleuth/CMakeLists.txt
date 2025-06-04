@@ -1,4 +1,4 @@
-file(GLOB_RECURSE RUST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.rs")
+file(GLOB_RECURSE RUST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.rs")
 
 project(sleuthlib C)
 

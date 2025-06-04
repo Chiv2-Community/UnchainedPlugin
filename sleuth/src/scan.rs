@@ -30,9 +30,10 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
                 .map(|n| format!("{:#x}", n))
             {
                 // sigs_json.insert(MyItem { id: resolver.name.to_string(), name: hex.to_string() });
-                let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|e| e.to_string())? & 0xFFFFFFF;
-                println!("{} {} {}", resolver.name, hex, val);
-                offsets.insert(resolver.name.to_string(), val);
+                let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|e| e.to_string())?;
+                let base = exe.base_address as u64;
+                println!("{} {} {} {:x?}", resolver.name, hex, val, (val-base) & 0xFFFFFFF);
+                offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
     } 

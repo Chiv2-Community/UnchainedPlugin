@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["staticlib"]
 
 [dependencies]
-typetag = "0.2.15"
+typetag = "0.2"
 async-trait = "0.1"
 patternsleuth = { path = "./patternsleuth/patternsleuth", features = ["process-external", "symbols", "serde-resolvers", "image-pe", "image-elf"] }
 patternsleuth_scanner = { path = "./patternsleuth/patternsleuth_scanner" }
@@ -37,3 +37,7 @@ time = { version = "0.3.31", features = ["formatting", "macros", "local-offset"]
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing = "0.1.40"
 futures = "0.3.31"
+
+[features]
+default = ["serde-resolvers"]
+serde-resolvers = []
