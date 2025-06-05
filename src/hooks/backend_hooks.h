@@ -8,7 +8,7 @@
 
 REGISTER_HOOK_PATCH(
 	FString_AppendChars,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (FString* this_ptr, const wchar_t* Str, uint32_t Count)
 ) {
 	return o_FString_AppendChars(this_ptr, Str, Count);
@@ -17,7 +17,7 @@ REGISTER_HOOK_PATCH(
 // Distributed bans
 REGISTER_HOOK_PATCH(
 	PreLogin,
-	ATTACH_WHEN(g_state->GetCLIArgs().use_backend_banlist),
+	APPLY_WHEN(g_state->GetCLIArgs().use_backend_banlist),
 	void, (ATBLGameMode* this_ptr, const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 ) {
 	std::wstring addressString(Address.str);
@@ -57,7 +57,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	GetMotd,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*,(GCGObj* this_ptr, void* a2, GetMotdRequest* request, void* a4)
 ) {
 	GLOG_DEBUG("GetMotd Called");
@@ -86,7 +86,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	GetCurrentGames,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (GCGObj* this_ptr, void* a2, GetCurrentGamesRequest* request, void* a4)
 ) {
 	GLOG_DEBUG("GetCurrentGames called");
@@ -115,7 +115,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	SendRequest,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (GCGObj* this_ptr, FString* fullUrlInputPtr, FString* bodyContentPtr, FString* authKeyHeaderPtr, FString* authKeyValuePtr)
 ) {
 	if (fullUrlInputPtr->letter_count > 0 &&

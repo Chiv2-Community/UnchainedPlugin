@@ -6,18 +6,14 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-REGISTER_BYTE_PATCH(
-	UTBLLocalPlayer_Exec,
-	ATTACH_ALWAYS,
-	0xEB
-)
+REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, 0xEB)
 
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
 // I do not feel like dealing with it right now.
 /*
 REGISTER_HOOK_PATCH(
 	ConsoleCommand,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	FString, (void* this_ptr, FString const& str, bool b)
 ) {
 #ifdef _DEBUG_
@@ -47,7 +43,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (FString* param)
 ) {
 	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
@@ -57,7 +53,7 @@ REGISTER_HOOK_PATCH(
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 REGISTER_HOOK_PATCH(
 	FText_AsCultureInvariant,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* ret_ptr, FString* input)
 ) {
 	// This is extremely loud in the console
@@ -72,7 +68,7 @@ REGISTER_HOOK_PATCH(
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 REGISTER_HOOK_PATCH(
 	BroadcastLocalizedChat,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* game_mode, FText* text, uint8_t chat_type)
 ) {
 	GLOG_DEBUG("BroadcastLocalizedChat");
@@ -112,7 +108,7 @@ bool IsServerStart()
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 REGISTER_HOOK_PATCH(
 	GetTBLGameMode,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* uobj)
 ) {
 	//LOG_DEBUG("GetTBLGameMode");
@@ -128,7 +124,7 @@ APlayerController::ClientMessage
 */
 REGISTER_HOOK_PATCH(
 	ClientMessage,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
 ) {
 	bool egs = g_state->GetCLIArgs().platform == EGS;

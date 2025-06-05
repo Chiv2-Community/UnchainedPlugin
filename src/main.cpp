@@ -23,7 +23,6 @@ extern "C" uint8_t generate_json();
 
 #include "constants.h"
 #include "builds.hpp"
-#include "patch.hpp"
 #include "string_util.hpp"
 
 #include "logging/global_logger.hpp"

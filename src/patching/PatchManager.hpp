@@ -75,11 +75,20 @@ public:
 
             const auto result = patch->apply(base_addr + maybe_offset.value());
 
-            if (result) {
-                GLOG_INFO("{} : Successfully enabled patch at offset 0x{:X}", patch_name, maybe_offset.value());
-            } else {
-                GLOG_ERROR("{} : Failed to enable patch", patch_name);
-                if (batched) failed_patches.push_back(patch_name);
+            switch (result) {
+                case APPLY_SUCCESS:
+                    GLOG_INFO("{} : Successfully enabled patch at offset 0x{:X}", patch_name, maybe_offset.value());
+                    break;
+                case APPLY_FAILED:
+                    GLOG_ERROR("{} : Failed to enable patch", patch_name);
+                    if (batched) failed_patches.push_back(patch_name);
+                    break;
+                case APPLY_DISABLED:
+                    GLOG_DEBUG("{} : Patch not enabled.", patch_name);
+                    break;
+                default:
+                    GLOG_ERROR("{} : Unknown result from patch apply. This should never happen. Please report a bug.", patch_name);
+                    if (batched) failed_patches.push_back(patch_name);
             }
 
             return result;

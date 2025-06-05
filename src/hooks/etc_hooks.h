@@ -7,7 +7,7 @@
 
 REGISTER_HOOK_PATCH(
 	GetGameInfo,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	FString*, (FString* ret_ptr, void* uWorld)
 ) {
 	auto val = o_GetGameInfo(ret_ptr, uWorld);

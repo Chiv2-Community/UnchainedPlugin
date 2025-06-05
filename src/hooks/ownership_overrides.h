@@ -6,7 +6,7 @@
 
 REGISTER_HOOK_PATCH(
     ATBLPlayerController__GetOwnershipFromPlayerControllerAndState,
-    ATTACH_WHEN(g_state->GetCLIArgs().is_headless),
+    APPLY_NEVER, //APPLY_WHEN(g_state->GetCLIArgs().is_headless),
     FOwnershipResponse*, (FOwnershipResponse* result, void* PlayerController, void* PlayerState, void* AssetIdToCheck, bool BaseOnly)
 ) {
     FOwnershipResponse* response = o_ATBLPlayerController__GetOwnershipFromPlayerControllerAndState(result, PlayerController, PlayerState, AssetIdToCheck, BaseOnly);
@@ -17,7 +17,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
     ATBLPlayerController__CanUseLoadoutItem,
-    ATTACH_ALWAYS,
+    APPLY_ALWAYS,
     FOwnershipResponse*, (ATBLPlayerController* _this, FOwnershipResponse* result, const void* InLoadOutSelection, const void* InItem)
 ) {
     auto response = o_ATBLPlayerController__CanUseLoadoutItem(_this, result, InLoadOutSelection, InItem);
@@ -29,7 +29,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
     ATBLPlayerController__CanUseCharacter,
-    ATTACH_ALWAYS,
+    APPLY_ALWAYS,
     FOwnershipResponse*, (ATBLPlayerController* _this, FOwnershipResponse* result, const void* CharacterSubclass)
 ) {
     auto response = o_ATBLPlayerController__CanUseCharacter(_this, result, CharacterSubclass);
@@ -40,7 +40,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
     ATBLPlayerController__ConditionalInitializeCustomizationOnServer,
-    ATTACH_WHEN(g_state->GetCLIArgs().is_headless),
+    APPLY_NEVER, //APPLY_WHEN(g_state->GetCLIArgs().is_headless),
     void, (ATBLPlayerController* _this, const void* player_state)
 ) {
     _this->bOnlineInventoryInitialized = true;

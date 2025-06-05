@@ -4,7 +4,7 @@
 
 REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_1,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
 	const auto attr{ GetFileAttributesW(Filename) };
@@ -18,7 +18,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_2,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
 	const auto attr{ GetFileAttributesW(Filename) };
@@ -32,7 +32,7 @@ REGISTER_HOOK_PATCH(
 
 REGISTER_HOOK_PATCH(
 	IsNonPakFilenameAllowed,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, void* InFilename)
 ) {
 	return 1;
