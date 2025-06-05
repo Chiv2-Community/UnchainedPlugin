@@ -13,150 +13,158 @@
 
 
 #[macro_export]
-macro_rules! define_pattern_resolver {
+macro_rules! define_pocess {
+
+    // Simple sig pattern lookup (returns start address)
+    (@emit_body $name:ident, Simple, $ctx:ident, $patterns:ident) => {{
+        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+            let futures = ::patternsleuth::resolvers::futures::future::join_all(
+                $patterns.iter()
+                    .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
+            ).await;
     
-    //  (NAME, MODE, DICT) -> emit(NAME, MODE, DICT)
-    ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@emit_body $name, $mode, {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        });
-    };
+            ::patternsleuth::resolvers::ensure_one(futures.into_iter().flatten())?
+        })
+    }};
 
-    //  (NAME, DICT) -> macro(NAME, Simple, DICT)
-    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    // Scan for a function call, extract 4 bytes and return address of the called function
+    // e.g. "E8 | ?? ?? ?? ?? 4C 39 ?8 74 3?" returns address of the function after |
+    (@emit_body $name:ident, Call, $ctx:ident, $patterns:ident) => {{
+        use patternsleuth::MemoryTrait;
+        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+            let res = futures::future::join_all($patterns.iter().map(|p| $ctx.scan(patternsleuth::scanner::Pattern::new(p).unwrap()))).await;
+            
+            patternsleuth::resolvers::try_ensure_one(
+                res.iter()
+                    .flatten()
+                    .map(|a| -> patternsleuth::resolvers::Result<usize> { Ok($ctx.image().memory.rip4(*a)?) }))?
+        })
+    }};
 
-        define_pattern_resolver!($name, Simple, {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        });
-    };
+    // Scan for Xrefs, return last
+    // FIXME: expects max. 2 results
+    // FIXME: handles only one pattern
+    (@emit_body $name:ident, XrefLast, $ctx:ident, $patterns:ident) => {{
+        use patternsleuth::resolvers::unreal::util;
+        use patternsleuth::resolvers::ensure_one;
+        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+            // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
+            let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
+            let refs = util::scan_xrefs($ctx, &strings).await;
+            let mut fns = util::root_functions($ctx, &refs)?;
+            if fns.len() == 2 {
+                fns[0] = fns[1]; // FIXME: deque? last?
+                fns.pop();
+            }
+            ensure_one(fns)?
+        })
+    }};
 
-    //  emit(NAME, MODE, DICT) -> ...
-    (@emit_body $name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    // Wrap code and define_pattern_resolver
+    (@emit_process_inline $name:ident, |$ctx:ident, $patterns:ident| $body:block) => {{
+        let result = $body;
+        Ok($name(result))
+    }};
+}
 
+#[macro_export]
+macro_rules! define_pattern_resolver {
+
+    // Internal: produce header
+    (@emit_header $name:ident) => {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)]
-        pub struct $name( pub usize);
+        pub struct $name(pub usize);
+    };
+
+    // Called with Mode (Process) specified
+    //  (NAME, MODE, LIST) 
+    ($name:ident, $mode:ident, [ $( $pattern:expr ),+ $(,)? ]) => {
+        define_pattern_resolver!(@emit_header $name);
+
+        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
+            let patterns = [ $( $pattern ),+ ];
+
+            define_pocess!(@emit_body $name, $mode, ctx, patterns)
+        });
+    };
+
+    // Called with a body block
+    // (NAME, LIST, |ctx, patterns| { CODE } )
+    ($name:ident, [ $( $pattern:expr ),+ $(,)? ], |$ctx:ident, $patterns:ident| $body:block) => {
+        define_pattern_resolver!(@emit_header $name);
+
+        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
+            let $patterns = [ $( $pattern ),+ ];
+
+            define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
+        });
+    };
+
+    // Called with Mode (Process) specified
+    //  (NAME, MODE, DICT) 
+    ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let platform = super::current_platform();
-
             let mut patterns: Vec<&str> = Vec::new();
             for var in [platform, super::PlatformType::OTHER] {
-                // println!("Testing {}", stringify!($name));
-                
+                // println!("Testing {}", stringify!($name));                
                 let pattern_part: &[&str] = match var {
                     $(
                         super::PlatformType::$platform => &[ $( $pattern ),+ ],
                     )+
                     _ => &[],
-                };
-                
+                };                
                 // println!("{}: {:?}", var, pattern_part);
-
                 patterns.extend_from_slice(pattern_part);
-            }
-            
-            println!("combined {:?}", patterns);
-
-            define_pattern_resolver![@emit_body $name, $mode];
-
-            process(ctx, patterns).await
-
-            // Ok($name(
-            //     123
-            //     // ::patternsleuth::resolvers::ensure_one(futures.into_iter().flatten())?
-            // ))
-            // Ok($name(12345))
+            }            
+            // println!("combined {:?}", patterns);            
+            define_pocess!(@emit_body $name, $mode, ctx, patterns)
         });
     };
-    
-    //  (NAME, MODE, LIST) -> emit function body, emit(NAME, MODE)
-    ($name:ident, $mode:ident, [ $( $pattern:expr ),+ $(,)? ]) => {
+
+    // Called with a body block
+    //  (NAME, MODE, DICT) 
+    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
+        define_pattern_resolver!(@emit_header $name);
         
-        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-        #[allow(non_camel_case_types)]
-        pub struct $name(pub usize);
+        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
+            let platform = super::current_platform();
+            let mut $patterns: Vec<&str> = Vec::new();
+            for var in [platform, super::PlatformType::OTHER] {
+                // println!("Testing {}", stringify!($name));                
+                let pattern_part: &[&str] = match var {
+                    $(
+                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
+                    )+
+                    _ => &[],
+                };                
+                // println!("{}: {:?}", var, pattern_part);
+                $patterns.extend_from_slice(pattern_part);
+            }            
+            // println!("combined {:?}", patterns);            
 
-        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let patterns = [ $( $pattern ),+ ];
-
-            define_pattern_resolver![@emit_body $name, $mode];
-
-            process(ctx, patterns.to_vec()).await
+            define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
         });
     };
 
-    //  (NAME, LIST) -> (NAME, Simple, LIST)
+    // Fallbacks for cases with no mode specified (assuming Simple)
+    
+    //  (NAME, LIST) 
     ($name:ident, [ $( $pattern:expr ),+ $(,)? ]) => {
         define_pattern_resolver![$name, Simple,
             [ $( $pattern ),+ ]
         ];
-        
     };
 
-    // Process implementation
-
-    (@emit_body $name:ident, Simple) => {
-        async fn process(ctx: &patternsleuth::resolvers::AsyncContext<'_> , patterns: Vec<&str>) -> patternsleuth::resolvers::Result<$name>{
-            let futures = ::patternsleuth::resolvers::futures::future::join_all(
-                patterns.iter()
-                    .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
-            ).await;
-
-            Ok($name(
-                ::patternsleuth::resolvers::ensure_one(futures.into_iter().flatten())?
-            ))
-        }
+    //  (NAME, DICT) 
+    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!($name, Simple, {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        });
     };
-
-    (@emit_body $name:ident, Call) => {
-
-        async fn process(ctx: &patternsleuth::resolvers::AsyncContext<'_> , patterns: Vec<&str>) -> patternsleuth::resolvers::Result<$name>{
-            let res = futures::future::join_all(patterns.iter().map(|p| ctx.scan(patternsleuth::scanner::Pattern::new(p).unwrap()))).await;
-            
-            Ok($name(try_ensure_one(
-                res.iter()
-                    .flatten()
-                    .map(|a| -> Result<usize> { Ok(ctx.image().memory.rip4(*a)?) }))?))
-        }
-    };
-
-    (@emit_body $name:ident, XrefLast) => {
-
-        async fn process(ctx: &patternsleuth::resolvers::AsyncContext<'_> , patterns: Vec<patternsleuth::scanner::Pattern>) -> patternsleuth::resolvers::Result<$name>{
-            
-            // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
-            let strings = ctx.scan(patterns.first().unwrap().clone()).await;
-            let refs = util::scan_xrefs(ctx, &strings).await;
-            let mut fns = util::root_functions(ctx, &refs)?;
-            if fns.len() == 2 {
-                fns[0] = fns[1]; // FIXME: deque? last?
-                fns.pop();
-            }
-            Ok($name(ensure_one(fns)?))
-        }
-    };
-
-    (@emit_body $name:ident, Xref) => {
-
-        async fn process(ctx: &patternsleuth::resolvers::AsyncContext<'_> , patterns: Vec<patternsleuth::scanner::Pattern>) -> patternsleuth::resolvers::Result<$name>{
-            
-            // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
-            let strings = ctx.scan(patterns.first().unwrap().clone()).await;
-            let refs = util::scan_xrefs(ctx, &strings).await;
-            let mut fns = util::root_functions(ctx, &refs)?;
-            Ok($name(ensure_one(fns.first().unwrap().clone())?))
-        }
-    };
-    
-    // Fallback: mode not matched. Call user macro with name $mode
-    (@emit_body $name:ident, $mode:ident) => {
-        $mode![@emit_body $name];
-        // async fn process(ctx: &patternsleuth::resolvers::AsyncContext<'_> , patterns: Vec<patternsleuth::scanner::Pattern>) -> patternsleuth::resolvers::Result<$name>{
-            
-        // }
-    };
-    
 }
 
 #[macro_export]
