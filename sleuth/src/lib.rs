@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::to_writer_pretty;
+use self::resolvers::{PLATFORM, PlatformType};
 
 // IEEE
 use std::arch::x86_64::_mm_crc32_u8;
@@ -75,16 +76,12 @@ pub fn dump_builds(offsets: HashMap<String, u64>) -> Result<()> {
     
     let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
-    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-        true => "EGS",
-        false => "STEAM"
-    };
 
     let build_info = BuildInfo {
         build: 0,
         file_hash: crc32,
         name: "".to_string(),
-        platform: platform.to_string(),
+        platform: PLATFORM.get().ok_or("OTHER").unwrap().to_string(),//platform.to_string(),
         path: file_path.to_string(),
         offsets,
     };
@@ -99,6 +96,14 @@ pub fn dump_builds(offsets: HashMap<String, u64>) -> Result<()> {
 #[no_mangle]
 pub extern "C" fn generate_json() -> u8 {
     println!("test asd");
+    
+    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
+        true => PlatformType::EGS,
+        false => PlatformType::STEAM
+    };
+
+    PLATFORM.set(platform).expect("Platform already set");
+
     let offsets = scan::scan().expect("Failed to scan");
     let len_u8 = offsets.len() as u8;
     dump_builds(offsets).expect("Failed to dump builds JSON");

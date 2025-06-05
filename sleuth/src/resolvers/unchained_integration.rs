@@ -1,14 +1,18 @@
 
-// define_pattern_resolver!(FViewport, [
-// ]);
+// not working?
+// define_pattern_resolver!(FViewport, {
+//     STEAM: ["48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6"],
+//     EGS: ["48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED"],
+// });
 
-// define_pattern_resolver!(LoadFrontEndMap, [
-// ]);
-
-define_pattern_resolver!(InternalGetNetMode, [
-    "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9", // EGS
-    "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B", // STEAM
+define_pattern_resolver!(LoadFrontEndMap, [
+    "48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"
 ]);
+
+define_pattern_resolver!(InternalGetNetMode, {
+    EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
+    STEAM: ["40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B"], // STEAM
+});
 
 define_pattern_resolver!(UNetDriver_GetNetMode, [
     "48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4",
