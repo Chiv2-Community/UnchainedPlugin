@@ -37,20 +37,13 @@ define_pattern_resolver!(ApproveLogin, [
     "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 8B", // STEAM
 ]);
 
-// #[derive(Debug, PartialEq)]
-// #[cfg_attr(
-//     feature = "serde-resolvers",
-//     derive(serde::Serialize, serde::Deserialize)
-// )]
-// pub struct GetMotd(pub usize);
-// impl_resolver_singleton!(all, GetMotd, |ctx| async {
-//     let patterns = [
-//     ];
 
-//     let res = join_all(patterns.iter().map(|p| ctx.scan(Pattern::new(p).unwrap()))).await;
+// TODO: Shorter sigs
+define_pattern_resolver!(GetMotd, {
+    EGS: ["4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09"],
+    STEAM: ["4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC E8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 E8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 18 01 00 00 48 8D 55 B7 4C 89 AC 24 E0 00 00 00 4C 89 B4 24 D8 00 00 00 4C 89 BC 24 D0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4C 24 20 33 F6 BA 09"]
+});
 
-//     Ok(GetMotd(ensure_one(res.into_iter().flatten())?))
-// });
 
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
