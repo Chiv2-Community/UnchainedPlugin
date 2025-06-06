@@ -75,22 +75,45 @@ AUTO_HOOK(LoadFrontEndMap);
 static wchar_t staticBuffer[1024] = {};
 static bool hasPendingCommand = false;
 
+// #define GETNETMODE_CC
 CREATE_HOOK(
 	InternalGetNetMode,
 	ATTACH_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
+#ifdef GETNETMODE_CC 
 	if (hasPendingCommand)
 	{
 		hasPendingCommand = false;
-		GLOG_WARNING("Console Command: {}", staticBuffer);
+		GLOG_WARNING("Console Command (InternalGetNetMode): {}", staticBuffer);
 		FString commandString(staticBuffer);
 		o_ExecuteConsoleCommand(&commandString);
 	}
+#endif
 	return o_InternalGetNetMode(world);
 }
 AUTO_HOOK(InternalGetNetMode);
+
+
+#ifndef GETNETMODE_CC
+CREATE_HOOK(
+	UGameEngineTick,
+	ATTACH_ALWAYS,
+	void, (void* engine, float delta_seconds, uint8_t idle_mode)
+) {
+	// GLOG_WARNING("Engine hook");
+	if (hasPendingCommand)
+	{
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command (UGameEngineTick): {}", staticBuffer);
+		FString commandString(staticBuffer);
+		o_ExecuteConsoleCommand(&commandString);
+	}
+	o_UGameEngineTick(engine, delta_seconds, idle_mode);
+}
+AUTO_HOOK(UGameEngineTick);
+#endif
 
 CREATE_HOOK(
 	UNetDriver_GetNetMode,
