@@ -90,6 +90,10 @@ void handleRCON() {
 			//convert to wide string
 			std::string chunkString(buffer, count);
 			std::wstring wideChunkString(chunkString.begin(), chunkString.end() - 1);
+			// possibly off by one?
+			// if (!chunkString.empty() && chunkString.back() == '\n')
+			// 	chunkString.pop_back();
+			// std::wstring wideChunkString(chunkString.begin(), chunkString.end());
 			*command += wideChunkString; //append this chunk to the command
 		} while (buffer[count - 1] != '\n');
 		//we now have the whole command as a wide string
@@ -99,9 +103,9 @@ void handleRCON() {
 			continue;
 		}
 
-		//add into command queue
-		FString commandString(command->c_str());
-		o_ExecuteConsoleCommand(&commandString);
+		wcsncpy_s(staticBuffer, command->c_str(), 1023);
+		staticBuffer[1023] = 0; // ensure null-termination
+		hasPendingCommand = true;
 	}
 
 	return;

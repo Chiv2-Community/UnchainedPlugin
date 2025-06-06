@@ -72,12 +72,22 @@ CREATE_HOOK(
 }
 AUTO_HOOK(LoadFrontEndMap);
 
+static wchar_t staticBuffer[1024] = {};
+static bool hasPendingCommand = false;
+
 CREATE_HOOK(
 	InternalGetNetMode,
 	ATTACH_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
+	if (hasPendingCommand)
+	{
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command: {}", staticBuffer);
+		FString commandString(staticBuffer);
+		o_ExecuteConsoleCommand(&commandString);
+	}
 	return o_InternalGetNetMode(world);
 }
 AUTO_HOOK(InternalGetNetMode);
