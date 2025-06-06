@@ -1,6 +1,6 @@
 
 // not working?
-define_pattern_resolver!(FViewport, {
+define_pattern_resolver!(FViewport, First, {
     STEAM: ["48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6"],
     EGS: ["48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED"],
 });

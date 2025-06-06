@@ -27,6 +27,17 @@ macro_rules! define_pocess {
         })
     }};
 
+    (@emit_body $name:ident, First, $ctx:ident, $patterns:ident) => {{
+        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+            let futures = ::patternsleuth::resolvers::futures::future::join_all(
+                $patterns.iter()
+                    .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
+            ).await;
+    
+            futures.into_iter().flatten().collect::<Vec<usize>>()[0]
+        })
+    }};
+
     // Scan for a function call, extract 4 bytes and return address of the called function
     // e.g. "E8 | ?? ?? ?? ?? 4C 39 ?8 74 3?" returns address of the function after |
     (@emit_body $name:ident, Call, $ctx:ident, $patterns:ident) => {{
