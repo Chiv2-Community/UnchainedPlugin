@@ -28,6 +28,11 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 // }
 ];
 
+
+// define_pattern_resolver!(ConsoleCommand, First, [
+//     "40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"
+// ]);
+
 define_pattern_resolver!(BroadcastLocalizedChat, [
     "48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"
 ]);
