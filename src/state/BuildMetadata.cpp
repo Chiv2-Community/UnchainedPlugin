@@ -12,12 +12,9 @@
 #include "../logging/global_logger.hpp"
 #include "../string_util.hpp"
 
-BuildMetadata::BuildMetadata(uint32_t fileHash, uint32_t buildId, std::map<std::string, uint64_t> offsets,
-    std::string nameStr, Platform platform) {
+BuildMetadata::BuildMetadata(uint32_t fileHash, std::map<std::string, uint64_t> offsets, Platform platform) {
     this->fileHash = fileHash;
-    this->buildId = buildId;
     this->offsets = std::move(offsets);
-    this->nameStr = std::move(nameStr);
     this->platform = platform;
 }
 
@@ -28,7 +25,7 @@ void BuildMetadata::SetOffset(std::string name, uint64_t offset) {
     offsets[std::move(name)] = offset;
 }
 
-std::optional<uint64_t> BuildMetadata::GetOffset(const std::string &name) const {
+std::optional<uintptr_t> BuildMetadata::GetOffset(const std::string &name) const {
     if (auto it = offsets.find(name); it != offsets.end()) {
         return it->second;
     }
@@ -54,71 +51,12 @@ uint32_t BuildMetadata::GetFileHash() const {
     return fileHash;
 }
 
-void BuildMetadata::SetBuildId(uint32_t id) {
-    buildId = id;
-}
-
-uint32_t BuildMetadata::GetBuildId() const {
-    return buildId;
-}
-
-void BuildMetadata::SetName(const std::string &newName) {
-    if (!newName.empty()) {
-        nameStr = newName;
-    }
-}
-
-void BuildMetadata::SetName(std::wstring newName) {
-    if (!newName.empty()) {
-        nameStr = std::format("{}", newName);
-    }
-}
-
-std::string BuildMetadata::GetName() const {
-    return nameStr;
-}
-
 std::string BuildMetadata::GetBuildKey() const {
     return std::format("{}", this->GetFileHash());
 }
 
 Platform BuildMetadata::GetPlatform() const {
     return platform;
-}
-
-
-std::optional<std::string> BuildMetadata::Serialize(int indent) const {
-    std::stringstream ss;
-
-    if (this->GetFileHash() == 0) {
-        GLOG_WARNING("No file hash set. Cannot serialize build");
-        return std::nullopt;
-    }
-
-    const std::string platform_string = platform_to_string.at(GetPlatform());
-    const std::string build_key = this->GetBuildKey();
-
-    ss << ws(indent  ) << quot << build_key  << quot << ": {"
-       << ws(indent+1) << quot << "Build"    << quot << ": " << this->GetBuildId() << ","
-       << ws(indent+1) << quot << "FileHash" << quot << ": " << this->GetFileHash() << ","
-       << ws(indent+1) << quot << "Name"     << quot << ": " << quot << this->GetName() << quot << ","
-       << ws(indent+1) << quot << "Platform" << quot << ": " << quot << platform_string << quot << ","
-       << ws(indent+1) << quot << "Offsets"  << quot << ": {";
-
-    auto offsets = this->GetOffsets();
-    const auto offsets_length = offsets.size();
-    for (size_t i = 0; i < offsets_length; i++) {
-        auto [name, offset] = offsets[i];
-        ss << ws(indent + 2) << quot << name << quot << ": " << offset;
-        if (i != offsets_length - 1) {
-            ss << ",";
-        }
-    }
-
-    ss << ws(indent+1) << "}"
-       << ws(indent) << "}";
-
-    return ss.str();
 }
 
 std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
@@ -155,23 +93,6 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         GLOG_ERROR("Error, the 'Offsets' property is not found or not an object");
         return std::nullopt;
     }
-    
-    const json_t* buildNameJson = json_getProperty(json, "Name");
-    std::string buildName = "";
-    if (!buildNameJson || JSON_TEXT != json_getType(buildNameJson)) {
-        GLOG_WARNING("Error, the 'Name' property is not found or not a string. Serializing build without it.");
-    } else {
-        buildName = json_getValue(buildNameJson);
-    }
-
-    // Get Build ID
-    const json_t* buildIdJson = json_getProperty(json, "Build");
-    uint32_t buildId = 0;
-    if (!buildIdJson || JSON_INTEGER != json_getType(buildIdJson)) {
-        GLOG_WARNING("Error, the 'Build' property is not found or not an integer. Serializing build without it.");
-    } else {
-        buildId = static_cast<uint32_t>(json_getInteger(buildIdJson));
-    }
 
     std::map<std::string, uint64_t> offsets;
     for (const json_t* offsetEntry = json_getChild(offsetsJson); offsetEntry != nullptr; offsetEntry = json_getSibling(offsetEntry)) {
@@ -184,7 +105,7 @@ std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
         }
     }
 
-    BuildMetadata metadata(file_hash, buildId, std::move(offsets), std::move(buildName), platform);
+    BuildMetadata metadata(file_hash, std::move(offsets), platform);
 
     return metadata;
 }

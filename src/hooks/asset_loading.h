@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../hooking/hook_macros.hpp"
+#include "../patching/patch_macros.hpp"
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_1,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
 	const auto attr{ GetFileAttributesW(Filename) };
@@ -15,11 +15,10 @@ CREATE_HOOK(
 
 	return o_FindFileInPakFiles_1(this_ptr, Filename, OutPakFile, OutEntry);
 }
-AUTO_HOOK(FindFileInPakFiles_1)
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_2,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
 	const auto attr{ GetFileAttributesW(Filename) };
@@ -30,13 +29,11 @@ CREATE_HOOK(
 
 	return o_FindFileInPakFiles_2(this_ptr, Filename, OutPakFile, OutEntry);
 }
-AUTO_HOOK(FindFileInPakFiles_2)
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	IsNonPakFilenameAllowed,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	long long, (void* this_ptr, void* InFilename)
 ) {
 	return 1;
 }
-AUTO_HOOK(IsNonPakFilenameAllowed)
