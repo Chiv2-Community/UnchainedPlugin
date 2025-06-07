@@ -1,4 +1,14 @@
+// use futures::future::join_all;
+// use patternsleuth::resolvers::AsyncContext;
+// use patternsleuth::resolvers::ensure_one;
 
+// use crate::resolvers::macros::Simple_signature;
+
+// use super::macros::DefaultResult;
+// use patternsleuth::resolvers::ResolveError;
+
+// use std::future::Future;
+// use std::pin::Pin;
 
 define_pattern_resolver!(FString_AppendChars, [
     "45 85 C0 0F 84 89 00 00 00 48 89 5C 24 18 48 89 6C 24 20 56 48 83 EC 20 48 89 7C 24 30 48 8B EA 48 63 79 08 48 8B D9 4C 89 74 24 38 45 33 F6 85 FF 49 63 F0 41 8B C6 0F 94 C0 03 C7 03 C6 89 41 08 3B 41 0C 7E 07 8B D7 E8 ?? ?? ?? ?? 85 FF 49 8B C6 48 8B CF 48 8B D5 0F 95 C0 48 2B C8 48 8B 03 48 8D 1C 36 4C 8B C3 48 8D 3C 48 48 8B CF E8 ?? ?? ?? ?? 48 8B 6C 24 48 66 44 89 34 3B 4C 8B 74 24 38 48 8B 7C 24 30 48 8B 5C 24 40 48 83 C4 20 5E C3" // Universal
@@ -28,3 +38,71 @@ define_pattern_resolver!(GetCurrentGames, Call, [
 define_pattern_resolver!(SendRequest, [
     "48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 55 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 40 48 8B D9 49 8B F9"
 ]);
+
+// define_signature_fn!(function_first_signature,
+//     | ctx, patterns | {
+//         let futures = ::patternsleuth::resolvers::futures::future::join_all(
+//             patterns.iter()
+//                 .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
+//         ).await;
+
+//         // FIXME
+//         Ok(DefaultResult(futures.into_iter().flatten().collect::<Vec<usize>>()[0]))
+//     }
+// );
+
+// define_pattern_resolver!(GetMotdTwo, {
+//     EGS: [
+//         // function_signature("4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09"),
+//         function_first_signature("4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09")
+//     ],
+//     STEAM: [call_signature("4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC E8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 E8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 18 01 00 00 48 8D 55 B7 4C 89 AC 24 E0 00 00 00 4C 89 B4 24 D8 00 00 00 4C 89 BC 24 D0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4C 24 20 33 F6 BA 09")]
+// },
+// |ctx, patterns| {
+//     let mut results = Vec::new();
+//     // FIXME: group sigs by type, run Signature func on multiple
+//     for pat in patterns {
+//         // match pat.kind {
+//         //     SignatureKind::Call => println!("call"),
+//         //     SignatureKind::Function => println!("function"),
+//         //     _ => print!("NO MATCH")
+//         // }
+//         let offset = pat.calculate_offset(ctx).await.map(|r| r.offset());
+//         // print!("PART RESULT: {:?}", offset);
+//         results.push(offset);
+//     }
+//     ensure_one(results.into_iter().flatten())?
+// });
+
+// define_pattern_resolver!(GetMotdTwo2, MultiCall, {
+//     EGS: [
+//         Simple_signature("4C 89"),
+//         function_first_signature("4C 89")
+//     ],
+//     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
+// });
+
+// define_pattern_resolver!(GetMotdTwoS, {
+//     EGS: [
+//         Simple_signature("4C 89"),
+//         function_first_signature("4C 89")
+//     ],
+//     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
+// });
+
+// define_pattern_resolver![GetMotdTwoS2, [
+//         Simple_signature("4C 89"),
+//         function_first_signature("4C 89")
+// ]];
+
+// define_pattern_resolver![GetMotdTwoS3, MultiCall, [
+//         Simple_signature("4C 89"),
+//         function_first_signature("4C 89")
+// ]];
+
+
+// define_pattern_resolver!(GetMotdTwo3, MultiCall, [
+//     function_signature("4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09"),
+//     function_signature("4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC E8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 E8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 18 01 00 00 48 8D 55 B7 4C 89 AC 24 E0 00 00 00 4C 89 B4 24 D8 00 00 00 4C 89 BC 24 D0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4C 24 20 33 F6 BA 09")
+// ]);
+

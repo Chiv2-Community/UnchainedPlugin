@@ -4,14 +4,67 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
+winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser"] }
+
+patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
+# dll_hook = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", package = "dll_hook" }
+# patternsleuth = { path = "../../patternsleuth/patternsleuth", features = ["process-internal", "symbols", "serde-resolvers", "image-pe", "image-elf"] }
+# dll_hook = { path = "../../patternsleuth/examples/dll_hook"}
 anyhow = "1.0.79"
-serde = { version = "1.0.195", features = ["derive"] }
-serde_json = "1.0.111"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0"
+# typetag = "0.2.20"
 tracing = "0.1.40"
 futures = "0.3.31"
 once_cell = "1.19"
-paste = "1.0"
+paste = "1.0.15"
+widestring = "1.0.2"
+# backtrace = "0.3.69"
+bitflags = "2.4.1"
+# eframe = "0.24.0"
+# egui-winit = { version = "0.24.0", default-features = false }
+indexmap = "2.1.0"
+parking_lot = "0.12.1"
+# simple-log = "1.6.0"
+# thread_local = "1.1.7"
+
+retour = { version = "0.3.1", features = ["static-detour"]}
+# windows = { version = "0.48.0", features = ["Win32_Foundation",
+#             "Win32_System_Console", 
+#             "Win32_System_LibraryLoader", 
+#             "Win32_System_SystemServices",
+#             "Win32_Graphics_Gdi", 
+#             "Win32_Graphics_Direct3D", 
+#             "Win32_Graphics_Direct3D11",
+#             "Win32_Graphics_Dxgi", 
+#             "Win32_Graphics_Dxgi_Common",
+#             "Win32_UI_WindowsAndMessaging",
+#             "Win32_System_Threading",
+
+#             "Win32_Security",
+#             "Win32_System_Kernel",
+#             "Win32_System_Memory",
+#             "Win32_System_ProcessStatus",
+#             ]}
+
+# [target."cfg(windows)".dev-dependencies.windows]
+# version = "0.48"
+# features = ["Win32_Foundation",
+#             "Win32_System_Console", "Win32_System_LibraryLoader", "Win32_System_SystemServices",
+#             "Win32_Graphics_Gdi", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11",
+#             "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common",
+#             "Win32_UI_WindowsAndMessaging",
+#             ]
+
+# [target.'cfg(windows)'.dependencies]
+# winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser"] }
+
+
+
+[features]
+default = ["serde-resolvers"]
+serde-resolvers = []
+image-elf = []

@@ -214,7 +214,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		}
 
 		GLOG_INFO("Continuing to RCON");
-		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
+		// handleRCON(); //this has an infinite loop for commands! Keep this at the end!
 
 		ExitThread(0);
 	} catch (const std::exception& e) {
