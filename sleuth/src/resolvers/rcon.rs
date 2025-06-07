@@ -12,6 +12,7 @@ fn get_rcon_port() -> Option<u16> {
 }
 pub static COMMAND_PENDING: Lazy<Arc<Mutex<Option<bool>>>>   = Lazy::new(|| Arc::new(Mutex::new(None)));
 pub static LAST_COMMAND: Lazy<Arc<Mutex<Option<String>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+// pub static FLAST_COMMAND: Lazy<Arc<Mutex<Option<FString>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
 
 pub fn handle_rcon() {
     let port = match get_rcon_port() {
@@ -27,7 +28,7 @@ pub fn handle_rcon() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let cmd_store = Arc::clone(&LAST_COMMAND);
+                let cmd_store: Arc<Mutex<Option<String>>> = Arc::clone(&LAST_COMMAND);
                 let cmd_pending = Arc::clone(&COMMAND_PENDING);
                 thread::spawn(move || {
                     let reader = BufReader::new(stream);

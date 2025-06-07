@@ -1,14 +1,10 @@
 
-use patternsleuth::_impl_try_collector;
-use patternsleuth::resolvers::Singleton;
 use retour::static_detour;
 use std::{collections::HashMap, sync::Arc};
 use std::error::Error;
 use std::os::raw::c_void;
 use std::mem;
-use crate::resolvers::BASE_ADDR;
-// use crate::resolvers::ue::FString;
-use crate::scan::{OFFSETS, RESOLUTION};
+use crate::ue::*;
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
@@ -23,153 +19,29 @@ define_pattern_resolver!(ExecuteConsoleCommand, [
     "40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"
 ]);
 
-CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut super::FString), {
-    println!(">>>>>>>>ExecuteConsoleCommand_d");
+CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut FString), {
+    println!("ExecuteConsoleCommand");
 });
 
-// static_detour!{
-//     pub static o_ExecuteConsoleCommand:unsafe extern "C" fn(*mut super::FString);
-// }#[allow(non_snake_case)]
-// pub fn ExecuteConsoleCommand_detour_fkt(string: *mut super::FString){
-//     {}
-//     unsafe {
-//         println!(">>>>>>>>ExecuteConsoleCommand_detour_fkt {}", string.as_ref().unwrap().letter_count);
-//         o_ExecuteConsoleCommand.call(string)
-//     }
-// }
-// #[allow(non_snake_case)]
-// pub unsafe fn attach_ExecuteConsoleCommand(base_address:usize,offsets:HashMap<String,u64>) -> Result<(),Box<dyn Error>>{
-//     let address = base_address+offsets[stringify![ExecuteConsoleCommand]]as usize;
-//     let target:FnExecuteConsoleCommand = mem::transmute(address);
-//     type FnExecuteConsoleCommand = unsafe extern "C" fn(*mut super::FString);
-//     println!("o_ExecuteConsoleCommand INITED: {:x?}", address);
-//     o_ExecuteConsoleCommand.initialize(target,ExecuteConsoleCommand_detour_fkt)? .enable()?;
-//     Ok(())
-// }
-
-// unsafe fn attach_ExecuteConsoleCommand(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
-//   let address = base_address + offsets["ExecuteConsoleCommand"] as usize; 
-//   let target: FnExecuteConsoleCommand = mem::transmute(address);
-//   type FnExecuteConsoleCommand = unsafe extern "C" fn(*mut c_void, f32, u8);
-//   static_detour! {
-//     static ExecuteConsoleCommand: unsafe extern "C" fn(*mut c_void, f32, u8);
-//   }
-//   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
-//       println!("rust ExecuteConsoleCommand delta: {}", delta);
-//       unsafe { ExecuteConsoleCommand.call( engine, delta, state) }
-//   }
-//   ExecuteConsoleCommand
-//     .initialize(target, detour_fkt)?
-//     .enable()?;
-//   Ok(())
-
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-    let asd = Arc::clone(&crate::resolvers::rcon::COMMAND_PENDING);
-    let pending = match asd.lock().unwrap().as_ref() {
-        Some(true) => {
-            println!("got pending");
-            true
-        }
-        _ => false
-    };
-    if pending {
-        
-        let cmd_buf = Arc::clone(&crate::resolvers::rcon::LAST_COMMAND);
-        if let Some(cmd) = crate::resolvers::rcon::LAST_COMMAND.lock().unwrap().as_ref() {
-            if let Some(offset_map) = OFFSETS.get() {
-                println!("offsets: {}", offset_map.len());
-                if let Some(val) = offset_map.get("ExecuteConsoleCommand") {
-                    println!("Offset for ExecuteConsoleCommand is: 0x{:X}", val);
-                    let u16pat = widestring::U16CString::from_str(cmd.as_str()).unwrap();
-                    let mut sstring = crate::resolvers::FString::new_from_wide_str(u16pat.as_slice());
-                    unsafe {
-                        // let str_teeemp = widestring::U16CString::from_ptr(sstring.str, sstring.letter_count as usize).unwrap();
-                        // println!("[Rust RCOM]  asdasdasdasdasd o_ExecuteConsoleCommand: {:x?} {}", val, str_teeemp.to_string_lossy());
-                        *asd.lock().unwrap() = Some(false);
-                        unsafe { o_ExecuteConsoleCommand.call(&mut sstring); }
-                        println!("executed command");
-                    }
-                }
-            }
+    let lock = Arc::clone(&crate::resolvers::rcon::LAST_COMMAND);
+    if let Some(cmd) = crate::resolvers::rcon::LAST_COMMAND.lock().unwrap().as_ref() {
+        let mut fstring = FString::from(
+            widestring::U16CString::from_str(cmd.as_str())
+            .unwrap()
+            .as_slice_with_nul());
+        {
+            println!("executing command");
+            *lock.lock().unwrap() = Some("".to_string());
+            unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
+            println!("executed command");
         }
     }
 });
-// CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-//     // println!("rust UGameEngineTick delta: {}", delta);
-//     // ExecuteConsoleCommand::get(&self).ok_or("Cant get addr");
-//     // ExecuteConsoleCommand::resolver()
-//     // RESOLUTION
-//     // ExecuteConsoleCommand.get()
-//     // ExecuteConsoleCommand::get(ExecuteConsoleCommand.clone());
-     
-//     let asd = Arc::clone(&crate::resolvers::rcon::COMMAND_PENDING);
-//     let pending = match asd.lock().unwrap().as_ref() {
-//         Some(true) => {
-//             println!("got pending");
-//             true
-//         }
-//         _ => false
-//     };
-//     // if let Some(pending) = crate::resolvers::rcon::COMMAND_PENDING.lock().unwrap().as_ref() {
-//         if (pending == true) {
-            
-//         let cmd_buf = Arc::clone(&crate::resolvers::rcon::LAST_COMMAND);
-//         println!("pending: {pending}", );
-//         if let Some(cmd) = crate::resolvers::rcon::LAST_COMMAND.lock().unwrap().as_ref() {
-//             println!("cmd: {}", cmd);
 
-//             if let Some(offset_map) = OFFSETS.get() {
-//                 println!("offsets: {}", offset_map.len());
-//                 if let Some(val) = offset_map.get("ExecuteConsoleCommand") {
-//                     println!("Offset for ExecuteConsoleCommand is: 0x{:X}", val);
-                    
-//                     println!("[Rust RCOM] Got command: {}", cmd);
-                    
-//                     let u16pat = widestring::U16CString::from_str(
-//                         cmd.as_str()
-//                     ).unwrap();
-//                     let mut sstring = crate::resolvers::FString::new_from_wide_str(u16pat.as_slice());
-//                     let base_address = BASE_ADDR.get().unwrap();
-//                     unsafe {
-//                         let target:FnExecuteConsoleCommand = mem::transmute(val);
-//                         type FnExecuteConsoleCommand = unsafe extern "C" fn(*mut super::FString);
-//                         let str_teeemp = widestring::U16CString::from_ptr(sstring.str, sstring.letter_count as usize).unwrap();
-//                         println!("[Rust RCOM]  asdasdasdasdasd o_ExecuteConsoleCommand: {:x?} {}", val, str_teeemp.to_string_lossy());
-//                         // o_ExecuteConsoleCommand.initialize(target,ExecuteConsoleCommand_detour_fkt).unwrap().enable();
-//                         *asd.lock().unwrap() = Some(false);
-//                         // unsafe { ExecuteConsoleCommand_detour_fkt(&mut sstring); }
-//                         unsafe { o_ExecuteConsoleCommand.call(&mut sstring); }
-//                         println!("executed command");
-//                     }
-//                 } else {
-//                     println!("Key not found"); 
-//                 }
-//             } else {
-//                 println!("OFFSETS not initialized yet");
-//             }
-
-//             println!("hello down here");
-//             // let mut str_test = FString::from_string(cmd.as_str()).0;
-//             // let boxed = Box::new(str_test);
-//             // // Get *mut FString
-//             // let fstring_ptr: *mut FString = Box::into_raw(boxed);
-//             // unsafe { o_ExecuteConsoleCommand.call(fstring_ptr); }
-
-            
-//             // attach_ExecuteConsoleCommand::detour_fkt();
-            
-
-//             // unsafe { ExecuteConsoleCommand_detour_fkt(&mut sstring); }
-//             // if let Some(addr) = OFFSETS.get().and_then(|m| m.get("ExecuteConsoleCommand")) {
-//             //     println!("Address FOUND: 0x{:X}", addr);
-//             // }
-//         }
-//         *cmd_buf.lock().unwrap() = Some("\0".to_string());
-//     }
-// }
-//     // println!("hello down hereeeeee");
-// );
-
+CREATE_HOOK!(FEngineLoopInit, (engine_loop:*mut c_void), {
+println!("Engine Loop initialized!!");
+});
 
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 define_pattern_resolver![FText_AsCultureInvariant,  First, {
@@ -203,14 +75,3 @@ define_pattern_resolver![GetTBLGameMode, {
 define_pattern_resolver!(ClientMessage, [
     "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
 ]);
-
-// use patternsleuth::resolvers::impl_try_collector;
-// impl_try_collector! {
-//     #[derive(Debug, PartialEq, Clone)]
-//     struct DllHookResolution2 {
-//         guobject_array: patternsleuth::resolvers::unreal::guobject_array::GUObjectArray,
-
-//         free_uobject: patternsleuth::resolvers::unreal::guobject_array::FUObjectArrayFreeUObjectIndex,
-        
-//     }
-// }

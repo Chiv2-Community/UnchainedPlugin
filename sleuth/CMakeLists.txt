@@ -41,4 +41,10 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     winspool.lib
     ws2_32.lib
     psapi.lib
+    bcrypt.lib
+    crypt32.lib
+    cryptnet.lib
+    dbghelp.lib
+    legacy_stdio_definitions.lib
+    ncrypt.lib
 )
