@@ -2,7 +2,6 @@
 
 mod resolvers;
 mod scan;
-
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -13,7 +12,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::to_writer_pretty;
-use self::resolvers::{PLATFORM, PlatformType};
+use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
 
 // IEEE
 use std::arch::x86_64::_mm_crc32_u8;
@@ -93,6 +92,15 @@ pub fn dump_builds(offsets: HashMap<String, u64>) -> Result<()> {
     Ok(())
 }
 
+
+pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>> {
+
+    // attach_GameEngineTick(base_address, offsets).unwrap();
+    resolvers::admin_control::attach_UGameEngineTick(base_address, offsets.clone()).unwrap();
+    resolvers::admin_control::attach_ExecuteConsoleCommand(base_address, offsets).unwrap();
+    Ok(())
+  }
+
 #[no_mangle]
 pub extern "C" fn generate_json() -> u8 {
     println!("test asd");
@@ -102,10 +110,24 @@ pub extern "C" fn generate_json() -> u8 {
         false => PlatformType::STEAM
     };
 
-    PLATFORM.set(platform).expect("Platform already set");
+    std::thread::spawn(|| {
+        resolvers::rcon::handle_rcon();
+    });
 
+    PLATFORM.set(platform).expect("Platform already set");
+    let image = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
+    let exe = image;
+    println!("GAME  '{:x?}'", exe.base_address);
+    BASE_ADDR.set(exe.base_address).expect("BASE_ADDR already set");
+    // let scan = scan::scan();
     let offsets = scan::scan().expect("Failed to scan");
     let len_u8 = offsets.len() as u8;
-    dump_builds(offsets).expect("Failed to dump builds JSON");
+    // FIXME: ?
+    let offset_copy = offsets.clone();
+    // let base_addr = scan::scan().1;
+    unsafe {
+        attach_hooks(exe.base_address, offsets).unwrap();
+    }
+    dump_builds(offset_copy).expect("Failed to dump builds JSON");
     len_u8
 }

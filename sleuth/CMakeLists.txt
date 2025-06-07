@@ -4,7 +4,7 @@ project(sleuthlib C)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/target/release/sleuthlib.lib
-    COMMAND cargo build --release
+    COMMAND cargo +nightly build --release
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS
         # ${CMAKE_CURRENT_SOURCE_DIR}/sleuthlib.rs

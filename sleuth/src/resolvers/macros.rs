@@ -14,6 +14,118 @@
 // #[macro_use]
 // extern crate paste; // concat strings
 
+
+/// ```rust
+/// unsafe fn attach_GameEngineTick(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+///   let address = base_address + offsets["UGameEngineTick"] as usize; 
+///   let target: FnUGameEngineTick = mem::transmute(address);
+///   type FnUGameEngineTick = unsafe extern "C" fn(*mut c_void, f32, u8);
+///   static_detour! {
+///     static UGameEngineTick: unsafe extern "C" fn(*mut c_void, f32, u8);
+///   }
+///   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
+///       println!("rust UGameEngineTick delta: {}", delta);
+///       unsafe { UGameEngineTick.call( engine, delta, state) }
+///   }
+///   UGameEngineTick
+///     .initialize(target, detour_fkt)?
+///     .enable()?;
+///   Ok(())
+/// }
+/// ```
+/// 
+
+
+#[macro_export]
+macro_rules! CREATE_HOOK {
+    
+    // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+    // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+    //     println!($name);
+    //     println!($mode);
+    //     println!($rettype);
+
+    //     [ $( $call_type ($pattern) ),+ ];
+    // };
+    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+      paste::paste! {
+
+        static_detour! {
+          pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ );
+        }
+
+        #[allow(non_snake_case)]
+        pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) {
+            // println!("rust $name delta: {}", delta);
+            $body
+            unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+        }
+
+        #[allow(non_snake_case)]
+        pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+        
+          // ( $( $arg: $ty ),+ );
+          let address = base_address + offsets[stringify![$name]] as usize; 
+          let target: [<Fn $name>] = mem::transmute(address);
+
+          type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
+
+          [<o_ $name>]
+            .initialize(target, [<$name _detour_fkt>])?
+            .enable()?;
+
+          Ok(())
+        }
+      }
+
+
+    };
+}
+
+// #[macro_export]
+// macro_rules! CREATE_HOOK {
+    
+//     // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+//     // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+//     //     println!($name);
+//     //     println!($mode);
+//     //     println!($rettype);
+
+//     //     [ $( $call_type ($pattern) ),+ ];
+//     // };
+//     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+//       paste::paste! {
+//         #[allow(non_snake_case)]
+//         pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+        
+//           // ( $( $arg: $ty ),+ );
+//           let address = base_address + offsets[stringify![$name]] as usize; 
+//           let target: [<Fn $name>] = mem::transmute(address);
+
+//           type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
+
+//           static_detour! {
+//             pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ );
+//           }
+
+//           pub fn detour_fkt( $( $arg: $ty ),+ ) {
+//               // println!("rust $name delta: {}", delta);
+//               $body
+//               unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+//           }
+
+//           [<o_ $name>]
+//             .initialize(target, detour_fkt)?
+//             .enable()?;
+
+//           Ok(())
+//         }
+//       }
+
+
+//     };
+// }
+
 use std::{future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
 
@@ -259,8 +371,9 @@ macro_rules! define_process {
 }
 
 // custom handlers
-
 define_pattern_resolver!(@emit_header DefaultResult);
+
+#[allow(dead_code)]
 impl DefaultResult {
     pub fn offset(&self) -> usize {
         self.0 // assuming it's something like `pub struct DefaultResult(pub usize)`
@@ -284,6 +397,7 @@ pub struct Signature<'a> {
     pub signature_string: String,
 }
 
+#[allow(dead_code)]
 impl<'a> Signature<'a> {
     pub async fn calculate_offset(&self, ctx: &'a AsyncContext<'a>) -> Result<DefaultResult, ResolveError> {
         (self.offset_calculator)(ctx).await
