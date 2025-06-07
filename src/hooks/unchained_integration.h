@@ -8,10 +8,6 @@
 
 CREATE_HOOK(
 	FViewport,
-	PLATFORM_SIGNATURES(
-		PLATFORM_SIGNATURE(STEAM, "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 41 56 48 83 EC 30 33 F6")
-		PLATFORM_SIGNATURE(EGS, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 33 ED")
-	),
 	ATTACH_ALWAYS,
 	FString*, (FViewport_C* this_ptr, void* viewportClient)
 ) {
@@ -49,7 +45,6 @@ AUTO_HOOK(FViewport)
 
 CREATE_HOOK(
 	LoadFrontEndMap,
-	UNIVERSAL_SIGNATURE("48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"),
 	ATTACH_ALWAYS,
 	bool, (void* this_ptr, FString* param_1)
 ) {
@@ -77,23 +72,51 @@ CREATE_HOOK(
 }
 AUTO_HOOK(LoadFrontEndMap);
 
+static wchar_t staticBuffer[1024] = {};
+static bool hasPendingCommand = false;
+
+// #define GETNETMODE_CC
 CREATE_HOOK(
 	InternalGetNetMode,
-	PLATFORM_SIGNATURES(
-		PLATFORM_SIGNATURE(EGS, "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9")
-		PLATFORM_SIGNATURE(STEAM, "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B")
-	),
 	ATTACH_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
+#ifdef GETNETMODE_CC 
+	if (hasPendingCommand)
+	{
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command (InternalGetNetMode): {}", staticBuffer);
+		FString commandString(staticBuffer);
+		o_ExecuteConsoleCommand(&commandString);
+	}
+#endif
 	return o_InternalGetNetMode(world);
 }
 AUTO_HOOK(InternalGetNetMode);
 
+
+#ifndef GETNETMODE_CC
+CREATE_HOOK(
+	UGameEngineTick,
+	ATTACH_ALWAYS,
+	void, (void* engine, float delta_seconds, uint8_t idle_mode)
+) {
+	// GLOG_WARNING("Engine hook");
+	if (hasPendingCommand)
+	{
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command (UGameEngineTick): {}", staticBuffer);
+		FString commandString(staticBuffer);
+		o_ExecuteConsoleCommand(&commandString);
+	}
+	o_UGameEngineTick(engine, delta_seconds, idle_mode);
+}
+AUTO_HOOK(UGameEngineTick);
+#endif
+
 CREATE_HOOK(
 	UNetDriver_GetNetMode,
-	UNIVERSAL_SIGNATURE("48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4"),
 	ATTACH_WHEN(g_state->GetCLIArgs().apply_desync_patch),
 	ENetMode, (void* this_ptr)
 ) {
@@ -107,7 +130,6 @@ AUTO_HOOK(UNetDriver_GetNetMode);
 
 CREATE_HOOK(
 	UGameplay_IsDedicatedServer,
-	UNIVERSAL_SIGNATURE("48 83 EC 28 48 85 C9 ? ? BA 01 00 00 00 ? ? ? ? ? 48 85 C0 ? ? 48 8B C8 ? ? ? ? ? 83 F8 01 0F 94 C0 48"),
 	ATTACH_ALWAYS,
 	bool, (long long param_1)
 ) {

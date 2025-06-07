@@ -16,37 +16,30 @@ inline bool register_auto_hooks(FunctionHookManager& hook_manager) {
 
 template<typename RetType, typename... Args>
 inline HookData* register_hook(std::string name,
-     const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform,
      const std::function<bool()> should_attach,
      RetType(*&trampoline)(Args...),  // Note the & here - we need the address of the function pointer
      RetType(*hook_function)(Args...)
 ) {
-	g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, select_signature_for_platform, should_attach, reinterpret_cast<void**>(&trampoline), hook_function)));
+	g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, should_attach, reinterpret_cast<void**>(&trampoline), hook_function)));
 	return g_auto_hooks.back().get();
 }
 
-inline HookData* register_scan_only_hook(
-    std::string name,
-	const std::function<std::optional<OffsetOrString>(Platform)> select_signature_for_platform
-) {
-    g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, select_signature_for_platform, true)));
+inline HookData* register_scan_only_hook(std::string name) {
+    g_auto_hooks.push_back(std::make_unique<HookData>(HookData(name, true)));
     return g_auto_hooks.back().get();
 }
 
-#define CREATE_HOOK(name, signatures_func, attach_predicate, return_type, arguments) \
-    static const auto name##_signature = signatures_func; \
+#define CREATE_HOOK(name, attach_predicate, return_type, arguments) \
     static const auto name##_predicate = attach_predicate; \
     return_type(*o_##name)arguments = nullptr; \
     return_type hk_##name arguments
 
-#define SCAN_HOOK(name, signatures_func) \
-    static const auto name##_signature = signatures_func; \
-    auto name##_HookData = register_scan_only_hook(#name, name##_signature);
+#define SCAN_HOOK(name) \
+    auto name##_HookData = register_scan_only_hook(#name);
 
 #define AUTO_HOOK(name) \
     static auto name##_Hook = register_hook( \
         #name, \
-        name##_signature, \
         name##_predicate, \
         o_##name, \
         hk_##name \

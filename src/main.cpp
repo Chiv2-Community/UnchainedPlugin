@@ -12,6 +12,7 @@
 
 #include <direct.h>
 
+extern "C" uint8_t generate_json();
 
 
 //black magic for the linker to get winsock2 to work
@@ -31,7 +32,6 @@
 #include "hooking/FunctionHookManager.hpp"
 
 #include "hooks/all_hooks.h"
-#include "hooking/heuristics/all_heuristics.h"
 
 void handleRCON() {
 	std::wstring commandLine = GetCommandLineW();
@@ -90,6 +90,10 @@ void handleRCON() {
 			//convert to wide string
 			std::string chunkString(buffer, count);
 			std::wstring wideChunkString(chunkString.begin(), chunkString.end() - 1);
+			// possibly off by one?
+			// if (!chunkString.empty() && chunkString.back() == '\n')
+			// 	chunkString.pop_back();
+			// std::wstring wideChunkString(chunkString.begin(), chunkString.end());
 			*command += wideChunkString; //append this chunk to the command
 		} while (buffer[count - 1] != '\n');
 		//we now have the whole command as a wide string
@@ -99,9 +103,9 @@ void handleRCON() {
 			continue;
 		}
 
-		//add into command queue
-		FString commandString(command->c_str());
-		o_ExecuteConsoleCommand(&commandString);
+		wcsncpy_s(staticBuffer, command->c_str(), 1023);
+		staticBuffer[1023] = 0; // ensure null-termination
+		hasPendingCommand = true;
 	}
 
 	return;
@@ -139,7 +143,7 @@ void CreateDebugConsole() {
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
 		initialize_global_logger(LogLevel::INFO);
-		GLOG_INFO("Logger initialized");
+		GLOG_INFO("Logger initialized  {}", generate_json());
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
 
@@ -192,7 +196,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, current_build_metadata, all_heuristics);
+		FunctionHookManager hook_manager(baseAddr, moduleInfo, current_build_metadata);
 		register_auto_hooks(hook_manager);
 		auto all_hooks_successful = hook_manager.enable_hooks();
 

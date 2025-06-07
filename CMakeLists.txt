@@ -59,7 +59,6 @@ endfunction()
 
 generate_include_all_header("src/hooks" "all_hooks.h")
 generate_include_all_header("src/logging/formatters" "all_formatters.h")
-generate_include_all_header("src/hooking/heuristics" "all_heuristics.h")
 
 # File collection
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
@@ -104,11 +103,14 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<BOOL:${PRINT_CLIENT_MSG}>:PRINT_CLIENT_MSG>
 )
 
+add_subdirectory(sleuth)
+
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     MinHook
     tiny-json
     winhttp
+    sleuthlib_interface
 )
 
 # Source grouping for better organization in IDEs
