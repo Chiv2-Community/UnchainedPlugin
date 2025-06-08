@@ -1,10 +1,12 @@
 
+
 use retour::static_detour;
 use std::{collections::HashMap, sync::Arc};
 use std::error::Error;
 use std::os::raw::c_void;
 use std::mem;
-use crate::ue::*;
+use crate::resolvers::rcon::LAST_COMMAND;
+use crate::{globals, ue::*};
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
@@ -19,26 +21,31 @@ define_pattern_resolver!(ExecuteConsoleCommand, [
     "40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"
 ]);
 
+// FIXME: Nihi: stub
 CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut FString), {
-    println!("ExecuteConsoleCommand");
+    println!("ExecuteConsoleCommand: {}", unsafe { &*string });
 });
 
+// Executes pending RCON command
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     let lock = Arc::clone(&crate::resolvers::rcon::LAST_COMMAND);
+    let mut fstring = FString::default();
     if let Some(cmd) = crate::resolvers::rcon::LAST_COMMAND.lock().unwrap().as_ref() {
-        let mut fstring = FString::from(
+        fstring = FString::from(
             widestring::U16CString::from_str(cmd.as_str())
             .unwrap()
             .as_slice_with_nul());
-        {
-            println!("executing command");
-            *lock.lock().unwrap() = Some("".to_string());
-            unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
-            println!("executed command");
-        }
+    }
+
+    if fstring.len() > 1 {
+        println!("executing command");
+        *lock.lock().unwrap() = None;
+        unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
+        println!("executed command");
     }
 });
 
+// FIXME: Nihi: stub
 CREATE_HOOK!(FEngineLoopInit, (engine_loop:*mut c_void), {
 println!("Engine Loop initialized!!");
 });
@@ -72,6 +79,76 @@ define_pattern_resolver![GetTBLGameMode, {
     OTHER : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 74 60 48 8B 01 FF 90 ?? ?? ?? ?? 48 85 C0 75 23 0F 1F 40 00 48 8B 5B 20 48 85 DB 74 11 48 8B 03 48 8B CB FF 90 ?? ?? ?? ?? 48 85 C0 74 E6 48 85 C0 74 2F 48 8B 98 28"]
 }];
 
+
+
+
+// Handle Game chat: commands, chat log, system messages
 define_pattern_resolver!(ClientMessage, [
     "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
 ]);
+
+mod client_message {
+    use regex::Regex;
+
+    #[derive(Debug)]
+    pub struct ChatMessage<'a> {
+        pub name: &'a str,
+        pub channel: u32,
+        pub message: &'a str,
+    }
+    
+    pub fn parse_chat_line(line: &str) -> Option<ChatMessage> {
+        static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+            Regex::new(r"^(\w+)\s+\w+\s+<(\d+)>:\s+(.*)$").unwrap()
+        });
+    
+        RE.captures(line).map(|caps| ChatMessage {
+            name: caps.get(1).unwrap().as_str(),
+            channel: caps.get(2).unwrap().as_str().parse().ok().unwrap(),
+            message: caps.get(3).unwrap().as_str(),
+        })
+    }
+}
+
+// void __thiscall APlayerController::ClientMessage(APlayerController *this,FString *S,FName Type,float MsgLifeTime)
+CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+    let cmd_store = Arc::clone(&LAST_COMMAND);
+    // FIXME: Nihi: better way to access it?
+    let string_ref: &FString = unsafe{ &*S };
+    let message2 = string_ref.to_string();
+    println!("[ClientMessages] S: \'{}\', Type: \'{}\'({}),  MsgLifeTime: \'{}\' ", message2, Type, Type.number, MsgLifeTime);
+
+    // Chat commands
+    // TODO: handle commands tranformed by ChatHooks
+    //       e.g. ".hello" -> '<7>: Console Command: hello', Type: 'None'(0),  MsgLifeTime: '0'
+    //       this needs to provide the playfabid somehow
+    unsafe {        
+        let cmd_filter = |c| ['/', '.'].contains(&c);
+        match client_message::parse_chat_line(message2.as_str()) {
+            Some(chat) => {
+                match chat.message.starts_with(cmd_filter) {
+                    true => {
+                        let cmd_trimmed = chat.message.trim_start_matches(cmd_filter);
+                        println!("-> Got console command from \'{}\' ch{}: {}", 
+                            chat.name,
+                            chat.channel,
+                            cmd_trimmed);
+                        // Set pending console command
+                        // FIXME: Nihi: Add auth or allow only offline
+                        *cmd_store.lock().unwrap() = Some(cmd_trimmed.trim().to_string());
+                        println!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
+                        // TODO: save command to log
+                    }
+                    false => {
+                        println!("-> User message: {:?}", chat);
+                        // TODO: save user message
+                    }
+                };        
+            }
+            _ => {
+                println!("System message");
+                // TODO: Write message to logfile
+            }
+        }
+    }                  
+});

@@ -2,6 +2,7 @@
 
 mod resolvers;
 mod scan;
+use core::fmt;
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -120,7 +121,8 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
     // attach_GameEngineTick(base_address, offsets).unwrap();
     resolvers::admin_control::attach_UGameEngineTick(base_address, offsets.clone()).unwrap();
     resolvers::admin_control::attach_ExecuteConsoleCommand(base_address, offsets.clone()).unwrap();
-    resolvers::admin_control::attach_FEngineLoopInit(base_address, offsets).unwrap();
+    resolvers::admin_control::attach_FEngineLoopInit(base_address, offsets.clone()).unwrap();
+    resolvers::admin_control::attach_ClientMessage(base_address, offsets.clone()).unwrap();
     Ok(())
   }
 
@@ -128,9 +130,10 @@ unsafe fn init_globals() {
     
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
     println!("starting scan");
+    // FIXME: Nihi: use the results from scan function
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     println!("finished scan");
-
+    
     println!("results: {:?}", resolution);
     let guobject_array: &'static ue::FUObjectArray =
         &*(resolution.guobject_array.0 as *const ue::FUObjectArray);
@@ -167,7 +170,7 @@ pub extern "C" fn generate_json() -> u8 {
     // let scan = scan::scan();
     let offsets = scan::scan().expect("Failed to scan");
     let len_u8 = offsets.len() as u8;
-    // FIXME: ?
+    // FIXME: Nihi: ?
     let offset_copy = offsets.clone();
     // let base_addr = scan::scan().1;
     unsafe {
@@ -209,6 +212,7 @@ impl<'de> Deserialize<'de> for DllHookResolution {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de>, { todo!("Deserialization not implemented") }
 }
+
 
 // Globals impl from dll_hook example
 // used by ue.rs

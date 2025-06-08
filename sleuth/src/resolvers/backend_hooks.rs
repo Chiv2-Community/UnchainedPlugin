@@ -60,7 +60,7 @@ define_pattern_resolver!(SendRequest, [
 // },
 // |ctx, patterns| {
 //     let mut results = Vec::new();
-//     // FIXME: group sigs by type, run Signature func on multiple
+//     // FIXME: Nihi: group sigs by type, run Signature func on multiple
 //     for pat in patterns {
 //         // match pat.kind {
 //         //     SignatureKind::Call => println!("call"),

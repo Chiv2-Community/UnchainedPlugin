@@ -35,10 +35,10 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
     let mut offsets: HashMap<String, u64> = HashMap::new();
     let mut offsets_resolver: HashMap<String, usize> = HashMap::new();
     
-    // FIXME: ugh
+    // FIXME: Nihi: ugh
     for (resolver, resolution) in resolvers.iter().zip(&resolution) {
         if let Ok(r) = resolution {
-            // FIXME: Less nasty way?
+            // FIXME: Nihi: Less nasty way?
             if let Some(hex) = format!("{r:?}")
                 .split(['(', ')'])
                 .nth(1)

@@ -177,7 +177,7 @@ macro_rules! define_pocess {
         // use patternsleuth::MemoryTrait;
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let mut results = Vec::new();
-            // FIXME: group sigs by type, run Signature func on multiple
+            // FIXME: Nihi: group sigs by type, run Signature func on multiple
             for pat in $patterns {
                 // match pat.kind {
                 //     SignatureKind::Call => println!("call"),
@@ -193,8 +193,8 @@ macro_rules! define_pocess {
     }};
 
     // Scan for Xrefs, return last
-    // FIXME: expects max. 2 results
-    // FIXME: handles only one pattern
+    // FIXME: Nihi: expects max. 2 results
+    // FIXME: Nihi: handles only one pattern
     (@emit_body $name:ident, XrefLast, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
@@ -204,7 +204,7 @@ macro_rules! define_pocess {
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
             if fns.len() == 2 {
-                fns[0] = fns[1]; // FIXME: deque? last?
+                fns[0] = fns[1]; // FIXME: Nihi: deque? last?
                 fns.pop();
             }
             ensure_one(fns)?
@@ -516,7 +516,7 @@ macro_rules! wrap_process_macro {
     };
 }
 
-// FIXME: move somewhere so those are not buried?
+// FIXME: Nihi: move somewhere so those are not buried?
 // Possible to auto generate from macro?
 wrap_process_macro!(Simple);
 wrap_process_macro!(Call);

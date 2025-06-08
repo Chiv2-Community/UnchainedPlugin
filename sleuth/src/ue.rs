@@ -1,6 +1,6 @@
 // From trumank/patternsleuth
 // https://github.com/trumank/patternsleuth/blob/master/examples/dll_hook/src/ue.rs
-// FIXME: the file is unchanged. Find a way to get use it via git without submodules
+// FIXME: Nihi: the file is unchanged. Find a way to get use it via git without submodules
 
 use std::{
     cell::UnsafeCell,
