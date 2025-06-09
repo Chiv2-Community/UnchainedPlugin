@@ -1,11 +1,14 @@
 
 
+use client_message::{parse_chat_line, ChatMessage};
+use log::{debug, info, warn};
 use retour::static_detour;
 use std::{collections::HashMap, sync::Arc};
 use std::error::Error;
 use std::os::raw::c_void;
 use std::mem;
 use crate::resolvers::rcon::LAST_COMMAND;
+use crate::chiv2::*;
 use crate::{globals, ue::*};
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
@@ -25,6 +28,9 @@ define_pattern_resolver!(ExecuteConsoleCommand, [
 CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut FString), {
     println!("ExecuteConsoleCommand: {}", unsafe { &*string });
 });
+CREATE_HOOK!(SomeRandomFunction, (string:*mut FString), {
+    println!("SomeRandomFunction: {}", unsafe { &*string });
+});
 
 // Executes pending RCON command
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
@@ -38,16 +44,15 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     }
 
     if fstring.len() > 1 {
-        println!("executing command");
+        warn!("Execuing Command: {}", fstring);
         *lock.lock().unwrap() = None;
         unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
-        println!("executed command");
     }
 });
 
 // FIXME: Nihi: stub
 CREATE_HOOK!(FEngineLoopInit, (engine_loop:*mut c_void), {
-println!("Engine Loop initialized!!");
+// println!("Engine Loop initialized!!");
 });
 
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
@@ -88,7 +93,11 @@ define_pattern_resolver!(ClientMessage, [
 ]);
 
 mod client_message {
+    use log::warn;
     use regex::Regex;
+
+    use crate::chiv2::EChatType;
+    use std::str::FromStr;
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -108,6 +117,15 @@ mod client_message {
             message: caps.get(3).unwrap().as_str(),
         })
     }
+    
+    pub fn parse_msg_line(line: &str) -> Option<(EChatType, &str)> {
+        let mut parts = line.splitn(2, ": ");
+        warn!["parts: {:?}", parts];
+        let msg_type_str = parts.next()?;
+        let msg = parts.next()?;
+        let msg_type = EChatType::from_str(msg_type_str).ok()?;
+        Some((msg_type, msg))
+    }
 }
 
 // void __thiscall APlayerController::ClientMessage(APlayerController *this,FString *S,FName Type,float MsgLifeTime)
@@ -115,8 +133,10 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     let cmd_store = Arc::clone(&LAST_COMMAND);
     // FIXME: Nihi: better way to access it?
     let string_ref: &FString = unsafe{ &*S };
-    let message2 = string_ref.to_string();
-    println!("[ClientMessages] S: \'{}\', Type: \'{}\'({}),  MsgLifeTime: \'{}\' ", message2, Type, Type.number, MsgLifeTime);
+    let message = string_ref.to_string();
+    // TODO: Does this need to handle lines separately?
+    // info!("[ClientMessages] S: \'{:?}\', Type: \'{}\'({}),  MsgLifeTime: \'{}\' ", message.replace("\r\n", " "), Type, Type.number, MsgLifeTime);
+    info!("[client] \'{:?}\'", message.replace("\r\n", " "));
 
     // Chat commands
     // TODO: handle commands tranformed by ChatHooks
@@ -124,29 +144,35 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     //       this needs to provide the playfabid somehow
     unsafe {        
         let cmd_filter = |c| ['/', '.'].contains(&c);
-        match client_message::parse_chat_line(message2.as_str()) {
+        match client_message::parse_chat_line(message.as_str()) {
             Some(chat) => {
                 match chat.message.starts_with(cmd_filter) {
                     true => {
                         let cmd_trimmed = chat.message.trim_start_matches(cmd_filter);
-                        println!("-> Got console command from \'{}\' ch{}: {}", 
+                        debug!("-> Got console command from \'{}\' ch{}: {}", 
                             chat.name,
                             chat.channel,
                             cmd_trimmed);
                         // Set pending console command
                         // FIXME: Nihi: Add auth or allow only offline
                         *cmd_store.lock().unwrap() = Some(cmd_trimmed.trim().to_string());
-                        println!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
+                        debug!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
                         // TODO: save command to log
                     }
                     false => {
-                        println!("-> User message: {:?}", chat);
+                        debug!("-> User message: {:?}", chat);
                         // TODO: save user message
                     }
                 };        
             }
             _ => {
-                println!("System message");
+                debug!("System message");
+                if let Some(msg) = parse_chat_line(message.as_str()) {
+                    warn!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                    if let Some(chat_mnsg) = client_message::parse_msg_line(msg.message) {
+                        warn!("Text: {:?} {}", chat_mnsg.0, chat_mnsg.1);
+                    }
+                }
                 // TODO: Write message to logfile
             }
         }

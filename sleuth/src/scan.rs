@@ -19,7 +19,9 @@ use patternsleuth::resolvers::{ResolveError};
 pub static OFFSETS: OnceCell<HashMap<String, usize>> = OnceCell::new();
 
 
+
 pub fn scan() -> Result<HashMap<String, u64>, String> {
+
     let pid = Some(process::id() as i32);
 
     let resolvers = resolvers().collect::<Vec<_>>();

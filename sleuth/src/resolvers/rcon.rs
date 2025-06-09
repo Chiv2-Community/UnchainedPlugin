@@ -1,10 +1,11 @@
 use std::{
-    io::{BufRead, BufReader},
+    io::{stdin, stdout, BufRead, BufReader, Write},
     net::TcpListener,
     sync::{Arc, Mutex},
     thread,
 };
 
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 
 fn get_rcon_port() -> Option<u16> {
@@ -21,9 +22,9 @@ pub fn handle_rcon() {
     };
 
     let listener = TcpListener::bind(("127.0.0.1", port))
-        .expect("[Rust RCON]: Failed to bind to port");
+        .expect("[RCON] Failed to bind to port");
 
-    println!("[Rust RCON]: Listening on 127.0.0.1:{}", port);
+    info!("[RCON] Listening on 127.0.0.1:{}", port);
 
     for stream in listener.incoming() {
         match stream {
@@ -34,14 +35,28 @@ pub fn handle_rcon() {
                     let reader = BufReader::new(stream);
                     for line in reader.lines().flatten() {
                         if !line.trim().is_empty() {
-                            println!("[Rust RCON]: Received: {}", line.trim());
+                            warn!("[RCON] Received: {}", line.trim());
                             *cmd_store.lock().unwrap() = Some(line.trim().to_string());
                             *cmd_pending.lock().unwrap() = Some(true);
                         }
                     }
                 });
             }
-            Err(e) => eprintln!("[Rust RCON]: Connection failed: {}", e),
+            Err(e) => error!("[RCON] Connection failed: {}", e),
         }
+    }
+}
+
+
+// FIME: Nihi: this need some validation
+// maybe a proper prompt etc
+pub fn handle_cmd() {
+    let mut line = String::new();
+    loop {
+        let mut input = String::new();
+        stdin().read_line(&mut input)
+            .expect("UTF-8 unsupported");
+        let cmd_store: Arc<Mutex<Option<String>>> = Arc::clone(&LAST_COMMAND);
+        *cmd_store.lock().unwrap() = Some(input.trim().to_string());
     }
 }

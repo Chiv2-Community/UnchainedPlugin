@@ -14,7 +14,22 @@
 // #[macro_use]
 // extern crate paste; // concat strings
 
-
+// unsafe fn attach_TestFunction(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+//   let address = base_address + offsets["TestFunction"] as usize; 
+//   let target: FnTestFunction = mem::transmute(address);
+//   type FnTestFunction = unsafe extern "C" fn(*mut c_void, f32, u8);
+//   static_detour! {
+//     static TestFunction: unsafe extern "C" fn(*mut c_void, f32, u8);
+//   }
+//   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
+//       println!("rust TestFunction delta: {}", delta);
+//       unsafe { TestFunction.call( engine, delta, state) }
+//   }
+//   TestFunction
+//     .initialize(target, detour_fkt)?
+//     .enable()?;
+//   Ok(())
+// }
 /// ```rust
 /// unsafe fn attach_GameEngineTick(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
 ///   let address = base_address + offsets["UGameEngineTick"] as usize; 
@@ -63,18 +78,28 @@ macro_rules! CREATE_HOOK {
 
         #[allow(non_snake_case)]
         pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+        // pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error> {
         
-          // ( $( $arg: $ty ),+ );
-          let address = base_address + offsets[stringify![$name]] as usize; 
-          let target: [<Fn $name>] = mem::transmute(address);
-
-          type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
-
-          [<o_ $name>]
-            .initialize(target, [<$name _detour_fkt>])?
-            .enable()?;
-
-          Ok(())
+        // TODO: propagate error? why panic
+          match offsets.get(stringify![$name]) {
+            None => {
+                Err("No address found.".into())// Err("No Address found."),//log::error!["Failed to attach: {}", stringify![$name]],
+            },
+            Some(_) => {
+                // log::info!["attached"];
+                // ( $( $arg: $ty ),+ );
+                let address = base_address + offsets[stringify![$name]] as usize; 
+                let target: [<Fn $name>] = mem::transmute(address);
+      
+                type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
+      
+                [<o_ $name>]
+                  .initialize(target, [<$name _detour_fkt>])?
+                  .enable()?;;
+      
+                Ok(())
+            },
+          }
         }
       }
 
@@ -125,6 +150,7 @@ macro_rules! CREATE_HOOK {
 
 //     };
 // }
+
 
 use std::{future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
@@ -214,6 +240,7 @@ macro_rules! define_pocess {
     // Wrap code and define_pattern_resolver
     (@emit_process_inline $name:ident, |$ctx:ident, $patterns:ident| $body:block) => {{
         let result = $body;
+        log::debug![target:"sig_scan", "[ 0x{:#x?} ]: {}", result, stringify![$name]];
         Ok($name(result))
     }};
 }

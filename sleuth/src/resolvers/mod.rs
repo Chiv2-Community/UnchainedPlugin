@@ -1,5 +1,5 @@
 #[macro_use]
-mod macros;
+pub mod macros;
 // use dll_hook::ue;
 
 use once_cell::sync::OnceCell;

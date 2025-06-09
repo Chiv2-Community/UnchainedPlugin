@@ -3,15 +3,19 @@
 mod resolvers;
 mod scan;
 use core::fmt;
-use std::env;
+use std::time::Duration;
+use std::{env, thread};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::io::{BufWriter, Write};
 use std::collections::HashMap;
 use std::path::PathBuf;
 mod ue;
+mod tools;
+mod chiv2;
 
 use anyhow::Result;
+use chrono::offset;
 use patternsleuth::resolvers::unreal::blueprint_library::UFunctionBind;
 use patternsleuth::resolvers::unreal::*;
 // use dll_hook::ue::*;
@@ -23,10 +27,145 @@ use patternsleuth::resolvers::unreal::{fname::FNameToString,
                                 gmalloc::GMalloc,
                                 guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}
                             };
+use resolvers::macros;
 use serde::Serialize;
 use serde_json::to_writer_pretty;
+use tools::syslog::init_syslog;
 use winapi::um::winnt::FILE_APPEND_DATA;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
+
+use log::{debug, error, info, warn};
+use clap::{command, CommandFactory, FromArgMatches, Parser, Subcommand};
+use async_std::io;
+
+pub static test_intro: &str = "\x1b[38;5;228m\
+\
+▄████████    ▄█    █▄     ▄█   ▄█    █▄     ▄████████  ▄█          ▄████████ ▄██   ▄         ▄█   ▄█ \r\n\
+███    ███   ███    ███   ███  ███    ███   ███    ███ ███         ███    ███ ███   ██▄      ███  ███ \r\n\
+███    █▀    ███    ███   ███▌ ███    ███   ███    ███ ███         ███    ███ ███▄▄▄███      ███▌ ███▌\r\n\
+███         ▄███▄▄▄▄███▄▄ ███▌ ███    ███   ███    ███ ███        ▄███▄▄▄▄██▀ ▀▀▀▀▀▀███      ███▌ ███▌\r\n\
+███        ▀▀███▀▀▀▀███▀  ███▌ ███    ███ ▀███████████ ███       ▀▀███▀▀▀▀▀   ▄██   ███      ███▌ ███▌\r\n\
+███    █▄    ███    ███   ███  ███    ███   ███    ███ ███       ▀███████████ ███   ███      ███  ███ \r\n\
+███    ███   ███    ███   ███  ███    ███   ███    ███ ███▌    ▄   ███    ███ ███   ███      ███  ███ \r\n\
+████████▀    ███    █▀    █▀    ▀██████▀    ███    █▀  █████▄▄██   ███    ███  ▀█████▀       █▀   █▀  \r\n\
+                                                       ▀           ███    ███                         \r\n\
+\x1b[38;5;1m███    █▄  ███▄▄▄▄    ▄████████    ▄█    █▄       ▄████████  ▄█  ███▄▄▄▄      ▄████████ ████████▄     \r\n\
+███    ███ ███▀▀▀██▄ ███    ███   ███    ███     ███    ███ ███  ███▀▀▀██▄   ███    ███ ███   ▀███    \r\n\
+███    ███ ███   ███ ███    █▀    ███    ███     ███    ███ ███▌ ███   ███   ███    █▀  ███    ███    \r\n\
+███    ███ ███   ███ ███         ▄███▄▄▄▄███▄▄   ███    ███ ███▌ ███   ███  ▄███▄▄▄     ███    ███    \r\n\
+███    ███ ███   ███ ███        ▀▀███▀▀▀▀███▀  ▀███████████ ███▌ ███   ███ ▀▀███▀▀▀     ███    ███    \r\n\
+███    ███ ███   ███ ███    █▄    ███    ███     ███    ███ ███  ███   ███   ███    █▄  ███    ███    \r\n\
+███    ███ ███   ███ ███    ███   ███    ███     ███    ███ ███  ███   ███   ███    ███ ███   ▄███    \r\n\
+████████▀   ▀█   █▀  ████████▀    ███    █▀      ███    █▀  █▀    ▀█   █▀    ██████████ ████████▀     \r\n\
+\x1b[38;5;255m                                                                                                      \r\n\
+                                                                                                      ";
+
+pub static test_intro3: &str = "\
+|            █               \r\n\
+|          ███████           \r\n\
+|          ██  ███           \r\n\
+|      ███   █████    ██     \r\n\
+|     █████     █   █████    \r\n\
+|    ████████       ███████  \r\n\
+|    ███████████    ███   ██ \r\n\
+|    █████████████   ███  ███\r\n\
+|     ██      ███      █████ \r\n\
+|     ██      ████      █    \r\n\
+|    ███    ████████   ██    \r\n\
+|    ██████████  █████████   \r\n\
+|       ██████   ████████    \r\n\
+|        █████  █████        \r\n\
+|         ███████████        \r\n\
+|         ███████ ██         \r\n\
+|           ██ █   █         \r\n\
+";
+
+// pub static test: &str = "\x1b[38;5;196m▄\x1b[0m\x1b[38;5;202m█\x1b[0m\x1b[38;5;226m█\x1b[0m\x1b[38;5;46m█\x1b[0m\x1b[38;5;21m█\x1b[0m\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m\x1b[38;5;196m█\x1b[0m\x1b[38;5;202m█\x1b[0m    \x1b[38;5;226m▄\x1b[0m\x1b[38;5;46m█\x1b[0m    \x1b[38;5;21m█\x1b[0m\x1b[38;5;93m▄\x1b[0m     \x1b[38;5;201m▄\x1b[0m\x1b[38;5;196m█\x1b[0m   \x1b[38;5;202m▄\x1b[0m\x1b[38;5;226m█\x1b[0m    \x1b[38;5;46m█\x1b[0m\x1b[38;5;21m▄\x1b[0m     \x1b[38;5;93m▄\x1b[0m\x1b[38;5;201m█\x1b[0m\x1b[38;5;196m█\x1b[0m\x1b[38;5;202m█\x1b[0m\x1b[38;5;226m█\x1b[0m\x1b[38;5;46m█\x1b[0m\x1b[38;5;21m█\x1b[0m\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m  \x1b[38;5;196m▄\x1b[0m\x1b[38;5;202m█\x1b[0m          \x1b[38;5;226m▄\x1b[0m\x1b[38;5;46m█\x1b[0m\x1b[38;5;21m█\x1b[0m\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m\x1b[38;5;196m█\x1b[0m\x1b[38;5;202m█\x1b[0m\x1b[38;5;226m█\x1b[0m\x1b[38;5;46m█\x1b[0m \x1b[38;5;21m▄\x1b[0m\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m   \x1b[38;5;196m▄\x1b[0m         \x1b[38;5;202m▄\x1b[0m\x1b[38;5;226m█\x1b[0m   \x1b[38;5;46m▄\x1b[0m\x1b[38;5;21m█\x1b[0m\n\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m\x1b[38;5;196m█\x1b[0m    \x1b[38;5;202m█\x1b[0m\x1b[38;5;226m█\x1b[0m\x1b[38;5;46m█\x1b[0m   \x1b[38;5;21m█\x1b[0m\x1b[38;5;93m█\x1b[0m\x1b[38;5;201m█\x1b[0m    \x1b[38;5;196m█\x1b[0m\x1b[38;5;202m█\x1b[0m\x1b[38;5;226m█\x1b[0m   \x1b[38;5;46m█\x1b";
+
+
+// CLI args
+#[derive(Debug, Subcommand)]
+enum Commands {
+    TBL,
+    NONE,
+}
+// #[derive(Parser, Debug)]
+// #[command(name = "Chivalry 2 Unchained", version = "1.0", author = "Unchained Team")]
+#[derive(Parser, Debug)]
+#[command(name = "Chivalry 2 Unchained", author = "Unchained Team", version, about, long_about = None)]
+// FIXME: possible to skip unhandled args?
+struct CLIArgs {    
+    // #[arg()]
+    // positional_args: Vec<String>,
+    // #[arg()]
+    // game_id: String,
+
+    #[arg(long = "next-map-mod-actors")]
+    next_mod_actors: Option<Vec<String>>,
+
+    #[arg(long = "all-mod-actors")]
+    mod_paks: Option<Vec<String>>,
+
+    #[arg(long = "unchained")]
+    is_unchained: bool,
+    // 
+    #[arg(long = "rcon")]
+    rcon_port: Option<u16>,
+    // // 
+    #[arg(long = "desync-patch")]
+    apply_desync_patch: bool,
+    // 
+    #[arg(long = "use-backend-banlist")]
+    use_backend_banlist: bool,
+    // 
+    #[arg(long = "nullrhi")]
+    is_headless: bool,
+    // 
+    #[arg(long = "next-map-name")]
+    next_map: Option<String>,
+    // 
+    #[arg(long = "playable-listen")]
+    playable_listen: bool,
+    // // 
+    #[arg(long = "server-browser-backend")]
+    server_browser_backend: Option<String>,
+    // // 
+    #[arg(long = "server-password")]
+    server_password: Option<String>,
+    // s
+    #[arg(long = "platform")]
+    platform: Option<String>,
+
+    #[arg(long = "saveddirsuffix")]
+    saveddirsuffix: Option<String>,
+
+
+    // UNHANDLED START
+    #[arg(long = "AUTH_LOGIN")]
+    AUTH_LOGIN: Option<String>,
+    #[arg(long = "AUTH_PASSWORD")]
+    AUTH_PASSWORD: Option<String>,
+    #[arg(long = "AUTH_TYPE")]
+    AUTH_TYPE: Option<String>,
+    #[arg(long = "epicapp")]
+    epicapp: Option<String>,
+    #[arg(long = "epicenv")]
+    epicenv: Option<String>,
+    #[arg(long = "EpicPortal")]
+    EpicPortal: bool,
+    #[arg(long = "epicusername")]
+    epicusername: Option<String>,
+    #[arg(long = "epicuserid")]
+    epicuserid: Option<String>,
+    #[arg(long = "epiclocale")]
+    epiclocale: Option<String>,
+    #[arg(long = "epicsandboxid")]
+    epicsandboxid: Option<String>,
+    // UNHANDLED END
+
+    #[arg(trailing_var_arg = true)]
+    pub extra_args: Vec<String>,
+}
 
 // IEEE
 use std::arch::x86_64::_mm_crc32_u8;
@@ -74,7 +213,7 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
 
 pub fn dump_builds() -> Result<()> {
     let builds_path = expand_env_path(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\c2uc.builds.json").unwrap().to_path_buf();
-    println!("JSON PATH {}", builds_path.to_string_lossy());
+    // println!("JSON PATH {}", builds_path.to_string_lossy());
     let file = File::create(builds_path)?;
     let mut writer = BufWriter::new(file);
     let mut data = HashMap::new();
@@ -90,7 +229,7 @@ pub fn dump_builds() -> Result<()> {
     //     Ok(path) => file_path = path.to_string_lossy().into(),
     //     Err(e) => eprintln!("Failed to get path: {}", e),
     // }
-    println!("Current executable path: {:?}", file_path);
+    // println!("Current executable path: {:?}", file_path);
     
     let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
@@ -116,67 +255,271 @@ pub fn dump_builds() -> Result<()> {
 }
 
 
+// TODO: replace this with registration similar to resolvers
+type HookFn = unsafe fn(usize, HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
+// macro_rules! attach_hooks_list {
+//     ( [ $( $pattern:ident ),+ $(,)? ]) => {
+//         paste::paste!{
+//             {
+//                 let hooks: HashMap<String, u64>= [ $( ( stringify![$pattern], [<attach_ $pattern>] ) ),+ ]
+//                                     .into_iter().map(|(name, func)| (name.to_string(), func)).collect();
+//                 Ok(hooks)
+//             }
+//         }
+//     };
+// }
+
+macro_rules! attach_hooks_list {
+    ( [ $( $pattern:ident ),+ $(,)? ]) => {{
+        use std::collections::HashMap;
+        paste::paste! {
+            let hooks: HashMap<&'static str, HookFn> = [
+                $((stringify!($pattern), [<attach_ $pattern>] as HookFn)),+
+            ]
+            .into_iter()
+            .collect();
+
+            hooks
+        }
+    }};
+}
+
+
 pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>> {
 
     // attach_GameEngineTick(base_address, offsets).unwrap();
-    resolvers::admin_control::attach_UGameEngineTick(base_address, offsets.clone()).unwrap();
-    resolvers::admin_control::attach_ExecuteConsoleCommand(base_address, offsets.clone()).unwrap();
-    resolvers::admin_control::attach_FEngineLoopInit(base_address, offsets.clone()).unwrap();
-    resolvers::admin_control::attach_ClientMessage(base_address, offsets.clone()).unwrap();
+    info!("Attaching hooks:");
+    
+    let hooks_new = attach_hooks_list![[
+        UGameEngineTick,
+        ExecuteConsoleCommand,
+        FEngineLoopInit,
+        ClientMessage,
+        SomeRandomFunction,
+    ]];
+    
+    use resolvers::admin_control::*;
+    // use crate::resolvers::macros;
+    hooks_new.iter().for_each(|(s, f)| {
+        match (f)(base_address, offsets.clone()) {
+            Ok(_) => info!["☑ {} ", s],
+            Err(e) => {
+                serror!(func, file;"☐ {}: {}", s.to_uppercase(), e);
+                serror!(func, file, line;"☐ {}: {}", s.to_uppercase(), e);
+                serror!(func, file, line, column;"☐ {}: {}", s.to_uppercase(), e);
+                serror!(func, file, line, mod;"☐ {}: {}", s.to_uppercase(), e);
+                serror!("☐ {}: {}", s.to_uppercase(), e);
+            },
+        }
+    });
+    
+    // resolvers::admin_control::attach_UGameEngineTick(base_address, offsets.clone()).unwrap();
+    // resolvers::admin_control::attach_ExecuteConsoleCommand(base_address, offsets.clone()).unwrap();
+    // resolvers::admin_control::attach_FEngineLoopInit(base_address, offsets.clone()).unwrap();
+    // resolvers::admin_control::attach_ClientMessage(base_address, offsets.clone()).unwrap();
     Ok(())
   }
 
-unsafe fn init_globals() {
+// We're using a mix of cli arg types, normalize them to --key value(s)
+// e.g. -rcon 9001, -epicsomething=blablabla, Port=7777
+// This function converts all of those to --convention. It also drops game_identifier
+// To parse it all with clap, it checks against entries in CLIArgs and filters out unhandled ones
+fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
+    let mut args = args.into_iter();
+    let bin_name = args.next().unwrap_or_else(|| "app".to_string());
+
+    let known_flags: Vec<String> = CLIArgs::command()
+        .get_arguments()
+        .filter_map(|a| a.get_long().map(|s| format!("--{}", s)))
+        .collect();
+
+    let mut result = vec![bin_name];
+    let mut args = args.peekable();
+    let mut last_flag: Option<String> = None;
+    let mut last_opt: Option<String> = None;
+    
+
+    while let Some(arg) = args.next() {
+        // println!("-- LINE: {arg}");
+        // Normalize `key=value` and `-flag` → `--flag`
+        let (flag, value_opt): (String, Option<String>) = 
+            if let Some((k, v)) = arg.split_once('=') {
+                (format!("--{}", k.trim_start_matches('-')), Some(v.to_string()))
+            } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
+                (format!("--{}", &arg[1..]), None)
+            } else {
+                (arg.clone(), None)
+            };
+        
+        // println!("cur: {flag}");
+        let cur_flag = flag.clone();
+        if known_flags.contains(&flag) {
+            result.push(flag);
+            if let Some(v) = value_opt {
+                // println!("option: {v}");
+                last_opt = Some(v.clone());
+                result.push(v);
+            } 
+            else if let Some(peek) = args.peek() {
+                if !peek.starts_with('-') {
+                    let var = args.next().unwrap();
+                    // print!("pushing {var}");
+                    result.push(var);
+                }
+            }
+        }
+        // args can split an option (e.g. --name Not Sure)
+        else if result.len() > 0 && !flag.starts_with('-') { 
+            let last_valid = result.last().unwrap();
+            if let Some(last) = last_flag {
+                // println!("Last '{last}' last valid '{last_valid}'");
+                if let Some(o) = &last_opt {
+                    // println!("Last '{}' last valid {} last option '{}' equal: {}", last, last_valid, o, o == last_valid);
+                    // println!("Res: {} Trailing string {}, last flag {}, last result {}",result.len(), flag, last, last_valid);
+                    if o == last_valid {
+                        if let Some(last_mut) = result.last_mut() {
+                            last_mut.push_str(" ");
+                            last_mut.push_str(&cur_flag);
+                        }
+                    }
+                }
+            } 
+        }
+        last_flag = Some(cur_flag);
+    }
+
+    result
+}
+
+unsafe fn load_cli() -> Result<(CLIArgs), clap::error::Error> {
+    let args = std::env::args();
+    let parsed = normalize_and_filter_args(args);
+    let cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI atgs");
+    // println!("Parsed CLI: {:#?}", cli);
+    Ok(cli)
+}
+unsafe fn init_globals() -> Result<(), clap::error::Error>{
+    
+    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
+        true => PlatformType::EGS,
+        false => PlatformType::STEAM
+    };
     
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
-    println!("starting scan");
-    // FIXME: Nihi: use the results from scan function
+    // FIXME: replace old references
+    PLATFORM.set(platform).expect("Platform already set");
+    BASE_ADDR.set(exe.base_address).expect("BASE_ADDR already set");
+    // debug!("Platform: {} base_addr: '0x{:x?}'", platform, exe.base_address);
+
+    // Load CLI ARGS
+    let args = load_cli().expect("Failed to load CLI ARGS");
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
-    println!("finished scan");
     
-    println!("results: {:?}", resolution);
+    // println!("results: {:?}", resolution);
     let guobject_array: &'static ue::FUObjectArray =
         &*(resolution.guobject_array.0 as *const ue::FUObjectArray);
+        
 
     GLOBALS = Some(Globals {
         guobject_array: guobject_array.into(),
         resolution,
         main_thread_id: std::thread::current().id(),
         last_command: None,
+        base_address: exe.base_address,
+        is_server: false,
+        cli_args: args,
+        platform
     });
-
+    Ok(())
 }
 
+
+
+// █: 743
+// ▀: 67
+// ▄: 66
+// r: 18
+// n: 18
+// ▌: 13
+fn intro() {
+    let mut color_index = 16;
+    let max_color = 231;
+    for line in test_intro.lines() {
+        for ch in line.chars() {
+            let color = format!("\x1b[38;5;{}m", color_index);
+            print!("{}{}\x1b[0m", color, ch);
+
+            color_index += 1;
+            if color_index > max_color {
+                color_index = 16;
+            }
+            thread::sleep(Duration::from_micros(20));
+        }
+        println!(); // new line
+    }
+}
+
+// https://stackoverflow.com/questions/38088067/equivalent-of-func-or-function-in-rust
+// https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=df5975cd589ae7286a769e1c70e7715d
+macro_rules! function {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        &name[..name.len() - 3]
+    }}
+}
+// define_pocess!
+
 #[no_mangle]
-pub extern "C" fn generate_json() -> u8 {
-    println!("test asd");
-    
-    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-        true => PlatformType::EGS,
-        false => PlatformType::STEAM
-    };
+pub extern "C" fn generate_json() -> u8 {   
+    // intro();
+    // thread::sleep(Duration::from_secs(10));
+    print!("{test_intro}");
+    print!("\n");
+    init_syslog().expect("Failed to init syslog");
+    unsafe { init_globals() };
 
     std::thread::spawn(|| {
         resolvers::rcon::handle_rcon();
     });
 
-    PLATFORM.set(platform).expect("Platform already set");
-    let image = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
-    let exe = image;
-    println!("GAME  '{:x?}'", exe.base_address);
-    BASE_ADDR.set(exe.base_address).expect("BASE_ADDR already set");
+    (|| {
+        mod module {
+            pub trait Trait {
+                fn function(&self) {
+                    println!("{} (in {} [{}:{}:{}])",
+                        function!(), module_path!(), file!(), line!(), column!()
+                    );
+                }
+            }
+            impl Trait for () {}
+        }
+        module::Trait::function(&());
+    })();
+    
+    // Init syslog    
+    // info!("Info blabla");
+    // warn!("Warning! ‼");
+    // debug!("DEBUG MESSAGE");
+    // error!("ERRROR ");
 
-    unsafe { init_globals() };
-    // let scan = scan::scan();
+    // PLATFORM.set(platform).expect("Platform already set");
+    let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
+
     let offsets = scan::scan().expect("Failed to scan");
     let len_u8 = offsets.len() as u8;
     // FIXME: Nihi: ?
-    let offset_copy = offsets.clone();
-    // let base_addr = scan::scan().1;
     unsafe {
         attach_hooks(exe.base_address, offsets).unwrap();
     }
     dump_builds().expect("Failed to dump builds JSON");
+    
+    std::thread::spawn(|| {
+        resolvers::rcon::handle_cmd();
+    });
     len_u8
 }
 
@@ -224,6 +567,10 @@ pub struct Globals {
     guobject_array: parking_lot::FairMutex<&'static ue::FUObjectArray>,
     main_thread_id: std::thread::ThreadId,
     last_command: Option<ue::FString>,
+    platform: PlatformType,
+    base_address: usize,
+    is_server: bool,
+    cli_args: CLIArgs,
 }
 
 impl Globals {
@@ -249,9 +596,21 @@ impl Globals {
         *self.guobject_array.data_ptr()
     }
 
-    // pub fn last_command(&self) -> Option<&mut ue::FString> {
-    //     self.last_command.as_mut()
-    // }
+    pub fn get_platform(&self) -> PlatformType {
+        self.platform
+    }
+
+    pub fn get_base_address(&self) -> usize {
+        self.base_address
+    }
+
+    pub fn is_server(&self) -> bool {
+        self.is_server
+    }
+
+    fn args(&self) -> &CLIArgs {
+        &self.cli_args
+    }
 }
 
 pub fn globals() -> &'static Globals {
