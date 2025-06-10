@@ -2,18 +2,18 @@
 
 #include <regex>
 #include "../logging/Logger.hpp"
-#include "../hooking/hook_macros.hpp"
+#include "../patching/patch_macros.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-SCAN_HOOK(UTBLLocalPlayer_Exec)
+REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, 0xEB)
 
 // Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
 // I do not feel like dealing with it right now.
 /*
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ConsoleCommand,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	FString, (void* this_ptr, FString const& str, bool b)
 ) {
 #ifdef _DEBUG_
@@ -39,23 +39,21 @@ CREATE_HOOK(
 #endif
 	return o_ConsoleCommand(this_ptr, str, b);
 }
-AUTO_HOOK(ConsoleCommand);
 */
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (FString* param)
 ) {
 	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
-AUTO_HOOK(ExecuteConsoleCommand);
 
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	FText_AsCultureInvariant,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* ret_ptr, FString* input)
 ) {
 	// This is extremely loud in the console
@@ -66,18 +64,16 @@ CREATE_HOOK(
 	//}
 	return o_FText_AsCultureInvariant(ret_ptr, input);
 }
-AUTO_HOOK(FText_AsCultureInvariant);
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	BroadcastLocalizedChat,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* game_mode, FText* text, uint8_t chat_type)
 ) {
 	GLOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
-AUTO_HOOK(BroadcastLocalizedChat);
 
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
@@ -110,9 +106,9 @@ bool IsServerStart()
 }
 
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	GetTBLGameMode,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* uobj)
 ) {
 	//LOG_DEBUG("GetTBLGameMode");
@@ -120,16 +116,15 @@ CREATE_HOOK(
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
 }
-AUTO_HOOK(GetTBLGameMode)
 
 /*
 void __thiscall
 APlayerController::ClientMessage
 		  (APlayerController *this,FString *param_1,FName param_2,float param_3)
 */
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ClientMessage,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
 ) {
 	bool egs = g_state->GetCLIArgs().platform == EGS;
@@ -180,4 +175,3 @@ CREATE_HOOK(
 	}
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }
-AUTO_HOOK(ClientMessage);

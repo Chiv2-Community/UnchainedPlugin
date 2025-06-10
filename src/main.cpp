@@ -23,27 +23,24 @@ extern "C" uint8_t generate_json();
 
 #include "constants.h"
 #include "builds.hpp"
-#include "patch.hpp"
 #include "string_util.hpp"
 
 #include "logging/global_logger.hpp"
 #include "stubs/UE4.h"
 #include "state/global_state.hpp"
-#include "hooking/FunctionHookManager.hpp"
+#include "patching/PatchManager.hpp"
 
 #include "hooks/all_hooks.h"
 
-void handleRCON() {
-	std::wstring commandLine = GetCommandLineW();
-	size_t flagLoc = commandLine.find(L"-rcon");
-	if (!g_state->GetCLIArgs().rcon_port.has_value()) {
+void handleRCON(State& state) {
+	if (!state.GetCLIArgs().rcon_port.has_value()) {
 		ExitThread(0);
 		return;
 	}
 
 	GLOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
 
-	int port = g_state->GetCLIArgs().rcon_port.value();
+	int port = state.GetCLIArgs().rcon_port.value();
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -64,6 +61,8 @@ void handleRCON() {
 	bind(listenSock, (sockaddr*)&addr, sizeof(addr));
 	listen(listenSock, SOMAXCONN);
 
+	RCONState rcon_State = state.GetRCONState();
+	wchar_t staticBuffer[1024];
 
 	while (true) {
 		//set up a new command string
@@ -105,7 +104,7 @@ void handleRCON() {
 
 		wcsncpy_s(staticBuffer, command->c_str(), 1023);
 		staticBuffer[1023] = 0; // ensure null-termination
-		hasPendingCommand = true;
+		rcon_State.set_command(staticBuffer);
 	}
 
 	return;
@@ -171,11 +170,11 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
 		std::string build_hash_string = std::to_string(build_hash);
-		bool needsSerialization = false;
 
 		if (!loaded.contains(build_hash_string)) {
-			loaded.emplace(build_hash_string, BuildMetadata(build_hash, 0, {}, "", cliArgs.platform));
-			needsSerialization = true;
+			GLOG_ERROR("Failed to load build metadata for build hash: {}", build_hash_string);
+			GLOG_ERROR("Something is probably wrong with the rust module invocation");
+			return 1;
 		}
 
 		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
@@ -194,41 +193,29 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-		auto module_base{ reinterpret_cast<unsigned char*>(baseAddr) };
+		PatchManager patch_manager(baseAddr, moduleInfo, current_build_metadata);
 
-		FunctionHookManager hook_manager(baseAddr, moduleInfo, current_build_metadata);
-		register_auto_hooks(hook_manager);
-		auto all_hooks_successful = hook_manager.enable_hooks();
-
-		if (needsSerialization)
-			SaveBuildMetadata(loaded);
-
-		auto localPlayerOffset = state->GetBuildMetadata().GetOffset(UTBLLocalPlayer_Exec_HookData->name);
-		if (localPlayerOffset.has_value()) {
-			// Patch for command permission when executing commands (UTBLLocalPlayer::Exec)
-			Ptch_Repl(module_base + localPlayerOffset.value(), 0xEB);
+		for (auto& patch: ALL_REGISTERED_PATCHES) {
+			patch_manager.register_patch(*patch);
 		}
-		/*printf("offset dedicated: 0x%08X", g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22);
-		Ptch_Repl(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_UGameplay__IsDedicatedServer]) + 0x22, 0x2);*/
-		// Dedicated server hook in ApproveLogin
-		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
 
-		if (!all_hooks_successful) {
-			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
+		auto all_patches_successful = patch_manager.apply_patches();
+		if (!all_patches_successful) {
+			GLOG_ERROR("Failed to apply all patches. Unchained may not function as expected.");
 		}
 
 		GLOG_INFO("Continuing to RCON");
-		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
+		handleRCON(*state); //this has an infinite loop for commands! Keep this at the end!
 
 		ExitThread(0);
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());
 		GLOG_ERROR("std::exception: {}", e.what());
-		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		GLOG_ERROR("Patching failed. Things are probably broken.");
 		return 1;
 	} catch (...) {
 		GLOG_ERROR("Unknown C++ exception caught");
-		GLOG_ERROR("Function hooking failed. Things are probably broken.");
+		GLOG_ERROR("Patching failed. Things are probably broken.");
 		return 1;
 	}
 }
