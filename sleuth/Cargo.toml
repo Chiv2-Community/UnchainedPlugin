@@ -85,11 +85,11 @@ default = [
         "chat-log",
         "chiv2",
         "mirage",
-        "demo",
-        "syslog-client",
+        #"demo",
+        #"syslog-client",
         "rcon",
         "dev",
-        "server-registration",
+        #"server-registration",
         ]
 serde-resolvers = []
 image-elf = []

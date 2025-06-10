@@ -33,6 +33,7 @@ use resolvers::kismet_dev::*;
 use serde::Serialize;
 use serde_json::to_writer_pretty;
 use tools::logger::init_syslog;
+#[cfg(feature="server-registration")]
 use tools::server_registration::Registration;
 use winapi::um::winnt::FILE_APPEND_DATA;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
