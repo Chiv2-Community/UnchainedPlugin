@@ -4,12 +4,14 @@
 
 #include "BuildMetadata.hpp"
 #include "CLIArgs.hpp"
+#include "RCONState.hpp"
 
 class State {
     CLIArgs args;                                     // Changed from reference to object
     BuildMetadata& current_build_metadata;                      // Changed from reference to object
     void* uworld = nullptr;
     void* CurGameMode = nullptr;
+    RCONState rcon_state;
 
     std::map<std::string, BuildMetadata> build_metadata;
 
@@ -18,6 +20,7 @@ public:
     State(CLIArgs args, std::map<std::string, BuildMetadata> all_build_metadata, BuildMetadata& current_build_metadata)
         : args(std::move(args)), current_build_metadata(current_build_metadata), build_metadata(all_build_metadata){
         this->uworld = nullptr;
+        this->rcon_state = RCONState();
     }
 
     inline void SetUWorld(void* uworld) {
@@ -48,5 +51,9 @@ public:
 
     inline std::map<std::string, BuildMetadata> GetSavedBuildMetadata() const {
         return this->build_metadata;
+    }
+
+    inline RCONState& GetRCONState() {
+        return this->rcon_state;
     }
 };

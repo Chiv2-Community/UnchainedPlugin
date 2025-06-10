@@ -34,14 +34,52 @@ REGISTER_HOOK_PATCH(
 		return o_LoadFrontEndMap(this_ptr, param_1);
 }
 
+static wchar_t staticBuffer[1024] = {};
+static bool hasPendingCommand = false;
+
+// #define GETNETMODE_CC
 REGISTER_HOOK_PATCH(
 	InternalGetNetMode,
 	APPLY_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
+#ifdef GETNETMODE_CC
+	std::optional<std::wstring> next_command = g_state->GetRCONState().get_command();
+	if (next_command.has_value())
+	{
+		std::wstring command = next_command.value();
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command (InternalGetNetMode): {}", command);
+		const wchar_t* command_chars = command.c_str();
+		FString commandString(command_chars);
+		o_ExecuteConsoleCommand(&commandString);
+	}
+#endif
 	return o_InternalGetNetMode(world);
 }
+
+
+#ifndef GETNETMODE_CC
+REGISTER_HOOK_PATCH(
+	UGameEngineTick,
+	APPLY_ALWAYS,
+	void, (void* engine, float delta_seconds, uint8_t idle_mode)
+) {
+	// GLOG_WARNING("Engine hook");
+	std::optional<std::wstring> next_command = g_state->GetRCONState().get_command();
+	if (next_command.has_value())
+	{
+		std::wstring command = next_command.value();
+		hasPendingCommand = false;
+		GLOG_WARNING("Console Command (UGameEngineTick): {}", command);
+		const wchar_t* command_chars = command.c_str();
+		FString commandString(command_chars);
+		o_ExecuteConsoleCommand(&commandString);
+	}
+	o_UGameEngineTick(engine, delta_seconds, idle_mode);
+}
+#endif
 
 REGISTER_HOOK_PATCH(
 	UNetDriver_GetNetMode,
@@ -59,7 +97,7 @@ REGISTER_HOOK_PATCH(
 	bool, (long long param_1)
 ) {
 	if (g_state->GetUWorld() != nullptr && !g_state->GetCLIArgs().playable_listen) {
-		ENetMode mode = o_InternalGetNetMode(g_state->GetUWorld());
+		const ENetMode mode = o_InternalGetNetMode(g_state->GetUWorld());
 		bool isHosting = mode == DEDICATED_SERVER || mode == LISTEN_SERVER;
 		return isHosting;
 	}

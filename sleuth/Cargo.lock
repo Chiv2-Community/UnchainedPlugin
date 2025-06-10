@@ -540,6 +540,7 @@ dependencies = [
  "anyhow",
  "futures",
  "once_cell",
+ "paste",
  "patternsleuth",
  "serde",
  "serde_json",

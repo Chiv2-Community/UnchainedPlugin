@@ -32,15 +32,15 @@ extern "C" uint8_t generate_json();
 
 #include "hooks/all_hooks.h"
 
-void handleRCON() {
-	if (!g_state->GetCLIArgs().rcon_port.has_value()) {
+void handleRCON(State& state) {
+	if (!state.GetCLIArgs().rcon_port.has_value()) {
 		ExitThread(0);
 		return;
 	}
 
 	GLOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
 
-	int port = g_state->GetCLIArgs().rcon_port.value();
+	int port = state.GetCLIArgs().rcon_port.value();
 
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -61,6 +61,8 @@ void handleRCON() {
 	bind(listenSock, (sockaddr*)&addr, sizeof(addr));
 	listen(listenSock, SOMAXCONN);
 
+	RCONState rcon_State = state.GetRCONState();
+	wchar_t staticBuffer[1024];
 
 	while (true) {
 		//set up a new command string
@@ -87,6 +89,10 @@ void handleRCON() {
 			//convert to wide string
 			std::string chunkString(buffer, count);
 			std::wstring wideChunkString(chunkString.begin(), chunkString.end() - 1);
+			// possibly off by one?
+			// if (!chunkString.empty() && chunkString.back() == '\n')
+			// 	chunkString.pop_back();
+			// std::wstring wideChunkString(chunkString.begin(), chunkString.end());
 			*command += wideChunkString; //append this chunk to the command
 		} while (buffer[count - 1] != '\n');
 		//we now have the whole command as a wide string
@@ -96,9 +102,9 @@ void handleRCON() {
 			continue;
 		}
 
-		//add into command queue
-		FString commandString(command->c_str());
-		o_ExecuteConsoleCommand(&commandString);
+		wcsncpy_s(staticBuffer, command->c_str(), 1023);
+		staticBuffer[1023] = 0; // ensure null-termination
+		rcon_State.set_command(staticBuffer);
 	}
 
 	return;
@@ -199,7 +205,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		}
 
 		GLOG_INFO("Continuing to RCON");
-		handleRCON(); //this has an infinite loop for commands! Keep this at the end!
+		handleRCON(*state); //this has an infinite loop for commands! Keep this at the end!
 
 		ExitThread(0);
 	} catch (const std::exception& e) {
