@@ -163,7 +163,7 @@ macro_rules! CREATE_HOOK {
       
                 [<o_ $name>]
                   .initialize(target, [<$name _detour_fkt>])?
-                  .enable()?;;
+                  .enable()?;
       
                 // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
                 $crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);

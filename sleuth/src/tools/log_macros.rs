@@ -120,7 +120,7 @@ macro_rules! sinfo {
     //     $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
     // };
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
-        $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
+        $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*)
     };
     ($($arg:tt)*) => {
         $crate::__slog_internal!(info, $($arg)*);
@@ -130,7 +130,7 @@ macro_rules! sinfo {
 #[macro_export]
 macro_rules! swarn {
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
-        $crate::__slog_internal!(warn, $( $flag ),+ ; $($arg)*);
+        $crate::__slog_internal!(warn, $( $flag ),+ ; $($arg)*)
     };
     ($($arg:tt)*) => {
         $crate::__slog_internal!(warn, $($arg)*);
@@ -160,7 +160,7 @@ macro_rules! strace {
 #[macro_export]
 macro_rules! serror {
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
-        $crate::__slog_internal!(error, $( $flag ),+ ; $($arg)*);
+        $crate::__slog_internal!(error, $( $flag ),+ ; $($arg)*)
     };
     ($($arg:tt)*) => {
         $crate::__slog_internal!(error, $($arg)*);

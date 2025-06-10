@@ -4,32 +4,33 @@ use log4rs::{append::{console::ConsoleAppender, file::FileAppender}, config::{Ap
 
 use super::syslog::SyslogAppender;
 
-use log::LevelFilter;
-use log4rs::config::{ Logger};
+// use log::LevelFilter;
+// use log4rs::config::{ Logger};
 
-fn main() {
-    let stdout = ConsoleAppender::builder().build();
+// fn main() {
+//     let stdout = ConsoleAppender::builder().build();
 
-    let requests = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
-        .build("log/requests.log")
-        .unwrap();
+//     let requests = FileAppender::builder()
+//         .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
+//         .build("log/requests.log")
+//         .unwrap();
 
-    let config = Config::builder()
-        .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .appender(Appender::builder().build("requests", Box::new(requests)))
-        .logger(Logger::builder().build("app::backend::db", LevelFilter::Info))
-        .logger(Logger::builder()
-            .appender("requests")
-            .additive(false)
-            .build("app::requests", LevelFilter::Info))
-        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
-        .unwrap();
+//     let config = Config::builder()
+//         .appender(Appender::builder().build("stdout", Box::new(stdout)))
+//         .appender(Appender::builder().build("requests", Box::new(requests)))
+//         .logger(Logger::builder().build("app::backend::db", LevelFilter::Info))
+//         .logger(Logger::builder()
+//             .appender("requests")
+//             .additive(false)
+//             .build("app::requests", LevelFilter::Info))
+//         .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
+//         .unwrap();
 
-    let handle = log4rs::init_config(config).unwrap();
+//     // let handle = log4rs::init_config(config).unwrap();
 
-    // use handle to change logger configuration at runtime
-}
+//     // use handle to change logger configuration at runtime
+// }
+
 pub fn init_syslog() -> anyhow::Result<()> {
     // use function name
     let console = ConsoleAppender::builder()
@@ -40,6 +41,7 @@ pub fn init_syslog() -> anyhow::Result<()> {
         )))
         .build();
 
+        #[cfg(feature="syslog-client")]
         let syslog = SyslogAppender::builder()
         .encoder(Box::new(PatternEncoder::new(
             // TODO: make this configurable opt? Maybe only for syslog or only file log
@@ -47,6 +49,7 @@ pub fn init_syslog() -> anyhow::Result<()> {
             "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}", // Log file name and line
         )))
         .build();
+
         let file = FileAppender::builder()
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] [{M}] [{f}:{L}] {m}{n}\n")))
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] {P} [{l:6}] [{t}] {m}{n}")))
@@ -60,9 +63,19 @@ pub fn init_syslog() -> anyhow::Result<()> {
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 
     // Build the config programmatically
-    let config = Config::builder()
-        .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)))
-        // .appender(Appender::builder().build("syslog", Box::new(syslog)))
+    let mut builder = Config::builder()
+    .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)));
+
+    #[cfg(feature="syslog-client")]
+    {
+        builder = builder
+        .appender(Appender::builder().build("syslog", Box::new(syslog)));
+    }
+
+    // let config = Config::builder()
+    //     .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)))
+    //     // .appender(Appender::builder().build("syslog", Box::new(syslog)))
+    let config = builder
         .appender(Appender::builder().build("file", Box::new(file)))
         .appender(Appender::builder().build("kismet", Box::new(kismet)))
         .build(

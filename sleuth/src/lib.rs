@@ -35,9 +35,9 @@ use tools::server_registration::Registration;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
 
 use log::info;
-use clap::{command, CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap::{command, CommandFactory, Parser, Subcommand};
 
-pub static test_intro: &str = "\x1b[38;5;228m\
+pub static TEST_INTRO: &str = "\x1b[38;5;228m\
 \
 ▄████████    ▄█    █▄     ▄█   ▄█    █▄     ▄████████  ▄█          ▄████████ ▄██   ▄         ▄█   ▄█ \r\n\
 ███    ███   ███    ███   ███  ███    ███   ███    ███ ███         ███    ███ ███   ██▄      ███  ███ \r\n\
@@ -59,7 +59,7 @@ pub static test_intro: &str = "\x1b[38;5;228m\
 \x1b[38;5;255m                                                                                                      \r\n\
                                                                                                       ";
 
-pub static test_intro3: &str = "\
+pub static TEST_INTRO3: &str = "\
 |            █               \r\n\
 |          ███████           \r\n\
 |          ██  ███           \r\n\
@@ -147,17 +147,17 @@ struct CLIArgs {
 
     // UNHANDLED START
     #[arg(long = "AUTH_LOGIN")]
-    AUTH_LOGIN: Option<String>,
+    auth_login: Option<String>,
     #[arg(long = "AUTH_PASSWORD")]
-    AUTH_PASSWORD: Option<String>,
+    auth_password: Option<String>,
     #[arg(long = "AUTH_TYPE")]
-    AUTH_TYPE: Option<String>,
+    auth_type: Option<String>,
     #[arg(long = "epicapp")]
     epicapp: Option<String>,
     #[arg(long = "epicenv")]
     epicenv: Option<String>,
     #[arg(long = "EpicPortal")]
-    EpicPortal: bool,
+    epic_portal: bool,
     #[arg(long = "epicusername")]
     epicusername: Option<String>,
     #[arg(long = "epicuserid")]
@@ -287,7 +287,7 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
     // use crate::resolvers::macros;
     hooks_new.iter().for_each(|(s, f)| {
         match (f)(base_address, offsets.clone()) {
-            Ok(addr) => {
+            Ok(_) => {
                 sinfo![f; "☑ {} ", s]
             },
             Err(e) => {
@@ -368,7 +368,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         // args can split an option (e.g. --name Not Sure)
         else if !result.is_empty() && !flag.starts_with('-') { 
             let last_valid = result.last().unwrap();
-            if let Some(last) = last_flag {
+            if let Some(_) = last_flag {
                 // println!("Last '{last}' last valid '{last_valid}'");
                 if let Some(o) = &last_opt {
                     // println!("Last '{}' last valid {} last option '{}' equal: {}", last, last_valid, o, o == last_valid);
@@ -421,7 +421,7 @@ unsafe fn init_globals() -> Result<(), clap::error::Error>{
         guobject_array: guobject_array.into(),
         resolution,
         main_thread_id: std::thread::current().id(),
-        last_command: None,
+        // last_command: None,
         base_address: exe.base_address,
         is_server: false,
         cli_args: args,
@@ -438,10 +438,11 @@ unsafe fn init_globals() -> Result<(), clap::error::Error>{
 // r: 18
 // n: 18
 // ▌: 13
+#[allow(dead_code)]
 fn intro() {
     let mut color_index = 16;
     let max_color = 231;
-    for line in test_intro.lines() {
+    for line in TEST_INTRO.lines() {
         for ch in line.chars() {
             let color = format!("\x1b[38;5;{color_index}m");
             print!("{color}{ch}\x1b[0m");
@@ -458,26 +459,32 @@ fn intro() {
 
 // https://stackoverflow.com/questions/38088067/equivalent-of-func-or-function-in-rust
 // https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=df5975cd589ae7286a769e1c70e7715d
-macro_rules! function {
-    () => {{
-        fn f() {}
-        fn type_name_of<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let name = type_name_of(f);
-        &name[..name.len() - 3]
-    }}
-}
+// #[allow(unused_macros)]
+// macro_rules! function {
+//     () => {{
+//         fn f() {}
+//         fn type_name_of<T>(_: T) -> &'static str {
+//             std::any::type_name::<T>()
+//         }
+//         let name = type_name_of(f);
+//         &name[..name.len() - 3]
+//     }}
+// }
 // define_pocess!
 
 #[no_mangle]
 pub extern "C" fn generate_json() -> u8 {   
     // intro();
     // thread::sleep(Duration::from_secs(10));
-    print!("{test_intro}");
+    print!("{TEST_INTRO}");
     println!();
     init_syslog().expect("Failed to init syslog");
-    unsafe { init_globals() };
+    unsafe { 
+        match init_globals() {
+            Ok(_) => {},
+            Err(e) => serror!(f; "No globals: {}", e),
+        }
+     };
 
     #[cfg(feature="rcon")]
     std::thread::spawn(|| {
@@ -586,8 +593,9 @@ static mut GLOBALS: Option<Globals> = None;
 pub struct Globals {
     resolution: DllHookResolution,
     guobject_array: parking_lot::FairMutex<&'static ue::FUObjectArray>,
+    #[allow(dead_code)]
     main_thread_id: std::thread::ThreadId,
-    last_command: Option<ue::FString>,
+    // last_command: Option<ue::FString>,
     platform: PlatformType,
     base_address: usize,
     is_server: bool,
@@ -634,6 +642,8 @@ impl Globals {
     }
 }
 
+// FIXME: Nihi: ?
+#[allow(static_mut_refs)]
 pub fn globals() -> &'static Globals {
     unsafe { GLOBALS.as_ref().unwrap() }
 }

@@ -141,7 +141,6 @@ mod client_message {
         // "<8>: FACTION NOT VALID"
         // warn!("LINE: '{line}'");
         let re = Regex::new(r#"<(\d+)>: (.+)"#).unwrap();
-        let test = r#"""<4>: Carryable_Peasant_Raid_Child2_C_2147471851 : X=-3256.829 Y=-1015.456 Z=-145.546"""#;
         // warn!("TEST: '{test}'");
 
         if let Some(caps) = re.captures(line) {
@@ -188,7 +187,7 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     // TODO: handle commands tranformed by ChatHooks
     //       e.g. ".hello" -> '<7>: Console Command: hello', Type: 'None'(0),  MsgLifeTime: '0'
     //       this needs to provide the playfabid somehow
-    unsafe {        
+    {        
         let cmd_filter = |c| ['/', '.'].contains(&c);
         match client_message::parse_chat_line(message_repl.as_str()) {
             Some(chat) => {

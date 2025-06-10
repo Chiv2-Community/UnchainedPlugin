@@ -24,7 +24,7 @@ CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const u16, Type: u8
         unsafe {
 			let msg = widestring::U16CStr::from_ptr_str(Message as *const u16);
 			match FString::try_from(msg.as_slice_with_nul()) {
-				Ok(str) => {
+				Ok(_) => {
 					let mut message = msg.to_string_lossy();
 					message = match message.contains('\n') {
 						true => format!("\n{message}"),//.replace("\r\n", " "),

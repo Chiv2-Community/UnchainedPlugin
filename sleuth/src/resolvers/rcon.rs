@@ -55,7 +55,7 @@ pub fn handle_rcon() {
 // maybe a proper prompt etc
 #[cfg(feature="cli-commands")]
 pub fn handle_cmd() {
-    let line = String::new();
+    // let line = String::new();
     loop {
         let mut input = String::new();
         stdin().read_line(&mut input)
@@ -63,10 +63,10 @@ pub fn handle_cmd() {
         let cmd_store: Arc<Mutex<Option<String>>> = Arc::clone(&LAST_COMMAND);
         *cmd_store.lock().unwrap() = Some(input.trim().to_string());
         match input.as_str() {
-            _ => {},
             "findobj" => {
                 crate::sdebug!(f; "findobj {:?}", 123);
             }
+            _ => {},
         }
     }
 }

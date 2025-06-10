@@ -91,16 +91,16 @@ pub static LAST_INFO: Lazy<Arc<Mutex<Option<a2s::info::Info>>>>   = Lazy::new(||
 // }
 
 // static EMPTY_MODS: &[ModInfo] = &[]; // FIXME: Nihi: yuck
-static EMPTY_MODS: &[ModInfo<'static>] = &[];
-pub static REGISTRATION: Lazy<Arc<Mutex<Option<Registration>>>>   = Lazy::new(|| Arc::new(Mutex::new(None)));
+// static EMPTY_MODS: &[ModInfo<'static>] = &[];
+// pub static REGISTRATION: Lazy<Arc<Mutex<Option<Registration>>>>   = Lazy::new(|| Arc::new(Mutex::new(None)));
 pub struct Registration {
     server_addr: String,
-    query_port: u16,
+    // query_port: u16,
     client: Client,
     stop_update: Arc<(Mutex<bool>, Condvar)>,
     stop_heartbeat: Arc<(Mutex<bool>, Condvar)>,
     heartbeat_thread: Mutex<Option<thread::JoinHandle<()>>>,
-    last_info: Option<a2s::info::Info>
+    // last_info: Option<a2s::info::Info>
 }
 
 fn instant_from_unix_time(unix_secs: f64) -> Option<Instant> {
@@ -127,12 +127,12 @@ impl Registration {
     pub fn new(ip: &str, query_port: u16) -> Self {
         Self {
             server_addr: format!("{ip}:{query_port}"),
-            query_port,
+            // query_port,
             client: Client::new(),
             stop_update: Arc::new((Mutex::new(false), Condvar::new())),
             stop_heartbeat: Arc::new((Mutex::new(false), Condvar::new())),
             heartbeat_thread: Mutex::new(None),
-            last_info: None
+            // last_info: None
         }
     }
     
@@ -206,12 +206,14 @@ impl Registration {
 
     }
 
-    pub fn start(&self, server_list_url: &str, id: &str, key: &str) {
+    pub fn start(&self, server_list_url: &str, _: &str, _: &str) {
+    // pub fn start(&self, server_list_url: &str, id: &str, key: &str) {
         let client = self.client.clone();
         let server_addr = self.server_addr.clone();
         let stop_flag = self.stop_update.clone();
-        let id = id.to_string();
-        let key = key.to_string();
+        // todo: run registration from here?
+        // let id = id.to_string();
+        // let key = key.to_string();
         let url = server_list_url.to_string();
 
         thread::spawn(move || {
@@ -259,13 +261,14 @@ impl Registration {
                     thread::sleep(Duration::from_secs(1));
                 }
 
-                let now = Instant::now();
                 let timeout = Duration::from_secs(10);
                 let _ = cvar.wait_timeout(lock.lock().unwrap(), timeout).unwrap();
             }
         });
     }
 
+    // FIXME: Nihi: implement
+    #[allow(dead_code)]
     pub fn stop(&self) {
         let (lock, cvar) = &*self.stop_update;
         *lock.lock().unwrap() = true;
@@ -273,12 +276,12 @@ impl Registration {
     }
 
     pub fn start_heartbeat(self: Arc<Self>, server_list_url: &str, id: &str, key: &str) {
-        let stop_flag = self.stop_heartbeat.clone();
+        // let stop_flag = self.stop_heartbeat.clone();
         let client = self.client.clone();
         let url = server_list_url.to_string();
         let mut id = id.to_string();
         let mut key = key.to_string();
-        let refresh_before: f64 = 0.0;
+        // let refresh_before: f64 = 0.0;
         let self_clone = Arc::clone(&self);
         let stop_flag = self_clone.stop_heartbeat.clone();
 
@@ -313,9 +316,9 @@ impl Registration {
                         Ok(resp) if resp.status().as_u16() == 404 => {
                             sdebug!(f; "Registration expired; re-register here");
                             
-                            let last_info = Arc::clone(&LAST_INFO);
+                            // let last_info = Arc::clone(&LAST_INFO);
                             // *last_info.lock().unwrap() = Some(info.clone());
-                            let empty: &[ModInfo<'_>] = &[];
+                            // let empty: &[ModInfo<'_>] = &[];
                             if let Some(info) = LAST_INFO.lock().unwrap().as_ref() {
                                 let args = &globals().cli_args;   
                                 let name = format!("{}\n(local server)", info.name);
@@ -376,6 +379,8 @@ impl Registration {
         *self.heartbeat_thread.lock().unwrap() = Some(handle);
     }
 
+    // FIXME: Nihi: implement
+    #[allow(dead_code)]
     pub fn stop_heartbeat(&self) {
         let (lock, cvar) = &*self.stop_heartbeat;
         *lock.lock().unwrap() = true;

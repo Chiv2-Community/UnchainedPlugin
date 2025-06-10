@@ -2,6 +2,8 @@
 // https://github.com/trumank/patternsleuth/blob/master/examples/dll_hook/src/ue.rs
 // FIXME: Nihi: the file is unchanged. Find a way to get use it via git without submodules
 
+#![allow(dead_code, private_interfaces)]
+
 use std::{
     cell::UnsafeCell,
     ffi::c_void,

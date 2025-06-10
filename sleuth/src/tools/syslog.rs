@@ -44,9 +44,8 @@
 
 use std::cell::RefCell;
 use std::io::{self, Cursor, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use log4rs::filter::{Filter, Response};
-use once_cell::sync::Lazy;
 
 const DEFAULT_BUF_SIZE: usize = 4096;
 type PersistentBuf = Cursor<Vec<u8>>;
@@ -57,8 +56,8 @@ thread_local! {
 }
 
 // Optional: for some kind of global shared output string
-pub static SYSLOG_BUF: Lazy<Arc<Mutex<Option<String>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+// pub static SYSLOG_BUF: Lazy<Arc<Mutex<Option<String>>>> =
+//     Lazy::new(|| Arc::new(Mutex::new(None)));
 
 pub struct BufWriter;
 
@@ -91,7 +90,7 @@ impl Write for BufWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         // In case you want to trigger network send from here
-        let log_line = self.flush_to_string();
+        // let log_line = self.flush_to_string();
         // println!("Sending syslog: {}", log_line);
         // send_to_syslog(log_line); // You can call your network send function here
         Ok(())
@@ -101,13 +100,12 @@ impl log4rs::encode::Write for BufWriter {}
 
 // https://en.wikipedia.org/wiki/Syslog
 
-use chrono::Local;
-use std::{fmt};
+use std::fmt;
 use std::net::UdpSocket;
 
-use log::{Level, LevelFilter, Record};
+use log::{LevelFilter, Record};
 use log4rs::{
-    append::{console::Target, Append},
+    append::Append,
     encode::{pattern::PatternEncoder, Encode},
     // ConfigBuilder,
 };
@@ -116,7 +114,7 @@ use log4rs::{
 pub struct SyslogAppender {
     // writer: Writer,
     encoder: Box<dyn Encode>,
-    do_write: bool,
+    // do_write: bool,
     socket: Arc<UdpSocket>,
     target_addr: String,
     hostname: String,
@@ -145,7 +143,7 @@ impl SyslogAppender {
     pub fn builder() -> SyslogAppenderBuilder {
         SyslogAppenderBuilder {
             encoder: None,
-            target: Target::Stdout,
+            // target: Target::Stdout,
         }
     }
 }
@@ -163,7 +161,7 @@ impl SyslogAppender {
 /// A builder for `SyslogAppender`s.
 pub struct SyslogAppenderBuilder {
     encoder: Option<Box<dyn Encode>>,
-    target: Target,
+    // target: Target,
 }
 
 impl SyslogAppenderBuilder {
@@ -194,7 +192,7 @@ impl SyslogAppenderBuilder {
             encoder: self
                 .encoder
                 .unwrap_or_else(|| Box::<PatternEncoder>::default()),
-            do_write: true,
+            // do_write: true,
             socket: Arc::new(socket),
             target_addr: "127.0.0.1:514".to_string(),
             hostname: "unchained".to_string(),
@@ -204,34 +202,34 @@ impl SyslogAppenderBuilder {
 }
 
 impl SyslogAppender {
-    pub fn new(syslog_addr: &str, hostname: &str, tag: &str) -> std::io::Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
-        Ok(Self {
-            socket: Arc::new(socket),
-            target_addr: syslog_addr.to_string(),
-            hostname: hostname.to_string(),
-            tag: tag.to_string(),
-            encoder: todo!(),
-            do_write: todo!(),
-        })
-    }
+    // pub fn new(syslog_addr: &str, hostname: &str, tag: &str) -> std::io::Result<Self> {
+    //     let socket = UdpSocket::bind("0.0.0.0:0")?;
+    //     Ok(Self {
+    //         socket: Arc::new(socket),
+    //         target_addr: syslog_addr.to_string(),
+    //         hostname: hostname.to_string(),
+    //         tag: tag.to_string(),
+    //         encoder: todo!(),
+    //         // do_write: todo!(),
+    //     })
+    // }
 
-    fn format_syslog_message(&self, level: Level, msg: &str) -> String {
-        let pri = match level {
-            Level::Error => 3,
-            Level::Warn => 4,
-            Level::Info => 6,
-            Level::Debug | Level::Trace => 7,
-        } + 8; // facility 1 (user)
-        // TODO: Extend facility, let user provide it. Enum?
-        //      Also syslog it supports more severity levels
+    // fn format_syslog_message(&self, level: Level, msg: &str) -> String {
+    //     let pri = match level {
+    //         Level::Error => 3,
+    //         Level::Warn => 4,
+    //         Level::Info => 6,
+    //         Level::Debug | Level::Trace => 7,
+    //     } + 8; // facility 1 (user)
+    //     // TODO: Extend facility, let user provide it. Enum?
+    //     //      Also syslog it supports more severity levels
 
-        let timestamp = Local::now().format("%b %d %H:%M:%S");
-        format!(
-            "<{}>{} {} {}: {}",
-            pri, timestamp, self.hostname, self.tag, msg
-        )
-    }
+    //     let timestamp = Local::now().format("%b %d %H:%M:%S");
+    //     format!(
+    //         "<{}>{} {} {}: {}",
+    //         pri, timestamp, self.hostname, self.tag, msg
+    //     )
+    // }
 }
 impl fmt::Debug for SyslogAppender {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -246,16 +244,22 @@ impl fmt::Debug for SyslogAppender {
 
 // Filter
 
+// FIXME: Nihi: implement
+#[allow(dead_code)]
 pub struct MetaDataFilterConfig {
     level: LevelFilter,
 }
 
+// FIXME: Nihi: implement
+#[allow(dead_code)]
 /// A filter that rejects all events at a level below a provided threshold.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct MetaDataFilter {
     level: LevelFilter,
 }
 
+// FIXME: Nihi: implement
+#[allow(dead_code)]
 impl MetaDataFilter {
     /// Creates a new `MetaDataFilter` with the specified threshold.
     pub fn new(level: LevelFilter) -> MetaDataFilter {
@@ -263,6 +267,8 @@ impl MetaDataFilter {
     }
 }
 
+// FIXME: Nihi: implement
+#[allow(dead_code)]
 impl Filter for MetaDataFilter {
     fn filter(&self, record: &Record) -> Response {
         fn strip_ansi_codes(input: &str) -> String {
@@ -280,31 +286,31 @@ impl Filter for MetaDataFilter {
     }
 }
 
-/// A deserializer for the `MetaDataFilter`.
-///
-/// # Configuration
-///
-/// ```yaml
-/// kind: threshold
-///
-/// # The threshold log level to filter at. Required
-/// level: warn
-/// ```
-#[cfg(feature = "config_parsing")]
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct MetaDataFilterDeserializer;
+// /// A deserializer for the `MetaDataFilter`.
+// ///
+// /// # Configuration
+// ///
+// /// ```yaml
+// /// kind: threshold
+// ///
+// /// # The threshold log level to filter at. Required
+// /// level: warn
+// /// ```
+// #[cfg(feature = "config_parsing")]
+// #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+// pub struct MetaDataFilterDeserializer;
 
-#[cfg(feature = "config_parsing")]
-impl Deserialize for MetaDataFilterDeserializer {
-    type Trait = dyn Filter;
+// #[cfg(feature = "config_parsing")]
+// impl Deserialize for MetaDataFilterDeserializer {
+//     type Trait = dyn Filter;
 
-    type Config = MetaDataFilterConfig;
+//     type Config = MetaDataFilterConfig;
 
-    fn deserialize(
-        &self,
-        config: MetaDataFilterConfig,
-        _: &Deserializers,
-    ) -> anyhow::Result<Box<dyn Filter>> {
-        Ok(Box::new(MetaDataFilter::new(config.level)))
-    }
-}
+//     fn deserialize(
+//         &self,
+//         config: MetaDataFilterConfig,
+//         _: &Deserializers,
+//     ) -> anyhow::Result<Box<dyn Filter>> {
+//         Ok(Box::new(MetaDataFilter::new(config.level)))
+//     }
+// }
