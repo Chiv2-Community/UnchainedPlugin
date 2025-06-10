@@ -3531,6 +3531,7 @@ dependencies = [
  "retour 0.3.1",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "shell-words",
  "simple-log",
  "tracing",

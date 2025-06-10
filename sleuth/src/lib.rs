@@ -270,21 +270,28 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
     // attach_GameEngineTick(base_address, offsets).unwrap();
     info!("Attaching hooks:");
     
-    let hooks_new = attach_hooks_list![[
+    let mut hooks_new = attach_hooks_list![[
         UGameEngineTick,
         ExecuteConsoleCommand,
         FEngineLoopInit,
         ClientMessage,
-        #[cfg(feature="demo")]
-        SomeRandomFunction,
         // StaticFindObjectSafe,
         #[cfg(feature="kismet-log")]
         KismetExecutionMessage,
-        #[cfg(feature="dev")]
-        LogReliableRPC,
-        #[cfg(feature="dev")]
-        LogReliableRPCFailed,
     ]];
+
+    // Misc hooks
+    #[cfg(feature="dev")]
+    hooks_new.extend(attach_hooks_list![[
+        ClientTravelToSession,
+        ClientTravelInternal,
+        #[cfg(feature="rpc-debug")]
+        LogReliableRPC,
+        #[cfg(feature="rpc-debug")]
+        LogReliableRPCFailed,
+        #[cfg(feature="demo")]
+        SomeRandomFunction,
+    ]]);
     
     // use crate::resolvers::macros;
     hooks_new.iter().for_each(|(s, f)| {
@@ -531,7 +538,7 @@ pub extern "C" fn generate_json() -> u8 {
 
     
     #[cfg(feature="server-registration")]
-    {
+    if globals().cli_args.rcon_port.is_some() { // FIXME: Nihi: better way than checking for rcon port. Listen?
         let cli = globals().args();
         
         let backend = cli.server_browser_backend.clone().unwrap();

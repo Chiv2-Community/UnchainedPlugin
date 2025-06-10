@@ -241,31 +241,3 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     }                  
 });
 
-
-#[cfg(feature = "dev")]
-define_pattern_resolver!(LogReliableRPCFailed,[
-    "48 89 5C 24 08 57 48 83 EC 40 41 83 78 08 00 49 8B F8 48 8B D9 ?? ?? 49 8B 00 ?? ?? 48"
-    ]);
-    
-// void __thiscall
-// UNetConnection::LogReliableRPCFailed
-// (UNetConnection* this, FInBunch* param_1, FString* param_2, int param_3)
-#[cfg(feature = "dev")]
-CREATE_HOOK!(LogReliableRPCFailed, c_void, (this_ptr: *mut c_void, arg1: *mut FString, arg2: u32), {
-    println!("LogReliableRPCFailed");
-    // crate::sinfo![f; "Triggered!"];
-});
-
-
-
-#[cfg(feature = "dev")]
-define_pattern_resolver!(LogReliableRPC,[
-    "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 20 48 8B 01 41 8B E8 48 8B DA 4C 8B F1 ?? ?? ?? ?? ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 48 8B F0 48 85 C0 ?? ?? ?? ?? ?? ?? ?? 48 8B 4E 10 48"
-    ]);
-
-//void __thiscall ATBLCharacter::LogReliableRPC(ATBLCharacter *this,FName param_1,int param_2)
-#[cfg(feature = "dev")]
-CREATE_HOOK!(LogReliableRPC, c_void, (this_ptr: *mut c_void, arg1: *mut FString, arg2: u32), {
-    println!("LogReliableRPC");
-    // crate::sinfo![f; "Triggered!"];
-});
