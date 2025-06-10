@@ -87,7 +87,7 @@ macro_rules! attach_hooks_list {
         $pattern:ident
     ),+ $(,)? ]) => {{
         use std::collections::HashMap;
-        use crate::resolvers::macros::HookFn;
+        use $crate::resolvers::macros::HookFn;
         paste::paste! {
             #[allow(dead_code)]
             enum ActiveHooks {
@@ -166,7 +166,7 @@ macro_rules! CREATE_HOOK {
                   .enable()?;;
       
                 // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
-                crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
+                $crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
                 Ok(Some(rel_address as usize))
             },
           }
@@ -584,7 +584,7 @@ macro_rules! define_signature_fn {
     ) => {
         #[allow(non_snake_case)]
         #[allow(dead_code)]
-        pub fn $fn_name<'a>(s: &'a str) -> crate::resolvers::macros::Signature<'a> {
+        pub fn $fn_name<'a>(s: &'a str) -> $crate::resolvers::macros::Signature<'a> {
             let calc: std::sync::Arc<
                 dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>
                     + Send
@@ -602,7 +602,7 @@ macro_rules! define_signature_fn {
                 Box::pin(fut)
             });
 
-            crate::resolvers::macros::Signature {
+            $crate::resolvers::macros::Signature {
                 // kind: $kind,
                 offset_calculator: calc,
                 signature_string: s.to_string(),

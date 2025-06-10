@@ -45,8 +45,6 @@
 use std::cell::RefCell;
 use std::io::{self, Cursor, Write};
 use std::sync::{Arc, Mutex};
-use log4rs::append::file::FileAppender;
-use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::filter::{Filter, Response};
 use once_cell::sync::Lazy;
 
@@ -75,7 +73,7 @@ impl BufWriter {
     /// Returns the current buffer as a UTF-8 string and resets buffer.
     pub fn flush_to_string(&self) -> String {
         PERSISTENT_BUF.with(|buf| {
-            let mut buf = buf.borrow_mut();
+            let buf = buf.borrow_mut();
             let pos = buf.position() as usize;
             let slice = &buf.get_ref()[..pos];
             match std::str::from_utf8(slice) {
@@ -107,12 +105,10 @@ use chrono::Local;
 use std::{fmt};
 use std::net::UdpSocket;
 
-use log::{info, Level, LevelFilter, Record};
+use log::{Level, LevelFilter, Record};
 use log4rs::{
-    append::{console::{ConsoleAppender, Target}, Append},
-    config::{Appender, Config, Root},
+    append::{console::Target, Append},
     encode::{pattern::PatternEncoder, Encode},
-    init_config,
     // ConfigBuilder,
 };
 
@@ -274,7 +270,7 @@ impl Filter for MetaDataFilter {
             ansi_regex.replace_all(input, "").into_owned()
         }
 
-        println!("FILTERING {:#?}", record);
+        println!("FILTERING {record:#?}");
         // let clean_str = strip_ansi_codes(asd);
         if record.level() > self.level {
             Response::Reject

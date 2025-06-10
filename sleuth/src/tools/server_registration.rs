@@ -4,7 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 use a2s::A2SClient;
-use log::error;
 use once_cell::sync::Lazy;
 use reqwest::blocking::Client;
 
@@ -127,7 +126,7 @@ fn instant_from_unix_time(unix_secs: f64) -> Option<Instant> {
 impl Registration {
     pub fn new(ip: &str, query_port: u16) -> Self {
         Self {
-            server_addr: format!("{}:{}", ip, query_port),
+            server_addr: format!("{ip}:{query_port}"),
             query_port,
             client: Client::new(),
             stop_update: Arc::new((Mutex::new(false), Condvar::new())),
@@ -173,7 +172,7 @@ impl Registration {
 
         let response = self
             .client
-            .post(&format!("{}/api/v1/servers", server_list_url))
+            .post(format!("{server_list_url}/api/v1/servers"))
             .json(&req_body)
             .send().unwrap();
 
@@ -218,7 +217,7 @@ impl Registration {
         thread::spawn(move || {
             let a2s = A2SClient::new().unwrap();
             loop {
-                let &(ref lock, ref cvar) = &*stop_flag;
+                let (lock, cvar) = &*stop_flag;
                 if *lock.lock().unwrap() {
                     break;
                 }
@@ -239,7 +238,7 @@ impl Registration {
                             map_name: info.map.as_str(),
                         };
 
-                        let res = client.post(format!("{}/update", url))
+                        let res = client.post(format!("{url}/update"))
                             .json(&payload)
                             .send();
 
@@ -268,7 +267,7 @@ impl Registration {
     }
 
     pub fn stop(&self) {
-        let &(ref lock, ref cvar) = &*self.stop_update;
+        let (lock, cvar) = &*self.stop_update;
         *lock.lock().unwrap() = true;
         cvar.notify_all();
     }
@@ -279,7 +278,7 @@ impl Registration {
         let url = server_list_url.to_string();
         let mut id = id.to_string();
         let mut key = key.to_string();
-        let mut refresh_before: f64 = 0.0;
+        let refresh_before: f64 = 0.0;
         let self_clone = Arc::clone(&self);
         let stop_flag = self_clone.stop_heartbeat.clone();
 
@@ -287,7 +286,7 @@ impl Registration {
             let mut refresh_by = Instant::now() + Duration::from_secs(30); // default interval
 
             loop {
-                let &(ref lock, ref cvar) = &*stop_flag;
+                let (lock, cvar) = &*stop_flag;
                 if *lock.lock().unwrap() {
                     break;
                 }
@@ -297,7 +296,7 @@ impl Registration {
                     // Send heartbeat POST/GET, here assumed POST to "/heartbeat"
                     // Replace with your actual heartbeat logic & parsing
 
-                    let res = client.post(format!("{}/heartbeat", url))
+                    let res = client.post(format!("{url}/heartbeat"))
                         .json(&serde_json::json!({
                             "id": id,
                             "key": key,
@@ -367,8 +366,8 @@ impl Registration {
 
                 // Sleep until next check or stop signal
                 let wait_time = refresh_by.saturating_duration_since(Instant::now());
-                let mut lock_guard = lock.lock().unwrap();
-                if cvar.wait_timeout(lock_guard, wait_time).unwrap().0.clone() {
+                let lock_guard = lock.lock().unwrap();
+                if *cvar.wait_timeout(lock_guard, wait_time).unwrap().0 {
                     break;
                 }
             }
@@ -378,7 +377,7 @@ impl Registration {
     }
 
     pub fn stop_heartbeat(&self) {
-        let &(ref lock, ref cvar) = &*self.stop_heartbeat;
+        let (lock, cvar) = &*self.stop_heartbeat;
         *lock.lock().unwrap() = true;
         cvar.notify_all();
 

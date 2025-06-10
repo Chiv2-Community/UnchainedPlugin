@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use patternsleuth::resolvers::{resolvers, unreal::game_loop::UGameEngineTick, NamedResolver, Resolution};
-use serde::{Deserialize, Serialize};
+use patternsleuth::resolvers::resolvers;
 
 use std::process;
 
@@ -11,9 +10,7 @@ use std::process;
 // patternsleuth::resolvers::ResolveError
 // >> = Vec::new();
 
-use once_cell::sync::{Lazy, OnceCell};
-use std::sync::Arc;
-use patternsleuth::resolvers::{ResolveError};
+use once_cell::sync::OnceCell;
 
 
 pub static OFFSETS: OnceCell<HashMap<String, usize>> = OnceCell::new();
@@ -45,7 +42,7 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
                 .split(['(', ')'])
                 .nth(1)
                 .and_then(|s| s.parse::<u64>().ok())
-                .map(|n| format!("{:#x}", n))
+                .map(|n| format!("{n:#x}"))
             {
                 // sigs_json.insert(MyItem { id: resolver.name.to_string(), name: hex.to_string() });
                 let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|e| e.to_string())?;

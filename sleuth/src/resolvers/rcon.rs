@@ -1,5 +1,5 @@
 use std::{
-    io::{stdin, stdout, BufRead, BufReader, Write},
+    io::{stdin, BufRead, BufReader},
     net::TcpListener,
     sync::{Arc, Mutex},
     thread,
@@ -8,7 +8,6 @@ use std::{
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
 
-use crate::{sdebug, sinfo};
 
 #[cfg(feature="rcon")]
 fn get_rcon_port() -> Option<u16> {
@@ -28,7 +27,7 @@ pub fn handle_rcon() {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .expect("[RCON] Failed to bind to port");
 
-    info!("[RCON] Listening on 127.0.0.1:{}", port);
+    info!("[RCON] Listening on 127.0.0.1:{port}");
 
     for stream in listener.incoming() {
         match stream {
@@ -46,7 +45,7 @@ pub fn handle_rcon() {
                     }
                 });
             }
-            Err(e) => error!("[RCON] Connection failed: {}", e),
+            Err(e) => error!("[RCON] Connection failed: {e}"),
         }
     }
 }
@@ -56,7 +55,7 @@ pub fn handle_rcon() {
 // maybe a proper prompt etc
 #[cfg(feature="cli-commands")]
 pub fn handle_cmd() {
-    let mut line = String::new();
+    let line = String::new();
     loop {
         let mut input = String::new();
         stdin().read_line(&mut input)

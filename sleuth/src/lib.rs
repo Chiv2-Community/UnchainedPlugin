@@ -2,7 +2,6 @@
 
 mod resolvers;
 mod scan;
-use core::fmt;
 use std::time::Duration;
 use std::{env, thread};
 use std::fs::File;
@@ -14,7 +13,6 @@ mod tools;
 mod chiv2;
 
 use anyhow::Result;
-use chrono::offset;
 use patternsleuth::resolvers::unreal::blueprint_library::UFunctionBind;
 use patternsleuth::resolvers::unreal::*;
 // use dll_hook::ue::*;
@@ -26,7 +24,6 @@ use patternsleuth::resolvers::unreal::{fname::FNameToString,
                                 gmalloc::GMalloc,
                                 guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}
                             };
-use resolvers::macros;
 use resolvers::admin_control::*;
 #[cfg(feature="kismet-log")]
 use resolvers::kismet_dev::*;
@@ -35,12 +32,10 @@ use serde_json::to_writer_pretty;
 use tools::logger::init_syslog;
 #[cfg(feature="server-registration")]
 use tools::server_registration::Registration;
-use winapi::um::winnt::FILE_APPEND_DATA;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
 
-use log::{debug, error, info, warn};
+use log::info;
 use clap::{command, CommandFactory, FromArgMatches, Parser, Subcommand};
-use async_std::io;
 
 pub static test_intro: &str = "\x1b[38;5;228m\
 \
@@ -233,7 +228,7 @@ pub fn dump_builds() -> Result<()> {
     let offsets = crate::scan::OFFSETS.get().unwrap();
     let base_addr = BASE_ADDR.get().unwrap();
 
-    let mut file_path: String = env::current_exe().unwrap().to_string_lossy().into();
+    let file_path: String = env::current_exe().unwrap().to_string_lossy().into();
 
     // match env::current_exe() {
     //     Ok(path) => file_path = path.to_string_lossy().into(),
@@ -332,7 +327,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 
     let known_flags: Vec<String> = CLIArgs::command()
         .get_arguments()
-        .filter_map(|a| a.get_long().map(|s| format!("--{}", s)))
+        .filter_map(|a| a.get_long().map(|s| format!("--{s}")))
         .collect();
 
     let mut result = vec![bin_name];
@@ -371,7 +366,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
             }
         }
         // args can split an option (e.g. --name Not Sure)
-        else if result.len() > 0 && !flag.starts_with('-') { 
+        else if !result.is_empty() && !flag.starts_with('-') { 
             let last_valid = result.last().unwrap();
             if let Some(last) = last_flag {
                 // println!("Last '{last}' last valid '{last_valid}'");
@@ -380,7 +375,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
                     // println!("Res: {} Trailing string {}, last flag {}, last result {}",result.len(), flag, last, last_valid);
                     if o == last_valid {
                         if let Some(last_mut) = result.last_mut() {
-                            last_mut.push_str(" ");
+                            last_mut.push(' ');
                             last_mut.push_str(&cur_flag);
                         }
                     }
@@ -393,7 +388,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
     result
 }
 
-unsafe fn load_cli() -> Result<(CLIArgs), clap::error::Error> {
+unsafe fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     let parsed = normalize_and_filter_args(args);
     let cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI atgs");
@@ -448,8 +443,8 @@ fn intro() {
     let max_color = 231;
     for line in test_intro.lines() {
         for ch in line.chars() {
-            let color = format!("\x1b[38;5;{}m", color_index);
-            print!("{}{}\x1b[0m", color, ch);
+            let color = format!("\x1b[38;5;{color_index}m");
+            print!("{color}{ch}\x1b[0m");
 
             color_index += 1;
             if color_index > max_color {
@@ -480,7 +475,7 @@ pub extern "C" fn generate_json() -> u8 {
     // intro();
     // thread::sleep(Duration::from_secs(10));
     print!("{test_intro}");
-    print!("\n");
+    println!();
     init_syslog().expect("Failed to init syslog");
     unsafe { init_globals() };
 

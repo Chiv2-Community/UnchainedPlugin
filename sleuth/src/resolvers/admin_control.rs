@@ -1,15 +1,12 @@
 
 
-use client_message::{parse_chat_line, ChatMessage};
+use client_message::parse_chat_line;
 use log::{debug, info, warn};
-use retour::static_detour;
-use std::{collections::HashMap, sync::Arc};
-use std::error::Error;
+use std::sync::Arc;
 use std::os::raw::c_void;
-use std::mem;
 use crate::resolvers::rcon::LAST_COMMAND;
-use crate::{chiv2::*, sdebug};
-use crate::{globals, ue::*};
+use crate::chiv2::*;
+use crate::ue::*;
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
@@ -46,7 +43,7 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     }
 
     if fstring.len() > 1 {
-        warn!("Execuing Command: {}", fstring);
+        warn!("Execuing Command: {fstring}");
         *lock.lock().unwrap() = None;
         unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
     }
@@ -115,11 +112,11 @@ CREATE_HOOK!(StaticFindObjectSafe, *mut UObject, (ObjectClass:*mut UClass, Objec
 
 
 mod client_message {
-    use log::warn;
+    
     use regex::Regex;
 
     use crate::chiv2::EChatType;
-    use std::str::FromStr;
+    
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -227,7 +224,7 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
                         info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
                     }
                     else {
-                        info!(target: "system_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m{}\x1b[38;5;255m", chat_type, message);
+                        info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
                     }
                 }
                 else {
