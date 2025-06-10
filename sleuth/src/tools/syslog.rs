@@ -47,6 +47,7 @@ use std::io::{self, Cursor, Write};
 use std::sync::{Arc, Mutex};
 use log4rs::append::file::FileAppender;
 use log4rs::filter::threshold::ThresholdFilter;
+use log4rs::filter::{Filter, Response};
 use once_cell::sync::Lazy;
 
 const DEFAULT_BUF_SIZE: usize = 4096;
@@ -106,7 +107,7 @@ use chrono::Local;
 use std::{fmt};
 use std::net::UdpSocket;
 
-use log::{info, Level, Record};
+use log::{info, Level, LevelFilter, Record};
 use log4rs::{
     append::{console::{ConsoleAppender, Target}, Append},
     config::{Appender, Config, Root},
@@ -246,63 +247,68 @@ impl fmt::Debug for SyslogAppender {
     }
 }
 
-pub fn init_syslog() -> anyhow::Result<()> {
-    // let console = ConsoleAppender::builder()
-    //     .encoder(Box::new(PatternEncoder::new(
-    //         "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}",
-    //     )))
-    //     .build();
-    info!(target:"syslog_init", "hello");
-    info!(target:"syslog", "hello syslog");
-    
-    // use function name
-    let console = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new(
-            // "[{d(%Y-%m-%d %H:%M:%S)}] {h:1}[{l:5}]{h:-1} {m}{n}",
-        // "[{d(%Y-%m-%d %H:%M:%S)}] {h:1}[{l:5}]{h:-1} {m}{n}",  
-            
-            // TODO: make this configurable opt? Maybe only for syslog or only file log
-            // "[{d(%Y-%m-%d %H:%M:%S)} {h({l:5})}] [{f}:{L}] {m}{n}", // Log file name and line
-            "{h([{d(%H:%M:%S)} {l:5}])} {m}{n}",
-        )))
-        .build();
 
-        let syslog = SyslogAppender::builder()
-        .encoder(Box::new(PatternEncoder::new(
-            // "[{d(%Y-%m-%d %H:%M:%S)}] {h:1}[{l:5}]{h:-1} {m}{n}",
-        // "[{d(%Y-%m-%d %H:%M:%S)}] {h:1}[{l:5}]{h:-1} {m}{n}",  
-            
-            // TODO: make this configurable opt? Maybe only for syslog or only file log
-            "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}", // Log file name and line
-        )))
-        .build();
-        let file = FileAppender::builder()
-        // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] [{M}] [{f}:{L}] {m}{n}\n")))
-        .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] {P} [{l:6}] [{t}] {m}{n}")))
-        // .build("my_log_file.log")?;
-        .build(r"U:\Unchained\UnchainedSleuth\unchained.log")?;
-    // Set up our custom syslog UDP appender
-    // let syslog = SyslogAppender::new(
-    //     "127.0.0.1:514", // TODO: config option
-    //     "rustlib", // Build from launch type?
-    //     "unchained",
-    // )?;
-    let console_filter = ThresholdFilter::new(log::LevelFilter::Info);
+// Filter
 
-    // Build the config programmatically
-    let config = Config::builder()
-        .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)))
-        .appender(Appender::builder().build("syslog", Box::new(syslog)))
-        .appender(Appender::builder().build("file", Box::new(file)))
-        .build(
-            Root::builder()
-                .appender("console")
-                .appender("syslog")
-                .appender("file")
-                .build(log::LevelFilter::Debug),
-        )?;
+pub struct MetaDataFilterConfig {
+    level: LevelFilter,
+}
 
-    init_config(config)?;
+/// A filter that rejects all events at a level below a provided threshold.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct MetaDataFilter {
+    level: LevelFilter,
+}
 
-    Ok(())
+impl MetaDataFilter {
+    /// Creates a new `MetaDataFilter` with the specified threshold.
+    pub fn new(level: LevelFilter) -> MetaDataFilter {
+        MetaDataFilter { level }
+    }
+}
+
+impl Filter for MetaDataFilter {
+    fn filter(&self, record: &Record) -> Response {
+        fn strip_ansi_codes(input: &str) -> String {
+            let ansi_regex = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+            ansi_regex.replace_all(input, "").into_owned()
+        }
+
+        println!("FILTERING {:#?}", record);
+        // let clean_str = strip_ansi_codes(asd);
+        if record.level() > self.level {
+            Response::Reject
+        } else {
+            Response::Neutral
+        }
+    }
+}
+
+/// A deserializer for the `MetaDataFilter`.
+///
+/// # Configuration
+///
+/// ```yaml
+/// kind: threshold
+///
+/// # The threshold log level to filter at. Required
+/// level: warn
+/// ```
+#[cfg(feature = "config_parsing")]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct MetaDataFilterDeserializer;
+
+#[cfg(feature = "config_parsing")]
+impl Deserialize for MetaDataFilterDeserializer {
+    type Trait = dyn Filter;
+
+    type Config = MetaDataFilterConfig;
+
+    fn deserialize(
+        &self,
+        config: MetaDataFilterConfig,
+        _: &Deserializers,
+    ) -> anyhow::Result<Box<dyn Filter>> {
+        Ok(Box::new(MetaDataFilter::new(config.level)))
+    }
 }

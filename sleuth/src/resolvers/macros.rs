@@ -49,8 +49,70 @@
 /// }
 /// ```
 /// 
+/// 
+// TODO: replace this with registration similar to resolvers
+pub type HookFn = unsafe fn(usize, HashMap<String, u64>) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+// macro_rules! attach_hooks_list {
+//     ( [ $( $pattern:ident ),+ $(,)? ]) => {
+//         paste::paste!{
+//             {
+//                 let hooks: HashMap<String, u64>= [ $( ( stringify![$pattern], [<attach_ $pattern>] ) ),+ ]
+//                                     .into_iter().map(|(name, func)| (name.to_string(), func)).collect();
+//                 Ok(hooks)
+//             }
+//         }
+//     };
+// }
+
+// #[macro_export]
+// macro_rules! attach_hooks_list {
+//     ( [ $( $pattern:ident ),+ $(,)? ]) => {{
+//         use std::collections::HashMap;
+//         use crate::resolvers::macros::HookFn;
+//         paste::paste! {
+//             let hooks: HashMap<&'static str, HookFn> = [
+//                 $((stringify!($pattern), [<attach_ $pattern>] as HookFn)),+
+//             ]
+//             .into_iter()
+//             .collect();
+
+//             hooks
+//         }
+//     }};
+// }
+#[macro_export]
+macro_rules! attach_hooks_list {
+    ( [ $(
+        $(#[$attr:meta])*
+        $pattern:ident
+    ),+ $(,)? ]) => {{
+        use std::collections::HashMap;
+        use crate::resolvers::macros::HookFn;
+        paste::paste! {
+            #[allow(dead_code)]
+            enum ActiveHooks {
+                $(
+                    $(#[$attr])*
+                    $pattern
+                ),+
+            }
+
+            let hooks: HashMap<&'static str, HookFn> = [
+                $(
+                    $(#[$attr])*
+                    (stringify!($pattern), [<attach_ $pattern>] as HookFn)
+                ),+
+            ]
+            .into_iter()
+            .collect();
+
+            hooks
+        }
+    }};
+}
 
 
+// generate_stub!(StubName);
 #[macro_export]
 macro_rules! CREATE_HOOK {
     
@@ -62,22 +124,28 @@ macro_rules! CREATE_HOOK {
 
     //     [ $( $call_type ($pattern) ),+ ];
     // };
+    
     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+        CREATE_HOOK!($name, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+    };
+
+    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+        
       paste::paste! {
 
-        static_detour! {
-          pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ );
+        ::retour::static_detour! {
+          pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
         }
 
         #[allow(non_snake_case)]
-        pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) {
+        pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
             // println!("rust $name delta: {}", delta);
             $body
             unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
         }
 
         #[allow(non_snake_case)]
-        pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+        pub unsafe fn [<attach_ $name>](base_address: usize, offsets: std::collections::HashMap<String, u64>)  -> Result<Option<usize>, Box<dyn std::error::Error>>{
         // pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error> {
         
         // TODO: propagate error? why panic
@@ -88,22 +156,22 @@ macro_rules! CREATE_HOOK {
             Some(_) => {
                 // log::info!["attached"];
                 // ( $( $arg: $ty ),+ );
-                let address = base_address + offsets[stringify![$name]] as usize; 
-                let target: [<Fn $name>] = mem::transmute(address);
+                let rel_address = offsets[stringify![$name]] as usize;
+                let target: [<Fn $name>] = std::mem::transmute(base_address + rel_address);
       
-                type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
+                type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
       
                 [<o_ $name>]
                   .initialize(target, [<$name _detour_fkt>])?
                   .enable()?;;
       
-                Ok(())
+                // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
+                crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
+                Ok(Some(rel_address as usize))
             },
           }
         }
       }
-
-
     };
 }
 
@@ -152,7 +220,7 @@ macro_rules! CREATE_HOOK {
 // }
 
 
-use std::{future::Future, pin::Pin};
+use std::{collections::HashMap, future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
 
 
@@ -245,6 +313,24 @@ macro_rules! define_pocess {
     }};
 }
 
+#[allow(unused_macros)]
+macro_rules! generate_stub {
+    ( $name:ident ) => {
+        // $name
+        #[cfg(feature="dev")]
+        define_pattern_resolver!($name, [
+            "4C"
+        ]);
+        
+        #[cfg(feature="dev")]
+        CREATE_HOOK!($name, (arg0: *mut c_void), {
+            crate::sinfo![f; "Triggered!"];
+        });
+    };
+}
+
+// inline this
+// generate_stub!(StubName);
 #[macro_export]
 macro_rules! define_pattern_resolver {
 

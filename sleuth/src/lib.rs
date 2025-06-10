@@ -8,8 +8,7 @@ use std::{env, thread};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::io::{BufWriter, Write};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 mod ue;
 mod tools;
 mod chiv2;
@@ -28,9 +27,13 @@ use patternsleuth::resolvers::unreal::{fname::FNameToString,
                                 guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}
                             };
 use resolvers::macros;
+use resolvers::admin_control::*;
+#[cfg(feature="kismet-log")]
+use resolvers::kismet_dev::*;
 use serde::Serialize;
 use serde_json::to_writer_pretty;
-use tools::syslog::init_syslog;
+use tools::logger::init_syslog;
+use tools::server_registration::Registration;
 use winapi::um::winnt::FILE_APPEND_DATA;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
 
@@ -136,8 +139,14 @@ struct CLIArgs {
     #[arg(long = "platform")]
     platform: Option<String>,
 
-    #[arg(long = "saveddirsuffix")]
-    saveddirsuffix: Option<String>,
+    #[arg(long = "GameServerPingPort", default_value="3075")]
+    game_server_ping_port: Option<u16>,
+
+    #[arg(long = "GameServerQueryPort", default_value="7071")]
+    game_server_query_port: Option<u16>,
+
+    #[arg(long = "Port", default_value="7777")]
+    game_port: Option<u16>,
 
 
     // UNHANDLED START
@@ -255,34 +264,7 @@ pub fn dump_builds() -> Result<()> {
 }
 
 
-// TODO: replace this with registration similar to resolvers
-type HookFn = unsafe fn(usize, HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
-// macro_rules! attach_hooks_list {
-//     ( [ $( $pattern:ident ),+ $(,)? ]) => {
-//         paste::paste!{
-//             {
-//                 let hooks: HashMap<String, u64>= [ $( ( stringify![$pattern], [<attach_ $pattern>] ) ),+ ]
-//                                     .into_iter().map(|(name, func)| (name.to_string(), func)).collect();
-//                 Ok(hooks)
-//             }
-//         }
-//     };
-// }
 
-macro_rules! attach_hooks_list {
-    ( [ $( $pattern:ident ),+ $(,)? ]) => {{
-        use std::collections::HashMap;
-        paste::paste! {
-            let hooks: HashMap<&'static str, HookFn> = [
-                $((stringify!($pattern), [<attach_ $pattern>] as HookFn)),+
-            ]
-            .into_iter()
-            .collect();
-
-            hooks
-        }
-    }};
-}
 
 
 pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>> {
@@ -295,20 +277,39 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
         ExecuteConsoleCommand,
         FEngineLoopInit,
         ClientMessage,
+        #[cfg(feature="demo")]
         SomeRandomFunction,
+        // StaticFindObjectSafe,
+        #[cfg(feature="kismet-log")]
+        KismetExecutionMessage,
+        #[cfg(feature="dev")]
+        LogReliableRPC,
+        #[cfg(feature="dev")]
+        LogReliableRPCFailed,
     ]];
     
-    use resolvers::admin_control::*;
     // use crate::resolvers::macros;
     hooks_new.iter().for_each(|(s, f)| {
         match (f)(base_address, offsets.clone()) {
-            Ok(_) => info!["☑ {} ", s],
+            Ok(addr) => {
+                sinfo![f; "☑ {} ", s]
+            },
             Err(e) => {
-                serror!(func, file;"☐ {}: {}", s.to_uppercase(), e);
-                serror!(func, file, line;"☐ {}: {}", s.to_uppercase(), e);
-                serror!(func, file, line, column;"☐ {}: {}", s.to_uppercase(), e);
-                serror!(func, file, line, mod;"☐ {}: {}", s.to_uppercase(), e);
-                serror!("☐ {}: {}", s.to_uppercase(), e);
+                // sdebug!(file, f;"☐ {}: {}", s.to_uppercase(), e);
+                // strace!(file, f, line;"☐ {}: {}", s.to_uppercase(), e);
+                // swarn!(file, f, line;"☐ {}: {}", s.to_uppercase(), e);
+                // sinfo!(file, func, line, mod;"☐ {}: {}", s.to_uppercase(), e);
+                // serror!(file, func, line, column;"☐ {}: {}", s.to_uppercase(), e);
+                // debug_where!();
+// console -> [23:54:45 ERROR] [attach_hooks] ☐ SOMERANDOMFUNCTION: No address found.
+// file -> [2025-06-09 23:54:45 13116 ERROR | function ] [attach_hooks] ☐ SOMERANDOMFUNCTION: No address found.
+
+// console -> [23:54:45 ERROR] [src\lib.rs|sleuthlib::attach_hooks::{{closure}}|L317|C17] ☐ SOMERANDOMFUNCTION: No address found.
+// file -> [2025-06-09 23:54:45 13116 ERROR | function ] [src\lib.rs|sleuthlib::attach_hooks::{{closure}}|L317|C17] ☐ SOMERANDOMFUNCTION: No address found.
+
+                // error!("☐ {}: {}", s.to_uppercase(), e);
+                serror!(f; "☐ {}: {}", s.to_uppercase(), e);
+                // serror!(file, func, line, column;"☐ {}: {}", s.to_uppercase(), e);
             },
         }
     });
@@ -482,23 +483,24 @@ pub extern "C" fn generate_json() -> u8 {
     init_syslog().expect("Failed to init syslog");
     unsafe { init_globals() };
 
+    #[cfg(feature="rcon")]
     std::thread::spawn(|| {
         resolvers::rcon::handle_rcon();
     });
 
-    (|| {
-        mod module {
-            pub trait Trait {
-                fn function(&self) {
-                    println!("{} (in {} [{}:{}:{}])",
-                        function!(), module_path!(), file!(), line!(), column!()
-                    );
-                }
-            }
-            impl Trait for () {}
-        }
-        module::Trait::function(&());
-    })();
+    // (|| {
+    //     mod module {
+    //         pub trait Trait {
+    //             fn function(&self) {
+    //                 println!("{} (in {} [{}:{}:{}])",
+    //                     function!(), module_path!(), file!(), line!(), column!()
+    //                 );
+    //             }
+    //         }
+    //         impl Trait for () {}
+    //     }
+    //     module::Trait::function(&());
+    // })();
     
     // Init syslog    
     // info!("Info blabla");
@@ -517,9 +519,32 @@ pub extern "C" fn generate_json() -> u8 {
     }
     dump_builds().expect("Failed to dump builds JSON");
     
+    #[cfg(feature="cli-commands")]
     std::thread::spawn(|| {
         resolvers::rcon::handle_cmd();
     });
+
+    
+    #[cfg(feature="server-registration")]
+    {
+        let cli = globals().args();
+        
+        let backend = cli.server_browser_backend.clone().unwrap();
+        let reg = Registration::new(
+            "127.0.0.1",
+            7071
+        );
+        
+        // let last_info = std::sync::Arc::clone(&tools::server_registration::REGISTRATION);
+        // *last_info.lock().unwrap() = Some(reg);
+        reg.start(&backend, "Chivalry 2 Local Server", "");
+        let registration = std::sync::Arc::new(reg);
+        registration.start_heartbeat(&backend, "Some Server", "");
+        info!("Backend: {backend}");
+        // std::thread::spawn(|| {
+        // });
+
+    }
     len_u8
 }
 

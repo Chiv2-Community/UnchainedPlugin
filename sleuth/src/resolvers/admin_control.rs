@@ -8,7 +8,7 @@ use std::error::Error;
 use std::os::raw::c_void;
 use std::mem;
 use crate::resolvers::rcon::LAST_COMMAND;
-use crate::chiv2::*;
+use crate::{chiv2::*, sdebug};
 use crate::{globals, ue::*};
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
@@ -28,7 +28,9 @@ define_pattern_resolver!(ExecuteConsoleCommand, [
 CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut FString), {
     println!("ExecuteConsoleCommand: {}", unsafe { &*string });
 });
-CREATE_HOOK!(SomeRandomFunction, (string:*mut FString), {
+
+#[cfg(feature="demo")]
+CREATE_HOOK!(SomeRandomFunction, c_void, (string:*mut FString), {
     println!("SomeRandomFunction: {}", unsafe { &*string });
 });
 
@@ -85,12 +87,32 @@ define_pattern_resolver![GetTBLGameMode, {
 }];
 
 
-
-
+// https://github.com/trumank/unrealsdk/blob/d121ba258e6751d5fa522aa9b803aaa0ea59fec7/src/unrealsdk/game/bl3/object.cpp#L122
+//     "48 89 5C 24 ??"     // mov [rsp+08], rbx
+//     "48 89 6C 24 ??"     // mov [rsp+10], rbp
+//     "48 89 74 24 ??"     // mov [rsp+18], rsi
+//     "57"                 // push rdi
+//     "48 83 EC 30"        // sub rsp, 30
+//     "80 3D ???????? 00"  // cmp byte ptr [Borderlands3.exe+69EAA10], 00
 // Handle Game chat: commands, chat log, system messages
-define_pattern_resolver!(ClientMessage, [
-    "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+#[cfg(feature="object-lookup")]
+define_pattern_resolver!(StaticFindObjectSafe, [
+    "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 80 3D ?? ?? ?? ?? 00 41 0F B6 D9 49 8B F8 48 8B",
+    // "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 80 3D ?? ?? ?? ?? 00"
 ]);
+// UObject * __cdecl StaticFindObjectSafe(UClass.conflict *param_1,UObject *param_2,wchar_t *param_3,bool param_4)
+// UObject* StaticFindObjectSafe( UClass* ObjectClass, UObject* ObjectParent, const TCHAR* InName, bool bExactClass )
+#[cfg(feature="object-lookup")]
+CREATE_HOOK!(StaticFindObjectSafe, *mut UObject, (ObjectClass:*mut UClass, ObjectParent:*mut UObject, InName:*mut FString, bExactClass: bool), {
+    if !InName.is_null() {
+        unsafe {
+            let reference  = &*InName;
+            // Now you can use `reference` safely
+            // crate::sdebug!(f; "{:?}", reference);
+        }
+    }
+});
+
 
 mod client_message {
     use log::warn;
@@ -119,24 +141,51 @@ mod client_message {
     }
     
     pub fn parse_msg_line(line: &str) -> Option<(EChatType, &str)> {
-        let mut parts = line.splitn(2, ": ");
-        warn!["parts: {:?}", parts];
-        let msg_type_str = parts.next()?;
-        let msg = parts.next()?;
-        let msg_type = EChatType::from_str(msg_type_str).ok()?;
-        Some((msg_type, msg))
+        // "<8>: FACTION NOT VALID"
+        // warn!("LINE: '{line}'");
+        let re = Regex::new(r#"<(\d+)>: (.+)"#).unwrap();
+        let test = r#"""<4>: Carryable_Peasant_Raid_Child2_C_2147471851 : X=-3256.829 Y=-1015.456 Z=-145.546"""#;
+        // warn!("TEST: '{test}'");
+
+        if let Some(caps) = re.captures(line) {
+            let msg_type_str: u8 = caps.get(1)?.as_str().parse().ok()?;
+            let msg_type = EChatType::try_from(msg_type_str).expect("Failed to parse EChatType");
+            let message = caps.get(2)?.as_str();
+            Some((msg_type, message))
+        } else {
+            None
+        }
+        // let mut parts = line.splitn(2, ": ");
+        // warn!["parts: {:?}", parts];
+        // let msg_type_str = parts.next()?;
+        // let msg = parts.next()?;
+        // let msg_type = EChatType::from_str(msg_type_str).ok()?;
+        // Some((msg_type, msg))
     }
 }
 
+
+
+// Handle Game chat: commands, chat log, system messages
+define_pattern_resolver!(ClientMessage, [
+    "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+]);
+
 // void __thiscall APlayerController::ClientMessage(APlayerController *this,FString *S,FName Type,float MsgLifeTime)
 CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+    #[cfg(feature="chat-commands")]
     let cmd_store = Arc::clone(&LAST_COMMAND);
     // FIXME: Nihi: better way to access it?
     let string_ref: &FString = unsafe{ &*S };
     let message = string_ref.to_string();
     // TODO: Does this need to handle lines separately?
     // info!("[ClientMessages] S: \'{:?}\', Type: \'{}\'({}),  MsgLifeTime: \'{}\' ", message.replace("\r\n", " "), Type, Type.number, MsgLifeTime);
-    info!("[client] \'{:?}\'", message.replace("\r\n", " "));
+    let message_repl = match message.contains('\n') {
+        true => format!("\n{message}"),//.replace("\r\n", " "),
+        false => message,
+    };
+
+    // info!(target: "client", " \'{:?}\'", message_repl);
 
     // Chat commands
     // TODO: handle commands tranformed by ChatHooks
@@ -144,37 +193,83 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     //       this needs to provide the playfabid somehow
     unsafe {        
         let cmd_filter = |c| ['/', '.'].contains(&c);
-        match client_message::parse_chat_line(message.as_str()) {
+        match client_message::parse_chat_line(message_repl.as_str()) {
             Some(chat) => {
                 match chat.message.starts_with(cmd_filter) {
                     true => {
-                        let cmd_trimmed = chat.message.trim_start_matches(cmd_filter);
-                        debug!("-> Got console command from \'{}\' ch{}: {}", 
-                            chat.name,
-                            chat.channel,
-                            cmd_trimmed);
-                        // Set pending console command
-                        // FIXME: Nihi: Add auth or allow only offline
-                        *cmd_store.lock().unwrap() = Some(cmd_trimmed.trim().to_string());
-                        debug!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
-                        // TODO: save command to log
+                        #[cfg(feature="chat-commands")]
+                        {
+                            let cmd_trimmed = chat.message.trim_start_matches(cmd_filter);
+                            debug!("-> Got console command from \'{}\' ch{}: {}", 
+                                chat.name,
+                                chat.channel,
+                                cmd_trimmed);
+                            // Set pending console command
+                            // FIXME: Nihi: Add auth or allow only offline
+                            *cmd_store.lock().unwrap() = Some(cmd_trimmed.trim().to_string());
+                            debug!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
+                            // TODO: save command to log
+                        }
                     }
                     false => {
-                        debug!("-> User message: {:?}", chat);
+                        // debug!("-> User message: {:?}", chat);
+                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
+                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
                         // TODO: save user message
                     }
                 };        
             }
             _ => {
-                debug!("System message");
-                if let Some(msg) = parse_chat_line(message.as_str()) {
-                    warn!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
-                    if let Some(chat_mnsg) = client_message::parse_msg_line(msg.message) {
-                        warn!("Text: {:?} {}", chat_mnsg.0, chat_mnsg.1);
+                // debug!("System message");
+                // "<8>: FACTION NOT VALID"
+                if let Some((chat_type, message)) = client_message::parse_msg_line(message_repl.as_str()) {
+                    if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                        info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                    }
+                    else {
+                        info!(target: "system_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m{}\x1b[38;5;255m", chat_type, message);
                     }
                 }
+                else {
+                    println!("something went wrong");
+                }
+                // if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                //     warn!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                //     if let Some(chat_mnsg) = client_message::parse_msg_line(msg.message) {
+                //         warn!("Text: {:?} {}", chat_mnsg.0, chat_mnsg.1);
+                //     }
+                // }
                 // TODO: Write message to logfile
             }
         }
     }                  
+});
+
+
+#[cfg(feature = "dev")]
+define_pattern_resolver!(LogReliableRPCFailed,[
+    "48 89 5C 24 08 57 48 83 EC 40 41 83 78 08 00 49 8B F8 48 8B D9 ?? ?? 49 8B 00 ?? ?? 48"
+    ]);
+    
+// void __thiscall
+// UNetConnection::LogReliableRPCFailed
+// (UNetConnection* this, FInBunch* param_1, FString* param_2, int param_3)
+#[cfg(feature = "dev")]
+CREATE_HOOK!(LogReliableRPCFailed, c_void, (this_ptr: *mut c_void, arg1: *mut FString, arg2: u32), {
+    println!("LogReliableRPCFailed");
+    // crate::sinfo![f; "Triggered!"];
+});
+
+
+
+#[cfg(feature = "dev")]
+define_pattern_resolver!(LogReliableRPC,[
+    "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 20 48 8B 01 41 8B E8 48 8B DA 4C 8B F1 ?? ?? ?? ?? ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 48 8B F0 48 85 C0 ?? ?? ?? ?? ?? ?? ?? 48 8B 4E 10 48"
+    ]);
+
+//void __thiscall ATBLCharacter::LogReliableRPC(ATBLCharacter *this,FName param_1,int param_2)
+#[cfg(feature = "dev")]
+CREATE_HOOK!(LogReliableRPC, c_void, (this_ptr: *mut c_void, arg1: *mut FString, arg2: u32), {
+    println!("LogReliableRPC");
+    // crate::sinfo![f; "Triggered!"];
 });

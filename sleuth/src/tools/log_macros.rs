@@ -1,10 +1,3 @@
-pub mod slog_flags {
-    pub const FN: &str = "fn";
-    pub const FILE: &str = "file";
-    pub const LINE: &str = "line";
-    pub const COLUMN: &str = "column";
-    pub const MOD: &str = "mod";
-}
 
 #[macro_export]
 macro_rules! function {
@@ -18,6 +11,8 @@ macro_rules! function {
     }};
 }
 
+
+
 #[macro_export]
 macro_rules! __slog_internal {
     // With flags
@@ -25,23 +20,53 @@ macro_rules! __slog_internal {
         // use std::io::Write;
 
         let mut context_parts = vec![];
+        let mut target: Option<String> = None;
 
         $(
             match stringify!($flag) {
-                "func" => context_parts.push(format!("{}", $crate::function!())),
+                "f" => {
+                    fn extract_segment(s: &str) -> Option<String> {
+                        let mut end = s;
+                        while let Some(stripped) = end.strip_suffix("::{{closure}}") {
+                            end = stripped;
+                        }
+                        end.rsplit("::").next().map(|s| s.to_string())
+                    }
+                    let short_name = extract_segment($crate::function!()).unwrap();
+                    context_parts.push(format!("{}", short_name));
+                    // target = Some(short_name);              
+                    target = Some("function".to_string());
+                }
+                "func" => {
+                    target = Some("function".to_string());
+                    context_parts.push(format!("{}", $crate::function!()))
+                },
                 "file" => context_parts.push(file!().to_string()),
-                "line" => context_parts.push(format!("line {}", line!())),
-                "column" => context_parts.push(format!("col {}", std::column!())),
-                "mod"    => context_parts.push(format!("{}", std::module_path!())),
+                "line" => context_parts.push(format!("L{}", line!())),
+                "column" => context_parts.push(format!("C{}", std::column!())),
+                "mod"    => context_parts.push(format!("M{}", std::module_path!())),
                 _        => {}
             }
         )+
-
-        if !context_parts.is_empty() {
-            log::$level!("[{}]", context_parts.join(" | "));
+        if let Some(tgt) = target {
+            log::$level!(target: &tgt, "[{}] {}", context_parts.join("|"), format_args!($($arg)*));
         }
+        else {
+            log::$level!("[{}]", context_parts.join("|"));
+        }
+        // if let Some(tgt) = target {
+        //     if !context_parts.is_empty() {
+        //         log::$level!(target: &tgt, "[{}]", context_parts.join(":"));
+        //     }
+        //     log::$level!(target: &tgt, $($arg)*);
+        // }
+        // else {
+        //     if !context_parts.is_empty() {
+        //         log::$level!("[{}]", context_parts.join(":"));
+        //     }
+        //     log::$level!($($arg)*);
+        // }
 
-        log::$level!($($arg)*);
     }};
 
     // No flags
@@ -64,22 +89,8 @@ macro_rules! __slog_internal {
     }};
 }
 
-// #[macro_export]
-// macro_rules! sinfo {
-//     ( $(fn|file|line|column|mod)+ ; $($arg:tt)* ) => {
-//         $crate::__slog_internal!(info, $($arg)*);
-//     };
-//     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
-//         $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
-//     };
-//     ($($arg:tt)*) => {
-//         $crate::__slog_internal!(info, $($arg)*);
-//     };
-// }
-
-
-
-
+// FIXME: Nihi: couldn't figure out how to generalize it
+//              not possible to make nested macros with repeating patterns?
 // #[macro_export]
 // macro_rules! generate_slog_macro {
 //     ($name:ident, $level:ident) => {
@@ -99,39 +110,30 @@ macro_rules! __slog_internal {
 //     };
 // }
 
-// FIXME: Nihi: couldn't figure out how to generalize it
-//              not possible to make nested macros with repeating patterns?
-// Helper macro to define one macro named $fun that prints with format + args
-// macro_rules! nested {
-//     (($($f:ident),*) $args:tt) => {
-//         println!["asdf"];
-//         $(nested!(@call $f $args);)*
-//         println!["asdf over"];
-//     };
-//     (@call $f:ident ($($arg:expr),*)) => {
-//             println![stringify![$f]];
-//             println![$($arg),*];
-//             println!["asdfg over"];
-//     };
-//     () => {
-//         println!["no match"];
-//     }
-// }
-
 #[macro_export]
 macro_rules! sinfo {
     //     ( $(fn|file|line|column|mod)+ ; $($arg:tt)* ) => {
     //         $crate::__slog_internal!(info, $($arg)*);
     //     };
-    ( $sublevel:ident; $( $flag:ident ),+ + $(;)? $($arg:tt)* ) => {
-        println![stringify!(sublevel)];
-        $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
-    };
+    // ( $sublevel:ident; $( $flag:ident ),+ ; $($arg:tt)* ) => {
+    //     println![stringify!(sublevel)];
+    //     $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
+    // };
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
         $crate::__slog_internal!(info, $( $flag ),+ ; $($arg)*);
     };
     ($($arg:tt)*) => {
         $crate::__slog_internal!(info, $($arg)*);
+    };
+}
+
+#[macro_export]
+macro_rules! swarn {
+    ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
+        $crate::__slog_internal!(warn, $( $flag ),+ ; $($arg)*);
+    };
+    ($($arg:tt)*) => {
+        $crate::__slog_internal!(warn, $($arg)*);
     };
 }
 
@@ -144,6 +146,7 @@ macro_rules! sdebug {
         $crate::__slog_internal!(debug, $($arg)*);
     };
 }
+
 #[macro_export]
 macro_rules! strace {
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
@@ -153,6 +156,7 @@ macro_rules! strace {
         $crate::__slog_internal!(trace, $($arg)*);
     };
 }
+
 #[macro_export]
 macro_rules! serror {
     ( $( $flag:ident ),+ ; $($arg:tt)* ) => {
@@ -160,5 +164,27 @@ macro_rules! serror {
     };
     ($($arg:tt)*) => {
         $crate::__slog_internal!(error, $($arg)*);
+    };
+}
+
+/// ## Example usage
+/// ```rust
+/// debug_where!();
+/// ```
+/// ```rust
+/// debug_where!("Entering important state {}", state);
+/// ```
+#[macro_export]
+macro_rules! debug_where {
+    () => {
+        log::debug!(target: "function", "From: {}", $crate::function!());
+    };
+    ($($arg:tt)*) => {
+        log::debug!(
+            target: "function",
+            "[{}] - {}",
+            $crate::function!(),
+            format!($($arg)*)
+        );
     };
 }

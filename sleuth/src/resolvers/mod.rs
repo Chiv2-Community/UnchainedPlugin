@@ -122,4 +122,6 @@ pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod rcon;
+#[cfg(feature="kismet-log")]
+pub mod kismet_dev;
 

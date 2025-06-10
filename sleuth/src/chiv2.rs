@@ -47,3 +47,29 @@ impl FromStr for EChatType {
         }
     }
 }
+
+impl TryFrom<u8> for EChatType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(EChatType::AllSay),
+            1 => Ok(EChatType::TeamSay),
+            2 => Ok(EChatType::Whisper),
+            3 => Ok(EChatType::Admin),
+            4 => Ok(EChatType::Objective),
+            5 => Ok(EChatType::System),
+            6 => Ok(EChatType::ServerSay),
+            7 => Ok(EChatType::Debug),
+            8 => Ok(EChatType::CrosshairMsg),
+            9 => Ok(EChatType::Backend),
+            10 => Ok(EChatType::Party),
+            11 => Ok(EChatType::Spectator),
+            12 => Ok(EChatType::ClosedCaption),
+            13 => Ok(EChatType::ClosedCaptionMason),
+            14 => Ok(EChatType::ClosedCaptionAgatha),
+            15 => Ok(EChatType::MAX),
+            _ => Err(()),
+        }
+    }
+}

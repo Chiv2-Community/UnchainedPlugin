@@ -27,24 +27,26 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
 
     # Native system libs required by Rust
     advapi32.lib
+    bcrypt.lib
+    secur32.lib
     cfgmgr32.lib
+    crypt32.lib
+    cryptnet.lib
+    dbghelp.lib
     gdi32.lib
     kernel32.lib
+    legacy_stdio_definitions.lib
     msimg32.lib
     msvcrtd.lib
+    ncrypt.lib
     ntdll.lib
     ole32.lib
     opengl32.lib
+    psapi.lib
     shell32.lib
     user32.lib
     userenv.lib
     winspool.lib
+    # windows.0.52.0.lib
     ws2_32.lib
-    psapi.lib
-    bcrypt.lib
-    crypt32.lib
-    cryptnet.lib
-    dbghelp.lib
-    legacy_stdio_definitions.lib
-    ncrypt.lib
 )
