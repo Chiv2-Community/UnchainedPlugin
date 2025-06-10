@@ -19,13 +19,13 @@ pub static OFFSETS: OnceCell<HashMap<String, usize>> = OnceCell::new();
 
 pub fn scan() -> Result<HashMap<String, u64>, String> {
 
-    let pid = Some(process::id() as i32);
+    let pid = process::id() as i32;
 
     let resolvers = resolvers().collect::<Vec<_>>();
     let dyn_resolvers = resolvers.iter().map(|res| res.getter).collect::<Vec<_>>();
 
     // let name = format!("PID={}", pid.unwrap());
-    let game_name = format!("pid={}", pid.unwrap()); // fixme
+    let game_name = format!("pid={pid}"); // fixme
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string())?;
     
     let resolution = tracing::info_span!("scan", game = game_name)

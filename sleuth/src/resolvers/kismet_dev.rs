@@ -1,6 +1,5 @@
 
-	
-use crate::swarn;
+
 /*KismetExecutionMessage*/
 	
 use crate::ue::*;
@@ -22,21 +21,17 @@ CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const u16, Type: u8
 	
     if !Message.is_null() {
         unsafe {
-			let msg = widestring::U16CStr::from_ptr_str(Message as *const u16);
-			match FString::try_from(msg.as_slice_with_nul()) {
-				Ok(_) => {
-					let mut message = msg.to_string_lossy();
-					message = match message.contains('\n') {
-						true => format!("\n{message}"),//.replace("\r\n", " "),
-						false => message,
-					};
-					
-					match LIST_OF_SHAME.iter().any(|x| message.contains(x)) {
-						true => {} // filtered out
-						false => log::debug!(target: "kismet", "{message}"),
-					}
-				},
-				Err(e) => swarn!(f; "{e}")
+			let msg = widestring::U16CStr::from_ptr_str(Message);
+			// let string =  FString::from(msg.as_slice_with_nul());
+			let mut message = msg.to_string_lossy();
+			message = match message.contains('\n') {
+				true => format!("\n{message}"),//.replace("\r\n", " "),
+				false => message,
+			};
+			
+			match LIST_OF_SHAME.iter().any(|x| message.contains(x)) {
+				true => {} // filtered out
+				false => log::debug!(target: "kismet", "{message}"),
 			}
         }
     }

@@ -36,7 +36,7 @@ pub fn handle_rcon() {
                 let cmd_pending = Arc::clone(&COMMAND_PENDING);
                 thread::spawn(move || {
                     let reader = BufReader::new(stream);
-                    for line in reader.lines().flatten() {
+                    for line in reader.lines().map_while(Result::ok) {
                         if !line.trim().is_empty() {
                             warn!("[RCON] Received: {}", line.trim());
                             *cmd_store.lock().unwrap() = Some(line.trim().to_string());
@@ -62,11 +62,8 @@ pub fn handle_cmd() {
             .expect("UTF-8 unsupported");
         let cmd_store: Arc<Mutex<Option<String>>> = Arc::clone(&LAST_COMMAND);
         *cmd_store.lock().unwrap() = Some(input.trim().to_string());
-        match input.as_str() {
-            "findobj" => {
-                crate::sdebug!(f; "findobj {:?}", 123);
-            }
-            _ => {},
+        if input.as_str() == "findobj" {
+            crate::sdebug!(f; "findobj {:?}", 123);
         }
     }
 }

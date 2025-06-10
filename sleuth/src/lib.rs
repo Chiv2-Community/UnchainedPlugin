@@ -85,7 +85,9 @@ pub static TEST_INTRO3: &str = "\
 // CLI args
 #[derive(Debug, Subcommand)]
 enum Commands {
+    #[allow(clippy::upper_case_acronyms)]
     TBL,
+    #[allow(clippy::upper_case_acronyms)]
     NONE,
 }
 // #[derive(Parser, Debug)]
@@ -368,7 +370,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         // args can split an option (e.g. --name Not Sure)
         else if !result.is_empty() && !flag.starts_with('-') { 
             let last_valid = result.last().unwrap();
-            if let Some(_) = last_flag {
+            if last_flag.is_some() {
                 // println!("Last '{last}' last valid '{last_valid}'");
                 if let Some(o) = &last_opt {
                     // println!("Last '{}' last valid {} last option '{}' equal: {}", last, last_valid, o, o == last_valid);
