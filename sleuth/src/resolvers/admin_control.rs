@@ -1,5 +1,13 @@
 
 
+use client_message::parse_chat_line;
+use log::{debug, info, warn};
+use std::sync::Arc;
+use std::os::raw::c_void;
+use crate::resolvers::rcon::LAST_COMMAND;
+use crate::chiv2::*;
+use crate::ue::*;
+
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
     // "75 17 45 84 ED", // STEAM
@@ -12,6 +20,39 @@ define_pattern_resolver![UTBLLocalPlayer_Exec, {
 define_pattern_resolver!(ExecuteConsoleCommand, [
     "40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"
 ]);
+
+// FIXME: Nihi: stub
+CREATE_HOOK!(ExecuteConsoleCommand, (string:*mut FString), {
+    println!("ExecuteConsoleCommand: {}", unsafe { &*string });
+});
+
+#[cfg(feature="demo")]
+CREATE_HOOK!(SomeRandomFunction, c_void, (string:*mut FString), {
+    println!("SomeRandomFunction: {}", unsafe { &*string });
+});
+
+// Executes pending RCON command
+CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
+    let lock = Arc::clone(&crate::resolvers::rcon::LAST_COMMAND);
+    let mut fstring = FString::default();
+    if let Some(cmd) = crate::resolvers::rcon::LAST_COMMAND.lock().unwrap().as_ref() {
+        fstring = FString::from(
+            widestring::U16CString::from_str(cmd.as_str())
+            .unwrap()
+            .as_slice_with_nul());
+    }
+
+    if fstring.len() > 1 {
+        warn!("Execuing Command: {fstring}");
+        *lock.lock().unwrap() = None;
+        unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
+    }
+});
+
+// FIXME: Nihi: stub
+CREATE_HOOK!(FEngineLoopInit, (engine_loop:*mut c_void), {
+// println!("Engine Loop initialized!!");
+});
 
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 define_pattern_resolver![FText_AsCultureInvariant,  First, {
@@ -42,6 +83,161 @@ define_pattern_resolver![GetTBLGameMode, {
     OTHER : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 74 60 48 8B 01 FF 90 ?? ?? ?? ?? 48 85 C0 75 23 0F 1F 40 00 48 8B 5B 20 48 85 DB 74 11 48 8B 03 48 8B CB FF 90 ?? ?? ?? ?? 48 85 C0 74 E6 48 85 C0 74 2F 48 8B 98 28"]
 }];
 
+
+// https://github.com/trumank/unrealsdk/blob/d121ba258e6751d5fa522aa9b803aaa0ea59fec7/src/unrealsdk/game/bl3/object.cpp#L122
+//     "48 89 5C 24 ??"     // mov [rsp+08], rbx
+//     "48 89 6C 24 ??"     // mov [rsp+10], rbp
+//     "48 89 74 24 ??"     // mov [rsp+18], rsi
+//     "57"                 // push rdi
+//     "48 83 EC 30"        // sub rsp, 30
+//     "80 3D ???????? 00"  // cmp byte ptr [Borderlands3.exe+69EAA10], 00
+// Handle Game chat: commands, chat log, system messages
+#[cfg(feature="object-lookup")]
+define_pattern_resolver!(StaticFindObjectSafe, [
+    "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 80 3D ?? ?? ?? ?? 00 41 0F B6 D9 49 8B F8 48 8B",
+    // "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC 30 80 3D ?? ?? ?? ?? 00"
+]);
+// UObject * __cdecl StaticFindObjectSafe(UClass.conflict *param_1,UObject *param_2,wchar_t *param_3,bool param_4)
+// UObject* StaticFindObjectSafe( UClass* ObjectClass, UObject* ObjectParent, const TCHAR* InName, bool bExactClass )
+#[cfg(feature="object-lookup")]
+CREATE_HOOK!(StaticFindObjectSafe, *mut UObject, (ObjectClass:*mut UClass, ObjectParent:*mut UObject, InName:*mut FString, bExactClass: bool), {
+    if !InName.is_null() {
+        unsafe {
+            let reference  = &*InName;
+            // Now you can use `reference` safely
+            // crate::sdebug!(f; "{:?}", reference);
+        }
+    }
+});
+
+
+mod client_message {
+    
+    use regex::Regex;
+
+    use crate::chiv2::EChatType;
+    
+
+    #[derive(Debug)]
+    pub struct ChatMessage<'a> {
+        pub name: &'a str,
+        pub channel: u32,
+        pub message: &'a str,
+    }
+    
+    pub fn parse_chat_line(line: &str) -> Option<ChatMessage> {
+        static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+            Regex::new(r"^(\w+)\s+\w+\s+<(\d+)>:\s+(.*)$").unwrap()
+        });
+    
+        RE.captures(line).map(|caps| ChatMessage {
+            name: caps.get(1).unwrap().as_str(),
+            channel: caps.get(2).unwrap().as_str().parse().ok().unwrap(),
+            message: caps.get(3).unwrap().as_str(),
+        })
+    }
+    
+    pub fn parse_msg_line(line: &str) -> Option<(EChatType, &str)> {
+        // "<8>: FACTION NOT VALID"
+        // warn!("LINE: '{line}'");
+        let re = Regex::new(r#"<(\d+)>: (.+)"#).unwrap();
+        // warn!("TEST: '{test}'");
+
+        if let Some(caps) = re.captures(line) {
+            let msg_type_str: u8 = caps.get(1)?.as_str().parse().ok()?;
+            let msg_type = EChatType::try_from(msg_type_str).expect("Failed to parse EChatType");
+            let message = caps.get(2)?.as_str();
+            Some((msg_type, message))
+        } else {
+            None
+        }
+        // let mut parts = line.splitn(2, ": ");
+        // warn!["parts: {:?}", parts];
+        // let msg_type_str = parts.next()?;
+        // let msg = parts.next()?;
+        // let msg_type = EChatType::from_str(msg_type_str).ok()?;
+        // Some((msg_type, msg))
+    }
+}
+
+
+
+// Handle Game chat: commands, chat log, system messages
 define_pattern_resolver!(ClientMessage, [
     "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
 ]);
+
+// void __thiscall APlayerController::ClientMessage(APlayerController *this,FString *S,FName Type,float MsgLifeTime)
+CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+    #[cfg(feature="chat-commands")]
+    let cmd_store = Arc::clone(&LAST_COMMAND);
+    // FIXME: Nihi: better way to access it?
+    let string_ref: &FString = unsafe{ &*S };
+    let message = string_ref.to_string();
+    // TODO: Does this need to handle lines separately?
+    // info!("[ClientMessages] S: \'{:?}\', Type: \'{}\'({}),  MsgLifeTime: \'{}\' ", message.replace("\r\n", " "), Type, Type.number, MsgLifeTime);
+    let message_repl = match message.contains('\n') {
+        true => format!("\n{message}"),//.replace("\r\n", " "),
+        false => message,
+    };
+
+    // info!(target: "client", " \'{:?}\'", message_repl);
+
+    // Chat commands
+    // TODO: handle commands tranformed by ChatHooks
+    //       e.g. ".hello" -> '<7>: Console Command: hello', Type: 'None'(0),  MsgLifeTime: '0'
+    //       this needs to provide the playfabid somehow
+    {        
+        let cmd_filter = |c| ['/', '.'].contains(&c);
+        match client_message::parse_chat_line(message_repl.as_str()) {
+            Some(chat) => {
+                match chat.message.starts_with(cmd_filter) {
+                    true => {
+                        #[cfg(feature="chat-commands")]
+                        {
+                            let cmd_trimmed = chat.message.trim_start_matches(cmd_filter);
+                            debug!("-> Got console command from \'{}\' ch{}: {}", 
+                                chat.name,
+                                chat.channel,
+                                cmd_trimmed);
+                            // Set pending console command
+                            // FIXME: Nihi: Add auth or allow only offline
+                            *cmd_store.lock().unwrap() = Some(cmd_trimmed.trim().to_string());
+                            debug!("Pending: {:?}", Some(cmd_trimmed.trim().to_string()));
+                            // TODO: save command to log
+                        }
+                    }
+                    false => {
+                        // debug!("-> User message: {:?}", chat);
+                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
+                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
+                        // TODO: save user message
+                    }
+                };        
+            }
+            _ => {
+                // debug!("System message");
+                // "<8>: FACTION NOT VALID"
+                if let Some((chat_type, message)) = client_message::parse_msg_line(message_repl.as_str()) {
+                    if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                        info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                    }
+                    else {
+                        info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                    }
+                }
+                else {
+                    println!("something went wrong");
+                }
+                // if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                //     warn!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                //     if let Some(chat_mnsg) = client_message::parse_msg_line(msg.message) {
+                //         warn!("Text: {:?} {}", chat_mnsg.0, chat_mnsg.1);
+                //     }
+                // }
+                // TODO: Write message to logfile
+            }
+        }
+    }                  
+});
+

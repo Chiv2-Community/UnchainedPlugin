@@ -180,4 +180,4 @@ CREATE_HOOK(
 	}
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }
-AUTO_HOOK(ClientMessage);
+// AUTO_HOOK(ClientMessage);

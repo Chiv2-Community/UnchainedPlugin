@@ -14,7 +14,224 @@
 // #[macro_use]
 // extern crate paste; // concat strings
 
-use std::{future::Future, pin::Pin};
+// unsafe fn attach_TestFunction(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+//   let address = base_address + offsets["TestFunction"] as usize; 
+//   let target: FnTestFunction = mem::transmute(address);
+//   type FnTestFunction = unsafe extern "C" fn(*mut c_void, f32, u8);
+//   static_detour! {
+//     static TestFunction: unsafe extern "C" fn(*mut c_void, f32, u8);
+//   }
+//   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
+//       println!("rust TestFunction delta: {}", delta);
+//       unsafe { TestFunction.call( engine, delta, state) }
+//   }
+//   TestFunction
+//     .initialize(target, detour_fkt)?
+//     .enable()?;
+//   Ok(())
+// }
+/// ```rust
+/// unsafe fn attach_GameEngineTick(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+///   let address = base_address + offsets["UGameEngineTick"] as usize; 
+///   let target: FnUGameEngineTick = mem::transmute(address);
+///   type FnUGameEngineTick = unsafe extern "C" fn(*mut c_void, f32, u8);
+///   static_detour! {
+///     static UGameEngineTick: unsafe extern "C" fn(*mut c_void, f32, u8);
+///   }
+///   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
+///       println!("rust UGameEngineTick delta: {}", delta);
+///       unsafe { UGameEngineTick.call( engine, delta, state) }
+///   }
+///   UGameEngineTick
+///     .initialize(target, detour_fkt)?
+///     .enable()?;
+///   Ok(())
+/// }
+/// ```
+/// 
+/// 
+// TODO: replace this with registration similar to resolvers
+pub type HookFn = unsafe fn(usize, HashMap<String, u64>) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+// macro_rules! attach_hooks_list {
+//     ( [ $( $pattern:ident ),+ $(,)? ]) => {
+//         paste::paste!{
+//             {
+//                 let hooks: HashMap<String, u64>= [ $( ( stringify![$pattern], [<attach_ $pattern>] ) ),+ ]
+//                                     .into_iter().map(|(name, func)| (name.to_string(), func)).collect();
+//                 Ok(hooks)
+//             }
+//         }
+//     };
+// }
+
+// #[macro_export]
+// macro_rules! attach_hooks_list {
+//     ( [ $( $pattern:ident ),+ $(,)? ]) => {{
+//         use std::collections::HashMap;
+//         use crate::resolvers::macros::HookFn;
+//         paste::paste! {
+//             let hooks: HashMap<&'static str, HookFn> = [
+//                 $((stringify!($pattern), [<attach_ $pattern>] as HookFn)),+
+//             ]
+//             .into_iter()
+//             .collect();
+
+//             hooks
+//         }
+//     }};
+// }
+#[macro_export]
+macro_rules! attach_hooks_list {
+    ( [ $(
+        $(#[$attr:meta])*
+        $pattern:ident
+    ),+ $(,)? ]) => {{
+        use std::collections::HashMap;
+        use $crate::resolvers::macros::HookFn;
+        paste::paste! {
+            #[allow(dead_code)]
+            enum ActiveHooks {
+                $(
+                    $(#[$attr])*
+                    $pattern
+                ),+
+            }
+
+            let hooks: HashMap<&'static str, HookFn> = [
+                $(
+                    $(#[$attr])*
+                    (stringify!($pattern), [<attach_ $pattern>] as HookFn)
+                ),+
+            ]
+            .into_iter()
+            .collect();
+
+            hooks
+        }
+    }};
+}
+
+
+// generate_stub!(StubName);
+#[macro_export]
+macro_rules! CREATE_HOOK {
+    
+    // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+    // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+    //     println!($name);
+    //     println!($mode);
+    //     println!($rettype);
+
+    //     [ $( $call_type ($pattern) ),+ ];
+    // };
+    
+    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+        CREATE_HOOK!($name, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+    };
+
+    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+        
+      paste::paste! {
+
+        ::retour::static_detour! {
+          pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+        }
+
+        #[allow(non_snake_case)]
+        pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+            // println!("rust $name delta: {}", delta);
+            $body
+            unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+        }
+
+        #[allow(non_snake_case)]
+        pub unsafe fn [<attach_ $name>](base_address: usize, offsets: std::collections::HashMap<String, u64>)  -> Result<Option<usize>, Box<dyn std::error::Error>>{
+        // pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error> {
+        
+        // TODO: propagate error? why panic
+          match offsets.get(stringify![$name]) {
+            None => {
+                Err("No address found.".into())// Err("No Address found."),//log::error!["Failed to attach: {}", stringify![$name]],
+            },
+            Some(_) => {
+                // log::info!["attached"];
+                // ( $( $arg: $ty ),+ );
+                let rel_address = offsets[stringify![$name]] as usize;
+                let target: [<Fn $name>] = std::mem::transmute(base_address + rel_address);
+      
+                type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+      
+                let res = [<o_ $name>]
+                  .initialize(target, [<$name _detour_fkt>]);
+
+                match res {
+                    Ok(_) => crate::sdebug!(f; "INIT Attached!"),
+                    Err(e) => crate::serror!(f; "INIT FAILED TO ATTACH! {e}"),
+                }
+                let res2 = [<o_ $name>] 
+                .enable();
+
+                match res2 {
+                    Ok(_) => crate::sdebug!(f; "ENABLE Attached!"),
+                    Err(e) => crate::serror!(f; "ENABLE FAILED TO ATTACH! {e}"),
+                }
+      
+                // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
+                $crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
+                Ok(Some(rel_address as usize))
+            },
+          }
+        }
+      }
+    };
+}
+
+// #[macro_export]
+// macro_rules! CREATE_HOOK {
+    
+//     // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+//     // ($name:ident, $mode:ident, $rettype:ident, ( $( $call_type:ident:  $pattern:expr  ),+ $(,)? )) => {
+//     //     println!($name);
+//     //     println!($mode);
+//     //     println!($rettype);
+
+//     //     [ $( $call_type ($pattern) ),+ ];
+//     // };
+//     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+//       paste::paste! {
+//         #[allow(non_snake_case)]
+//         pub unsafe fn [<attach_ $name>](base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+        
+//           // ( $( $arg: $ty ),+ );
+//           let address = base_address + offsets[stringify![$name]] as usize; 
+//           let target: [<Fn $name>] = mem::transmute(address);
+
+//           type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ );
+
+//           static_detour! {
+//             pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ );
+//           }
+
+//           pub fn detour_fkt( $( $arg: $ty ),+ ) {
+//               // println!("rust $name delta: {}", delta);
+//               $body
+//               unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+//           }
+
+//           [<o_ $name>]
+//             .initialize(target, detour_fkt)?
+//             .enable()?;
+
+//           Ok(())
+//         }
+//       }
+
+
+//     };
+// }
+
+
+use std::{collections::HashMap, future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
 
 
@@ -65,7 +282,7 @@ macro_rules! define_pocess {
         // use patternsleuth::MemoryTrait;
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let mut results = Vec::new();
-            // FIXME: group sigs by type, run Signature func on multiple
+            // FIXME: Nihi: group sigs by type, run Signature func on multiple
             for pat in $patterns {
                 // match pat.kind {
                 //     SignatureKind::Call => println!("call"),
@@ -81,8 +298,8 @@ macro_rules! define_pocess {
     }};
 
     // Scan for Xrefs, return last
-    // FIXME: expects max. 2 results
-    // FIXME: handles only one pattern
+    // FIXME: Nihi: expects max. 2 results
+    // FIXME: Nihi: handles only one pattern
     (@emit_body $name:ident, XrefLast, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
@@ -92,7 +309,7 @@ macro_rules! define_pocess {
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
             if fns.len() == 2 {
-                fns[0] = fns[1]; // FIXME: deque? last?
+                fns[0] = fns[1]; // FIXME: Nihi: deque? last?
                 fns.pop();
             }
             ensure_one(fns)?
@@ -102,10 +319,29 @@ macro_rules! define_pocess {
     // Wrap code and define_pattern_resolver
     (@emit_process_inline $name:ident, |$ctx:ident, $patterns:ident| $body:block) => {{
         let result = $body;
+        log::debug![target:"sig_scan", "[ 0x{:#x?} ]: {}", result, stringify![$name]];
         Ok($name(result))
     }};
 }
 
+#[allow(unused_macros)]
+macro_rules! generate_stub {
+    ( $name:ident ) => {
+        // $name
+        #[cfg(feature="dev")]
+        define_pattern_resolver!($name, [
+            "4C"
+        ]);
+        
+        #[cfg(feature="dev")]
+        CREATE_HOOK!($name, (arg0: *mut c_void), {
+            crate::sinfo![f; "Triggered!"];
+        });
+    };
+}
+
+// inline this
+// generate_stub!(StubName);
 #[macro_export]
 macro_rules! define_pattern_resolver {
 
@@ -259,8 +495,9 @@ macro_rules! define_process {
 }
 
 // custom handlers
-
 define_pattern_resolver!(@emit_header DefaultResult);
+
+#[allow(dead_code)]
 impl DefaultResult {
     pub fn offset(&self) -> usize {
         self.0 // assuming it's something like `pub struct DefaultResult(pub usize)`
@@ -284,6 +521,7 @@ pub struct Signature<'a> {
     pub signature_string: String,
 }
 
+#[allow(dead_code)]
 impl<'a> Signature<'a> {
     pub async fn calculate_offset(&self, ctx: &'a AsyncContext<'a>) -> Result<DefaultResult, ResolveError> {
         (self.offset_calculator)(ctx).await
@@ -357,7 +595,7 @@ macro_rules! define_signature_fn {
     ) => {
         #[allow(non_snake_case)]
         #[allow(dead_code)]
-        pub fn $fn_name<'a>(s: &'a str) -> crate::resolvers::macros::Signature<'a> {
+        pub fn $fn_name<'a>(s: &'a str) -> $crate::resolvers::macros::Signature<'a> {
             let calc: std::sync::Arc<
                 dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>
                     + Send
@@ -375,7 +613,7 @@ macro_rules! define_signature_fn {
                 Box::pin(fut)
             });
 
-            crate::resolvers::macros::Signature {
+            $crate::resolvers::macros::Signature {
                 // kind: $kind,
                 offset_calculator: calc,
                 signature_string: s.to_string(),
@@ -402,7 +640,7 @@ macro_rules! wrap_process_macro {
     };
 }
 
-// FIXME: move somewhere so those are not buried?
+// FIXME: Nihi: move somewhere so those are not buried?
 // Possible to auto generate from macro?
 wrap_process_macro!(Simple);
 wrap_process_macro!(Call);

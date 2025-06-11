@@ -4,7 +4,7 @@ project(sleuthlib C)
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/target/release/sleuthlib.lib
-    COMMAND cargo build --release
+    COMMAND cargo +nightly build --release
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS
         # ${CMAKE_CURRENT_SOURCE_DIR}/sleuthlib.rs
@@ -27,18 +27,26 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
 
     # Native system libs required by Rust
     advapi32.lib
+    bcrypt.lib
+    secur32.lib
     cfgmgr32.lib
+    crypt32.lib
+    cryptnet.lib
+    dbghelp.lib
     gdi32.lib
     kernel32.lib
+    legacy_stdio_definitions.lib
     msimg32.lib
     msvcrtd.lib
+    ncrypt.lib
     ntdll.lib
     ole32.lib
     opengl32.lib
+    psapi.lib
     shell32.lib
     user32.lib
     userenv.lib
     winspool.lib
+    # windows.0.52.0.lib
     ws2_32.lib
-    psapi.lib
 )
