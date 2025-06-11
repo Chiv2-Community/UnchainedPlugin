@@ -161,9 +161,20 @@ macro_rules! CREATE_HOOK {
       
                 type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
       
-                [<o_ $name>]
-                  .initialize(target, [<$name _detour_fkt>])?
-                  .enable()?;
+                let res = [<o_ $name>]
+                  .initialize(target, [<$name _detour_fkt>]);
+
+                match res {
+                    Ok(_) => crate::sdebug!(f; "INIT Attached!"),
+                    Err(e) => crate::serror!(f; "INIT FAILED TO ATTACH! {e}"),
+                }
+                let res2 = [<o_ $name>] 
+                .enable();
+
+                match res2 {
+                    Ok(_) => crate::sdebug!(f; "ENABLE Attached!"),
+                    Err(e) => crate::serror!(f; "ENABLE FAILED TO ATTACH! {e}"),
+                }
       
                 // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
                 $crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);

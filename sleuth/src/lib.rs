@@ -291,6 +291,11 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
         LogReliableRPCFailed,
         #[cfg(feature="demo")]
         SomeRandomFunction,
+        #[cfg(feature = "dev-joindata")]
+        JoinData,
+        JoinDataTwo,
+        ShowSusMessage,
+        // JoinDataFour
     ]]);
     
     // use crate::resolvers::macros;

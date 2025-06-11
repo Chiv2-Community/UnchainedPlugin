@@ -91,6 +91,7 @@ default = [
         "rcon",
         "dev",
         "server-registration",
+        #"dev-joindata",
         ]
 serde-resolvers = []
 image-elf = []
@@ -113,6 +114,7 @@ mirage = []
 # WIP
 rpc-debug = []
 object-lookup = []
+dev-joindata = []
 
 server = [
 #        "chat-commands",

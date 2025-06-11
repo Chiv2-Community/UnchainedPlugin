@@ -209,6 +209,12 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		// Dedicated server hook in ApproveLogin
 		//Nop(module_base + g_state->GetBuildMetadata().GetOffset(strFunc[F_ApproveLogin]) + 0x46, 6);
 
+		// 19626AE + 0xF FIXME: THIS IS STEAM ONLYYY
+		Ptch_Nop(module_base + 0x19626bd, 5); // nop the function call which assigns str or smth
+
+		// Ptch_Repl(module_base + 0x196260a, 0xEB); // try to replace if in eos msg
+		
+
 		if (!all_hooks_successful) {
 			GLOG_ERROR("Failed to hook all functions. Unchained may not function as expected.");
 		}
