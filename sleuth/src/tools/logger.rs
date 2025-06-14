@@ -55,10 +55,12 @@ pub fn init_syslog() -> anyhow::Result<()> {
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] {P} [{l:6}] [{t}] {m}{n}")))
         .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}")))
         // .build("my_log_file.log")?;
-        .build(r"U:\Unchained\UnchainedSleuth\unchained.log")?; // FIXME: Nihi: LOCAL FILE
+        // .build(r"U:\Unchained\UnchainedSleuth\unchained.log")?; // FIXME: Nihi: LOCAL FILE
+    .build(r"unchained.log")?; // FIXME: Nihi: LOCAL FILE
         let kismet = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}")))
-        .build(r"U:\Unchained\UnchainedSleuth\kismet.log")?;
+        // .build(r"U:\Unchained\UnchainedSleuth\kismet.log")?;
+    .build(r"kismet.log")?;
     let console_filter = ThresholdFilter::new(log::LevelFilter::Info);
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 

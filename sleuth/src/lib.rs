@@ -101,10 +101,10 @@ struct CLIArgs {
     // #[arg()]
     // game_id: String,
 
-    #[arg(long = "next-map-mod-actors")]
+    #[arg(long = "next-map-mod-actors", value_delimiter = ',', required = false)]
     next_mod_actors: Option<Vec<String>>,
 
-    #[arg(long = "all-mod-actors")]
+    #[arg(long = "all-mod-actors", value_delimiter = ',', required = false)]
     mod_paks: Option<Vec<String>>,
 
     #[arg(long = "unchained")]
@@ -273,6 +273,7 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
     let mut hooks_new = attach_hooks_list![[
         UGameEngineTick,
         ExecuteConsoleCommand,
+        #[cfg(feature="engine_loop")]
         FEngineLoopInit,
         ClientMessage,
         // StaticFindObjectSafe,
@@ -294,7 +295,7 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
         #[cfg(feature = "dev-joindata")]
         JoinData,
         JoinDataTwo,
-        ShowSusMessage,
+        // ShowSusMessage,
         // JoinDataFour
     ]]);
     
@@ -441,6 +442,7 @@ unsafe fn init_globals() -> Result<(), clap::error::Error>{
         cli_args: args,
         platform
     });
+    sinfo!(f; "{GLOBALS:#?}");
     Ok(())
 }
 
@@ -485,7 +487,7 @@ fn intro() {
 //     }}
 // }
 // define_pocess!
-
+use tools::memtools::*;
 #[no_mangle]
 pub extern "C" fn generate_json() -> u8 {   
     // intro();
@@ -532,9 +534,34 @@ pub extern "C" fn generate_json() -> u8 {
     let len_u8 = offsets.len() as u8;
     // FIXME: Nihi: ?
     unsafe {
-        attach_hooks(exe.base_address, offsets).unwrap();
+        attach_hooks(exe.base_address, offsets.clone()).unwrap();
     }
     dump_builds().expect("Failed to dump builds JSON");
+    
+    sinfo!("trying to patch");
+    // 19626AE + 0xF = 19626BD
+    match offsets.get("ShowSusMessage") {
+        Some(a) => { //FIXME: Nihi: <- usize or u64 or *mut u8
+
+            // let addr = exe.base_address + 0x19626BD; // *a as usize;// + 0xF;
+            let extra = match globals().get_platform() {
+                PlatformType::EGS => 0xE,
+                PlatformType::STEAM => 0xF,
+                PlatformType::XBOX => todo!(),
+                PlatformType::OTHER => todo!(),
+            };
+            swarn!(f; "Offset: 0x{:X?}", extra);
+            let addr = exe.base_address + *a as usize + extra;// + 0xF;
+            swarn!(f; "sus: {:X?} {:X?}", a-exe.base_address as u64, a, );
+            swarn!(f; "an addr: {:X?}", *a as usize );
+            swarn!(f; "a base: {:X?}", *a as usize + extra);
+            unsafe { nop(addr as *mut u8, 5) };
+            // unsafe { nop(addr as *mut u8, 5) };
+            swarn!(f; "Patched the function {:X?} {:X?}", addr, addr - exe.base_address);
+            swarn!(f; "Patchessthe function {:X?} {:X?}", a, a - exe.base_address as u64);
+        },
+        None => serror!(f; "No address to patch"),
+    }
     
     #[cfg(feature="cli-commands")]
     std::thread::spawn(|| {
@@ -603,7 +630,7 @@ impl<'de> Deserialize<'de> for DllHookResolution {
 // used by ue.rs
 
 static mut GLOBALS: Option<Globals> = None;
-
+#[derive(Debug)]
 pub struct Globals {
     resolution: DllHookResolution,
     guobject_array: parking_lot::FairMutex<&'static ue::FUObjectArray>,

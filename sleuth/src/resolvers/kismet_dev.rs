@@ -5,7 +5,7 @@ use std::{ffi::c_void, os::raw::{c_char, c_longlong}};
 
 /*KismetExecutionMessage*/
 	
-use crate::{globals, sinfo, ue::*};
+use crate::{globals, resolvers::macros::First_signature, sinfo, ue::*};
 static LIST_OF_SHAME: [&str; 4] = [
 	"/Game/Maps/Frontend/CIT/FE_Citadel_Atmospherics.FE_Citadel_Atmospherics_C",
 	"Divide by zero: ProjectVectorOnToVector with zero Target vector",
@@ -227,20 +227,56 @@ CREATE_HOOK!(JoinDataTwo, c_void, (param_1: u64, param_2: *mut u16, param_3: *mu
 //           		 {fe ff}
 //    19626c2		 48 85 db    TEST   RBX,RBX
 //    19626c5		 74 08       JZ     LAB_1419626cf
-#[cfg(feature = "dev")]
-define_pattern_resolver!(ShowSusMessage, [
-    patternsleuth::resolvers::unreal::util::utf8_pattern("Please, start the game")
-], |ctx, patterns| {
-	let strings = ctx.scan(patterns.first().unwrap().clone()).await;
-	let refs: Vec<usize> = patternsleuth::resolvers::unreal::util::scan_xrefs(ctx, &strings).await;
-	patternsleuth::resolvers::ensure_one(refs)?	+ 0xF
-});
+// 14.06.2025 EGS
+// 14193dcd4 4c 8d 05        LEA        R8,[s_Please,_start_the_game_via_Chivalry2Laun   = "Please, start the game via Ch
+// 			 b5 5c e0 02
+// 14193dcdb 48 8b cf        MOV        RCX,RDI
+// 14193dcde 48 8d 55 40     LEA        RDX,[RBP + 0x40]
+// 14193dce2 e8 59 dc        CALL       FUN_14192b940                                    undefined FUN_14192b940()
+// 			 fe ff
+// 14193dce7 48 85 db        TEST       RBX,RBX
+// 14193dcea 74 08           JZ         LAB_14193dcf4
 
+// 4c 8d 05
+// ?? ?? ?? ??
+// 48 8b cf
+// 48 ?? ??
+// ?? ??
+// ?? ?? ??
+// ?? ??
+// 48 85 db
+// 74 08
+
+
+// 4c 8d 05   
+// 3b 30 dd 02
+// 48 8b cf   
+// 48 8d 54   
+// 24 50
+// e8 6e ec
+// fe ff
+// 48 85 db   
+// 74 08      
 #[cfg(feature = "dev")]
-CREATE_HOOK!(ShowSusMessage, c_void, (param_1: c_longlong),{
-	println!("ASDFG");
-    crate::sinfo![f; "Triggered!"];
-});
+define_pattern_resolver!(ShowSusMessage, Simple, {
+	EGS: ["4c 8d 05 b5 5c e0 02 48 8b cf 48 8d 55 40 e8 59 dc fe ff 48 85 db 74 08"],
+	STEAM: ["4c 8d 05 3b 30 dd 02 48 8b cf 48 8d 54 24 50 e8 6e ec fe ff 48 85 db 74 08"]
+    // patternsleuth::resolvers::unreal::util::utf8_pattern("Please, start the game")
+}
+// , |ctx, patterns| {
+// 	let sig = First_signature(patterns.first().unwrap().clone());
+// 	// let strings = ctx.scan(patterns.first().unwrap().clone()).await;
+// 	// let refs: Vec<usize> = patternsleuth::resolvers::unreal::util::scan_xrefs(ctx, &strings).await;
+// 	// match globals().get_platform() {
+// 	// }
+// }
+);
+
+// #[cfg(feature = "dev")]
+// CREATE_HOOK!(ShowSusMessage, c_void, (param_1: c_longlong),{
+// 	println!("ASDFG");
+//     crate::sinfo![f; "Triggered!"];
+// });
 
 // #[cfg(feature = "dev")]
 // define_pattern_resolver!(JoinDataFour, [
