@@ -39,12 +39,13 @@ inline Patch* register_patch(
  *
  * @param name
  * @param apply_predicate Predicate returning true when the patch should apply
+ * @param additional_offset Function returning some additional offset
  * @param replacement_bytes A single byte, or vector of bytes.
  */
-#define REGISTER_BYTE_PATCH(name, apply_predicate, replacement_bytes) \
+#define REGISTER_BYTE_PATCH(name, apply_predicate, additional_offset, replacement_bytes) \
     static auto name##_predicate = apply_predicate; \
     static auto name##_patch = register_patch(std::make_unique<ByteReplacementPatch>(\
-        ByteReplacementPatch(#name, name##_predicate, replacement_bytes) \
+        ByteReplacementPatch(#name, name##_predicate, additional_offset, replacement_bytes) \
     ));
 
 /**
@@ -52,14 +53,26 @@ inline Patch* register_patch(
  *
  * @param name
  * @param apply_predicate Predicate returning true when the patch should apply
+ * @param additional_offset Function returning some additional offset
  * @param size The number of bytes to replace with Nop (0x90)
  */
-#define REGISTER_NOP_PATCH(name, apply_predicate, size) \
+#define REGISTER_NOP_PATCH(name, apply_predicate, additional_offset, size) \
     static auto name##_predicate = apply_predicate; \
     static auto name##_patch = register_patch(std::make_unique<NopPatch>(\
-        NopPatch(#name, name##_predicate, size) \
+        NopPatch(#name, name##_predicate, additional_offset, size) \
     ));
 
 #define APPLY_ALWAYS [](){ return true; }
 #define APPLY_NEVER [](){ return false; }
 #define APPLY_WHEN(condition) [](){ return condition; }
+
+#define EGS_OFFSET(x) case EGS: return x;
+#define STEAM_OFFSET(x) case STEAM: return x;
+#define ADDITIONAL_PLATFORM_OFFSETS(...) \
+    []() { switch (g_state->GetCLIArgs().platform) { \
+        __VA_ARGS__ \
+        default: return 0; \
+    }}
+
+#define NO_ADDITIONAL_OFFSET \
+    []() { return 0; }

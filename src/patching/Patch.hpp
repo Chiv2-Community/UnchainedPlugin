@@ -88,41 +88,43 @@ private:
 
 class ByteReplacementPatch : public Patch {
     const std::vector<uint8_t> replacement_bytes;
+    const std::function<uint64_t()> additional_offset;
 public:
 
     ByteReplacementPatch(
         const std::string name,
         const std::function<bool()> should_apply_patch_func,
+        const std::function<uint64_t()> additional_offset,
         const std::vector<uint8_t> replacement_bytes
-    ): Patch(name, should_apply_patch_func), replacement_bytes(replacement_bytes) {}
+    ): Patch(name, should_apply_patch_func), replacement_bytes(replacement_bytes), additional_offset(additional_offset) {}
 
     bool apply_impl(const uintptr_t address) override {
-    unsigned long old_protect, temp_protect;
-    
-    const auto bytes = replacement_bytes.data();
-    const auto size = replacement_bytes.size();
-    
-    auto address_ptr = reinterpret_cast<void*>(address);
-    
-    auto res = VirtualProtect(address_ptr, size, PAGE_EXECUTE_READWRITE, &old_protect);
-    if (!res) {
-        log_windows_error(address_ptr);
-        return false;
+        unsigned long old_protect, temp_protect;
+
+        const auto bytes = replacement_bytes.data();
+        const auto size = replacement_bytes.size();
+
+        auto address_ptr = reinterpret_cast<void*>(address + additional_offset());
+
+        auto res = VirtualProtect(address_ptr, size, PAGE_EXECUTE_READWRITE, &old_protect);
+        if (!res) {
+            log_windows_error(address_ptr);
+            return false;
+        }
+
+        memcpy(address_ptr, bytes, size);
+
+        FlushInstructionCache(GetCurrentProcess(), address_ptr, size);
+
+        res = VirtualProtect(address_ptr, size, old_protect, &temp_protect);
+        if (!res) {
+            log_windows_error(address_ptr);
+            return false;
+        }
+
+        GLOG_DEBUG("{} : Successfully patched {} bytes at address {}", get_name(), size, address_ptr);
+        return true;
     }
-    
-    memcpy(address_ptr, bytes, size);
-    
-    FlushInstructionCache(GetCurrentProcess(), address_ptr, size);
-    
-    res = VirtualProtect(address_ptr, size, old_protect, &temp_protect);
-    if (!res) {
-        log_windows_error(address_ptr);
-        return false;
-    }
-    
-    GLOG_DEBUG("{} : Successfully patched {} bytes at address {}", get_name(), size, address_ptr);
-    return true;
-}
 
 private:
     static void log_windows_error(void *address) {
@@ -133,9 +135,11 @@ private:
 };
 
 class NopPatch : public ByteReplacementPatch {
+public:
     NopPatch(
         const std::string name,
         const std::function<bool()> should_apply_patch_func,
+        const std::function<uint64_t()> additional_offset,
         const uint64_t size
-    ): ByteReplacementPatch(name, should_apply_patch_func, std::vector<uint8_t>(size, 0x90)) {}
+    ): ByteReplacementPatch(name, should_apply_patch_func, additional_offset, std::vector<uint8_t>(size, 0x90)) {}
 };

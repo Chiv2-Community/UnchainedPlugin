@@ -64,6 +64,7 @@ public:
 
     bool apply_patch(Patch* patch, bool batched = false) {
         auto patch_name = patch->get_name();
+        GLOG_TRACE("Applying patch '{}'", patch_name);
 
         try {
             const auto maybe_offset = this->current_build_metadata.GetOffset(patch_name);
