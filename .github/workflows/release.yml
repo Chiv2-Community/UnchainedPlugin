@@ -36,7 +36,14 @@ jobs:
       - name: Get version from tag
         id: get_version
         shell: bash
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${GITHUB_REF#refs/tags/v}"
+
+      # Debug version information before CMake
+      - name: Debug version information
+        run: |
+          echo "Version from tag: ${{ steps.get_version.outputs.VERSION }}"
 
       # Create build directory
       - name: Create build directory
@@ -45,7 +52,7 @@ jobs:
       # Configure CMake with the version from tag
       - name: Configure CMake
         run: |
-          cmake -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=Release -DVERSION=${{ steps.get_version.outputs.VERSION }}
+          cmake -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=Release -DVERSION="${{ steps.get_version.outputs.VERSION }}"
 
       # Build the project
       - name: Build
