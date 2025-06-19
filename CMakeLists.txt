@@ -101,6 +101,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:_DEBUG_CONSOLE>
     $<$<CONFIG:Release>:_DEBUG_CONSOLE>
     $<$<BOOL:${PRINT_CLIENT_MSG}>:PRINT_CLIENT_MSG>
+    _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # Fix mutex issues on some versions of the cpp redist
 )
 
 add_subdirectory(sleuth)
