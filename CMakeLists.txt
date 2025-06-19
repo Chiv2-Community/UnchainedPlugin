@@ -25,17 +25,14 @@ else()
     set(VERSION_PATCH 0)
 endif()
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Release>,MultiThreadedDLL,MultiThreadedDebugDLL>")
-set(MSVC_RUNTIME_LIB "msvcrtd.lib")
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(MSVC_RUNTIME_LIB "msvcrt.lib")
-endif()
 
 # C++ standard requirements
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_BUILD_PARALLEL_LEVEL ${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT})
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Release>,MultiThreadedDLL,MultiThreadedDebugDLL>")
 
 # Options
 option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
@@ -98,7 +95,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_compile_options(${PROJECT_NAME} PRIVATE /MP)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    NOMINMAX                      # Prevent Windows.h from defining min/max macros
+    NOMINMAX                             # Prevent Windows.h from defining min/max macros
     _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # Fix mutex issues on some versions of the cpp redist
     # CHAT_COMMANDS # Enable this to enable chat commands to be sent from clients to the server
 )
