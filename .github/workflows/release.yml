@@ -60,7 +60,7 @@ jobs:
           name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: ${{github.workspace}}/build/Output/UnchainedPlugin.dll
+          files: ${{github.workspace}}/build/Output/Release/UnchainedPlugin.dll
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
