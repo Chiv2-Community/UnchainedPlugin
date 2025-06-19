@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
 
 jobs:
   build:
@@ -16,9 +15,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
           submodules: recursive
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.build_type }}
+
       - uses: lukka/get-cmake@latest
+      
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       # Ensure build directory exists
       - name: Create build directory

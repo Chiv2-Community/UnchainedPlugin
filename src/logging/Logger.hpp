@@ -9,6 +9,8 @@
 #include <mutex>
 #include <source_location>
 #include <filesystem>
+#include <map>
+
 #include "sinks/LogSink.hpp"
 
 enum class LogLevel {
@@ -17,6 +19,14 @@ enum class LogLevel {
     INFO,
     WARNING,
     ERR
+};
+
+static std::map<std::string, LogLevel> log_level_to_string = {
+    {"TRACE", LogLevel::TRACE},
+    {"DEBUG", LogLevel::DEBUG},
+    {"INFO", LogLevel::INFO},
+    {"WARNING", LogLevel::WARNING},
+    {"ERROR", LogLevel::ERR}
 };
 
 class Logger {

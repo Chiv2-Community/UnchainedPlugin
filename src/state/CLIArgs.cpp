@@ -9,7 +9,7 @@
 CLIArgs::CLIArgs(std::optional<uint16_t> rcon_port, bool apply_desync_patch, bool use_backend_banlist,
                  bool is_headless, bool is_server, bool playable_listen, std::optional<std::wstring> next_map,
                  std::wstring server_browser_backend, std::optional<std::wstring> server_password,
-                 Platform platform)
+                 Platform platform, LogLevel log_level)
     : rcon_port(rcon_port)
     , apply_desync_patch(apply_desync_patch)
     , use_backend_banlist(use_backend_banlist)
@@ -20,6 +20,7 @@ CLIArgs::CLIArgs(std::optional<uint16_t> rcon_port, bool apply_desync_patch, boo
     , server_password(server_password)
     , platform(platform)
     , next_map(next_map)
+    , log_level(log_level)
 {
 }
 
@@ -35,6 +36,9 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
     std::optional<std::wstring> server_password = std::nullopt;
     std::optional<std::wstring> next_map = std::nullopt;
     Platform platform = Platform::STEAM;
+    LogLevel log_level = LogLevel::INFO;
+
+    bool did_set_log_level = false;
 
     std::wistringstream iss(cli_param_string);
     std::vector<std::wstring> tokens;
@@ -90,13 +94,28 @@ CLIArgs CLIArgs::Parse(std::wstring cli_param_string)
                 GLOG_ERROR("Invalid platform '{}'.  Expected 'STEAM', 'EGS', or 'XBOX'", platform_str);
                 GLOG_WARNING("Defaulting to STEAM");
             }
+        } else if (arg == L"--unchained-log-level" && i + 1 < tokens.size()) {
+            const auto& log_level_wstr = tokens[++i];
+            const auto log_level_str = std::format("{}", log_level_wstr);
+            did_set_log_level = true;
+            if (log_level_to_string.contains(log_level_str))
+                log_level = log_level_to_string.at(log_level_str);
+            else {
+                GLOG_ERROR("Invalid log level '{}'.  Expected 'DEBUG', 'INFO', 'WARNING', 'ERROR', or 'FATAL'", log_level_str);
+                GLOG_WARNING("Defaulting to INFO");
+            }
         }
         else if (arg == L"-epicapp=Peppermint") {
             platform = Platform::EGS;
         }
     }
 
+    if (!did_set_log_level) {
+        GLOG_INFO("Defaulting to INFO log level.  Use '--unchained-log-level [TRACE, DEBUG, INFO, WARNING, ERROR]' to change this.");
+    }
+
     return CLIArgs(rcon_port, apply_desync_patch, use_backend_banlist,
                   is_headless, is_server, playable_listen, next_map,
-                  server_browser_backend, server_password, platform);
+                  server_browser_backend, server_password, platform,
+                  log_level);
 }
