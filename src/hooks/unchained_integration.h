@@ -3,49 +3,12 @@
 #include "../logging/Logger.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
-#include "../hooking/hook_macros.hpp"
+#include "../patching/patch_macros.hpp"
 #include <optional>
 
-CREATE_HOOK(
-	FViewport,
-	ATTACH_ALWAYS,
-	FString*, (FViewport_C* this_ptr, void* viewportClient)
-) {
-		FString* val = o_FViewport(this_ptr, viewportClient);
-		wchar_t* buildNr = wcschr(this_ptr->AppVersionString.str, L'+') + 1;
-		if (buildNr != nullptr)
-		{
-			bool needsSerialization = false;
-
-			uint32_t buildId = _wtoi(buildNr);
-			if (g_state->GetBuildMetadata().GetBuildId() == 0)
-			{
-				needsSerialization = true;
-				const wchar_t* build_name = this_ptr->AppVersionString.str + 7;
-				const std::wstring build_name_str(build_name);
-				g_state->GetBuildMetadata().SetName(build_name_str);
-				g_state->GetBuildMetadata().SetBuildId(buildId);
-
-				GLOG_INFO("Build metadata set - Name: {} BuildId: {} Hash: 0x{:X}",
-						  g_state->GetBuildMetadata().GetName(),
-						  g_state->GetBuildMetadata().GetBuildId(),
-						  g_state->GetBuildMetadata().GetFileHash());
-
-				SaveBuildMetadata(g_state->GetSavedBuildMetadata());
-			}
-
-			if (!g_state->GetBuildMetadata().GetName().empty())
-			{
-				GLOG_INFO("Build String found!{} {}", (g_state->GetBuildMetadata().GetBuildId() == 0) ? L"" : L" (loaded)", g_state->GetBuildMetadata().GetName());
-			}
-		}
-		return val;
-}
-AUTO_HOOK(FViewport)
-
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	LoadFrontEndMap,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	bool, (void* this_ptr, FString* param_1)
 ) {
 	static wchar_t szBuffer[512];
@@ -70,71 +33,52 @@ CREATE_HOOK(
 	else
 		return o_LoadFrontEndMap(this_ptr, param_1);
 }
-AUTO_HOOK(LoadFrontEndMap);
 
-static wchar_t staticBuffer[1024] = {};
-static bool hasPendingCommand = false;
-
-// #define GETNETMODE_CC
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	InternalGetNetMode,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
-#ifdef GETNETMODE_CC 
-	if (hasPendingCommand)
-	{
-		hasPendingCommand = false;
-		GLOG_WARNING("Console Command (InternalGetNetMode): {}", staticBuffer);
-		FString commandString(staticBuffer);
-		o_ExecuteConsoleCommand(&commandString);
-	}
-#endif
 	return o_InternalGetNetMode(world);
 }
-AUTO_HOOK(InternalGetNetMode);
 
 
-#ifndef GETNETMODE_CC
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	UGameEngineTick,
-	ATTACH_ALWAYS,
+	APPLY_WHEN(g_state->GetCLIArgs().rcon_port.has_value()),
 	void, (void* engine, float delta_seconds, uint8_t idle_mode)
 ) {
-	// GLOG_WARNING("Engine hook");
-	if (hasPendingCommand)
+	// GLOG_TRACE("Engine hook");
+	std::optional<std::wstring> next_command = g_state->GetRCONState().get_command();
+	if (next_command.has_value())
 	{
-		hasPendingCommand = false;
-		GLOG_WARNING("Console Command (UGameEngineTick): {}", staticBuffer);
-		FString commandString(staticBuffer);
-		o_ExecuteConsoleCommand(&commandString);
+		std::wstring command = next_command.value();
+		GLOG_TRACE("Console Command (UGameEngineTick): {}", command);
+		const wchar_t* command_chars = command.c_str();
+		FString commandString(command_chars);
+		hk_ExecuteConsoleCommand(&commandString);
 	}
 	o_UGameEngineTick(engine, delta_seconds, idle_mode);
 }
-AUTO_HOOK(UGameEngineTick);
-#endif
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	UNetDriver_GetNetMode,
-	ATTACH_WHEN(g_state->GetCLIArgs().apply_desync_patch),
+	APPLY_WHEN(g_state->GetCLIArgs().apply_desync_patch),
 	ENetMode, (void* this_ptr)
 ) {
 	const ENetMode mode = o_UNetDriver_GetNetMode(this_ptr);
 	const ENetMode result = mode == LISTEN_SERVER ? DEDICATED_SERVER : mode;
 	return result;
 }
-AUTO_HOOK(UNetDriver_GetNetMode);
 
-
-
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	UGameplay_IsDedicatedServer,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	bool, (long long param_1)
 ) {
 	if (g_state->GetUWorld() != nullptr && !g_state->GetCLIArgs().playable_listen) {
-		ENetMode mode = o_InternalGetNetMode(g_state->GetUWorld());
+		const ENetMode mode = o_InternalGetNetMode(g_state->GetUWorld());
 		bool isHosting = mode == DEDICATED_SERVER || mode == LISTEN_SERVER;
 		return isHosting;
 	}

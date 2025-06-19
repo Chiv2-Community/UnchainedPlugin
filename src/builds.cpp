@@ -53,54 +53,8 @@ std::filesystem::path getBuildMetadataPath() {
 		   "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
 }
 
-static std::mutex g_saveBuildMutex;
-bool SaveBuildMetadata(const std::map<std::string, BuildMetadata>& builds)
-{
-	std::lock_guard lock(g_saveBuildMutex);
-
-	auto buildMetadataPath = getBuildMetadataPath();
-	if (!std::filesystem::exists(buildMetadataPath.parent_path())) {
-		std::filesystem::create_directories(buildMetadataPath.parent_path());
-	}
-
-	GLOG_DEBUG("Saving build metadata to: {}", buildMetadataPath.string());
-
-	std::stringstream out("");
-	out << "{";
-
-	// Add builds from the provided map
-	if (!builds.empty()) {
-		bool isFirst = true;
-		for (const auto& [buildName, buildData] : builds) {
-			auto buildSerialized = buildData.Serialize(1);
-			if (buildSerialized.has_value()) {
-				if (!isFirst)
-					out << ",";
-				else
-					isFirst = false;
-				out << buildSerialized.value();
-			} else {
-				GLOG_WARNING("Failed to serialize build metadata: {}", buildName);
-			}
-		}
-	}
-
-	out << "\n}";
-
-	std::ofstream file(buildMetadataPath);
-	if (!file.is_open()) {
-		GLOG_ERROR("Error opening build metadata: {}", buildMetadataPath);
-		return false;
-	}
-
-	file << out.str();
-	GLOG_INFO("Successfully saved build metadata to: {}", buildMetadataPath.string());
-	return true;
-}
-
 std::map<std::string, BuildMetadata> LoadBuildMetadata()
 {
-	std::lock_guard lock(g_saveBuildMutex);
 
     auto configPath = getBuildMetadataPath();
     std::map<std::string, BuildMetadata> buildMap;
