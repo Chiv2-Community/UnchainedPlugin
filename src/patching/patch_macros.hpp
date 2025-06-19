@@ -56,7 +56,7 @@ inline Patch* register_patch(
  */
 #define REGISTER_NOP_PATCH(name, apply_predicate, size) \
     static auto name##_predicate = apply_predicate; \
-    static auto name##_patch = register_patch(std::make_unique<ByteReplacementPatch>(\
+    static auto name##_patch = register_patch(std::make_unique<NopPatch>(\
         NopPatch(#name, name##_predicate, size) \
     ));
 
