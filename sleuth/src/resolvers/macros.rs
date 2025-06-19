@@ -262,6 +262,7 @@ macro_rules! define_process {
 
 define_pattern_resolver!(@emit_header DefaultResult);
 impl DefaultResult {
+    #[allow(dead_code)]
     pub fn offset(&self) -> usize {
         self.0 // assuming it's something like `pub struct DefaultResult(pub usize)`
     }
@@ -285,6 +286,7 @@ pub struct Signature<'a> {
 }
 
 impl<'a> Signature<'a> {
+    #[allow(dead_code)]
     pub async fn calculate_offset(&self, ctx: &'a AsyncContext<'a>) -> Result<DefaultResult, ResolveError> {
         (self.offset_calculator)(ctx).await
     }

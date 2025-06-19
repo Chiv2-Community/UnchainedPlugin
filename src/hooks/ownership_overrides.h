@@ -2,11 +2,11 @@
 
 #include "../state/global_state.hpp"
 #include "../stubs/Chivalry2.h"
-#include "../hooking/hook_macros.hpp"
+#include "../patching/patch_macros.hpp"
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
     ATBLPlayerController__GetOwnershipFromPlayerControllerAndState,
-    ATTACH_WHEN(g_state->GetCLIArgs().is_headless),
+    APPLY_WHEN(g_state->GetCLIArgs().is_headless),
     FOwnershipResponse*, (FOwnershipResponse* result, void* PlayerController, void* PlayerState, void* AssetIdToCheck, bool BaseOnly)
 ) {
     FOwnershipResponse* response = o_ATBLPlayerController__GetOwnershipFromPlayerControllerAndState(result, PlayerController, PlayerState, AssetIdToCheck, BaseOnly);
@@ -14,11 +14,10 @@ CREATE_HOOK(
     response->level = 0;
     return response;
 }
-AUTO_HOOK(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState)
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
     ATBLPlayerController__CanUseLoadoutItem,
-    ATTACH_ALWAYS,
+    APPLY_ALWAYS,
     FOwnershipResponse*, (ATBLPlayerController* _this, FOwnershipResponse* result, const void* InLoadOutSelection, const void* InItem)
 ) {
     auto response = o_ATBLPlayerController__CanUseLoadoutItem(_this, result, InLoadOutSelection, InItem);
@@ -27,11 +26,10 @@ CREATE_HOOK(
     result->owned = true;
     return response;
 }
-AUTO_HOOK(ATBLPlayerController__CanUseLoadoutItem)
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
     ATBLPlayerController__CanUseCharacter,
-    ATTACH_ALWAYS,
+    APPLY_ALWAYS,
     FOwnershipResponse*, (ATBLPlayerController* _this, FOwnershipResponse* result, const void* CharacterSubclass)
 ) {
     auto response = o_ATBLPlayerController__CanUseCharacter(_this, result, CharacterSubclass);
@@ -39,15 +37,13 @@ CREATE_HOOK(
     response->owned = true;
     return response;
 }
-AUTO_HOOK(ATBLPlayerController__CanUseCharacter)
 
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
     ATBLPlayerController__ConditionalInitializeCustomizationOnServer,
-    ATTACH_WHEN(g_state->GetCLIArgs().is_headless),
+    APPLY_WHEN(g_state->GetCLIArgs().is_headless),
     void, (ATBLPlayerController* _this, const void* player_state)
 ) {
     _this->bOnlineInventoryInitialized = true;
     _this->bPlayerCustomizationReceived = true;
     o_ATBLPlayerController__ConditionalInitializeCustomizationOnServer(_this, player_state);
 }
-AUTO_HOOK(ATBLPlayerController__ConditionalInitializeCustomizationOnServer)

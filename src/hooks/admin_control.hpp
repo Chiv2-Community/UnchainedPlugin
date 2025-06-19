@@ -2,60 +2,25 @@
 
 #include <regex>
 #include "../logging/Logger.hpp"
-#include "../hooking/hook_macros.hpp"
+#include "../patching/patch_macros.hpp"
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-SCAN_HOOK(UTBLLocalPlayer_Exec)
+REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, { 0xEB })
 
-// Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
-// I do not feel like dealing with it right now.
-/*
-CREATE_HOOK(
-	ConsoleCommand,
-	ATTACH_ALWAYS,
-	FString, (void* this_ptr, FString const& str, bool b)
-) {
-#ifdef _DEBUG_
-	static void* cached_this;
-	if (this_ptr == NULL) {
-		this_ptr = cached_this;
-	}
-	else {
-		if (cached_this != this_ptr) {
-			cached_this = this_ptr;
-			//std::cout << "0x" << std::hex << this_ptr << std::endl;
-		}
-	}
-
-	GLOG_DEBUG("[RCON]: PlayerController Exec called with: {}", str);
-
-	const wchar_t* interceptPrefix = L"RCON_INTERCEPT";
-	//if the command starts with the intercept prefix
-	//TODO: clean up mutex stuff here. Way too sloppy to be final
-	if (wcslen(str.str) >= 14 && memcmp(str.str, interceptPrefix, lstrlenW(interceptPrefix) * sizeof(wchar_t)) == 0) {
-		GLOG_DEBUG("[RCON]: Intercept command detected");
-	}
-#endif
-	return o_ConsoleCommand(this_ptr, str, b);
-}
-AUTO_HOOK(ConsoleCommand);
-*/
-
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (FString* param)
 ) {
-	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
+	GLOG_INFO("Executing console command: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
-AUTO_HOOK(ExecuteConsoleCommand);
 
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	FText_AsCultureInvariant,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* ret_ptr, FString* input)
 ) {
 	// This is extremely loud in the console
@@ -66,18 +31,16 @@ CREATE_HOOK(
 	//}
 	return o_FText_AsCultureInvariant(ret_ptr, input);
 }
-AUTO_HOOK(FText_AsCultureInvariant);
 
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	BroadcastLocalizedChat,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* game_mode, FText* text, uint8_t chat_type)
 ) {
 	GLOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
-AUTO_HOOK(BroadcastLocalizedChat);
 
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
@@ -110,9 +73,9 @@ bool IsServerStart()
 }
 
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
-CREATE_HOOK(
+REGISTER_HOOK_PATCH(
 	GetTBLGameMode,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void*, (void* uobj)
 ) {
 	//LOG_DEBUG("GetTBLGameMode");
@@ -120,43 +83,62 @@ CREATE_HOOK(
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
 }
-AUTO_HOOK(GetTBLGameMode)
 
 /*
 void __thiscall
 APlayerController::ClientMessage
 		  (APlayerController *this,FString *param_1,FName param_2,float param_3)
 */
-CREATE_HOOK(
+static bool init = false;
+REGISTER_HOOK_PATCH(
 	ClientMessage,
-	ATTACH_ALWAYS,
+	APPLY_ALWAYS,
 	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
 ) {
-	bool egs = g_state->GetCLIArgs().platform == EGS;
-	static uint64_t init = false;
-	GLOG_DEBUG("ClientMessage");
+	GLOG_TRACE("ClientMessage");
 
-	char* pValue;
-	size_t len;
-	char ladBuff[256];
+	bool isEgs = g_state->GetCLIArgs().platform == EGS;
+	bool isServer = IsServerStart();
+
+	char* pValue = nullptr;
+	size_t len = 0;
 	errno_t err = _dupenv_s(&pValue, &len, "LOCALAPPDATA");
 
-	// TODO: make this nicer
-	strncpy_s(ladBuff, 256, pValue, len);
-	strncpy_s(ladBuff + len - 1, 256 - len, "\\Chivalry 2\\Saved\\Logs\\Unchained", 34);
+	if (err != 0 || pValue == nullptr) {
+		GLOG_ERROR("Failed to get LOCALAPPDATA environment variable");
+		return;
+	}
 
-	_mkdir(ladBuff);
-	sprintf_s(ladBuff, 256, "%s\\Chivalry 2\\Saved\\Logs\\Unchained\\ClientMessage%s%s.log",
-		pValue, (IsServerStart() ? "-server" : "-client"), (egs ? "-egs" : "-steam"));
-	if (!init)
-		GLOG_DEBUG("{}", ladBuff);
+	// Use std::string for safer string handling
+	std::string logDir = std::string(pValue) + "\\Chivalry 2\\Saved\\Logs\\Unchained";
+	free(pValue);  // Free memory allocated by _dupenv_s
 
-	std::wofstream  out(ladBuff, init++ ? std::ios_base::app : std::ios_base::trunc);
-	if (out.is_open())
-		out << init << L":: " << param_1->str << std::endl;
-	else
-		GLOG_ERROR("Can't open ClientMessage log for writing.");
+	_mkdir(logDir.c_str());
 
+	std::string logFile = logDir + "\\ClientMessage" +
+						  (isServer ? "-server" : "-client") +
+						  (isEgs ? "-egs" : "-steam") + ".log";
+
+	if (!init) {
+		GLOG_DEBUG("Writing Client Logs to: {}", logFile);
+	}
+
+	std::wofstream out(logFile, init ? std::ios_base::app : std::ios_base::trunc);
+	if (out.is_open()) {
+		static size_t messageCount = 0;
+		wchar_t* str = param_1->str;
+		out << ++messageCount << L":: " << str << std::endl;
+		GLOG_DEBUG("ClientMessage: {}", str);
+	} else {
+		auto error_string = get_last_windows_error_message_string();
+		GLOG_ERROR("Can't open ClientMessage log for writing: {}",
+				  error_string.has_value() ? error_string.value() : "Unknown error");
+	}
+
+	init = true;
+
+
+#ifdef CHAT_COMMANDS
 	static std::wstring playerName;
 	auto command = std::make_unique<std::wstring>();
 
@@ -176,8 +158,8 @@ CREATE_HOOK(
 
 		auto empty = FString(command->c_str());
 
-		o_ExecuteConsoleCommand(&empty);
+		hk_ExecuteConsoleCommand(&empty);
 	}
+#endif
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }
-AUTO_HOOK(ClientMessage);
