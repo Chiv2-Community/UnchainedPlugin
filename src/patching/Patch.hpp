@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "../string_util.hpp"
 
 using OffsetOrString = std::variant<uintptr_t, std::string>;
 
@@ -124,28 +125,10 @@ public:
 }
 
 private:
-    void log_windows_error(void *address) {
-        auto error = GetLastError();
-        LPSTR error_message = nullptr;
-        const DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER
-                          | FORMAT_MESSAGE_FROM_SYSTEM
-                          | FORMAT_MESSAGE_IGNORE_INSERTS;
-        FormatMessageA(
-            flags,
-            nullptr,
-            error,
-            0,
-            reinterpret_cast<LPSTR>(&error_message),
-            0,
-            nullptr
-        );
-        if (error_message[strlen(error_message) - 2] == '\r') {
-            error_message[strlen(error_message) - 2] = '\0';
-        }
-        GLOG_ERROR("Failed to patch {}. Error ({}) {}", address, error, error_message ? error_message : "Unknown error");
-        if (error_message) {
-            LocalFree(error_message);
-        }
+    static void log_windows_error(void *address) {
+        std::optional<std::string> error_message = get_last_windows_error_message_string();
+        GLOG_ERROR("Failed to patch {}. Error {}", address,
+                   error_message.has_value() ? error_message.value() : "Unknown error");
     }
 };
 

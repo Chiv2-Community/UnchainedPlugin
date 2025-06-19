@@ -21,3 +21,5 @@ std::vector<std::string> split(std::string_view str, std::string_view delimiter)
  * @return
  */
 std::string ws(int indent);
+
+std::optional<std::string> get_last_windows_error_message_string();
