@@ -22,7 +22,8 @@ add_dependencies(${PROJECT_NAME}_interface RustBuild)
 
 target_link_directories(${PROJECT_NAME}_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/target/release)
 
-target_link_libraries(${PROJECT_NAME}_interface INTERFACE 
+set(MSVC_RUNTIME_LIB "$<IF:$<CONFIG:Release>,msvcrt.lib,msvcrtd.lib>")
+target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     ${PROJECT_NAME}
 
     # Native system libs required by Rust
@@ -31,7 +32,7 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     gdi32.lib
     kernel32.lib
     msimg32.lib
-    msvcrtd.lib
+    ${MSVC_RUNTIME_LIB}
     ntdll.lib
     ole32.lib
     opengl32.lib

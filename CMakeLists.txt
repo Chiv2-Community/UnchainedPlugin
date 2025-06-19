@@ -26,12 +26,13 @@ else()
 endif()
 
 
-
 # C++ standard requirements
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_BUILD_PARALLEL_LEVEL ${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT})
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Release>,MultiThreadedDLL,MultiThreadedDebugDLL>")
 
 # Options
 option(POST_BUILD_COPY "Copy output file to specified dir" OFF)
@@ -93,10 +94,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE /MP)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Release>,MultiThreadedDLL,MultiThreadedDebugDLL>")
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    NOMINMAX                      # Prevent Windows.h from defining min/max macros
-    _DEBUG                        # Define _DEBUG, always. So far this seems necessary for the console to work
+    NOMINMAX                             # Prevent Windows.h from defining min/max macros
     _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # Fix mutex issues on some versions of the cpp redist
     # CHAT_COMMANDS # Enable this to enable chat commands to be sent from clients to the server
 )
