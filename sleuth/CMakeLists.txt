@@ -23,10 +23,6 @@ add_dependencies(${PROJECT_NAME}_interface RustBuild)
 target_link_directories(${PROJECT_NAME}_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/target/release)
 
 # Choose the appropriate MSVC runtime library based on build configuration
-set(MSVC_RUNTIME_LIB "msvcrtd.lib")
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(MSVC_RUNTIME_LIB "msvcrt.lib")
-endif()
 
 target_link_libraries(${PROJECT_NAME}_interface INTERFACE 
     ${PROJECT_NAME}
