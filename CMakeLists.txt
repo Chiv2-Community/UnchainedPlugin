@@ -92,8 +92,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/Sig
 )
 
-# Compiler definitions
 target_compile_options(${PROJECT_NAME} PRIVATE /MP)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Release>,MultiThreadedDLL,MultiThreadedDebugDLL>")
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     NOMINMAX                      # Prevent Windows.h from defining min/max macros
     _DEBUG                        # Define _DEBUG, always. So far this seems necessary for the console to work
