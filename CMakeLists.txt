@@ -80,7 +80,6 @@ add_library(${PROJECT_NAME} SHARED
     ${SOURCES} 
     ${HEADERS} 
     ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-        src/state/RCONState.hpp
 )
 
 # Target properties
