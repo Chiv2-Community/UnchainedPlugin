@@ -180,11 +180,13 @@ void CreateDebugConsole() {
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
 		initialize_global_logger(LogLevel::TRACE);
-		GLOG_INFO("Logger initialized  {}", generate_json());
+		GLOG_INFO("Logger initialized.");
+		auto found_offsets = generate_json();
+		GLOG_INFO("Sleuth found {} offsets", found_offsets);
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
+		g_logger->set_level(cliArgs.log_level);
 
-		HMODULE hModule = static_cast<HMODULE>(lpParameter);
 		auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
 		for (const auto& part : logo_parts) {
 			GLOG_ERROR("{}", part);

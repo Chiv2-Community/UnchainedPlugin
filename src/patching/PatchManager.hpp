@@ -31,7 +31,7 @@ public:
     } ;
 
     inline bool register_patch(Patch& patch) {
-        GLOG_DEBUG("{} : Registered patch", patch.get_name());
+        GLOG_DEBUG("Registered patch '{}'", patch.get_name());
         pending_patches.push_back(std::ref(patch));
         return true;
     }
@@ -68,7 +68,7 @@ public:
         try {
             const auto maybe_offset = this->current_build_metadata.GetOffset(patch_name);
             if (!maybe_offset.has_value()) {
-                GLOG_ERROR("{} : No offset found for patch.", patch_name);
+                GLOG_ERROR("No offset found for patch '{}'", patch_name);
                 if (batched) failed_patches.push_back(patch_name);
                 return false;
             }
@@ -77,23 +77,20 @@ public:
 
             switch (result) {
                 case APPLY_SUCCESS:
-                    GLOG_INFO("{} : Successfully enabled patch at offset 0x{:X}", patch_name, maybe_offset.value());
+                    GLOG_INFO("0x{:X} : Successfully enabled patch '{}'",  maybe_offset.value(), patch_name);
                     break;
                 case APPLY_FAILED:
-                    GLOG_ERROR("{} : Failed to enable patch", patch_name);
+                    GLOG_ERROR("Failed to enable patch '{}'", patch_name);
                     if (batched) failed_patches.push_back(patch_name);
                     break;
                 case APPLY_DISABLED:
-                    GLOG_DEBUG("{} : Patch not enabled.", patch_name);
+                    GLOG_DEBUG("Patch '{}' not enabled", patch_name);
                     break;
-                default:
-                    GLOG_ERROR("{} : Unknown result from patch apply. This should never happen. Please report a bug.", patch_name);
-                    if (batched) failed_patches.push_back(patch_name);
             }
 
             return result;
         } catch (const std::exception& e) {
-            GLOG_ERROR("{}: Failed to enable patch ({})", patch_name, e.what());
+            GLOG_ERROR("Failed to enable patch '{}'. {}", patch_name, e.what());
             if (batched) failed_patches.push_back(patch_name);
             return false;
         }
