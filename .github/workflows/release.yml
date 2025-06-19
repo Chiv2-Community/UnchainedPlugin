@@ -40,11 +40,6 @@ jobs:
           echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           echo "Extracted version: ${GITHUB_REF#refs/tags/v}"
 
-      # Debug version information before CMake
-      - name: Debug version information
-        run: |
-          echo "Version from tag: ${{ steps.get_version.outputs.VERSION }}"
-
       # Create build directory
       - name: Create build directory
         run: mkdir -p ${{github.workspace}}/build
