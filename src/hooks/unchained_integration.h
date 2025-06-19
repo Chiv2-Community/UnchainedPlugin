@@ -6,6 +6,17 @@
 #include "../patching/patch_macros.hpp"
 #include <optional>
 
+
+REGISTER_NOP_PATCH(
+	EACAntiCheatMesssage,
+	APPLY_ALWAYS,
+	ADDITIONAL_PLATFORM_OFFSETS(
+		STEAM_OFFSET(0xF)
+		EGS_OFFSET(0xE)
+	),
+	5
+)
+
 REGISTER_HOOK_PATCH(
 	LoadFrontEndMap,
 	APPLY_ALWAYS,
