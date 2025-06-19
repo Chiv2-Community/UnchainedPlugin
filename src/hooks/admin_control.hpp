@@ -128,7 +128,7 @@ REGISTER_HOOK_PATCH(
 		static size_t messageCount = 0;
 		wchar_t* str = param_1->str;
 		out << ++messageCount << L":: " << str << std::endl;
-		GLOG_DEBUG("ClientMessage: {}", str);
+		GLOG_INFO("ClientMessage: {}", str);
 	} else {
 		auto error_string = get_last_windows_error_message_string();
 		GLOG_ERROR("Can't open ClientMessage log for writing: {}",
