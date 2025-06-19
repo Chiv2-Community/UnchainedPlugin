@@ -51,7 +51,7 @@ jobs:
       # Create GitHub Release
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
           draft: false
