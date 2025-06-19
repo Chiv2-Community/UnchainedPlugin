@@ -1,0 +1,62 @@
+﻿name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on tags starting with 'v'
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-Release
+
+      - uses: lukka/get-cmake@latest
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      # Extract version from tag (remove 'v' prefix)
+      - name: Get version from tag
+        id: get_version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      # Create build directory
+      - name: Create build directory
+        run: mkdir -p ${{github.workspace}}/build
+
+      # Configure CMake with the version from tag
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=Release -DVERSION=${{ steps.get_version.outputs.VERSION }}
+
+      # Build the project
+      - name: Build
+        run: |
+          cmake --build ${{github.workspace}}/build --config Release
+
+      # Create GitHub Release
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          files: ${{github.workspace}}/build/Output/UnchainedPlugin.dll
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
