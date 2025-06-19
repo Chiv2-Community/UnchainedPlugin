@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include "../logging/global_logger.hpp"
 
 
 class RCONState {

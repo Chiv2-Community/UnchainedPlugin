@@ -42,12 +42,12 @@ namespace std {
     };
 
     template <typename CharT>
-    struct formatter<const wchar_t*, CharT> {
+    struct formatter<wchar_t*, CharT> {
         constexpr auto parse(format_parse_context& ctx) {
             return ctx.begin();
         }
 
-        auto format(const wchar_t* p, std::format_context& ctx) const {
+        auto format(wchar_t* p, std::format_context& ctx) const {
             std::string narrowStr = convert_wstring_to_string(p);
             return std::copy(narrowStr.begin(), narrowStr.end(), ctx.out());
         }
@@ -59,7 +59,7 @@ namespace std {
             return ctx.begin();
         }
 
-        auto format(const wchar_t* p, std::format_context& ctx) const {
+        auto format(wchar_t* p, std::format_context& ctx) const {
             std::string narrowStr = convert_wstring_to_string(p, N);
             return std::copy(narrowStr.begin(), narrowStr.end(), ctx.out());
         }

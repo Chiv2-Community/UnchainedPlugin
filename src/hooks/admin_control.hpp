@@ -6,47 +6,14 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, 0xEB)
-
-// Commenting this out because we don't really need it, and the functions have different inputs on steam and EGS.
-// I do not feel like dealing with it right now.
-/*
-REGISTER_HOOK_PATCH(
-	ConsoleCommand,
-	APPLY_ALWAYS,
-	FString, (void* this_ptr, FString const& str, bool b)
-) {
-#ifdef _DEBUG_
-	static void* cached_this;
-	if (this_ptr == NULL) {
-		this_ptr = cached_this;
-	}
-	else {
-		if (cached_this != this_ptr) {
-			cached_this = this_ptr;
-			//std::cout << "0x" << std::hex << this_ptr << std::endl;
-		}
-	}
-
-	GLOG_DEBUG("[RCON]: PlayerController Exec called with: {}", str);
-
-	const wchar_t* interceptPrefix = L"RCON_INTERCEPT";
-	//if the command starts with the intercept prefix
-	//TODO: clean up mutex stuff here. Way too sloppy to be final
-	if (wcslen(str.str) >= 14 && memcmp(str.str, interceptPrefix, lstrlenW(interceptPrefix) * sizeof(wchar_t)) == 0) {
-		GLOG_DEBUG("[RCON]: Intercept command detected");
-	}
-#endif
-	return o_ConsoleCommand(this_ptr, str, b);
-}
-*/
+REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, { 0xEB })
 
 REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
 	APPLY_ALWAYS,
 	void, (FString* param)
 ) {
-	GLOG_INFO("EXECUTECONSOLECMD: {}", std::wstring(param->str));
+	GLOG_INFO("Executing console command: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
 
@@ -127,9 +94,10 @@ REGISTER_HOOK_PATCH(
 	APPLY_ALWAYS,
 	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
 ) {
+	GLOG_TRACE("ClientMessage");
+
 	bool egs = g_state->GetCLIArgs().platform == EGS;
 	static uint64_t init = false;
-	GLOG_DEBUG("ClientMessage");
 
 	char* pValue;
 	size_t len;
@@ -144,14 +112,16 @@ REGISTER_HOOK_PATCH(
 	sprintf_s(ladBuff, 256, "%s\\Chivalry 2\\Saved\\Logs\\Unchained\\ClientMessage%s%s.log",
 		pValue, (IsServerStart() ? "-server" : "-client"), (egs ? "-egs" : "-steam"));
 	if (!init)
-		GLOG_DEBUG("{}", ladBuff);
+		GLOG_DEBUG("Writing Client Logs to: ", ladBuff);
 
 	std::wofstream  out(ladBuff, init++ ? std::ios_base::app : std::ios_base::trunc);
 	if (out.is_open())
 		out << init << L":: " << param_1->str << std::endl;
+		GLOG_DEBUG("ClientMessage: {}", param_1->str);
 	else
 		GLOG_ERROR("Can't open ClientMessage log for writing.");
 
+#ifdef CHAT_COMMANDS
 	static std::wstring playerName;
 	auto command = std::make_unique<std::wstring>();
 
@@ -171,7 +141,8 @@ REGISTER_HOOK_PATCH(
 
 		auto empty = FString(command->c_str());
 
-		o_ExecuteConsoleCommand(&empty);
+		hk_ExecuteConsoleCommand(&empty);
 	}
+#endif
 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
 }

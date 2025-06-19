@@ -32,82 +32,120 @@ extern "C" uint8_t generate_json();
 
 #include "hooks/all_hooks.h"
 
-void handleRCON(State& state) {
-	if (!state.GetCLIArgs().rcon_port.has_value()) {
-		ExitThread(0);
-		return;
-	}
+void handleRCON(RCONState& rcon_state, int port) {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        GLOG_ERROR("[RCON]: Failed to initialize Winsock!");
+        return;
+    }
 
-	GLOG_INFO("[RCON]: Found -rcon flag. RCON will be enabled.");
+    GLOG_DEBUG("[RCON]: Opening RCON server socket on TCP/{}", port);
 
-	int port = state.GetCLIArgs().rcon_port.value();
+    SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSock == INVALID_SOCKET) {
+        GLOG_ERROR("[RCON]: Failed to create socket, error: {}", WSAGetLastError());
+        WSACleanup();
+        return;
+    }
 
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		GLOG_ERROR("[RCON]: Failed to initialize Winsock!");
-		ExitThread(0);
-		return;
-	}
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-	GLOG_INFO("[RCON]: Opening RCON server socket on TCP/{}", port);
+    if (bind(listenSock, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        GLOG_ERROR("[RCON]: Bind failed with error: {}", WSAGetLastError());
+        closesocket(listenSock);
+        WSACleanup();
+        return;
+    }
 
-	SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listen(listenSock, SOMAXCONN) == SOCKET_ERROR) {
+        GLOG_ERROR("[RCON]: Listen failed with error: {}", WSAGetLastError());
+        closesocket(listenSock);
+        WSACleanup();
+        return;
+    }
 
-	sockaddr_in addr;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    u_long mode = 1;
+    ioctlsocket(listenSock, FIONBIO, &mode);
 
-	bind(listenSock, (sockaddr*)&addr, sizeof(addr));
-	listen(listenSock, SOMAXCONN);
+    GLOG_INFO("[RCON]: Listening for RCON commands on TCP/{}", port);
 
-	RCONState rcon_State = state.GetRCONState();
-	wchar_t staticBuffer[1024];
+    constexpr size_t BUFFER_SIZE = 256;
+    constexpr size_t CMD_BUFFER_SIZE = 1024;
+    wchar_t cmd_buffer[CMD_BUFFER_SIZE];
 
-	while (true) {
-		//set up a new command string
-		auto command = std::make_unique<std::wstring>();
-		GLOG_DEBUG("[RCON]: Waiting for command");
-		//get a command from a socket
-		int addrLen = sizeof(addr);
-		SOCKET remote = accept(listenSock, (sockaddr*)&addr, &addrLen);
-		GLOG_DEBUG("[RCON]: Accepted connection");
-		if (remote == INVALID_SOCKET) {
-			GLOG_ERROR("[RCON]: invalid socket error");
-			return;
-		}
-		const int BUFFER_SIZE = 256;
-		//create one-filled buffer
-		char buffer[BUFFER_SIZE + 1];
-		for (int i = 0; i < BUFFER_SIZE + 1; i++) {
-			buffer[i] = 1;
-		}
-		int count; //holds number of received bytes 
-		do {
-			count = recv(remote, (char*)&buffer, BUFFER_SIZE, 0); //receive a chunk (may not be the whole command)
-			buffer[count] = 0; //null-terminate it implicitly
-			//convert to wide string
-			std::string chunkString(buffer, count);
-			std::wstring wideChunkString(chunkString.begin(), chunkString.end() - 1);
-			// possibly off by one?
-			// if (!chunkString.empty() && chunkString.back() == '\n')
-			// 	chunkString.pop_back();
-			// std::wstring wideChunkString(chunkString.begin(), chunkString.end());
-			*command += wideChunkString; //append this chunk to the command
-		} while (buffer[count - 1] != '\n');
-		//we now have the whole command as a wide string
-		closesocket(remote);
+	// TODO: listen for some signal to exit this loop
+    while (true) {
+        std::wstring command;
 
-		if (command->size() == 0) {
-			continue;
-		}
+        int addrLen = sizeof(addr);
+        SOCKET remote = accept(listenSock, (sockaddr*)&addr, &addrLen);
 
-		wcsncpy_s(staticBuffer, command->c_str(), 1023);
-		staticBuffer[1023] = 0; // ensure null-termination
-		rcon_State.set_command(staticBuffer);
-	}
+        if (remote == INVALID_SOCKET) {
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK) {
+                // No connection available, sleep a bit and continue
+                Sleep(100);
+            } else {
+	            GLOG_ERROR("[RCON]: Accept failed with error: {}", error);
+            }
+            continue;
+        }
 
-	return;
+        GLOG_DEBUG("[RCON]: Accepted connection");
+
+        char buffer[BUFFER_SIZE + 1] = {};
+        int bytes_read = 0;
+
+        do {
+            bytes_read = recv(remote, buffer, BUFFER_SIZE, 0);
+
+            if (bytes_read <= 0) {
+                if (bytes_read < 0) {
+                    GLOG_ERROR("[RCON]: Receive error: {}", WSAGetLastError());
+                }
+                break;
+            }
+
+            // Null-terminate received data
+            buffer[bytes_read] = '\0';
+
+            // Convert to wide string
+            int required_size = MultiByteToWideChar(CP_UTF8, 0, buffer, bytes_read, nullptr, 0);
+            if (required_size > 0) {
+                size_t current_size = command.size();
+                command.resize(current_size + required_size);
+                MultiByteToWideChar(CP_UTF8, 0, buffer, bytes_read,
+                                   &command[current_size], required_size);
+            }
+        } while (bytes_read > 0 && buffer[bytes_read - 1] != '\n');
+
+        // Always close the client socket when done
+        closesocket(remote);
+
+        if (command.empty()) {
+            continue;
+        }
+
+        // Copy command to static buffer with bounds checking
+        if (command.size() < CMD_BUFFER_SIZE) {
+            wcsncpy_s(cmd_buffer, command.c_str(), CMD_BUFFER_SIZE - 1);
+            cmd_buffer[CMD_BUFFER_SIZE - 1] = 0; // ensure null-termination
+            rcon_state.set_command(cmd_buffer);
+        } else {
+            GLOG_ERROR("[RCON]: Command too long, truncating");
+            wcsncpy_s(cmd_buffer, command.c_str(), CMD_BUFFER_SIZE - 1);
+            cmd_buffer[CMD_BUFFER_SIZE - 1] = 0;
+            rcon_state.set_command(cmd_buffer);
+        }
+    }
+
+    // Clean up resources
+    closesocket(listenSock);
+    WSACleanup();
+    GLOG_INFO("[RCON]: RCON server stopped");
 }
 
 
@@ -141,7 +179,7 @@ void CreateDebugConsole() {
 
 DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
-		initialize_global_logger(LogLevel::INFO);
+		initialize_global_logger(LogLevel::TRACE);
 		GLOG_INFO("Logger initialized  {}", generate_json());
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
@@ -202,10 +240,13 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		auto all_patches_successful = patch_manager.apply_patches();
 		if (!all_patches_successful) {
 			GLOG_ERROR("Failed to apply all patches. Unchained may not function as expected.");
+		} else {
+			GLOG_INFO("All patches applied successfully");
 		}
 
-		GLOG_INFO("Continuing to RCON");
-		handleRCON(*state); //this has an infinite loop for commands! Keep this at the end!
+		if (state->GetCLIArgs().rcon_port.has_value()) {
+			handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
+		}
 
 		ExitThread(0);
 	} catch (const std::exception& e) {

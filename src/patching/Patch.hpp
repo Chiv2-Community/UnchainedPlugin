@@ -95,12 +95,6 @@ public:
         const std::vector<uint8_t> replacement_bytes
     ): Patch(name, should_apply_patch_func), replacement_bytes(replacement_bytes) {}
 
-    ByteReplacementPatch(
-      const std::string name,
-      const std::function<bool()> should_apply_patch_func,
-      const uint8_t replacement_byte
-  ): Patch(name, should_apply_patch_func), replacement_bytes({replacement_byte}) {}
-
     bool apply_impl(const uintptr_t address) override {
     unsigned long old_protect, temp_protect;
     

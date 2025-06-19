@@ -34,52 +34,33 @@ REGISTER_HOOK_PATCH(
 		return o_LoadFrontEndMap(this_ptr, param_1);
 }
 
-static wchar_t staticBuffer[1024] = {};
-static bool hasPendingCommand = false;
-
-// #define GETNETMODE_CC
 REGISTER_HOOK_PATCH(
 	InternalGetNetMode,
 	APPLY_ALWAYS,
 	ENetMode, (void* world)
 ) {
 	g_state->SetUWorld(world);
-#ifdef GETNETMODE_CC
-	std::optional<std::wstring> next_command = g_state->GetRCONState().get_command();
-	if (next_command.has_value())
-	{
-		std::wstring command = next_command.value();
-		hasPendingCommand = false;
-		GLOG_WARNING("Console Command (InternalGetNetMode): {}", command);
-		const wchar_t* command_chars = command.c_str();
-		FString commandString(command_chars);
-		o_ExecuteConsoleCommand(&commandString);
-	}
-#endif
 	return o_InternalGetNetMode(world);
 }
 
 
-#ifndef GETNETMODE_CC
 REGISTER_HOOK_PATCH(
 	UGameEngineTick,
-	APPLY_ALWAYS,
+	APPLY_WHEN(g_state->GetCLIArgs().rcon_port.has_value()),
 	void, (void* engine, float delta_seconds, uint8_t idle_mode)
 ) {
-	// GLOG_WARNING("Engine hook");
+	// GLOG_TRACE("Engine hook");
 	std::optional<std::wstring> next_command = g_state->GetRCONState().get_command();
 	if (next_command.has_value())
 	{
 		std::wstring command = next_command.value();
-		hasPendingCommand = false;
-		GLOG_WARNING("Console Command (UGameEngineTick): {}", command);
+		GLOG_TRACE("Console Command (UGameEngineTick): {}", command);
 		const wchar_t* command_chars = command.c_str();
 		FString commandString(command_chars);
-		o_ExecuteConsoleCommand(&commandString);
+		hk_ExecuteConsoleCommand(&commandString);
 	}
 	o_UGameEngineTick(engine, delta_seconds, idle_mode);
 }
-#endif
 
 REGISTER_HOOK_PATCH(
 	UNetDriver_GetNetMode,
