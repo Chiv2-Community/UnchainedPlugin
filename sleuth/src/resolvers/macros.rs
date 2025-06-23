@@ -125,24 +125,84 @@ macro_rules! CREATE_HOOK {
     //     [ $( $call_type ($pattern) ),+ ];
     // };
     
-    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    // No ret type specified
+    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         CREATE_HOOK!($name, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
     };
 
-    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    // No hook type specified - run before original by default
+    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        CREATE_HOOK![$name, PRE, $out_type, ( $( $arg: $ty ),+ ), $body];
+    };
+
+    
+    (@gen_detour NONE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                // println!("rust $name delta: {}", delta);
+                $body
+                // unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+            }
+        }
+    };
+
+    (@gen_detour POST, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                // println!("rust $name delta: {}", delta);
+                let ret_val = unsafe { [<o_ $name>].call ( $( $arg ),+ ) };
+                // let body_val = $body;
+                // let mut fallback = None;
+
+                // let _ = match body_val {
+                //     () => fallback = Some(ret_val),
+                //     val => fallback = Some(body_val),
+                // };
+            
+                // fallback.unwrap()
+                let ret_val = ret_val;
+                ($body(ret_val))
+            }
+        }
+    };
+
+    (@gen_detour PRE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                $body
+                unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+            }
+        }
+    };
+
+    ($name:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         
       paste::paste! {
 
         ::retour::static_detour! {
           pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
         }
+        
+        CREATE_HOOK![@gen_detour $hook_type, $name, $out_type, ( $( $arg: $ty ),+ ), $body];
 
-        #[allow(non_snake_case)]
-        pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
-            // println!("rust $name delta: {}", delta);
-            $body
-            unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
-        }
+        // #[allow(non_snake_case)]
+        // pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+        //     // println!("rust $name delta: {}", delta);
+            
+        //     let someValue = $body;
+        //     if (someValue != ()) {
+        //         crate::serror!("SomeValue: {someValue:?}");
+        //     }
+        //     unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+        //     // $body
+        //     // unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+        // }
 
         #[allow(non_snake_case)]
         pub unsafe fn [<attach_ $name>](base_address: usize, offsets: std::collections::HashMap<String, u64>)  -> Result<Option<usize>, Box<dyn std::error::Error>>{
