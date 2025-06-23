@@ -1,11 +1,11 @@
 use std::{
-    io::{stdin, BufRead, BufReader}, net::TcpListener, os::raw::c_void, sync::{Arc, Mutex}, thread
+    hash::{DefaultHasher, Hash, Hasher}, io::{stdin, BufRead, BufReader}, net::TcpListener, os::raw::c_void, sync::{Arc, Mutex}, thread
 };
 
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
 
-use crate::ue::{FName, FString, UObject};
+use crate::ue::{FName, FString, TMap, UClass, UObject};
 
 
 #[cfg(feature="rcon")]
@@ -55,13 +55,42 @@ pub struct AArgonSDKModBase_C {
     _private: [u8; 0], // or a guessed size
 }
 
-// pub type TSubclassOf<T> = *mut crate::ue::UClass;
+// pub type TSubclassOf<T> = *mut UClass;
+use crate::ue::UEHash;
+
+// impl UEHash for *mut crate::ue::UClass {
+//     fn ue_hash(&self) -> u32 {
+//         *self as usize as u32
+//     }
+// }
+
+// impl UEHash for *mut crate::ue::UObject {
+//     fn ue_hash(&self) -> u32 {
+//         *self as usize as u32
+//     }
+// }
+impl UEHash for *mut crate::ue::UClass {
+    fn ue_hash(&self) -> u32 {
+        let mut hasher = DefaultHasher::new();
+        (*self as usize).hash(&mut hasher);
+        (hasher.finish() & 0xFFFF_FFFF) as u32
+    }
+}
+impl UEHash for *mut crate::ue::UObject {
+    fn ue_hash(&self) -> u32 {
+        let mut hasher = DefaultHasher::new();
+        (*self as usize).hash(&mut hasher);
+        (hasher.finish() & 0xFFFF_FFFF) as u32
+    }
+}
 
 #[repr(C)]
-pub struct MyStruct {
+#[derive(Debug)]
+pub struct ModActorStruct {
+    _private: [u8; 0x30], // or a guessed size
     // pub ModActors: TMap<TSubclassOf<AArgonSDKModBase_C>, FString>, // Offset 0x0030
-    // pub ModActors: TMap<*mut crate::ue::UClass, FString>, // Offset 0x0030
-    // pub CustomObjects: TMap<*mut UObject, FString>,                // Offset 0x0080
+    pub ModActors: TMap<*mut crate::ue::UClass, FString>, // Offset 0x0030
+    pub CustomObjects: TMap<*mut UObject, FString>,                // Offset 0x0080
     // pub CustomObjects: TMap<FName, FName>,                // Offset 0x0080
 }
 // FIME: Nihi: this need some validation
@@ -135,7 +164,7 @@ pub fn handle_cmd() {
 
                     let name_res: *mut FName = o_FNameCtorWchar.call(&mut fname as *mut FName,
                         wchar_ptr,
-                        crate::resolvers::asset_registry::EFindName::Find);
+                        crate::ue::EFindName::Find);
                     // let name_res: *mut FName = o_FNameCtorWchar.call(
                     //     &mut fname as *mut FName,
                     //     wchar_ptr,
@@ -186,7 +215,34 @@ pub fn handle_cmd() {
                             sinfo!(f; "{}: {}", cnt, a.PackagePath);
                             let obj: *mut UObject = o_GetAsset.call(a as *const FAssetData as *mut FAssetData); // FIXME: Yeah..
                             if !obj.is_null() {
-                                swarn!(f; "Obj: {}", (&*obj).uobject_base_utility.uobject_base.name_private);
+                                swarn!(f; "Obj: {}", (&*obj).uobject_base_utility.uobject_base.name_private);                                
+                                let class_ptr = obj as *mut UClass;
+                                let mod_struct = obj as *mut ModActorStruct;
+                                // swarn!(f; "Obj: {}", (&*mod_struct).ModActors);       
+                                // for (k, v) in (&*mod_struct).ModActors. {
+
+                                // }   
+                                // let slice = (&*mod_struct).ModActors.elements.data.as_slice();
+                                // let slice = &(&*mod_struct).ModActors.elements;
+
+                                // let asdasda = (&*mod_struct).ModActors.into_hashmap();
+
+                                // let asdasda = (&(*mod_struct).ModActors).to_hashmap();
+                                for (a, b) in  (&*mod_struct).ModActors.iter() {
+                                    let mut name = FName::default();
+                                    if !a.is_null() {
+                                        let test = *a;
+                                        name = (*test).ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private;
+                                    }
+                                    swarn!(f; "\tName: {}", name);   
+                                    swarn!(f; "\tDescription: {}", b);   
+                                }
+
+
+
+                                // let class = unsafe { (*obj).get_class() }; // Or use the class field
+                                // let name = unsafe { &(*(*obj)).name_private };
+                                // swarn!(f; "Obj: {}", name);
                             }
                         }
                     }

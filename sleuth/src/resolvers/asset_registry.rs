@@ -5,7 +5,7 @@
 
 use std::{fmt, os::raw::c_void, ptr::null_mut};
 
-use crate::{globals, serror, sinfo, swarn, ue::{FName, FString, TArray, UObject}};
+use crate::{globals, serror, sinfo, swarn, ue::{EFindName, FName, FString, TArray, UObject}};
 
 #[cfg(feature = "dev")]
 define_pattern_resolver!(GetAssetRegistry,[
@@ -219,13 +219,13 @@ CREATE_HOOK!(FNamePool,  *mut c_void, (ret_val_tscr:  *mut c_void),{
 
 // FName * __thiscall FName::FName(FName *this,wchar_t *param_1,EFindName param_2)
 
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum EFindName {
-    Find = 0,          // Only return existing names
-    Add = 1,           // Add to name pool if missing
-    ReplaceNotSafe = 2 // Rarely used
-}
+// #[repr(u8)]
+// #[derive(Debug, Clone, Copy, PartialEq)]
+// pub enum EFindName {
+//     Find = 0,          // Only return existing names
+//     Add = 1,           // Add to name pool if missing
+//     ReplaceNotSafe = 2 // Rarely used
+// }
 
 #[cfg(feature = "dev")]
 define_pattern_resolver!(FNameCtorWchar, Simple, [
@@ -233,7 +233,7 @@ define_pattern_resolver!(FNameCtorWchar, Simple, [
     ]);
 
 #[cfg(feature = "dev")]
-CREATE_HOOK!(FNameCtorWchar,  *mut FName, (this: *mut FName, Str: *mut u16, findname: EFindName),{
+CREATE_HOOK!(FNameCtorWchar,  *mut FName, (this: *mut FName, Str: *const u16, findname: EFindName),{
     // crate::sinfo![f; "Triggered!"];
     unsafe {
         if findname == EFindName::Find {
@@ -252,6 +252,6 @@ define_pattern_resolver!(GetAsset,["40 53 48 83 EC 60 48 8B D9 33 D2"]);
 #[cfg(feature = "dev")]
 CREATE_HOOK!(GetAsset, *mut UObject, (asset_data: *mut FAssetData),{
     unsafe {
-        crate::sinfo![f; "Triggered! {}", &*asset_data];
+        // crate::sinfo![f; "Triggered! {}", &*asset_data];
     }
 });

@@ -1,6 +1,7 @@
 
 
 mod resolvers;
+mod ue;
 mod scan;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +10,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::io::{BufWriter, Write};
 use std::{collections::HashMap, path::PathBuf};
-mod ue;
+mod ue_old;
 mod tools;
 mod chiv2;
 
@@ -34,6 +35,7 @@ use serde_json::to_writer_pretty;
 use tools::logger::init_syslog;
 #[cfg(feature="server-registration")]
 use tools::registration::Registration;
+use ue_old::FUObjectArray;
 // use tools::server_registration::Registration;
 use windows::core::PCSTR;
 use windows::Win32::System::Console::SetConsoleTitleA;
@@ -463,8 +465,8 @@ unsafe fn init_globals() -> Result<(), clap::error::Error>{
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     
     // println!("results: {:?}", resolution);
-    let guobject_array: &'static ue::FUObjectArray =
-        &*(resolution.guobject_array.0 as *const ue::FUObjectArray);
+    let guobject_array: &'static FUObjectArray =
+        &*(resolution.guobject_array.0 as *const FUObjectArray);
         
 
     GLOBALS = Some(Globals {
@@ -693,7 +695,7 @@ static mut GLOBALS: Option<Globals> = None;
 #[derive(Debug)]
 pub struct Globals {
     resolution: DllHookResolution,
-    guobject_array: parking_lot::FairMutex<&'static ue::FUObjectArray>,
+    guobject_array: parking_lot::FairMutex<&'static FUObjectArray>,
     #[allow(dead_code)]
     main_thread_id: std::thread::ThreadId,
     // last_command: Option<ue::FString>,
@@ -719,10 +721,10 @@ impl Globals {
     pub fn uobject_base_utility_get_path_name(&self) -> ue::FnUObjectBaseUtilityGetPathName {
         unsafe { std::mem::transmute(self.resolution.uobject_base_utility_get_path_name.0) }
     }
-    pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'static, &ue::FUObjectArray> {
+    pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'static, &FUObjectArray> {
         self.guobject_array.lock()
     }
-    pub unsafe fn guobject_array_unchecked(&self) -> &ue::FUObjectArray {
+    pub unsafe fn guobject_array_unchecked(&self) -> &FUObjectArray {
         *self.guobject_array.data_ptr()
     }
 
