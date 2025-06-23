@@ -115,6 +115,7 @@ impl std::str::FromStr for PlatformType {
 // }
 
 
+pub mod asset_registry;
 pub mod hook_retour;
 pub mod admin_control;
 pub mod asset_loading;

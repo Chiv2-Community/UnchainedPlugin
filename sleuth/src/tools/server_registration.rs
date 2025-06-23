@@ -7,7 +7,7 @@ use a2s::A2SClient;
 use once_cell::sync::Lazy;
 use reqwest::blocking::Client;
 
-const MAX_RETRIES: u8 = 10;
+const MAX_RETRIES: u8 = 50;
 
 // Reg start
 use serde::{Deserialize, Serialize};
@@ -111,6 +111,8 @@ fn instant_from_unix_time(unix_secs: f64) -> Option<Instant> {
 
     let sys_time = std::time::UNIX_EPOCH.checked_add(Duration::new(whole, nanos))?;
     let now = std::time::SystemTime::now();
+    let asd = sys_time.duration_since(now);
+    swarn!("Next refresh in: {}s", asd.unwrap().as_secs());
 
     if sys_time > now {
         // time in the future: compute duration from now
@@ -206,67 +208,6 @@ impl Registration {
 
     }
 
-    pub fn start(&self, server_list_url: &str, _: &str, _: &str) {
-    // pub fn start(&self, server_list_url: &str, id: &str, key: &str) {
-        let client = self.client.clone();
-        let server_addr = self.server_addr.clone();
-        let stop_flag = self.stop_update.clone();
-        // todo: run registration from here?
-        // let id = id.to_string();
-        // let key = key.to_string();
-        let url = server_list_url.to_string();
-
-        thread::spawn(move || {
-            let a2s = A2SClient::new().unwrap();
-            loop {
-                let (lock, cvar) = &*stop_flag;
-                if *lock.lock().unwrap() {
-                    break;
-                }
-
-                let mut retries = 0;
-                while retries < MAX_RETRIES {
-                    // match a2s.info(&server_addr) {
-                    //     Ok(info) => {
-                    //         println!("CONNECTED {info:#?}")
-                    //     },
-                    //     Err(e) => println!("failed {e}"),
-                    // }
-                    if let Ok(info) = a2s.info(&server_addr) {
-                        let payload = UpdatePayload {
-                            player_count: info.players,
-                            max_players: info.max_players,
-                            // map_name: &info.map_name,
-                            map_name: info.map.as_str(),
-                        };
-
-                        let res = client.post(format!("{url}/update"))
-                            .json(&payload)
-                            .send();
-
-                        if res.is_ok() {
-                            // self.last_info = Some(info.clone());
-                            let last_info = Arc::clone(&LAST_INFO);
-                            *last_info.lock().unwrap() = Some(info.clone());
-                            sdebug!(f; "Updated server: {:?}", payload);
-                            break;
-                        }
-                    }
-                    else {
-                        sdebug!(f; "Failed to connect to a2s");
-                    }
-
-                    retries += 1;
-                    sdebug!(f; "Retrying A2S query ({}/{})", retries, MAX_RETRIES);
-                    thread::sleep(Duration::from_secs(1));
-                }
-
-                let timeout = Duration::from_secs(10);
-                let _ = cvar.wait_timeout(lock.lock().unwrap(), timeout).unwrap();
-            }
-        });
-    }
-
     // FIXME: Nihi: implement
     #[allow(dead_code)]
     pub fn stop(&self) {
@@ -276,12 +217,15 @@ impl Registration {
     }
 
     pub fn start_heartbeat(self: Arc<Self>, server_list_url: &str, id: &str, key: &str) {
+    // pub fn start_heartbeat(&self, server_list_url: &str, id: &str, key: &str) {
         // let stop_flag = self.stop_heartbeat.clone();
         let client = self.client.clone();
         let url = server_list_url.to_string();
         let mut id = id.to_string();
         let mut key = key.to_string();
         // let refresh_before: f64 = 0.0;
+        // let reg = std::sync::Arc::new(self);
+        // let self_clone = *self;//Arc::clone(&self);
         let self_clone = Arc::clone(&self);
         let stop_flag = self_clone.stop_heartbeat.clone();
 
@@ -299,11 +243,13 @@ impl Registration {
                     // Send heartbeat POST/GET, here assumed POST to "/heartbeat"
                     // Replace with your actual heartbeat logic & parsing
 
-                    let res = client.post(format!("{url}/heartbeat"))
-                        .json(&serde_json::json!({
-                            "id": id,
-                            "key": key,
-                        }))
+                    let res = client
+                        .post(format!("{url}/{id}/heartbeat"))
+                        .header("x-chiv2-server-browser-key", key.as_str())
+                        // .json(&serde_json::json!({
+                        //     "id": id,
+                        //     "key": key,
+                        // }))
                         .send();
 
                     match res {
@@ -311,10 +257,10 @@ impl Registration {
                             // If your server returns next refresh interval, parse it here.
                             // For demo, assume fixed 30s interval:
                             refresh_by = Instant::now() + Duration::from_secs(30);
-                            sdebug!(f; "Heartbeat successful");
+                            swarn!(f; "Heartbeat successful");
                         }
                         Ok(resp) if resp.status().as_u16() == 404 => {
-                            sdebug!(f; "Registration expired; re-register here");
+                            swarn!(f; "Registration expired; re-register here");
                             
                             // let last_info = Arc::clone(&LAST_INFO);
                             // *last_info.lock().unwrap() = Some(info.clone());
@@ -343,10 +289,12 @@ impl Registration {
 
                                 match res {
                                     Ok((unique_id, new_key, refresh)) => { 
+                                        swarn!("Update: id: {} key: {}", unique_id, new_key);
                                         id = unique_id;                                       
                                         key = new_key;
                                         // let test = Instant::now() + (Duration::from_secs_f64(refresh) - std::time::UNIX_EPOCH);
-                                        refresh_by = instant_from_unix_time(refresh).unwrap() - Duration::from_secs(5);
+                                        refresh_by = instant_from_unix_time(refresh - 30.0).unwrap();
+                                        // swarn!(f;"Refresh in {}", refresh_by.elapsed().as_secs())
                                     },
                                     Err(e) => serror!(f; "FAILED TO REGISTER {e}"),
                                 }
@@ -389,5 +337,85 @@ impl Registration {
         if let Some(handle) = self.heartbeat_thread.lock().unwrap().take() {
             handle.join().unwrap();
         }
+    }
+
+    pub fn start(&self, server_list_url: &str, id: &str, key: &str) {
+    // pub fn start(&self, server_list_url: &str, id: &str, key: &str) {
+        let client = self.client.clone();
+        let server_addr = self.server_addr.clone();
+        let stop_flag = self.stop_update.clone();
+        // todo: run registration from here?
+        let id = id.to_string();
+        let key = key.to_string();
+        let url = server_list_url.to_string();
+
+        thread::spawn(move || {
+            thread::sleep(Duration::from_secs(20));
+            let a2s = A2SClient::new().unwrap();
+            let mut cnt: usize = 0;
+            loop {
+                cnt += 1;
+                let (lock, cvar) = &*stop_flag;
+                // swarn!(f; "IN LOOP {cnt}");
+                if *lock.lock().unwrap() {
+                    break;
+                }
+
+                let mut retries = 0;
+                while retries < MAX_RETRIES {
+                    // sinfo!(f; "RETRY {retries}");
+                    // match a2s.info(&server_addr) {
+                    //     Ok(info) => {
+                    //         println!("CONNECTED {info:#?}")
+                    //     },
+                    //     Err(e) => println!("failed {e}"),
+                    // }
+                    if let Ok(info) = a2s.info(&server_addr) {
+                        if (cnt == 1)  {
+                            serror!(f; "Connected {:?}", info);
+                        }
+                        let payload = UpdatePayload {
+                            player_count: info.players,
+                            max_players: info.max_players,
+                            // map_name: &info.map_name,
+                            map_name: info.map.as_str(),
+                        };
+
+                        let res = client.post(format!("{url}/update"))
+                            .json(&payload)
+                            .send();
+
+                        match res.is_ok() {
+                            true => {
+                                // self.last_info = Some(info.clone());
+                                let last_info = Arc::clone(&LAST_INFO);
+                                *last_info.lock().unwrap() = Some(info.clone());
+                                sdebug!(f; "Updated server: {:?}", payload);
+                                sinfo!(f; "server /update: {res:#?}");
+                                break;
+                            },
+                            false => sdebug!(f; "Update post failed"),
+                        }
+                        
+                    }
+                    else {
+                        sdebug!(f; "Failed to connect to a2s");
+                    }
+
+                    retries += 1;
+                    sdebug!(f; "Retrying A2S query ({}/{})", retries, MAX_RETRIES);
+                    thread::sleep(Duration::from_secs(1));
+                }
+
+                let timeout = Duration::from_secs(10);
+                let _ = cvar.wait_timeout(lock.lock().unwrap(), timeout).unwrap();
+            }
+        });
+
+        // let registration = std::sync::Arc::new(reg);
+        let registration = std::sync::Arc::new(*self);
+        registration.start_heartbeat(&server_list_url, "Some Server", "");
+        // let reg = std::sync::Arc::new(self);
+        // reg.start_heartbeat( &server_list_url, "Some Server", "");
     }
 }

@@ -1,12 +1,11 @@
 use std::{
-    io::{stdin, BufRead, BufReader},
-    net::TcpListener,
-    sync::{Arc, Mutex},
-    thread,
+    io::{stdin, BufRead, BufReader}, net::TcpListener, os::raw::c_void, sync::{Arc, Mutex}, thread
 };
 
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
+
+use crate::ue::{FName, FString, UObject};
 
 
 #[cfg(feature="rcon")]
@@ -50,20 +49,154 @@ pub fn handle_rcon() {
     }
 }
 
+#[repr(C)]
+pub struct AArgonSDKModBase_C {
+    // unknown layout – leave empty or fill in as needed
+    _private: [u8; 0], // or a guessed size
+}
 
+// pub type TSubclassOf<T> = *mut crate::ue::UClass;
+
+#[repr(C)]
+pub struct MyStruct {
+    // pub ModActors: TMap<TSubclassOf<AArgonSDKModBase_C>, FString>, // Offset 0x0030
+    // pub ModActors: TMap<*mut crate::ue::UClass, FString>, // Offset 0x0030
+    // pub CustomObjects: TMap<*mut UObject, FString>,                // Offset 0x0080
+    // pub CustomObjects: TMap<FName, FName>,                // Offset 0x0080
+}
 // FIME: Nihi: this need some validation
 // maybe a proper prompt etc
 #[cfg(feature="cli-commands")]
 pub fn handle_cmd() {
     // let line = String::new();
+
+    use std::os::raw::c_void;
+    use std::ptr::null_mut;
+
+    use crate::resolvers::asset_registry::{o_Conv_InterfaceToObject, o_FNameCtorWchar, o_GetAsset, o_GetAssetsByClass, FAssetData, GetAssetsByClass_detour_fkt, TScriptInterface};
+    use crate::ue::{FName, FNameEntryId, FString, TArray};
+    use crate::{resolvers::asset_registry::o_GetAssetRegistry, sinfo};
+    use crate::{o_GetAssetRegistry_Helper, swarn};
     loop {
         let mut input = String::new();
         stdin().read_line(&mut input)
             .expect("UTF-8 unsupported");
         let cmd_store: Arc<Mutex<Option<String>>> = Arc::clone(&LAST_COMMAND);
-        *cmd_store.lock().unwrap() = Some(input.trim().to_string());
-        if input.as_str() == "findobj" {
-            crate::sdebug!(f; "findobj {:?}", 123);
+        // if input.as_str() == "findobj" {
+        //     crate::sdebug!(f; "findobj {:?}", 123);
+        // }
+
+        match input.as_str().trim() {
+            "findobj" => {
+                sinfo!(f; "Nothing");
+            },
+            "listmods" => {
+                sinfo!(f; "Nothing 2");
+                unsafe {
+                    // // let mut asdf: *mut c_void = null_mut();
+                    // let AR = o_GetAssetRegistry_Helper.call(&mut result as *mut TScriptInterface);
+                    // // let test2 = widestring::U16CString::from_str("DA_ModMarker_C");
+                    // let cmd = "DA_ModMarker_C".to_string();
+
+                    // let wstr = widestring::U16CString::from_str(cmd.as_str())
+                    // .unwrap()
+                    // .as_slice_with_nul();
+                    // let wstr: *mut u16 = widestring::U16CString::from_str(cmd.as_str())
+                    //     .unwrap()
+                    //     .as_slice_with_nul()
+                    //     .as_ptr() as *mut u16;
+                    // let fstring = FString::from(test2);
+
+                    let cmd = "DA_ModMarker_C".to_string();
+
+                    // let mut result = TScriptInterface {
+                    //     object: std::ptr::null_mut(),
+                    //     interface: std::ptr::null_mut(),
+                    // };
+
+                    let mut result = TScriptInterface::new();
+
+                    let AR: *mut TScriptInterface = o_GetAssetRegistry_Helper.call(&mut result as *mut TScriptInterface);
+                    // let raw_obj: *mut c_void = o_ConvInterfaceToObject.call(&result);
+
+                    // let AR = o_Conv_InterfaceToObject.call()
+                    
+                    let mut fname = FName {
+                        comparison_index: FNameEntryId{ value:0 },
+                        number: 0,
+                    };
+
+                    let mut fstring2 = FString::from(
+                        widestring::U16CString::from_str(cmd.as_str())
+                        .unwrap()
+                        .as_slice_with_nul());
+
+                    let wchar_ptr: *mut u16 = fstring2.as_mut_slice().as_mut_ptr();
+
+                    let name_res: *mut FName = o_FNameCtorWchar.call(&mut fname as *mut FName,
+                        wchar_ptr,
+                        crate::resolvers::asset_registry::EFindName::Find);
+                    // let name_res: *mut FName = o_FNameCtorWchar.call(
+                    //     &mut fname as *mut FName,
+                    //     wchar_ptr,
+                    //     crate::resolvers::asset_registry::EFindName::Add, // instead of Find
+                    // );
+                    sinfo!(f; "Name found: '{}'", *name_res);     
+                    // sinfo!(f; "Name fname dbg: '{:#?}'", fname);    
+                    // sinfo!(f; "Name fname: '{}'", fname);      
+                    // sinfo!(f; "Name found: '{:#?}'", *name_res);  
+                    // sinfo!(f; "FName index: {}, number: {}", (*name_res).comparison_index.value, (*name_res).number);
+   
+                    
+                    let obj = (*AR).object;
+                    let obj_with_offset = (obj as *mut u8).wrapping_add(0x28) as *mut UObject; // FIXME: vtable!!!
+
+                    swarn!(f; "AR: {:#?}", AR);
+                    // ClassPathName: FName, OutAssetData: * mut TArray<FAssetData>, bSearchSubClasses: bool
+                    // let mut res_arr: TArray<FAssetData> = TArray::<FAssetData>::default();
+                    // let mut res_arr = TArray::<FAssetData>::with_capacity(64);
+                    let mut res_arr = TArray::<FAssetData>::default();
+                    // sinfo!(f; "Raw num: {}, max: {}", res_arr.len(), res_arr.capacity());
+                    // let out = GetAssetsByClass_detour_fkt(
+                    //     obj_with_offset as *mut c_void,
+                    //     *name_res,
+                    //     &mut res_arr as *mut TArray<FAssetData>,
+                    //     true
+
+                    // );
+                    // sinfo!(f; "Raw num: {}, max: {}", res_arr.len(), res_arr.capacity());
+                    
+                    // if (out) {
+                    //     sinfo!(f; "Mods: {}", res_arr.len());
+                    //     for (cnt, a) in res_arr.as_slice().iter().enumerate() {
+                    //         sinfo!(f; "{}: {}", cnt, a.PackagePath);
+                    //     }
+                    // }
+                    let out = o_GetAssetsByClass.call(
+                        obj_with_offset as *mut c_void,
+                        *name_res,
+                        &mut res_arr as *mut TArray<FAssetData>,
+                        true
+                    );
+                    sinfo!(f; "Raw num: {}, max: {}", res_arr.len(), res_arr.capacity());
+                    
+                    if (out) {
+                        sinfo!(f; "Mods: {}", res_arr.len());
+                        for (cnt, a) in res_arr.as_mut_slice().iter().enumerate() {
+                            sinfo!(f; "{}: {}", cnt, a.PackagePath);
+                            let obj: *mut UObject = o_GetAsset.call(a as *const FAssetData as *mut FAssetData); // FIXME: Yeah..
+                            if !obj.is_null() {
+                                swarn!(f; "Obj: {}", (&*obj).uobject_base_utility.uobject_base.name_private);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {     
+                sinfo!(f; "Unmatched cmd: '{}'", input.as_str());        
+                *cmd_store.lock().unwrap() = Some(input.trim().to_string());
+            }
+
         }
     }
 }
