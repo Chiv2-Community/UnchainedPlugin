@@ -2,6 +2,7 @@
 
 mod resolvers;
 mod scan;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, thread};
 use std::fs::File;
@@ -24,6 +25,7 @@ use patternsleuth::resolvers::unreal::{fname::FNameToString,
                                 gmalloc::GMalloc,
                                 guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}
                             };
+use resolvers::asset_registry::*;
 use resolvers::admin_control::*;
 #[cfg(feature="kismet-log")]
 use resolvers::kismet_dev::*;
@@ -31,7 +33,10 @@ use serde::Serialize;
 use serde_json::to_writer_pretty;
 use tools::logger::init_syslog;
 #[cfg(feature="server-registration")]
-use tools::server_registration::Registration;
+use tools::registration::Registration;
+// use tools::server_registration::Registration;
+use windows::core::PCSTR;
+use windows::Win32::System::Console::SetConsoleTitleA;
 use self::resolvers::{PLATFORM, BASE_ADDR, PlatformType};
 
 use log::info;
@@ -125,10 +130,16 @@ struct CLIArgs {
     #[arg(long = "next-map-name")]
     next_map: Option<String>,
     // 
+    #[arg(long = "launched-profile")]
+    launched_profile: Option<String>,
+    // 
     #[arg(long = "playable-listen")]
     playable_listen: bool,
+    // 
+    #[arg(long = "register")]
+    register: bool,
     // // 
-    #[arg(long = "server-browser-backend")]
+    #[arg(long = "server-browser-backend", default_value="https://servers.polehammer.net")]
     server_browser_backend: Option<String>,
     // // 
     #[arg(long = "server-password")]
@@ -148,26 +159,26 @@ struct CLIArgs {
 
 
     // UNHANDLED START
-    #[arg(long = "AUTH_LOGIN")]
-    auth_login: Option<String>,
-    #[arg(long = "AUTH_PASSWORD")]
-    auth_password: Option<String>,
-    #[arg(long = "AUTH_TYPE")]
-    auth_type: Option<String>,
-    #[arg(long = "epicapp")]
-    epicapp: Option<String>,
-    #[arg(long = "epicenv")]
-    epicenv: Option<String>,
-    #[arg(long = "EpicPortal")]
-    epic_portal: bool,
-    #[arg(long = "epicusername")]
-    epicusername: Option<String>,
-    #[arg(long = "epicuserid")]
-    epicuserid: Option<String>,
-    #[arg(long = "epiclocale")]
-    epiclocale: Option<String>,
-    #[arg(long = "epicsandboxid")]
-    epicsandboxid: Option<String>,
+    // #[arg(long = "AUTH_LOGIN")]
+    // auth_login: Option<String>,
+    // #[arg(long = "AUTH_PASSWORD")]
+    // auth_password: Option<String>,
+    // #[arg(long = "AUTH_TYPE")]
+    // auth_type: Option<String>,
+    // #[arg(long = "epicapp")]
+    // epicapp: Option<String>,
+    // #[arg(long = "epicenv")]
+    // epicenv: Option<String>,
+    // #[arg(long = "EpicPortal")]
+    // epic_portal: bool,
+    // #[arg(long = "epicusername")]
+    // epicusername: Option<String>,
+    // #[arg(long = "epicuserid")]
+    // epicuserid: Option<String>,
+    // #[arg(long = "epiclocale")]
+    // epiclocale: Option<String>,
+    // #[arg(long = "epicsandboxid")]
+    // epicsandboxid: Option<String>,
     // UNHANDLED END
 
     #[arg(trailing_var_arg = true)]
@@ -276,7 +287,7 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
         #[cfg(feature="engine_loop")]
         FEngineLoopInit,
         ClientMessage,
-        // StaticFindObjectSafe,
+        StaticFindObjectSafe,
         #[cfg(feature="kismet-log")]
         KismetExecutionMessage,
     ]];
@@ -295,6 +306,19 @@ pub unsafe fn attach_hooks(base_address: usize, offsets: HashMap<String, u64>) -
         #[cfg(feature = "dev-joindata")]
         JoinData,
         JoinDataTwo,
+        MatchUpdate,
+        // GetStageTimeRemaining,
+        SetMatchState,
+        LogFImpl,
+        Log2,
+        GetAssetRegistry,
+        Conv_InterfaceToObject,
+        GetAssetsByClass,
+        GetAssetRegistry_Helper,
+        FNamePool,
+        FNameCtorWchar,
+        GetAsset,
+        // LogFImpl2,
         // ShowSusMessage,
         // JoinDataFour
     ]]);
@@ -356,27 +380,31 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         // Normalize `key=value` and `-flag` → `--flag`
         let (flag, value_opt): (String, Option<String>) = 
             if let Some((k, v)) = arg.split_once('=') {
+                // println!("{} Split by =", arg);
+                println!("k '{}' , v '{}' ", k, v);
                 (format!("--{}", k.trim_start_matches('-')), Some(v.to_string()))
             } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
+                // println!("{} Split by -", arg);
                 (format!("--{}", &arg[1..]), None)
             } else {
+                // println!("{} Split by else", arg);
                 (arg.clone(), None)
             };
         
-        // println!("cur: {flag}");
+        // println!("cur: '{flag}'");
         let cur_flag = flag.clone();
         if known_flags.contains(&flag) {
-            result.push(flag);
+            result.push(flag.trim().to_string());
             if let Some(v) = value_opt {
-                // println!("option: {v}");
+                // println!("option: '{v}'");
                 last_opt = Some(v.clone());
-                result.push(v);
+                result.push(v.trim().to_string());
             } 
             else if let Some(peek) = args.peek() {
                 if !peek.starts_with('-') {
                     let var = args.next().unwrap();
-                    // print!("pushing {var}");
-                    result.push(var);
+                    // print!("pushing '{var}'");
+                    result.push(var.trim().to_string());
                 }
             }
         }
@@ -390,8 +418,14 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
                     // println!("Res: {} Trailing string {}, last flag {}, last result {}",result.len(), flag, last, last_valid);
                     if o == last_valid {
                         if let Some(last_mut) = result.last_mut() {
-                            last_mut.push(' ');
-                            last_mut.push_str(&cur_flag);
+                            if (cur_flag.len() > 0)
+                            {
+                                // println!("Trailing '{cur_flag}'");
+                                last_mut.push(' ');
+                                last_mut.push_str(&cur_flag.trim().to_string());
+
+                            }
+                            // last_mut = last_mut.trim().to_string();
                         }
                     }
                 }
@@ -400,14 +434,15 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         last_flag = Some(cur_flag);
     }
 
+    println!("Res: {:?}", result);
     result
 }
 
 unsafe fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     let parsed = normalize_and_filter_args(args);
+    println!("Pre-Parsed CLI: {:#?}", parsed);
     let cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI atgs");
-    // println!("Parsed CLI: {:#?}", cli);
     Ok(cli)
 }
 unsafe fn init_globals() -> Result<(), clap::error::Error>{
@@ -442,7 +477,7 @@ unsafe fn init_globals() -> Result<(), clap::error::Error>{
         cli_args: args,
         platform
     });
-    sinfo!(f; "{GLOBALS:#?}");
+    sdebug!(f; "{GLOBALS:#?}");
     Ok(())
 }
 
@@ -497,10 +532,27 @@ pub extern "C" fn generate_json() -> u8 {
     init_syslog().expect("Failed to init syslog");
     unsafe { 
         match init_globals() {
-            Ok(_) => {},
+            Ok(_) => {
+                // swarn!("{:#?}", globals().cli_args)
+            },
             Err(e) => serror!(f; "No globals: {}", e),
         }
      };
+
+     
+    unsafe {
+        let mut title_pcstr = PCSTR("Chivalry 2 Unchained\0".to_string().as_ptr() as _);
+
+        if let Some(profile_name) = &globals().cli_args.launched_profile {
+            let title = format!("Chivalry 2 Unchained - {}\0", profile_name);
+            title_pcstr = PCSTR(title.as_ptr() as _);
+        }
+        
+        match SetConsoleTitleA(title_pcstr) {
+            Ok(_) => {},
+            Err(e) => serror!(f; "Failed to set title {e}"),
+        }
+    }
 
     #[cfg(feature="rcon")]
     std::thread::spawn(|| {
@@ -530,8 +582,10 @@ pub extern "C" fn generate_json() -> u8 {
     // PLATFORM.set(platform).expect("Platform already set");
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
 
-    let offsets = scan::scan().expect("Failed to scan");
+    let mut offsets = scan::scan().expect("Failed to scan");
     let len_u8 = offsets.len() as u8;
+    let addr_temp = *globals().resolution.kismet_system_library.0.get("Conv_InterfaceToObject").unwrap() - exe.base_address;
+    offsets.insert("Conv_InterfaceToObject".to_string(), addr_temp as u64);
     // FIXME: Nihi: ?
     unsafe {
         attach_hooks(exe.base_address, offsets.clone()).unwrap();
@@ -540,6 +594,7 @@ pub extern "C" fn generate_json() -> u8 {
     
     sinfo!("trying to patch");
     // 19626AE + 0xF = 19626BD
+    // #[cfg(feature="skip_msg")]
     match offsets.get("ShowSusMessage") {
         Some(a) => { //FIXME: Nihi: <- usize or u64 or *mut u8
 
@@ -570,25 +625,30 @@ pub extern "C" fn generate_json() -> u8 {
 
     
     #[cfg(feature="server-registration")]
-    if globals().cli_args.rcon_port.is_some() { // FIXME: Nihi: better way than checking for rcon port. Listen?
+    if globals().cli_args.rcon_port.is_some() ||
+        globals().cli_args.register { // FIXME: Nihi: better way than checking for rcon port. Listen?
         let cli = globals().args();
+        // sinfo!(f; "cli: {cli:?}");
         
         let backend = cli.server_browser_backend.clone().unwrap();
-        let reg = Registration::new(
+        let reg = Arc::new(Registration::new(
             "127.0.0.1",
-            7071
-        );
+            globals().cli_args.game_server_query_port.unwrap()
+        ));
         
         // let last_info = std::sync::Arc::clone(&tools::server_registration::REGISTRATION);
         // *last_info.lock().unwrap() = Some(reg);
-        reg.start(&backend, "Chivalry 2 Local Server", "");
-        let registration = std::sync::Arc::new(reg);
-        registration.start_heartbeat(&backend, "Some Server", "");
+        sinfo!(f; "Started server registration");
+        // (&backend);
+        reg.start();
+        // let registration = std::sync::Arc::new(reg);
+        // registration.start_heartbeat(&backend, "Some Server", "");
         info!("Backend: {backend}");
         // std::thread::spawn(|| {
         // });
 
     }
+    sinfo!("Generate_json done");
     len_u8
 }
 

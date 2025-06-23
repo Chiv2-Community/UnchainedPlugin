@@ -125,7 +125,7 @@ void CreateDebugConsole() {
 	freopen_s(&pCerr, "CONOUT$", "w", stderr);
 	std::ios::sync_with_stdio(true);
 
-	SetConsoleTitleA("Chivalry 2 Unchained Debug");
+	// SetConsoleTitleA("Chivalry 2 Unchained Debug");
 
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	DWORD consoleMode;
@@ -141,6 +141,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		initialize_global_logger(LogLevel::INFO);
 		GLOG_INFO("Logger initialized  {}", generate_json());
 
+		GLOG_INFO("Parsing CLI args");
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
 
 		HMODULE hModule = static_cast<HMODULE>(lpParameter);
