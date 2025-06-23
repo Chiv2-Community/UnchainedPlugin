@@ -8,4 +8,5 @@ pub mod memtools;
 pub mod log_macros;
 
 #[cfg(feature="server-registration")]
-pub mod server_registration;
+pub mod registration;
+// pub mod server_registration;
