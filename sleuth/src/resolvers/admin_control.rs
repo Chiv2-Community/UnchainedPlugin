@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::os::raw::c_void;
 use crate::resolvers::rcon::LAST_COMMAND;
 use crate::chiv2::*;
+use crate::serror;
 use crate::ue::*;
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
@@ -43,7 +44,7 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     }
 
     if fstring.len() > 1 {
-        warn!("Execuing Command: {fstring}");
+        warn!("Executing Command: {fstring}");
         *lock.lock().unwrap() = None;
         unsafe { o_ExecuteConsoleCommand.call(&mut fstring); }
     }
@@ -100,12 +101,31 @@ define_pattern_resolver!(StaticFindObjectSafe, [
 // UObject * __cdecl StaticFindObjectSafe(UClass.conflict *param_1,UObject *param_2,wchar_t *param_3,bool param_4)
 // UObject* StaticFindObjectSafe( UClass* ObjectClass, UObject* ObjectParent, const TCHAR* InName, bool bExactClass )
 #[cfg(feature="object-lookup")]
-CREATE_HOOK!(StaticFindObjectSafe, *mut UObject, (ObjectClass:*mut UClass, ObjectParent:*mut UObject, InName:*mut FString, bExactClass: bool), {
+CREATE_HOOK!(StaticFindObjectSafe, *mut UObject, (ObjectClass:*mut UClass, ObjectParent:*mut UObject, InName:*mut u16, bExactClass: bool), {
     if !InName.is_null() {
         unsafe {
             let reference  = &*InName;
             // Now you can use `reference` safely
-            // crate::sdebug!(f; "{:?}", reference);
+            let mut class_str = "".to_string();
+            let mut parent_str = "".to_string();
+            // FIXME: Oh god
+            if !ObjectClass.is_null() {
+                // crate::sinfo!(f; "ObjectClass {}", (&*ObjectClass).ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private);
+                class_str = (&*ObjectClass).ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private.to_string();
+            }
+            if !ObjectParent.is_null() {
+                // crate::sinfo!(f; "ObjectParent {}", (&*ObjectParent).uobject_base_utility.uobject_base.name_private);
+                parent_str = (&*ObjectParent).uobject_base_utility.uobject_base.name_private.to_string();
+            }
+
+            crate::sinfo!(f; "Exact? {} '{}' '{}' '{}'",
+                // (&*ObjectClass).ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private,
+                // (&*ObjectParent).uobject_base_utility.uobject_base.name_private,
+                bExactClass,
+                class_str,
+                parent_str,
+                widestring::U16CString::from_ptr_str(InName).display(),
+            );
         }
     }
 });
@@ -241,3 +261,163 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     }                  
 });
 
+// Match state change
+// void __thiscall UTBLMatchesSubsystem::MatchUpdate(UTBLMatchesSubsystem *this)
+#[cfg(feature = "dev")]
+define_pattern_resolver!(MatchUpdate,[
+    "48 89 5C 24 08 57 48 83 EC 20 48 8B D9 ?? ?? ?? ?? ?? 48 8B F8 48 85 C0 ?? ?? ?? ?? ?? ?? 48 8D 54 24 38 48 8B C8 ?? ?? ?? ?? ?? 48 8B",
+    "48 89 5C 24 ?? 57 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B F8 48 85 C0 0F 84 ?? ?? ?? ??"
+    ]);
+
+#[cfg(feature = "dev")]
+CREATE_HOOK!(MatchUpdate,(arg0: *mut u8),{
+    crate::sinfo![f; "Triggered!"];
+});
+
+// // float __thiscall ATBLGameState::GetStageTimeRemaining(ATBLGameState *this)
+#[cfg(feature = "dev")]
+define_pattern_resolver![GetStageTimeRemaining,[
+    "40 53 48 83 EC 40 48 8B 01 48 8B D9 0F 29 7C 24 ?? 0F 57 FF FF 90 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 03 48 8B CB 0F 29 74 24 ?? F3 0F 10 B3 ?? ?? ?? ?? FF 90 ?? ?? ?? ?? F3 0F 5C F0 F3 0F 5F F7 0F 28 C6 0F 28 74 24 ?? 0F 28 7C 24 ?? 48 83 C4 40 5B C3 0F 28 7C 24 ?? 0F 57 C0 48 83 C4 40 5B C3"
+    ]
+,|ctx, patterns| {
+    let futures = ::patternsleuth::resolvers::futures::future::join_all(
+        patterns.iter()
+            .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
+    ).await;
+
+    // FIXME (2 of 3)
+    futures.into_iter().flatten().collect::<Vec<usize>>()[1]
+}
+];
+
+#[cfg(feature = "dev")]
+// CREATE_HOOK!(GetStageTimeRemaining, f32, (arg0: *mut u8), {
+//     // serror!("RETVAL: {}", ret_val);
+//     // crate::sinfo![f; "Triggered!"];
+//     // ret_val
+// });
+// CREATE_HOOK!(GetStageTimeRemaining, POST, f32, (arg0: *mut u8), |ret_val| {
+//     serror!("RETVAL: {}", ret_val);
+//     crate::sinfo![f; "Triggered!"];
+//     ret_val
+// });
+
+// void __thiscall AGameMode::SetMatchState(AGameMode *this,FName param_1)
+#[cfg(feature = "dev")]
+define_pattern_resolver!(SetMatchState,[
+    "48 89 5C 24 ?? 56 48 83 EC 20 48 8B DA 48 8B F1 48 39 91 ?? ?? ?? ??"
+    ]);
+#[cfg(feature = "dev")]
+CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
+    info![target: "server", "Changed! {}", new_state];
+    // unsafe {
+    //     let time_rem = o_GetStageTimeRemaining.call(this_ptr);
+    //     if time_rem != 0.0 {
+    //         crate::sinfo!(f; "Time: {}", time_rem);
+    //     }        
+    // }
+});
+
+enum UELogType {
+    NoLogging = 0,
+    Fatal = 1,
+    Error = 2,
+    Warning = 3,
+    Display = 4,
+    Log = 5,
+    Verbose = 6,
+    All = 7,
+    // VeryVerbose = 7,
+    NumVerbosity = 8,
+    VerbosityMask = 15,
+    SetColor = 64,
+    BreakOnLog = 128,
+}
+
+// void __thiscall FOutputDevice::LogfImpl(FOutputDevice *this,Type param_1,wchar_t *param_2)
+// longlong * FUN_14352dec0(longlong *param_1,longlong *param_2,short **param_3,char param_4)
+#[cfg(feature = "dev")]
+define_pattern_resolver!(LogFImpl,[
+    // "4C 89 44 24 ?? 4C 89 4C 24 ?? 53 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 58 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 49 8B F8",
+    "44 88 4C 24 ?? 48 89 54 24 ?? 55 53 56 57 41 54 41 55"
+    ]);
+#[cfg(feature = "dev")]
+// CREATE_HOOK!(LogFImpl,(this_ptr: *mut c_void, Type: u8, Text: *mut u8),{
+CREATE_HOOK!(LogFImpl, POST, *mut i64, (
+    param_1: *mut i64,
+    param_2: *mut i64,
+    param_3: *mut *mut i16,
+    param_4: i8,), |ret_val: *mut i64| {
+// CREATE_HOOK!(LogFImpl,(this_ptr: *mut c_void, Type: u8, Text: *const u16),{
+    	
+    // crate::sinfo![f; "TEXT"];
+    unsafe {
+        if param_3.is_null() || (*param_3).is_null() {
+            // Handle null pointer safely
+            // return std::ptr::null_mut();
+        } else {
+    
+            let raw_u16_ptr: *const u16 = *param_3 as *const u16;
+            let u16_cstr = widestring::U16CStr::from_ptr_str(raw_u16_ptr);
+            if !u16_cstr.to_string_lossy().contains("RCON_INTERCEPT") {
+                crate::sinfo![f; "{}", u16_cstr.display()];
+            }
+        }
+
+    }
+
+    // if !Text.is_null() {
+    //     unsafe {
+	// 		let msg = widestring::U16CStr::from_ptr_str(Text);
+	// 		// let string =  FString::from(msg.as_slice_with_nul());
+	// 		let mut message = msg.to_string_lossy();
+	// 		message = match message.contains('\n') {
+	// 			true => format!("\n{message}"),//.replace("\r\n", " "),
+	// 			false => message,
+	// 		};
+    //         crate::sinfo![f; "{}", message];
+			
+    //     }
+    // }
+    ret_val
+});
+
+// void __thiscall FOutputDevice::LogfImpl(FOutputDevice *this,wchar_t *param_1)
+#[cfg(feature = "dev")]
+define_pattern_resolver!(LogFImpl2,[
+    "48 89 54 24 ?? 4C 89 44 24 ?? 4C 89 4C 24 ?? 53 55 56 57 41 54 41 55"
+    ]);
+#[cfg(feature = "dev")]
+// CREATE_HOOK!(LogFImpl2, POST, *mut u16, (this_ptr: *mut c_void, Text: *const u16), |ret_val: *mut u16|{
+CREATE_HOOK!(LogFImpl2, POST, *mut u16, (
+    param_1: *mut i64,
+    param_2: *mut i64,
+    param_3: *mut *mut i16,
+    param_4: i8,), |ret_val: *mut u16|{
+// CREATE_HOOK!(LogFImpl2,(this_ptr: *mut c_void, Text: *const u16),{
+    	
+    crate::sinfo![f; "TEXT2"];
+    // if !ret_val.is_null() {
+    //     unsafe {
+	// 		let msg = widestring::U16CStr::from_ptr_str(ret_val.clone());
+	// 		// let string =  FString::from(msg.as_slice_with_nul());
+	// 		let mut message = msg.to_string_lossy();
+	// 		message = match message.contains('\n') {
+	// 			true => format!("\n{message}"),//.replace("\r\n", " "),
+	// 			false => message,
+	// 		};
+    //         crate::sinfo![f; "{}", message];
+			
+    //     }
+    // }
+    ret_val
+});
+
+// never triggers
+// void __thiscall FOutputDevice::Log(FOutputDevice *this,wchar_t *param_1)
+#[cfg(feature = "dev")]
+define_pattern_resolver!(Log2,["48 89 5C 24 ?? 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 4C 8B 17"]);
+#[cfg(feature = "dev")]
+CREATE_HOOK!(Log2, (this_ptr: *mut c_void, Text: *mut *mut i16),{
+    crate::sinfo![f;    "Triggered!"];
+});
