@@ -45,9 +45,7 @@ macro_rules! define_pocess {
             futures
                 .into_iter()
                 .flatten()
-                .collect::<Vec<usize>>()
-                .get(0)
-                .cloned()
+                .next()
                 .ok_or_else(||
                     ::patternsleuth::resolvers::ResolveError::Msg(format!(
                         "Failed to find match for {name} with one of the patterns: {patterns:?}",
