@@ -31,7 +31,7 @@ macro_rules! define_pocess {
                     .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
             ).await;
     
-            ::patternsleuth::resolvers::ensure_one(futures.into_iter().flatten())?
+            ::patternsleuth::resolvers::ensure_one(futures.into_iter().flatten())
         })
     }};
 
@@ -42,8 +42,18 @@ macro_rules! define_pocess {
                     .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
             ).await;
     
-            // FIXME
-            futures.into_iter().flatten().collect::<Vec<usize>>()[0]
+            futures
+                .into_iter()
+                .flatten()
+                .collect::<Vec<usize>>()
+                .get(0)
+                .cloned()
+                .ok_or_else(||
+                    ::patternsleuth::resolvers::ResolveError::Msg(format!(
+                        "Failed to find match for {name} with one of the patterns: {patterns:?}",
+                        name = stringify!($name), patterns = $patterns
+                    ).into())
+            )
         })
     }};
 
@@ -57,7 +67,7 @@ macro_rules! define_pocess {
             patternsleuth::resolvers::try_ensure_one(
                 res.iter()
                     .flatten()
-                    .map(|a| -> patternsleuth::resolvers::Result<usize> { Ok($ctx.image().memory.rip4(*a)?) }))?
+                    .map(|a| -> patternsleuth::resolvers::Result<usize> { Ok($ctx.image().memory.rip4(*a)?) }))
         })
     }};
     
@@ -76,7 +86,7 @@ macro_rules! define_pocess {
                 // print!("PART RESULT: {:?}", offset);
                 results.push(offset);
             }
-            ensure_one(results.into_iter().flatten())?
+            ensure_one(results.into_iter().flatten())
         })
     }};
 
@@ -95,14 +105,19 @@ macro_rules! define_pocess {
                 fns[0] = fns[1]; // FIXME: deque? last?
                 fns.pop();
             }
-            ensure_one(fns)?
+            ensure_one(fns)
         })
     }};
 
     // Wrap code and define_pattern_resolver
     (@emit_process_inline $name:ident, |$ctx:ident, $patterns:ident| $body:block) => {{
-        let result = $body;
-        Ok($name(result))
+        let result = $body.map($name);
+
+        if let Err(msg) = &result {
+            println!("Failed to resolve {}: {:?}", stringify!($name), msg);
+        }
+
+        result
     }};
 }
 
