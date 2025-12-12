@@ -32,6 +32,14 @@ extern "C" uint8_t generate_json();
 
 #include "hooks/all_hooks.h"
 
+
+#include <mutex>
+#include <condition_variable>
+
+std::mutex mtx;
+std::condition_variable cv;
+bool ready = false;
+
 void handleRCON(RCONState& rcon_state, int port) {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -177,8 +185,82 @@ void CreateDebugConsole() {
 	GLOG_INFO("Debug console created successfully\n");
 }
 
-DWORD WINAPI  main_thread(LPVOID lpParameter) {
-	try {
+
+
+bool Patch(BYTE *address) {
+  // Patch the target function to always return true.
+  // mov al, 1; ret
+//   const BYTE patchBytes[] = {0xB0, 0x01, 0xC3};
+//   const BYTE patchBytes[] = {0x90, 0x90 };
+  const BYTE patchBytes[] = {0xEB};
+  DWORD oldProtect;
+  if (!VirtualProtect(address, sizeof(patchBytes), PAGE_EXECUTE_READWRITE,
+                      &oldProtect)) {
+    // LogMessage(LogLevel::INFO, "UniversalPatch", __LINE__,
+    // (std::ostringstream() << "Failed to change protection at " << std::hex <<
+    // address).str());
+
+    // GLOG_INFO("Failed to change protection\n");
+    return false;
+  }
+
+  std::memcpy(address, patchBytes, sizeof(patchBytes));
+  FlushInstructionCache(GetCurrentProcess(), address, sizeof(patchBytes));
+  VirtualProtect(address, sizeof(patchBytes), oldProtect, &oldProtect);
+    // GLOG_INFO("Patched Sig\n");
+  return true;
+}
+
+void * FPakPlatformFile = nullptr;
+
+typedef bool (*FPakPlatformFile_Mount_t)(void /*FPakPlatformFile*/  *this_ptr, wchar_t *param_1,int param_2,wchar_t *param_3,bool param_4);
+FPakPlatformFile_Mount_t o_FPakPlatformFile_Mount;
+
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+bool hk_FPakPlatformFile_Mount(void /*FPakPlatformFile*/  *this_ptr, wchar_t *param_1,int param_2,wchar_t *param_3,bool param_4) {
+    *(bool*)((uint8_t*)this_ptr + 0x30) = false;
+    FPakPlatformFile = this_ptr;
+    if (param_3 != nullptr) {
+        printf("   mount path: %ls\n", param_3);
+    }   
+    bool res = o_FPakPlatformFile_Mount(this_ptr, param_1, param_2, param_3, param_4);
+    // GLOG_INFO("FPakPlatformFile__Mount: {}  : {}", std::wstring(param_1), res);
+    printf(">>>>>>>>>>>> FPakPlatformFile__Mount: %ls  loaded: %d index: %d\n", param_1, res, param_2);
+    return res;
+}
+
+// // FUN_141026be0
+// typedef void * (*SCOPED_BOOT_TIMING_t)(void * this_ptr,wchar_t *param_1);
+// SCOPED_BOOT_TIMING_t o_SCOPED_BOOT_TIMING;
+
+// // bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+// void * hk_SCOPED_BOOT_TIMING(void * this_ptr, wchar_t *param_1) {
+//     if (param_1 != nullptr && wstrlen(param_1) > 0) {
+//         printf("   hk_SCOPED_BOOT_TIMING: %ls\n", param_1);
+//     }   
+//     return o_SCOPED_BOOT_TIMING(this_ptr, param_1);
+// }
+// FUN_141026be0
+typedef uint32_t (*GetPakOrderFromFilePath_t)(void * this_ptr, FString * param_1);
+GetPakOrderFromFilePath_t o_GetPakOrderFromFilePath;
+
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+uint32_t hk_GetPakOrderFromFilePath(void * this_ptr, FString * param_1) {
+    
+    // std::unique_lock<std::mutex> lock(mtx);
+
+    // cv.wait(lock, []{ return ready; });
+    auto rval = o_GetPakOrderFromFilePath(this_ptr, param_1);
+    if (param_1 != nullptr) {
+        // printf("   hk_GetPakOrderFromFilePath: %ls %d\n", std::wstring(param_1->str).c_str(), rval);
+        printf("   hk_GetPakOrderFromFilePath: %d\n", rval);
+    }   
+    return 1;
+}
+
+DWORD WINAPI main_thread(LPVOID lpParameter) {
+  try {
+
 		initialize_global_logger(LogLevel::TRACE);
 		GLOG_INFO("Logger initialized.");
 		auto found_offsets = generate_json();
@@ -250,6 +332,32 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 			handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
 		}
 
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/DripSync.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/ChatSendTest.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/ChatHooks.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/ChatCommands.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/BearTest.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/asdf.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/Amos.pak  loaded: 1 index: 3
+        // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/AIArchers.pak  loaded: 1 index: 3
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+// bool hk_FPakPlatformFile_Mount(void /*FPakPlatformFile*/  *this_ptr, wchar_t *param_1,int param_2,wchar_t *param_3,bool param_4) {
+    // bool res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/DripSync.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/ChatSendTest.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/ChatHooks.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/ChatCommands.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/BearTest.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/asdf.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/Amos.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/AIArchers.pak"), 1, NULL, true);
+    // res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/Unchained-Mods.pak"), 1, NULL, true);
+
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            ready = true;
+        }
+        cv.notify_one();
+
 		ExitThread(0);
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());
@@ -263,14 +371,83 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	}
 }
 
+DWORD WINAPI BlockerThread(LPVOID) {
+    // You can safely block here
+    // Sleep(INFINITE); 
+    std::unique_lock<std::mutex> lock(mtx);
 
+    cv.wait(lock, []{ return ready; });
+    return 0;
+}
+
+bool attached = false;
+
+// void FPakFile::GetFilenames(longlong *param_1,longlong *param_2)
+typedef void (*FPakFile_GetFilenames_t)(void * this_ptr, void * param_1);
+FPakFile_GetFilenames_t o_FPakFile_GetFilenames;
+
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+void hk_FPakFile_GetFilenames(void * this_ptr, void * param_1) {
+    
+    // std::unique_lock<std::mutex> lock(mtx);
+
+    printf("   hk_GetPakOrderFromFilePath\n");
+    // cv.wait(lock, []{ return ready; });
+    o_FPakFile_GetFilenames(this_ptr, param_1);
+    // if (param_1 != nullptr) {
+    //     // printf("   hk_FPakFile_GetFilenames: %ls %d\n", std::wstring(param_1->str).c_str(), rval);
+    //     printf("   hk_GetPakOrderFromFilePath: %d\n", rval);
+    // }   
+}
+
+bool Patch2(BYTE *address) {
+  // Patch the target function to always return true.
+  // mov al, 1; ret
+//   const BYTE patchBytes[] = {0xB0, 0x01, 0xC3};
+//   const BYTE patchBytes[] = {0x90, 0x90 };
+  const BYTE patchBytes[] = {0xEB, 0x7c};
+  DWORD oldProtect;
+  if (!VirtualProtect(address, sizeof(patchBytes), PAGE_EXECUTE_READWRITE,
+                      &oldProtect)) {
+    // LogMessage(LogLevel::INFO, "UniversalPatch", __LINE__,
+    // (std::ostringstream() << "Failed to change protection at " << std::hex <<
+    // address).str());
+
+    // GLOG_INFO("Failed to change protection\n");
+    return false;
+  }
+
+  std::memcpy(address, patchBytes, sizeof(patchBytes));
+  FlushInstructionCache(GetCurrentProcess(), address, sizeof(patchBytes));
+  VirtualProtect(address, sizeof(patchBytes), oldProtect, &oldProtect);
+    // GLOG_INFO("Patched Sig\n");
+  return true;
+}
 int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    // HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+    // BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
+    // Patch(baseAddress + 0x1dc45e0); // Patch the function at this address to
+    //                                 // always return true          
+    // CreateThread(nullptr, 0, BlockerThread, nullptr, 0, nullptr);
 	CreateDebugConsole();
+    HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+    BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
+    Patch(baseAddress + 0x2fc8d50 + 0xB7);  // fpakplatformfile_mount
+    Patch2(baseAddress + 0x2fc8d50 + 0xdc3);  // fpakplatformfile_mount
+
+
+	MH_CreateHook(baseAddress + 0x2fc8d50, hk_FPakPlatformFile_Mount, reinterpret_cast<void**>(&o_FPakPlatformFile_Mount));
+	MH_EnableHook(baseAddress + 0x2fc8d50);
+	MH_CreateHook(baseAddress + 0x2fc2d50, hk_FPakFile_GetFilenames, reinterpret_cast<void**>(&o_FPakFile_GetFilenames));
+	MH_EnableHook(baseAddress + 0x2fc2d50);
+
+	// MH_CreateHook(baseAddress + 0x2fc3700, hk_GetPakOrderFromFilePath, reinterpret_cast<void**>(&o_GetPakOrderFromFilePath));
+	// MH_EnableHook(baseAddress + 0x2fc3700);
 	switch (ul_reason_for_call) {
 		case DLL_PROCESS_ATTACH: {
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
 			DisableThreadLibraryCalls(hModule);
-			HANDLE thread_handle = CreateThread(NULL, 0, main_thread, hModule, 0, NULL);
+			HANDLE thread_handle = CreateThread(NULL, 0, main_thread, hModule, 0, NULL);  
 			if (thread_handle) {
 				CloseHandle(thread_handle);
 			} else {

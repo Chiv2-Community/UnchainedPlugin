@@ -1,3 +1,17 @@
+// PDB 48 83 ec 28 65 48 8b 04 25 58 00 00 00 8b 0d 45 b6 05 04 ba 58 00 00 00 48 8b 0c c8 8b 04 0a 39 05 03 61 e3 03 7f 0c 48 8d 05 ea 60 e3 03 48 83 c4 28 c3 48 8d 0d ee 60 e3 03 e8 99 79 3a 02 83 3d e2 60 e3 03 ff 75 df 48 8d 0d 91 03 55 02 e8 e4 77 3a 02 48 8d 0d cd 60 e3 03 e8 18 79 3a 02 48 8d 05 b1 60 e3 03 48 83 c4 28 c3
+// our 48 83 ec 28 65 48 8b 04 25 58 00 00 00 8b 0d 85 68 e1 03 ba 78 00 00 00 48 8b 0c c8 8b 04 0a 39 05 97 91 c2 03 7f 0c 48 8d 05 ea f9 7f 03 48 83 c4 28 c3 48 8d 0d 82 91 c2 03 e8 99 8e 17 02 83 3d 76 91 c2 03 ff 75 df 48 8d 0d d1 38 2e 02 e8 e4 8c 17 02 48 8d 0d 61 91 c2 03 e8 18 8e 17 02 48 8d 05 b1 f9 7f 03 48 83 c4 28 c3
+define_pattern_resolver!(
+    GetPakSigningKeysDelegate,
+    // ["48 83 ec 28 65 48 8b 04 25 58 00 00 00 8b 0d 85 68 e1 03 ba 78 00 00 00 48",]
+    ["48 89 5C 24 08 57 48 83 EC 20 65 48 8B 04 25 58 00 00 00 48 8B F9 8B 15 CC 77 03 04 B9 78",]
+);
+
+define_pattern_resolver!(
+    FPakPlatformFile_Mount,
+    ["4c 8b dc 55 57 49 8d ab 78 fe ff ff 48 81 ec 78 02 00 00 48 8b 05 0e 03 a2 02 48 33 c4 48 89 85 30 01 00 00 0f b6 bd b0 01 00 00 33 c0 49 89 5b e8 49 89 73 e0 48 8b f2 4d 89 63 d8 4d 89 6b d0",]
+    // 4C 8B DC 55 57 49 8D AB 78 FE FF FF 48 81 EC 78 02 00 00 48 8B 05 0E 03 A2 02 48 33 C4 48 89 85 30 01 00 00 0F B6
+);
+
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
     // "75 17 45 84 ED", // STEAM
