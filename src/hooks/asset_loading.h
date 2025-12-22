@@ -8,12 +8,22 @@ REGISTER_HOOK_PATCH(
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
 	const auto attr{ GetFileAttributesW(Filename) };
+	bool res = true;
 	if (attr != INVALID_FILE_ATTRIBUTES && Filename && wcsstr(Filename, L"../../../")) {
+		// if (Filename)
+		// 	printf("FindFileInPakFiles_2: Checking file: %ls: %d\n", Filename, res);
 		if (OutPakFile) OutPakFile = nullptr;
-		return 0;
+		res = 0;
 	}
-
-	return o_FindFileInPakFiles_1(this_ptr, Filename, OutPakFile, OutEntry);
+	else
+		res = o_FindFileInPakFiles_1(this_ptr, Filename, OutPakFile, OutEntry);
+	// true if contains Mods/ArgonSDK/Mods
+	// if (wcsstr(Filename, L"Mods/ArgonSDK/Mods")) {
+	// 	res = 1;
+	// }
+	// if (Filename && !res)
+	// 	printf("FindFileInPakFiles_1: Checking file: %ls: %d\n", Filename, res);
+	return res;
 }
 
 REGISTER_HOOK_PATCH(
@@ -21,13 +31,28 @@ REGISTER_HOOK_PATCH(
 	APPLY_ALWAYS,
 	long long, (void* this_ptr, const wchar_t* Filename, void** OutPakFile, void* OutEntry)
 ) {
+	bool res = true;
+
 	const auto attr{ GetFileAttributesW(Filename) };
 	if (attr != INVALID_FILE_ATTRIBUTES && Filename && wcsstr(Filename, L"../../../")) {
-		if (OutPakFile) OutPakFile = nullptr;
-		return 0;
-	}
+		// if (Filename)
+		// 	printf("FindFileInPakFiles_2: Checking file: %ls: %d\n", Filename, res);
 
-	return o_FindFileInPakFiles_2(this_ptr, Filename, OutPakFile, OutEntry);
+		if (OutPakFile) OutPakFile = nullptr;
+		res = 0;
+	}
+	else
+		res =  o_FindFileInPakFiles_2(this_ptr, Filename, OutPakFile, OutEntry);
+	
+	// true if contains Mods/ArgonSDK/Mods
+	// if (wcsstr(Filename, L"Mods/ArgonSDK/Mods")) {
+	// 	res = 1;
+	// }
+
+	// if (Filename && !res)
+	// 	printf("FindFileInPakFiles_2: Checking file: %ls: %d\n", Filename, res);
+
+	return res;
 }
 
 REGISTER_HOOK_PATCH(

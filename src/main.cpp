@@ -218,11 +218,11 @@ FPakPlatformFile_Mount_t o_FPakPlatformFile_Mount;
 
 // bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
 bool hk_FPakPlatformFile_Mount(void /*FPakPlatformFile*/  *this_ptr, wchar_t *param_1,int param_2,wchar_t *param_3,bool param_4) {
-    *(bool*)((uint8_t*)this_ptr + 0x30) = false;
+    // *(bool*)((uint8_t*)this_ptr + 0x30) = false;
     FPakPlatformFile = this_ptr;
-    if (param_3 != nullptr) {
-        printf("   mount path: %ls\n", param_3);
-    }   
+    // if (param_3 != nullptr) {
+    //     printf("   mount path: %ls\n", param_3);
+    // }   
     bool res = o_FPakPlatformFile_Mount(this_ptr, param_1, param_2, param_3, param_4);
     // GLOG_INFO("FPakPlatformFile__Mount: {}  : {}", std::wstring(param_1), res);
     printf(">>>>>>>>>>>> FPakPlatformFile__Mount: %ls  loaded: %d index: %d\n", param_1, res, param_2);
@@ -258,11 +258,113 @@ uint32_t hk_GetPakOrderFromFilePath(void * this_ptr, FString * param_1) {
     return 1;
 }
 
+
+// void FPakFile::GetFilenames(longlong *param_1,longlong *param_2)
+typedef void (*FPakFile_GetFilenames_t)(void * this_ptr, void * param_1);
+FPakFile_GetFilenames_t o_FPakFile_GetFilenames;
+
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+void hk_FPakFile_GetFilenames(void * this_ptr, void * param_1) {
+    
+    // std::unique_lock<std::mutex> lock(mtx);
+
+    printf(">>>>>>>>>>>>>>>>>>>>>>>   hk_GetPakOrderFromFilePath\n");
+    // cv.wait(lock, []{ return ready; });
+    return o_FPakFile_GetFilenames(this_ptr, param_1);
+    // if (param_1 != nullptr) {
+    //     // printf("   hk_FPakFile_GetFilenames: %ls %d\n", std::wstring(param_1->str).c_str(), rval);
+    //     printf("   hk_GetPakOrderFromFilePath: %d\n", rval);
+    // }   
+}
+
+typedef void (*LinkerLoad_OnNewFileAdded_t)(void * param_1);
+LinkerLoad_OnNewFileAdded_t o_LinkerLoad_OnNewFileAdded;
+
+// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
+void hk_LinkerLoad_OnNewFileAdded(void * param_1) {
+    
+    // std::unique_lock<std::mutex> lock(mtx);
+
+    printf(">>>>>>>>>>>>>>>>>>>>>>>   hk_GetPakOrderFromFilePath\n");
+    // cv.wait(lock, []{ return ready; });
+    return o_LinkerLoad_OnNewFileAdded(param_1);
+    // if (param_1 != nullptr) {
+    //     // printf("   hk_FPakFile_GetFilenames: %ls %d\n", std::wstring(param_1->str).c_str(), rval);
+    //     printf("   hk_GetPakOrderFromFilePath: %d\n", rval);
+    // }   
+}
+
+bool Patch2(BYTE *address) {
+  // Patch the target function to always return true.
+  // mov al, 1; ret
+//   const BYTE patchBytes[] = {0xB0, 0x01, 0xC3};
+//   const BYTE patchBytes[] = {0x90, 0x90 };
+  const BYTE patchBytes[] = {0xEB, 0x7c+2};
+  DWORD oldProtect;
+  if (!VirtualProtect(address, sizeof(patchBytes), PAGE_EXECUTE_READWRITE,
+                      &oldProtect)) {
+    // LogMessage(LogLevel::INFO, "UniversalPatch", __LINE__,
+    // (std::ostringstream() << "Failed to change protection at " << std::hex <<
+    // address).str());
+
+    GLOG_INFO("Failed to change protection\n");
+    return false;
+  }
+
+  std::memcpy(address, patchBytes, sizeof(patchBytes));
+  FlushInstructionCache(GetCurrentProcess(), address, sizeof(patchBytes));
+  VirtualProtect(address, sizeof(patchBytes), oldProtect, &oldProtect);
+    // GLOG_INFO("Patched Sig\n");
+  return true;
+}
+
+// bool Patch_bytes(BYTE *address, const BYTE patchBytes[], size_t size) {
+//   DWORD oldProtect;
+//   if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE,
+//                       &oldProtect)) {
+//     GLOG_INFO("Failed to change protection\n");
+//     return false;
+//   }
+
+//   std::memcpy(address, patchBytes, size);
+//   FlushInstructionCache(GetCurrentProcess(), address, size);
+//   VirtualProtect(address, size, oldProtect, &oldProtect);
+//   return true;
+// }
+#include <initializer_list> // Necessary header
+
+bool Patch_bytes(BYTE *address, std::initializer_list<BYTE> patchBytes, size_t size) {
+    if (patchBytes.size() != size) {
+        GLOG_ERROR("Patch_bytes size mismatch: expected {}, got {}", size, patchBytes.size());
+        return false;
+    }
+    
+    DWORD oldProtect;
+    if (!VirtualProtect(address, size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        GLOG_ERROR("Failed to change protection\n");
+        return false;
+    }
+    std::memcpy(address, patchBytes.begin(), size); 
+    
+    FlushInstructionCache(GetCurrentProcess(), address, size);
+    VirtualProtect(address, size, oldProtect, &oldProtect);
+    return true;
+}
+
+#include <chrono>
+#include <thread> // For std::this_thread::sleep_for
+
+bool attached = false;
+
 DWORD WINAPI main_thread(LPVOID lpParameter) {
   try {
 
 		initialize_global_logger(LogLevel::TRACE);
 		GLOG_INFO("Logger initialized.");
+
+        
+        
+
 		auto found_offsets = generate_json();
 		GLOG_INFO("Sleuth found {} offsets", found_offsets);
 
@@ -281,11 +383,11 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 		GLOG_INFO("");
 
 		GLOG_DEBUG("Initializing MinHook");
-		auto mh_result = MH_Initialize();
-		if (!mh_result == MH_OK) {
-			GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
-			return 1;
-		}
+		// auto mh_result = MH_Initialize();
+		// if (!mh_result == MH_OK) {
+		// 	GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
+		// 	return 1;
+		// }
 		GLOG_DEBUG("MinHook initialized");
 
 		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
@@ -340,6 +442,11 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
         // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/asdf.pak  loaded: 1 index: 3
         // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/Amos.pak  loaded: 1 index: 3
         // >>>>>>>>>>>> FPakPlatformFile__Mount: ../../../TBL/Content/Paks/AIArchers.pak  loaded: 1 index: 3
+        // HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+        // BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
+        // auto sig_bp = baseAddress + 0x1dc45e0; 
+        // // 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC 48 83 EC 28 E8 ?? ?? ?? ?? 48 89 05 ?? ?? ?? ?? 48 83 C4 28 C3 CC CC CC CC CC CC CC CC CC CC CC 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC
+        // Patch_bytes(sig_bp, {0xC3}, 1);
 // bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
 // bool hk_FPakPlatformFile_Mount(void /*FPakPlatformFile*/  *this_ptr, wchar_t *param_1,int param_2,wchar_t *param_3,bool param_4) {
     // bool res = hk_FPakPlatformFile_Mount(FPakPlatformFile, const_cast<wchar_t *>(L"../../../TBL/Content/Paks/DripSync.pak"), 1, NULL, true);
@@ -380,71 +487,51 @@ DWORD WINAPI BlockerThread(LPVOID) {
     return 0;
 }
 
-bool attached = false;
 
-// void FPakFile::GetFilenames(longlong *param_1,longlong *param_2)
-typedef void (*FPakFile_GetFilenames_t)(void * this_ptr, void * param_1);
-FPakFile_GetFilenames_t o_FPakFile_GetFilenames;
 
-// bool Mount(const TCHAR* InPakFilename, uint32 PakOrder, const TCHAR* InPath = NULL, bool bLoadIndex = true);
-void hk_FPakFile_GetFilenames(void * this_ptr, void * param_1) {
-    
-    // std::unique_lock<std::mutex> lock(mtx);
-
-    printf("   hk_GetPakOrderFromFilePath\n");
-    // cv.wait(lock, []{ return ready; });
-    o_FPakFile_GetFilenames(this_ptr, param_1);
-    // if (param_1 != nullptr) {
-    //     // printf("   hk_FPakFile_GetFilenames: %ls %d\n", std::wstring(param_1->str).c_str(), rval);
-    //     printf("   hk_GetPakOrderFromFilePath: %d\n", rval);
-    // }   
-}
-
-bool Patch2(BYTE *address) {
-  // Patch the target function to always return true.
-  // mov al, 1; ret
-//   const BYTE patchBytes[] = {0xB0, 0x01, 0xC3};
-//   const BYTE patchBytes[] = {0x90, 0x90 };
-  const BYTE patchBytes[] = {0xEB, 0x7c};
-  DWORD oldProtect;
-  if (!VirtualProtect(address, sizeof(patchBytes), PAGE_EXECUTE_READWRITE,
-                      &oldProtect)) {
-    // LogMessage(LogLevel::INFO, "UniversalPatch", __LINE__,
-    // (std::ostringstream() << "Failed to change protection at " << std::hex <<
-    // address).str());
-
-    // GLOG_INFO("Failed to change protection\n");
-    return false;
-  }
-
-  std::memcpy(address, patchBytes, sizeof(patchBytes));
-  FlushInstructionCache(GetCurrentProcess(), address, sizeof(patchBytes));
-  VirtualProtect(address, sizeof(patchBytes), oldProtect, &oldProtect);
-    // GLOG_INFO("Patched Sig\n");
-  return true;
-}
 int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     // HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
     // BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
     // Patch(baseAddress + 0x1dc45e0); // Patch the function at this address to
     //                                 // always return true          
     // CreateThread(nullptr, 0, BlockerThread, nullptr, 0, nullptr);
-	CreateDebugConsole();
-    HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
-    BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
-    Patch(baseAddress + 0x2fc8d50 + 0xB7);  // fpakplatformfile_mount
-    Patch2(baseAddress + 0x2fc8d50 + 0xdc3);  // fpakplatformfile_mount
-
-
-	MH_CreateHook(baseAddress + 0x2fc8d50, hk_FPakPlatformFile_Mount, reinterpret_cast<void**>(&o_FPakPlatformFile_Mount));
-	MH_EnableHook(baseAddress + 0x2fc8d50);
-	MH_CreateHook(baseAddress + 0x2fc2d50, hk_FPakFile_GetFilenames, reinterpret_cast<void**>(&o_FPakFile_GetFilenames));
-	MH_EnableHook(baseAddress + 0x2fc2d50);
 
 	// MH_CreateHook(baseAddress + 0x2fc3700, hk_GetPakOrderFromFilePath, reinterpret_cast<void**>(&o_GetPakOrderFromFilePath));
 	// MH_EnableHook(baseAddress + 0x2fc3700);
 	switch (ul_reason_for_call) {
 		case DLL_PROCESS_ATTACH: {
+            CreateDebugConsole();
+            printf("Chivalry 2 Unchained DLL injected successfully.\n");
+            HMODULE baseAddr2 = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+            BYTE *baseAddress = reinterpret_cast<BYTE *>(baseAddr2);
+
+            GLOG_DEBUG("Initializing MinHook");
+            auto mh_result = MH_Initialize();
+            if (!mh_result == MH_OK) {
+                GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
+                return 1;
+            }
+
+            // filename patch
+            auto mount_stricmp_pakname = baseAddress + 0x2fc8d50 + 0xb7; 
+            Patch_bytes(mount_stricmp_pakname, {0xEB}, 1); // jz->jmp
+            auto sig_bp = baseAddress + 0x1dc45e0; 
+            // 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC 48 83 EC 28 E8 ?? ?? ?? ?? 48 89 05 ?? ?? ?? ?? 48 83 C4 28 C3 CC CC CC CC CC CC CC CC CC CC CC 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC 48 8D 0D ?? ?? ?? ?? E9 ?? ?? ?? ?? CC CC CC CC
+            // Patch_bytes(sig_bp, {0xB0, 0x01, 0xC3}, 3);
+            // Patch_bytes(sig_bp, {0xC3}, 1);
+
+            // Patch(baseAddress + 0x2fc8d50 + 0xB7);  // fpakplatformfile_mount
+            // Patch2(baseAddress + 0x2fc8d50 + 0xdc3);  // fpakplatformfile_mount
+            // Patch(baseAddress + 0x2fc8d50 + 0xdc5);  // fpakplatformfile_mount
+            MH_CreateHook(baseAddress + 0x2fc8d50, hk_FPakPlatformFile_Mount, reinterpret_cast<void**>(&o_FPakPlatformFile_Mount));
+            MH_EnableHook(baseAddress + 0x2fc8d50);
+            
+            MH_CreateHook(baseAddress + 0x1f85170, hk_LinkerLoad_OnNewFileAdded, reinterpret_cast<void**>(&o_LinkerLoad_OnNewFileAdded));
+            MH_EnableHook(baseAddress + 0x1f85170);
+
+            MH_CreateHook(baseAddress + 0x2fc2d50, hk_FPakFile_GetFilenames, reinterpret_cast<void**>(&o_FPakFile_GetFilenames));
+            MH_EnableHook(baseAddress + 0x2fc2d50);
+
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
 			DisableThreadLibraryCalls(hModule);
 			HANDLE thread_handle = CreateThread(NULL, 0, main_thread, hModule, 0, NULL);  

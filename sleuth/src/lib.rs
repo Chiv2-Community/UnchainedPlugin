@@ -94,9 +94,7 @@ pub fn dump_builds(offsets: HashMap<String, u64>) -> Result<()> {
 }
 
 #[no_mangle]
-pub extern "C" fn generate_json() -> u8 {
-    println!("test asd");
-    
+pub extern "C" fn generate_json() -> u8 {    
     let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
         true => PlatformType::EGS,
         false => PlatformType::STEAM
