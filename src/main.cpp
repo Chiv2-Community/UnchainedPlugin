@@ -12,8 +12,10 @@
 
 #include <direct.h>
 
-extern "C" uint8_t generate_json();
-
+struct RustBuildInfo;
+extern "C" const RustBuildInfo* load_current_build_info();
+extern "C" uint8_t build_info_save(const void* bi);
+extern "C" uint32_t build_info_get_file_hash(const void* bi);
 
 //black magic for the linker to get winsock2 to work
 //TODO: properly add this to the linker settings
@@ -22,7 +24,6 @@ extern "C" uint8_t generate_json();
 #include <string_view>
 
 #include "constants.h"
-#include "builds.hpp"
 #include "string_util.hpp"
 
 #include "logging/global_logger.hpp"
@@ -181,15 +182,6 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 	try {
 		initialize_global_logger(LogLevel::TRACE);
 		GLOG_INFO("Logger initialized.");
-		auto found_offsets = generate_json();
-		GLOG_INFO("Sleuth found {} offsets", found_offsets);
-
-		auto current_build_opt = BuildMetadata::FromSleuth();
-		if (!current_build_opt) {
-			GLOG_ERROR("Failed to get build metadata from Sleuth memory");
-			return 1;
-		}
-		BuildMetadata& current_build_metadata = *current_build_opt;
 
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
 		g_logger->set_level(cliArgs.log_level);
@@ -213,16 +205,16 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		}
 		GLOG_DEBUG("MinHook initialized");
 
-		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
-
-		uint32_t build_hash = current_build_metadata.GetFileHash();
-		std::string build_hash_string = std::to_string(build_hash);
-
-		if (!loaded.contains(build_hash_string)) {
-			GLOG_DEBUG("Current build hash {} not found in loaded metadata (expected if just scanned)", build_hash_string);
+		auto rust_build_info = load_current_build_info();
+		if (rust_build_info == nullptr) {
+			GLOG_ERROR("Failed to get build info from Sleuth");
+			return 1;
 		}
 
-		auto state = new State(cliArgs, loaded, current_build_metadata);
+		uint32_t build_hash = build_info_get_file_hash(rust_build_info);
+		GLOG_INFO("Current build hash: {}", build_hash);
+
+		auto state = new State(cliArgs);
 		initialize_global_state(state);
 
 		auto baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
@@ -236,7 +228,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-		PatchManager patch_manager(baseAddr, moduleInfo, current_build_metadata);
+		PatchManager patch_manager(baseAddr, moduleInfo, rust_build_info);
 
 		for (auto& patch: ALL_REGISTERED_PATCHES) {
 			patch_manager.register_patch(*patch);
@@ -253,6 +245,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 			handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
 		}
 
+		build_info_save(rust_build_info);
 		ExitThread(0);
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());

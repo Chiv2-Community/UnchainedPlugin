@@ -5,9 +5,13 @@
 #include <Sig.hpp>
 #include <variant>
 
+#include <optional>
 #include "Patch.hpp"
 #include "../logging/global_logger.hpp"
 
+struct RustBuildInfo;
+
+extern "C" uint64_t build_info_get_offset(const RustBuildInfo* info, const char* name);
 
 /**
  * The PatchManager keeps track of patches to be enabled
@@ -16,16 +20,16 @@ class PatchManager {
 private:
     std::vector<std::string> failed_patches;
     std::vector<std::reference_wrapper<Patch>> pending_patches;
-    BuildMetadata& current_build_metadata;
     uintptr_t base_addr;
     MODULEINFO module_info;
+    const RustBuildInfo* build_info;
 
 
 public:
-    PatchManager(const HMODULE base_addr, const MODULEINFO &module_info, BuildMetadata& current_build_metadata)
-        :current_build_metadata(current_build_metadata) {
+    PatchManager(const HMODULE base_addr, const MODULEINFO &module_info, const RustBuildInfo* build_info) {
         this->base_addr = reinterpret_cast<uintptr_t>(base_addr);
         this->module_info = module_info;
+        this->build_info = build_info;
         this->failed_patches = {};
         this->pending_patches = {};
     } ;
@@ -67,18 +71,18 @@ public:
         GLOG_TRACE("Applying patch '{}'", patch_name);
 
         try {
-            const auto maybe_offset = this->current_build_metadata.GetOffset(patch_name);
-            if (!maybe_offset.has_value()) {
+            const uint64_t offset = build_info_get_offset(build_info, patch_name.c_str());
+            if (offset == 0) {
                 GLOG_ERROR("No offset found for patch '{}'", patch_name);
                 if (batched) failed_patches.push_back(patch_name);
                 return false;
             }
 
-            const auto result = patch->apply(base_addr + maybe_offset.value());
+            const auto result = patch->apply(base_addr + offset);
 
             switch (result) {
                 case APPLY_SUCCESS:
-                    GLOG_INFO("0x{:X} : Successfully enabled patch '{}'",  maybe_offset.value(), patch_name);
+                    GLOG_INFO("0x{:X} : Successfully enabled patch '{}'",  offset, patch_name);
                     break;
                 case APPLY_FAILED:
                     GLOG_ERROR("Failed to enable patch '{}'", patch_name);
