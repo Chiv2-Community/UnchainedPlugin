@@ -2,110 +2,51 @@
 
 #include <cstring>
 #include <stdint.h>
-#include <iostream>
-#include <fstream>
+#include <map>
 #include <string>
-#include <filesystem>
-#include <tiny-json.h>
-#include <nmmintrin.h> // SSE4.2 intrinsics
-#include <functional>
 #include <Windows.h>
-#include <mutex>
-
 
 #include "logging/global_logger.hpp"
 #include "state/global_state.hpp"
 
-uint32_t calculateCRC32(const std::string& filename) {
-	std::ifstream file(filename, std::ios::binary);
-	if (!file.is_open()) {
-		std::cerr << "Error opening file: " << filename << std::endl;
-		return 0;
-	}
-
-	uint32_t crc = 0; // Initial value for CRC-32
-
-	char buffer[4096];
-	while (file) {
-		file.read(buffer, sizeof(buffer));
-		std::streamsize bytesRead = file.gcount();
-
-		for (std::streamsize i = 0; i < bytesRead; ++i) {
-			crc = _mm_crc32_u8(crc, buffer[i]);
-		}
-	}
-
-	file.close();
-	return crc ^ 0xFFFFFFFF; // Final XOR value for CRC-32
-}
-
-std::filesystem::path getBuildMetadataPath() {
-	char localAppData[MAX_PATH];
-	DWORD result = GetEnvironmentVariableA("LOCALAPPDATA", localAppData, MAX_PATH);
-
-	if (result == 0 || result > MAX_PATH) {
-		// Handle error - environment variable not found or buffer too small
-		GLOG_ERROR("Failed to get LOCALAPPDATA environment variable");
-		return {};
-	}
-
-	return std::filesystem::path(localAppData) /
-		   "Chivalry 2" / "Saved" / "Config" / "c2uc.builds.json";
-}
+extern "C" void load_known_builds();
+extern "C" size_t get_known_builds_count();
+extern "C" uint32_t get_known_build_hash(size_t index);
+extern "C" char* get_known_build_platform(size_t index);
+extern "C" size_t get_known_build_offset_count(size_t index);
+extern "C" char* get_known_build_offset_name(size_t build_index, size_t offset_index);
+extern "C" uint64_t get_known_build_offset_value(size_t build_index, size_t offset_index);
+extern "C" void free_string(char* s);
 
 std::map<std::string, BuildMetadata> LoadBuildMetadata()
 {
-
-    auto configPath = getBuildMetadataPath();
-    std::map<std::string, BuildMetadata> buildMap;
+	load_known_builds();
+	std::map<std::string, BuildMetadata> buildMap;
     
-	GLOG_DEBUG("Loading build metadata from: {}", configPath.string());
-
-    if (!std::filesystem::exists(configPath)) {
-        GLOG_WARNING("Build metadata file ({}) does not exist. This is normal on first start.", configPath);
-        return buildMap;
-    }
-    
-    std::ifstream file(configPath);
-    if (!file.is_open()) {
-        GLOG_ERROR("Error opening build metadata: {}", configPath);
-        return buildMap;
-    }
-    
-    std::string file_content{
-        std::istreambuf_iterator<char>(file), 
-        std::istreambuf_iterator<char>()
-    };
-    
-    GLOG_DEBUG("File content preview: {}", file_content);
-    
-    json_t mem[128];
-    const json_t* json = json_create(const_cast<char *>(file_content.c_str()), mem, 128);
-
-	if (!json) {
-		GLOG_ERROR("Failed to create json parser");
-		return buildMap;
-	}
-	json_t const* buildEntry;
-
-	buildEntry = json_getChild(json);
-	while (buildEntry != nullptr) {
-		if (JSON_OBJ == json_getType(buildEntry)) {
-			const auto buildKey = std::string(json_getName(buildEntry));
-			GLOG_DEBUG("Parsing build metadata: {}", buildKey);
-
-            // Parse the build metadata
-            auto parsedBuild = BuildMetadata::Parse(buildEntry);
-            if (!parsedBuild.has_value()) {
-                GLOG_ERROR("Failed to parse build metadata for {}", buildKey);
-                buildEntry = json_getSibling(buildEntry);
-                continue;
-            }
-
-            BuildMetadata bd = parsedBuild.value();
-			buildMap.emplace(buildKey, bd);
+	size_t build_count = get_known_builds_count();
+	for (size_t i = 0; i < build_count; ++i) {
+		uint32_t hash = get_known_build_hash(i);
+		char* platform_str = get_known_build_platform(i);
+		
+		Platform platform = STEAM;
+		if (string_to_platform.contains(platform_str)) {
+			platform = string_to_platform.at(platform_str);
 		}
-		buildEntry = json_getSibling(buildEntry);
+		free_string(platform_str);
+
+		size_t offset_count = get_known_build_offset_count(i);
+		std::map<std::string, uint64_t> offsets;
+		for (size_t j = 0; j < offset_count; ++j) {
+			char* name = get_known_build_offset_name(i, j);
+			uint64_t value = get_known_build_offset_value(i, j);
+			if (name) {
+				offsets[name] = value;
+				free_string(name);
+			}
+		}
+
+		BuildMetadata metadata(hash, std::move(offsets), platform);
+		buildMap.emplace(std::to_string(hash), std::move(metadata));
 	}
 
 	return buildMap;

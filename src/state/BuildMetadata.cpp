@@ -7,8 +7,6 @@
 #include <optional>
 #include <sstream>
 
-#include <tiny-json.h>
-
 #include "../logging/global_logger.hpp"
 #include "../string_util.hpp"
 
@@ -59,53 +57,34 @@ Platform BuildMetadata::GetPlatform() const {
     return platform;
 }
 
-std::optional<BuildMetadata> BuildMetadata::Parse(const json_t* json) {
-    if (!json) {
-        GLOG_ERROR("Invalid JSON object or build name");
-        return std::nullopt;
-    }
+extern "C" uint32_t get_file_hash();
+extern "C" char* get_platform();
+extern "C" size_t get_offset_count();
+extern "C" char* get_offset_name(size_t index);
+extern "C" uint64_t get_offset_value(size_t index);
+extern "C" void free_string(char* s);
 
-    // Get File Hash
-    const json_t* fileHashJson = json_getProperty(json, "FileHash");
-    if (!fileHashJson || JSON_INTEGER != json_getType(fileHashJson)) {
-        GLOG_ERROR("Error, the 'FileHash' property is not found or not an integer");
-        return std::nullopt;
-    }
-    auto file_hash = static_cast<uint32_t>(json_getInteger(fileHashJson));
+std::optional<BuildMetadata> BuildMetadata::FromSleuth() {
+    uint32_t file_hash = get_file_hash();
+    if (file_hash == 0) return std::nullopt;
 
-    const json_t* platformJson = json_getProperty(json, "Platform");
-    if (!platformJson || JSON_TEXT != json_getType(platformJson)) {
-        GLOG_ERROR("Error, the 'Platform' property is not found or not a string");
-        return std::nullopt;
-    }
-    const char* platform_string = json_getValue(platformJson);
-
+    char* platform_str = get_platform();
     Platform platform = STEAM;
-    if (string_to_platform.contains(platform_string))
-        platform = string_to_platform.at(platform_string);
-    else {
-        GLOG_ERROR("Invalid platform '{}'.  Expected 'STEAM', 'EGS', or 'XBOX'", platform_string);
-        return std::nullopt;
+    if (string_to_platform.contains(platform_str)) {
+        platform = string_to_platform.at(platform_str);
     }
+    free_string(platform_str);
 
-    const json_t* offsetsJson = json_getProperty(json, "Offsets");
-    if (!offsetsJson || JSON_OBJ != json_getType(offsetsJson)) {
-        GLOG_ERROR("Error, the 'Offsets' property is not found or not an object");
-        return std::nullopt;
-    }
-
+    size_t offset_count = get_offset_count();
     std::map<std::string, uint64_t> offsets;
-    for (const json_t* offsetEntry = json_getChild(offsetsJson); offsetEntry != nullptr; offsetEntry = json_getSibling(offsetEntry)) {
-        if (JSON_INTEGER == json_getType(offsetEntry)) {
-            const char* offsetName = json_getName(offsetEntry);
-            if (offsetName && strlen(offsetName) > 0) {
-                auto offsetValue = static_cast<uint64_t>(json_getInteger(offsetEntry));
-                offsets.emplace(offsetName, offsetValue);
-            }
+    for (size_t i = 0; i < offset_count; ++i) {
+        char* name = get_offset_name(i);
+        uint64_t value = get_offset_value(i);
+        if (name) {
+            offsets[name] = value;
+            free_string(name);
         }
     }
 
-    BuildMetadata metadata(file_hash, std::move(offsets), platform);
-
-    return metadata;
+    return BuildMetadata(file_hash, std::move(offsets), platform);
 }

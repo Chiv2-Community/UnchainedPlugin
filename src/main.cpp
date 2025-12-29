@@ -184,6 +184,13 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		auto found_offsets = generate_json();
 		GLOG_INFO("Sleuth found {} offsets", found_offsets);
 
+		auto current_build_opt = BuildMetadata::FromSleuth();
+		if (!current_build_opt) {
+			GLOG_ERROR("Failed to get build metadata from Sleuth memory");
+			return 1;
+		}
+		BuildMetadata& current_build_metadata = *current_build_opt;
+
 		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
 		g_logger->set_level(cliArgs.log_level);
 
@@ -208,16 +215,12 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
 
-		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
+		uint32_t build_hash = current_build_metadata.GetFileHash();
 		std::string build_hash_string = std::to_string(build_hash);
 
 		if (!loaded.contains(build_hash_string)) {
-			GLOG_ERROR("Failed to load build metadata for build hash: {}", build_hash_string);
-			GLOG_ERROR("Something is probably wrong with the rust module invocation");
-			return 1;
+			GLOG_DEBUG("Current build hash {} not found in loaded metadata (expected if just scanned)", build_hash_string);
 		}
-
-		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
 
 		auto state = new State(cliArgs, loaded, current_build_metadata);
 		initialize_global_state(state);

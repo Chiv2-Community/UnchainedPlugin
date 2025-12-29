@@ -6,7 +6,5 @@
 
 #include "state/BuildMetadata.hpp"
 
-uint32_t calculateCRC32(const std::string& filename);
-
-// Loads builds from a JSON config file
+// Loads builds via Sleuth memory
 std::map<std::string, BuildMetadata> LoadBuildMetadata();

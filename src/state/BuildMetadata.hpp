@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "tiny-json.h"
 #include "../Platform.hpp"
 
 /**
@@ -22,9 +21,9 @@ public:
     BuildMetadata(uint32_t fileHash, std::map<std::string, uint64_t> offsets, Platform platform);
     ~BuildMetadata();
 
-    static std::optional<BuildMetadata> Parse(const json_t* json);
+    static std::optional<BuildMetadata> FromSleuth();
 
-    void SetOffset(std::string name, uintptr_t offset);
+    void SetOffset(std::string name, uint64_t offset);
     std::optional<uintptr_t> GetOffset(const std::string& name) const;
     std::vector<std::pair<std::string, uintptr_t>> GetOffsets() const;
 

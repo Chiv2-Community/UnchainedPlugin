@@ -73,7 +73,6 @@ configure_file(
 
 # Add dependencies
 add_subdirectory(lib/MinHook)
-add_subdirectory(lib/tiny-json)
 
 # Define the library
 add_library(${PROJECT_NAME} SHARED 
@@ -105,7 +104,6 @@ add_subdirectory(sleuth)
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     MinHook
-    tiny-json
     winhttp
     sleuthlib_interface
 )
