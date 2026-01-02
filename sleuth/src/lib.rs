@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use anyhow::{Context, Result};
 use serde::{Serialize, Deserialize};
 use serde_json::to_writer_pretty;
-use self::resolvers::{PLATFORM, PlatformType};
+use self::resolvers::{PlatformType};
 
 // IEEE
 use std::arch::x86_64::{_mm_crc32_u8, _mm_crc32_u64};
@@ -43,7 +43,7 @@ pub struct BuildInfo {
     build: u32,
     file_hash: u32,
     name: String,
-    platform: String,
+    platform: PlatformType,
     path: String,
     offsets: HashMap<String, u64>,
 }
@@ -59,43 +59,35 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
     None
 }
 
-fn get_build_path(crc: u32) -> Option<PathBuf> {
-    expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{:08x}.build.json", crc))
+fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
+    let platform_str = platform_type.to_string();
+    expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}.build.json", platform_str, crc))
 }
 
 impl BuildInfo {
-    pub fn scan() -> Self {
+    pub fn scan(crc32: u32, platform: PlatformType) -> Self {
         println!("Scanning build...");
-        
-        let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-            true => PlatformType::EGS,
-            false => PlatformType::STEAM
-        };
 
-        PLATFORM.set(platform).ok(); // Ignore if already set
+        let offsets = scan::scan(platform, None).expect("Failed to scan");
 
-        let offsets = scan::scan().expect("Failed to scan");
-        
         let mut file_path = String::new();
         match env::current_exe() {
             Ok(path) => file_path = path.to_string_lossy().into(),
             Err(e) => eprintln!("Failed to get path: {}", e),
         }
-        
-        let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
         BuildInfo {
             build: 0,
             file_hash: crc32,
             name: "".to_string(),
-            platform: PLATFORM.get().unwrap_or(&PlatformType::OTHER).to_string(),
+            platform: platform,
             path: file_path.to_string(),
             offsets,
         }
     }
 
-    pub fn load(crc: u32) -> Result<Self> {
-        let path = get_build_path(crc).context("Failed to expand path")?;
+    pub fn load(crc: u32, platform_type: PlatformType) -> Result<Self> {
+        let path = get_build_path(crc, platform_type).context("Failed to expand path")?;
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let build_info: BuildInfo = serde_json::from_reader(reader)?;
@@ -103,7 +95,7 @@ impl BuildInfo {
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = get_build_path(self.file_hash).ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
+        let path = get_build_path(self.file_hash, self.platform).ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
         println!("Saving build info to {}", path.to_string_lossy());
         
         let file = File::create(path)?;
@@ -132,16 +124,37 @@ pub extern "C" fn load_current_build_info() -> *const BuildInfo {
             file_path = path.to_string_lossy().into();
         }
 
-        let crc31 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
+        let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
-        match BuildInfo::load(crc31) {
-            Ok(bi) => {
+        let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
+            true => PlatformType::EGS,
+            false => PlatformType::STEAM
+        };
+
+        match BuildInfo::load(crc32, platform) {
+            Ok(mut bi) => {
+                println!("Loaded build info from cache");
+
+                // Scan only for missing signatures
+                match scan::scan(platform, Some(&bi.offsets)) {
+                    Ok(new_offsets) => {
+                        if !new_offsets.is_empty() {
+                            println!("Found {} missing signatures, updating cache", new_offsets.len());
+                            bi.offsets.extend(new_offsets);
+                            let _ = bi.save();
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to scan for missing signatures: {}", e);
+                    }
+                }
+
                 *current = Some(bi);
             }
             Err(err) => {
                 eprintln!("Failed to load build info: {}", err);
                 eprintln!("Scanning build...");
-                let bi = BuildInfo::scan();
+                let bi = BuildInfo::scan(crc32, platform);
                 *current = Some(bi);
             }
         }
