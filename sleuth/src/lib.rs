@@ -10,7 +10,7 @@ use std::os::raw::c_char;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Serialize, Deserialize};
 use serde_json::to_writer_pretty;
 use self::resolvers::{PLATFORM, PlatformType};
@@ -38,7 +38,7 @@ unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
 
         
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all(serialize = "PascalCase", deserialize = "snake_case"))]
+#[serde(rename_all="PascalCase")]
 pub struct BuildInfo {
     build: u32,
     file_hash: u32,
@@ -95,7 +95,7 @@ impl BuildInfo {
     }
 
     pub fn load(crc: u32) -> Result<Self> {
-        let path = get_build_path(crc).ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
+        let path = get_build_path(crc).context("Failed to expand path")?;
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let build_info: BuildInfo = serde_json::from_reader(reader)?;
@@ -138,7 +138,9 @@ pub extern "C" fn load_current_build_info() -> *const BuildInfo {
             Ok(bi) => {
                 *current = Some(bi);
             }
-            Err(_) => {
+            Err(err) => {
+                eprintln!("Failed to load build info: {}", err);
+                eprintln!("Scanning build...");
                 let bi = BuildInfo::scan();
                 *current = Some(bi);
             }
