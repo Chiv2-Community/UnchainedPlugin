@@ -12,14 +12,12 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
     let resolvers = resolvers().collect::<Vec<_>>();
 
     // Filter resolvers to only scan for missing signatures
-    let (resolvers_to_scan, _indices): (Vec<_>, Vec<_>) = if let Some(existing) = existing_offsets {
+    let resolvers_to_scan: Vec<_> = if let Some(existing) = existing_offsets {
         resolvers.iter()
-            .enumerate()
-            .filter(|(_, res)| !existing.contains_key(res.name))
-            .map(|(i, res)| (res, i))
-            .unzip()
+            .filter(|res| !existing.contains_key(res.name))
+            .collect()
     } else {
-        (resolvers.iter().collect(), (0..resolvers.len()).collect())
+        resolvers.iter().collect()
     };
 
     if resolvers_to_scan.is_empty() {
