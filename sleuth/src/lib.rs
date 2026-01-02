@@ -135,7 +135,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
             Ok(mut bi) => {
                 println!("Loaded build info from cache");
 
-                if(scan_missing) {
+                if scan_missing {
                     match scan::scan(platform, Some(&bi.offsets)) {
                         Ok(new_offsets) => {
                             if !new_offsets.is_empty() {
@@ -154,7 +154,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
             Err(err) => {
                 eprintln!("Failed to load build info: {}", err);
                 eprintln!("Scanning build...");
-                if(scan_missing) {
+                if scan_missing {
                     let bi = BuildInfo::scan(crc32, platform);
                     *current = Some(bi);
                 }

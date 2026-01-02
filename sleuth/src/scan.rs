@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use patternsleuth::resolvers::resolvers;
 
@@ -8,22 +8,6 @@ use crate::resolvers::{PlatformType, PLATFORM};
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = Some(process::id() as i32);
 
-    let IGNORE_RESOLVERS: HashSet<&'static str> = HashSet::from([
-        "EngineVersion",
-        "EngineVersionStrings",
-        "ConsoleManagerSingleton",
-        "A",
-        "KismetSystemLibrary",
-        "UtilStringExtractor",
-        "BlueprintLibraryInit",
-        "FTextFString",
-        "UGameplayStaticsSaveGameToMemory",
-        "GEngine",
-        "FFrameStepViaExec",
-        "AESKeys",
-        "EACAntiCheatMesssage"
-    ]);
-
     PLATFORM.set(platform).unwrap();
     let resolvers = resolvers().collect::<Vec<_>>();
 
@@ -32,12 +16,10 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         resolvers.iter()
             .enumerate()
             .filter(|(_, res)| !existing.contains_key(res.name))
-            .filter(|(_, res)| !IGNORE_RESOLVERS.contains(res.name))
             .map(|(i, res)| (res, i))
             .unzip()
     } else {
-        (resolvers.iter().filter(|res| !IGNORE_RESOLVERS.contains(res.name)).collect()
-         , (0..resolvers.len()).collect())
+        (resolvers.iter().collect(), (0..resolvers.len()).collect())
     };
 
     if resolvers_to_scan.is_empty() {
