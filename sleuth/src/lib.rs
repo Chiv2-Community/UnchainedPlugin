@@ -116,7 +116,7 @@ impl BuildInfo {
 }
 
 #[no_mangle]
-pub extern "C" fn load_current_build_info() -> *const BuildInfo {
+pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
     if current.is_none() {
         let mut file_path = String::new();
@@ -135,17 +135,17 @@ pub extern "C" fn load_current_build_info() -> *const BuildInfo {
             Ok(mut bi) => {
                 println!("Loaded build info from cache");
 
-                // Scan only for missing signatures
-                match scan::scan(platform, Some(&bi.offsets)) {
-                    Ok(new_offsets) => {
-                        if !new_offsets.is_empty() {
-                            println!("Found {} missing signatures, updating cache", new_offsets.len());
-                            bi.offsets.extend(new_offsets);
-                            let _ = bi.save();
+                if(scan_missing) {
+                    match scan::scan(platform, Some(&bi.offsets)) {
+                        Ok(new_offsets) => {
+                            if !new_offsets.is_empty() {
+                                println!("Found {} missing signatures, updating cache", new_offsets.len());
+                                bi.offsets.extend(new_offsets);
+                            }
                         }
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to scan for missing signatures: {}", e);
+                        Err(e) => {
+                            eprintln!("Failed to scan for missing signatures: {}", e);
+                        }
                     }
                 }
 
@@ -154,8 +154,10 @@ pub extern "C" fn load_current_build_info() -> *const BuildInfo {
             Err(err) => {
                 eprintln!("Failed to load build info: {}", err);
                 eprintln!("Scanning build...");
-                let bi = BuildInfo::scan(crc32, platform);
-                *current = Some(bi);
+                if(scan_missing) {
+                    let bi = BuildInfo::scan(crc32, platform);
+                    *current = Some(bi);
+                }
             }
         }
     }

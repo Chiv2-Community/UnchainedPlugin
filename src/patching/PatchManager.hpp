@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <variant>
+#include <algorithm>
 
 #include "Patch.hpp"
 #include "../logging/global_logger.hpp"
@@ -44,6 +45,10 @@ public:
      * @return true if all patches were successfully enabled, false otherwise.
      */
     inline bool apply_patches() {
+        std::sort(pending_patches.begin(), pending_patches.end(), [](const Patch& a, const Patch& b) {
+            return a.get_priority() > b.get_priority();
+        });
+
         for (auto& patch : pending_patches) {
             apply_patch(&patch.get(), true);
         }
@@ -74,6 +79,12 @@ public:
                 GLOG_ERROR("No offset found for patch '{}'", patch_name);
                 if (batched) failed_patches.push_back(patch_name);
                 return false;
+            }
+
+            if (patch->is_applied(base_addr + offset))
+            {
+                GLOG_INFO("0x{:X} : Already enabled patch '{}'", offset, patch_name);
+                return true;
             }
 
             const auto result = patch->apply(base_addr + offset);

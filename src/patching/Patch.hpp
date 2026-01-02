@@ -18,32 +18,50 @@ enum ApplyResult {
 class Patch {
 private:
     const std::string name;
-    const std::function<bool()> should_apply_patch_func;
+    const std::function<bool(Patch*)> should_apply_patch_func;
+    const int priority;
+    std::vector<uintptr_t> applied_locations = {};
 public:
     virtual ~Patch() = default;
 
     Patch(
         const std::string name,
-        const std::function<bool()> should_apply_patch_func
+        const std::function<bool(Patch*)> should_apply_patch_func,
+        const int priority = 0
     )
         : name(name),
-          should_apply_patch_func(should_apply_patch_func) {}
+          should_apply_patch_func(should_apply_patch_func),
+          priority(priority) {}
 
 private:
     [[nodiscard]] virtual bool apply_impl(const uintptr_t address) = 0;
 
 public:
     [[nodiscard]] ApplyResult apply(uintptr_t address) {
-        if (!should_apply_patch_func()) {
+        if (!should_apply_patch_func(this)) {
+            GLOG_TRACE("{} : Patch should not be enabled. Skipping.", name);
             return APPLY_DISABLED;
         }
 
         GLOG_TRACE("{} : Patch should be enabled.  Attempting to enable it...", name);
-        return this->apply_impl(address) ? APPLY_SUCCESS : APPLY_FAILED;
+        bool applied = apply_impl(address);
+
+        if (!applied) return APPLY_FAILED;
+
+        applied_locations.push_back(address);
+        return APPLY_SUCCESS;
     }
 
     [[nodiscard]] const std::string& get_name() const {
         return name;
+    }
+
+    [[nodiscard]] int get_priority() const {
+        return priority;
+    }
+
+    [[nodiscard]] bool is_applied(uintptr_t at_address) const {
+        return std::find(applied_locations.begin(), applied_locations.end(), at_address) != applied_locations.end();
     }
 };
 
@@ -54,10 +72,11 @@ private:
 public:
     HookPatch(
         const std::string name,
-        const std::function<bool()> should_apply_patch_func,
+        const std::function<bool(Patch*)> should_apply_patch_func,
         void** trampoline,
-        void* hook_function
-    ): Patch(name, should_apply_patch_func), trampoline(trampoline), hook_function(hook_function) {}
+        void* hook_function,
+        const int priority = 0
+    ): Patch(name, should_apply_patch_func, priority), trampoline(trampoline), hook_function(hook_function) {}
 
     bool apply_impl(const uintptr_t address) override {
         const auto address_ptr = reinterpret_cast<void*>(address);
@@ -93,10 +112,11 @@ public:
 
     ByteReplacementPatch(
         const std::string name,
-        const std::function<bool()> should_apply_patch_func,
+        const std::function<bool(Patch*)> should_apply_patch_func,
         const std::function<uint64_t()> additional_offset,
-        const std::vector<uint8_t> replacement_bytes
-    ): Patch(name, should_apply_patch_func), replacement_bytes(replacement_bytes), additional_offset(additional_offset) {}
+        const std::vector<uint8_t> replacement_bytes,
+        const int priority = 0
+    ): Patch(name, should_apply_patch_func, priority), replacement_bytes(replacement_bytes), additional_offset(additional_offset) {}
 
     bool apply_impl(const uintptr_t address) override {
         unsigned long old_protect, temp_protect;
@@ -106,6 +126,7 @@ public:
 
         auto address_ptr = reinterpret_cast<void*>(address + additional_offset());
 
+        GLOG_TRACE("{} : Patching {} bytes at address {}", get_name(), size, address_ptr);
         auto res = VirtualProtect(address_ptr, size, PAGE_EXECUTE_READWRITE, &old_protect);
         if (!res) {
             log_windows_error(address_ptr);
@@ -138,8 +159,9 @@ class NopPatch : public ByteReplacementPatch {
 public:
     NopPatch(
         const std::string name,
-        const std::function<bool()> should_apply_patch_func,
+        const std::function<bool(Patch*)> should_apply_patch_func,
         const std::function<uint64_t()> additional_offset,
-        const uint64_t size
-    ): ByteReplacementPatch(name, should_apply_patch_func, additional_offset, std::vector<uint8_t>(size, 0x90)) {}
+        const uint64_t size,
+        const int priority = 0
+    ): ByteReplacementPatch(name, should_apply_patch_func, additional_offset, std::vector<uint8_t>(size, 0x90), priority) {}
 };

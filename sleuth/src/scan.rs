@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use patternsleuth::resolvers::resolvers;
 
@@ -8,7 +8,23 @@ use crate::resolvers::{PlatformType, PLATFORM};
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = Some(process::id() as i32);
 
-    PLATFORM.set(platform).unwrap();    
+    let IGNORE_RESOLVERS: HashSet<&'static str> = HashSet::from([
+        "EngineVersion",
+        "EngineVersionStrings",
+        "ConsoleManagerSingleton",
+        "A",
+        "KismetSystemLibrary",
+        "UtilStringExtractor",
+        "BlueprintLibraryInit",
+        "FTextFString",
+        "UGameplayStaticsSaveGameToMemory",
+        "GEngine",
+        "FFrameStepViaExec",
+        "AESKeys",
+        "EACAntiCheatMesssage"
+    ]);
+
+    PLATFORM.set(platform).unwrap();
     let resolvers = resolvers().collect::<Vec<_>>();
 
     // Filter resolvers to only scan for missing signatures
@@ -16,10 +32,12 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         resolvers.iter()
             .enumerate()
             .filter(|(_, res)| !existing.contains_key(res.name))
+            .filter(|(_, res)| !IGNORE_RESOLVERS.contains(res.name))
             .map(|(i, res)| (res, i))
             .unzip()
     } else {
-        (resolvers.iter().collect(), (0..resolvers.len()).collect())
+        (resolvers.iter().filter(|res| !IGNORE_RESOLVERS.contains(res.name)).collect()
+         , (0..resolvers.len()).collect())
     };
 
     if resolvers_to_scan.is_empty() {
@@ -28,8 +46,11 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
     }
 
     println!("Scanning for {} missing signatures", resolvers_to_scan.len());
+    resolvers_to_scan.iter().for_each(|res| println!("  {}", res.name));
 
-    let dyn_resolvers = resolvers_to_scan.iter().map(|res| res.getter).collect::<Vec<_>>();
+    let dyn_resolvers = resolvers_to_scan.iter()
+        .map(|res| res.getter)
+        .collect::<Vec<_>>();
 
     let name = format!("PID={}", pid.unwrap());
     let game_name = format!("pid={}", pid.unwrap()); // fixme
