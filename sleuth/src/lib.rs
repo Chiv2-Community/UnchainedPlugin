@@ -113,16 +113,24 @@ impl BuildInfo {
     pub fn get_offset(&self, name: &str) -> Option<&u64> {
         self.offsets.get(name)
     }
+
+    pub fn get_offsets(&self) -> &HashMap<String, u64> {
+        &self.offsets
+    }
+
+    pub fn add_offset(&mut self, name: String, offset: u64) {
+        self.offsets.insert(name, offset);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
+
     if current.is_none() {
-        let mut file_path = String::new();
-        if let Ok(path) = env::current_exe() {
-            file_path = path.to_string_lossy().into();
-        }
+        let file_path = env::current_exe()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
 
         let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
@@ -132,41 +140,35 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
         };
 
         match BuildInfo::load(crc32, platform) {
-            Ok(mut bi) => {
+            Ok(bi) => {
                 println!("Loaded build info from cache");
-
-                if scan_missing {
-                    match scan::scan(platform, Some(&bi.offsets)) {
-                        Ok(new_offsets) => {
-                            if !new_offsets.is_empty() {
-                                println!("Found {} missing signatures, updating cache", new_offsets.len());
-                                bi.offsets.extend(new_offsets);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to scan for missing signatures: {}", e);
-                        }
-                    }
-                }
-
                 *current = Some(bi);
             }
             Err(err) => {
                 eprintln!("Failed to load build info: {}", err);
-                eprintln!("Scanning build...");
                 if scan_missing {
-                    let bi = BuildInfo::scan(crc32, platform);
-                    *current = Some(bi);
+                    *current = Some(BuildInfo::scan(crc32, platform));
                 }
             }
         }
     }
 
-    if let Some(ref bi) = *current {
-        bi as *const BuildInfo
-    } else {
-        std::ptr::null()
+    if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
+        match scan::scan(bi.platform, Some(bi.get_offsets())) {
+            Ok(new_offsets) if !new_offsets.is_empty() => {
+                println!("Found {} missing signatures, updating build info", new_offsets.len());
+                for (name, offset) in new_offsets {
+                    bi.add_offset(name, offset);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
+        }
     }
+
+    current.as_ref()
+        .map(|bi| bi as *const BuildInfo)
+        .unwrap_or(std::ptr::null())
 }
 
 #[no_mangle]

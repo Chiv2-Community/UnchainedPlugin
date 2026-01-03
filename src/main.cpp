@@ -244,8 +244,6 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 		if (restart_required)
 		{
 			GLOG_ERROR("A restart is required to apply all patches. Exiting in 5 seconds. Please re-launch.");
-			GLOG_ERROR("A restart is required to apply all patches. Exiting in 5 seconds. Please re-launch.");
-			GLOG_ERROR("A restart is required to apply all patches. Exiting in 5 seconds. Please re-launch.");
 			GLOG_INFO("");
 			GLOG_WARNING("The error above is normal on the first launch of a new update.");
 			Sleep(5000);
