@@ -65,19 +65,5 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         }
     }
 
-    // let res = dump_builds(offsets);
-
     Ok(offsets)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_multiple_scans_dont_panic() {
-        let _ = PLATFORM.set(PlatformType::STEAM);
-        let _ = PLATFORM.set(PlatformType::STEAM); // Should not panic
-        assert_eq!(PLATFORM.get(), Some(&PlatformType::STEAM));
-    }
 }

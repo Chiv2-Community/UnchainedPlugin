@@ -326,7 +326,7 @@ int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		case DLL_PROCESS_ATTACH: {
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
 
-			initialize_global_logger(LogLevel::TRACE);
+			initialize_global_logger(cliArgs.log_level);
 			GLOG_INFO("Logger initialized.");
 
 			if (!initialize_minhook())
