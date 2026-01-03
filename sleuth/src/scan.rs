@@ -3,12 +3,17 @@ use std::collections::HashMap;
 use patternsleuth::resolvers::resolvers;
 
 use std::process;
-use crate::resolvers::{PlatformType, PLATFORM};
+use crate::resolvers::{current_platform, PlatformType, PLATFORM};
 
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = Some(process::id() as i32);
 
-    PLATFORM.set(platform).unwrap();
+    if PLATFORM.get().is_none() {
+        let _ = PLATFORM.set(platform);
+    } else if PLATFORM.get().unwrap() != &platform {
+        return Err(format!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, current_platform()));
+    }
+
     let resolvers = resolvers().collect::<Vec<_>>();
 
     // Filter resolvers to only scan for missing signatures
@@ -63,4 +68,16 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
     // let res = dump_builds(offsets);
 
     Ok(offsets)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_multiple_scans_dont_panic() {
+        let _ = PLATFORM.set(PlatformType::STEAM);
+        let _ = PLATFORM.set(PlatformType::STEAM); // Should not panic
+        assert_eq!(PLATFORM.get(), Some(&PlatformType::STEAM));
+    }
 }
