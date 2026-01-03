@@ -9,11 +9,15 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include <direct.h>
 
-extern "C" uint8_t generate_json();
-
+struct RustBuildInfo;
+extern "C" const RustBuildInfo* load_current_build_info(bool scan_missing);
+extern "C" uint8_t build_info_save(const void* bi);
+extern "C" uint32_t build_info_get_file_hash(const void* bi);
+extern "C" uint64_t build_info_get_offset(const RustBuildInfo* info, const char* name);
 
 //black magic for the linker to get winsock2 to work
 //TODO: properly add this to the linker settings
@@ -22,7 +26,6 @@ extern "C" uint8_t generate_json();
 #include <string_view>
 
 #include "constants.h"
-#include "builds.hpp"
 #include "string_util.hpp"
 
 #include "logging/global_logger.hpp"
@@ -31,6 +34,10 @@ extern "C" uint8_t generate_json();
 #include "patching/PatchManager.hpp"
 
 #include "hooks/all_hooks.h"
+
+
+// Becomes true if all prelim patches cannot be applied due to missing offsets.
+static bool restart_required = false;
 
 void handleRCON(RCONState& rcon_state, int port) {
     WSADATA wsaData;
@@ -177,16 +184,10 @@ void CreateDebugConsole() {
 	GLOG_INFO("Debug console created successfully\n");
 }
 
-DWORD WINAPI  main_thread(LPVOID lpParameter) {
+static CLIArgs cliArgs = CLIArgs::Parse(GetCommandLineW());
+
+DWORD WINAPI main_thread(LPVOID lpParameter) {
 	try {
-		initialize_global_logger(LogLevel::TRACE);
-		GLOG_INFO("Logger initialized.");
-		auto found_offsets = generate_json();
-		GLOG_INFO("Sleuth found {} offsets", found_offsets);
-
-		auto cliArgs = CLIArgs::Parse(GetCommandLineW());
-		g_logger->set_level(cliArgs.log_level);
-
 		auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
 		for (const auto& part : logo_parts) {
 			GLOG_ERROR("{}", part);
@@ -198,28 +199,16 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 		GLOG_INFO("{}", std::wstring(GetCommandLineW()));
 		GLOG_INFO("");
 
-		GLOG_DEBUG("Initializing MinHook");
-		auto mh_result = MH_Initialize();
-		if (!mh_result == MH_OK) {
-			GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
-			return 1;
-		}
-		GLOG_DEBUG("MinHook initialized");
-
-		std::map<std::string, BuildMetadata> loaded = LoadBuildMetadata();
-
-		uint32_t build_hash = calculateCRC32("Chivalry2-Win64-Shipping.exe");
-		std::string build_hash_string = std::to_string(build_hash);
-
-		if (!loaded.contains(build_hash_string)) {
-			GLOG_ERROR("Failed to load build metadata for build hash: {}", build_hash_string);
-			GLOG_ERROR("Something is probably wrong with the rust module invocation");
+		auto rust_build_info = load_current_build_info(true);
+		if (rust_build_info == nullptr) {
+			GLOG_ERROR("Failed to get build info from Sleuth");
 			return 1;
 		}
 
-		BuildMetadata& current_build_metadata = loaded.at(build_hash_string);
+		uint32_t build_hash = build_info_get_file_hash(rust_build_info);
+		GLOG_INFO("Current build hash: {}", build_hash);
 
-		auto state = new State(cliArgs, loaded, current_build_metadata);
+		auto state = new State(cliArgs);
 		initialize_global_state(state);
 
 		auto baseAddr = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
@@ -233,7 +222,7 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
-		PatchManager patch_manager(baseAddr, moduleInfo, current_build_metadata);
+		PatchManager patch_manager(baseAddr, moduleInfo, rust_build_info);
 
 		for (auto& patch: ALL_REGISTERED_PATCHES) {
 			patch_manager.register_patch(*patch);
@@ -250,7 +239,19 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 			handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
 		}
 
-		ExitThread(0);
+		build_info_save(rust_build_info);
+
+		if (restart_required)
+		{
+			GLOG_ERROR("A restart is required to apply all patches. Exiting in 5 seconds. Please re-launch.");
+			GLOG_INFO("");
+			GLOG_WARNING("The error above is normal on the first launch of a new update.");
+			Sleep(5000);
+			TerminateProcess(GetCurrentProcess(), -67);
+			return -67;
+		}
+
+		return 0;
 	} catch (const std::exception& e) {
 		std::string error = "std::exception: " + std::string(e.what());
 		GLOG_ERROR("std::exception: {}", e.what());
@@ -264,11 +265,84 @@ DWORD WINAPI  main_thread(LPVOID lpParameter) {
 }
 
 
+bool initialize_minhook()
+{
+	GLOG_DEBUG("Initializing MinHook");
+	auto mh_result = MH_Initialize();
+	if (!mh_result == MH_OK) {
+		GLOG_ERROR("MinHook initialization failed: {}", MH_StatusToString(mh_result));
+		return false;
+	}
+	GLOG_DEBUG("MinHook initialized");
+	return true;
+}
+
+/**
+ * Some patches must be quickly applied before UE performs certain operations.
+ * Any patch with a priority > 100 will be applied in this stage.
+ * These patches block the main thread and are applied before all others.
+ * This function cannot do much or else it will cause the function to crash.
+ */
+bool apply_preliminary_patches()
+{
+	bool success = true;
+
+	const RustBuildInfo* build_info = load_current_build_info(false);
+
+	if (build_info != nullptr)
+	{
+		auto hmodule = GetModuleHandleA("Chivalry2-Win64-Shipping.exe");
+		auto base_addr = reinterpret_cast<uintptr_t>(hmodule);
+
+		for (auto& patch : ALL_REGISTERED_PATCHES)
+		{
+			if (patch->get_priority() < 100)
+				continue;
+
+			auto address = base_addr + build_info_get_offset(build_info, patch->get_name().c_str());
+			auto res = patch->apply(address);
+			if (res == APPLY_FAILED) {
+				success = false;
+			} else
+			{
+				GLOG_INFO("Successfully applied preliminary patch '{}'", patch->get_name());
+			}
+		}
+	} else {
+		restart_required = true;
+		success = false;
+	}
+
+	if (!success)
+	{
+		GLOG_ERROR("Failed to enable preliminary patches.");
+	}
+	return success;
+}
+
 int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
 	CreateDebugConsole();
 	switch (ul_reason_for_call) {
 		case DLL_PROCESS_ATTACH: {
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
+
+			initialize_global_logger(cliArgs.log_level);
+			GLOG_INFO("Logger initialized.");
+
+			if (!initialize_minhook())
+			{
+				GLOG_ERROR("Failed to initialize MinHook. Unchained cannot apply patches.");
+				GLOG_ERROR("Sleeping for 5 seconds, then exiting.");
+				Sleep(5000);
+				TerminateProcess(GetCurrentProcess(), 1);
+				return 0;
+			}
+
+			if (!apply_preliminary_patches())
+			{
+				GLOG_ERROR("Failed to apply preliminary patches. Some functionality may be broken.");
+			}
+
 			DisableThreadLibraryCalls(hModule);
 			HANDLE thread_handle = CreateThread(NULL, 0, main_thread, hModule, 0, NULL);
 			if (thread_handle) {

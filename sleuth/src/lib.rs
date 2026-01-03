@@ -1,54 +1,54 @@
-
-
 mod resolvers;
 mod scan;
 
 use std::env;
 use std::fs::File;
-use std::io::{BufReader, Read};
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::os::raw::c_char;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 
-use anyhow::Result;
-use serde::Serialize;
+use anyhow::{Context, Result};
+use serde::{Serialize, Deserialize};
 use serde_json::to_writer_pretty;
-use self::resolvers::{PLATFORM, PlatformType};
+use self::resolvers::{PlatformType};
 
 // IEEE
-use std::arch::x86_64::_mm_crc32_u8;
+use std::arch::x86_64::{_mm_crc32_u8, _mm_crc32_u64};
+
 #[target_feature(enable = "sse4.2")]
 unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
-    let mut buffer = [0u8; 4096];
-    let mut crc: u32 = 0;
+    let mmap = memmap2::Mmap::map(&file)?;
+    let mut crc: u64 = 0;
 
-    loop {
-        let bytes_read = reader.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        for &byte in &buffer[..bytes_read] {
-            crc = _mm_crc32_u8(crc, byte);
-        }
+    let mut chunks = mmap.chunks_exact(8);
+    while let Some(chunk) = chunks.next() {
+        crc = _mm_crc32_u64(crc, u64::from_le_bytes(chunk.try_into().unwrap()));
     }
 
-    Ok(crc ^ 0xFFFFFFFF)
+    for &byte in chunks.remainder() {
+        crc = _mm_crc32_u8(crc as u32, byte) as u64;
+    }
+
+    Ok((crc as u32) ^ 0xFFFFFFFF)
 }
 
         
-#[derive(Serialize)]
-#[serde(rename_all(serialize = "PascalCase", deserialize = "snake_case"))]
-struct BuildInfo {
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all="PascalCase")]
+pub struct BuildInfo {
     build: u32,
     file_hash: u32,
     name: String,
-    platform: String,
+    platform: PlatformType,
     path: String,
     offsets: HashMap<String, u64>,
 }
+
+static CURRENT_BUILD_INFO: Lazy<Mutex<Option<BuildInfo>>> = Lazy::new(|| Mutex::new(None));
 
 fn expand_env_path(path: &str) -> Option<PathBuf> {
     if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
@@ -59,53 +59,137 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
     None
 }
 
-pub fn dump_builds(offsets: HashMap<String, u64>) -> Result<()> {
-    let builds_path = expand_env_path(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\c2uc.builds.json").unwrap().to_path_buf();
-    println!("JSON PATH {}", builds_path.to_string_lossy());
-    let file = File::create(builds_path)?;
-    let mut writer = BufWriter::new(file);
-    let mut data = HashMap::new();
+fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
+    let platform_str = platform_type.to_string();
+    expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}.build.json", platform_str, crc))
+}
 
-    let mut file_path = String::new();
+impl BuildInfo {
+    pub fn scan(crc32: u32, platform: PlatformType) -> Self {
+        println!("Scanning build...");
 
-    match env::current_exe() {
-        Ok(path) => file_path = path.to_string_lossy().into(),
-        Err(e) => eprintln!("Failed to get path: {}", e),
+        let offsets = scan::scan(platform, None).expect("Failed to scan");
+
+        let mut file_path = String::new();
+        match env::current_exe() {
+            Ok(path) => file_path = path.to_string_lossy().into(),
+            Err(e) => eprintln!("Failed to get path: {}", e),
+        }
+
+        BuildInfo {
+            build: 0,
+            file_hash: crc32,
+            name: "".to_string(),
+            platform: platform,
+            path: file_path.to_string(),
+            offsets,
+        }
     }
-    println!("Current executable path: {:?}", file_path);
-    
-    let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
 
+    pub fn load(crc: u32, platform_type: PlatformType) -> Result<Self> {
+        let path = get_build_path(crc, platform_type).context("Failed to expand path")?;
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let build_info: BuildInfo = serde_json::from_reader(reader)?;
+        Ok(build_info)
+    }
 
-    let build_info = BuildInfo {
-        build: 0,
-        file_hash: crc32,
-        name: "".to_string(),
-        platform: PLATFORM.get().ok_or("OTHER").unwrap().to_string(),//platform.to_string(),
-        path: file_path.to_string(),
-        offsets,
-    };
+    pub fn save(&self) -> Result<()> {
+        let path = get_build_path(self.file_hash, self.platform).ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
+        println!("Saving build info to {}", path.to_string_lossy());
+        
+        let file = File::create(path)?;
+        let mut writer = BufWriter::new(file);
+        to_writer_pretty(&mut writer, self)?;
+        writer.flush()?;
 
-    data.insert(crc32.to_string(), build_info);
-    to_writer_pretty(&mut writer, &data)?;
-    writer.flush()?;
+        Ok(())
+    }
 
-    Ok(())
+    pub fn get_file_hash(&self) -> u32 {
+        self.file_hash
+    }
+
+    pub fn get_offset(&self, name: &str) -> Option<&u64> {
+        self.offsets.get(name)
+    }
+
+    pub fn get_offsets(&self) -> &HashMap<String, u64> {
+        &self.offsets
+    }
+
+    pub fn add_offset(&mut self, name: String, offset: u64) {
+        self.offsets.insert(name, offset);
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn generate_json() -> u8 {
-    println!("test asd");
-    
-    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-        true => PlatformType::EGS,
-        false => PlatformType::STEAM
-    };
+pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
+    let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
-    PLATFORM.set(platform).expect("Platform already set");
+    if current.is_none() {
+        let file_path = env::current_exe()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
 
-    let offsets = scan::scan().expect("Failed to scan");
-    let len_u8 = offsets.len() as u8;
-    dump_builds(offsets).expect("Failed to dump builds JSON");
-    len_u8
+        let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
+
+        let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
+            true => PlatformType::EGS,
+            false => PlatformType::STEAM
+        };
+
+        match BuildInfo::load(crc32, platform) {
+            Ok(bi) => {
+                println!("Loaded build info from cache");
+                *current = Some(bi);
+            }
+            Err(err) => {
+                eprintln!("Failed to load build info: {}", err);
+                if scan_missing {
+                    *current = Some(BuildInfo::scan(crc32, platform));
+                }
+            }
+        }
+    }
+
+    if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
+        match scan::scan(bi.platform, Some(bi.get_offsets())) {
+            Ok(new_offsets) if !new_offsets.is_empty() => {
+                println!("Found {} missing signatures, updating build info", new_offsets.len());
+                for (name, offset) in new_offsets {
+                    bi.add_offset(name, offset);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
+        }
+    }
+
+    current.as_ref()
+        .map(|bi| bi as *const BuildInfo)
+        .unwrap_or(std::ptr::null())
+}
+
+#[no_mangle]
+pub extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
+    let bi = unsafe { &*bi };
+    if let Err(e) = bi.save() {
+        eprintln!("Failed to save build info: {}", e);
+        return 0;
+    }
+    1
+}
+
+#[no_mangle]
+pub extern "C" fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
+    let bi = unsafe { &*bi };
+    bi.get_file_hash()
+}
+
+#[no_mangle]
+pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
+    let bi = unsafe { &*bi };
+    let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
+    *bi.get_offset(name.as_ref()).unwrap_or(&0)
 }

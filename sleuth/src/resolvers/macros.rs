@@ -17,7 +17,6 @@
 use std::{future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
 
-
 #[macro_export]
 macro_rules! define_pocess {
     // Note: After adding a new process, add a MultiCall handler below    

@@ -3,12 +3,39 @@ use std::collections::HashMap;
 use patternsleuth::resolvers::resolvers;
 
 use std::process;
+use crate::resolvers::{current_platform, PlatformType, PLATFORM};
 
-pub fn scan() -> Result<HashMap<String, u64>, String> {
+pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = Some(process::id() as i32);
 
+    if PLATFORM.get().is_none() {
+        let _ = PLATFORM.set(platform);
+    } else if PLATFORM.get().unwrap() != &platform {
+        return Err(format!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, current_platform()));
+    }
+
     let resolvers = resolvers().collect::<Vec<_>>();
-    let dyn_resolvers = resolvers.iter().map(|res| res.getter).collect::<Vec<_>>();
+
+    // Filter resolvers to only scan for missing signatures
+    let resolvers_to_scan: Vec<_> = if let Some(existing) = existing_offsets {
+        resolvers.iter()
+            .filter(|res| !existing.contains_key(res.name))
+            .collect()
+    } else {
+        resolvers.iter().collect()
+    };
+
+    if resolvers_to_scan.is_empty() {
+        println!("All signatures already found in cache");
+        return Ok(HashMap::new());
+    }
+
+    println!("Scanning for {} missing signatures", resolvers_to_scan.len());
+    resolvers_to_scan.iter().for_each(|res| println!("  {}", res.name));
+
+    let dyn_resolvers = resolvers_to_scan.iter()
+        .map(|res| res.getter)
+        .collect::<Vec<_>>();
 
     let name = format!("PID={}", pid.unwrap());
     let game_name = format!("pid={}", pid.unwrap()); // fixme
@@ -20,7 +47,7 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
 
     // get Names and offsets from resolution
     let mut offsets = HashMap::new();
-    for (resolver, resolution) in resolvers.iter().zip(&resolution) {
+    for (resolver, resolution) in resolvers_to_scan.iter().zip(&resolution) {
         if let Ok(r) = resolution {
             // FIXME: Less nasty way?
             if let Some(hex) = format!("{r:?}")
@@ -36,9 +63,7 @@ pub fn scan() -> Result<HashMap<String, u64>, String> {
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
-    } 
-
-    // let res = dump_builds(offsets);
+    }
 
     Ok(offsets)
 }

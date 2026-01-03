@@ -73,7 +73,6 @@ configure_file(
 
 # Add dependencies
 add_subdirectory(lib/MinHook)
-add_subdirectory(lib/tiny-json)
 
 # Define the library
 add_library(${PROJECT_NAME} SHARED 
@@ -89,8 +88,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/Sig
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE /MP)
@@ -105,7 +104,6 @@ add_subdirectory(sleuth)
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     MinHook
-    tiny-json
     winhttp
     sleuthlib_interface
 )
