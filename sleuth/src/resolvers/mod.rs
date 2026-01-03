@@ -1,5 +1,5 @@
 #[macro_use]
-mod macros;
+pub mod macros;
 
 use once_cell::sync::OnceCell;
 
@@ -38,6 +38,9 @@ impl std::str::FromStr for PlatformType {
     }
 }
 
+pub static BASE_ADDR: OnceCell<usize> = OnceCell::new();
+
+pub mod asset_registry;
 pub mod admin_control;
 pub mod asset_loading;
 pub mod backend_hooks;

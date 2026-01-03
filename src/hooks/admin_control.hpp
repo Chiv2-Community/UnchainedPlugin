@@ -89,77 +89,77 @@ void __thiscall
 APlayerController::ClientMessage
 		  (APlayerController *this,FString *param_1,FName param_2,float param_3)
 */
-static bool init = false;
-REGISTER_HOOK_PATCH(
-	ClientMessage,
-	APPLY_ALWAYS,
-	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
-) {
-	GLOG_TRACE("ClientMessage");
+// static bool init = false;
+// REGISTER_HOOK_PATCH(
+// 	ClientMessage,
+// 	APPLY_ALWAYS,
+// 	void, (void* this_ptr, FString* param_1, void* param_2, float param_3)
+// ) {
+// 	GLOG_TRACE("ClientMessage");
 
-	bool isEgs = g_state->GetCLIArgs().platform == EGS;
-	bool isServer = IsServerStart();
+// 	bool isEgs = g_state->GetCLIArgs().platform == EGS;
+// 	bool isServer = IsServerStart();
 
-	char* pValue = nullptr;
-	size_t len = 0;
-	errno_t err = _dupenv_s(&pValue, &len, "LOCALAPPDATA");
+// 	char* pValue = nullptr;
+// 	size_t len = 0;
+// 	errno_t err = _dupenv_s(&pValue, &len, "LOCALAPPDATA");
 
-	if (err != 0 || pValue == nullptr) {
-		GLOG_ERROR("Failed to get LOCALAPPDATA environment variable");
-		return;
-	}
+// 	if (err != 0 || pValue == nullptr) {
+// 		GLOG_ERROR("Failed to get LOCALAPPDATA environment variable");
+// 		return;
+// 	}
 
-	// Use std::string for safer string handling
-	std::string logDir = std::string(pValue) + "\\Chivalry 2\\Saved\\Logs\\Unchained";
-	free(pValue);  // Free memory allocated by _dupenv_s
+// 	// Use std::string for safer string handling
+// 	std::string logDir = std::string(pValue) + "\\Chivalry 2\\Saved\\Logs\\Unchained";
+// 	free(pValue);  // Free memory allocated by _dupenv_s
 
-	_mkdir(logDir.c_str());
+// 	_mkdir(logDir.c_str());
 
-	std::string logFile = logDir + "\\ClientMessage" +
-						  (isServer ? "-server" : "-client") +
-						  (isEgs ? "-egs" : "-steam") + ".log";
+// 	std::string logFile = logDir + "\\ClientMessage" +
+// 						  (isServer ? "-server" : "-client") +
+// 						  (isEgs ? "-egs" : "-steam") + ".log";
 
-	if (!init) {
-		GLOG_DEBUG("Writing Client Logs to: {}", logFile);
-	}
+// 	if (!init) {
+// 		GLOG_DEBUG("Writing Client Logs to: {}", logFile);
+// 	}
 
-	std::wofstream out(logFile, init ? std::ios_base::app : std::ios_base::trunc);
-	if (out.is_open()) {
-		static size_t messageCount = 0;
-		wchar_t* str = param_1->str;
-		out << ++messageCount << L":: " << str << std::endl;
-		GLOG_INFO("ClientMessage: {}", str);
-	} else {
-		auto error_string = get_last_windows_error_message_string();
-		GLOG_ERROR("Can't open ClientMessage log for writing: {}",
-				  error_string.has_value() ? error_string.value() : "Unknown error");
-	}
+// 	std::wofstream out(logFile, init ? std::ios_base::app : std::ios_base::trunc);
+// 	if (out.is_open()) {
+// 		static size_t messageCount = 0;
+// 		wchar_t* str = param_1->str;
+// 		out << ++messageCount << L":: " << str << std::endl;
+// 		GLOG_INFO("ClientMessage: {}", str);
+// 	} else {
+// 		auto error_string = get_last_windows_error_message_string();
+// 		GLOG_ERROR("Can't open ClientMessage log for writing: {}",
+// 				  error_string.has_value() ? error_string.value() : "Unknown error");
+// 	}
 
-	init = true;
+// 	init = true;
 
 
-#ifdef CHAT_COMMANDS
-	static std::wstring playerName;
-	auto command = std::make_unique<std::wstring>();
+// #ifdef CHAT_COMMANDS
+// 	static std::wstring playerName;
+// 	auto command = std::make_unique<std::wstring>();
 
-	if (extractPlayerCommand(param_1->str, playerName, *command)) {
-		GLOG_DEBUG("[ChatCommands] Extracted player name: {}", playerName);
-		GLOG_DEBUG("[ChatCommands] Extracted command: {}", *command);
+// 	if (extractPlayerCommand(param_1->str, playerName, *command)) {
+// 		GLOG_DEBUG("[ChatCommands] Extracted player name: {}", playerName);
+// 		GLOG_DEBUG("[ChatCommands] Extracted command: {}", *command);
 
-		FText txt;
-		void* res = o_FText_AsCultureInvariant(&txt, new FString(L"Command detected"));
-		if (res != nullptr && g_state->GetCurGameMode() != nullptr)
-		{
-			GLOG_DEBUG("[ChatCommands] Could print server text");
-			o_BroadcastLocalizedChat(g_state->GetCurGameMode(), (FText*)res, 3);
-		}
+// 		FText txt;
+// 		void* res = o_FText_AsCultureInvariant(&txt, new FString(L"Command detected"));
+// 		if (res != nullptr && g_state->GetCurGameMode() != nullptr)
+// 		{
+// 			GLOG_DEBUG("[ChatCommands] Could print server text");
+// 			o_BroadcastLocalizedChat(g_state->GetCurGameMode(), (FText*)res, 3);
+// 		}
 
-		GLOG_INFO("[ChatCommands] Executing command {}", *command);
+// 		GLOG_INFO("[ChatCommands] Executing command {}", *command);
 
-		auto empty = FString(command->c_str());
+// 		auto empty = FString(command->c_str());
 
-		hk_ExecuteConsoleCommand(&empty);
-	}
-#endif
-	o_ClientMessage(this_ptr, param_1, param_2, param_3);
-}
+// 		hk_ExecuteConsoleCommand(&empty);
+// 	}
+// #endif
+// 	o_ClientMessage(this_ptr, param_1, param_2, param_3);
+// }

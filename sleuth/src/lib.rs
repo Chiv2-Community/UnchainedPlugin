@@ -1,22 +1,28 @@
 mod resolvers;
 mod scan;
+mod tools;
+mod ue;
+mod ue_old;
 
+use log::info;
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::os::raw::c_char;
+use std::path::PathBuf;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
-
 use anyhow::{Context, Result};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
-use self::resolvers::{PlatformType};
+use resolvers::admin_control::*;
+use crate::tools::hook_globals::{globals, init_globals};
+use crate::tools::misc::CLI_LOGO;
+use self::resolvers::PlatformType;
 
 // IEEE
-use std::arch::x86_64::{_mm_crc32_u8, _mm_crc32_u64};
+use std::arch::x86_64::{_mm_crc32_u64, _mm_crc32_u8};
 
 #[target_feature(enable = "sse4.2")]
 unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
@@ -36,9 +42,8 @@ unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
     Ok((crc as u32) ^ 0xFFFFFFFF)
 }
 
-        
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all="PascalCase")]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "PascalCase")]
 pub struct BuildInfo {
     build: u32,
     file_hash: u32,
@@ -61,7 +66,10 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
 
 fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     let platform_str = platform_type.to_string();
-    expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}.build.json", platform_str, crc))
+    expand_env_path(&format!(
+        r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}.build.json",
+        platform_str, crc
+    ))
 }
 
 impl BuildInfo {
@@ -95,9 +103,10 @@ impl BuildInfo {
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = get_build_path(self.file_hash, self.platform).ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
+        let path = get_build_path(self.file_hash, self.platform)
+            .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
         println!("Saving build info to {}", path.to_string_lossy());
-        
+
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
         to_writer_pretty(&mut writer, self)?;
@@ -125,8 +134,11 @@ impl BuildInfo {
 
 #[no_mangle]
 pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
+    // swarn!(f; "{:#?}", globals().cli_args);
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
+    sinfo!(f; "Loading current build info, scan_missing={}", scan_missing);
+    
     if current.is_none() {
         let file_path = env::current_exe()
             .map(|path| path.to_string_lossy().into_owned())
@@ -136,7 +148,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
 
         let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
             true => PlatformType::EGS,
-            false => PlatformType::STEAM
+            false => PlatformType::STEAM,
         };
 
         match BuildInfo::load(crc32, platform) {
@@ -156,7 +168,10 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
     if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
         match scan::scan(bi.platform, Some(bi.get_offsets())) {
             Ok(new_offsets) if !new_offsets.is_empty() => {
-                println!("Found {} missing signatures, updating build info", new_offsets.len());
+                println!(
+                    "Found {} missing signatures, updating build info",
+                    new_offsets.len()
+                );
                 for (name, offset) in new_offsets {
                     bi.add_offset(name, offset);
                 }
@@ -166,7 +181,15 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
         }
     }
 
-    current.as_ref()
+    // Attach hooks
+    let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
+    let offsets = current.as_ref().unwrap().offsets.clone();
+    unsafe {
+        attach_hooks(exe.base_address, offsets.clone()).unwrap();
+    }
+
+    current
+        .as_ref()
         .map(|bi| bi as *const BuildInfo)
         .unwrap_or(std::ptr::null())
 }
@@ -192,4 +215,53 @@ pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_cha
     let bi = unsafe { &*bi };
     let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
     *bi.get_offset(name.as_ref()).unwrap_or(&0)
+}
+
+// Initialize Logger and Globals
+#[no_mangle]
+pub extern "C" fn init_rustlib() {
+    print!("{CLI_LOGO}");
+    tools::logger::init_syslog().expect("Failed to init syslog");
+    unsafe {
+        match init_globals() {
+            Ok(_) => {
+                // swarn!("{:#?}", globals().cli_args)
+            }
+            Err(e) => serror!(f; "No globals: {}", e),
+        }
+    };
+}
+
+pub unsafe fn attach_hooks(
+    base_address: usize,
+    offsets: HashMap<String, u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Attaching hooks:");
+
+    // TODO: replace this with registration similar to resolvers
+    let hooks_new = attach_hooks_list![[
+        // #[cfg(feature="engine_loop")]
+        ClientMessage,
+        // These are only called
+        // GetAssetRegistry,
+        // Conv_InterfaceToObject,
+        // GetAssetsByClass,
+        // GetAssetRegistry_Helper,
+        // FNamePool,
+        // FNameCtorWchar,
+        // GetAsset
+    ]];
+
+    hooks_new.iter().for_each(|(s, f)| {
+        match (f)(base_address, offsets.clone()) {
+            Ok(_) => {
+                sinfo![f; "☑ {} ", s]
+            },
+            Err(e) => {
+                serror!(f; "☐ {}: {}", s.to_uppercase(), e);
+            },
+        }
+    });
+
+    Ok(())
 }

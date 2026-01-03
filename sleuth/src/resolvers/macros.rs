@@ -1,4 +1,246 @@
 
+use std::collections::HashMap;
+
+/// ```rust
+/// unsafe fn attach_GameEngineTick(base_address: usize, offsets: HashMap<String, u64>)  -> Result<(), Box<dyn Error>>{
+///   let address = base_address + offsets["UGameEngineTick"] as usize; 
+///   let target: FnUGameEngineTick = mem::transmute(address);
+///   type FnUGameEngineTick = unsafe extern "C" fn(*mut c_void, f32, u8);
+///   static_detour! {
+///     static UGameEngineTick: unsafe extern "C" fn(*mut c_void, f32, u8);
+///   }
+///   fn detour_fkt(engine:*mut c_void, delta:f32, state:u8) {
+///       println!("rust UGameEngineTick delta: {}", delta);
+///       unsafe { UGameEngineTick.call( engine, delta, state) }
+///   }
+///   UGameEngineTick
+///     .initialize(target, detour_fkt)?
+///     .enable()?;
+///   Ok(())
+/// }
+/// ```
+/// 
+// TODO: replace this with registration similar to resolvers
+#[allow(unused)]
+pub type HookFn = unsafe fn(usize, HashMap<String, u64>) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+
+#[macro_export]
+macro_rules! attach_hooks_list {
+    ( [ $(
+        $(#[$attr:meta])*
+        $pattern:ident
+    ),+ $(,)? ]) => {{
+        use std::collections::HashMap;
+        use $crate::resolvers::macros::HookFn;
+        paste::paste! {
+            #[allow(dead_code)]
+            enum ActiveHooks {
+                $(
+                    $(#[$attr])*
+                    $pattern
+                ),+
+            }
+
+            let hooks: HashMap<&'static str, HookFn> = [
+                $(
+                    $(#[$attr])*
+                    (stringify!($pattern), [<attach_ $pattern>] as HookFn)
+                ),+
+            ]
+            .into_iter()
+            .collect();
+
+            hooks
+        }
+    }};
+}
+
+// This garbage is needed because new rust-analyzer version chokes on the previous implementation
+#[macro_export]
+macro_rules! CREATE_HOOK {
+    ($($tt:tt)*) => {
+        #[cfg(not(rust_analyzer))]
+        $crate::__create_hook_impl!($($tt)*);
+    };
+}
+
+#[macro_export]
+macro_rules! __create_hook_impl {
+    // No ret type specified
+    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        __create_hook_impl!($name, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+    };
+
+    // No hook type specified - run before original by default
+    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        __create_hook_impl![$name, PRE, $out_type, ( $( $arg: $ty ),+ ), $body];
+    };
+
+    (@gen_detour NONE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                $body
+            }
+        }
+    };
+
+    (@gen_detour POST, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                let ret_val = unsafe { [<o_ $name>].call ( $( $arg ),+ ) };
+                ($body(ret_val))
+            }
+        }
+    };
+
+    (@gen_detour PRE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+                $body
+                unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+            }
+        }
+    };
+
+    ($name:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        paste::paste! {
+            ::retour::static_detour! {
+                pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+            }
+
+            __create_hook_impl![@gen_detour $hook_type, $name, $out_type, ( $( $arg: $ty ),+ ), $body];
+
+            #[allow(non_snake_case)]
+            pub unsafe fn [<attach_ $name>](
+                base_address: usize,
+                offsets: std::collections::HashMap<String, u64>
+            ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+
+                match offsets.get(stringify![$name]) {
+                    None => Err("No address found.".into()),
+                    Some(_) => {
+                        let rel_address = offsets[stringify![$name]] as usize;
+
+                        type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+                        let target: [<Fn $name>] =
+                            std::mem::transmute(base_address + rel_address);
+
+                        let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
+                        let _ = [<o_ $name>].enable();
+
+                        crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
+                        Ok(Some(rel_address))
+                    }
+                }
+            }
+        }
+    };
+}
+
+
+// #[cfg(not(rust_analyzer))]
+// #[macro_export]
+// macro_rules! CREATE_HOOK {
+//     // No ret type specified
+//     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+//         CREATE_HOOK!($name, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+//     };
+
+//     // No hook type specified - run before original by default
+//     ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+//         CREATE_HOOK![$name, PRE, $out_type, ( $( $arg: $ty ),+ ), $body];
+//     };
+    
+//     (@gen_detour NONE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+//         paste::paste! {
+//             #[allow(non_snake_case)]
+//             pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+//                 // println!("rust $name delta: {}", delta);
+//                 // crate::swarn!(f; "Inside hook");
+//                 $body
+//                 // unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+//             }
+//         }
+//     };
+
+//     (@gen_detour POST, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+//         paste::paste! {
+//             #[allow(non_snake_case)]
+//             pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+//                 // crate::swarn!(f; "Inside hook");
+//                 let ret_val = unsafe { [<o_ $name>].call ( $( $arg ),+ ) };
+//                 let ret_val = ret_val;
+//                 ($body(ret_val))
+//             }
+//         }
+//     };
+
+//     (@gen_detour PRE, $name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+//         paste::paste! {
+//             #[allow(non_snake_case)]
+//             pub fn [<$name _detour_fkt>]( $( $arg: $ty ),+ ) -> $out_type {
+//                 // crate::swarn!(f; "Inside hook");
+//                 $body
+//                 unsafe { [<o_ $name>].call ( $( $arg ),+ ) }
+//             }
+//         }
+//     };
+
+//     ($name:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        
+//       paste::paste! {
+
+//         ::retour::static_detour! {
+//           pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+//         }
+        
+//         CREATE_HOOK![@gen_detour $hook_type, $name, $out_type, ( $( $arg: $ty ),+ ), $body];
+
+//         #[allow(non_snake_case)]
+//         pub unsafe fn [<attach_ $name>](base_address: usize, offsets: std::collections::HashMap<String, u64>)  -> Result<Option<usize>, Box<dyn std::error::Error>>{
+
+//         // TODO: propagate error? why panic
+//           match offsets.get(stringify![$name]) {
+//             None => {
+//                 Err("No address found.".into())// Err("No Address found."),//log::error!["Failed to attach: {}", stringify![$name]],
+//             },
+//             Some(_) => {
+//                 let rel_address = offsets[stringify![$name]] as usize;
+//                 let target: [<Fn $name>] = std::mem::transmute(base_address + rel_address);
+      
+//                 type [<Fn $name>] = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+      
+//                 // let res = [<o_ $name>]
+//                 //   .initialize(target, [<$name _detour_fkt>]);
+
+//                 // match res {
+//                 //     Ok(_) => crate::sinfo!(f; "INIT Attached!"),
+//                 //     Err(e) => crate::serror!(f; "INIT FAILED TO ATTACH! {e}"),
+//                 // }
+//                 // let res2 = [<o_ $name>] 
+//                 // .enable();
+//                 // match res2 {
+//                 //     Ok(_) => crate::sinfo!(f; "ENABLE Attached!"),
+//                 //     Err(e) => crate::serror!(f; "ENABLE FAILED TO ATTACH! {e}"),
+//                 // }
+//                 let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
+//                 let _ = [<o_ $name>].enable();
+//                 // crate::debug_where!("Attached [ 0x{:#x?} ]", rel_address);
+//                 crate::sdebug!(f; "Attached [ 0x{:#x?} ]", rel_address);
+//                 Ok(Some(rel_address as usize))
+//             },
+//           }
+//         }
+//       }
+//     };
+// }
+
 // Testing SomeTestFkt
 // EGS: ["40 53 FF", "40 53 48"]
 // Testing SomeTestFkt
@@ -422,6 +664,22 @@ wrap_process_macro!(Simple);
 wrap_process_macro!(Call);
 wrap_process_macro!(First);
 wrap_process_macro!(XrefLast);
+
+#[allow(unused_macros)]
+macro_rules! generate_stub {
+    ( $name:ident ) => {
+        // $name
+        #[cfg(feature="dev")]
+        define_pattern_resolver!($name, [
+            "4C"
+        ]);
+        
+        #[cfg(feature="dev")]
+        CREATE_HOOK!($name, (arg0: *mut c_void), {
+            crate::sinfo![f; "Triggered!"];
+        });
+    };
+}
 
 // Simpler version
 

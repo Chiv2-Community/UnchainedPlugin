@@ -15,6 +15,7 @@
 
 struct RustBuildInfo;
 extern "C" const RustBuildInfo* load_current_build_info(bool scan_missing);
+extern "C" const void init_rustlib();
 extern "C" uint8_t build_info_save(const void* bi);
 extern "C" uint32_t build_info_get_file_hash(const void* bi);
 extern "C" uint64_t build_info_get_offset(const RustBuildInfo* info, const char* name);
@@ -198,6 +199,7 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 		GLOG_INFO("Command line args:");
 		GLOG_INFO("{}", std::wstring(GetCommandLineW()));
 		GLOG_INFO("");
+		init_rustlib();
 
 		auto rust_build_info = load_current_build_info(true);
 		if (rust_build_info == nullptr) {
@@ -325,7 +327,6 @@ int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 	switch (ul_reason_for_call) {
 		case DLL_PROCESS_ATTACH: {
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
-
 			initialize_global_logger(cliArgs.log_level);
 			GLOG_INFO("Logger initialized.");
 
@@ -351,6 +352,7 @@ int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 				OutputDebugStringA("[DLL] Failed to create main thread\n");
 				return FALSE;
 			}
+
 			break;
 		}
 		case DLL_THREAD_ATTACH:
