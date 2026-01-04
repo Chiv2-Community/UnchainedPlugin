@@ -57,3 +57,20 @@ macro_rules! CREATE_REQUEST_HOOK {
         );
     };
 }
+
+#[macro_export]
+macro_rules! CREATE_REQUEST_HOOK_DUMMY {
+    ($name:ident) => {
+        $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut std::os::raw::c_void,
+            (this_ptr: *mut $crate::resolvers::chiv2_macros::GenericGCGObj, a2: *mut std::os::raw::c_void, request: *mut $crate::resolvers::chiv2_macros::GenericRequest, a4: *mut std::os::raw::c_void), {
+                let (this, req) = unsafe {
+                    (this_ptr.as_mut().expect("GCGObj was null"),
+                     request.as_mut().expect("Request was null"))
+                };  
+                // $crate::sinfo!("{} Dummy: url_base={}", stringify!($name), this.url_base);
+                $crate::sinfo!(f; "{} Dummy", stringify!($name));
+                $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
+            }
+        );
+    };
+}
