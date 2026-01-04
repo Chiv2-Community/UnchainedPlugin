@@ -183,6 +183,9 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
     let offsets = current.as_ref().unwrap().offsets.clone();
     unsafe {
+        apply_patches(exe.base_address, offsets.clone());
+    }
+    unsafe {
         attach_hooks(exe.base_address, offsets.clone()).unwrap();
     }
 
@@ -250,4 +253,18 @@ pub unsafe fn attach_hooks(
     }
 
     Ok(())
+}
+
+pub unsafe fn apply_patches(base: usize, offsets: std::collections::HashMap<String, u64>) {
+    for p in inventory::iter::<resolvers::PatchRegistration> {
+        // Run the condition check
+        if (p.enabled_fn)() {
+            match (p.patch_fn)(base, offsets.clone()) {
+                Ok(_) => sinfo!(f; "[+] Patch Applied: {}", p.name),
+                Err(e) => serror!(f; "[-] Patch Failed: {} -> {}", p.name, e),
+            }
+        } else {
+            sinfo!(f; "[.] Patch Skipped (Condition not met): {}", p.name);
+        }
+    }
 }

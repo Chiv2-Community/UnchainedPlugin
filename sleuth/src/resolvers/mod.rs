@@ -48,6 +48,15 @@ pub struct HookRegistration {
     pub auto_activate: bool,
 }
 
+pub type ConditionFn = fn() -> bool;
+pub type PatchFn = unsafe fn(usize, std::collections::HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
+
+pub struct PatchRegistration {
+    pub name: &'static str,
+    pub patch_fn: PatchFn,
+    pub enabled_fn: ConditionFn, // The runtime check
+}
+
 
 pub mod asset_registry;
 pub mod admin_control;
@@ -58,3 +67,4 @@ pub mod ownership_overrides;
 pub mod unchained_integration;
 
 inventory::collect!(HookRegistration);
+inventory::collect!(PatchRegistration);
