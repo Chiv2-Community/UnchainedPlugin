@@ -55,6 +55,7 @@ REGISTER_HOOK_PATCH(
 	GLOG_INFO("{}{}",addressString, suffix);
 }
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	GetMotd,
 	APPLY_ALWAYS,
@@ -112,6 +113,7 @@ REGISTER_HOOK_PATCH(
 		throw;
 	}
 }
+#endif
 
 REGISTER_HOOK_PATCH(
 	SendRequest,
