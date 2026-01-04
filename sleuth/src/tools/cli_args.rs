@@ -9,58 +9,58 @@ pub struct CLIArgs {
     // #[arg()]
     // game_id: String,
     #[arg(long = "next-map-mod-actors", value_delimiter = ',', required = false)]
-    next_mod_actors: Option<Vec<String>>,
+    pub next_mod_actors: Option<Vec<String>>,
 
     #[arg(long = "all-mod-actors", value_delimiter = ',', required = false)]
-    mod_paks: Option<Vec<String>>,
+    pub mod_paks: Option<Vec<String>>,
 
     #[arg(long = "unchained")]
-    is_unchained: bool,
+    pub is_unchained: bool,
     //
     #[arg(long = "rcon")]
-    rcon_port: Option<u16>,
+    pub rcon_port: Option<u16>,
     // //
     #[arg(long = "desync-patch")]
-    apply_desync_patch: bool,
+    pub apply_desync_patch: bool,
     //
     #[arg(long = "use-backend-banlist")]
-    use_backend_banlist: bool,
+    pub use_backend_banlist: bool,
     //
     #[arg(long = "nullrhi")]
-    is_headless: bool,
+    pub is_headless: bool,
     //
     #[arg(long = "next-map-name")]
-    next_map: Option<String>,
+    pub next_map: Option<String>,
     //
     #[arg(long = "launched-profile")]
-    launched_profile: Option<String>,
+    pub launched_profile: Option<String>,
     //
     #[arg(long = "playable-listen")]
-    playable_listen: bool,
+    pub playable_listen: bool,
     //
     #[arg(long = "register")]
-    register: bool,
+    pub register: bool,
     // //
     #[arg(
         long = "server-browser-backend",
         default_value = "https://servers.polehammer.net"
     )]
-    server_browser_backend: Option<String>,
+    pub server_browser_backend: Option<String>,
     // //
     #[arg(long = "server-password")]
-    server_password: Option<String>,
+    pub server_password: Option<String>,
     // s
     #[arg(long = "platform")]
-    platform: Option<String>,
+    pub platform: Option<String>,
 
     #[arg(long = "GameServerPingPort", default_value = "3075")]
-    game_server_ping_port: Option<u16>,
+    pub game_server_ping_port: Option<u16>,
 
     #[arg(long = "GameServerQueryPort", default_value = "7071")]
-    game_server_query_port: Option<u16>,
+    pub game_server_query_port: Option<u16>,
 
     #[arg(long = "Port", default_value = "7777")]
-    game_port: Option<u16>,
+    pub game_port: Option<u16>,
 
     // UNHANDLED START
     // #[arg(long = "AUTH_LOGIN")]
