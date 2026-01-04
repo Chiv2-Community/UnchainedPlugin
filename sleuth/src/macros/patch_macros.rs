@@ -82,6 +82,7 @@ macro_rules! __create_patch_impl {
             inventory::submit! {
                 $crate::resolvers::PatchRegistration {
                     name: stringify!($name),
+                    tag: stringify!($suffix),
                     patch_fn: [<apply_patch_ $name _ $suffix>],
                     enabled_fn: $cond_fn,
                 }

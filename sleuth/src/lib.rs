@@ -262,11 +262,11 @@ pub unsafe fn apply_patches(base: usize, offsets: std::collections::HashMap<Stri
         // Run the condition check
         if (p.enabled_fn)() {
             match (p.patch_fn)(base, offsets.clone()) {
-                Ok(_) => sinfo!(f; "[+] Patch Applied: {}", p.name),
-                Err(e) => serror!(f; "[-] Patch Failed: {} -> {}", p.name, e),
+                Ok(_) => sinfo!(f; "[+] Patch Applied: {} ({})", p.name, p.tag),
+                Err(e) => serror!(f; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
         } else {
-            sinfo!(f; "[.] Patch Skipped (Condition not met): {}", p.name);
+            sinfo!(f; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
         }
     }
 }

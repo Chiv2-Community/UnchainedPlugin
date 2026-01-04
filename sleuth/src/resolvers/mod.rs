@@ -53,6 +53,7 @@ pub type PatchFn = unsafe fn(usize, std::collections::HashMap<String, u64>) -> R
 
 pub struct PatchRegistration {
     pub name: &'static str,
+    pub tag: &'static str,
     pub patch_fn: PatchFn,
     pub enabled_fn: ConditionFn, // The runtime check
 }
