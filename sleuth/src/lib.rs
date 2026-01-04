@@ -199,6 +199,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
 }
 
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
     let bi = unsafe { &*bi };
     if let Err(e) = bi.save() {
@@ -209,12 +210,14 @@ pub extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
 }
 
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
     let bi = unsafe { &*bi };
     bi.get_file_hash()
 }
 
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
     let bi = unsafe { &*bi };
     let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
