@@ -59,6 +59,10 @@ pub struct PatchRegistration {
     pub enabled_fn: ConditionFn, // The runtime check
 }
 
+pub struct OffsetRegisty {
+    pub name: &'static str,
+    pub map: fn() -> std::collections::HashMap<String, u64>,
+}
 
 pub mod asset_registry;
 pub mod admin_control;
@@ -72,3 +76,4 @@ pub mod chiv2_macros;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
+inventory::collect!(OffsetRegisty);

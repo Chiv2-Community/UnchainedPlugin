@@ -180,16 +180,25 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
             Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
         }
     }
-
-    // Attach hooks
+    
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
-    let offsets = current.as_ref().unwrap().offsets.clone();
-    unsafe {
-        apply_patches(exe.base_address, offsets.clone());
+    match current.as_ref() {
+        None => sdebug!(f; "No current BuildInfo"),
+        Some(bi) => {
+            // Attach hooks
+            
+            let offsets = bi.offsets.clone();
+            unsafe {
+                apply_patches(exe.base_address, offsets.clone());
+            }
+            unsafe {
+                attach_hooks(exe.base_address, offsets.clone()).unwrap();
+            }
+        },
     }
-    unsafe {
-        attach_hooks(exe.base_address, offsets.clone()).unwrap();
-    }
+
+    // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";    
+    // tools::pdb_scan::list_functions_with_addresses(pdb_file, exe.base_address).expect("Failed to list functions");
     // swarn!(f; "{:#?}", globals());
 
     current

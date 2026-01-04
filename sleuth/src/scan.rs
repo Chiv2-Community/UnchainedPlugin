@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use patternsleuth::resolvers::resolvers;
 
 use std::process;
-use crate::{resolvers::{PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
+use crate::{resolvers::{self, PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
 
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = process::id() as i32;
@@ -63,6 +63,14 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
+    }
+    for p in inventory::iter::<resolvers::OffsetRegisty> {
+        let map: HashMap<String, u64> = (p.map)();
+        sinfo!(f; "Offset Registry '{}': {} entries", p.name, map.len());
+        for (k, v) in map.iter() {
+            sinfo!(f; "  '{}' => 0x{:x}", k, v);
+        }
+        offsets.extend(map.into_iter());
     }
 
     Ok(offsets)
