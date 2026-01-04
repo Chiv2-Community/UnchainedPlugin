@@ -19,26 +19,11 @@ define_pattern_resolver!(ApproveLogin, [
     "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 8B", // STEAM
 ]);
 
-
-// TODO: Shorter sigs
-// define_pattern_resolver!(GetMotd, {
-//     EGS: ["4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09"],
-//     STEAM: [
-//         "4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC E8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 E8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 18 01 00 00 48 8D 55 B7 4C 89 AC 24 E0 00 00 00 4C 89 B4 24 D8 00 00 00 4C 89 BC 24 D0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4C 24 20 33 F6 BA 09",
-//         "4C 89 4C 24 20 4C 89 44 24 18 48 89 4C 24 08 55 56 57 41 54 48 8D 6C 24 C1 48 81 EC D8 00 00 00 83 79 08 01 4C 8B E2 48 8B F9 7F 19 33 F6 48 8B C2 48 89 32 48 89 72 08 48 81 C4 D8 00 00 00 41 5C 5F 5E 5D C3 48 89 9C 24 08 01 00 00 48 8D 55 B7 4C 89 AC 24 D0 00 00 00 4C 89 B4 24 C8 00 00 00 4C 89 BC 24 C0 00 00 00 E8 ?? ?? ?? ?? 4C 8B 6D B7 48 8D 4D 97 33 F6 48 89 75 97 48 89 75 9F 49 8B 45 00 8D 56 09" // EGS 2.11.4
-//         ]
-// });
-// CREATE_REQUEST_HOOK!(GetMotd, "/api/tbio");
-
-// define_pattern_resolver!(GetCurrentGames, Call, ["E8 | ?? ?? ?? ?? 4C 39 ?8 74 3?"]);
-// CREATE_REQUEST_HOOK!(GetCurrentGames, "/api/tbio");
-
 define_pattern_resolver!(SendRequest, [
     "48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 55 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 40 48 8B D9 49 8B F9"
 ]);
 
 
-// OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 use std::collections::HashMap;
 use std::sync::RwLock;
 use once_cell::sync::Lazy;
@@ -46,6 +31,7 @@ use once_cell::sync::Lazy;
 pub static STRING_TO_ROOT_FN: Lazy<RwLock<HashMap<String, u64>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+// OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 define_pattern_resolver!(CreateHttpRequest, [
     "40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",
 ], |ctx, patterns| {
@@ -133,75 +119,3 @@ CREATE_REQUEST_HOOK_DUMMY!(GetPost_GetTitleData);
 CREATE_REQUEST_HOOK_DUMMY!(GetPost_LoginEOS);
 CREATE_REQUEST_HOOK_DUMMY!(GetPost_ConfirmJoinTicket);
 CREATE_REQUEST_HOOK_DUMMY!(GetPost_PhonebookDeleteOwnId);
-
-// define_pattern_resolver!(CreateHttpRequest, [
-//     "40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",
-//     // "40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24 60 33 DB"
-// ],
-// |ctx, patterns| {
-//             let futures = ::patternsleuth::resolvers::futures::future::join_all(
-//                 patterns.iter()
-//                     .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
-//             ).await;
-    
-//             let res = futures
-//                 .into_iter()
-//                 .flatten()
-//                 .next()
-//                 .ok_or_else(||
-//                     ::patternsleuth::resolvers::ResolveError::Msg(format!(
-//                         "Failed to find match for asdf with one of the patterns: {patterns:?}",
-//                          patterns = patterns
-//                     ).into())
-//             );  
-//             let base_addr = crate::globals().get_base_address();
-//             let addr: usize = res.clone()?;
-            
-//             let xcalls = util::scan_xcalls(ctx, [&addr]).await;
-//             crate::sinfo!(f; "CreateHttpRequest xcalls found: {}", xcalls.len());
-//             // let xrefs = util::scan_xrefs(ctx, [&addr]).await;
-//             // crate::sinfo!(f; "CreateHttpRequest xrefs found: {}", xrefs.len());
-//             let str_offset = 0x49 + 0x3;       
-//             let str_next = 0x49 + 0x3 + 0x4;       
-//             let mem = &ctx.image().memory;
-//             let mut fns = util::root_functions(ctx, &xcalls)?;
-//             crate::sinfo!(f; "CreateHttpRequest root functions found: {}", fns.len());
-//             for call in xcalls {
-//                 let str_ref_addr = call + str_offset;
-//                 let str_addr = mem.rip4(str_ref_addr).unwrap_or(0);
-//                 crate::sinfo!(f; 
-//                     "CreateHttpRequest xcall string ref at 0x{:x}, string addr at 0x{:x}, next instr at 0x{:x}",
-//                     str_ref_addr - base_addr,
-//                     str_addr - base_addr,
-//                     call + str_next - base_addr);
-//                 // match mem.read_string(mem.ptr(str_addr)?) {
-//                 match mem.read_wstring(str_addr) {
-//                     Ok(s) => {
-//                         crate::sinfo!(f; "CreateHttpRequest xcall string at 0x{:x}: {}", str_addr, s);
-//                     },
-//                     Err(e) => {
-//                         crate::sinfo!(f; "CreateHttpRequest xcall string read error at 0x{:x}: {}", str_addr, e);
-//                     }
-//                 }
-//             }
-//             for fn_addr in &fns {
-//                 if *fn_addr >= base_addr {
-//                     // crate::sinfo!(f; "CreateHttpRequest use found at: 0x{:x}", *fn_addr - base_addr);
-//                     let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";    
-//                     let rva = (*fn_addr - base_addr) as u32;
-//                     match tools::pdb_scan::get_function_name_from_rva(pdb_file, rva as u32) {
-//                         Ok(Some(name)) => {
-//                             crate::sinfo!(f; "Function name: {}", name);
-//                         },
-//                         Ok(None) => {
-//                             crate::sinfo!(f; "No function name found for RVA {:#X}", rva);
-//                         },
-//                         Err(e) => {
-//                             crate::sinfo!(f; "Error reading PDB: {}", e);
-//                         }
-//                     }
-//                 }
-//             }
-//             crate::sinfo!(f; "CreateHttpRequest found at: 0x{:x}", res.as_ref().unwrap() - base_addr);
-//             res
-//         });
