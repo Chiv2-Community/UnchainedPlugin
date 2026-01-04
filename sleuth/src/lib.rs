@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod resolvers;
 mod scan;
 mod tools;
