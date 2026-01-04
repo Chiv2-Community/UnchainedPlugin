@@ -1,3 +1,7 @@
+
+#![allow(dead_code)]
+#![allow(private_interfaces)]
+
 use std::{
     cell::UnsafeCell,
     ffi::c_void,

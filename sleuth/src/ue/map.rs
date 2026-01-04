@@ -1,3 +1,4 @@
+#![allow(private_interfaces)]
 use std::fmt::Debug;
 
 use super::TArray;
@@ -61,7 +62,7 @@ impl<K: PartialEq + UEHash, V> TMap<K, V> {
                 if allocation_flags.index(i).bool() {
                     // SAFETY: The bit is set, so this is a live element.
                     let elem_ptr = unsafe { &mut entry.element };
-                    let tuple = unsafe { &mut elem_ptr.value };
+                    let tuple = &mut elem_ptr.value;
 
                     Some((&tuple.a, &mut tuple.b))
                 } else {

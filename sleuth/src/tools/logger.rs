@@ -39,7 +39,7 @@ pub fn init_syslog() -> anyhow::Result<()> {
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 
     // Build the config programmatically
-    let mut builder = Config::builder()
+    let builder = Config::builder()
     .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)));
 
     #[cfg(feature="syslog-client")]

@@ -1,7 +1,7 @@
 
 use std::env;
 
-use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, sinfo, strace, swarn, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
+use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sinfo, swarn, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
 use patternsleuth::resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -46,6 +46,7 @@ impl<'de> Deserialize<'de> for DllHookResolution {
 static mut GLOBALS: Option<Globals> = None;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Globals {
     resolution: DllHookResolution,
     guobject_array: parking_lot::FairMutex<&'static FUObjectArray>,
@@ -58,6 +59,7 @@ pub struct Globals {
     pub(crate) cli_args: CLIArgs,
 }
 
+#[allow(dead_code)]
 impl Globals {
     pub fn gmalloc(&self) -> &ue::FMalloc {
         unsafe { &**(self.resolution.gmalloc.0 as *const *const ue::FMalloc) }

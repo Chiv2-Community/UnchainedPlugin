@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod array;
 pub mod kismet;
 mod malloc;

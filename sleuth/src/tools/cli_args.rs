@@ -151,7 +151,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
                     // println!("Res: {} Trailing string {}, last flag {}, last result {}",result.len(), flag, last, last_valid);
                     if o == last_valid {
                         if let Some(last_mut) = result.last_mut() {
-                            if (cur_flag.len() > 0) {
+                            if cur_flag.len() > 0 {
                                 // println!("Trailing '{cur_flag}'");
                                 last_mut.push(' ');
                                 last_mut.push_str(&cur_flag.trim().to_string());
