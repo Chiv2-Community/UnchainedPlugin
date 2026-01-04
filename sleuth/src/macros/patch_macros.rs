@@ -97,3 +97,51 @@ macro_rules! __apply_patch_op {
     (NOP, $addr:expr, $val:expr) => { $crate::tools::memtools::nop($addr, $val) };
     (WRITE, $addr:expr, $val:expr) => { $crate::tools::memtools::write_ptr($addr as *mut _, $val) };
 }
+
+#[macro_export]
+macro_rules! CREATE_PATCH_PLATFORM {
+    // tag + offset + if
+    ($platform:ident, $name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::CREATE_PATCH!($name @ $tag, $extra, $op, $val, IF {
+            $crate::__platform_check!($platform) && $cond
+        });
+    };
+
+    // name + offset + if
+    ($platform:ident, $name:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::CREATE_PATCH!($name, $extra, $op, $val, IF {
+            $crate::__platform_check!($platform) && $cond
+        });
+    };
+
+    // tag + offset (no if)
+    ($platform:ident, $name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr) => {
+        $crate::CREATE_PATCH!($name @ $tag, $extra, $op, $val, IF {
+            $crate::__platform_check!($platform)
+        });
+    };
+
+    // name + offset (no if)
+    ($platform:ident, $name:ident, $extra:literal, $op:ident, $val:expr) => {
+        $crate::CREATE_PATCH!($name, $extra, $op, $val, IF {
+            $crate::__platform_check!($platform)
+        });
+    };
+    
+    // name + op + val (no offset, no if)
+    ($platform:ident, $name:ident, $op:ident, $val:expr) => {
+        $crate::CREATE_PATCH!($name, $op, $val, IF {
+            $crate::__platform_check!($platform)
+        });
+    };
+}
+
+#[macro_export]
+macro_rules! __platform_check {
+    ($platform:ident) => {
+        match $crate::tools::hook_globals::globals_initialized() {
+            true => $crate::globals().get_platform() == $crate::resolvers::PlatformType::$platform,
+            _ => false,
+        }
+    };
+}
