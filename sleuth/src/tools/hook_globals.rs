@@ -1,7 +1,7 @@
 
 use std::env;
 
-use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sinfo, swarn, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
+use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, sinfo, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
 use patternsleuth::resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -43,20 +43,43 @@ impl<'de> Deserialize<'de> for DllHookResolution {
     }
 }
 
-static mut GLOBALS: Option<Globals> = None;
+
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SyncFUObjectArray(&'static FUObjectArray);
+unsafe impl Sync for SyncFUObjectArray {}
+unsafe impl Send for SyncFUObjectArray {}
+
+impl std::ops::Deref for SyncFUObjectArray {
+    type Target = FUObjectArray;
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+use std::sync::OnceLock;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Globals {
     resolution: DllHookResolution,
-    guobject_array: parking_lot::FairMutex<&'static FUObjectArray>,
-    #[allow(dead_code)]
+    // Use the wrapper here to satisfy the Sync requirement
+    guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
     main_thread_id: std::thread::ThreadId,
-    // last_command: Option<ue::FString>,
     platform: PlatformType,
     base_address: usize,
     is_server: bool,
     pub(crate) cli_args: CLIArgs,
+}
+
+static GLOBALS: OnceLock<Globals> = OnceLock::new();
+
+pub fn globals() -> &'static Globals {
+    GLOBALS.get().expect("Globals not initialized")
+}
+
+pub fn globals_initialized() -> bool {
+    GLOBALS.get().is_some()
 }
 
 #[allow(dead_code)]
@@ -76,13 +99,13 @@ impl Globals {
     pub fn uobject_base_utility_get_path_name(&self) -> ue::FnUObjectBaseUtilityGetPathName {
         unsafe { std::mem::transmute(self.resolution.uobject_base_utility_get_path_name.0) }
     }
-    pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'static, &FUObjectArray> {
+    pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
         self.guobject_array.lock()
     }
     pub unsafe fn guobject_array_unchecked(&self) -> &FUObjectArray {
-        *self.guobject_array.data_ptr()
+        // deref ptr to SyncFUObjectArray, then deref to FUObjectArray
+        &*( *self.guobject_array.data_ptr() )
     }
-
     pub fn get_platform(&self) -> PlatformType {
         self.platform
     }
@@ -100,12 +123,6 @@ impl Globals {
     }
 }
 
-// FIXME: Nihi: ?
-#[allow(static_mut_refs)]
-pub fn globals() -> &'static Globals {
-    unsafe { GLOBALS.as_ref().expect("Globals not initialized") }
-}
-
 pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
     let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
         true => PlatformType::EGS,
@@ -118,7 +135,7 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
     BASE_ADDR.set(exe.base_address).expect("BASE_ADDR already set");
-    sinfo!(
+    sinfo!(f;
         "Platform: {} base_addr: '0x{:x?}'",
         platform, exe.base_address
     );
@@ -128,42 +145,24 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
     sdebug!(f; "CLI Args: {:?}", args);
     sinfo!(f; "Running resolvers");
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
-    // use rayon::ThreadPoolBuilder;
-
-    // let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-    // pool.install(|| {
-    //     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
-    // });
-    // let resolution = match exe.resolve(DllHookResolution::resolver()) {
-    //     Ok(res) => {
-    //         println!("Resolvers complete");
-    //         res
-    //     }
-    //     Err(e) => {
-    //         eprintln!("Failed to resolve: {}", e);
-    //         return Err(clap::error::Error::raw(
-    //             clap::error::ErrorKind::Io,
-    //             format!("Failed to resolve: {}", e),
-    //         ));
-    //     }
-    // };
-    // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
-    log::info!("Resolvers complete ASDF");
-    sinfo!("Resolvers complete");
     // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =
         &*(resolution.guobject_array.0 as *const FUObjectArray);
 
-    GLOBALS = Some(Globals {
-        guobject_array: guobject_array.into(),
+    let globals_instance = Globals {
+        // Wrap the reference in our Sync-promising struct
+        guobject_array: parking_lot::FairMutex::new(SyncFUObjectArray(guobject_array)),
         resolution,
         main_thread_id: std::thread::current().id(),
-        // last_command: None,
         base_address: exe.base_address,
         is_server: false,
         cli_args: args,
         platform,
-    });
+    };
+
+    if let Err(_) = GLOBALS.set(globals_instance) {
+        eprintln!("Error: Globals already initialized!");
+    }
     // sdebug!(f; "{GLOBALS:#?}");
     Ok(())
 }
