@@ -112,7 +112,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         let (flag, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=')
         {
             // println!("{} Split by =", arg);
-            println!("k '{}' , v '{}' ", k, v);
+            // println!("k '{}' , v '{}' ", k, v);
             (
                 format!("--{}", k.trim_start_matches('-')),
                 Some(v.to_string()),

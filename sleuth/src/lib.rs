@@ -134,10 +134,10 @@ impl BuildInfo {
 
 #[no_mangle]
 pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
-    // swarn!(f; "{:#?}", globals().cli_args);
+    
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
-    sinfo!(f; "Loading current build info, scan_missing={}", scan_missing);
+    sdebug!(f; "Loading current build info, scan_missing={}", scan_missing);
     
     if current.is_none() {
         let file_path = env::current_exe()
@@ -190,6 +190,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
     unsafe {
         attach_hooks(exe.base_address, offsets.clone()).unwrap();
     }
+    // swarn!(f; "{:#?}", globals());
 
     current
         .as_ref()
@@ -239,12 +240,12 @@ pub unsafe fn attach_hooks(
     base_address: usize,
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    sinfo!(f; "Attaching hooks via auto-discovery:");
+    sdebug!(f; "Attaching hooks via auto-discovery:");
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
         if !hook.auto_activate {
-            sinfo!(f; "Skipping inactive hook: {}", hook.name);
+            sdebug!(f; "Skipping inactive hook: {}", hook.name);
             continue;
         }
 
@@ -266,7 +267,7 @@ pub unsafe fn apply_patches(base: usize, offsets: std::collections::HashMap<Stri
                 Err(e) => serror!(f; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
         } else {
-            sinfo!(f; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+            sdebug!(f; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
         }
     }
 }

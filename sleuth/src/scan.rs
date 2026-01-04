@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use patternsleuth::resolvers::resolvers;
 
 use std::process;
-use crate::resolvers::{current_platform, PlatformType, PLATFORM};
+use crate::{resolvers::{PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
 
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
     let pid = Some(process::id() as i32);
@@ -30,8 +30,8 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         return Ok(HashMap::new());
     }
 
-    println!("Scanning for {} missing signatures", resolvers_to_scan.len());
-    resolvers_to_scan.iter().for_each(|res| println!("  {}", res.name));
+    sinfo!(f; "Scanning for {} missing signatures", resolvers_to_scan.len());
+    resolvers_to_scan.iter().for_each(|res| sdebug!(f; "  {}", res.name));
 
     let dyn_resolvers = resolvers_to_scan.iter()
         .map(|res| res.getter)
@@ -40,7 +40,7 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
     let name = format!("PID={}", pid.unwrap());
     let game_name = format!("pid={}", pid.unwrap()); // fixme
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string())?;
-    println!("GAME '{:?}' '{:x?}'", name, exe.base_address);
+    sdebug!(f;"GAME '{:?}' '{:x?}'", name, exe.base_address);
 
     let resolution = tracing::info_span!("scan", game = game_name)
         .in_scope(|| exe.resolve_many(&dyn_resolvers));
@@ -59,7 +59,7 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
                 // sigs_json.insert(MyItem { id: resolver.name.to_string(), name: hex.to_string() });
                 let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16).map_err(|e| e.to_string())?;
                 let base = exe.base_address as u64;
-                println!("{} {} {} {:x?}", resolver.name, hex, val, (val-base) & 0xFFFFFFF);
+                sinfo!(f; "{} {} {} {:x?}", resolver.name, hex, val, (val-base) & 0xFFFFFFF);
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }

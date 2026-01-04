@@ -61,5 +61,5 @@ CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLi
     let string_ref: &FString = unsafe{ &*S };
     let message = string_ref.to_string();
     
-    println!("ClientMessage Hooked: Type: {:?}, Message: {}", Type, message);
+    crate::sinfo!("ClientMessage Hooked: Type: {:?}, Message: {}", Type, message);
 });

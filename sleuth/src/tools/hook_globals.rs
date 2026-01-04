@@ -125,16 +125,8 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
 
     // Load CLI ARGS
     let args = load_cli().expect("Failed to load CLI ARGS");
-
-    swarn!(f; "Running resolvers");
-    // rayon::ThreadPoolBuilder::new()
-    // .num_threads(4) // or 1 for safety
-    // .build()
-    // .unwrap()
-    // .install(|| {
-    //     // your heavy Rust work here
-    //     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
-    // });
+    sdebug!(f; "CLI Args: {:?}", args);
+    sinfo!(f; "Running resolvers");
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     // use rayon::ThreadPoolBuilder;
 

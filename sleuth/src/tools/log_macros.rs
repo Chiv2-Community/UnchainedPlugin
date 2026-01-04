@@ -50,7 +50,7 @@ macro_rules! __slog_internal {
             log::$level!(target: &tgt, "[{}] {}", context_parts.join("|"), format_args!($($arg)*));
         }
         else {
-            log::$level!("[{}]", context_parts.join("|"));
+            log::$level!("[{}] {}", context_parts.join("|"), format_args!($($arg)*));
         }
 
     }};
@@ -58,12 +58,13 @@ macro_rules! __slog_internal {
     // No flags
     ( $level:ident, $($arg:tt)* ) => {{
         log::$level!(
-            "{}:{}:{}",
+            "[{}:{}:{}] {}",
             $crate::function!(),
             std::line!(),
-            std::column!()
+            std::column!(),
+            format_args!($($arg)*)
         );
-        log::$level!($($arg)*);
+        // log::$level!($($arg)*);
     }};
 }
 

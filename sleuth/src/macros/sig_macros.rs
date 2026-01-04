@@ -111,7 +111,7 @@ macro_rules! define_pocess {
         let result = $body.map($name);
 
         if let Err(msg) = &result {
-            println!("Failed to resolve {}: {:?}", stringify!($name), msg);
+            log::error!("Failed to resolve {}: {:?}", stringify!($name), msg);
         }
 
         result
