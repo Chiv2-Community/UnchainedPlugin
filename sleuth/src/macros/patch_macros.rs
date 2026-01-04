@@ -1,23 +1,50 @@
 
-/// Examples
+/// A macro for registering memory patches with support for offsets, tags and conditions.
+///
+///
+/// # Components
+/// - **Name**: The lookup key in the offsets HashMap.
+/// - **Tag**: (Optional) An identifier used to create unique function names when patching the same function multiple times.
+/// - **Extra**: (Optional) A numeric literal offset to add to the base function address.
+/// - **Op**: The operation to perform (`NOP`, `BYTES`, or `WRITE`).
+/// - **Val**: The payload (byte count for `NOP`, `&[u8]` for `BYTES`, or a reference for `WRITE`).
+/// - **IF { block }**: (Optional) A runtime check. The patch only applies if the block returns `true`.
+///
+/// # Examples
+/// 
 /// ```rust
-/// // Always active
+/// // 1. Basic usage: NOP 2 bytes at the start of 'PatchSomething'
 /// CREATE_PATCH!(PatchSomething, NOP, 2);
 /// 
-/// // Always active with offset
+/// // 2. Offset usage: NOP 2 bytes at 'PatchSomething' + 0x10
 /// CREATE_PATCH!(PatchSomething, 0x10, NOP, 2);
 /// 
-/// // Only apply if a specific feature is enabled in your config
+/// // 3. Tagged usage: Allows multiple patches on the same function name
+/// CREATE_PATCH!(ProcessInput @ FixX, 0x42, NOP, 3);
+/// CREATE_PATCH!(ProcessInput @ FixY, 0x88, BYTES, &[0x90, 0x90]);
+/// 
+/// // 4. Conditional usage: Only apply if a config flag is set
 /// CREATE_PATCH!(InfiniteSomething, NOP, 5, IF {
 ///     crate::config::get().infinite_ammo_enabled
 /// });
 /// 
-/// // Only apply if a CLI argument was passed (assuming a global lazy_static or once_cell)
-/// CREATE_PATCH!(SkipIntro, BYTES, &[0xEB, 0x05], IF {
-///     std::env::args().any(|x| x == "--skip-intro")
-/// });
-/// 
+/// // 5. Direct Value Write: Change a float constant in memory
+/// CREATE_PATCH!(GlobalMultiplier, WRITE, &1.5f32);
 /// ```
+///
+/// # Address Calculation
+/// The final target memory address is calculated as:
+/// $Address = BaseAddress + Offset(Name) + Extra$
+/// 
+/// # Internal Generated Code
+/// 
+/// This macro creates a `PatchRegistration` struct that is automatically 
+/// collected via `inventory`. It handles address calculation, identifier generation via `paste!`, 
+/// and maps operations to internal memory tools.
+/// 
+/// For a call like `CREATE_PATCH!(MyFunc, NOP, 1)`, the macro generates:
+/// - A unique function: `pub unsafe fn apply_patch_MyFunc_base(...)`
+/// - An `inventory::submit!` call containing the function pointer and the metadata.
 #[macro_export]
 macro_rules! CREATE_PATCH {
     // tag + offset + condition
@@ -98,6 +125,17 @@ macro_rules! __apply_patch_op {
     (WRITE, $addr:expr, $val:expr) => { $crate::tools::memtools::write_ptr($addr as *mut _, $val) };
 }
 
+/// A macro for registering platform-specific memory patches with support for offsets, tags and conditions.
+/// 
+/// ```rust
+/// //Platform-specific usage: Only apply on Steam
+/// CREATE_PATCH_PLATFORM!(STEAM, DRMCheck, NOP, 6);
+/// 
+/// // Platform + Condition: Apply on Epic if experimental is enabled
+/// CREATE_PATCH_PLATFORM!(EPIC, UnlockFPS, 0x150, BYTES, &[0x01], IF {
+///     crate::config::get().experimental
+/// });
+/// ```
 #[macro_export]
 macro_rules! CREATE_PATCH_PLATFORM {
     // tag + offset + if
