@@ -25,7 +25,9 @@ define_pattern_resolver!(UGameplay_IsDedicatedServer, [
     "48 83 EC 28 48 85 C9 ?? ?? BA 01 00 00 00 ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 83 F8 01 0F 94 C0 48",
 ]);
 
-define_pattern_resolver!(EACAntiCheatMesssage, Simple, {
-    EGS:   ["4c 8d 05 b5 5c e0 02 48 8b cf 48 8d 55 40 e8 59 dc fe ff 48 85 db 74 08"],
-    STEAM: ["4c 8d 05 3b 30 dd 02 48 8b cf 48 8d 54 24 50 e8 6e ec fe ff 48 85 db 74 08"]
-});
+define_pattern_resolver!(EACAntiCheatMesssage, Simple,  [
+    "4c 8d 05 ?? ?? ?? ?? 48 8b cf 48 8d ?? ?? ?? ?? ?? fe ff 48 85 db 74 08"
+]);
+CREATE_PATCH!(EACAntiCheatMesssage, 0xE, NOP, 5);
+// CREATE_PATCH_PLATFORM!(STEAM, EACAntiCheatMesssage @ STEAM, 0xF, NOP, 5);
+// CREATE_PATCH_PLATFORM!(EGS, EACAntiCheatMesssage @ EGS, 0xE, NOP, 5);

@@ -6,7 +6,7 @@
 #include "../state/global_state.hpp"
 #include "../stubs/UE4.h"
 
-REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, NO_ADDITIONAL_OFFSET, { 0xEB })
+// REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, NO_ADDITIONAL_OFFSET, { 0xEB })
 
 REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,

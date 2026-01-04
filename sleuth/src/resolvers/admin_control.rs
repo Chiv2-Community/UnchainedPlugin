@@ -12,6 +12,7 @@ define_pattern_resolver![UTBLLocalPlayer_Exec, {
     EGS: ["75 18 40 38 7d d7 75 12 4d 85 f6 74 0d 41 38 be ?? 01 00 00"], // EGS
     // "75 1a 45 84 ed 75 15 48 85 f6 74 10 40 38 be b0 01 00 00 74 07 32 db e9 a6 fd ff ff 48 8b 5d 60 49 8b d6 4c 8b 45 58 4c 8b cb 49 8b cf", // PDB
 }];
+CREATE_PATCH!(UTBLLocalPlayer_Exec, BYTES, &[0xEB]);
 
 define_pattern_resolver!(
     ExecuteConsoleCommand,
