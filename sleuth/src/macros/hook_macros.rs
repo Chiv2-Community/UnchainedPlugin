@@ -1,7 +1,58 @@
 
 // Use pre-release version of rust-analyzer if this causes errors
+/// Generates a detour hook for a function, handles auto-registration, and 
+/// 
+/// provides rust-analyzer compatible type-hinting within the hook body.
+///
+/// # Supported Formats
+///
+/// 1. **Basic Shorthand** (Defaults: ACTIVE, NONE, void)
+///    ```rust
+///    CREATE_HOOK!(Name, (args), { body }); 
+///    ```
+/// 2. **Explicit Status** (Defaults: NONE, void)
+///    ```rust
+///    CREATE_HOOK!(Name, Status, (args), { body });
+///    ```
+///
+/// 3. **Explicit Return Type** (Defaults: ACTIVE, NONE)
+///    ```rust
+///    CREATE_HOOK!(Name, RetType, (args), { body });
+///    ```
+///
+/// 4. **Status & Return Type** (Defaults: NONE)
+///    ```rust
+///    CREATE_HOOK!(Name, Status, RetType, (args), { body });
+///    ```
+///
+/// 5. **Full Configuration**
+///    ```rust
+///    CREATE_HOOK!(Name, Status, HookType, RetType, (args), { body });
+///    ```
+///
+/// # Arguments
+/// * `Name` - The identifier of the function (used to generate `o_Name` and `attach_Name`).
+/// * `Status` - `ACTIVE` or `INACTIVE`. Controls if the hook enables on startup.
+/// * `HookType` - 
+///     * `NONE`: The body is the complete implementation. You are responsible for calling `o_Name.call()`.
+///     * `PRE`: The body runs first, then the original function is called automatically.
+///     * `POST`: The original function runs first, then the result is passed to your body.
+///     * If no HookType is provided, defaults to PRE
+/// * `RetType` - The Rust type returned by the original function (e.g., `*mut c_void`, `bool`).
+/// * `(args)` - A comma-separated list of `name: Type` pairs matching the function signature.
+/// * `{ body }` - The code block for the detour. Must return `RetType`.
+/// 
+/// 
+/// 
 #[macro_export]
 macro_rules! CREATE_HOOK {
+    ($($tt:tt)*) => {
+        $crate::__create_hook_inner!($($tt)*);
+    };
+}
+
+#[macro_export]
+macro_rules! __create_hook_inner {
     // Format: Name, (args), {body}
     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
@@ -31,8 +82,9 @@ macro_rules! __create_hook_impl {
 
     ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
         paste::paste! {
+            #[cfg(not(rust_analyzer))]
             ::retour::static_detour! {
-                pub static [<o_ $name>]: unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+                pub static [<o_ $name>]: unsafe extern "C" fn($( $ty ),+) -> $out_type;
             }
 
             #[allow(non_snake_case, unused_variables)]
@@ -67,6 +119,7 @@ macro_rules! __create_hook_impl {
                 }
             }
         }
+
     };
 }
 
@@ -93,4 +146,16 @@ macro_rules! __hook_dispatch {
             { $body(ret_val) }
         }
     };
+}
+
+/// Calls the original detour function `o_<name>` with arguments.
+/// Preserves type hints for Rust Analyzer.
+#[macro_export]
+macro_rules! CALL_ORIGINAL {
+    ($name:ident ( $($arg:expr),* $(,)? )) => {{
+        // Use paste to reconstruct o_<name>
+        paste::paste! {
+            unsafe { [<o_ $name>].call($($arg),*) }
+        }
+    }};
 }
