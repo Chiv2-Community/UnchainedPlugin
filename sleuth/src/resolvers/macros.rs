@@ -56,6 +56,12 @@ macro_rules! attach_hooks_list {
 
 /// Examples
 /// ```rust
+/// // Always active
+/// CREATE_PATCH!(PatchSomething, NOP, 2);
+/// 
+/// // Always active with offset
+/// CREATE_PATCH!(PatchSomething, 0x10, NOP, 2);
+/// 
 /// // Only apply if a specific feature is enabled in your config
 /// CREATE_PATCH!(InfiniteSomething, NOP, 5, IF {
 ///     crate::config::get().infinite_ammo_enabled
@@ -66,25 +72,37 @@ macro_rules! attach_hooks_list {
 ///     std::env::args().any(|x| x == "--skip-intro")
 /// });
 /// 
-/// // Always active
-/// CREATE_PATCH!(PatchSomething, NOP, 2);
 /// ```
 #[macro_export]
 macro_rules! CREATE_PATCH {
-    // Branch with condition: Name, Op, Value, IF { expr }
-    ($name:ident, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, $op, $val, || $cond);
+    // with condition + extra offset
+    // Name, 0x10, NOP, 5, IF { ... }
+    ($name:ident, $extra:expr, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::__create_patch_impl!($name, $extra, $op, $val, || $cond);
     };
 
-    // Default branch: Name, Op, Value (Always active)
+    // default + extra offset
+    // Name, 0x10, NOP, 5
+    ($name:ident, $extra:expr, $op:ident, $val:expr) => {
+        $crate::__create_patch_impl!($name, $extra, $op, $val, || true);
+    };
+
+    // with condition (no extra offset)
+    // Name, NOP, 5, IF { ... }
+    ($name:ident, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::__create_patch_impl!($name, 0, $op, $val, || $cond);
+    };
+
+    // default (no extra offset)
+    // Name, NOP, 5
     ($name:ident, $op:ident, $val:expr) => {
-        $crate::__create_patch_impl!($name, $op, $val, || true);
+        $crate::__create_patch_impl!($name, 0, $op, $val, || true);
     };
 }
 
 #[macro_export]
 macro_rules! __create_patch_impl {
-    ($name:ident, $op:ident, $val:expr, $cond_fn:expr) => {
+    ($name:ident, $extra:expr, $op:ident, $val:expr, $cond_fn:expr) => {
         paste::paste! {
             #[allow(non_snake_case)]
             pub unsafe fn [<apply_patch_ $name>](
@@ -94,8 +112,8 @@ macro_rules! __create_patch_impl {
                 match offsets.get(stringify!($name)) {
                     None => Err(format!("Offset for {} not found", stringify!($name)).into()),
                     Some(offset) => {
-                        let addr = (base_address + *offset as usize) as *mut u8;
-                        // Map the Op to your existing helper functions
+                        let addr = (base_address + (*offset as usize) + ($extra as usize)) as *mut u8;
+                        // Map to existing ops (memtools)
                         $crate::__apply_patch_op!($op, addr, $val);
                         Ok(())
                     }
