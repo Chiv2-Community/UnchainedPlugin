@@ -20,37 +20,51 @@
 /// ```
 #[macro_export]
 macro_rules! CREATE_PATCH {
-    // with condition + extra offset
+    // tag + offset + condition
+    // Name @ Suffix, 0x10, NOP, 5, IF { ... }
+    ($name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::__create_patch_impl!($name, $tag, $extra, $op, $val, || $cond);
+    };
+
+    // tag + condition (no offset)
+    // Name @ Suffix, NOP, 5, IF { ... }
+    ($name:ident @ $tag:ident, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::__create_patch_impl!($name, $tag, 0, $op, $val, || $cond);
+    };
+
+    // name + offset + condition (auto-tag via offset)
     // Name, 0x10, NOP, 5, IF { ... }
-    ($name:ident, $extra:expr, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, $extra, $op, $val, || $cond);
+    ($name:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
+        $crate::__create_patch_impl!($name, $extra, $extra, $op, $val, || $cond);
     };
 
-    // default + extra offset
-    // Name, 0x10, NOP, 5
-    ($name:ident, $extra:expr, $op:ident, $val:expr) => {
-        $crate::__create_patch_impl!($name, $extra, $op, $val, || true);
-    };
-
-    // with condition (no extra offset)
+    // name + condition (no offset, no tag)
     // Name, NOP, 5, IF { ... }
     ($name:ident, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, 0, $op, $val, || $cond);
+        $crate::__create_patch_impl!($name, base, 0, $op, $val, || $cond);
     };
 
-    // default (no extra offset)
+    // no tags
+
+    // default + offset
+    // Name, 0x10, NOP, 5
+    ($name:ident, $extra:literal, $op:ident, $val:expr) => {
+        $crate::__create_patch_impl!($name, $extra, $extra, $op, $val, || true);
+    };
+
+    // default (no offset)
     // Name, NOP, 5
     ($name:ident, $op:ident, $val:expr) => {
-        $crate::__create_patch_impl!($name, 0, $op, $val, || true);
+        $crate::__create_patch_impl!($name, base, 0, $op, $val, || true);
     };
 }
 
 #[macro_export]
 macro_rules! __create_patch_impl {
-    ($name:ident, $extra:expr, $op:ident, $val:expr, $cond_fn:expr) => {
+    ($name:ident, $suffix:tt, $extra:expr, $op:ident, $val:expr, $cond_fn:expr) => {
         paste::paste! {
             #[allow(non_snake_case)]
-            pub unsafe fn [<apply_patch_ $name>](
+            pub unsafe fn [<apply_patch_ $name _ $suffix>](
                 base_address: usize,
                 offsets: std::collections::HashMap<String, u64>
             ) -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +82,7 @@ macro_rules! __create_patch_impl {
             inventory::submit! {
                 $crate::resolvers::PatchRegistration {
                     name: stringify!($name),
-                    patch_fn: [<apply_patch_ $name>],
+                    patch_fn: [<apply_patch_ $name _ $suffix>],
                     enabled_fn: $cond_fn,
                 }
             }
