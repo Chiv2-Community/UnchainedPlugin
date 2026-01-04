@@ -371,7 +371,7 @@ macro_rules! define_signature_fn {
     ) => {
         #[allow(non_snake_case)]
         #[allow(dead_code)]
-        pub fn $fn_name<'a>(s: &'a str) -> crate::macros::sig_macros::Signature<'a> {
+        pub fn $fn_name<'a>(s: &'a str) -> $crate::macros::sig_macros::Signature<'a> {
             let calc: std::sync::Arc<
                 dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>
                     + Send
@@ -389,7 +389,7 @@ macro_rules! define_signature_fn {
                 Box::pin(fut)
             });
 
-            crate::macros::sig_macros::Signature {
+            $crate::macros::sig_macros::Signature {
                 // kind: $kind,
                 offset_calculator: calc,
                 signature_string: s.to_string(),

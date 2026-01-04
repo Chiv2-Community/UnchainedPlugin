@@ -31,7 +31,7 @@ unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
     let mut crc: u64 = 0;
 
     let mut chunks = mmap.chunks_exact(8);
-    while let Some(chunk) = chunks.next() {
+    for chunk in chunks.by_ref() {
         crc = _mm_crc32_u64(crc, u64::from_le_bytes(chunk.try_into().unwrap()));
     }
 
@@ -88,7 +88,7 @@ impl BuildInfo {
             build: 0,
             file_hash: crc32,
             name: "".to_string(),
-            platform: platform,
+            platform,
             path: file_path.to_string(),
             offsets,
         }
@@ -239,6 +239,7 @@ pub extern "C" fn init_rustlib() {
     };
 }
 
+/// # Safety
 pub unsafe fn attach_hooks(
     base_address: usize,
     offsets: HashMap<String, u64>,
@@ -261,6 +262,7 @@ pub unsafe fn attach_hooks(
     Ok(())
 }
 
+/// # Safety
 pub unsafe fn apply_patches(base: usize, offsets: std::collections::HashMap<String, u64>) {
     for p in inventory::iter::<resolvers::PatchRegistration> {
         // Run the condition check

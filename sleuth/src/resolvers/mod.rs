@@ -6,6 +6,7 @@ use once_cell::sync::OnceCell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[allow(clippy::upper_case_acronyms)]
 pub enum PlatformType {
     EGS,
     STEAM,

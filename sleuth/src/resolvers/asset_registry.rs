@@ -119,7 +119,7 @@ CREATE_HOOK!(GetAssetsByClass, INACTIVE, NONE, bool, (this_ptr: *mut c_void, Cla
         // if ClassPathName.to_string() == "DA_ModMarker_C".to_string() {
 
         // }
-        if res && ClassPathName.to_string() == "DA_ModMarker_C".to_string() {
+        if res && ClassPathName.to_string() == "DA_ModMarker_C" {
             swarn!(f; "this_ptr: {:#?}", this_ptr);
             swarn!(f; "ClassPathName: {}", ClassPathName);
             // sinfo!(f; "ClassPathName D: {:#?}", ClassPathName);

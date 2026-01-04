@@ -104,7 +104,7 @@ impl Globals {
     }
     pub unsafe fn guobject_array_unchecked(&self) -> &FUObjectArray {
         // deref ptr to SyncFUObjectArray, then deref to FUObjectArray
-        &*( *self.guobject_array.data_ptr() )
+        &( *self.guobject_array.data_ptr() )
     }
     pub fn get_platform(&self) -> PlatformType {
         self.platform
@@ -160,7 +160,7 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
         platform,
     };
 
-    if let Err(_) = GLOBALS.set(globals_instance) {
+    if GLOBALS.set(globals_instance).is_err() {
         eprintln!("Error: Globals already initialized!");
     }
     // sdebug!(f; "{GLOBALS:#?}");

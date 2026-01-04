@@ -6,7 +6,7 @@ use std::process;
 use crate::{resolvers::{PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
 
 pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>, String> {
-    let pid = Some(process::id() as i32);
+    let pid = process::id() as i32;
 
     if PLATFORM.get().is_none() {
         let _ = PLATFORM.set(platform);
@@ -37,8 +37,8 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         .map(|res| res.getter)
         .collect::<Vec<_>>();
 
-    let name = format!("PID={}", pid.unwrap());
-    let game_name = format!("pid={}", pid.unwrap()); // fixme
+    let name = format!("PID={}", pid);
+    let game_name = format!("pid={}", pid); // fixme
     let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string())?;
     sdebug!(f;"GAME '{:?}' '{:x?}'", name, exe.base_address);
 

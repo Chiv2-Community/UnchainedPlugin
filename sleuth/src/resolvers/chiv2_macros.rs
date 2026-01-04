@@ -3,9 +3,9 @@
 #[macro_export]
 macro_rules! backend_url {
     ($suffix:expr) => {
-        crate::ue::FString::from(format!(
+        $crate::ue::FString::from(format!(
             "{}{}",
-            crate::globals().cli_args.server_browser_backend
+            $crate::globals().cli_args.server_browser_backend
                 .as_ref()
                 .expect("Missing server_browser_backend"),
             $suffix
@@ -35,7 +35,7 @@ pub struct GenericGCGObj {
 macro_rules! CREATE_REQUEST_HOOK {
     ($name:ident, $url_suffix:expr) => {
         $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut std::os::raw::c_void,
-            (this_ptr: *mut crate::resolvers::chiv2_macros::GenericGCGObj, a2: *mut std::os::raw::c_void, request: *mut crate::resolvers::chiv2_macros::GenericRequest, a4: *mut std::os::raw::c_void), {
+            (this_ptr: *mut $crate::resolvers::chiv2_macros::GenericGCGObj, a2: *mut std::os::raw::c_void, request: *mut $crate::resolvers::chiv2_macros::GenericRequest, a4: *mut std::os::raw::c_void), {
                 let (this, req) = unsafe {
                     (this_ptr.as_mut().expect("GCGObj was null"),
                      request.as_mut().expect("Request was null"))
@@ -44,7 +44,7 @@ macro_rules! CREATE_REQUEST_HOOK {
                 let old_token = unsafe { std::ptr::read(&req.token) };
                 unsafe {
                     std::ptr::write(&mut this.url_base, $crate::backend_url!($url_suffix));
-                    std::ptr::write(&mut req.token, crate::ue::FString::from(""));
+                    std::ptr::write(&mut req.token, $crate::ue::FString::from(""));
                 }
                 let result = match std::panic::catch_unwind(|| $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))) {
                     Ok(r) => r,
