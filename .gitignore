@@ -11,10 +11,14 @@
 *.sln.docstates
 
 sleuth/target/
+sleuth/Cargo.lock
+sleuth/.vscode/*
+!sleuth/.vscode/launch.json
 
 CMakeFiles
 Output
-.vscode
+.vscode/*
+!.vscode/launch.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

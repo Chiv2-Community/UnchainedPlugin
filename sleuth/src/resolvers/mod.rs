@@ -40,6 +40,15 @@ impl std::str::FromStr for PlatformType {
 
 pub static BASE_ADDR: OnceCell<usize> = OnceCell::new();
 
+pub type HookFn = unsafe fn(usize, std::collections::HashMap<String, u64>) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+
+pub struct HookRegistration {
+    pub name: &'static str,
+    pub hook_fn: HookFn,
+    pub auto_activate: bool,
+}
+
+
 pub mod asset_registry;
 pub mod admin_control;
 pub mod asset_loading;
@@ -47,3 +56,5 @@ pub mod backend_hooks;
 pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
+
+inventory::collect!(HookRegistration);

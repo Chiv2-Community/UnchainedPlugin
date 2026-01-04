@@ -3,9 +3,9 @@
 
 // IAssetRegistry * __thiscall UAssetManager::GetAssetRegistry(UAssetManager *this)
 
-use std::{fmt, os::raw::c_void, ptr::null_mut};
+use std::{fmt, os::raw::c_void};
 
-use crate::{globals, serror, sinfo, swarn, ue::{EFindName, FName, FString, TArray, UObject}};
+use crate::{ serror, sinfo, swarn, ue::{EFindName, FName, FString, TArray, UObject}};
 
 #[cfg(feature = "dev")]
 define_pattern_resolver!(GetAssetRegistry,[
@@ -14,7 +14,7 @@ define_pattern_resolver!(GetAssetRegistry,[
 
 // TODO: We only need to call this
 #[cfg(feature = "dev")]
-CREATE_HOOK!(GetAssetRegistry,(asset_manager: *mut c_void),{
+CREATE_HOOK!(GetAssetRegistry, INACTIVE, (asset_manager: *mut c_void),{
     // crate::sinfo![f; "Triggered!"];
 });
 
@@ -22,7 +22,7 @@ CREATE_HOOK!(GetAssetRegistry,(asset_manager: *mut c_void),{
 // let rel_address = *globals().resolution.kismet_system_library.0.get("Conv_InterfaceToObject").unwrap() as usize;
 // void __cdecl UKismetSystemLibrary::execConv_InterfaceToObject(UObject *param_1,FFrame *param_2,void *param_3)
 #[cfg(feature = "dev")]
-CREATE_HOOK!(Conv_InterfaceToObject,(object: *mut c_void, frame: *mut c_void, arg3: *mut c_void),{
+CREATE_HOOK!(Conv_InterfaceToObject, INACTIVE, (object: *mut c_void, frame: *mut c_void, arg3: *mut c_void),{
     crate::sinfo![f; "Triggered!"];
 });
 
@@ -66,6 +66,7 @@ define_pattern_resolver!(GetAssetsByClass,[
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+#[allow(non_snake_case)]
 pub struct FAssetData {
     pub ObjectPath: FName,
     pub PackageName: FName,
@@ -107,18 +108,18 @@ impl fmt::Display for FAssetData {
 // static mut test_name: FName = FName;
 
 #[cfg(feature = "dev")]
-CREATE_HOOK!(GetAssetsByClass, NONE, bool, (this_ptr: *mut c_void, ClassPathName: FName, OutAssetData: * mut TArray<FAssetData>, bSearchSubClasses: bool), {
+CREATE_HOOK!(GetAssetsByClass, INACTIVE, NONE, bool, (this_ptr: *mut c_void, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
     crate::sinfo![f; "Triggered! {}", ClassPathName];
     // let slc = OutAssetData.as_slice();
     // let slc = OutAssetData.len();
-    let test = OutAssetData.clone();
-    let mut res = false;
+    // let test = OutAssetData.clone();
+    let res: bool;
     unsafe {
         res = o_GetAssetsByClass.call(this_ptr, ClassPathName, OutAssetData, bSearchSubClasses);
         // if ClassPathName.to_string() == "DA_ModMarker_C".to_string() {
 
         // }
-        if (res && ClassPathName.to_string() == "DA_ModMarker_C".to_string()) {
+        if res && ClassPathName.to_string() == "DA_ModMarker_C".to_string() {
             swarn!(f; "this_ptr: {:#?}", this_ptr);
             swarn!(f; "ClassPathName: {}", ClassPathName);
             // sinfo!(f; "ClassPathName D: {:#?}", ClassPathName);
@@ -128,8 +129,8 @@ CREATE_HOOK!(GetAssetsByClass, NONE, bool, (this_ptr: *mut c_void, ClassPathName
             let asdf = &*OutAssetData;
             let test_cp = asdf.clone();
             crate::sinfo![f; "Length res: {}", test_cp.len()];
-            let val1 = &test_cp.as_slice()[0];
-            let val2 = &test_cp.as_slice()[1];
+            // let val1 = &test_cp.as_slice()[0];
+            // let val2 = &test_cp.as_slice()[1];
             
             // sinfo!(f; "{}: Asset: {}", 1, val1.ObjectPath);
             // sinfo!(f; "{}: Asset: {}", 1, val1.PackageName);
@@ -164,6 +165,7 @@ pub struct TScriptInterface {
     pub object: *mut UObject,
     pub interface: *mut c_void,
 }
+#[allow(dead_code)]
 impl TScriptInterface {
     pub fn new() -> Self {
         Self {
@@ -180,7 +182,7 @@ define_pattern_resolver!(GetAssetRegistry_Helper,[
     ]);
 
 #[cfg(feature = "dev")]
-CREATE_HOOK!(GetAssetRegistry_Helper,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
+CREATE_HOOK!(GetAssetRegistry_Helper, INACTIVE,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
     crate::sinfo![f; "Triggered!"];
 });
 
@@ -213,7 +215,7 @@ define_pattern_resolver!(FNamePool, Call, [
     ]);
 
 #[cfg(feature = "dev")]
-CREATE_HOOK!(FNamePool,  *mut c_void, (ret_val_tscr:  *mut c_void),{
+CREATE_HOOK!(FNamePool, INACTIVE,  *mut c_void, (ret_val_tscr:  *mut c_void),{
     crate::sinfo![f; "Triggered!"];
 });
 
@@ -233,7 +235,7 @@ define_pattern_resolver!(FNameCtorWchar, Simple, [
     ]);
 
 #[cfg(feature = "dev")]
-CREATE_HOOK!(FNameCtorWchar,  *mut FName, (this: *mut FName, Str: *const u16, findname: EFindName),{
+CREATE_HOOK!(FNameCtorWchar, INACTIVE,  *mut FName, (this: *mut FName, Str: *const u16, findname: EFindName),{
     // crate::sinfo![f; "Triggered!"];
     unsafe {
         if findname == EFindName::Find {
@@ -250,8 +252,8 @@ CREATE_HOOK!(FNameCtorWchar,  *mut FName, (this: *mut FName, Str: *const u16, fi
 #[cfg(feature = "dev")]
 define_pattern_resolver!(GetAsset,["40 53 48 83 EC 60 48 8B D9 33 D2"]);
 #[cfg(feature = "dev")]
-CREATE_HOOK!(GetAsset, *mut UObject, (asset_data: *mut FAssetData),{
-    unsafe {
-        // crate::sinfo![f; "Triggered! {}", &*asset_data];
-    }
+CREATE_HOOK!(GetAsset, INACTIVE, *mut UObject, (asset_data: *mut FAssetData),{
+    // unsafe {
+    //     // crate::sinfo![f; "Triggered! {}", &*asset_data];
+    // }
 });

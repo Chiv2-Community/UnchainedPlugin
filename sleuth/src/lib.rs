@@ -4,7 +4,6 @@ mod tools;
 mod ue;
 mod ue_old;
 
-use log::info;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
@@ -16,7 +15,6 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
-use resolvers::admin_control::*;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -236,32 +234,20 @@ pub unsafe fn attach_hooks(
     base_address: usize,
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Attaching hooks:");
+    sinfo!(f; "Attaching hooks via auto-discovery:");
 
-    // TODO: replace this with registration similar to resolvers
-    let hooks_new = attach_hooks_list![[
-        // #[cfg(feature="engine_loop")]
-        ClientMessage,
-        // These are only called
-        // GetAssetRegistry,
-        // Conv_InterfaceToObject,
-        // GetAssetsByClass,
-        // GetAssetRegistry_Helper,
-        // FNamePool,
-        // FNameCtorWchar,
-        // GetAsset
-    ]];
-
-    hooks_new.iter().for_each(|(s, f)| {
-        match (f)(base_address, offsets.clone()) {
-            Ok(_) => {
-                sinfo![f; "☑ {} ", s]
-            },
-            Err(e) => {
-                serror!(f; "☐ {}: {}", s.to_uppercase(), e);
-            },
+    // inventory::iter finds everything submitted via CREATE_HOOK!
+    for hook in inventory::iter::<resolvers::HookRegistration> {
+        if !hook.auto_activate {
+            sinfo!(f; "Skipping inactive hook: {}", hook.name);
+            continue;
         }
-    });
+
+        match (hook.hook_fn)(base_address, offsets.clone()) {
+            Ok(_) => sinfo!(f; "☑ {} attached", hook.name),
+            Err(e) => serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e),
+        }
+    }
 
     Ok(())
 }
