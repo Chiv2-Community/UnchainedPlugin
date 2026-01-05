@@ -1,3 +1,4 @@
+// Overrides for PlayFab (tbio) requests
 
 use crate::{ ue::FString};
 use patternsleuth::{MemoryTrait, resolvers::unreal::util};
@@ -22,7 +23,7 @@ pub struct GenericGCGObj {
 //   (OpenAPIClientApi *this,TSharedPtr<> *__return_storage_ptr__,GetMotdPostRequest *param_1,TBaseDelegate<> *param_2)
 #[macro_export]
 macro_rules! CREATE_REQUEST_HOOK {
-    ($name:ident, $url_suffix:expr) => {
+    ($name:ident) => {
         $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut std::os::raw::c_void,
             (
                 this_ptr: *mut $crate::resolvers::getpost_requests::GenericGCGObj, 
@@ -36,9 +37,11 @@ macro_rules! CREATE_REQUEST_HOOK {
                 };  
                 let old_url = unsafe { std::ptr::read(&this.url_base) };
                 let old_token = unsafe { std::ptr::read(&req.token) };
+                let backend_url = $crate::backend_url!("/api/tbio");
+                let new_fstring = $crate::ue::FString::from("");
                 unsafe {
-                    std::ptr::write(&mut this.url_base, $crate::backend_url!($url_suffix));
-                    std::ptr::write(&mut req.token, $crate::ue::FString::from(""));
+                    std::ptr::write(&mut this.url_base, backend_url);
+                    std::ptr::write(&mut req.token, new_fstring);
                 }
                 let result = match std::panic::catch_unwind(|| $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))) {
                     Ok(r) => r,
@@ -139,8 +142,8 @@ define_pattern_resolver!(CreateHttpRequest, [
     Ok(addr)
 });
 
-CREATE_REQUEST_HOOK!(GetPost_GetMotd, "/api/tbio");
-CREATE_REQUEST_HOOK!(GetPost_GetCurrentGames, "/api/tbio");
+CREATE_REQUEST_HOOK!(GetPost_GetMotd);
+CREATE_REQUEST_HOOK!(GetPost_GetCurrentGames);
 
 
 #[macro_export]
