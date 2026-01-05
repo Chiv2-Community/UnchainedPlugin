@@ -17,6 +17,7 @@ REGISTER_HOOK_PATCH(
 	o_ExecuteConsoleCommand(param);
 }
 
+#ifdef CPP_HOOKS_UNUSED
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 REGISTER_HOOK_PATCH(
 	FText_AsCultureInvariant,
@@ -41,6 +42,8 @@ REGISTER_HOOK_PATCH(
 	GLOG_DEBUG("BroadcastLocalizedChat");
 	return o_BroadcastLocalizedChat(game_mode, text, chat_type);
 }
+
+#endif
 
 bool extractPlayerCommand(const wchar_t* input, std::wstring& playerName, std::wstring& command) {
 	// Define the regular expression pattern
@@ -72,6 +75,8 @@ bool IsServerStart()
 	return isHeadless || isSetToTravel;
 }
 
+#ifdef CPP_HOOKS_UNUSED
+
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 REGISTER_HOOK_PATCH(
 	GetTBLGameMode,
@@ -83,6 +88,8 @@ REGISTER_HOOK_PATCH(
 	g_state->SetCurGameMode(curGameMode);
 	return curGameMode;
 }
+
+#endif
 
 /*
 void __thiscall
