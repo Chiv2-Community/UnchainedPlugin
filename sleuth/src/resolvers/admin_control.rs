@@ -1,6 +1,4 @@
 
-use crate::ue::*;
-
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
     // "75 17 45 84 ED", // STEAM
@@ -12,6 +10,7 @@ define_pattern_resolver![UTBLLocalPlayer_Exec, {
     EGS: ["75 18 40 38 7d d7 75 12 4d 85 f6 74 0d 41 38 be ?? 01 00 00"], // EGS
     // "75 1a 45 84 ed 75 15 48 85 f6 74 10 40 38 be b0 01 00 00 74 07 32 db e9 a6 fd ff ff 48 8b 5d 60 49 8b d6 4c 8b 45 58 4c 8b cb 49 8b cf", // PDB
 }];
+// Allow console command execution
 CREATE_PATCH!(UTBLLocalPlayer_Exec, BYTES, &[0xEB]);
 
 define_pattern_resolver!(
@@ -53,14 +52,3 @@ define_pattern_resolver![GetTBLGameMode, {
         "40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51" // EGS 2.11.4
         ]
 }];
-
-define_pattern_resolver!(ClientMessage, [
-    "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
-]);
-use std::os::raw::c_void;
-CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
-    let string_ref: &FString = unsafe{ &*S };
-    let message = string_ref.to_string();
-    
-    crate::sinfo!("ClientMessage Hooked: Type: {:?}, Message: {}", Type, message);
-});

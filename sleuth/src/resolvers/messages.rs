@@ -1,6 +1,23 @@
 
 
+// Chat messages
+// #[cfg(feature="client_message")]
+mod client_message {
+    define_pattern_resolver!(ClientMessage, [
+        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+    ]);
+    use std::os::raw::c_void;
+    use crate::ue::{FName, FString};
 
+    CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+        let string_ref: &FString = unsafe{ &*S };
+        let message = string_ref.to_string();
+        
+        crate::sinfo!("ClientMessage Hooked: Type: {:?}, Message: {}", Type, message);
+    });
+}
+
+// Kismet error messages
 #[cfg(feature="kismet_log")]
 pub mod kismet_log {
     use crate::ue::{FName, UObject};
