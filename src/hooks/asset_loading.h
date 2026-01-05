@@ -2,6 +2,8 @@
 
 #include "../patching/patch_macros.hpp"
 
+#ifdef CPP_HOOKS_IMPL
+
 REGISTER_HOOK_PATCH(
 	FindFileInPakFiles_1,
 	APPLY_ALWAYS,
@@ -37,3 +39,4 @@ REGISTER_HOOK_PATCH(
 ) {
 	return 1;
 }
+#endif

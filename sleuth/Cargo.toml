@@ -25,15 +25,17 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
 [features]
 default = [
         "serde-resolvers",
-        "dev"
+        "dev",
+        # "loose_assets"
         ]
 serde-resolvers = []
 image-elf = []
 dev = []
 syslog-client = []
-request_dummy_hooks = []
-kismet_log = []
+request_dummy_hooks = [] # Enable Get*Post dummy hooks
+kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
+loose_assets = [] # Load assets in addition to paks
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }

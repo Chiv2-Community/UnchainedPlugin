@@ -3,6 +3,7 @@ use crate::ue::FString;
 
 #[repr(C)]
 #[derive(Debug)]
+#[allow(non_snake_case)]
 pub struct FOwnershipResponse {
 	owned: bool,
 	crowns: i32,
