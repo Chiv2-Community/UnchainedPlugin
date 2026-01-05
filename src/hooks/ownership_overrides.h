@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef CPP_HOOKS_IMPL
+
 #include "../state/global_state.hpp"
 #include "../stubs/Chivalry2.h"
 #include "../patching/patch_macros.hpp"
@@ -47,3 +49,5 @@ REGISTER_HOOK_PATCH(
     _this->bPlayerCustomizationReceived = true;
     o_ATBLPlayerController__ConditionalInitializeCustomizationOnServer(_this, player_state);
 }
+
+#endif 

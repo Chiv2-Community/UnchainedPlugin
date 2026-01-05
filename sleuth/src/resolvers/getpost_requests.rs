@@ -18,6 +18,8 @@ pub struct GenericGCGObj {
 
 
 /// Generic hook macro for Get*Post methods (e.g. GetMotd, GetCurrentGames)
+/// OpenAPIMerged::OpenAPIClientApi::GetMotdPost
+//   (OpenAPIClientApi *this,TSharedPtr<> *__return_storage_ptr__,GetMotdPostRequest *param_1,TBaseDelegate<> *param_2)
 #[macro_export]
 macro_rules! CREATE_REQUEST_HOOK {
     ($name:ident, $url_suffix:expr) => {
