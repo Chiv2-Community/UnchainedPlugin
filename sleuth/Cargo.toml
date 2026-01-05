@@ -31,6 +31,7 @@ serde-resolvers = []
 image-elf = []
 dev = []
 syslog-client = []
+request_dummy_hooks = []
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }

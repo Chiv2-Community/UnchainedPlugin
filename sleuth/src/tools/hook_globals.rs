@@ -78,6 +78,7 @@ pub fn globals() -> &'static Globals {
     GLOBALS.get().expect("Globals not initialized")
 }
 
+#[allow(dead_code)]
 pub fn globals_initialized() -> bool {
     GLOBALS.get().is_some()
 }

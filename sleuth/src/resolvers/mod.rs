@@ -71,8 +71,11 @@ pub mod backend_hooks;
 pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
+
 #[macro_use]
 pub mod chiv2_macros;
+#[macro_use]
+pub mod getpost_requests;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
