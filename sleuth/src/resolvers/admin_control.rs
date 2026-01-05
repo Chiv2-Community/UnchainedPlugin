@@ -18,6 +18,7 @@ define_pattern_resolver!(
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
 
+// FIXME: Unused
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 define_pattern_resolver![FText_AsCultureInvariant,  First, {
     EGS: ["48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63"],
@@ -40,11 +41,13 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 //     "40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"
 // ]);
 
+// FIXME: Unused
 define_pattern_resolver!(
     BroadcastLocalizedChat,
     ["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]
 );
 
+// Unused
 define_pattern_resolver![GetTBLGameMode, {
     EGS : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"], // EGS
     OTHER : [

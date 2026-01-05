@@ -17,6 +17,7 @@
 // 	5
 // )
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	LoadFrontEndMap,
 	APPLY_ALWAYS,
@@ -44,7 +45,9 @@ REGISTER_HOOK_PATCH(
 	else
 		return o_LoadFrontEndMap(this_ptr, param_1);
 }
+#endif
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	InternalGetNetMode,
 	APPLY_ALWAYS,
@@ -53,8 +56,9 @@ REGISTER_HOOK_PATCH(
 	g_state->SetUWorld(world);
 	return o_InternalGetNetMode(world);
 }
+#endif
 
-
+#ifdef CPP_HOOKS_UNUSED
 REGISTER_HOOK_PATCH(
 	UGameEngineTick,
 	APPLY_WHEN(g_state->GetCLIArgs().rcon_port.has_value()),
@@ -72,7 +76,9 @@ REGISTER_HOOK_PATCH(
 	}
 	o_UGameEngineTick(engine, delta_seconds, idle_mode);
 }
+#endif
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	UNetDriver_GetNetMode,
 	APPLY_WHEN(g_state->GetCLIArgs().apply_desync_patch),
@@ -82,7 +88,9 @@ REGISTER_HOOK_PATCH(
 	const ENetMode result = mode == LISTEN_SERVER ? DEDICATED_SERVER : mode;
 	return result;
 }
+#endif
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	UGameplay_IsDedicatedServer,
 	APPLY_ALWAYS,
@@ -96,3 +104,4 @@ REGISTER_HOOK_PATCH(
 
 	return o_UGameplay_IsDedicatedServer(param_1);
 }
+#endif

@@ -1,7 +1,8 @@
 
-use std::env;
+use std::{env, os::raw::c_void};
 
 use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, sinfo, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
+use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -57,6 +58,38 @@ impl std::ops::Deref for SyncFUObjectArray {
     }
 }
 
+/// Pointer wrapper for things like world, gamemode
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SyncPtr<T>(pub *mut T);
+
+unsafe impl<T> Send for SyncPtr<T> {}
+unsafe impl<T> Sync for SyncPtr<T> {}
+
+impl<T> Copy for SyncPtr<T> {}
+impl<T> Clone for SyncPtr<T> {
+    fn clone(&self) -> Self { *self }
+}
+
+impl<T> Default for SyncPtr<T> {
+    fn default() -> Self { Self(std::ptr::null_mut()) }
+}
+
+macro_rules! global_ptr {
+    ($name:ident, $ty:ty) => {
+        pub fn $name(&self) -> Option<*mut $ty> {
+            let ptr = self.$name.read().0;
+            if ptr.is_null() { None } else { Some(ptr) }
+        }
+
+        paste::paste! {
+            pub fn [<set_ $name>](&self, ptr: *mut $ty) {
+                *self.$name.write() = SyncPtr(ptr);
+            }
+        }
+    };
+}
+
 use std::sync::OnceLock;
 
 #[derive(Debug)]
@@ -70,6 +103,7 @@ pub struct Globals {
     base_address: usize,
     is_server: bool,
     pub(crate) cli_args: CLIArgs,
+    pub world: RwLock<SyncPtr<c_void>>,
 }
 
 static GLOBALS: OnceLock<Globals> = OnceLock::new();
@@ -110,18 +144,16 @@ impl Globals {
     pub fn get_platform(&self) -> PlatformType {
         self.platform
     }
-
     pub fn get_base_address(&self) -> usize {
         self.base_address
     }
-
     pub fn is_server(&self) -> bool {
         self.is_server
     }
-
     fn args(&self) -> &CLIArgs {
         &self.cli_args
     }
+    global_ptr!(world, c_void);
 }
 
 pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
@@ -159,6 +191,7 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
         is_server: false,
         cli_args: args,
         platform,
+        world: RwLock::new(SyncPtr::default())
     };
 
     if GLOBALS.set(globals_instance).is_err() {

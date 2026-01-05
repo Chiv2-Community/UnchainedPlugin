@@ -5,6 +5,7 @@ mod scan;
 mod tools;
 mod ue;
 mod ue_old;
+mod game;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
