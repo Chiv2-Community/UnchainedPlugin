@@ -4,6 +4,7 @@
 #include "../patching/patch_macros.hpp"
 
 
+#ifdef CPP_HOOKS_IMPL
 
 REGISTER_HOOK_PATCH(
 	GetGameInfo,
@@ -14,3 +15,5 @@ REGISTER_HOOK_PATCH(
 	std::wcout << "GetGameInfo: " << *val->str << std::endl;
 	return val;
 }
+
+#endif
