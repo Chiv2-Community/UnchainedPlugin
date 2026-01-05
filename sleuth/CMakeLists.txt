@@ -60,4 +60,5 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     winspool.lib
     ws2_32.lib
     psapi.lib
+    bcrypt.lib
 )

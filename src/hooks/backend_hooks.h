@@ -6,6 +6,7 @@
 #include "../patching/patch_macros.hpp"
 #include "../logging/global_logger.hpp"
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	FString_AppendChars,
 	APPLY_ALWAYS,
@@ -13,7 +14,9 @@ REGISTER_HOOK_PATCH(
 ) {
 	return o_FString_AppendChars(this_ptr, Str, Count);
 }
+#endif
 
+#ifdef CPP_HOOKS_IMPL
 // Distributed bans
 REGISTER_HOOK_PATCH(
 	PreLogin,
@@ -54,6 +57,7 @@ REGISTER_HOOK_PATCH(
 
 	GLOG_INFO("{}{}",addressString, suffix);
 }
+#endif
 
 #ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(

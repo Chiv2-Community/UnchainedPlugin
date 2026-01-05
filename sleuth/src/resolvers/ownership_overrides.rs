@@ -1,5 +1,4 @@
-use crate::ue::FString;
-
+// Methods to enable customization / loadout on custom servers
 
 #[repr(C)]
 #[derive(Debug)]
@@ -83,15 +82,10 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
     OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
 });
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct ATBLPlayerController { 
-    _private: [u8; 0x1348],
-	bOnlineInventoryInitialized: bool,
-	bPlayerCustomizationReceived: bool,
-}
 
 use std::os::raw::c_void;
+
+use crate::game::chivalry2::ATBLPlayerController;
 CREATE_HOOK!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, ACTIVE, PRE,
     c_void, (this: *mut ATBLPlayerController, player_state: *mut c_void), {
         let pc = unsafe { this.as_mut().expect("PlayerController was null") };
