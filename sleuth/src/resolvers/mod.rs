@@ -71,6 +71,7 @@ pub mod backend_hooks;
 pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
+pub mod messages;
 
 #[macro_use]
 pub mod chiv2_macros;
