@@ -119,6 +119,7 @@ REGISTER_HOOK_PATCH(
 }
 #endif
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	SendRequest,
 	APPLY_ALWAYS,
@@ -146,3 +147,4 @@ REGISTER_HOOK_PATCH(
 	}
 	return o_SendRequest(this_ptr, fullUrlInputPtr, bodyContentPtr, authKeyHeaderPtr, authKeyValuePtr);
 }
+#endif

@@ -58,7 +58,7 @@ REGISTER_HOOK_PATCH(
 }
 #endif
 
-#ifdef CPP_HOOKS_UNUSED
+// #ifdef CPP_HOOKS_UNUSED
 REGISTER_HOOK_PATCH(
 	UGameEngineTick,
 	APPLY_WHEN(g_state->GetCLIArgs().rcon_port.has_value()),
@@ -76,7 +76,7 @@ REGISTER_HOOK_PATCH(
 	}
 	o_UGameEngineTick(engine, delta_seconds, idle_mode);
 }
-#endif
+// #endif
 
 #ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(

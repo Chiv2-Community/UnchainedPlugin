@@ -135,14 +135,14 @@ macro_rules! __hook_dispatch {
         {
             // internal scope to not leak vars, force () return
             { $body }; 
-            unsafe { paste::paste! { [<o_ $name>].call($( $arg ),+) } }
+            CALL_ORIGINAL![$name($( $arg ),+)]
         }
     };
 
     // POST: Original function, then user code -> return value
     (POST, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:expr) => {
         {
-            let ret_val = unsafe { paste::paste! { [<o_ $name>].call($( $arg ),+) } };
+            let ret_val = CALL_ORIGINAL![$name($( $arg ),+)];
             { $body(ret_val) }
         }
     };
@@ -153,8 +153,8 @@ macro_rules! __hook_dispatch {
 #[macro_export]
 macro_rules! CALL_ORIGINAL {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
-        // Use paste to reconstruct o_<name>
         paste::paste! {
+            #[allow(clippy::macro_metavars_in_unsafe)] // FIXME: I guess
             unsafe { [<o_ $name>].call($($arg),*) }
         }
     }};
