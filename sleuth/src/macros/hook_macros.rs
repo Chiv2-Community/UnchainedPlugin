@@ -54,23 +54,23 @@ macro_rules! CREATE_HOOK {
 #[macro_export]
 macro_rules! __create_hook_inner {
     // Format: Name, (args), {body}
-    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
     };
     // Format: Name, ACTIVE, (args), {body}
-    ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
     };
     // Format: Name, OutType, (args), {body}
-    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
     // Format: Name, Status, OutType, (args), {body}
-    ($name:ident, $status:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, $status:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, PRE, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
     // Format: Name, Status, HookType, OutType, (args), {body}
-    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
 }
@@ -80,7 +80,7 @@ macro_rules! __create_hook_impl {
     (@is_active ACTIVE) => { true };
     (@is_active INACTIVE) => { false };
 
-    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:block) => {
+    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         paste::paste! {
             #[cfg(not(rust_analyzer))]
             ::retour::static_detour! {
@@ -126,12 +126,12 @@ macro_rules! __create_hook_impl {
 #[macro_export]
 macro_rules! __hook_dispatch {
     // NONE: Classic hook
-    (NONE, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:block) => { 
+    (NONE, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:expr) => { 
         $body 
     };
     
     // PRE: User code, then original function.
-    (PRE, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:block) => {
+    (PRE, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:expr) => {
         {
             // internal scope to not leak vars, force () return
             { $body }; 
@@ -140,7 +140,7 @@ macro_rules! __hook_dispatch {
     };
 
     // POST: Original function, then user code -> return value
-    (POST, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:block) => {
+    (POST, $name:ident, $out_type:ty, ( $( $arg:expr ),+ ), $body:expr) => {
         {
             let ret_val = unsafe { paste::paste! { [<o_ $name>].call($( $arg ),+) } };
             { $body(ret_val) }
