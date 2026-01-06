@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::os::raw::c_char;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
@@ -23,6 +23,7 @@ use serde_json::to_writer_pretty;
 use crate::features::commands::spawn_cli_handler;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
+use crate::features::server_registration::Registration;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -260,10 +261,36 @@ pub extern "C" fn postinit_rustlib() {
     spawn_cli_handler();
     #[cfg(feature="rcon_commands")]
     std::thread::spawn(|| {
-    handle_rcon();
+        handle_rcon();
     });
 
-    
+    #[cfg(feature="server_registration")]
+    {
+        let args = &globals().cli_args;
+        if args.rcon_port.is_some() || args.register {
+            let query_port = args.game_server_query_port.unwrap_or(7071);
+            let reg = Arc::new(Registration::new("127.0.0.1", query_port));
+            
+            let mut global_reg = globals().registration.lock().unwrap();
+            *global_reg = Some(Arc::clone(&reg));
+            
+            sinfo!(f; "Started server registration manager");
+            reg.start();
+        }
+    }
+
+    // #[cfg(feature="server_registration")]
+    // {
+    //     let args = &globals().cli_args;
+    //     if args.rcon_port.is_some() || args.register {
+    //         let reg = Arc::new(Registration::new(
+    //             "127.0.0.1",
+    //             globals().cli_args.game_server_query_port.unwrap()
+    //         ));
+    //         sinfo!(f; "Started server registration");
+    //         reg.start();
+    //     }
+    // }
 }
 
 /// # Safety

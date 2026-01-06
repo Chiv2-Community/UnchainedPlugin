@@ -106,11 +106,13 @@ impl BackendApi {
 // --- Main Implementation ---
 
 /// Manages the background lifecycle of a game server registration.
+#[derive(Debug)]
 pub struct Registration {
     inner: Arc<RegistrationInner>,
     handle: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
+#[derive(Debug)]
 struct RegistrationInner {
     server_addr: String,
     state: Mutex<WorkerState>,

@@ -1,6 +1,10 @@
 
+#[cfg(feature="server_registration")]
+use std::sync::{Arc, Mutex};
 use std::{env, os::raw::c_void};
 
+#[cfg(feature="server_registration")]
+use crate::features::server_registration::Registration;
 use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, sinfo, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
 use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}};
@@ -104,6 +108,8 @@ pub struct Globals {
     is_server: bool,
     pub(crate) cli_args: CLIArgs,
     pub world: RwLock<SyncPtr<c_void>>,
+    #[cfg(feature="server_registration")]
+    pub registration: Mutex<Option<Arc<Registration>>>,
 }
 
 static GLOBALS: OnceLock<Globals> = OnceLock::new();
@@ -191,7 +197,9 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
         is_server: false,
         cli_args: args,
         platform,
-        world: RwLock::new(SyncPtr::default())
+        world: RwLock::new(SyncPtr::default()),
+        #[cfg(feature="server_registration")]
+        registration: std::sync::Mutex::new(None),
     };
 
     if GLOBALS.set(globals_instance).is_err() {
