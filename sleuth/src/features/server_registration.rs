@@ -9,8 +9,8 @@ use crate::{globals, serror, sinfo, swarn};
 
 // --- Configuration Constants ---
 const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
-const MIN_HEARTBEAT_FLOOR_SECS: u64 = 15;   // Don't heartbeat faster than this
-const MAX_HEARTBEAT_CAP_SECS: u64 = 60;     // Don't heartbeat slower than this
+const MIN_HEARTBEAT_FLOOR_SECS: u64 = 5;   // Don't heartbeat faster than this
+const MAX_HEARTBEAT_CAP_SECS: u64 = 30;     // Don't heartbeat slower than this
 const BACKOFF_INITIAL_SECS: u64 = 10;
 const BACKOFF_MAX_SECS: u64 = 300;          // 5 minutes
 const A2S_RETRIES: u8 = 3;
@@ -52,6 +52,12 @@ struct RegisterResponse {
     server: RegisteredServer,
     key: String,
     refresh_before: f64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct HeartbeatResponse {
+    refresh_before: f64,
+    server: RegisteredServer,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -223,19 +229,28 @@ impl RegistrationInner {
                 }
             };
 
-            // 3. Heartbeat & Update
+            // 3. Perform the Heartbeat + Metadata Update
             match self.send_heartbeat_and_update(&a2s, &ident) {
-                Ok(_) => {
+                Ok(new_expiry) => {
                     backoff_secs = BACKOFF_INITIAL_SECS;
+                    
+                    // Update our internal Identity with the new timestamp from the backend
+                    {
+                        let mut lock = self.identity.lock().unwrap();
+                        if let Some(ref mut id) = *lock {
+                            id.refresh_at = new_expiry;
+                        }
+                    }
+
                     self.wait_interruptible(Duration::from_secs(ident.refresh_period));
                 }
                 Err(true) => { // Fatal Auth Error
-                    serror!(f; "Invalid credentials. Stopping worker.");
+                    serror!(f; "Authorization failed (401/403). Clearing identity.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
                     break;
                 }
-                Err(false) => { // Transient Error
+                Err(false) => { // Transient Network/Backend Error
                     self.wait_interruptible(Duration::from_secs(backoff_secs));
                     backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                 }
@@ -265,7 +280,10 @@ impl RegistrationInner {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         
         if let Some(id) = lock.as_ref() {
-            if id.refresh_at > now { return Some(id.clone()); }
+            if id.refresh_at > (now + 5) { 
+                return Some(id.clone()); 
+            }
+            if DEBUG_LOGGING { sinfo!(f; "Identity expiring soon (or expired), re-registering..."); }
         }
 
         // Register fresh
@@ -306,7 +324,7 @@ impl RegistrationInner {
             let expiry = data.refresh_before as u64;
             
             let period = if expiry > now {
-                ((expiry - now) / 3).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
+                (expiry - now).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
             } else {
                 MIN_HEARTBEAT_FLOOR_SECS
             };
@@ -322,11 +340,11 @@ impl RegistrationInner {
         }
     }
 
-    fn send_heartbeat_and_update(&self, a2s: &A2SClient, ident: &Identity) -> Result<(), bool> {
+    fn send_heartbeat_and_update(&self, a2s: &A2SClient, ident: &Identity) -> Result<u64, bool> {
         let info = self.poll_a2s_with_retry(a2s).map_err(|_| false)?;
         let start_time = Instant::now();
 
-        // 1. PUT Update
+        // 1. Metadata Update (PUT)
         let payload = UpdatePayload {
             player_count: info.players as i32,
             max_players: info.max_players as i32,
@@ -341,17 +359,24 @@ impl RegistrationInner {
             if s == 401 || s == 403 { return Err(true); }
         }
 
-        // 2. POST Heartbeat
+        // 2. Heartbeat Pulse (POST)
         let hb_res = self.http.post(BackendApi::heartbeat(&ident.id))
             .header(AUTH_HEADER, &ident.key)
             .send();
 
         match hb_res {
             Ok(r) if r.status().is_success() => {
-                if DEBUG_LOGGING { 
-                    sinfo!(f; "Heartbeat/Update success [id: {}, lat: {}ms]", ident.id, start_time.elapsed().as_millis()); 
+                // Parse the response to get the new refresh_before timestamp
+                if let Ok(data) = r.json::<HeartbeatResponse>() {
+                    if DEBUG_LOGGING { 
+                        sinfo!(f; "HB Success [id: {}, lat: {}ms, next_expiry: {}]", 
+                            ident.id, start_time.elapsed().as_millis(), data.refresh_before); 
+                    }
+                    Ok(data.refresh_before as u64)
+                } else {
+                    // Success, but couldn't parse JSON. Return current refresh_at to keep it alive.
+                    Ok(ident.refresh_at)
                 }
-                Ok(())
             }
             Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => Err(true),
             _ => Err(false),
