@@ -176,7 +176,7 @@ request_dummy_hooks!(
     GetPost_RedeemEntitlementEOS,
     GetPost_GrantPendingRewards,
     GetPost_PurchaseWithVirtualCurrency,
-    GetPost_SetCampaignPurchased,
+    // GetPost_SetCampaignPurchased,
     GetPost_GetTitleData,
     GetPost_LoginEOS,
     GetPost_ConfirmJoinTicket,

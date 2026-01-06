@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{features::commands::COMMAND_QUEUE, game::engine::ENetMode, tools::hook_globals::globals, ue::FString};
+use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, tools::hook_globals::globals, ue::FString};
 
 // not working?
 define_pattern_resolver!(FViewport, First, {
@@ -101,9 +101,14 @@ use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 // Resolver is handled by patternsleuth
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
 let mut q = COMMAND_QUEUE.lock().unwrap();
-    while let Some(cmd) = q.pop() {
-        log::info!(target: "Commands", "Console command: {cmd}");
-        let mut f_cmd = FString::from(cmd.as_str());
-        CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
+    while let Some(cmd) = q.pop() {        
+        match dispatch_command(cmd.as_str()) {
+            true => crate::sinfo!(f; "Executed custom command"),
+            false => {
+                log::info!(target: "Commands", "Console command: {cmd}");
+                let mut f_cmd = FString::from(cmd.as_str());
+                CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
+            }
+        }
     }
 });

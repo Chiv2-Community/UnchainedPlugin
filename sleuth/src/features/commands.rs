@@ -1,6 +1,53 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use inventory;
+
+/// The struct used to register a new command
+pub struct ConsoleCommandHandler {
+    pub name: &'static str,
+    pub aliases: &'static [&'static str],
+    pub description: &'static str,
+    /// mapping for parameter help (e.g., "id" => "The player ID")
+    pub field_description: &'static [(&'static str, &'static str)],
+    /// takes the raw arguments (excluding command name)
+    pub handler: fn(args: Vec<String>),
+}
+
+inventory::collect!(ConsoleCommandHandler);
+
+fn handle_help(_args: Vec<String>) {
+    println!("\n--- Available Console Commands ---");
+    
+    for cmd in inventory::iter::<ConsoleCommandHandler> {
+        let aliases = if cmd.aliases.is_empty() {
+            "".to_string()
+        } else {
+            format!(" (Aliases: {})", cmd.aliases.join(", "))
+        };
+
+        println!("> {}{}", cmd.name.to_uppercase(), aliases);
+        println!("  Description: {}", cmd.description);
+
+        if !cmd.field_description.is_empty() {
+            println!("  Parameters:");
+            for (field, desc) in cmd.field_description {
+                println!("    - {:<10} : {}", field, desc);
+            }
+        }
+        println!("----------------------------------");
+    }
+}
+
+inventory::submit! {
+    ConsoleCommandHandler {
+        name: "help",
+        aliases: &["?", "commands"],
+        description: "Displays this help menu.",
+        field_description: &[],
+        handler: handle_help,
+    }
+}
 
 
 pub static COMMAND_QUEUE: Lazy<Mutex<CommandManager>> = Lazy::new(|| {
@@ -29,8 +76,50 @@ impl CommandManager {
     }
 }
 
-// TODO: Implement proper interaction with logger, so that the prompt stays in place
+pub fn dispatch_command(input: &str) -> bool {
+    let parts: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
+    if parts.is_empty() { return false; }
 
+    let cmd_name = parts[0].to_lowercase();
+    let args = parts[1..].to_vec();
+
+    for cmd in inventory::iter::<ConsoleCommandHandler> {
+        if cmd.name == cmd_name || cmd.aliases.contains(&cmd_name.as_str()) {
+            (cmd.handler)(args);
+            return true;
+        }
+    }
+    // println!("Unknown command: {}. Type 'help' for a list.", cmd_name);
+    false
+}
+
+#[macro_export]
+macro_rules! CREATE_COMMAND {
+    (
+        $name:expr, 
+        [$($alias:expr),*], 
+        $desc:expr, 
+        {$($f_name:expr => $f_desc:expr),*}, 
+        |$args:ident| $body:block
+    ) => {
+        paste::paste! {
+            #[allow(unused_variables)]
+            fn [< __cmd_handler_ $name >] ($args: Vec<String>) $body
+
+            inventory::submit! {
+                ConsoleCommandHandler {
+                    name: $name,
+                    aliases: &[$($alias),*],
+                    description: $desc,
+                    field_description: &[ $(($f_name, $f_desc)),* ],
+                    handler: [< __cmd_handler_ $name >],
+                }
+            }
+        }
+    };
+}
+
+// TODO: Implement proper interaction with logger, so that the prompt stays in place
 #[cfg(feature="cli_commands")]
 pub fn spawn_cli_handler() {
     std::thread::spawn(move || {
@@ -40,7 +129,13 @@ pub fn spawn_cli_handler() {
         while input_source.read_line(&mut buffer).is_ok() {
             let trimmed = buffer.trim().to_string();
             if !trimmed.is_empty() {
+                // run commands in game thread
+                // TODO: yes it might cause a small hitch when executing             
                 COMMAND_QUEUE.lock().unwrap().push(trimmed);
+                // match dispatch_command(trimmed.as_str()) {
+                //     true => crate::sinfo!(f; "Executed custom command"),
+                //     false => COMMAND_QUEUE.lock().unwrap().push(trimmed)
+                // };                
             }
             buffer.clear();
         }

@@ -187,7 +187,7 @@ macro_rules! TRY_CALL_ORIGINAL {
 macro_rules! CALL_ORIGINAL_SAFE {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
         paste::paste! {
-            let is_init = [<o_ $name>].is_enabled() || [<o_ $name>].disable().is_ok();
+            let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
             if !is_init {
                 Err(format!("Detour {} is not initialized", stringify!($name)))
             } else {
