@@ -11,6 +11,7 @@ use crate::{globals, serror, sinfo, swarn};
 const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
 const MIN_HEARTBEAT_FLOOR_SECS: u64 = 5;   // Don't heartbeat faster than this
 const MAX_HEARTBEAT_CAP_SECS: u64 = 30;     // Don't heartbeat slower than this
+const HEARTBEAT_GRACE_PERIOD_SECS: u64 = 5;
 const BACKOFF_INITIAL_SECS: u64 = 10;
 const BACKOFF_MAX_SECS: u64 = 300;          // 5 minutes
 const A2S_RETRIES: u8 = 3;
@@ -20,6 +21,7 @@ const AUTH_HEADER: &str = "X-CHIV2-SERVER-BROWSER-KEY";
 const DEBUG_LOGGING: bool = true;
 
 // --- Data Structures ---
+
 
 #[derive(Debug, Serialize)]
 struct RegisterRequest<'a> {
@@ -31,16 +33,17 @@ struct RegisterRequest<'a> {
     player_count: i32,
     max_players: i32,
     local_ip_address: &'a str,
-    mods: &'a [ModInfo<'a>],
+    mods: Vec<Mod>,
 }
 
-#[derive(Debug, Serialize)]
-struct ModInfo<'a> {
-    name: &'a str,
-    version: &'a str,
+#[derive(Debug, Serialize, Clone)]
+pub struct Mod {
+    pub name: String,
+    pub organization: String,
+    pub version: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Ports {
     game: u16,
     ping: u16,
@@ -63,6 +66,7 @@ struct HeartbeatResponse {
 #[derive(Debug, Deserialize, Clone)]
 struct RegisteredServer {
     unique_id: String,
+    is_verified: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +127,7 @@ struct RegistrationInner {
     server_addr: String,
     state: Mutex<WorkerState>,
     identity: Mutex<Option<Identity>>,
+    mods: Mutex<Vec<Mod>>,
     cvar: Condvar,
     http: Client,
 }
@@ -141,11 +146,20 @@ impl Registration {
                 server_addr: format!("{ip}:{query_port}"),
                 state: Mutex::new(WorkerState::Idle),
                 identity: Mutex::new(None),
+                mods: Mutex::new(Vec::new()),
                 cvar: Condvar::new(),
                 http,
             }),
             handle: Mutex::new(None),
         }
+    }
+
+    /// Sets the mod list to be sent during the next registration/update.
+    pub fn set_mods(&self, mods: Vec<Mod>) {
+        let mut mod_lock = self.inner.mods.lock().unwrap();
+        *mod_lock = mods;
+        // Optionally trigger an update if we want mods to update mid-session
+        self.trigger_update();
     }
 
     /// Spawns the worker thread. If an identity exists and is still valid, 
@@ -193,10 +207,16 @@ impl Registration {
     fn perform_deregistration(&self) {
         let ident_opt = self.inner.identity.lock().unwrap().clone();
         if let Some(ident) = ident_opt {
-            let _ = self.inner.http.delete(BackendApi::server(&ident.id))
+            let res = self.inner.http.delete(BackendApi::server(&ident.id))
                 .header(AUTH_HEADER, &ident.key)
                 .send();
-            if DEBUG_LOGGING { sinfo!(f; "Deregistered: {}", ident.id); }
+            
+            if DEBUG_LOGGING {
+                match res {
+                    Ok(r) if r.status().is_success() => sinfo!(f; "Successfully deregistered: {}", ident.id),
+                    _ => swarn!(f; "Failed to deregister: {}", ident.id),
+                }
+            }
         }
     }
 }
@@ -245,7 +265,7 @@ impl RegistrationInner {
                     self.wait_interruptible(Duration::from_secs(ident.refresh_period));
                 }
                 Err(true) => { // Fatal Auth Error
-                    serror!(f; "Authorization failed (401/403). Clearing identity.");
+                    serror!(f; "Authorization failed. Clearing identity.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
                     break;
@@ -280,7 +300,7 @@ impl RegistrationInner {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         
         if let Some(id) = lock.as_ref() {
-            if id.refresh_at > (now + 5) { 
+            if id.refresh_at > (now + HEARTBEAT_GRACE_PERIOD_SECS) { 
                 return Some(id.clone()); 
             }
             if DEBUG_LOGGING { sinfo!(f; "Identity expiring soon (or expired), re-registering..."); }
@@ -300,6 +320,7 @@ impl RegistrationInner {
         let info = self.poll_a2s_with_retry(a2s)?;
         let args = &globals().cli_args;
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
+        let mods = self.mods.lock().unwrap().clone();
 
         let request = RegisterRequest {
             ports: Ports {
@@ -314,7 +335,7 @@ impl RegistrationInner {
             player_count: info.players as i32,
             max_players: info.max_players as i32,
             local_ip_address: "127.0.0.1",
-            mods: &[],
+            mods,
         };
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
@@ -323,6 +344,11 @@ impl RegistrationInner {
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
             let expiry = data.refresh_before as u64;
             
+            if DEBUG_LOGGING {
+                sinfo!(f; "Registered: {} | Verified: {} | Key: {}...", 
+                    data.server.unique_id, data.server.is_verified, &data.key[..8]);
+            }
+
             let period = if expiry > now {
                 (expiry - now).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
             } else {
@@ -369,8 +395,8 @@ impl RegistrationInner {
                 // Parse the response to get the new refresh_before timestamp
                 if let Ok(data) = r.json::<HeartbeatResponse>() {
                     if DEBUG_LOGGING { 
-                        sinfo!(f; "HB Success [id: {}, lat: {}ms, next_expiry: {}]", 
-                            ident.id, start_time.elapsed().as_millis(), data.refresh_before); 
+                        sinfo!(f; "HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]", 
+                            ident.id, start_time.elapsed().as_millis(), data.server.is_verified, data.refresh_before); 
                     }
                     Ok(data.refresh_before as u64)
                 } else {
