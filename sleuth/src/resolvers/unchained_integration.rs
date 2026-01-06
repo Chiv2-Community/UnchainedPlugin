@@ -18,6 +18,7 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_
     let pwd_opt = args.server_password.as_ref()
         .map(|p| format!("?Password={}", p))
         .unwrap_or_default();
+    // Old RCON widget
     let rcon_opt = if args.rcon_port.is_some() {"?rcon"} else {""};
     let init_opt = match INITIALIZED.load(Ordering::Relaxed) {
         true => "",
@@ -99,9 +100,10 @@ use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 // Executes pending RCON command
 // Resolver is handled by patternsleuth
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-    let mut q = COMMAND_QUEUE.lock().unwrap();
+let mut q = COMMAND_QUEUE.lock().unwrap();
     while let Some(cmd) = q.pop() {
         log::info!(target: "Commands", "Console command: {cmd}");
-        CALL_ORIGINAL!(ExecuteConsoleCommand(&mut FString::from(cmd.as_str())));
+        let mut f_cmd = FString::from(cmd.as_str());
+        CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
     }
 });

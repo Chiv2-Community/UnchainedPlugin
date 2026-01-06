@@ -16,6 +16,7 @@
 struct RustBuildInfo;
 extern "C" const RustBuildInfo* load_current_build_info(bool scan_missing);
 extern "C" const void init_rustlib();
+extern "C" const void postinit_rustlib();
 extern "C" uint8_t build_info_save(const void* bi);
 extern "C" uint32_t build_info_get_file_hash(const void* bi);
 extern "C" uint64_t build_info_get_offset(const RustBuildInfo* info, const char* name);
@@ -190,15 +191,15 @@ static CLIArgs cliArgs = CLIArgs::Parse(GetCommandLineW());
 DWORD WINAPI main_thread(LPVOID lpParameter) {
 	try {
 		auto logo_parts = split(std::string(UNCHAINED_LOGO), "\n");
-		for (const auto& part : logo_parts) {
-			GLOG_ERROR("{}", part);
-		}
+		// for (const auto& part : logo_parts) {
+		// 	GLOG_ERROR("{}", part);
+		// }
 
-		GLOG_ERROR("Chivalry 2 Unchained Plugin");
+		// GLOG_ERROR("Chivalry 2 Unchained Plugin");
 
-		GLOG_INFO("Command line args:");
-		GLOG_INFO("{}", std::wstring(GetCommandLineW()));
-		GLOG_INFO("");
+		// GLOG_INFO("Command line args:");
+		// GLOG_INFO("{}", std::wstring(GetCommandLineW()));
+		// GLOG_INFO("");
 		init_rustlib();
 
 		auto rust_build_info = load_current_build_info(true);
@@ -224,6 +225,7 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 
 		GetModuleInformation(GetCurrentProcess(), baseAddr, &moduleInfo, sizeof(moduleInfo));
 
+
 		PatchManager patch_manager(baseAddr, moduleInfo, rust_build_info);
 
 		for (auto& patch: ALL_REGISTERED_PATCHES) {
@@ -237,9 +239,9 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 			GLOG_INFO("All patches applied successfully");
 		}
 
-		if (state->GetCLIArgs().rcon_port.has_value()) {
-			handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
-		}
+		// if (state->GetCLIArgs().rcon_port.has_value()) {
+		// 	handleRCON(state->GetRCONState(), state->GetCLIArgs().rcon_port.value()); //this has an infinite loop for commands! Keep this at the end!
+		// }
 
 		build_info_save(rust_build_info);
 
@@ -252,6 +254,8 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 			TerminateProcess(GetCurrentProcess(), -67);
 			return -67;
 		}
+		
+		postinit_rustlib();
 
 		return 0;
 	} catch (const std::exception& e) {
@@ -328,7 +332,7 @@ int __stdcall DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		case DLL_PROCESS_ATTACH: {
 			OutputDebugStringA("[DLL] DLL PROCESS ATTACH");
 			initialize_global_logger(cliArgs.log_level);
-			GLOG_INFO("Logger initialized.");
+			// GLOG_INFO("Logger initialized.");
 
 			if (!initialize_minhook())
 			{

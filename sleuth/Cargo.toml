@@ -29,6 +29,7 @@ default = [
         # "loose_assets",
         "verbose_hooks",
         "cli_commands",
+        "rcon_commands",
         ]
 serde-resolvers = []
 image-elf = []

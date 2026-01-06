@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::features::commands::spawn_cli_handler;
+#[cfg(feature="rcon_commands")]
+use crate::features::rcon::handle_rcon;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -109,7 +111,7 @@ impl BuildInfo {
     pub fn save(&self) -> Result<()> {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
-        println!("Saving build info to {}", path.to_string_lossy());
+        sinfo!("Saving build info to {}", path.to_string_lossy());
 
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
@@ -157,7 +159,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
 
         match BuildInfo::load(crc32, platform) {
             Ok(bi) => {
-                println!("Loaded build info from cache");
+                // println!("Loaded build info from cache");
                 *current = Some(bi);
             }
             Err(err) => {
@@ -245,13 +247,19 @@ pub extern "C" fn init_rustlib() {
     unsafe {
         match init_globals() {
             Ok(_) => {
-                #[cfg(feature="cli_commands")]
-                spawn_cli_handler()
                 // swarn!("{:#?}", globals().cli_args)
             }
             Err(e) => serror!(f; "No globals: {}", e),
         }
     };
+}
+
+#[no_mangle]
+pub extern "C" fn postinit_rustlib() {
+    #[cfg(feature="cli_commands")]
+    spawn_cli_handler();
+    #[cfg(feature="rcon_commands")]
+    handle_rcon();
 }
 
 /// # Safety
