@@ -6,6 +6,7 @@ mod tools;
 mod ue;
 mod ue_old;
 mod game;
+mod features;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -18,6 +19,8 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
+#[cfg(feature="cli_commands")]
+use crate::features::commands::spawn_cli_handler;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -242,6 +245,8 @@ pub extern "C" fn init_rustlib() {
     unsafe {
         match init_globals() {
             Ok(_) => {
+                #[cfg(feature="cli_commands")]
+                spawn_cli_handler()
                 // swarn!("{:#?}", globals().cli_args)
             }
             Err(e) => serror!(f; "No globals: {}", e),

@@ -8,6 +8,7 @@
 
 // REGISTER_BYTE_PATCH(UTBLLocalPlayer_Exec, APPLY_ALWAYS, NO_ADDITIONAL_OFFSET, { 0xEB })
 
+#ifdef CPP_HOOKS_IMPL
 REGISTER_HOOK_PATCH(
 	ExecuteConsoleCommand,
 	APPLY_ALWAYS,
@@ -16,6 +17,7 @@ REGISTER_HOOK_PATCH(
 	GLOG_INFO("Executing console command: {}", std::wstring(param->str));
 	o_ExecuteConsoleCommand(param);
 }
+#endif
 
 #ifdef CPP_HOOKS_UNUSED
 //FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)

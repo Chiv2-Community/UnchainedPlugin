@@ -175,7 +175,7 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
 
     // Load CLI ARGS
     let args = load_cli().expect("Failed to load CLI ARGS");
-    sdebug!(f; "CLI Args: {:?}", args);
+    sdebug!(f; "CLI Args: {:#?}", args);
     sinfo!(f; "Running resolvers");
     let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     // println!("results: {:?}", resolution);

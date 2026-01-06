@@ -50,7 +50,7 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     gdi32.lib
     kernel32.lib
     msimg32.lib
-    # ${MSVC_RUNTIME_LIB}
+    ${MSVC_RUNTIME_LIB}
     ntdll.lib
     ole32.lib
     opengl32.lib

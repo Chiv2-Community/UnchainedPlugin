@@ -1,3 +1,7 @@
+use std::os::raw::c_void;
+
+use crate::ue::FString;
+
 
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
@@ -13,10 +17,15 @@ define_pattern_resolver![UTBLLocalPlayer_Exec, {
 // Allow console command execution
 CREATE_PATCH!(UTBLLocalPlayer_Exec, BYTES, &[0xEB]);
 
+// Commands executed by BPs. Also used for rcon and cli
 define_pattern_resolver!(
     ExecuteConsoleCommand,
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
+CREATE_HOOK!(ExecuteConsoleCommand, ACTIVE, NONE, c_void, (command: *mut FString), {
+    unsafe { log::info!(target: "Command", "Executing: {}", (&*command)); };
+    CALL_ORIGINAL!(ExecuteConsoleCommand(command))
+});
 
 // FIXME: Unused
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
@@ -37,9 +46,13 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 // }
 ];
 
-// define_pattern_resolver!(ConsoleCommand, First, [
-//     "40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"
-// ]);
+// Console commands executed ingame
+define_pattern_resolver!(ConsoleCommand, First, [
+    "40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"
+]);
+CREATE_HOOK!(ConsoleCommand, ACTIVE, FString, (this_ptr: *mut c_void, command: *mut FString, b: bool), {
+    unsafe { log::info!(target: "Console", "Executing: {}", (&*command)); };
+});
 
 // FIXME: Unused
 define_pattern_resolver!(

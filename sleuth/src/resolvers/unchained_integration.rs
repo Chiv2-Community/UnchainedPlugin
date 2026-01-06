@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{game::engine::ENetMode, tools::hook_globals::globals, ue::FString};
+use crate::{features::commands::COMMAND_QUEUE, game::engine::ENetMode, tools::hook_globals::globals, ue::FString};
 
 // not working?
 define_pattern_resolver!(FViewport, First, {
@@ -94,3 +94,14 @@ define_pattern_resolver!(EACAntiCheatMesssage, Simple,  [
 CREATE_PATCH!(EACAntiCheatMesssage, 0xE, NOP, 5);
 // CREATE_PATCH_PLATFORM!(STEAM, EACAntiCheatMesssage @ STEAM, 0xF, NOP, 5);
 // CREATE_PATCH_PLATFORM!(EGS, EACAntiCheatMesssage @ EGS, 0xE, NOP, 5);
+
+use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
+// Executes pending RCON command
+// Resolver is handled by patternsleuth
+CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
+    let mut q = COMMAND_QUEUE.lock().unwrap();
+    while let Some(cmd) = q.pop() {
+        log::info!(target: "Commands", "Console command: {cmd}");
+        CALL_ORIGINAL!(ExecuteConsoleCommand(&mut FString::from(cmd.as_str())));
+    }
+});

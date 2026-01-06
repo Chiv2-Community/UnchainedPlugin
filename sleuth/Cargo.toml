@@ -28,6 +28,7 @@ default = [
         "dev",
         # "loose_assets",
         "verbose_hooks",
+        "cli_commands",
         ]
 serde-resolvers = []
 image-elf = []
@@ -38,6 +39,9 @@ kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
 verbose_hooks = [] # print (some) hook triggers to console
+cli_commands = [] # process commands from plugin windows
+rcon_commands = [] # process commands from rcon
+server_registration = [] # register server with backend
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
