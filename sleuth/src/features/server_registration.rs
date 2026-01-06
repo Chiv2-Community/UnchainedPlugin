@@ -7,9 +7,14 @@ use a2s::A2SClient;
 
 use crate::{globals, serror, sinfo, swarn};
 
-// --- Constants ---
-const INITIAL_DELAY_SECS: u64 = 20;
-const MAX_HEARTBEAT_SECS: u64 = 60;
+// --- Configuration Constants ---
+const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
+const MIN_HEARTBEAT_FLOOR_SECS: u64 = 15;   // Don't heartbeat faster than this
+const MAX_HEARTBEAT_CAP_SECS: u64 = 60;     // Don't heartbeat slower than this
+const BACKOFF_INITIAL_SECS: u64 = 10;
+const BACKOFF_MAX_SECS: u64 = 300;          // 5 minutes
+const A2S_RETRIES: u8 = 3;
+
 const API_BASE_PATH: &str = "/api/v1/servers";
 const AUTH_HEADER: &str = "X-CHIV2-SERVER-BROWSER-KEY";
 const DEBUG_LOGGING: bool = true;
@@ -54,7 +59,7 @@ struct RegisteredServer {
     unique_id: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Identity {
     id: String,
     key: String,
@@ -70,14 +75,14 @@ struct UpdatePayload<'a> {
     map_name: &'a str,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum WorkerState {
     Idle,
     Running,
     StopRequested,
 }
 
-// --- API Helpers ---
+// --- API Helper ---
 
 struct BackendApi;
 impl BackendApi {
@@ -100,6 +105,7 @@ impl BackendApi {
 
 // --- Main Implementation ---
 
+/// Manages the background lifecycle of a game server registration.
 pub struct Registration {
     inner: Arc<RegistrationInner>,
     handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -114,23 +120,28 @@ struct RegistrationInner {
 }
 
 impl Registration {
-    /// Creates a new registration manager but does not start any threads.
+    /// Initializes the registration manager.
     pub fn new(ip: &str, query_port: u16) -> Self {
+        let http = Client::builder()
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_default();
+
         Self {
             inner: Arc::new(RegistrationInner {
                 server_addr: format!("{ip}:{query_port}"),
                 state: Mutex::new(WorkerState::Idle),
                 identity: Mutex::new(None),
                 cvar: Condvar::new(),
-                http: Client::new(),
+                http,
             }),
             handle: Mutex::new(None),
         }
     }
 
-    /// Spawns the background heartbeat thread. 
-    /// If an existing valid identity is found, it resumes immediately. 
-    /// Otherwise, it waits 20 seconds before initial registration.
+    /// Spawns the worker thread. If an identity exists and is still valid, 
+    /// it resumes heartbeats immediately without the discovery delay.
     pub fn start(self: Arc<Self>) {
         let mut state_lock = self.inner.state.lock().unwrap();
         if *state_lock == WorkerState::Running { return; }
@@ -140,35 +151,16 @@ impl Registration {
         let mut handle_lock = self.handle.lock().unwrap();
         
         *handle_lock = Some(thread::spawn(move || {
-            let resume = {
-                let id_lock = inner.identity.lock().unwrap();
-                id_lock.as_ref().map_or(false, |id| {
-                    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-                    id.refresh_at > now
-                })
-            };
-
-            if !resume {
-                if DEBUG_LOGGING { sinfo!(f; "Waiting {}s for server initialization...", INITIAL_DELAY_SECS); }
-                let (lock, cvar) = (&inner.state, &inner.cvar);
-                let mut state = lock.lock().unwrap();
-                let _ = cvar.wait_timeout(state, Duration::from_secs(INITIAL_DELAY_SECS)).unwrap();
-            } else if DEBUG_LOGGING {
-                sinfo!(f; "Resuming heartbeat with existing identity.");
-            }
-            
-            inner.run_loop();
+            inner.run_worker();
         }));
     }
 
-    /// Forces the heartbeat thread to wake up and send an update immediately.
-    /// Useful for player join/leave events or map changes.
+    /// Forces the worker to wake up and perform an update (e.g., on map change).
     pub fn trigger_update(&self) {
         self.inner.cvar.notify_all();
     }
 
-    /// Stops the background worker thread.
-    /// - `deregister`: If true, sends a DELETE request to the backend.
+    /// Stops the worker thread and optionally deregisters from the backend.
     pub fn stop(&self, deregister: bool) {
         {
             let mut state = self.inner.state.lock().unwrap();
@@ -196,54 +188,85 @@ impl Registration {
             let _ = self.inner.http.delete(BackendApi::server(&ident.id))
                 .header(AUTH_HEADER, &ident.key)
                 .send();
-            if DEBUG_LOGGING { sinfo!(f; "Server {} deregistered.", ident.id); }
+            if DEBUG_LOGGING { sinfo!(f; "Deregistered: {}", ident.id); }
         }
     }
 }
 
 impl RegistrationInner {
-    /// Internal worker loop that manages registration and heartbeats.
-    fn run_loop(&self) {
+    fn run_worker(&self) {
         let a2s = A2SClient::new().expect("Failed to create A2S Client");
-        
+        let mut backoff_secs = BACKOFF_INITIAL_SECS;
+
         loop {
             if self.is_stopping() { break; }
 
-            // 1. Check or Create Identity
+            // 1. Discovery/Ready Check (only if fresh start)
+            if !self.ensure_server_ready(&a2s) {
+                thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+
+            // 2. Resolve Identity
             let ident = match self.get_valid_identity(&a2s) {
-                Some(id) => id,
+                Some(id) => {
+                    backoff_secs = BACKOFF_INITIAL_SECS; // Reset backoff on success
+                    id
+                },
                 None => {
-                    thread::sleep(Duration::from_secs(10));
+                    if DEBUG_LOGGING { sinfo!(f; "Registration failed. Backing off {}s", backoff_secs); }
+                    self.wait_interruptible(Duration::from_secs(backoff_secs));
+                    backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                     continue;
                 }
             };
 
-            // 2. Perform Update & Heartbeat
-            if let Err(fatal) = self.send_heartbeat_and_update(&a2s, &ident) {
-                if fatal {
+            // 3. Heartbeat & Update
+            match self.send_heartbeat_and_update(&a2s, &ident) {
+                Ok(_) => {
+                    backoff_secs = BACKOFF_INITIAL_SECS;
+                    self.wait_interruptible(Duration::from_secs(ident.refresh_period));
+                }
+                Err(true) => { // Fatal Auth Error
+                    serror!(f; "Invalid credentials. Stopping worker.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
-                    break; 
+                    break;
+                }
+                Err(false) => { // Transient Error
+                    self.wait_interruptible(Duration::from_secs(backoff_secs));
+                    backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                 }
             }
-
-            // 3. Wait for interval or signal
-            let state_lock = self.state.lock().unwrap();
-            let result = self.cvar.wait_timeout(state_lock, Duration::from_secs(ident.refresh_period)).unwrap();
-            if *result.0 == WorkerState::StopRequested { break; }
         }
+    }
+
+    /// Polls A2S until the server responds, confirming it is ready to be registered.
+    fn ensure_server_ready(&self, a2s: &A2SClient) -> bool {
+        if self.identity.lock().unwrap().is_some() { return true; }
+
+        let start = Instant::now();
+        while start.elapsed().as_secs() < MAX_DISCOVERY_TIMEOUT_SECS {
+            if self.is_stopping() { return false; }
+            if a2s.info(&self.server_addr).is_ok() { 
+                if DEBUG_LOGGING { sinfo!(f; "Server detected on {} after {}s", self.server_addr, start.elapsed().as_secs()); }
+                return true; 
+            }
+            thread::sleep(Duration::from_secs(2));
+        }
+        swarn!(f; "A2S Discovery timeout: Server not responding at {}", self.server_addr);
+        false
     }
 
     fn get_valid_identity(&self, a2s: &A2SClient) -> Option<Identity> {
         let mut lock = self.identity.lock().unwrap();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
         
         if let Some(id) = lock.as_ref() {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-            if id.refresh_at > now {
-                return Some(id.clone());
-            }
+            if id.refresh_at > now { return Some(id.clone()); }
         }
 
+        // Register fresh
         match self.register(a2s) {
             Ok(new_id) => {
                 *lock = Some(new_id.clone());
@@ -254,9 +277,8 @@ impl RegistrationInner {
     }
 
     fn register(&self, a2s: &A2SClient) -> Result<Identity, ()> {
-        let info = a2s.info(&self.server_addr).map_err(|e| serror!(f; "A2S Error: {}", e))?;
+        let info = self.poll_a2s_with_retry(a2s)?;
         let args = &globals().cli_args;
-
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
 
         let request = RegisterRequest {
@@ -275,63 +297,84 @@ impl RegistrationInner {
             mods: &[],
         };
 
-        let res = self.http.post(BackendApi::register()).json(&request).send();
-        match res {
-            Ok(r) if r.status().is_success() => {
-                let data: RegisterResponse = r.json().map_err(|_| ())?;
-                let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-                let expiry = data.refresh_before as u64;
-                
-                let period = if expiry > now {
-                    ((expiry - now) / 3).clamp(10, MAX_HEARTBEAT_SECS)
-                } else {
-                    10
-                };
+        let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
+        if res.status().is_success() {
+            let data: RegisterResponse = res.json().map_err(|_| ())?;
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+            let expiry = data.refresh_before as u64;
+            
+            let period = if expiry > now {
+                ((expiry - now) / 3).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
+            } else {
+                MIN_HEARTBEAT_FLOOR_SECS
+            };
 
-                Ok(Identity {
-                    id: data.server.unique_id,
-                    key: data.key,
-                    refresh_at: expiry,
-                    refresh_period: period,
-                })
-            }
-            _ => Err(()),
+            Ok(Identity {
+                id: data.server.unique_id,
+                key: data.key,
+                refresh_at: expiry,
+                refresh_period: period,
+            })
+        } else {
+            Err(())
         }
     }
 
-    /// Sends both the metadata update (PUT) and the heartbeat pulse (POST).
-    /// Returns Err(true) if the failure is a fatal auth error.
     fn send_heartbeat_and_update(&self, a2s: &A2SClient, ident: &Identity) -> Result<(), bool> {
-        let info = a2s.info(&self.server_addr).map_err(|_| false)?;
+        let info = self.poll_a2s_with_retry(a2s).map_err(|_| false)?;
+        let start_time = Instant::now();
 
-        // Metadata Update
+        // 1. PUT Update
         let payload = UpdatePayload {
             player_count: info.players as i32,
             max_players: info.max_players as i32,
             map_name: &info.map,
         };
-        let upd = self.http.put(BackendApi::server(&ident.id))
+        let upd_res = self.http.put(BackendApi::server(&ident.id))
             .header(AUTH_HEADER, &ident.key)
             .json(&payload).send();
 
-        if let Ok(r) = upd {
-            let status = r.status().as_u16();
-            if status == 401 || status == 403 { return Err(true); }
+        if let Ok(r) = upd_res {
+            let s = r.status().as_u16();
+            if s == 401 || s == 403 { return Err(true); }
         }
 
-        // Heartbeat Pulse
-        let hb = self.http.post(BackendApi::heartbeat(&ident.id))
+        // 2. POST Heartbeat
+        let hb_res = self.http.post(BackendApi::heartbeat(&ident.id))
             .header(AUTH_HEADER, &ident.key)
             .send();
 
-        match hb {
+        match hb_res {
             Ok(r) if r.status().is_success() => {
-                if DEBUG_LOGGING { sinfo!(f; "Heartbeat/Update sent for {}", ident.id); }
+                if DEBUG_LOGGING { 
+                    sinfo!(f; "Heartbeat/Update success [id: {}, lat: {}ms]", ident.id, start_time.elapsed().as_millis()); 
+                }
                 Ok(())
             }
             Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => Err(true),
             _ => Err(false),
         }
+    }
+
+    fn poll_a2s_with_retry(&self, a2s: &A2SClient) -> Result<a2s::info::Info, ()> {
+        for i in 0..A2S_RETRIES {
+            match a2s.info(&self.server_addr) {
+                Ok(info) => return Ok(info),
+                Err(e) => {
+                    if i == A2S_RETRIES - 1 {
+                        serror!(f; "A2S failed after {} attempts: {}", A2S_RETRIES, e);
+                        return Err(());
+                    }
+                    thread::sleep(Duration::from_millis(500));
+                }
+            }
+        }
+        Err(())
+    }
+
+    fn wait_interruptible(&self, duration: Duration) {
+        let state = self.state.lock().unwrap();
+        let _ = self.cvar.wait_timeout(state, duration).unwrap();
     }
 
     fn is_stopping(&self) -> bool {
