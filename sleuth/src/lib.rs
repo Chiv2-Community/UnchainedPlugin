@@ -111,7 +111,7 @@ impl BuildInfo {
     pub fn save(&self) -> Result<()> {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
-        sinfo!("Saving build info to {}", path.to_string_lossy());
+        sinfo!(f; "Saving build info to {}", path.to_string_lossy());
 
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
@@ -259,7 +259,11 @@ pub extern "C" fn postinit_rustlib() {
     #[cfg(feature="cli_commands")]
     spawn_cli_handler();
     #[cfg(feature="rcon_commands")]
+    std::thread::spawn(|| {
     handle_rcon();
+    });
+
+    
 }
 
 /// # Safety
