@@ -95,7 +95,8 @@ macro_rules! __create_hook_impl {
             #[allow(non_snake_case)]
             pub unsafe fn [<attach_ $name>](
                 base_address: usize,
-                offsets: std::collections::HashMap<String, u64>
+                offsets: std::collections::HashMap<String, u64>,
+                auto_activate: bool
             ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
                 match offsets.get(stringify!($name)) {
                     None => Err(format!("No address found for {}", stringify!($name)).into()),
@@ -105,7 +106,9 @@ macro_rules! __create_hook_impl {
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
                         // FIXME: initialize seems to fail (already initialized). Find out what causes this
                         let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
-                        [<o_ $name>].enable()?;
+                        if auto_activate {
+                            [<o_ $name>].enable()?;
+                        }
                         Ok(Some(rel_address))
                     }
                 }
@@ -158,4 +161,50 @@ macro_rules! CALL_ORIGINAL {
             unsafe { [<o_ $name>].call($($arg),*) }
         }
     }};
+}
+
+/// Calls the original detour function `o_<name>` with arguments.
+/// Preserves type hints for Rust Analyzer.
+/// Returns if detour is disabled
+#[macro_export]
+macro_rules! TRY_CALL_ORIGINAL {
+    ($name:ident ( $($arg:expr),* $(,)? )) => {{
+        paste::paste! {
+            let is_init = [<o_ $name>].is_enabled() || [<o_ $name>].disable().is_ok();
+            if !is_init {
+                eprintln!("⚠️ Detour {} is not initialized. Skipping.", stringify!($name));
+                return; // The "TRY" part: exit the caller
+            }
+            
+            $crate::CALL_ORIGINAL!($name($($arg),*))
+        }
+    }};
+}
+/// Calls the original detour function `o_<name>` with arguments.
+/// Preserves type hints for Rust Analyzer.
+/// Returns Err if detour is disabled
+#[macro_export]
+macro_rules! CALL_ORIGINAL_SAFE {
+    ($name:ident ( $($arg:expr),* $(,)? )) => {{
+        paste::paste! {
+            let is_init = [<o_ $name>].is_enabled() || [<o_ $name>].disable().is_ok();
+            if !is_init {
+                Err(format!("Detour {} is not initialized", stringify!($name)))
+            } else {
+                Ok(unsafe { [<o_ $name>].call($($arg),*) })
+            }
+        }
+    }};
+}
+#[macro_export]
+macro_rules! TRY_OR_RETURN {
+    ($call:expr) => {
+        match $call {
+            Ok(val) => val,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                return;
+            }
+        }
+    };
 }

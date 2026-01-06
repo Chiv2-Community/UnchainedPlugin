@@ -303,12 +303,13 @@ pub unsafe fn attach_hooks(
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
         if !hook.auto_activate {
-            sdebug!(f; "Skipping inactive hook: {}", hook.name);
-            continue;
+            sdebug!(f; "inactive hook: {}", hook.name);
+            // Inactive hooks initialize but don't enable the detour
+            // continue;
         }
 
-        match (hook.hook_fn)(base_address, offsets.clone()) {
-            Ok(_) => sinfo!(f; "☑ {} attached", hook.name),
+        match (hook.hook_fn)(base_address, offsets.clone(), hook.auto_activate) {
+            Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if hook.auto_activate { "attached" } else { "attached (passive)" }),
             Err(e) => serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e),
         }
     }

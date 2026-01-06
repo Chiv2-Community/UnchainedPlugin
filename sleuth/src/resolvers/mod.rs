@@ -41,7 +41,7 @@ impl std::str::FromStr for PlatformType {
 
 pub static BASE_ADDR: OnceCell<usize> = OnceCell::new();
 
-pub type HookFn = unsafe fn(usize, std::collections::HashMap<String, u64>) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+pub type HookFn = unsafe fn(usize, std::collections::HashMap<String, u64>, bool) -> Result<Option<usize>, Box<dyn std::error::Error>>;
 
 pub struct HookRegistration {
     pub name: &'static str,
