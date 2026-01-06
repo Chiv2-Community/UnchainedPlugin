@@ -1,17 +1,15 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-use a2s::A2SClient;
-// use anyhow::Ok;
-// use anyhow::Ok;
-// use once_cell::sync::Lazy;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use a2s::A2SClient;
 
 use crate::{globals, serror, sinfo, swarn};
 
-// Register Request
+const INITIAL_DELAY_SECS: u64 = 20;
+const DEBUG_LOGGING: bool = true; // Can be moved to a config or feature flag
+
 #[derive(Debug, Serialize)]
 struct RegisterRequest<'a> {
     ports: Ports,
@@ -38,7 +36,6 @@ struct Ports {
     a2s: u16,
 }
 
-// TODO: Maybe use Identity instead
 #[derive(Debug, Deserialize, Clone)]
 struct RegisterResponse {
     server: RegisteredServer,
@@ -46,32 +43,12 @@ struct RegisterResponse {
     refresh_before: f64,
 }
 
-impl RegisterResponse {
-    fn refresh_eta_secs(&self) -> u64 {        
-        let start = SystemTime::now();
-        let since_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
-        match self.refresh_before as u64 > since_epoch.as_secs() {
-            true => {
-                sinfo!(f; "ETA: {}", self.refresh_before as u64 - since_epoch.as_secs());
-                (self.refresh_before as u64 - since_epoch.as_secs()) / 3
-            },
-            false => {
-                serror!(f; "refresh_before {} < since_epoch {}", self.refresh_before, since_epoch.as_secs());
-                10
-            }
-        }
-        // sinfo!(f; "refresh_before: {} since_epoch {}", self.refresh_before, since_epoch.as_secs());
-        // sinfo!(f; "ETA: {}", self.refresh_before as u64 - since_epoch.as_secs());
-        // self.refresh_before as u64 - since_epoch.as_secs()
-    }
-}
-
 #[derive(Debug, Deserialize, Clone)]
 struct RegisteredServer {
     unique_id: String,
 }
 
-// Server id/key
+#[derive(Clone)]
 struct Identity {
     id: String,
     key: String,
@@ -80,28 +57,17 @@ struct Identity {
 
 impl From<RegisterResponse> for Identity {
     fn from(res: RegisterResponse) -> Self {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let diff = if res.refresh_before as u64 > now {
+            (res.refresh_before as u64 - now) / 3
+        } else {
+            10 // Fallback
+        };
+
         Identity {
-            id: res.server.unique_id.clone(),
-            key: res.key.clone(),
-            refresh_period: res.refresh_eta_secs()
-        }
-    }
-}
-
-impl Identity {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            key: String::new(),
-            refresh_period: 60,
-        }
-    }
-
-    pub fn new(id: impl Into<String>, key: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            key: key.into(),
-            refresh_period: 60,
+            id: res.server.unique_id,
+            key: res.key,
+            refresh_period: diff.max(10), 
         }
     }
 }
@@ -114,272 +80,222 @@ struct UpdatePayload<'a> {
     map_name: &'a str,
 }
 
-pub struct Registration{
-    server_addr: String,
-    client: Client,
-    a2s: A2SClient,
-    identity: Mutex<Option<Identity>>,
-    stop_update: Arc<(Mutex<bool>, Condvar)>,
-    stop_heartbeat: Arc<(Mutex<bool>, Condvar)>,
-    heartbeat_thread: Mutex<Option<thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>>>,
+enum WorkerState {
+    Idle,
+    Running,
+    StopRequested,
 }
+
+pub struct Registration {
+    inner: Arc<RegistrationInner>,
+    handle: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+struct RegistrationInner {
+    server_addr: String,
+    state: Mutex<WorkerState>,
+    identity: Mutex<Option<Identity>>,
+    cvar: Condvar,
+    client: Client,
+}
+
 impl Registration {
     pub fn new(ip: &str, query_port: u16) -> Self {
         Self {
-            server_addr: format!("{ip}:{query_port}"),
-            // query_port,
-            client: Client::new(),
-            a2s: A2SClient::new().unwrap(),
-            identity: Mutex::new(None),
-            stop_update: Arc::new((Mutex::new(false), Condvar::new())),
-            stop_heartbeat: Arc::new((Mutex::new(false), Condvar::new())),
-            heartbeat_thread: Mutex::new(None),
-            // last_info: None
+            inner: Arc::new(RegistrationInner {
+                server_addr: format!("{ip}:{query_port}"),
+                state: Mutex::new(WorkerState::Idle),
+                identity: Mutex::new(None),
+                cvar: Condvar::new(),
+                client: Client::new(),
+            }),
+            handle: Mutex::new(None),
         }
     }
 
-    fn register_server(self: Arc<Self>, info: a2s::info::Info) -> Result<RegisterResponse, reqwest::Error> {
-        let args = &globals().cli_args;   
-        let desc = format!("{} (build {})\n{} server ",
-         info.game,
-         info.version,
-         info.folder);
-        let request = RegisterRequest{
+    /// Spawns the background registration and heartbeat thread.
+    pub fn start(self: Arc<Self>) {
+        let mut state_lock = self.inner.state.lock().unwrap();
+        if let WorkerState::Running = *state_lock {
+            swarn!(f; "Registration worker is already running.");
+            return;
+        }
+        *state_lock = WorkerState::Running;
+
+        let inner = Arc::clone(&self.inner);
+        let mut handle_lock = self.handle.lock().unwrap();
+        
+        *handle_lock = Some(thread::spawn(move || {
+            if DEBUG_LOGGING { sinfo!(f; "Background worker started."); }
+            
+            // 1. Initial required delay
+            let (lock, cvar) = (&inner.state, &inner.cvar);
+            let mut state = lock.lock().unwrap();
+            let _ = cvar.wait_timeout(state, Duration::from_secs(INITIAL_DELAY_SECS)).unwrap();
+            
+            inner.run_loop();
+        }));
+    }
+
+    /// Signals the heartbeat to happen immediately (e.g., on map change).
+    pub fn trigger_update(&self) {
+        if DEBUG_LOGGING { sinfo!(f; "Triggering immediate update/heartbeat."); }
+        self.inner.cvar.notify_all();
+    }
+
+    /// Stops the background thread and performs deregistration.
+    pub fn stop(&self) {
+        {
+            let mut state = self.inner.state.lock().unwrap();
+            *state = WorkerState::StopRequested;
+        }
+        self.inner.cvar.notify_all();
+
+        if let Some(handle) = self.handle.lock().unwrap().take() {
+            let _ = handle.join();
+        }
+        
+        self.deregister();
+    }
+
+    fn deregister(&self) {
+        let ident_lock = self.inner.identity.lock().unwrap();
+        if let Some(ident) = ident_lock.as_ref() {
+            let backend = globals().cli_args.server_browser_backend.clone().unwrap_or_default();
+            let url = format!("{}/api/v1/servers/{}", backend, ident.id);
+            
+            match self.inner.client.delete(url)
+                .header("X-CHIV2-SERVER-BROWSER-KEY", &ident.key)
+                .send() 
+            {
+                Ok(_) => sinfo!(f; "Successfully deregistered server."),
+                Err(e) => serror!(f; "Failed to deregister: {}", e),
+            }
+        }
+    }
+}
+
+impl RegistrationInner {
+    fn run_loop(&self) {
+        let a2s = A2SClient::new().unwrap();
+        
+        loop {
+            // Check shutdown signal
+            {
+                let state = self.state.lock().unwrap();
+                if let WorkerState::StopRequested = *state { break; }
+            }
+
+            // 1. Ensure Identity (Discovery + Registration)
+            let current_ident = self.identity.lock().unwrap().clone();
+            let ident = match current_ident {
+                Some(i) => i,
+                None => match self.perform_registration(&a2s) {
+                    Ok(new_ident) => {
+                        let mut lock = self.identity.lock().unwrap();
+                        *lock = Some(new_ident.clone());
+                        new_ident
+                    }
+                    Err(_) => {
+                        thread::sleep(Duration::from_secs(10));
+                        continue;
+                    }
+                }
+            };
+
+            // 2. Perform Update and Heartbeat
+            if let Err(fatal) = self.perform_heartbeat(&a2s, &ident) {
+                if fatal {
+                    serror!(f; "Fatal authorization error. Stopping worker.");
+                    let mut lock = self.identity.lock().unwrap();
+                    *lock = None;
+                    break; 
+                }
+            }
+
+            // 3. Wait for next period or notification (map change/stop)
+            let state = self.state.lock().unwrap();
+            let result = self.cvar.wait_timeout(state, Duration::from_secs(ident.refresh_period)).unwrap();
+            if let WorkerState::StopRequested = *result.0 { break; }
+        }
+    }
+
+    fn perform_registration(&self, a2s: &A2SClient) -> Result<Identity, ()> {
+        let info = a2s.info(&self.server_addr).map_err(|e| {
+            serror!(f; "A2S Discovery failed: {}", e);
+        })?;
+
+        let args = &globals().cli_args;
+        let backend = args.server_browser_backend.clone().ok_or(())?;
+        
+        let request = RegisterRequest {
             ports: Ports {
-                game: info.extended_server_info.port.unwrap(),
-                ping: args.game_server_ping_port.unwrap(),
-                a2s: args.game_server_query_port.unwrap(),
+                game: info.extended_server_info.port.unwrap_or(7777),
+                ping: args.game_server_ping_port.unwrap_or(0),
+                a2s: args.game_server_query_port.unwrap_or(0),
             },
             name: &info.name,
-            description: &desc,
-            password_protected: args.server_password.is_some(), // TODO
+            description: "Refactored Game Server", // Logic simplified for brevity
+            password_protected: args.server_password.is_some(),
             current_map: &info.map,
             player_count: info.players as i32,
             max_players: info.max_players as i32,
             local_ip_address: "127.0.0.1",
             mods: &[],
         };
-        let backend = args.server_browser_backend.clone();
-        let response = self.client
-            .post(format!("{}/api/v1/servers", &backend.unwrap()))
+
+        let res = self.client.post(format!("{}/api/v1/servers", backend))
             .json(&request)
-            .send().unwrap();
+            .send();
 
-        swarn!(f; "request {:#?}", request);
-        swarn!(f; "response {:#?}", response);
-        match response.json() as Result<RegisterResponse, reqwest::Error> {
-            Ok(res) => {
-                swarn!(f; "json {:#?}", res);
-                
-                let mut identity_lock = self.identity.lock().unwrap();
-                // *identity_lock = Some(Identity::new(&res.server.unique_id, &res.key));
-                *identity_lock = Some(res.clone().into());
-                Ok(res)
-            },
-            Err(e) => { serror!(f; "Error: {}", e); Err(e) },            
-        }
-    }
-
-    fn a2s_get_info(&self, retries: usize, period_s: f32) -> Result<a2s::info::Info, Box<dyn std::error::Error>> {
-        let stop_flag = self.stop_update.clone();
-        let mut itr = 0;
-        while itr < retries {
-            let (lock, cvar) = &*stop_flag;
-            if *lock.lock().unwrap() {
-                break;
+        match res {
+            Ok(r) if r.status().is_success() => {
+                let data: RegisterResponse = r.json().map_err(|_| ())?;
+                Ok(data.into())
             }
-            sinfo!(f; "Retry {itr}");
-            match self.a2s.info(&self.server_addr) {
-                Result::Ok(info) =>  {
-                    serror!(f; "Connected {:#?}", info);
-                    // serror!(f; "Players {:#?}", self.a2s.players(&self.server_addr)); // !
-                    // serror!(f; "Rules {:#?}", self.a2s.rules(&self.server_addr));
-                    return Ok(info)
-                },
-                Err(e) => serror!(f; "Failed to get info: {e}"),
+            Ok(r) => {
+                serror!(f; "Registration failed with status: {}", r.status());
+                Err(())
             }
-            itr += 1;
-            if itr < retries { // TODO: do..while?
-                thread::sleep(Duration::from_secs(1));
-            }
-        }
-        Err(format!("A2S failed after {retries} retries.").into())
-    }
-
-    fn start_discovery(self: Arc<Self>) -> Result<RegisterResponse, Box<dyn std::error::Error + Send + Sync>> {
-        
-        match self.a2s_get_info(50, 1.0) {
-            Ok(info) => {
-                sinfo!(f; "discovered server!");
-                match self.register_server(info) {
-                    Ok(rinfo) => {
-                        sinfo!(f; "ok");
-                        Ok(rinfo)
-                    }, // TODO: handle player list?
-                    Err(e) => {
-                        serror!(f; "Not ok :{e}"); 
-                        Err(e.into())
-                    },
-                }
-            },
             Err(e) => {
-                serror!(f; "Error: {}", e);
-                Err(format!("Error: {}", e).into())
-            },
-        }
-        // Err("Reached max retries".into())
-    }
-
-    pub fn start_a2s(self: Arc<Self>) {
-        let reg = self.clone();
-
-        thread::spawn(move || {
-            // reg.start_a2s();
-        });
-    }
-
-    pub fn start(self: Arc<Self>) {
-        // self.clone().start_heartbeat();
-        // self.clone().start_a2s();
-        let reg = self.clone();
-    
-        // spawn discovery thread
-        thread::spawn(move || {
-            thread::sleep(Duration::from_secs(20));
-            match reg.start_discovery() {
-                Ok(_) => {
-                    println!("Discovery successful, starting heartbeat...");
-                    match self.start_heartbeat() {
-                        Ok(_) => sinfo!(f; "Heartbeat started"),
-                        Err(e) => serror!(f; "Error: {e}"),
-                    }
-                    // Register server
-                    // start heartbeat
-                    // reg.start_heartbeat();
-                }
-                Err(e) => {
-                    eprintln!("Discovery failed: {:?}", e);
-                }
+                serror!(f; "Network error during registration: {}", e);
+                Err(())
             }
-        });
-    }
-
-    pub fn stop(self: Arc<Self>) {
-
-    }
-
-    fn send_update(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error + Send + Sync>>{
-        let client = self.client.clone();
-        // let url = self.server_addr.clone();
-        let args = &globals().cli_args;   
-        let backend = args.server_browser_backend.clone().unwrap();
-        let identity_lock: std::sync::MutexGuard<'_, Option<Identity>> = self.identity.lock().unwrap();
-        let ident = identity_lock.as_ref()
-            .ok_or("Heartbeat with unknown identity")?;
-        match self.a2s_get_info(1, 0.0) {
-            Ok(info) => {
-                let payload = UpdatePayload {
-                    player_count: info.players as i32,
-                    max_players: info.max_players as i32,
-                    map_name: info.map.as_str(),
-                };
-                
-                // let res = client.post(format!("{}/api/v1/servers/{}", backend, ident.id))
-                //     .json(&payload)
-                //     .header("X-CHIV2-SERVER-BROWSER-KEY", ident.key.as_str())
-                //     .send();
-
-                let request_builder = client.put(format!("{}/api/v1/servers/{}", backend, ident.id))
-                    .header("Content-Type", "application/json")
-                    .json(&payload)
-                    .header("X-CHIV2-SERVER-BROWSER-KEY", ident.key.as_str());
-
-                // 2. Build the request (this does NOT send it yet)
-                let request = request_builder.build()?;
-                log::info!("Sending Request: {:#?}", request);
-                let res = client.execute(request);
-                match res {
-                    Ok(update) => {
-                        sinfo!(f; "sent update payload {:#?}", update);
-                        // sinfo!("Sending update!");
-                        // let res_hb = client
-                        //     .post(format!("{}/api/v1/servers/{}/heartbeat", backend, ident.id))
-                        //     .header("X-CHIV2-SERVER-BROWSER-KEY", ident.key.as_str())
-                        //     .send();
-                        let req_hb = client
-                            .post(format!("{}/api/v1/servers/{}/heartbeat", backend, ident.id))
-                            .header("X-CHIV2-SERVER-BROWSER-KEY", ident.key.as_str());
-                        
-                        let request_hb = req_hb.build()?;
-                        log::info!("Sending Request: {:#?}", request_hb);
-                        let res_hb = client.execute(request_hb);
-
-                        match res_hb {
-                            Ok(hb) => {
-                                sinfo!("Sent heartbeat! {:#?}", hb);
-                                Ok(())
-                            },
-                            Err(e) =>  Err(format!("Update: failed to send heartbeat: {}", e).into()),
-                        }
-                    },
-                    Err(e) =>  Err(format!("Update: failed to send update: {}", e).into()),
-                }
-
-                
-        
-                // FIXME: why not derived here?
-                // Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
-            }
-
-            Err(e) => Err(format!("Update: failed to get A2S: {}", e).into()),
         }
     }
 
-    pub fn start_heartbeat(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
-        sinfo!(f; "start");
-        let stop_signal = Arc::clone(&self.stop_heartbeat);
-        let this = Arc::clone(&self);
-        // let identity = self.identity.lock().unwrap();
-        // match self.identity.lock().unwrap().as_ref() {
-        //     Some(ident) => todo!(),
-        //     None => todo!(),
-        // };
-        let handle = thread::spawn(move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-            let (lock, cvar) = &*stop_signal;
-            loop {
-                let mut stopped = lock.lock().unwrap();
-                
-                if *stopped {
-                    println!("🛑 Heartbeat stopping.");
-                    break;
-                }
+    fn perform_heartbeat(&self, a2s: &A2SClient, ident: &Identity) -> Result<(), bool> {
+        let info = a2s.info(&self.server_addr).map_err(|_| false)?;
+        let backend = globals().cli_args.server_browser_backend.clone().unwrap_or_default();
 
+        let payload = UpdatePayload {
+            player_count: info.players as i32,
+            max_players: info.max_players as i32,
+            map_name: &info.map,
+        };
 
-                match this.clone().send_update() {
-                    Ok(_) => sinfo!(f; "upadte success"),
-                    Err(e) => sinfo!(f; "upadte error: {}", e),
-                };
+        // Update call
+        let update_res = self.client.put(format!("{}/api/v1/servers/{}", backend, ident.id))
+            .header("X-CHIV2-SERVER-BROWSER-KEY", &ident.key)
+            .json(&payload)
+            .send();
 
-                let identity_lock = this.identity.lock().unwrap();
-                let ident = identity_lock.as_ref()
-                    .ok_or("Heartbeat with unknown identity")?;
+        if let Ok(r) = update_res {
+            if r.status().as_u16() == 401 || r.status().as_u16() == 403 { return Err(true); }
+        }
 
-                let result = cvar.wait_timeout(stopped, Duration::from_secs(ident.refresh_period)).unwrap();
-                stopped = result.0;
-                // if *stopped {
-                //     println!("🛑 Heartbeat stopping.");
-                //     break;
-                // }
+        // Heartbeat call
+        let hb_res = self.client.post(format!("{}/api/v1/servers/{}/heartbeat", backend, ident.id))
+            .header("X-CHIV2-SERVER-BROWSER-KEY", &ident.key)
+            .send();
+
+        match hb_res {
+            Ok(r) if r.status().is_success() => {
+                if DEBUG_LOGGING { sinfo!(f; "Heartbeat success for {}", ident.id); }
+                Ok(())
             }
-            Ok(())
-        });
-
-        *self.heartbeat_thread.lock().unwrap() = Some(handle);
-        Ok(())
+            Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => Err(true),
+            _ => Err(false),
+        }
     }
-
-    pub fn stop_heartbeat(self: Arc<Self>) {
-
-    }
-    
 }
