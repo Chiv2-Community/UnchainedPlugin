@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, tools::hook_globals::globals, ue::FString};
+use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, sinfo, tools::hook_globals::globals, ue::FString};
 
 // not working?
 define_pattern_resolver!(FViewport, First, {
@@ -96,12 +96,25 @@ CREATE_PATCH!(EACAntiCheatMesssage, 0xE, NOP, 5);
 // CREATE_PATCH_PLATFORM!(STEAM, EACAntiCheatMesssage @ STEAM, 0xF, NOP, 5);
 // CREATE_PATCH_PLATFORM!(EGS, EACAntiCheatMesssage @ EGS, 0xE, NOP, 5);
 
+use std::sync::Mutex;
+
+type GameThreadJob = Box<dyn FnOnce() + Send>;
+
+static JOB_QUEUE: Mutex<Vec<GameThreadJob>> = Mutex::new(Vec::new());
+
+pub fn run_on_game_thread<F>(f: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    JOB_QUEUE.lock().unwrap().push(Box::new(f));
+}
+
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 // Executes pending RCON command
 // Resolver is handled by patternsleuth
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-let mut q = COMMAND_QUEUE.lock().unwrap();
-    while let Some(cmd) = q.pop() {        
+    let mut q = COMMAND_QUEUE.lock().unwrap();
+    while let Some(cmd) = q.pop() {  
         match dispatch_command(cmd.as_str()) {
             true => crate::sinfo!(f; "Executed custom command"),
             false => {
@@ -109,6 +122,15 @@ let mut q = COMMAND_QUEUE.lock().unwrap();
                 let mut f_cmd = FString::from(cmd.as_str());
                 CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
             }
+        }
+    }
+
+    let mut queue = JOB_QUEUE.lock().unwrap();
+    if !queue.is_empty() {
+        for job in queue.drain(..) {
+            sinfo!(f; "Executing job");
+            job();
+            sinfo!(f; "Job done");
         }
     }
 });
