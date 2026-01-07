@@ -128,9 +128,7 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     let mut queue = JOB_QUEUE.lock().unwrap();
     if !queue.is_empty() {
         for job in queue.drain(..) {
-            sinfo!(f; "Executing job");
             job();
-            sinfo!(f; "Job done");
         }
     }
 });
