@@ -246,12 +246,7 @@ pub extern "C" fn init_rustlib() {
     print!("{CLI_LOGO}");
     tools::logger::init_syslog().expect("Failed to init syslog");
     unsafe {
-        match init_globals() {
-            Ok(_) => {
-                // swarn!("{:#?}", globals().cli_args)
-            }
-            Err(e) => serror!(f; "No globals: {}", e),
-        }
+        init_globals().expect("Failed to init globals!");
     };
 }
 
@@ -278,6 +273,16 @@ pub extern "C" fn postinit_rustlib() {
             reg.start();
         }
     }
+    
+    #[cfg(feature="mod_management")]
+    {
+        use crate::features::mod_management::ModManager;
+
+        let mm = Arc::new(ModManager::new());
+        let mut global_mm = globals().mod_manager.lock().unwrap();
+        *global_mm = Some(Arc::clone(&mm));
+    }
+
 
     // #[cfg(feature="server_registration")]
     // {

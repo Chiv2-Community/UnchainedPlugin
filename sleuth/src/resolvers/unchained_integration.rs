@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, sinfo, tools::hook_globals::globals, ue::FString};
+use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
 
 // not working?
 define_pattern_resolver!(FViewport, First, {
@@ -44,12 +44,12 @@ define_pattern_resolver!(InternalGetNetMode, {
         "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
         ], // STEAM
 });
-CREATE_HOOK!(InternalGetNetMode, ACTIVE, ENetMode, (world: *mut c_void), {
-    if globals().world() != Some(world) {
-        globals().set_world(world);
-        #[cfg(feature="verbose_hooks")]
-        crate::sinfo!(f; "World set to {:?}", world);
-    }
+CREATE_HOOK!(InternalGetNetMode, INACTIVE, ENetMode, (world: *mut c_void), {
+    // if globals().world() != Some(world) {
+    //     globals().set_world(world);
+    //     #[cfg(feature="verbose_hooks")]
+    //     crate::sinfo!(f; "World set to {:?}", world);
+    // }
 });
 
 // Desync patch
@@ -115,13 +115,9 @@ use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
     let mut q = COMMAND_QUEUE.lock().unwrap();
     while let Some(cmd) = q.pop() {  
-        match dispatch_command(cmd.as_str()) {
-            true => crate::sinfo!(f; "Executed custom command"),
-            false => {
-                log::info!(target: "Commands", "Console command: {cmd}");
-                let mut f_cmd = FString::from(cmd.as_str());
-                CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
-            }
+        if !dispatch_command(cmd.as_str(), true) {
+            let mut f_cmd = FString::from(cmd.as_str());
+            CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
         }
     }
 
@@ -131,4 +127,26 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
             job();
         }
     }
+});
+
+//define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"]);
+// FIXME: looks like this had major changes, needs real signature
+define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
+// void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
+CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
+    // crate::sinfo![f;"\x1b[32mTriggered! 0x{:#?}\x1b[0m", world];
+    if globals().world() != Some(world) {
+        globals().set_world(world);
+        #[cfg(feature="verbose_hooks")]
+        crate::sinfo!(f; "\x1b[32mWorld set to {:?}\x1b[0m", world);
+    }
+});
+
+
+define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
+// void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
+CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
+    let original_ptr = map_url;
+    let url_w = unsafe { (*map_url).to_string() };
+    crate::sinfo![f; "\x1b[32mTriggered! {}\x1b[0m", url_w];
 });

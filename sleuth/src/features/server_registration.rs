@@ -4,6 +4,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
+use crate::features::Mod;
+use crate::resolvers::asset_registry::*;
 
 use crate::{globals, serror, sinfo, swarn};
 
@@ -36,12 +38,12 @@ struct RegisterRequest<'a> {
     mods: Vec<Mod>,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct Mod {
-    pub name: String,
-    pub organization: String,
-    pub version: String,
-}
+// #[derive(Debug, Serialize, Clone)]
+// pub struct Mod {
+//     pub name: String,
+//     pub organization: String,
+//     pub version: String,
+// }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Ports {
@@ -315,12 +317,35 @@ impl RegistrationInner {
             Err(_) => None,
         }
     }
-
     fn register(&self, a2s: &A2SClient) -> Result<Identity, ()> {
         let info = self.poll_a2s_with_retry(a2s)?;
         let args = &globals().cli_args;
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
-        let mods = self.mods.lock().unwrap().clone();
+        let mods;
+        #[cfg(feature="mod_management")]
+        {              
+            use std::sync::mpsc;
+            use crate::{resolvers::unchained_integration::run_on_game_thread};
+            thread::sleep(Duration::from_millis(5000)); // sleep until mods are actually loaded
+
+            let (tx, rx) = mpsc::channel();
+            run_on_game_thread(move || {
+                if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
+                    mm.scan_asset_registry();
+                    let _ = tx.send(mm.get_active_mod_metadata());
+                }
+            }); 
+
+            let active_mods = rx.recv().unwrap_or_default();
+            let mut lock = self.mods.lock().unwrap();
+            *lock = active_mods.clone();
+            mods = active_mods
+        }
+
+        #[cfg(not(feature = "mod_management"))]
+        {
+            mods = self.mods.lock().unwrap().clone();
+        }
 
         let request = RegisterRequest {
             ports: Ports {

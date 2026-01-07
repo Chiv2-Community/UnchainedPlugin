@@ -1,13 +1,17 @@
 
 #[cfg(feature="server_registration")]
 use std::sync::{Arc, Mutex};
-use std::{env, os::raw::c_void};
+use std::{env, os::raw::c_void, panic};
 
+#[cfg(feature="mod_management")]
+use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
-use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, sinfo, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
+use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, serror, sinfo, tools::cli_args::{CLIArgs, load_cli}, ue, ue_old::FUObjectArray};
+use itertools::Itertools;
 use parking_lot::RwLock;
-use patternsleuth::resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}};
+use patternsleuth::{MemoryAccessError, disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
+use patternsleuth::{ resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 patternsleuth::_impl_try_collector! {
@@ -110,6 +114,8 @@ pub struct Globals {
     pub world: RwLock<SyncPtr<c_void>>,
     #[cfg(feature="server_registration")]
     pub registration: Mutex<Option<Arc<Registration>>>,
+    #[cfg(feature="mod_management")]
+    pub mod_manager: Mutex<Option<Arc<ModManager>>>,
 }
 
 static GLOBALS: OnceLock<Globals> = OnceLock::new();
@@ -183,7 +189,22 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
     let args = load_cli().expect("Failed to load CLI ARGS");
     sdebug!(f; "CLI Args: {:#?}", args);
     sinfo!(f; "Running resolvers");
-    let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
+    // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
+    let result = panic::catch_unwind(|| {
+        let resolution = exe.resolve(DllHookResolution::resolver())
+            .expect("Critical: Could not resolve DLL symbols"); // This panic is caught
+        
+        resolution
+    });
+
+    let resolution = match result {
+        Ok(res) => res,
+        Err(_) => {
+            serror!("Global initialization failed due to a panic in resolver.");
+            return Err("Global initialization aborted. Check logs.".into());
+        }
+    };
+
     // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =
         &*(resolution.guobject_array.0 as *const FUObjectArray);
@@ -200,6 +221,8 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
         world: RwLock::new(SyncPtr::default()),
         #[cfg(feature="server_registration")]
         registration: std::sync::Mutex::new(None),
+        #[cfg(feature="mod_management")]
+        mod_manager: std::sync::Mutex::new(None),
     };
 
     if GLOBALS.set(globals_instance).is_err() {

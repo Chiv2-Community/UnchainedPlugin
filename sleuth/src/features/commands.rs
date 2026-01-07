@@ -3,6 +3,8 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 use inventory;
 
+use crate::{serror};
+
 /// The struct used to register a new command
 pub struct ConsoleCommandHandler {
     pub name: &'static str,
@@ -12,6 +14,7 @@ pub struct ConsoleCommandHandler {
     pub field_description: &'static [(&'static str, &'static str)],
     /// takes the raw arguments (excluding command name)
     pub handler: fn(args: Vec<String>),
+    pub game_thread_required: bool
 }
 
 inventory::collect!(ConsoleCommandHandler);
@@ -46,6 +49,7 @@ inventory::submit! {
         description: "Displays this help menu.",
         field_description: &[],
         handler: handle_help,
+        game_thread_required: false,
     }
 }
 
@@ -76,7 +80,7 @@ impl CommandManager {
     }
 }
 
-pub fn dispatch_command(input: &str) -> bool {
+pub fn dispatch_command(input: &str, called_from_tick: bool) -> bool {
     let parts: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
     if parts.is_empty() { return false; }
 
@@ -84,7 +88,9 @@ pub fn dispatch_command(input: &str) -> bool {
     let args = parts[1..].to_vec();
 
     for cmd in inventory::iter::<ConsoleCommandHandler> {
-        if cmd.name == cmd_name || cmd.aliases.contains(&cmd_name.as_str()) {
+        let tick_cond = cmd.game_thread_required  == called_from_tick;
+        if tick_cond && (cmd.name == cmd_name || cmd.aliases.contains(&cmd_name.as_str())) {
+            // serror!(f; "cond: {}, game_required {}, is_tick: {}", tick_cond, cmd.game_thread_required, called_from_tick);
             (cmd.handler)(args);
             return true;
         }
@@ -93,13 +99,20 @@ pub fn dispatch_command(input: &str) -> bool {
     false
 }
 
+/// Create cli/rcon command handler
+/// name: str
+/// aliases: [str]
+/// description: str
+/// field_description: {field, desc}
+/// game_thread_required: bool
 #[macro_export]
 macro_rules! CREATE_COMMAND {
     (
-        $name:expr, 
+        $name:expr,
         [$($alias:expr),*], 
         $desc:expr, 
         {$($f_name:expr => $f_desc:expr),*}, 
+        $game_thread:expr, 
         |$args:ident| $body:block
     ) => {
         paste::paste! {
@@ -113,6 +126,7 @@ macro_rules! CREATE_COMMAND {
                     description: $desc,
                     field_description: &[ $(($f_name, $f_desc)),* ],
                     handler: [< __cmd_handler_ $name >],
+                    game_thread_required: $game_thread,
                 }
             }
         }
@@ -129,13 +143,10 @@ pub fn spawn_cli_handler() {
         while input_source.read_line(&mut buffer).is_ok() {
             let trimmed = buffer.trim().to_string();
             if !trimmed.is_empty() {
-                // run commands in game thread
-                // TODO: yes it might cause a small hitch when executing             
-                COMMAND_QUEUE.lock().unwrap().push(trimmed);
-                // match dispatch_command(trimmed.as_str()) {
-                //     true => crate::sinfo!(f; "Executed custom command"),
-                //     false => COMMAND_QUEUE.lock().unwrap().push(trimmed)
-                // };                
+                log::info!(target: "Commands", "Console command: {trimmed}");
+                if !dispatch_command(trimmed.as_str(), false) {
+                    COMMAND_QUEUE.lock().unwrap().push(trimmed)
+                }               
             }
             buffer.clear();
         }

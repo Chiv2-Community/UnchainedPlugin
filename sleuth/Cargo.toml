@@ -31,6 +31,8 @@ default = [
         "cli_commands",
         "rcon_commands",
         "server_registration",
+        "mod_management",
+        # "request_dummy_hooks",
         ]
 serde-resolvers = []
 image-elf = []
@@ -44,6 +46,7 @@ verbose_hooks = [] # print (some) hook triggers to console
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest"] # register server with backend
+mod_management = [] # info about mod markers and actors
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
@@ -66,6 +69,7 @@ parking_lot = "0.12.1"
 inventory = "0.3.14"
 regex = "1.11"
 ureq = "3.1.4"
+itertools = "0.14.0"
 # server registration
 a2s = { path = "../../a2s-rs", optional = true }
 reqwest = { version = "0.12.19", optional = true, features = ["blocking", "json"]  }

@@ -4,6 +4,30 @@ use log4rs::{append::{console::ConsoleAppender, file::FileAppender}, config::{Ap
 
 #[cfg(feature="syslog-client")]
 use super::syslog::SyslogAppender;
+use std::backtrace::Backtrace;
+use std::panic;
+use log::error;
+
+pub fn setup_panic_logger() {
+    panic::set_hook(Box::new(|info| {
+        let backtrace = Backtrace::force_capture();
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<dyn Any>",
+            },
+        };
+
+        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+
+        error!(
+            "PANIC at {}: {}\nStack Backtrace:\n{}",
+            location, msg, backtrace
+        );
+    }));
+}
 
 pub fn init_syslog() -> anyhow::Result<()> {
     // use function name
@@ -65,6 +89,7 @@ pub fn init_syslog() -> anyhow::Result<()> {
         )?;
 
     init_config(config)?;
+    setup_panic_logger();
 
     Ok(())
 }
