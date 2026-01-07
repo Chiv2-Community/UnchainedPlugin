@@ -5,7 +5,9 @@
 
 use std::{fmt, os::raw::c_void};
 
-use crate::{ serror, sinfo, swarn, ue::{EFindName, FName, FString, TArray, UObject}};
+use widestring::U16CStr;
+
+use crate::{ serror, sinfo, swarn, ue::{EFindName, FName, FString, TArray, UClass, UObject}};
 
 #[cfg(feature = "dev")]
 define_pattern_resolver!(GetAssetRegistry,[
@@ -256,4 +258,51 @@ CREATE_HOOK!(GetAsset, INACTIVE, *mut UObject, (asset_data: *mut FAssetData),{
     // unsafe {
     //     // crate::sinfo![f; "Triggered! {}", &*asset_data];
     // }
+});
+
+#[cfg(feature = "dev")]
+define_pattern_resolver!(StaticFindObject,["48 89 5C 24 08 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 83 EC 60 80 3D 98 BB"]);
+// UObject* StaticFindObject( UClass* ObjectClass, UObject* InObjectPackage, const TCHAR* OrigInName, bool ExactClass )
+CREATE_HOOK!(StaticFindObject, INACTIVE, *mut UObject, (
+    obj_class: *mut c_void, 
+    package: *mut c_void, 
+    name: *const u16, 
+    exact_class: bool
+), {
+    if !name.is_null() {
+        let name_str = unsafe { widestring::U16CStr::from_ptr_str(name) };
+        crate::sinfo!(f; "StaticFindObject looking for: {}", name_str.to_string_lossy());
+    }
+});
+
+define_pattern_resolver!(GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
+// UObject* GetDefaultObject(bool bCreateIfNeeded = true) const
+CREATE_HOOK!(GetDefaultObject, INACTIVE, *mut UObject, (this_ptr: *mut UClass, create_if_needed: bool),{
+    crate::sinfo![f; "Triggered!"];
+});
+
+define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
+// static void GetAllActorsOfClass(const UObject* WorldContextObject, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
+CREATE_HOOK!(GetAllActorsOfClass, INACTIVE, (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>),{
+    crate::sinfo![f;
+    "Triggered!"];
+});
+
+define_pattern_resolver!(StaticLoadObject,["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 FA FF FF 48 81 EC D8 06 00 00 48 8B 05 25 5E 9F 03 48 33 C4 48 89 85 C0 05 00 00 48"]);
+// UObject* StaticLoadObject(UClass* ObjectClass, UObject* InOuter, const TCHAR* InName, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowObjectReconciliation, FUObjectSerializeContext* InSerializeContext)
+// UObject* StaticLoadObject(UClass* Class, UObject* InOuter, const TCHAR* Name, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowNativeComponentClass, const FLinkerInstancingContext* InstancingContext)
+CREATE_HOOK!(StaticLoadObject, INACTIVE, *mut UObject, (
+    obj_class: *mut c_void, 
+    in_outer: *mut c_void, 
+    name: *const u16, 
+    filename: *const u16, 
+    load_flags: u32, 
+    sandbox: *mut c_void, 
+    allow_native_comp: bool,
+    instancing_context: *mut c_void
+), {
+    if !name.is_null() {
+        let name_str = unsafe { U16CStr::from_ptr_str(name) };
+        crate::swarn!(f; "StaticLoadObject triggered for: {}", name_str.to_string_lossy());
+    }
 });
