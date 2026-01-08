@@ -49,7 +49,6 @@ CREATE_HOOK!(FText_AsCultureInvariant, INACTIVE, *mut FText, (param_0: *mut FTex
 
 //     futures.into_iter().flatten().collect::<Vec<usize>>()[0]
 // }
-];
 
 // Console commands executed ingame
 define_pattern_resolver!(ConsoleCommand, First, [

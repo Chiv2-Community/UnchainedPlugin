@@ -1,12 +1,12 @@
 
 
-use log4rs::{append::{console::ConsoleAppender, file::FileAppender}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, init_config, Config};
+use log4rs::{Config, append::{console::ConsoleAppender, file::FileAppender}, config::{Appender, Logger, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, init_config};
 
 #[cfg(feature="syslog-client")]
 use super::syslog::SyslogAppender;
 use std::backtrace::Backtrace;
 use std::panic;
-use log::error;
+use log::{LevelFilter, error};
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {
@@ -63,14 +63,20 @@ pub fn init_syslog() -> anyhow::Result<()> {
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 
     // Build the config programmatically
-    let builder = Config::builder()
-    .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)));
+    let mut builder = Config::builder()
+    .appender(Appender::builder()
+    .filter(Box::new(console_filter))
+    .build("console", Box::new(console)));
 
-    #[cfg(feature="syslog-client")]
-    {
-        builder = builder
-        .appender(Appender::builder().build("syslog", Box::new(syslog)));
-    }
+    builder = builder
+        .logger(Logger::builder().build("serenity", log::LevelFilter::Warn))
+        .logger(Logger::builder().build("tracing", log::LevelFilter::Warn));
+
+    // #[cfg(feature="syslog-client")]
+    // {
+    //     builder = builder
+    //     .appender(Appender::builder().build("syslog", Box::new(syslog)));
+    // }
 
     // let config = Config::builder()
     //     .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)))
@@ -78,10 +84,11 @@ pub fn init_syslog() -> anyhow::Result<()> {
     let config = builder
         .appender(Appender::builder().build("file", Box::new(file)))
         .appender(Appender::builder().build("kismet", Box::new(kismet)))
+        .appender(Appender::builder().build("syslog", Box::new(syslog)))
         .build(
             Root::builder()
                 .appender("console")
-                // .appender("syslog")
+                .appender("syslog")
                 .appender("file")
                 // .additive(false)
                 // .appender("kismet")
