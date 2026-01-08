@@ -5,7 +5,6 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
 use crate::features::Mod;
-use crate::resolvers::asset_registry::*;
 
 use crate::{globals, serror, sinfo, swarn};
 
@@ -347,13 +346,18 @@ impl RegistrationInner {
             mods = self.mods.lock().unwrap().clone();
         }
 
+        let server_name = match globals().cli_args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
+            Some(name_str) => name_str,
+            _ => &info.name
+        };
+
         let request = RegisterRequest {
             ports: Ports {
                 game: info.extended_server_info.port.unwrap_or(7777),
                 ping: args.game_server_ping_port.unwrap_or(0),
                 a2s: args.game_server_query_port.unwrap_or(0),
             },
-            name: &info.name,
+            name: server_name,
             description,
             password_protected: args.server_password.is_some(),
             current_map: &info.map,

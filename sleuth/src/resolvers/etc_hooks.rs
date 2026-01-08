@@ -1,5 +1,5 @@
 use std::os::raw::c_void;
-use crate::ue::FString;
+use crate::{game::engine::{FActorSpawnParameters, FRotator}, ue::{FString, FVector, UClass}};
 
 define_pattern_resolver!(GetGameInfo, {
     // "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00", // Universal
@@ -51,4 +51,18 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
         }
         Err(e) => eprintln!("Error: {}", e),
     }
+});
+
+// AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
+
+define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
+CREATE_HOOK!(SpawnActor, INACTIVE, *mut c_void, (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
+    crate::sinfo![f; "Triggered!"];
+});
+/*
+ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
+*/
+define_pattern_resolver!(GetTBLGameMode,["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"]);
+CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut c_void, (object: *mut c_void),{
+    crate::sinfo![f; "Triggered!"];
 });

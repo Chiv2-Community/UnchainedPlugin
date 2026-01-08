@@ -4,82 +4,25 @@ use std::sync::{Arc, Mutex, mpsc};
 use widestring::U16CString;
 use crate::features::Mod;
 use crate::features::commands::ConsoleCommandHandler;
+use crate::game::chivalry2::EChatType;
+use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
+use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::{CREATE_COMMAND, sinfo};
-use crate::ue::{FName, FNameEntryId, FString, TArray, TMap, UClass, UObject};
-use crate::resolvers::{asset_registry::*};
-
-// Hashes for TMap
-use crate::ue::UEHash;
-impl UEHash for *mut crate::ue::UClass {
-    fn ue_hash(&self) -> u32 {
-        let mut hasher = DefaultHasher::new();
-        (*self as usize).hash(&mut hasher);
-        (hasher.finish() & 0xFFFF_FFFF) as u32
-    }
-}
-impl UEHash for *mut crate::ue::UObject {
-    fn ue_hash(&self) -> u32 {
-        let mut hasher = DefaultHasher::new();
-        (*self as usize).hash(&mut hasher);
-        (hasher.finish() & 0xFFFF_FFFF) as u32
-    }
-}
-
-#[repr(C)]
-pub struct ModActorStruct {
-    _private: [u8; 0x30], 
-    pub mod_actors: TMap<*mut UClass, FString>,    // Offset 0x0030
-    pub custom_objects: TMap<*mut UObject, FString>, // Offset 0x0080
-}
-
+use crate::{CREATE_COMMAND, serror, sinfo};
+use crate::ue::{FName, FNameEntryId, FString, FVector, TArray, TMap, UClass, UObject};
+use crate::resolvers::{asset_registry::*, asset_loading::*};
+use serde::Serialize;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::Path;
+use crate::game::engine::get_uobject_from_path;
 use std::collections::{HashMap, HashSet};
-
-#[derive(Debug)]
-pub struct ModManager {
-    /// Static metadata lookup (Path -> Mod Metadata)
-    registry: Arc<Mutex<HashMap<String, Mod>>>,
-    /// Set of active object paths
-    active_paths: Arc<Mutex<HashSet<String>>>,
-}
-
-#[repr(C)]
-pub struct ArgonSDKModBase {
-    pub actor_padding: [u8; 0x258],
-    // 0x0258
-    pub uber_graph_frame: u64, 
-    // 0x0260
-    pub default_scene_root: *mut c_void, 
-    // 0x0268
-    pub mod_name: FString,
-    // 0x0278
-    pub mod_version: FString,
-    // 0x0288
-    pub mod_description: FString,
-    // 0x0298
-    pub author: FString,
-    // 0x02A8
-    pub b_silent_load: bool,
-    pub padding_0: [u8; 0x7], // 0x02A9
-    // 0x02B0
-    pub mod_repo_url: FString,
-    // 0x02C0
-    pub duplicate: bool,
-    pub b_enable_by_default: bool,
-    pub b_show_in_gui: bool,
-    pub b_online_only: bool,
-    pub b_host_only: bool,
-    pub b_allow_on_frontend: bool,
-    pub padding_1: [u8; 0x2], // 0x02C6
-    // 0x02C8
-    pub mod_version_repl: FString,
-    // 0x02D8
-    // pub ingame_mod_menu_widgets: TMap<FString, *mut c_void>,
-    // 0x0328
-    // pub b_clientside: bool,
-}
+use crate::resolvers::etc_hooks::*;
+use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
+use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
+use crate::resolvers::messages::o_BroadcastLocalizedChat;
 
 #[macro_export]
 macro_rules! check_main_thread {
@@ -92,6 +35,79 @@ macro_rules! check_main_thread {
         }
     }
 }
+
+CREATE_COMMAND!(
+    "dumpmods",
+    [], 
+    "writes mods to json", 
+    {},
+    false,
+    |args| {
+        let mm_lock = || globals().mod_manager.lock().unwrap();
+        
+        if let Some(mm) = mm_lock().as_ref() {
+            let _ = mm.serialize_registry("ingame_mod_registry.json");
+        }
+    }
+);
+
+
+CREATE_COMMAND!(
+    "loadsave",
+    [], 
+    "writes mods to json", 
+    {},
+    false,
+    |args| {
+        let mm_lock = || globals().mod_manager.lock().unwrap();
+        
+        if let Some(mm) = mm_lock().as_ref() {
+            let _ = mm.update_save_game();
+        }
+    }
+);
+
+
+CREATE_COMMAND!(
+    "spawnmod",
+    [], 
+    "writes mods to json", 
+    {},
+    false,
+    |args| {
+        if args.is_empty() {
+            serror!(f; "No path provided!");
+            return;
+        }
+        
+
+        let mm_lock = || globals().mod_manager.lock().unwrap();
+        
+        if let Some(mm) = mm_lock().as_ref() {
+            let mod_map = mm.get_available();
+            let mut mods: Vec<&Mod> = mod_map.values().collect();
+            mods.sort_by(|a, b| a.name.cmp(&b.name));
+            unsafe {
+                // let obj = get_uobject_from_path(args.first().unwrap(), false);
+                let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
+                if id > mods.len() {
+                    sinfo!(f; "{:#?}", mods);
+                    serror!(f; "Invalid id {}", id);
+                    return;
+                }
+                let cur_mod = mods.get(id).expect("Not a valid mod");
+                sinfo!(f; "Spawning {} {}", id, cur_mod.name);
+                let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
+                if !obj.is_null() {
+                    let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
+                    mm.spawn_mod_actor(obj as *mut UClass);
+                }
+                else { serror!(f; "Could not load from path") }
+            }
+            // let _ = mm.update_save_game();
+        }
+    }
+);
 
 CREATE_COMMAND!(
     "listmods",
@@ -128,104 +144,13 @@ CREATE_COMMAND!(
     }
 );
 
-pub unsafe fn load_class_from_path(path: &str) -> *mut UClass {
-    let wide_path = U16CString::from_str(path).unwrap();
-    
-    // We pass UClass::StaticClass() as the first argument to ensure 
-    // the engine knows we are looking for a Class type.
-    // If you don't have StaticClass() bound, passing null_mut() usually works,
-    // but the engine will return a UObject* that you must cast.
-    let loaded_obj = CALL_ORIGINAL!(StaticLoadObject(
-        std::ptr::null_mut(), // Class (optional, null = auto-detect)
-        std::ptr::null_mut(), // InOuter
-        wide_path.as_ptr(),   // Path
-        std::ptr::null(),     // Filename
-        0,                    // LoadFlags
-        std::ptr::null_mut(), // Sandbox
-        false,                // bAllowNativeComponentClass
-        std::ptr::null_mut()  // InstancingContext
-    ));
-
-    if loaded_obj.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    // Return the object cast to a UClass
-    loaded_obj as *mut UClass
+#[derive(Debug)]
+pub struct ModManager {
+    /// Static metadata lookup (Path -> Mod Metadata)
+    registry: Arc<Mutex<HashMap<String, Mod>>>,
+    /// Set of active object paths
+    active_paths: Arc<Mutex<HashSet<String>>>,
 }
-
-pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut UObject {
-    let wide_path = U16CString::from_str(path).unwrap();
-    
-    if !load_if_missing {
-        // Try to find it in memory first
-        return CALL_ORIGINAL!(StaticFindObject(
-            std::ptr::null_mut(), 
-            std::ptr::null_mut(), 
-            wide_path.as_ptr(), 
-            false
-        ));
-    }
-
-    CALL_ORIGINAL_SAFE!(StaticLoadObject(
-        std::ptr::null_mut(), // Any class
-        std::ptr::null_mut(), // No specific outer
-        wide_path.as_ptr(), 
-        std::ptr::null(),     // Filename (usually null)
-        0,                    // LoadFlags (0 = LoadConfig)
-        std::ptr::null_mut(), // Sandbox
-        false,                // AllowNativeComponentClass
-        std::ptr::null_mut()
-    )).expect("Failed to find object")
-}
-
-pub unsafe fn get_assets_by_class(cmd: String) -> Result<TArray::<FAssetData>, String> {
-    let mut res_arr = TArray::<FAssetData>::default();
-    let mut result = TScriptInterface::new();
-    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(&mut result as *mut TScriptInterface)).expect("GetAssetRegistry_Helper failed");
-    
-    let mut fname = FName {
-        comparison_index: FNameEntryId{ value:0 },
-        number: 0,
-    };
-
-    let mut fstring2 = FString::from(
-        widestring::U16CString::from_str(cmd.as_str())
-        .unwrap()
-        .as_slice_with_nul());
-
-    let wchar_ptr: *mut u16 = fstring2.as_mut_slice().as_mut_ptr();
-
-    
-    let name_res: *mut FName = CALL_ORIGINAL_SAFE!(FNameCtorWchar(&mut fname as *mut FName,
-        wchar_ptr,
-        crate::ue::EFindName::Find)).expect("FNameCtorWchar failed"); 
-
-    let asset_registry_interface = {
-        if result.interface.is_null() {
-            // Fallback: If the interface pointer isn't set, 
-            // sometimes the Object itself IS the interface.
-            crate::serror!("interface is null");
-            result.object as *mut c_void
-        } else {
-            result.interface as *mut c_void
-        }
-    };
-
-    let out = CALL_ORIGINAL_SAFE!(GetAssetsByClass(
-        asset_registry_interface,
-        *name_res,
-        &mut res_arr as *mut TArray<FAssetData>,
-        true
-    )).expect("GetAssetsByClass failed");    
-
-    match out {
-        true => Ok(res_arr),
-        false => Err("".into())
-    }
-}
-
-
 
 impl ModManager {
     pub fn new() -> Self {
@@ -271,7 +196,7 @@ impl ModManager {
             let mobj = unsafe { get_uobject_from_path(&path, true) };
             if mobj.is_null() { continue; }
 
-            let mod_struct = mobj as *mut ModActorStruct;
+            let mod_struct = mobj as *mut DA_ModMarker_C;
             
             unsafe {
                 for (mod_class_ref, _) in (&*mod_struct).mod_actors.iter() {
@@ -355,11 +280,73 @@ impl ModManager {
 
     /// Spawn/Destroy Stubs
     pub fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        // TODO: implement
+        // (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
+        let mut loc: FVector = FVector { x: 0.0, y: 0.0, z: 0.0 };
+        let mut rot: FRotator = FRotator::ZERO;
+        let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
+            with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
+        let new_actor = CALL_ORIGINAL!(SpawnActor(
+            globals().world().unwrap(),
+            mod_class,
+            &mut loc,
+            &mut rot,
+            &mut params
+        ));
+
+        unsafe {
+            let actor_obj = new_actor as *mut UObject;
+            if actor_obj.is_null() { crate::serror!(f; "Failed to spawn")}
+            else { 
+                crate::sinfo!(f; "Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
+                let mut txt = FText::default();
+                
+                if let Some(world) = globals().world() {
+                    let settings_file = "Spawned new Mod from console";
+                    let mut settings_fstring = FString::from(settings_file);
+                    let res = unsafe { TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) } as *mut FText;
+                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+                    TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
+                }
+            }
+        }
+
+        if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
+            let _ = self.scan_active_mod_actors();
+            reg.set_mods(self.get_active_mod_metadata());
+        }
     }
 
     pub fn destroy_mod_actor(&self, actor_ptr: *mut UObject) {
         // TODO: implement
+    }
+
+    /*
+    
+    --server-mods /Game/Mods/AgMods/GiantSlayers/GiantSlayers.GiantSlayers_C,/Game/Mods/AgMods/ManlyMen/ManlyMen.ManlyMen_C,/Game/Mods/AgMods/ChatHooks/ChatHooks.ChatHooks_C,/Game/Mods/AgMods/PropHuntOnline/PropHuntOnline.PropHuntOnline_C
+    
+     */
+    pub fn update_save_game(&self) {
+        let settings_file = "ModLoader";
+        let mut settings_fstring = FString::from(settings_file);
+        let save_game_ptr = unsafe { TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) } ;
+        if save_game_ptr.is_null() {
+            serror!(f; "save game is null");
+            return;
+        }
+        let save_game = unsafe {&mut *(save_game_ptr as *mut UModLoaderSettings_C)};
+        // FIXME: apply mods from cli
+        save_game.enabled_mods.clear();
+        if let Some(mod_list) = globals().cli_args.server_mods.as_ref() {
+            for Mod in mod_list.iter() {  
+                if let Some(name_short) = Mod.rsplit_once('.').map(|(_, n)| n) {                    
+                    let soft_ptr = TSoftClassPtr::from_path(Mod.as_str());
+                    sinfo!(f; "Enabling mod {}", name_short);
+                    save_game.enabled_mods.push(soft_ptr);
+                }
+            }      
+        }  
+        let res = unsafe { TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0)) };
+        sinfo!(f; "Game Saved: {res}");
     }
 
     pub fn dump_to_console(&self) {
@@ -383,12 +370,25 @@ impl ModManager {
         }
         println!("----------------------------\n");
     }
+
+    pub fn serialize_registry(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> 
+    {
+        let path = Path::new(file_path);
+        let file = File::create(path)?;
+        
+        let writer = BufWriter::new(file);
+
+        let reg = self.registry.lock().unwrap().clone();
+        serde_json::to_writer_pretty(writer, &reg)?;
+
+        Ok(())
+    }
     
     /// Returns a Vec of Mod structs for all currently active mods
     /// Useful for Server Registration
     pub fn get_active_mod_metadata(&self) -> Vec<Mod> {
         let registry = self.registry.lock().unwrap();
-        let active = self.active_paths.lock().unwrap();
+        let active: std::sync::MutexGuard<'_, HashSet<String>> = self.active_paths.lock().unwrap();
 
         active.iter()
             .filter_map(|path| registry.get(path).cloned())

@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use clap::{CommandFactory, Parser};
+
+pub type IniMap = HashMap<String, HashMap<String, HashMap<String, String>>>;
 
 #[derive(Parser, Debug)]
 #[command(name = "Chivalry 2 Unchained", author = "Unchained Team", version, about, long_about = None)]
@@ -8,11 +12,18 @@ pub struct CLIArgs {
     // positional_args: Vec<String>,
     // #[arg()]
     // game_id: String,
+    #[deprecated]
     #[arg(long = "next-map-mod-actors", value_delimiter = ',', required = false)]
     pub next_mod_actors: Option<Vec<String>>,
-
+    #[deprecated]
     #[arg(long = "all-mod-actors", value_delimiter = ',', required = false)]
     pub mod_paks: Option<Vec<String>>,
+
+    #[arg(long = "server-mods", value_delimiter = ',', required = false)]
+    pub server_mods: Option<Vec<String>>,
+
+    #[arg(skip)]
+    pub ini_overrides: IniMap,
 
     #[arg(long = "unchained")]
     pub is_unchained: bool,
@@ -84,8 +95,44 @@ pub struct CLIArgs {
     // #[arg(long = "epicsandboxid")]
     // epicsandboxid: Option<String>,
     // UNHANDLED END
-    #[arg(trailing_var_arg = true)]
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
+}
+
+impl CLIArgs {
+    fn process_ini_map(raw_args: &[String]) -> IniMap {
+        let mut map: IniMap = HashMap::new();
+        for arg in raw_args {
+            if let Some(stripped) = arg.strip_prefix("-ini:") {
+                // Split into File, Section, and Key=Value
+                let parts: Vec<&str> = stripped.splitn(3, ':').collect();
+                if parts.len() == 3 {
+                    let file = parts[0].to_string();
+                    let section = parts[1].to_string();
+                    let kv_pair = parts[2];
+
+                    if let Some((key, value)) = kv_pair.split_once('=') {
+                        map.entry(file)
+                            .or_default()
+                            .entry(section)
+                            .or_default()
+                            .insert(key.to_string(), value.to_string());
+                    }
+                }
+            }
+        }
+        map
+    }
+
+    pub fn find_ini_value(&self, paths: &[(&str, &str, &str)]) -> Option<&str> {
+        paths.iter().find_map(|(file, section, key)| {
+            self.ini_overrides
+                .get(*file)?
+                .get(*section)?
+                .get(*key)
+                .map(|s| s.as_str()) // Explicitly convert to &str before the closure returns
+        })
+    }
 }
 
 // We're using a mix of cli arg types, normalize them to --key value(s)
@@ -102,76 +149,51 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         .collect();
 
     let mut result = vec![bin_name];
+    let mut ini_args = vec![]; 
     let mut args = args.peekable();
-    let mut last_flag: Option<String> = None;
-    let mut last_opt: Option<String> = None;
 
     while let Some(arg) = args.next() {
-        // println!("-- LINE: {arg}");
-        // Normalize `key=value` and `-flag` → `--flag`
-        let (flag, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=')
-        {
-            // println!("{} Split by =", arg);
-            // println!("k '{}' , v '{}' ", k, v);
-            (
-                format!("--{}", k.trim_start_matches('-')),
-                Some(v.to_string()),
-            )
+        // 1. Short-circuit INIs so they don't break flag/value pairs
+        if arg.starts_with("-ini:") {
+            ini_args.push(arg);
+            continue;
+        }
+
+        // 2. Split or Normalize
+        let (flag, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=') {
+            (format!("--{}", k.trim_start_matches('-')), Some(v.to_string()))
         } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
-            // println!("{} Split by -", arg);
             (format!("--{}", &arg[1..]), None)
         } else {
-            // println!("{} Split by else", arg);
             (arg.clone(), None)
         };
 
-        // println!("cur: '{flag}'");
-        let cur_flag = flag.clone();
+        // 3. Match against known flags
         if known_flags.contains(&flag) {
-            result.push(flag.trim().to_string());
+            result.push(flag);
             if let Some(v) = value_opt {
-                // println!("option: '{v}'");
-                last_opt = Some(v.clone());
-                result.push(v.trim().to_string());
-            } else if let Some(peek) = args.peek() {
-                if !peek.starts_with('-') {
-                    let var = args.next().unwrap();
-                    // print!("pushing '{var}'");
-                    result.push(var.trim().to_string());
-                }
-            }
-        }
-        // args can split an option (e.g. --name Not Sure)
-        else if !result.is_empty() && !flag.starts_with('-') {
-            let last_valid = result.last().unwrap();
-            if last_flag.is_some() {
-                // println!("Last '{last}' last valid '{last_valid}'");
-                if let Some(o) = &last_opt {
-                    // println!("Last '{}' last valid {} last option '{}' equal: {}", last, last_valid, o, o == last_valid);
-                    // println!("Res: {} Trailing string {}, last flag {}, last result {}",result.len(), flag, last, last_valid);
-                    if o == last_valid {
-                        if let Some(last_mut) = result.last_mut() {
-                            if !cur_flag.is_empty() {
-                                // println!("Trailing '{cur_flag}'");
-                                last_mut.push(' ');
-                                last_mut.push_str(cur_flag.trim());
-                            }
-                            // last_mut = last_mut.trim().to_string();
-                        }
+                result.push(v);
+            } else {
+                // Peek for the value if not provided via '='
+                while let Some(peek) = args.peek() {
+                    if !peek.starts_with('-') && !peek.contains('=') {
+                        result.push(args.next().unwrap());
+                    } else {
+                        break;
                     }
                 }
             }
         }
-        last_flag = Some(cur_flag);
     }
 
-    // println!("Res: {:?}", result);
+    result.extend(ini_args);
     result
 }
 
 pub unsafe fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     let parsed = normalize_and_filter_args(args);
-    let cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI args");
+    let mut cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI args");
+    cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
     Ok(cli)
 }
