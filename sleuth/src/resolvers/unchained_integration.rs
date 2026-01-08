@@ -206,7 +206,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     crate::sinfo![f; "\x1b[32mTriggered! {}\x1b[0m", url_w];
     
     // TODO: better check for server?
-    if globals().world().is_none() && globals().cli_args.rcon_port.is_some() {
+    if globals().world().is_none() && globals().cli_args.is_server() {
         // Loading into frontend for the first time
         if let Some(mm)  = globals().mod_manager.lock().unwrap().as_ref() {
             // mm.scan_asset_registry();

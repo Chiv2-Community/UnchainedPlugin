@@ -253,27 +253,6 @@ pub extern "C" fn init_rustlib() {
     };
 }
 
-// pub fn start_discord_listener() {
-//     std::thread::spawn(move || {
-//         loop {
-//             // Borrow the bridge from your globals
-//             if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
-//                 // Drain all pending messages from the channel
-//                 while let Ok(msg) = bridge.incoming.try_recv() {
-//                     let ingame_text = format!("<Discord>{}: {}", msg.user, msg.text);
-//                     sinfo!(f; "Received from disc: {ingame_text}");
-//                     // Push to the shared queue
-//                     if let Ok(mut queue) = CHAT_QUEUE.lock() {
-//                         queue.push(ingame_text);
-//                     }
-//                 }
-//             }
-//             // Sleep to avoid pegging the CPU
-//             std::thread::sleep(std::time::Duration::from_millis(100));
-//         }
-//     });
-// }
-
 #[no_mangle]
 pub extern "C" fn postinit_rustlib() {
     #[cfg(feature="cli_commands")]
@@ -286,7 +265,7 @@ pub extern "C" fn postinit_rustlib() {
     #[cfg(feature="server_registration")]
     {
         let args = &globals().cli_args;
-        if args.rcon_port.is_some() || args.register {
+        if args.is_server() || args.register {
             let query_port = args.game_server_query_port.unwrap_or(7071);
             let reg = Arc::new(Registration::new("127.0.0.1", query_port));
             
@@ -306,83 +285,30 @@ pub extern "C" fn postinit_rustlib() {
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
     }
-
-
-    // #[cfg(feature="server_registration")]
-    // {
-    //     let args = &globals().cli_args;
-    //     if args.rcon_port.is_some() || args.register {
-    //         let reg = Arc::new(Registration::new(
-    //             "127.0.0.1",
-    //             globals().cli_args.game_server_query_port.unwrap()
-    //         ));
-    //         sinfo!(f; "Started server registration");
-    //         reg.start();
-    //     }
-    // }
-
     
+    let args = &globals().cli_args;
     #[cfg(feature="discord_integration")]
-    if globals().cli_args.rcon_port.is_some() {
-        // 1. Startup
-        let config = DiscordConfig {
-            bot_token: "TOKEN".to_string(),
-            channel_id: 1154039134843846737,
-        };
-        let temp_bridge = DiscordBridge::new(config);
-        let global_bridge = &globals().DISCORD_BRIDGE;
-        let _ = global_bridge.set(temp_bridge).ok();
+    if args.discord_enabled() {
         
-        if let Some(bridge) = global_bridge.get() {
-            // if let Ok(msg) = bridge.incoming.try_recv() {
-            //     let ingame_text = format!("<Discord>{}: {}", msg.user, msg.text);
-                
-            //     if let Some(world) = globals().world() {
-            //         let mut txt = FText::default();
-            //         use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
-            //         let mut settings_fstring = FString::from(ingame_text.as_str());
-            //         let res = unsafe { TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) } as *mut FText;
-            //         let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
-            //         TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
-            //     }
-            // }
-
-            // 3. Triggering events
-            // Use a closure instead of a fn
-            let on_player_win = |winner: &str, map_name: &str| {
-                bridge.send_event(OutgoingEvent::MatchWon {
-                    winner_name: winner.to_string(),
-                    map: map_name.to_string(),
-                });
-            };
-
-            // Call it like a function
-            // on_player_win("Player1", "FFA_Wardenglade");
-        }
-
-        // start_discord_listener();
+        let config = DiscordConfig { 
+            bot_token: args.discord_bot_token.clone().expect("Token invalid"),
+            channel_id: args.discord_channel_id.unwrap()
+        };
+        let global_bridge = &globals().DISCORD_BRIDGE;
+        let _ = global_bridge.set(DiscordBridge::new(config)).ok();
+        
+        // if let Some(bridge) = global_bridge.get() {
+        //     let on_player_win = |winner: &str, map_name: &str| {
+        //         bridge.send_event(OutgoingEvent::MatchWon {
+        //             winner_name: winner.to_string(),
+        //             map: map_name.to_string(),
+        //         });
+        //     };
+        // }
     }
 
 }
 
-use std::sync::OnceLock;
-
-// // Global static storage for the bridge
-// static DISCORD_BRIDGE: OnceLock<DiscordBridge> = OnceLock::new();
-
-// // In your initialization:
-// let bridge = DiscordBridge::new(config);
-// let _ = DISCORD_BRIDGE.set(bridge);
-
-// // Now your function works anywhere in the file:
-// fn on_player_win(winner: &str, map_name: &str) {
-//     if let Some(bridge) = DISCORD_BRIDGE.get() {
-//         bridge.send_event(OutgoingEvent::MatchWon {
-//             winner_name: winner.to_string(),
-//             map: map_name.to_string(),
-//         });
-//     }
-// }
 /// # Safety
 pub unsafe fn attach_hooks(
     base_address: usize,

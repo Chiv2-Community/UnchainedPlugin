@@ -36,37 +36,20 @@ macro_rules! check_main_thread {
     }
 }
 
-CREATE_COMMAND!(
-    "dumpmods",
-    [], 
-    "writes mods to json", 
-    {},
-    false,
-    |args| {
-        let mm_lock = || globals().mod_manager.lock().unwrap();
+// CREATE_COMMAND!(
+//     "dumpmods",
+//     [], 
+//     "writes mods to json", 
+//     {},
+//     false,
+//     |args| {
+//         let mm_lock = || globals().mod_manager.lock().unwrap();
         
-        if let Some(mm) = mm_lock().as_ref() {
-            let _ = mm.serialize_registry("ingame_mod_registry.json");
-        }
-    }
-);
-
-
-CREATE_COMMAND!(
-    "loadsave",
-    [], 
-    "writes mods to json", 
-    {},
-    false,
-    |args| {
-        let mm_lock = || globals().mod_manager.lock().unwrap();
-        
-        if let Some(mm) = mm_lock().as_ref() {
-            let _ = mm.update_save_game();
-        }
-    }
-);
-
+//         if let Some(mm) = mm_lock().as_ref() {
+//             let _ = mm.serialize_registry("ingame_mod_registry.json");
+//         }
+//     }
+// );
 
 CREATE_COMMAND!(
     "spawnmod",

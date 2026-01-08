@@ -71,7 +71,7 @@ mod client_message {
                         
                         #[cfg(feature="discord_integration")]
                         {
-                            if (msg_type == EChatType::AllSay && globals().cli_args.rcon_port.is_some()) {
+                            if (msg_type == EChatType::AllSay && globals().cli_args.is_server()) {
                                 
                                 crate::sinfo!(f; "pre Sending message to discord");
                                 if let Some(bridge) = globals().DISCORD_BRIDGE.get() {

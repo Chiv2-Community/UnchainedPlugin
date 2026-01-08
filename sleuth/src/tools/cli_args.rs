@@ -73,6 +73,14 @@ pub struct CLIArgs {
     #[arg(long = "Port", default_value = "7777")]
     pub game_port: Option<u16>,
 
+    #[cfg(feature="discord_integration")]
+    #[arg(long = "discord-channel-id")]
+    pub discord_channel_id: Option<u64>,
+    
+    #[cfg(feature="discord_integration")]
+    #[arg(long = "discord-bot-token")]
+    pub discord_bot_token: Option<String>,
+
     // UNHANDLED START
     // #[arg(long = "AUTH_LOGIN")]
     // auth_login: Option<String>,
@@ -122,6 +130,15 @@ impl CLIArgs {
             }
         }
         map
+    }
+
+    #[cfg(feature="discord_integration")]
+    pub fn discord_enabled(&self) -> bool {
+        self.is_server() && self.discord_bot_token.is_some() && self.discord_channel_id.is_some()
+    }
+
+    pub fn is_server(&self) -> bool {
+        self.rcon_port.is_some()
     }
 
     pub fn find_ini_value(&self, paths: &[(&str, &str, &str)]) -> Option<&str> {
@@ -186,6 +203,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         }
     }
 
+    // need to add -ini fields at the end, otherwise clap chokes
     result.extend(ini_args);
     result
 }
