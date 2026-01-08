@@ -14,6 +14,59 @@ use patternsleuth::{MemoryAccessError, disassemble::{Control, disassemble}, imag
 use patternsleuth::{ resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+#[derive(Debug, PartialEq)]
+#[cfg_attr(
+    feature = "serde-resolvers",
+    derive(serde::Serialize, serde::Deserialize)
+)]
+pub struct GEngine(pub usize);
+impl_resolver_singleton!(collect, GEngine);
+impl_resolver_singleton!(PEImage, GEngine, |ctx| async {
+    let strings = ctx.scan(util::utf16_pattern("rhi.DumpMemory\0")).await;
+    let refs = util::scan_xrefs(ctx, &strings).await;
+
+    fn for_each(img: &Image<'_>, addr: usize) -> std::result::Result<Option<usize>, ResolveError> {
+        let Some(root) = img.get_root_function(addr)? else { return Ok(None); };
+        let f = root.range().start;
+
+        let mut gengine_ptr = None;
+
+        // Disassemble the whole function context
+        disassemble(img, f, |inst| {
+            let cur = inst.ip() as usize;
+            if cur > addr + 0x50 { return Ok(Control::Break); } // Don't scan too far past string
+
+            // Look for ANY IP-relative load that looks like it's pointing to a global
+            // Instead of forcing RCX, let's just find the most likely GEngine xref in this block
+            if inst.is_ip_rel_memory_operand() {
+                let target = inst.ip_rel_memory_address() as usize;
+                
+                // Optional: Add a check here to see if 'target' is in the GEngine address range
+                // For now, we assume the last global load before the string is our target
+                gengine_ptr = Some(target);
+            }
+
+            // If we hit our string xref, we stop and take whatever global we found last
+            if cur == addr {
+                return Ok(Control::Break);
+            }
+
+            Ok(Control::Continue)
+        })?;
+
+        Ok(gengine_ptr)
+    }
+
+    Ok(Self(try_ensure_one(
+        refs.into_iter()
+            .map(|addr| for_each(ctx.image(), addr))
+            .flatten_ok(),
+    )?))
+});
+impl_resolver_singleton!(ElfImage, GEngine, |_ctx| async {
+    super::bail_out!("ElfImage unimplemented");
+});
+
 patternsleuth::_impl_try_collector! {
     #[derive(Debug, PartialEq, Clone)]
     struct DllHookResolution {
@@ -31,6 +84,7 @@ patternsleuth::_impl_try_collector! {
         // fframe_kismet_execution_message: FFrameKismetExecutionMessage,
         ufunction_bind: UFunctionBind,
         uobject_base_utility_get_path_name: UObjectBaseUtilityGetPathName,
+        // g_engine: GEngine,
     }
 }
 
@@ -106,7 +160,7 @@ pub struct Globals {
     resolution: DllHookResolution,
     // Use the wrapper here to satisfy the Sync requirement
     guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
-    main_thread_id: std::thread::ThreadId,
+    pub main_thread_id: std::thread::ThreadId,
     platform: PlatformType,
     base_address: usize,
     is_server: bool,
