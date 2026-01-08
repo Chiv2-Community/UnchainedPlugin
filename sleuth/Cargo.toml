@@ -32,12 +32,14 @@ default = [
         "rcon_commands",
         "server_registration",
         "mod_management",
+        "discord_integration",
         # "request_dummy_hooks",
+        "syslog-client",
         ]
 serde-resolvers = []
 image-elf = []
 dev = []
-syslog-client = []
+syslog-client = [  ]
 request_dummy_hooks = [] # Enable Get*Post dummy hooks
 kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
@@ -47,6 +49,7 @@ cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest"] # register server with backend
 mod_management = [] # info about mod markers and actors
+discord_integration = [ "tokio", "crossbeam-channel", "serenity" ]
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
@@ -95,3 +98,6 @@ windows = { version = "0.52.0", features = ["Win32_Foundation",
             "Win32_System_Memory",
             "Win32_System_ProcessStatus",
             ]}
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time"], optional = true }
+serenity = { version = "0.12", optional = true, default-features = false, features = ["client", "gateway", "model", "native_tls_backend"] }
+crossbeam-channel = { version = "0.5", optional = true}

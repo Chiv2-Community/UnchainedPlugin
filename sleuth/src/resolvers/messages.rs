@@ -1,3 +1,7 @@
+use std::os::raw::c_void;
+
+use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
+use crate::globals;
 
 
 // Chat messages
@@ -6,7 +10,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{game::chivalry2::EChatType, ue::{FName, FString}};
+    use crate::{game::chivalry2::EChatType, tools::hook_globals::globals, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -17,14 +21,16 @@ mod client_message {
     
     pub fn parse_chat_line(line: &str) -> Option<ChatMessage<'_>> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            Regex::new(r"^(\w+)\s+\w+\s+<(\d+)>:\s+(.*)$").unwrap()
+            Regex::new(r"^(.*?)\s+<(\d+)>:\s+(.*)$").unwrap()
         });
-    
-        RE.captures(line).map(|caps| ChatMessage {
-            name: caps.get(1).unwrap().as_str(),
-            channel: caps.get(2).unwrap().as_str().parse().ok().unwrap(),
-            message: caps.get(3).unwrap().as_str(),
-        })
+
+        let caps = RE.captures(line)?;
+
+            Some(ChatMessage {
+                name: caps.get(1)?.as_str().trim(), // trim to remove trailing space before the middle word
+                channel: caps.get(2)?.as_str().parse().ok()?,
+                message: caps.get(3)?.as_str(),
+            })
     }
     
     pub fn parse_msg_line(line: &str) -> Option<(EChatType, &str)> {
@@ -62,6 +68,17 @@ mod client_message {
                     false => {
                         let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
                         info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
+                        
+                        #[cfg(feature="discord_integration")]
+                        {
+                            if (msg_type == EChatType::AllSay && globals().cli_args.rcon_port.is_some()) {
+                                
+                                crate::sinfo!(f; "pre Sending message to discord");
+                                if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
+                                    bridge.recv_game_message(msg_type, chat.name, chat.message);
+                                }
+                            }
+                        }
                     }
                 };        
             }
@@ -121,3 +138,59 @@ pub mod kismet_log {
 
     });
 }
+
+// /*
+// * void __cdecl
+// UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
+// */
+// DECL_HOOK(void, execBroadcastLocalizedChat, (FString* msg, void* param_2, void* param_3))
+// {
+// 	/*log("execBroadcastLocalizedChat");
+// 	logWideString(msg->str);*/
+// 	o_execBroadcastLocalizedChat(msg, param_2, param_3);
+// }
+
+
+// /*
+// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
+// }
+// */
+// DECL_HOOK(void, ClientReceiveChat_Implementation, (/*ATBLPlayerState * */void* SenderPlayerState, FString* S, /*TEnumAsByte<EChatType::Type>*/void * Type, bool IsSenderDev, /*FColor*/void * OverrideColor))
+// {
+// 	/*std::wcout << "crc: " << *S->str << std::endl;
+// 	log("ClientReceiveChat_Implementation");
+// 	logWideString(S->str);*/
+// 	o_ClientReceiveChat_Implementation(SenderPlayerState, S, Type, IsSenderDev, OverrideColor);
+// }
+
+define_pattern_resolver!(execBroadcastLocalizedChat,["48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ?? ?? ?? ?? ?? 48 83 7B 20 00 48 8B"]);
+// UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
+CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
+    if !msg.is_null() {
+        let url_w = unsafe { (*msg).to_string() };
+        crate::sinfo![f; "Triggered! {url_w}"];
+    }
+});
+
+define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ? ? ? ? ? ? 48 8B C8 48 8D"]);
+//void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
+CREATE_HOOK!(BroadcastLocalizedChat, INACTIVE, (gamemode: *mut c_void, text: *mut FText, chat_type: EChatType),{
+    crate::sinfo![f; "Triggered!"];
+});
+
+
+define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
+// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
+CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
+    if !S.is_null() {
+        let url_w = unsafe { (*S).to_string() };
+        crate::sinfo![f; "Triggered! {url_w}"];
+    }
+});
+
+	/* UTBLOnlineLibrary::execBroadcastLocalizedChat */
+	// "48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ? ? ? ? ? 48 83 7B 20 00 48 8B",
+	/*ClientReceiveChat_Implementation*/
+	// "40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48",
+
+

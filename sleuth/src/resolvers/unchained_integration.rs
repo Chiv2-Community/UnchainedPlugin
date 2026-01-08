@@ -1,5 +1,8 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{features::commands::{COMMAND_QUEUE, dispatch_command}, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
+use crate::{features::{commands::{COMMAND_QUEUE, dispatch_command}, discord_bot::ChatMessage}, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
+use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
+use crate::resolvers::messages::o_BroadcastLocalizedChat;
+use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 
 // not working?
 define_pattern_resolver!(FViewport, First, {
@@ -109,6 +112,56 @@ where
     JOB_QUEUE.lock().unwrap().push(Box::new(f));
 }
 
+use once_cell::sync::Lazy;
+// A global queue to hold messages waiting to be printed in-game
+pub static CHAT_QUEUE: Lazy<Mutex<Vec<ChatMessage>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
+pub fn process_discord_chat_queue() {
+    // 1. Get all messages from the queue and clear it
+    let mut messages = Vec::new();
+    if let Ok(mut queue) = CHAT_QUEUE.lock() {
+        if queue.is_empty() { return; }
+        messages.append(&mut queue);
+    }
+
+    // 2. We are now on the Main Thread, so it's safe to call Unreal
+    if let Some(world) = globals().world() {
+        use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
+
+        for msg in messages {
+            let mut txt = FText::default();
+            let mut settings_fstring = FString::from(msg.msg.as_str());
+
+            unsafe {
+                // Call Unreal functions safely on the main thread
+                let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
+                let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+                
+                if !game_mode.is_null() {
+                    TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, msg.chat_type));
+                }
+            }
+            // let game_mode = unsafe { TRY_CALL_ORIGINAL!(GetTBLGameMode(world)) };
+            // if !game_mode.is_null() {
+            // for chat_type in EChatType::ALL {
+            //     // Build the text: "[Admin] (3)"
+            //     let debug_str = format!("[{}] ({})", chat_type.as_str(), chat_type as u8);
+                
+            //     let mut settings_fstring = FString::from(debug_str.as_str());
+            //     let mut txt = FText::default();
+                
+            //     unsafe {
+            //         let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
+                    
+            //         // Broadcast using the current chat_type to see the color/prefix
+            //         TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type));
+            //     }
+            // }
+        // }
+        }
+    }
+}
+
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 // Executes pending RCON command
 // Resolver is handled by patternsleuth
@@ -127,6 +180,8 @@ CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
             job();
         }
     }
+
+    process_discord_chat_queue();
 });
 
 //define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"]);
@@ -149,4 +204,13 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     let original_ptr = map_url;
     let url_w = unsafe { (*map_url).to_string() };
     crate::sinfo![f; "\x1b[32mTriggered! {}\x1b[0m", url_w];
+    
+    // TODO: better check for server?
+    if globals().world().is_none() && globals().cli_args.rcon_port.is_some() {
+        // Loading into frontend for the first time
+        if let Some(mm)  = globals().mod_manager.lock().unwrap().as_ref() {
+            // mm.scan_asset_registry();
+            mm.update_save_game();
+        }
+    }
 });

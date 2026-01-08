@@ -3,6 +3,8 @@
 use std::sync::{Arc, Mutex};
 use std::{env, os::raw::c_void, panic};
 
+#[cfg(feature="discord_integration")]
+use crate::features::discord_bot::DiscordBridge;
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
@@ -170,6 +172,8 @@ pub struct Globals {
     pub registration: Mutex<Option<Arc<Registration>>>,
     #[cfg(feature="mod_management")]
     pub mod_manager: Mutex<Option<Arc<ModManager>>>,
+    #[cfg(feature="discord_integration")]
+    pub DISCORD_BRIDGE: OnceLock<DiscordBridge>,
 }
 
 static GLOBALS: OnceLock<Globals> = OnceLock::new();
@@ -222,7 +226,7 @@ impl Globals {
     global_ptr!(world, c_void);
 }
 
-pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
+pub unsafe fn init_globals() -> Result<(), String> {
     let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
         true => PlatformType::EGS,
         false => PlatformType::STEAM,
@@ -277,6 +281,8 @@ pub unsafe fn init_globals() -> Result<(), clap::error::Error> {
         registration: std::sync::Mutex::new(None),
         #[cfg(feature="mod_management")]
         mod_manager: std::sync::Mutex::new(None),
+        #[cfg(feature="discord_integration")]
+        DISCORD_BRIDGE: OnceLock::new(),
     };
 
     if GLOBALS.set(globals_instance).is_err() {
