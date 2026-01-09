@@ -7,6 +7,7 @@ mod ue;
 mod ue_old;
 mod game;
 mod features;
+mod commands;
 
 use once_cell::sync::Lazy;
 use serenity::all::{ChannelId, CreateMessage};
@@ -21,7 +22,9 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
-use crate::features::commands::spawn_cli_handler;
+use crate::commands::spawn_cli_handler;
+#[cfg(feature="cli_commands")]
+// use crate::features::commands::spawn_cli_handler;
 use crate::features::discord_bot::{DiscordBridge, DiscordConfig, OutgoingEvent};
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;

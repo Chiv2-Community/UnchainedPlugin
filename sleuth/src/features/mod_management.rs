@@ -3,14 +3,13 @@ use std::os::raw::c_void;
 use std::sync::{Arc, Mutex, mpsc};
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::features::commands::ConsoleCommandHandler;
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::{CREATE_COMMAND, serror, sinfo};
+use crate::{ serror, sinfo};
 use crate::ue::{FName, FNameEntryId, FString, FVector, TArray, TMap, UClass, UObject};
 use crate::resolvers::{asset_registry::*, asset_loading::*};
 use serde::Serialize;
@@ -23,6 +22,7 @@ use crate::resolvers::etc_hooks::*;
 use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
+use crate::commands::{CommandResult, ConsoleCommand};
 
 #[macro_export]
 macro_rules! check_main_thread {
@@ -35,97 +35,126 @@ macro_rules! check_main_thread {
         }
     }
 }
+// in my_engine/src/commands.rs
+use sleuth_macros::command;
+
+#[command(name = "mod", sub = "dump", desc = "Dumps mod list. Path is optional")]
+fn dump_mods(path: Option<String>) -> CommandResult {
+    let target: &str = path.as_deref().unwrap_or("ingame_mod_registry.json");
+    let mm_lock = || globals().mod_manager.lock().unwrap();
+    if let Some(mm) = mm_lock().as_ref() {
+        let _ = mm.serialize_registry(target);
+    }
+    sinfo!(f; "Registry saved to \'{}\'", target);
+    Ok(())
+}
+
+
+#[command(name="mod", sub="list", alias="lsmods", desc="Spawn entity")]
+fn list_mods() -> CommandResult {
+    use crate::{resolvers::unchained_integration::run_on_game_thread};
+    let mm_lock = || globals().mod_manager.lock().unwrap();
+
+    if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
+        let (tx, rx) = mpsc::channel();
+        sinfo!(f; "Starting scan!");
+        
+        run_on_game_thread(move || {
+            if let Some(mm) = mm_lock().as_ref() {
+                mm.scan_asset_registry();
+                let _ = tx.send(());
+            }
+        }); 
+        let _ = rx.recv();
+    } else {
+        if let Some(mm) = mm_lock().as_ref() {
+        sinfo!(f; "Getting list!");
+            let _ = mm.scan_active_mod_actors();
+        }
+    }
+
+    if let Some(mm) = mm_lock().as_ref() {
+        mm.dump_to_console();
+    } 
+    Ok(())
+}
 
 // CREATE_COMMAND!(
-//     "dumpmods",
+//     "spawnmod",
 //     [], 
 //     "writes mods to json", 
 //     {},
 //     false,
 //     |args| {
+//         if args.is_empty() {
+//             serror!(f; "No path provided!");
+//             return;
+//         }
+        
+
+
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
         
 //         if let Some(mm) = mm_lock().as_ref() {
-//             let _ = mm.serialize_registry("ingame_mod_registry.json");
+//             let mod_map = mm.get_available();
+//             let mut mods: Vec<&Mod> = mod_map.values().collect();
+//             mods.sort_by(|a, b| a.name.cmp(&b.name));
+//             unsafe {
+//                 // let obj = get_uobject_from_path(args.first().unwrap(), false);
+//                 let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
+//                 if id > mods.len() {
+//                     sinfo!(f; "{:#?}", mods);
+//                     serror!(f; "Invalid id {}", id);
+//                     return;
+//                 }
+//                 let cur_mod = mods.get(id).expect("Not a valid mod");
+//                 sinfo!(f; "Spawning {} {}", id, cur_mod.name);
+//                 let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
+//                 if !obj.is_null() {
+//                     let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
+//                     mm.spawn_mod_actor(obj as *mut UClass);
+//                 }
+//                 else { serror!(f; "Could not load from path") }
+//             }
+//             // let _ = mm.update_save_game();
 //         }
 //     }
 // );
 
-CREATE_COMMAND!(
-    "spawnmod",
-    [], 
-    "writes mods to json", 
-    {},
-    false,
-    |args| {
-        if args.is_empty() {
-            serror!(f; "No path provided!");
-            return;
-        }
-        
+// CREATE_COMMAND!(
+//     "listmods",
+//     ["mods", "lsmods"], 
+//     "Scans and lists all available and active mods", 
+//     {},
+//     false,
+//     |args| {
+//         use crate::{resolvers::unchained_integration::run_on_game_thread};
+//         let mm_lock = || globals().mod_manager.lock().unwrap();
 
-        let mm_lock = || globals().mod_manager.lock().unwrap();
-        
-        if let Some(mm) = mm_lock().as_ref() {
-            let mod_map = mm.get_available();
-            let mut mods: Vec<&Mod> = mod_map.values().collect();
-            mods.sort_by(|a, b| a.name.cmp(&b.name));
-            unsafe {
-                // let obj = get_uobject_from_path(args.first().unwrap(), false);
-                let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
-                if id > mods.len() {
-                    sinfo!(f; "{:#?}", mods);
-                    serror!(f; "Invalid id {}", id);
-                    return;
-                }
-                let cur_mod = mods.get(id).expect("Not a valid mod");
-                sinfo!(f; "Spawning {} {}", id, cur_mod.name);
-                let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
-                if !obj.is_null() {
-                    let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
-                    mm.spawn_mod_actor(obj as *mut UClass);
-                }
-                else { serror!(f; "Could not load from path") }
-            }
-            // let _ = mm.update_save_game();
-        }
-    }
-);
-
-CREATE_COMMAND!(
-    "listmods",
-    ["mods", "lsmods"], 
-    "Scans and lists all available and active mods", 
-    {},
-    false,
-    |args| {
-        use crate::{resolvers::unchained_integration::run_on_game_thread};
-        let mm_lock = || globals().mod_manager.lock().unwrap();
-
-        if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
-            let (tx, rx) = mpsc::channel();
+//         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
+//             let (tx, rx) = mpsc::channel();
             
-            run_on_game_thread(move || {
-                if let Some(mm) = mm_lock().as_ref() {
-                    sinfo!(f; "Starting scan!");
-                    mm.scan_asset_registry();
-                    let _ = tx.send(());
-                }
-                sinfo!(f; "Ended scan!");
-            }); 
+//             run_on_game_thread(move || {
+//                 if let Some(mm) = mm_lock().as_ref() {
+//                     sinfo!(f; "Starting scan!");
+//                     mm.scan_asset_registry();
+//                     let _ = tx.send(());
+//                 }
+//                 sinfo!(f; "Ended scan!");
+//             }); 
             
-            let _ = rx.recv();
-        } else {
-            if let Some(mm) = mm_lock().as_ref() {
-                let _ = mm.scan_active_mod_actors();
-            }
-        }
+//             let _ = rx.recv();
+//         } else {
+//             if let Some(mm) = mm_lock().as_ref() {
+//                 let _ = mm.scan_active_mod_actors();
+//             }
+//         }
 
-        if let Some(mm) = mm_lock().as_ref() {
-            mm.dump_to_console();
-        }     
-    }
-);
+//         if let Some(mm) = mm_lock().as_ref() {
+//             mm.dump_to_console();
+//         }     
+//     }
+// );
 
 #[derive(Debug)]
 pub struct ModManager {

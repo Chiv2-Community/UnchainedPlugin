@@ -1,5 +1,5 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{features::{commands::{COMMAND_QUEUE, dispatch_command}, discord_bot::ChatMessage}, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
+use crate::{commands::NATIVE_COMMAND_QUEUE, features::discord_bot::ChatMessage, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
@@ -166,10 +166,17 @@ use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 // Executes pending RCON command
 // Resolver is handled by patternsleuth
 CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-    let mut q = COMMAND_QUEUE.lock().unwrap();
-    while let Some(cmd) = q.pop() {  
-        if !dispatch_command(cmd.as_str(), true) {
-            let mut f_cmd = FString::from(cmd.as_str());
+    // let mut q = COMMAND_QUEUE.lock().unwrap();
+    // while let Some(cmd) = q.pop() {  
+    //     if !dispatch_command(cmd.as_str(), true) {
+    //         let mut f_cmd = FString::from(cmd.as_str());
+    //         CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
+    //     }
+    // }
+    {
+        let mut native_cmds = NATIVE_COMMAND_QUEUE.lock().unwrap();
+        for cmd_str in native_cmds.drain(..) {
+            let mut f_cmd = FString::from(cmd_str.as_str());
             CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
         }
     }

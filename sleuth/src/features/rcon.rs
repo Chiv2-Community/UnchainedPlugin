@@ -1,7 +1,7 @@
 use std::{
     io::{BufRead, BufReader}, net::TcpListener, thread
 };
-use crate::{features::commands::COMMAND_QUEUE, tools::hook_globals::globals};
+use crate::{tools::hook_globals::globals};
 
 
 #[cfg(feature="rcon_commands")]
@@ -23,8 +23,10 @@ pub fn handle_rcon() {
                     let reader = BufReader::new(stream);
                     for line in reader.lines().map_while(Result::ok) {
                         if !line.trim().is_empty() {
+                            use crate::commands::NATIVE_COMMAND_QUEUE;
+
                             log::warn!(target: "RCON", "RCON Received: {}", line.trim());
-                            COMMAND_QUEUE.lock().unwrap().push(line.trim().to_string());
+                            NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.trim().to_string());
                         }
                     }
                 });
