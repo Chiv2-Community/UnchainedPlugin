@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Sleuth (CMake)",
+            "type": "shell",
+            "command": "cmake --build build --target RustBuild",
+            "options": {
+                "env": {
+                    "CARGO_TERM_COLOR": "always" 
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": ["$rustc"] 
+        },
+        {
+            "label": "cargo-build-mock",
+            "type": "shell",
+            "command": "cargo build --bin mock_server",
+            "options": {
+                "cwd": "${workspaceFolder}/sleuth" 
+            },
+            "problemMatcher": ["$rustc"]
+        }
+    ]
+}

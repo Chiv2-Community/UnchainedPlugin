@@ -16,6 +16,19 @@
             "environment": [],
             "externalConsole": false,
             // "preLaunchTask": "build"
+        },
+        {
+            "name": "Debug Mock Server (Integrated)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/sleuth/target/debug/mock_server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/sleuth",
+            "environment": [],
+            "externalConsole": false,          // Disable the popup window
+            "console": "integratedTerminal",    // Force it into the VS Code tab
+            "preLaunchTask": "cargo-build-mock"
         }
 
     ]
