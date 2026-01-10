@@ -83,6 +83,9 @@ pub struct CLIArgs {
     #[arg(long = "discord-general-channel-id")]
     pub discord_general_channel_id: Option<u64>,
 
+    #[arg(long = "discord-admin-role-id")]
+    pub discord_admin_role_id: Option<u64>,
+
     // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,

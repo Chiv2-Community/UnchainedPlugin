@@ -4,6 +4,7 @@ use crate::discord::core::{DiscordSubscriber, GameEvent};
 use crate::discord::notifications::GameChatMessage;
 use crate::discord::responses::*;
 
+#[derive(Debug)]
 pub struct MapVoteEvent {
     pub initiator: String,
     pub map_target: String,
@@ -37,7 +38,9 @@ use serenity::http::Http;
 
 pub struct ExtMapVote {
     active_vote: Option<VoteState>,
+    ctx: crate::discord::Ctx
 }
+
 
 struct VoteState {
     map_name: String,
@@ -110,9 +113,10 @@ impl DiscordSubscriber for ExtMapVote {
 }
 
 impl ExtMapVote {
-    pub fn new() -> Self {
+    pub fn new(ctx: crate::discord::Ctx) -> Self {
         Self {
-            active_vote: None
+            active_vote: None,
+            ctx
         }
     }
     
@@ -157,6 +161,7 @@ impl ExtMapVote {
     }
 }
 
+#[derive(Debug)]
 pub struct VoteCastEvent {
     pub voter_id: String,
     pub choice: bool, // true = Yes, false = No

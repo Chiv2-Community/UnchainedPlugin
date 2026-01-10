@@ -291,7 +291,7 @@ impl ModManager {
     
 
     /// Spawn/Destroy Stubs
-    pub fn spawn_mod_actor(&self, mod_class: *mut UClass) {
+    pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
         // (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
         let mut loc: FVector = FVector { x: 0.0, y: 0.0, z: 0.0 };
         let mut rot: FRotator = FRotator::ZERO;

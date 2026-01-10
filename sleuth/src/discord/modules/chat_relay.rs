@@ -1,6 +1,6 @@
-use crate::discord::responses::*;
-use crate::discord::{core::*, send_ingame_message};
-use crate::discord::notifications::{CommandRequest, GameChatMessage};
+use crate::discord::{ChatType, responses::*};
+use crate::discord::{core::*};
+use crate::discord::notifications::{BridgeChatEvent, CommandRequest, GameChatMessage};
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::FText;
 use crate::sinfo;
@@ -11,16 +11,21 @@ use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 
-pub struct ChatRelayModule;
+pub struct ChatRelayModule {
+    ctx: crate::discord::Ctx
+}
 
 impl ChatRelayModule {
-    pub fn new() -> Self {
-        Self
+    pub fn new(ctx: crate::discord::Ctx) -> Self {
+        Self {
+            ctx
+        }
     }
 
     /// Safely invokes Unreal Engine functions using the TRY_CALL_ORIGINAL macro
     fn relay_to_unreal(&self, message: String) {
-        send_ingame_message(message, None);
+        self.ctx.chat.send(message, ChatType::Global);
+        // send_ingame_message(message, None);
         // if let Some(world) = crate::globals().world() {
         //     let mut settings_fstring = FString::from(message.as_str());
         //     let mut txt = FText::default();

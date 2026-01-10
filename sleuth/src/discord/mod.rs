@@ -1,10 +1,13 @@
+#[macro_use]
 pub mod core;
 pub mod modules;
 pub mod notifications;
 pub mod responses;
 #[macro_use]
 pub mod macros;
+pub mod config;
 
+use crate::discord::config::DiscordConfig;
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::map_vote::ExtMapVote;
@@ -12,8 +15,8 @@ use crate::discord::modules::{
     batcher::JoinBatcher, dashboard::Dashboard, duel_manager::DuelManager, herald::AdminHerald,
     killstreak::KillstreakModule, stats_tracker::StatsTracker,
 };
-use crate::discord::notifications::{CommandRequest, GameChatMessage};
-use crate::discord::responses::{BotResponse, ResponseContent, Target};
+use crate::discord::notifications::{CommandRequest, GameChatMessage, GameCommandEvent, PermissionFlags};
+use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::FText;
 use crate::ue::FString;
@@ -21,14 +24,17 @@ use crate::{sinfo, swarn};
 use censor::Censor;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use serde::{Deserialize, Serialize};
-use serenity::all::{CreateMessage, Http};
-use serenity::model::prelude::*;
+use serenity::all::{ChannelId, CreateMessage, Http, Message};
+// use serenity::model::prelude::*;
+use serenity::client::EventHandler as DiscordHandler;
 use serenity::prelude::*;
 use std::sync::{Arc, OnceLock};
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-
+use notify_debouncer_mini::{new_debouncer, notify::*, DebouncedEvent};
+use std::time::Duration;
+use tokio::sync::Mutex;
 // #[derive(Debug, Clone, Serialize, Deserialize)]
 // pub struct DiscordConfig {
 //     pub bot_token: String,
@@ -65,19 +71,59 @@ use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 //     ]
 // }
 
-#[derive(serde::Deserialize, Clone, Debug)]
-pub struct DiscordConfig {
-    pub bot_token: String,
-    pub channel_id: u64,
-    pub admin_channel_id: u64,
-    pub general_channel_id: u64,
-    pub admin_role_id: u64,
-    pub disabled_modules: Vec<String>,
-    pub blocked_notifications: Vec<String>,
-}
+// #[derive(serde::Deserialize, Clone, Debug)]
+// pub struct DiscordConfig {
+//     pub bot_token: String,
+//     pub channel_id: u64,
+//     pub admin_channel_id: u64,
+//     pub general_channel_id: u64,
+//     pub admin_role_id: u64,
+//     pub disabled_modules: Vec<String>,
+//     pub blocked_notifications: Vec<String>,
+// }
 
 fn default_true() -> bool {
     true
+}
+
+pub fn watch_config(path: &str, subscribers: Arc<Mutex<Vec<Box<dyn DiscordSubscriber>>>>) {
+    let path_clone = path.to_string();
+    
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(200), 
+        move |res: std::result::Result<Vec<DebouncedEvent>, Error>| {
+            match res {
+                Ok(_) => {
+                    println!("🔄 Config change detected! Reloading...");
+                    
+                    // Use the load logic we discussed
+                    match DiscordConfig::load(&path_clone, false) {
+                        Ok(new_config) => {
+                            // Since we aren't in an async function here, we use blocking_lock()
+                            let mut subs = subscribers.blocking_lock(); 
+                            for sub in subs.iter_mut() {
+                                sub.reconfigure(&new_config);
+                            }
+                            println!("✅ Modules reconfigured.");
+                        }
+                        Err(e) => println!("💀 Reload aborted: {}", e),
+                    }
+                }
+                Err(e) => {
+                    println!("Watcher error: {:?}", e);
+                }
+            }
+        }
+    ).expect("Failed to create file watcher");
+
+    // Start watching
+    debouncer
+        .watcher()
+        .watch(std::path::Path::new(path), RecursiveMode::NonRecursive)
+        .expect("Failed to watch path");
+
+    // Important: Keep the debouncer alive
+    std::mem::forget(debouncer); 
 }
 
 pub static DISCORD_HANDLE: OnceLock<DiscordHandle> = OnceLock::new();
@@ -119,30 +165,69 @@ impl DiscordSubscriber for SimpleNotifier {
         _: &Arc<Http>,
         _: ChannelId,
     ) -> Vec<BotResponse> {
-        // event.to_notification()
+        if let Some(res) = event.to_notification() {
+            return BotResponse::from(res).into_responses();
+        }
         vec![]
     }
 }
 
-pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
-    let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
-    if let Some(world) = crate::globals().world() {
-        let mut settings_fstring = FString::from(message.as_str());
-        let mut txt = FText::default();
+// pub enum ChatType {
+//     Admin,
+//     Global,
+//     Team,
+// }
 
-        unsafe {
-            let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
+// pub trait MessageSink: Send + Sync {
+//     fn send_message(&self, text: String, chat_type: ChatType);
+// }
+// pub struct GameSink;
+// impl MessageSink for GameSink {
+//     fn send_message(&self, text: String, chat_type: ChatType) {
+//         unsafe { send_ingame_message(text, chat_type.into()); }
+//     }
+// }
+// pub struct ConsoleSink;
+// impl MessageSink for ConsoleSink {
+//     fn send_message(&self, text: String, _chat_type: ChatType) {
+//         println!("[MOCK CHAT] {}", text);
+//     }
+// }
 
-            let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+// pub type MessageCallback = Arc<dyn Fn(String, ChatType) + Send + Sync + 'static>;
 
-            if !game_mode.is_null() {
-                TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
-            }
-        }
-    }
-}
+// use once_cell::sync::OnceCell;
 
-pub struct DiscordBridge;
+// static CHAT_SINK: OnceCell<MessageCallback> = OnceCell::new();
+
+// pub fn set_global_chat(sink: MessageCallback) {
+//     CHAT_SINK.set(sink).ok();
+// }
+
+// pub fn send_chat(text: String, t: ChatType) {
+//     if let Some(sink) = CHAT_SINK.get() {
+//         (sink)(text, t);
+//     }
+// }
+
+// pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
+//     let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
+//     if let Some(world) = crate::globals().world() {
+//         let mut settings_fstring = FString::from(message.as_str());
+//         let mut txt = FText::default();
+
+//         unsafe {
+//             let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
+
+//             let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+
+//             if !game_mode.is_null() {
+//                 TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
+//             }
+//         }
+//     }
+// }
+
 
 async fn dispatch_responses(
     http: &Arc<Http>,
@@ -186,11 +271,65 @@ fn sanitize_text(input: &str) -> String {
     filter.censor(input)
 }
 
+fn normalize_event(event: Box<dyn GameEvent>) -> Box<dyn GameEvent> {
+    // Try game chat → command
+    if let Some(chat) = event.as_any().downcast_ref::<GameChatMessage>() {
+        if let Some(cmd) = GameCommandEvent::from_game_chat(chat, PermissionFlags::USER) {
+            return Box::new(cmd);
+        }
+    }
+
+    // Try Discord → command
+    if let Some(req) = event.as_any().downcast_ref::<CommandRequest>() {
+        if let Some(cmd) = GameCommandEvent::from_discord(req, PermissionFlags::USER) {
+            return Box::new(cmd);
+        }
+    }
+
+    // Fallback: unchanged
+    event
+}
+
+
+pub enum ChatType { Admin, Global, Team }
+impl ChatType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Admin => "Admin",
+            Self::Global => "Global",
+            Self::Team => "Team",
+        }
+    }
+}
+
+// 1. The interface
+pub trait ChatSink: Send + Sync {
+    fn send(&self, text: String, chat_type: ChatType);
+}
+
+// 2. The container
+pub struct SleuthContext {
+    pub chat: Arc<dyn ChatSink>,
+    pub config: config::DiscordConfig,
+}
+
+pub type Ctx = Arc<SleuthContext>;
+
+pub struct ConsoleChatSink;
+impl ChatSink for ConsoleChatSink {
+    fn send(&self, text: String, chat_type: ChatType) {
+        println!("[MOCK CHAT] <{}> {:?}", chat_type.as_str(), text);
+    }
+}
+
+pub struct DiscordBridge;
+
 impl DiscordBridge {
-    pub fn init(config: DiscordConfig) -> DiscordHandle {
+    pub fn init(config_path: &str, ctx: Ctx) -> DiscordHandle {
         // let (tx, rx) = bounded::<Box<dyn GameEvent>>(1000);
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Box<dyn GameEvent>>();
-        let cfg = config.clone();
+        let cfg = ctx.config.clone();
+        let cfg_path = config_path.to_string();
 
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
@@ -199,14 +338,14 @@ impl DiscordBridge {
                 // In your init function
                 let all_subscribers: Vec<Box<dyn DiscordSubscriber>> = vec![
                     Box::new(SimpleNotifier),
-                    Box::new(Dashboard::new()),
+                    Box::new(Dashboard::new(Arc::clone(&ctx))),
                     Box::new(JoinBatcher::default()),
-                    Box::new(AdminHerald::new(cfg.admin_role_id)),
+                    Box::new(AdminHerald::new(Arc::clone(&ctx), cfg.admin_role_id)),
                     // Box::new(KillstreakModule::new()), // Not yet implemented (events)
                     // Box::new(DuelManager::new()), // Not yet implemented (events)
                     // Box::new(StatsTracker::new("discord/leaderboard.json")), // Not yet implemented (events)
-                    Box::new(ChatRelayModule::new()),
-                    Box::new(ExtMapVote::new()),
+                    Box::new(ChatRelayModule::new(Arc::clone(&ctx))),
+                    Box::new(ExtMapVote::new(Arc::clone(&ctx))),
                 ];
 
                 // 2. Filter modules based on config names
@@ -214,11 +353,19 @@ impl DiscordBridge {
                     .into_iter()
                     .filter(|s| s.name() == "SimpleNotifier" || !cfg.disabled_modules.contains(&s.name().to_string()))
                     .collect();
-                
+
                 swarn!(f; "Active subs: {}, disabled: {:?}", active_subs.len(), cfg.disabled_modules);
                 for sub in &active_subs {
                     swarn!(f; "Active: {}", sub.name());
                 }
+
+                for sub in active_subs.iter_mut() {
+                    sub.reconfigure(&cfg);
+                }
+                
+                let shared_subs = Arc::new(Mutex::new(active_subs));
+                watch_config(cfg_path.as_str(), Arc::clone(&shared_subs));
+
 
                 let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
                 let mut client = Client::builder(&cfg.bot_token, intents)
@@ -239,8 +386,12 @@ impl DiscordBridge {
                         tokio::select! {
                             Some(mut event) = rx.recv() => {
                                 event.sanitize();
-
-                                for sub in &mut active_subs {
+                                // Parse chat starting with ! into a command event type
+                                let event = normalize_event(event);
+                                // sinfo![f; "Got Event {:#?}", event];
+                                
+                                let mut subs = shared_subs.lock().await;
+                                for sub in subs.iter_mut() {
                                     // Get the responses (one or many)
                                     let responses = sub.on_event(event.as_ref(), &http, channel_id).await;
                                     dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
@@ -258,7 +409,8 @@ impl DiscordBridge {
                             //     }
                             // }
                             _ = ticker.tick() => {
-                                for sub in &mut active_subs {
+                                let mut subs = shared_subs.lock().await;
+                                for sub in subs.iter_mut() {
                                     if let resps = sub.on_tick(&http, channel_id).await {
                                         dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
                                     }
@@ -281,7 +433,7 @@ struct Handler {
     config: DiscordConfig,
 }
 #[async_trait::async_trait]
-impl EventHandler for Handler {
+impl DiscordHandler for Handler {
     async fn message(&self, _ctx: Context, msg: Message) {
         // sinfo!(f; "Got message: {}", msg.content.clone());
         if msg.author.bot || msg.channel_id.get() != self.config.channel_id {
@@ -294,6 +446,7 @@ impl EventHandler for Handler {
                 command: msg.content.clone(),
                 user: msg.author.name.clone(),
                 // Get roles from the member object (requires GatewayIntents::GUILD_MEMBERS)
+                user_id: msg.author.id,
                 user_roles: msg
                     .member
                     .as_ref()
@@ -304,6 +457,7 @@ impl EventHandler for Handler {
                 command: msg.content.clone(),
                 user: msg.author.name.clone(),
                 // Get roles from the member object (requires GatewayIntents::GUILD_MEMBERS)
+                user_id: msg.author.id,
                 user_roles: msg
                     .member
                     .as_ref()

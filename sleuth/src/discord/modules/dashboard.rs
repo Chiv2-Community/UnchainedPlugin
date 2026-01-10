@@ -1,7 +1,11 @@
+use crate::discord::config::DiscordConfig;
+use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;
 use crate::discord::responses::*;
 use crate::discord::notifications::*;
 use rand::seq::IndexedRandom;
+use serde::Deserialize;
+use serde::Serialize;
 use serenity::all::{Http, ChannelId, CreateMessage, MessageId, CreateEmbed, EditMessage};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -19,19 +23,42 @@ pub struct Dashboard {
     message_id: Option<MessageId>,
     message_id2: Option<MessageId>,
     needs_refresh: bool,
-    status: Option<ServerStatus>
+    status: Option<ServerStatus>,
+    ctx: crate::discord::Ctx,
+    settings: DashboardSettings,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DashboardSettings {
+    auto_spawn_dash: bool,
+}
+
+impl Default for DashboardSettings {
+    fn default() -> Self {
+        Self { 
+            auto_spawn_dash: false
+        }
+    }
+}
+
+impl ModuleConfig for DashboardSettings {
+    fn key() -> &'static str { "Dashboard" }
+}
+
+
 impl Dashboard {
-    pub fn new() -> Self {
+    pub fn new(ctx: crate::discord::Ctx) -> Self {
+        let settings = ctx.config.get_module_config::<DashboardSettings>().unwrap_or_default();
         Self {
             player_count: 0,
             current_map: "Loading...".to_string(),
             last_update: Instant::now(),
             message_id: None,
             message_id2: None,
-            needs_refresh: true,
+            needs_refresh: settings.auto_spawn_dash,
             status: None,
+            ctx,
+            settings,
         }
     }
 
@@ -140,11 +167,21 @@ impl Dashboard {
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for Dashboard {
-    fn name(&self) -> &'static str { "Dashboard" }
+    fn name(&self) -> &'static str { DashboardSettings::key() }
+
+    fn reconfigure(&mut self, config: &DiscordConfig) {
+        let new_settings = config.get_module_config::<DashboardSettings>().unwrap_or_default();        
+        if new_settings.auto_spawn_dash && !self.settings.auto_spawn_dash {
+            self.needs_refresh = true;
+        }
+
+        self.settings = new_settings;
+    }
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         let any = event.as_any();
 
+        // crate::sinfo!["Got Event {:#?}", event];
         // Update state based on events
         if let Some(_e) = any.downcast_ref::<JoinEvent>() {
             self.player_count += 1;
@@ -167,8 +204,13 @@ impl DiscordSubscriber for Dashboard {
             self.needs_refresh = true;
         }
         
-        if let Some(cmd) = any.downcast_ref::<CommandRequest>() {
-            if cmd.command == "!dash" {
+        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
+            if cmd.source != CommandSource::Discord || cmd.name != "dash" { return NO_RESP; }
+            
+            if self.status.is_none() {
+                return msg("Dashboard: no server status available").into_responses();
+            }
+            else {
                 self.message_id = None; // Resetting this forces a new message on next tick
                 self.message_id2 = None; // Resetting this forces a new message on next tick
                 self.needs_refresh = true;
@@ -247,7 +289,7 @@ impl DiscordSubscriber for Dashboard {
             return NO_RESP;
         }
 
-        if self.status.as_ref().is_none() {
+        if self.status.is_none() {
             return NO_RESP;
         }
 

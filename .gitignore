@@ -45,6 +45,8 @@ bld/
 [Bb]uild/
 [Bb]uild[Ff]iles/
 
+!sleuth/src/bin/
+sleuth/src/bin/mock_server/
 .idea
 
 # Visual Studio 2015/2017 cache/options directory

@@ -6,7 +6,7 @@ use std::any::Any;
 use crate::discord::responses::{BotResponse, NO_RESP};
 
 /// The base trait for anything that happens in the game.
-pub trait GameEvent: Send + Sync + 'static {
+pub trait GameEvent: Send + Sync + std::fmt::Debug + 'static {
     /// Required for modules to "downcast" the event to its concrete type.
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -29,6 +29,8 @@ pub trait DiscordSubscriber: Send + Sync {
     /// Unique name used for enabling/disabling via config.
     fn name(&self) -> &'static str;
 
+    fn reconfigure(&mut self, _config: &super::config::DiscordConfig) {}
+
     /// Called for every event. Returns an optional message to send to Discord.
     async fn on_event(&mut self, event: &dyn GameEvent, http: &Arc<Http>, channel: ChannelId) -> Vec<BotResponse>;
 
@@ -36,4 +38,24 @@ pub trait DiscordSubscriber: Send + Sync {
     async fn on_tick(&mut self, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         NO_RESP
     }
+}
+
+#[macro_export]
+macro_rules! impl_reconfigure {
+    ($settings_type:ty) => {
+        fn name(&self) -> &'static str { <$settings_type>::key() }
+
+        fn reconfigure(&mut self, config: &DiscordConfig) {
+            let key = <$settings_type>::key();
+            match config.get_module_config::<$settings_type>() {
+                Some(new_settings) => {
+                    self.settings = new_settings;
+                    println!("[{}] Configuration updated.", key);
+                }
+                None => {
+                    eprintln!("[{}] No configuration found in file, keeping current settings.", key);
+                }
+            }
+        }
+    };
 }

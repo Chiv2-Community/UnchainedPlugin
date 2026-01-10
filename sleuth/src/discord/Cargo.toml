@@ -1,0 +1,18 @@
+[package]
+name = "discord"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "discord"
+path = "mod.rs"  # This tells Cargo: "Use this as the library entry point"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
+async-trait = "0.1"
+crossbeam-channel = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+censor = "0.3"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time"] }

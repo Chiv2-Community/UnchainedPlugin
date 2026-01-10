@@ -1,15 +1,15 @@
 
 #[macro_use]
-mod macros;
+pub mod macros;
 mod resolvers;
-mod scan;
-mod tools;
+pub mod scan;
+pub mod tools;
 mod ue;
 mod ue_old;
-mod game;
-mod features;
-mod commands;
-mod discord;
+pub mod game;
+pub mod features;
+pub mod commands;
+pub mod discord;
 #[cfg(windows)]
 mod seh;
 
@@ -31,13 +31,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::commands::spawn_cli_handler;
-use crate::discord::DiscordConfig;
+use crate::discord::config::DiscordConfig;
 #[cfg(feature="cli_commands")]
 // use crate::features::commands::spawn_cli_handler;
 // use crate::features::discord_bot::{DiscordBridge, DiscordConfig, OutgoingEvent};
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
+use crate::game::chivalry2::EChatType;
 // use crate::resolvers::unchained_integration::CHAT_QUEUE;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
@@ -337,6 +338,18 @@ pub extern "C" fn postinit_rustlib() {
     });
 }
 
+struct GameChatSink;
+impl discord::ChatSink for GameChatSink {
+    fn send(&self, text: String, chat_type: discord::ChatType) {
+        let game_chat_type = match chat_type {
+            discord::ChatType::Admin => Some(EChatType::Admin),
+            discord::ChatType::Global => Some(EChatType::AllSay),
+            discord::ChatType::Team => Some(EChatType::TeamSay),
+        };
+        game::chivalry2::send_ingame_message(text, game_chat_type);
+    }
+}
+
 pub fn world_init() {
     #[cfg(feature="cli_commands")]
     spawn_cli_handler();
@@ -370,25 +383,48 @@ pub fn world_init() {
 
     if globals().cli_args.discord_enabled() {
         sinfo!(f; "Starting discord bridge");
-        let config = DiscordConfig {
-            bot_token: globals().cli_args.discord_bot_token.clone().expect("Token invalid"),
-            channel_id: globals().cli_args.discord_channel_id.unwrap(),
-            admin_channel_id: globals().cli_args.discord_admin_channel_id.unwrap(),
-            general_channel_id: globals().cli_args.discord_general_channel_id.unwrap(),
-            admin_role_id: 1113981344872140822,
-            disabled_modules: vec![],
-            blocked_notifications: vec![],
-        };
+        // let config = DiscordConfig {
+        //     bot_token: globals().cli_args.discord_bot_token.clone().expect("Token invalid"),
+        //     channel_id: globals().cli_args.discord_channel_id.unwrap(),
+        //     admin_channel_id: globals().cli_args.discord_admin_channel_id.unwrap(),
+        //     general_channel_id: globals().cli_args.discord_general_channel_id.unwrap(),
+        //     admin_role_id: 1113981344872140822,
+        //     disabled_modules: vec![],
+        //     blocked_notifications: vec![],
+        //     modules: HashMap::default()
+        // };
+        
+        fn update<T>(target: &mut T, source: Option<T>) {
+            if let Some(val) = source {
+                *target = val;
+            }
+        }
 
-        // 2. Initialize the Bridge
+        let config_path = "discord_bot_config.json";
+        let mut config = DiscordConfig::load(config_path, true).unwrap_or_else(|e| {
+            serror!("Configuration Error, loading default: {}", e);
+            DiscordConfig::default()
+        });
+
+        let cli = &globals().cli_args;
+        update(&mut config.bot_token, cli.discord_bot_token.clone());
+        update(&mut config.channel_id, cli.discord_channel_id);
+        update(&mut config.admin_channel_id, cli.discord_admin_channel_id);
+        update(&mut config.general_channel_id, cli.discord_general_channel_id);
+        update(&mut config.admin_role_id, cli.discord_admin_role_id);
+
+        let ctx = Arc::new(discord::SleuthContext {
+            chat: Arc::new(GameChatSink),
+            config
+        });
+        
         // This spawns the background thread and the Tokio runtime
-        let handle = crate::discord::DiscordBridge::init(config);
+        let handle = crate::discord::DiscordBridge::init(config_path, ctx);
 
-        // 3. Store the handle globally so the dispatch! macro can find it
+        // Store the handle globally so the dispatch! macro can find it
         crate::discord::DISCORD_HANDLE.set(handle)
             .expect("Discord Handle was already initialized!");
 
-        // 4. Continue with your game server logic
         sinfo!(f; "Discord Bridge is running in the background...");
     }
     

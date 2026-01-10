@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 use std::str::FromStr;
 
+use crate::{game::engine::FText, ue::FString};
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ATBLPlayerController { 
@@ -112,6 +114,29 @@ impl EChatType {
             Self::ClosedCaptionMason => "ClosedCaptionMason",
             Self::ClosedCaptionAgatha => "ClosedCaptionAgatha",
             Self::MAX => "MAX",
+        }
+    }
+}
+
+// Helper functions
+pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
+    use crate::resolvers::messages::o_BroadcastLocalizedChat;
+    use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
+    use crate::resolvers::etc_hooks::o_GetTBLGameMode;
+    
+    let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
+    if let Some(world) = crate::globals().world() {
+        let mut settings_fstring = FString::from(message.as_str());
+        let mut txt = FText::default();
+
+        unsafe {
+            let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
+
+            let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+
+            if !game_mode.is_null() {
+                TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
+            }
         }
     }
 }

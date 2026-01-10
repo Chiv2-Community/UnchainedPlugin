@@ -1,5 +1,5 @@
 use crate::{discord::core::GameEvent, game::chivalry2::EChatType};
-use serenity::all::{CreateMessage, CreateEmbed, RoleId};
+use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
 use std::any::Any;
 
 /// This macro automates the boilerplate for GameEvents.
@@ -46,11 +46,13 @@ macro_rules! impl_event {
 pub struct CommandRequest {
     pub command: String,
     pub user: String,
+    pub user_id: UserId,
     pub user_roles: Vec<RoleId>,
 }
 impl_event!(CommandRequest);
 
 /// Triggered when a player joins the game server
+#[derive(Debug)]
 pub struct JoinEvent {
     pub name: String,
 }
@@ -66,6 +68,7 @@ impl JoinEvent {
         Some(CreateMessage::new().add_embed(embed))
     }
 }
+#[derive(Debug)]
 pub struct CrashEvent {
     pub event_type: String,
     pub event_trace: Vec<String>,
@@ -86,6 +89,7 @@ impl_event!(CrashEvent);
 // }
 
 /// Triggered when a kill occurs (Data-heavy event)
+#[derive(Debug)]
 pub struct KillEvent {
     pub killer: String,
     pub victim: String,
@@ -96,18 +100,21 @@ impl_event!(KillEvent);
 // want to spam Discord for every single kill. Modules will handle this.
 
 /// Triggered when the server changes maps
+#[derive(Debug)]
 pub struct MapChangeEvent { 
     pub new_map: String 
 }
 impl_event!(MapChangeEvent);
 
 /// Triggered when a match finishes (before the map change)
+#[derive(Debug)]
 pub struct MatchEndEvent {
     pub winner_team: String,
     pub final_score: String,
 }
 impl_event!(MatchEndEvent);
 
+#[derive(Debug)]
 pub struct GameChatMessage {
     pub sender: String,
     pub message: String,
@@ -141,7 +148,216 @@ impl GameChatMessage {
     }
 }
 
-#[derive(Clone)]
+// Chat command (parsed from GameChatMessage)
+// pub struct GameChatCommandEvent {
+//     pub sender: String,
+//     pub name: String,
+//     pub args: Vec<String>,
+//     pub chat_type: EChatType,
+// }
+
+// impl GameEvent for GameChatCommandEvent {
+//     fn as_any(&self) -> &dyn Any {
+//         self
+//     }
+
+//     fn as_any_mut(&mut self) -> &mut dyn Any {
+//         self
+//     }
+
+//     fn event_type(&self) -> &'static str {
+//         "ChatCommand"
+//     }
+// }
+
+// impl GameChatCommandEvent {
+//     pub fn from_chat(chat: &GameChatMessage) -> Option<Self> {
+//         let msg = chat.message.trim();
+
+//         let without_bang = msg.strip_prefix('!')?;
+
+//         let mut parts = without_bang.split_whitespace();
+
+//         let name = parts.next()?.to_ascii_lowercase();
+//         let args = parts.map(|s| s.to_string()).collect();
+
+//         Some(Self {
+//             sender: chat.sender.clone(),
+//             name,
+//             args,
+//             chat_type: chat.chat_type,
+//         })
+//     }
+// }
+
+#[derive(Debug, PartialEq)]
+pub enum CommandSource {
+    GameChat,
+    Discord,
+}
+
+
+#[derive(Debug)]
+pub struct CommandActor {
+    pub identity: ActorIdentity,
+    pub permissions: ActorPermissions,
+    pub display_name: String,
+}
+
+impl CommandActor {
+    pub fn is_admin(&self) -> bool { self.permissions.flags.contains(PermissionFlags::ADMIN) }
+    pub fn is_moderator(&self) -> bool { self.permissions.flags.contains(PermissionFlags::MODERATOR) }
+    pub fn is_elevated(&self) -> bool { self.permissions.flags != PermissionFlags::USER }
+    pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &super::config::DiscordConfig) -> Self {
+        let is_admin = roles.contains(&RoleId::new(config.admin_role_id));
+
+        Self {
+            display_name: username.clone(),
+            identity: ActorIdentity::DiscordUser {
+                user_id,
+                display_name: username,
+            },
+            permissions: ActorPermissions { flags: if is_admin {PermissionFlags::ADMIN} else {PermissionFlags::USER} },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ActorIdentity {
+    GamePlayer {
+        player_id: u64,
+        display_name: String,
+    },
+    DiscordUser {
+        user_id: UserId,
+        display_name: String,
+    },
+}
+
+#[derive(Debug)]
+pub struct ActorPermissions {
+    pub flags: PermissionFlags,
+}
+
+bitflags::bitflags! {
+    #[derive(Debug, PartialEq)]
+    pub struct PermissionFlags: u32 {
+        const USER          = 0b00000001;
+        const ADMIN         = 0b00000010;
+        const MODERATOR     = 0b00000100;
+        const START_VOTE    = 0b00001000;
+        const FORCE_ACTION  = 0b00010000;
+    }
+}
+
+// This will be helpful for conversion if other input sources are added
+// we could just construct this instead of specific Discord/game chat events
+#[derive(Debug)]
+pub struct BridgeChatEvent {
+    pub message: String,
+    pub actor: CommandActor,
+    pub source: CommandSource,
+}
+impl_event!(BridgeChatEvent);
+
+#[derive(Debug)]
+pub struct GameCommandEvent {
+    pub name: String,
+    pub args: Vec<String>,
+    pub raw_args: String,
+    pub actor: CommandActor,
+    pub source: CommandSource,
+}
+
+impl GameEvent for GameCommandEvent {
+    fn as_any(&self) ->  &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) ->  &mut dyn Any {
+        self
+    }
+    fn sanitize(&mut self){}
+    
+    fn event_type(&self) ->  &'static str {
+        "GameCommandEvent"
+    }
+
+}
+
+fn parse_command(input: &str) -> Option<(String, Vec<String>, String)> {
+    let msg = input.trim();
+    let without_bang = msg.strip_prefix('!')?.trim();
+
+    let (name, raw_args) = match without_bang.split_once(char::is_whitespace) {
+        Some((n, a)) => (n.to_ascii_lowercase(), a.trim()),
+        None => (without_bang.to_ascii_lowercase(), ""), // Command with no args
+    };
+
+    let args_vec = raw_args.split_whitespace().map(|s| s.to_string()).collect();
+
+    Some((name, args_vec, raw_args.to_string()))
+}
+
+
+impl GameCommandEvent {
+    pub fn from_game_chat(chat: &GameChatMessage, perms: PermissionFlags) -> Option<Self> {
+        let (name, args, raw_args) = parse_command(&chat.message)?;
+
+        Some(Self {
+            name,
+            args,
+            raw_args,
+            source: CommandSource::GameChat,
+            actor: CommandActor {
+                display_name: chat.sender.clone(),
+                identity: ActorIdentity::GamePlayer {
+                    player_id: 0, //chat.player_id, // FIXME
+                    display_name: chat.sender.clone(),
+                },
+                permissions: ActorPermissions { flags: perms },
+            },
+        })
+    }
+}
+
+// #[poise::command(prefix_command)]
+// async fn relay(ctx: Context<'_>, msg: String) -> Result<(), Error> {
+//     let event = CommandRequest {
+//         command: msg,
+//         user: ctx.author().name.clone(),
+//         user_roles: ctx.author().roles.clone(),
+//     };
+
+//     dispatcher.send(event).await?;
+//     Ok(())
+// }
+
+
+impl GameCommandEvent {
+    pub fn from_discord(req: &CommandRequest, perms: PermissionFlags) -> Option<Self> {
+        let (name, args, raw_args) = parse_command(&req.command)?;
+
+        Some(Self {
+            name,
+            args,
+            raw_args,
+            source: CommandSource::Discord,
+            actor: CommandActor {
+                display_name: req.user.clone(),
+                identity: ActorIdentity::DiscordUser {
+                    user_id: req.user_id,
+                    display_name: req.user.clone(),
+                },
+                permissions: ActorPermissions { flags: perms },
+            },
+        })
+    }
+}
+
+
+
+
+#[derive(Clone, Debug)]
 pub struct ServerStatus {
     pub name: String,
     pub description: String,
@@ -155,6 +371,7 @@ pub struct ServerStatus {
 impl_event!(ServerStatus);
 
 /// Triggered when a player uses !admin in-game
+#[derive(Debug)]
 pub struct AdminAlert {
     pub reporter: String,
     pub reason: String,
@@ -167,8 +384,11 @@ impl AdminAlert {
     }
 }
 
+#[derive(Debug)]
 pub struct DuelStartEvent { pub challenger: String, pub opponent: String }
+#[derive(Debug)]
 pub struct AttackEvent { pub attacker: String, pub attack_type: String, pub was_parried: bool }
+#[derive(Debug)]
 pub struct DamageEvent { pub attacker: String, pub victim: String, pub damage: f32 }
 
 impl_event!(DuelStartEvent);
