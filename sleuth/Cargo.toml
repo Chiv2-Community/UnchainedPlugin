@@ -75,7 +75,7 @@ ureq = "3.1.4"
 itertools = "0.14.0"
 sleuth_macros = { path = "./sleuth_macros" }
 # server registration
-a2s = { path = "../../a2s-rs", optional = true }
+a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "3d3259e", optional = true }
 reqwest = { version = "0.12.19", optional = true, features = ["blocking", "json"]  }
 # discord
 async-trait = "0.1"
