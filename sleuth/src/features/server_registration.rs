@@ -4,9 +4,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
+use crate::discord::notifications::ServerStatus;
 use crate::features::Mod;
 
-use crate::{globals, serror, sinfo, swarn};
+use crate::{dispatch, globals, serror, sinfo, swarn};
 
 // --- Configuration Constants ---
 const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
@@ -321,6 +322,7 @@ impl RegistrationInner {
         let args = &globals().cli_args;
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
         let mods;
+        let mut all_mods: Vec<Mod> = Vec::new();
         #[cfg(feature="mod_management")]
         {              
             use std::sync::mpsc;
@@ -338,7 +340,11 @@ impl RegistrationInner {
             let active_mods = rx.recv().unwrap_or_default();
             let mut lock = self.mods.lock().unwrap();
             *lock = active_mods.clone();
-            mods = active_mods
+            mods = active_mods;
+
+            if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
+                all_mods = mm.get_available().values().cloned().collect();
+            }
         }
 
         #[cfg(not(feature = "mod_management"))]
@@ -369,6 +375,16 @@ impl RegistrationInner {
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {
+            dispatch!(ServerStatus{
+                name: request.name.into(),
+                description: request.description,
+                password_protected: request.password_protected,
+                current_map: request.current_map.into(),
+                player_count: request.player_count,
+                max_players: request.max_players,
+                mods: all_mods,
+                active_mods: request.mods,
+            });
             let data: RegisterResponse = res.json().map_err(|_| ())?;
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
             let expiry = data.refresh_before as u64;
@@ -424,7 +440,7 @@ impl RegistrationInner {
                 // Parse the response to get the new refresh_before timestamp
                 if let Ok(data) = r.json::<HeartbeatResponse>() {
                     if DEBUG_LOGGING { 
-                        sinfo!(f; "HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]", 
+                        crate::sdebug!(f; "HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]", 
                             ident.id, start_time.elapsed().as_millis(), data.server.is_verified, data.refresh_before); 
                     }
                     Ok(data.refresh_before as u64)

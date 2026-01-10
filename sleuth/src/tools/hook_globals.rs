@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 use std::{env, os::raw::c_void, panic};
 
-#[cfg(feature="discord_integration")]
+#[cfg(feature="discord_integration_old")]
 use crate::features::discord_bot::DiscordBridge;
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
@@ -172,7 +172,7 @@ pub struct Globals {
     pub registration: Mutex<Option<Arc<Registration>>>,
     #[cfg(feature="mod_management")]
     pub mod_manager: Mutex<Option<Arc<ModManager>>>,
-    #[cfg(feature="discord_integration")]
+    #[cfg(feature="discord_integration_old")]
     pub DISCORD_BRIDGE: OnceLock<DiscordBridge>,
 }
 
@@ -281,7 +281,7 @@ pub unsafe fn init_globals() -> Result<(), String> {
         registration: std::sync::Mutex::new(None),
         #[cfg(feature="mod_management")]
         mod_manager: std::sync::Mutex::new(None),
-        #[cfg(feature="discord_integration")]
+        #[cfg(feature="discord_integration_old")]
         DISCORD_BRIDGE: OnceLock::new(),
     };
 

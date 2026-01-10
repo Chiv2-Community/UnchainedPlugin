@@ -10,7 +10,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{game::chivalry2::EChatType, tools::hook_globals::globals, ue::{FName, FString}};
+    use crate::{discord::notifications::{AdminAlert, GameChatMessage}, event, game::chivalry2::EChatType, tools::hook_globals::globals, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -69,7 +69,25 @@ mod client_message {
                         let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
                         info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
                         
-                        #[cfg(feature="discord_integration")]
+                        if (msg_type == EChatType::AllSay && globals().cli_args.discord_enabled()) {
+                            if chat.message.starts_with("!admin ") {
+                                event!(AdminAlert {
+                                    reporter: chat.name,
+                                    reason: chat.message.split_once(" ")
+                                    .map(|(_, n)| n)
+                                    .unwrap_or(chat.message),
+                                })
+
+                            } else {
+                                event!(GameChatMessage {
+                                    sender: chat.name,
+                                    message: chat.message,
+                                    chat_type: msg_type,
+                                });
+                            }
+                        }
+                        
+                        #[cfg(feature="discord_integration_old")]
                         {
                             if (msg_type == EChatType::AllSay && globals().cli_args.is_server()) {
                                 

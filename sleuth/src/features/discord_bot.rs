@@ -71,25 +71,25 @@ pub struct DiscordBridge {
     pub incoming: Receiver<IncomingChatMessage>,
     outgoing: Sender<OutgoingEvent>,
 }
-pub fn start_discord_listener() {
-    std::thread::spawn(move || {
-        println!("Discord listener thread started...");
-        loop {
-            if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
-                match bridge.incoming.try_recv() {
-                    Ok(msg) => {
-                        println!("Thread received from bridge: {}", msg.text);
-                        if let Ok(mut queue) = CHAT_QUEUE.lock() {
-                            queue.push(ChatMessage { msg: format!("<D>{}: {}", msg.user, msg.text), chat_type: EChatType::AllSay });
-                        }
-                    },
-                    Err(_) => { /* No messages, keep waiting */ }
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    });
-}
+// pub fn start_discord_listener() {
+//     std::thread::spawn(move || {
+//         println!("Discord listener thread started...");
+//         loop {
+//             if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
+//                 match bridge.incoming.try_recv() {
+//                     Ok(msg) => {
+//                         println!("Thread received from bridge: {}", msg.text);
+//                         if let Ok(mut queue) = CHAT_QUEUE.lock() {
+//                             queue.push(ChatMessage { msg: format!("<D>{}: {}", msg.user, msg.text), chat_type: EChatType::AllSay });
+//                         }
+//                     },
+//                     Err(_) => { /* No messages, keep waiting */ }
+//                 }
+//             }
+//             std::thread::sleep(std::time::Duration::from_millis(100));
+//         }
+//     });
+// }
 
 impl DiscordBridge {
     pub fn recv_game_message(&self, _msg_type: EChatType, player_name: &str, message: &str) {

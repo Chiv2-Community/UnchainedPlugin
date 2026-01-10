@@ -73,11 +73,17 @@ pub struct CLIArgs {
     #[arg(long = "Port", default_value = "7777")]
     pub game_port: Option<u16>,
 
-    #[cfg(feature="discord_integration")]
+    // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-channel-id")]
     pub discord_channel_id: Option<u64>,
     
-    #[cfg(feature="discord_integration")]
+    #[arg(long = "discord-admin-channel-id")]
+    pub discord_admin_channel_id: Option<u64>,
+
+    #[arg(long = "discord-general-channel-id")]
+    pub discord_general_channel_id: Option<u64>,
+
+    // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
 
@@ -132,7 +138,7 @@ impl CLIArgs {
         map
     }
 
-    #[cfg(feature="discord_integration")]
+    // #[cfg(feature="discord_integration_old")]
     pub fn discord_enabled(&self) -> bool {
         self.is_server() && self.discord_bot_token.is_some() && self.discord_channel_id.is_some()
     }

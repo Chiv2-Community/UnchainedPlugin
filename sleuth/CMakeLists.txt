@@ -61,4 +61,5 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     ws2_32.lib
     psapi.lib
     bcrypt.lib
+    Dbghelp.lib
 )

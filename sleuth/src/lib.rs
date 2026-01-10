@@ -1,3 +1,4 @@
+
 #[macro_use]
 mod macros;
 mod resolvers;
@@ -8,28 +9,36 @@ mod ue_old;
 mod game;
 mod features;
 mod commands;
+mod discord;
+#[cfg(windows)]
+mod seh;
+
+
 
 use once_cell::sync::Lazy;
 use serenity::all::{ChannelId, CreateMessage};
 use std::collections::HashMap;
-use std::env;
+use std::time::Duration;
+use std::{env, thread};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::os::raw::c_char;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::commands::spawn_cli_handler;
+use crate::discord::DiscordConfig;
 #[cfg(feature="cli_commands")]
 // use crate::features::commands::spawn_cli_handler;
-use crate::features::discord_bot::{DiscordBridge, DiscordConfig, OutgoingEvent};
+// use crate::features::discord_bot::{DiscordBridge, DiscordConfig, OutgoingEvent};
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
-use crate::resolvers::unchained_integration::CHAT_QUEUE;
+// use crate::resolvers::unchained_integration::CHAT_QUEUE;
 use crate::tools::hook_globals::{globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -256,47 +265,54 @@ pub extern "C" fn init_rustlib() {
     };
 }
 
+static ENGINE_READY: AtomicBool = AtomicBool::new(false);
+static WORLD_READY: AtomicBool = AtomicBool::new(false);
+
 #[no_mangle]
 pub extern "C" fn postinit_rustlib() {
-    #[cfg(feature="cli_commands")]
-    spawn_cli_handler();
-    #[cfg(feature="rcon_commands")]
-    std::thread::spawn(|| {
-        handle_rcon();
-    });
-
-    #[cfg(feature="server_registration")]
-    {
-        let args = &globals().cli_args;
-        if args.is_server() || args.register {
-            let query_port = args.game_server_query_port.unwrap_or(7071);
-            let reg = Arc::new(Registration::new("127.0.0.1", query_port));
-            
-            let mut global_reg = globals().registration.lock().unwrap();
-            *global_reg = Some(Arc::clone(&reg));
-            
-            sinfo!(f; "Started server registration manager");
-            reg.start();
-        }
-    }
     
-    #[cfg(feature="mod_management")]
-    {
-        use crate::features::mod_management::ModManager;
-
-        let mm = Arc::new(ModManager::new());
-        let mut global_mm = globals().mod_manager.lock().unwrap();
-        *global_mm = Some(Arc::clone(&mm));
+    unsafe {
+        seh::install();
     }
+    // #[cfg(feature="cli_commands")]
+    // spawn_cli_handler();
+    // #[cfg(feature="rcon_commands")]
+    // std::thread::spawn(|| {
+    //     handle_rcon();
+    // });
+
+    // #[cfg(feature="server_registration")]
+    // {
+    //     let args = &globals().cli_args;
+    //     if args.is_server() || args.register {
+    //         let query_port = args.game_server_query_port.unwrap_or(7071);
+    //         let reg = Arc::new(Registration::new("127.0.0.1", query_port));
+            
+    //         let mut global_reg = globals().registration.lock().unwrap();
+    //         *global_reg = Some(Arc::clone(&reg));
+            
+    //         sinfo!(f; "Started server registration manager");
+    //         reg.start();
+    //     }
+    // }
     
-    let args = &globals().cli_args;
-    #[cfg(feature="discord_integration")]
+    // #[cfg(feature="mod_management")]
+    // {
+    //     use crate::features::mod_management::ModManager;
+
+    //     let mm = Arc::new(ModManager::new());
+    //     let mut global_mm = globals().mod_manager.lock().unwrap();
+    //     *global_mm = Some(Arc::clone(&mm));
+    // }
+    
+    // let args = &globals().cli_args;
+    #[cfg(feature="discord_integration_old")]
     if args.discord_enabled() {
         
-        let config = DiscordConfig { 
-            bot_token: args.discord_bot_token.clone().expect("Token invalid"),
-            channel_id: args.discord_channel_id.unwrap()
-        };
+        // let config = DiscordConfig { 
+        //     bot_token: args.discord_bot_token.clone().expect("Token invalid"),
+        //     channel_id: args.discord_channel_id.unwrap()
+        // };
         let global_bridge = &globals().DISCORD_BRIDGE;
         let _ = global_bridge.set(DiscordBridge::new(config)).ok();
         
@@ -310,6 +326,86 @@ pub extern "C" fn postinit_rustlib() {
         // }
     }
 
+    thread::spawn(|| {
+        crate::sinfo!("waiting for engine to start..");
+        
+        while !ENGINE_READY.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(500));
+        }
+
+        world_init();
+    });
+}
+
+pub fn world_init() {
+    #[cfg(feature="cli_commands")]
+    spawn_cli_handler();
+
+    #[cfg(feature="rcon_commands")]
+    std::thread::spawn(|| {
+        handle_rcon();
+    });
+
+    let args = &globals().cli_args;
+    sinfo!(f; "Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
+
+    #[cfg(feature="server_registration")]
+    {
+        if args.is_server() || args.register {
+            let query_port = args.game_server_query_port.unwrap_or(7071);
+            let reg = Arc::new(Registration::new("127.0.0.1", query_port));
+            
+            let mut global_reg = globals().registration.lock().unwrap();
+            *global_reg = Some(Arc::clone(&reg));
+            
+            sinfo!(f; "Started server registration manager");
+            reg.start();
+        }
+    }
+
+    // Mod manager requires world
+    while !WORLD_READY.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(500));
+    }
+
+    if globals().cli_args.discord_enabled() {
+        sinfo!(f; "Starting discord bridge");
+        let config = DiscordConfig {
+            bot_token: globals().cli_args.discord_bot_token.clone().expect("Token invalid"),
+            channel_id: globals().cli_args.discord_channel_id.unwrap(),
+            admin_channel_id: globals().cli_args.discord_admin_channel_id.unwrap(),
+            general_channel_id: globals().cli_args.discord_general_channel_id.unwrap(),
+            admin_role_id: 1113981344872140822,
+            disabled_modules: vec![],
+            blocked_notifications: vec![],
+        };
+
+        // 2. Initialize the Bridge
+        // This spawns the background thread and the Tokio runtime
+        let handle = crate::discord::DiscordBridge::init(config);
+
+        // 3. Store the handle globally so the dispatch! macro can find it
+        crate::discord::DISCORD_HANDLE.set(handle)
+            .expect("Discord Handle was already initialized!");
+
+        // 4. Continue with your game server logic
+        sinfo!(f; "Discord Bridge is running in the background...");
+    }
+    
+    #[cfg(feature="mod_management")]
+    {
+        thread::sleep(Duration::from_millis(200));
+        use crate::features::mod_management::ModManager;
+
+        let mm = Arc::new(ModManager::new());
+        let mut global_mm = globals().mod_manager.lock().unwrap();
+        *global_mm = Some(Arc::clone(&mm));
+
+        sinfo!(f; "Mod scans in progress");
+        mm.scan_asset_registry();
+        mm.update_save_game();
+        sinfo!(f; "Started mod manager");
+    }
 }
 
 /// # Safety

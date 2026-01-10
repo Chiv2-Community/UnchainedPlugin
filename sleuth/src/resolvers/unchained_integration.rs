@@ -1,5 +1,7 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
-use crate::{commands::NATIVE_COMMAND_QUEUE, features::discord_bot::ChatMessage, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::FString};
+use windows::Win32::System::Memory::IsBadReadPtr;
+
+use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, discord::notifications::MapChangeEvent, dispatch, event, game::engine::ENetMode, sinfo, swarn, tools::hook_globals::globals, ue::{FName, FString}, world_init};
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
@@ -109,86 +111,94 @@ pub fn run_on_game_thread<F>(f: F)
 where
     F: FnOnce() + Send + 'static,
 {
+    crate::sdebug!(f; "Task added to job queue");
     JOB_QUEUE.lock().unwrap().push(Box::new(f));
 }
 
-use once_cell::sync::Lazy;
-// A global queue to hold messages waiting to be printed in-game
-pub static CHAT_QUEUE: Lazy<Mutex<Vec<ChatMessage>>> = Lazy::new(|| Mutex::new(Vec::new()));
+// static IS_TICKING: AtomicBool = AtomicBool::new(false);
+thread_local! {
+    static IN_TICK: std::cell::Cell<bool> = std::cell::Cell::new(false);
+}
+use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
+CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, state:u8), {
+    // CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));
 
-pub fn process_discord_chat_queue() {
-    // 1. Get all messages from the queue and clear it
-    let mut messages = Vec::new();
-    if let Ok(mut queue) = CHAT_QUEUE.lock() {
-        if queue.is_empty() { return; }
-        messages.append(&mut queue);
+    // if IS_TICKING.swap(true, Ordering::SeqCst) {
+    //     crate::serror!(f; "TRIED TO TICK WHILE TICKING");
+    //     return;
+    // }
+    let reentered = IN_TICK.with(|f| {
+        let was = f.get();
+        f.set(true);
+        was
+    });
+
+    if reentered {
+        crate::serror!(f; "Re-entrant UGameEngineTick");
+        return;
     }
+    unsafe {
+        if IsBadReadPtr(Some(engine), 8).into() {
+            crate::serror!(f; "IsBadReadPtr UGameEngineTick");
+            return;
+        }
 
-    // 2. We are now on the Main Thread, so it's safe to call Unreal
-    if let Some(world) = globals().world() {
-        use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
+    }
+    if !o_UGameEngineTick.is_enabled() {
+        crate::serror!(f; "Disabled UGameEngineTick");
+        return;
+    }
+    CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));
 
-        for msg in messages {
-            let mut txt = FText::default();
-            let mut settings_fstring = FString::from(msg.msg.as_str());
-
+    // 3. Process Native Commands
+    // Use try_lock to avoid deadlocking the Game Thread if Discord is stuck
+    if let Ok(mut native_cmds) = NATIVE_COMMAND_QUEUE.try_lock() {
+        for cmd_str in native_cmds.drain(..) {
+            let mut f_cmd = FString::from(cmd_str.as_str());
             unsafe {
-                // Call Unreal functions safely on the main thread
-                let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
-                let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
-                
-                if !game_mode.is_null() {
-                    TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, msg.chat_type));
-                }
+                // Wrap in a guard to ensure we don't crash the whole thread
+                let _ = std::panic::catch_unwind(move || {
+                    CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
+                });
             }
-            // let game_mode = unsafe { TRY_CALL_ORIGINAL!(GetTBLGameMode(world)) };
-            // if !game_mode.is_null() {
-            // for chat_type in EChatType::ALL {
-            //     // Build the text: "[Admin] (3)"
-            //     let debug_str = format!("[{}] ({})", chat_type.as_str(), chat_type as u8);
-                
-            //     let mut settings_fstring = FString::from(debug_str.as_str());
-            //     let mut txt = FText::default();
-                
-            //     unsafe {
-            //         let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
-                    
-            //         // Broadcast using the current chat_type to see the color/prefix
-            //         TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type));
-            //     }
-            // }
-        // }
         }
     }
-}
 
-use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
-// Executes pending RCON command
-// Resolver is handled by patternsleuth
-CREATE_HOOK!(UGameEngineTick, (engine:*mut c_void, delta:f32, state:u8), {
-    // let mut q = COMMAND_QUEUE.lock().unwrap();
-    // while let Some(cmd) = q.pop() {  
-    //     if !dispatch_command(cmd.as_str(), true) {
-    //         let mut f_cmd = FString::from(cmd.as_str());
+    // 4. Process Jobs
+    if let Ok(mut queue) = JOB_QUEUE.try_lock() {
+        for job in queue.drain(..) {
+            let result = std::panic::catch_unwind(
+                std::panic::AssertUnwindSafe(|| {
+                    job();
+                })
+            );
+
+            if result.is_err() {
+                crate::serror!("GameThreadJob panicked! Catching to prevent engine crash.");
+            }
+        }
+    }
+
+    IN_TICK.with(|f| f.set(false));
+
+    // 5. Release Guard
+    // IS_TICKING.store(false, Ordering::SeqCst);
+    // {
+    //     let mut native_cmds = NATIVE_COMMAND_QUEUE.lock().unwrap();
+    //     for cmd_str in native_cmds.drain(..) {
+    //         swarn!("Command executing");
+    //         let mut f_cmd = FString::from(cmd_str.as_str());
     //         CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
     //     }
     // }
-    {
-        let mut native_cmds = NATIVE_COMMAND_QUEUE.lock().unwrap();
-        for cmd_str in native_cmds.drain(..) {
-            let mut f_cmd = FString::from(cmd_str.as_str());
-            CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
-        }
-    }
 
-    let mut queue = JOB_QUEUE.lock().unwrap();
-    if !queue.is_empty() {
-        for job in queue.drain(..) {
-            job();
-        }
-    }
-
-    process_discord_chat_queue();
+    // let mut queue = JOB_QUEUE.lock().unwrap();
+    // if !queue.is_empty() {
+    //     for job in queue.drain(..) {
+    //         swarn!("Job executing");
+    //         job();
+    //     }
+    // }
 });
 
 //define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"]);
@@ -197,6 +207,11 @@ define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
     // crate::sinfo![f;"\x1b[32mTriggered! 0x{:#?}\x1b[0m", world];
+    
+    if !WORLD_READY.load(Ordering::SeqCst) {
+        WORLD_READY.store(true, Ordering::SeqCst);
+        log::info!(target: "World", "\x1b[32mWorld signaled for initialization\x1b[0m");
+    }
     if globals().world() != Some(world) {
         globals().set_world(world);
         #[cfg(feature="verbose_hooks")]
@@ -214,10 +229,20 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     
     // TODO: better check for server?
     if globals().world().is_none() && globals().cli_args.is_server() {
-        // Loading into frontend for the first time
-        if let Some(mm)  = globals().mod_manager.lock().unwrap().as_ref() {
-            // mm.scan_asset_registry();
-            mm.update_save_game();
+        if !ENGINE_READY.load(Ordering::SeqCst) {
+            ENGINE_READY.store(true, Ordering::SeqCst);
+            log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
         }
     }
+    if globals().cli_args.discord_enabled() {
+        event!(MapChangeEvent { new_map: url_w });
+    }
+});
+
+// For tracking ingame match progress (Placeholder)
+define_pattern_resolver!(SetMatchState,[
+    "48 89 5C 24 ?? 56 48 83 EC 20 48 8B DA 48 8B F1 48 39 91 ?? ?? ?? ??"
+    ]);
+CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
+    log::info![target: "Match", "Match state: \x1b[32m{}\x1b[0m", new_state];
 });
