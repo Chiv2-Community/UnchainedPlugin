@@ -53,34 +53,47 @@ macro_rules! CREATE_HOOK {
 
 #[macro_export]
 macro_rules! __create_hook_inner {
-    // Format: Name, (args), {body}
+    // 1. Basic Shorthand: Name, (args), {body}
     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
     };
-    // Format: Name, ACTIVE, (args), {body}
+
+    // 2. Status Identifier: Name, ACTIVE/INACTIVE, (args), {body}
     ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
     };
-    // Format: Name, OutType, (args), {body}
+
+    // 3. NEW: Explicit Condition Block/Closure: Name, { || cond }, (args), {body}
+    ($name:ident, { $cond:expr }, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        $crate::__create_hook_impl!($name, { $cond }, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+    };
+
+    // 4. Explicit Return Type: Name, OutType, (args), {body}
     ($name:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
-    // Format: Name, Status, OutType, (args), {body}
+
+    // 5. Status & Return Type: Name, Status, OutType, (args), {body}
     ($name:ident, $status:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, PRE, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
-    // Format: Name, Status, HookType, OutType, (args), {body}
-    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+
+    // 6. Full Configuration: Name, Status, HookType, OutType, (args), {body}
+    // $status can now be an ident (ACTIVE) or a block { || globals().enabled }
+    ($name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
     };
 }
 
 #[macro_export]
 macro_rules! __create_hook_impl {
-    (@is_active ACTIVE) => { true };
-    (@is_active INACTIVE) => { false };
+    // Internal helper to turn Status/Expressions into fn() -> bool
+    (@as_cond ACTIVE) => { || true };
+    (@as_cond INACTIVE) => { || false };
+    (@as_cond { $cond:expr }) => { $cond }; 
+    (@as_cond $cond:expr) => { $cond };
 
-    ($name:ident, $status:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+    ($name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         paste::paste! {
             #[cfg(not(rust_analyzer))]
             ::retour::static_detour! {
@@ -104,9 +117,21 @@ macro_rules! __create_hook_impl {
                         let rel_address = *off as usize;
                         type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
-                        // FIXME: initialize seems to fail (already initialized). Find out what causes this
-                        let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
-                        if auto_activate {
+                        
+                        
+                        // Leak detour closure
+                        let detour_fn: Box<fn($( $ty ),+) -> $out_type> =
+                            Box::new([<$name _detour_fkt>]);
+                        let detour_fn: &'static _ = Box::leak(detour_fn);
+                        [<o_ $name>].initialize(target, detour_fn).unwrap();
+                        // let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
+                        $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
+                        
+                        // We combine the global 'auto_activate' flag with the local condition
+                        // Note: We evaluate the condition here at attachment time
+                        let condition_met = ($crate::__create_hook_impl![@as_cond $status])();
+                        
+                        if auto_activate && condition_met {
                             [<o_ $name>].enable()?;
                         }
                         Ok(Some(rel_address))
@@ -118,11 +143,11 @@ macro_rules! __create_hook_impl {
                 $crate::resolvers::HookRegistration {
                     name: stringify!($name),
                     hook_fn: [<attach_ $name>],
-                    auto_activate: $crate::__create_hook_impl![@is_active $status],
+                    // Store the condition as a function pointer for runtime re-checks if needed
+                    condition: $crate::__create_hook_impl![@as_cond $status] as fn() -> bool,
                 }
             }
         }
-
     };
 }
 
@@ -196,6 +221,7 @@ macro_rules! CALL_ORIGINAL_SAFE {
         }
     }};
 }
+
 #[macro_export]
 macro_rules! TRY_OR_RETURN {
     ($call:expr) => {

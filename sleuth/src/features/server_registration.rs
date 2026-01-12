@@ -373,7 +373,7 @@ impl RegistrationInner {
             local_ip_address: "127.0.0.1",
             mods,
         };
-        sinfo!(f; "Request: {:#?}", request);
+        //sinfo!(f; "Request: {:#?}", request);
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {

@@ -46,7 +46,8 @@ pub type HookFn = unsafe fn(usize, std::collections::HashMap<String, u64>, bool)
 pub struct HookRegistration {
     pub name: &'static str,
     pub hook_fn: HookFn,
-    pub auto_activate: bool,
+    pub condition: fn() -> bool,
+    // pub auto_activate: bool,
 }
 
 pub type ConditionFn = fn() -> bool;
