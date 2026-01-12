@@ -40,7 +40,7 @@ use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
 // use crate::resolvers::unchained_integration::CHAT_QUEUE;
-use crate::tools::hook_globals::{globals, init_globals};
+use crate::tools::hook_globals::{CLI_ARGS, cli_args, globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
 
@@ -155,6 +155,8 @@ impl BuildInfo {
     }
 }
 
+
+
 #[no_mangle]
 pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     
@@ -188,36 +190,45 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
         }
     }
 
-    if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
-        match scan::scan(bi.platform, Some(bi.get_offsets())) {
-            Ok(new_offsets) if !new_offsets.is_empty() => {
-                println!(
-                    "Found {} missing signatures, updating build info",
-                    new_offsets.len()
-                );
-                for (name, offset) in new_offsets {
-                    bi.add_offset(name, offset);
+
+        if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
+            match scan::scan(bi.platform, Some(bi.get_offsets())) {
+                Ok(new_offsets) if !new_offsets.is_empty() => {
+                    println!(
+                        "Found {} missing signatures, updating build info",
+                        new_offsets.len()
+                    );
+                    for (name, offset) in new_offsets {
+                        bi.add_offset(name, offset);
+                    }
                 }
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
             }
-            Ok(_) => {}
-            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
+        }
+    
+    static APPLIED: AtomicBool = AtomicBool::new(false);
+
+    if !APPLIED.load(Ordering::Relaxed) {
+        let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
+        match current.as_ref() {
+            None => sdebug!(f; "No current BuildInfo"),
+            Some(bi) => {
+                // Attach hooks
+                
+                let offsets = bi.offsets.clone();
+                unsafe {
+                    apply_patches(exe.base_address, offsets.clone());
+                }
+                unsafe {
+                    attach_hooks(exe.base_address, offsets.clone()).unwrap();
+                }
+                APPLIED.store(true, Ordering::Relaxed);
+            },
         }
     }
-    
-    let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
-    match current.as_ref() {
-        None => sdebug!(f; "No current BuildInfo"),
-        Some(bi) => {
-            // Attach hooks
-            
-            let offsets = bi.offsets.clone();
-            unsafe {
-                apply_patches(exe.base_address, offsets.clone());
-            }
-            unsafe {
-                attach_hooks(exe.base_address, offsets.clone()).unwrap();
-            }
-        },
+    else {
+        swarn!(f; "Patches already applied");
     }
 
     // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";    
@@ -256,11 +267,21 @@ pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_cha
     *bi.get_offset(name.as_ref()).unwrap_or(&0)
 }
 
+#[no_mangle]
+pub extern "C" fn preinit_rustlib() {
+    let args = unsafe { tools::cli_args::load_cli().expect("Failed to load CLI ARGS") };
+    sdebug!(f; "CLI Args: {:#?}", args);
+    if CLI_ARGS.set(args).is_err() {
+        eprintln!("Error: Cli args already initialized!");
+    }
+    tools::logger::init_syslog().expect("Failed to init syslog");
+}
+
 // Initialize Logger and Globals
 #[no_mangle]
 pub extern "C" fn init_rustlib() {
     print!("{CLI_LOGO}");
-    tools::logger::init_syslog().expect("Failed to init syslog");
+    // tools::logger::init_syslog().expect("Failed to init syslog");
     unsafe {
         init_globals().expect("Failed to init globals!");
     };
@@ -284,7 +305,7 @@ pub extern "C" fn postinit_rustlib() {
 
     // #[cfg(feature="server_registration")]
     // {
-    //     let args = &globals().cli_args;
+    //     let args = &cli_args();
     //     if args.is_server() || args.register {
     //         let query_port = args.game_server_query_port.unwrap_or(7071);
     //         let reg = Arc::new(Registration::new("127.0.0.1", query_port));
@@ -306,7 +327,7 @@ pub extern "C" fn postinit_rustlib() {
     //     *global_mm = Some(Arc::clone(&mm));
     // }
     
-    // let args = &globals().cli_args;
+    // let args = &cli_args();
     #[cfg(feature="discord_integration_old")]
     if args.discord_enabled() {
         
@@ -359,7 +380,7 @@ pub fn world_init() {
         handle_rcon();
     });
 
-    let args = &globals().cli_args;
+    let args = &cli_args();
     sinfo!(f; "Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
 
     #[cfg(feature="server_registration")]
@@ -381,13 +402,13 @@ pub fn world_init() {
         thread::sleep(Duration::from_millis(500));
     }
 
-    if globals().cli_args.discord_enabled() {
+    if cli_args().discord_enabled() {
         sinfo!(f; "Starting discord bridge");
         // let config = DiscordConfig {
-        //     bot_token: globals().cli_args.discord_bot_token.clone().expect("Token invalid"),
-        //     channel_id: globals().cli_args.discord_channel_id.unwrap(),
-        //     admin_channel_id: globals().cli_args.discord_admin_channel_id.unwrap(),
-        //     general_channel_id: globals().cli_args.discord_general_channel_id.unwrap(),
+        //     bot_token: cli_args().discord_bot_token.clone().expect("Token invalid"),
+        //     channel_id: cli_args().discord_channel_id.unwrap(),
+        //     admin_channel_id: cli_args().discord_admin_channel_id.unwrap(),
+        //     general_channel_id: cli_args().discord_general_channel_id.unwrap(),
         //     admin_role_id: 1113981344872140822,
         //     disabled_modules: vec![],
         //     blocked_notifications: vec![],
@@ -406,7 +427,7 @@ pub fn world_init() {
             DiscordConfig::default()
         });
 
-        let cli = &globals().cli_args;
+        let cli = &cli_args();
         update(&mut config.bot_token, cli.discord_bot_token.clone());
         update(&mut config.channel_id, cli.discord_channel_id);
         update(&mut config.admin_channel_id, cli.discord_admin_channel_id);
@@ -453,14 +474,15 @@ pub unsafe fn attach_hooks(
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
-        if !hook.auto_activate {
-            sdebug!(f; "inactive hook: {}", hook.name);
+        let cond = (hook.condition)();
+        if !cond {
+            swarn!(f; "inactive hook: {}", hook.name);
             // Inactive hooks initialize but don't enable the detour
             // continue;
         }
 
-        match (hook.hook_fn)(base_address, offsets.clone(), hook.auto_activate) {
-            Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if hook.auto_activate { "attached" } else { "attached (passive)" }),
+        match (hook.hook_fn)(base_address, offsets.clone(), cond) {
+            Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e),
         }
     }

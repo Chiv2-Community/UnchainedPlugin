@@ -210,16 +210,17 @@ CREATE_HOOK!(GetAssetRegistry_Helper, INACTIVE,  *mut TScriptInterface, (ret_val
 // });
 
 
-#[cfg(feature = "dev")]
-define_pattern_resolver!(FNamePool, Call, [
-        "74 09 4C 8D 05 | ?? ?? ?? ?? EB ?? 48 8D 0D ?? ?? ?? ?? E8",
-        "48 83 EC 20 C1 EA 03 48 8d 2d | ?? ?? ?? ?? ?? CA ?? ?? 48 bf cd cc cc cc cc cc cc",
-    ]);
+// hmm
+// #[cfg(feature = "dev")]
+// define_pattern_resolver!(FNamePool, Call, [
+//         "74 09 4C 8D 05 | ?? ?? ?? ?? EB ?? 48 8D 0D ?? ?? ?? ?? E8",
+//         "48 83 EC 20 C1 EA 03 48 8d 2d | ?? ?? ?? ?? ?? CA ?? ?? 48 bf cd cc cc cc cc cc cc",
+//     ]);
 
-#[cfg(feature = "dev")]
-CREATE_HOOK!(FNamePool, INACTIVE,  *mut c_void, (ret_val_tscr:  *mut c_void),{
-    crate::sinfo![f; "Triggered!"];
-});
+// #[cfg(feature = "dev")]
+// CREATE_HOOK!(FNamePool, INACTIVE,  *mut c_void, (ret_val_tscr:  *mut c_void),{
+//     crate::sinfo![f; "Triggered!"];
+// });
 
 // FName * __thiscall FName::FName(FName *this,wchar_t *param_1,EFindName param_2)
 

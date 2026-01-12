@@ -39,14 +39,14 @@ pub fn init_syslog() -> anyhow::Result<()> {
         )))
         .build();
 
-        #[cfg(feature="syslog-client")]
-        let syslog = SyslogAppender::builder()
-        .encoder(Box::new(PatternEncoder::new(
-            // TODO: make this configurable opt? Maybe only for syslog or only file log
-            // FIXME: Nihi: add valid syslog pattern in Appender
-            "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}", // Log file name and line
-        )))
-        .build();
+        // #[cfg(feature="syslog-client")]
+        // let syslog = SyslogAppender::builder()
+        // .encoder(Box::new(PatternEncoder::new(
+        //     // TODO: make this configurable opt? Maybe only for syslog or only file log
+        //     // FIXME: Nihi: add valid syslog pattern in Appender
+        //     "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}", // Log file name and line
+        // )))
+        // .build();
 
         let file = FileAppender::builder()
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] [{M}] [{f}:{L}] {m}{n}\n")))
@@ -70,7 +70,8 @@ pub fn init_syslog() -> anyhow::Result<()> {
 
     builder = builder
         .logger(Logger::builder().build("serenity", log::LevelFilter::Warn))
-        .logger(Logger::builder().build("tracing", log::LevelFilter::Warn));
+        .logger(Logger::builder().build("tracing", log::LevelFilter::Warn))
+        .logger(Logger::builder().build("patternsleuth", log::LevelFilter::Warn));
 
     // #[cfg(feature="syslog-client")]
     // {
@@ -84,11 +85,11 @@ pub fn init_syslog() -> anyhow::Result<()> {
     let config = builder
         .appender(Appender::builder().build("file", Box::new(file)))
         .appender(Appender::builder().build("kismet", Box::new(kismet)))
-        .appender(Appender::builder().build("syslog", Box::new(syslog)))
+        // .appender(Appender::builder().build("syslog", Box::new(syslog)))
         .build(
             Root::builder()
                 .appender("console")
-                .appender("syslog")
+                // .appender("syslog")
                 .appender("file")
                 // .additive(false)
                 // .appender("kismet")

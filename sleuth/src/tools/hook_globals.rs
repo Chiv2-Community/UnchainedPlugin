@@ -166,7 +166,7 @@ pub struct Globals {
     platform: PlatformType,
     base_address: usize,
     is_server: bool,
-    pub(crate) cli_args: CLIArgs,
+    // pub(crate) cli_args: CLIArgs,
     pub world: RwLock<SyncPtr<c_void>>,
     #[cfg(feature="server_registration")]
     pub registration: Mutex<Option<Arc<Registration>>>,
@@ -176,7 +176,12 @@ pub struct Globals {
     pub DISCORD_BRIDGE: OnceLock<DiscordBridge>,
 }
 
+pub static CLI_ARGS: OnceLock<CLIArgs> = OnceLock::new();
 static GLOBALS: OnceLock<Globals> = OnceLock::new();
+
+pub fn cli_args() -> &'static CLIArgs {
+    CLI_ARGS.get().expect("CLI_ARGS not parsed yet!")
+}
 
 pub fn globals() -> &'static Globals {
     GLOBALS.get().expect("Globals not initialized")
@@ -220,9 +225,9 @@ impl Globals {
     pub fn is_server(&self) -> bool {
         self.is_server
     }
-    fn args(&self) -> &CLIArgs {
-        &self.cli_args
-    }
+    // fn args(&self) -> &CLIArgs {
+    //     &self.cli_args
+    // }
     global_ptr!(world, c_void);
 }
 
@@ -244,8 +249,6 @@ pub unsafe fn init_globals() -> Result<(), String> {
     );
 
     // Load CLI ARGS
-    let args = load_cli().expect("Failed to load CLI ARGS");
-    sdebug!(f; "CLI Args: {:#?}", args);
     sinfo!(f; "Running resolvers");
     // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
@@ -274,7 +277,7 @@ pub unsafe fn init_globals() -> Result<(), String> {
         main_thread_id: std::thread::current().id(),
         base_address: exe.base_address,
         is_server: false,
-        cli_args: args,
+        // cli_args: args,
         platform,
         world: RwLock::new(SyncPtr::default()),
         #[cfg(feature="server_registration")]

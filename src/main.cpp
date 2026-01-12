@@ -15,6 +15,7 @@
 
 struct RustBuildInfo;
 extern "C" const RustBuildInfo* load_current_build_info(bool scan_missing);
+extern "C" const void preinit_rustlib();
 extern "C" const void init_rustlib();
 extern "C" const void postinit_rustlib();
 extern "C" uint8_t build_info_save(const void* bi);
@@ -197,9 +198,9 @@ DWORD WINAPI main_thread(LPVOID lpParameter) {
 
 		// GLOG_ERROR("Chivalry 2 Unchained Plugin");
 
-		// GLOG_INFO("Command line args:");
-		// GLOG_INFO("{}", std::wstring(GetCommandLineW()));
-		// GLOG_INFO("");
+		GLOG_INFO("Command line args:");
+		GLOG_INFO("{}", std::wstring(GetCommandLineW()));
+		GLOG_INFO("");
 		init_rustlib();
 
 		auto rust_build_info = load_current_build_info(true);
@@ -292,7 +293,8 @@ bool initialize_minhook()
 bool apply_preliminary_patches()
 {
 	bool success = true;
-
+	
+	preinit_rustlib();
 	const RustBuildInfo* build_info = load_current_build_info(false);
 
 	if (build_info != nullptr)

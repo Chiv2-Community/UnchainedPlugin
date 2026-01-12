@@ -46,6 +46,7 @@ pub struct ArgonSDKModBase {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct UModLoaderSettings_C {
     // 0x0000 (size 0x28) 
     pub base: [u8; 0x28], 

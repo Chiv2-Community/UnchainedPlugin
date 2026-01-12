@@ -10,16 +10,19 @@ path = "src/bin/mock_server.rs"
 [lib]
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Cforce-frame-pointers=yes"]
+
 [profile.dev]
-debug = true
+debug = "full"
 opt-level = 0
-panic = "abort"
+panic = "unwind"
 incremental = false
 
 [profile.release]
 debug = "full"
 opt-level = 1
-panic = "abort"
+panic = "unwind"
 lto = false
 
 
@@ -80,9 +83,9 @@ ureq = "3.1.4"
 itertools = "0.14.0"
 sleuth_macros = { path = "./sleuth_macros" }
 # server registration
-a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "3d3259e", optional = true }
+a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", optional = true }
 reqwest = { version = "0.12.19", optional = true, features = ["blocking", "json"]  }
-# discord
+# discord<
 async-trait = "0.1"
 backtrace = "0.3.76"
 notify = "6.1.1"

@@ -1,12 +1,14 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::os::raw::c_void;
 use std::sync::{Arc, Mutex, mpsc};
+use itertools::enumerate;
 use widestring::U16CString;
 use crate::features::Mod;
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
+use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
 use crate::{ serror, sinfo};
@@ -239,12 +241,18 @@ impl ModManager {
             }
         }
         
+        sinfo!(f; "Found {} Mods", registry_local.len());
+        
         {
             let mut mods = self.registry.lock().expect("Lock poisoned");
             *mods = registry_local;
         }
+
         
-        self.scan_active_mod_actors().expect("Failed to scan active mods");
+        match self.scan_active_mod_actors() {
+            Ok(_) => {},
+            Err(e) => {serror!(f; "Failed to scan active mods: {}", e);}
+        };
     }
 
     /// SCAN 2: Active Mod Actors (Entities currently in the World)
@@ -346,9 +354,16 @@ impl ModManager {
             return;
         }
         let save_game = unsafe {&mut *(save_game_ptr as *mut UModLoaderSettings_C)};
+        // sinfo!(f;"Save Game:   {:#?}", save_game);
+        sinfo!(f;"Enable Bots: {}", save_game.b_enable_bots);
+        sinfo!(f;"PlayerBots:  {}", save_game.b_use_player_bots);
+        sinfo!(f;"Bot count:   {}", save_game.num_player_bots);
+        for (cnt, Mod) in enumerate(save_game.enabled_mods.as_slice()) {
+            sinfo!(f;"{:02}: Mod: {}", cnt, Mod.soft_ptr.path.asset_path_name);
+        }
         // FIXME: apply mods from cli
         save_game.enabled_mods.clear();
-        if let Some(mod_list) = globals().cli_args.server_mods.as_ref() {
+        if let Some(mod_list) = cli_args().server_mods.as_ref() {
             for Mod in mod_list.iter() {  
                 if let Some(name_short) = Mod.rsplit_once('.').map(|(_, n)| n) {                    
                     let soft_ptr = TSoftClassPtr::from_path(Mod.as_str());
@@ -358,7 +373,13 @@ impl ModManager {
             }      
         }  
         let res = unsafe { TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0)) };
-        sinfo!(f; "Game Saved: {res}");
+        if res {
+            sinfo!(f; "Modloader settings saved: {res}");
+        }
+        else {
+            serror!(f; "Failed to save Modloader settings");
+
+        }
     }
 
     pub fn dump_to_console(&self) {

@@ -89,6 +89,7 @@ impl FRotator {
 // SoftClassPath
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FSoftObjectPath {
     pub asset_path_name: FName,   // 0x00
     pub sub_path_string: FString, // 0x08
@@ -105,6 +106,7 @@ impl FSoftObjectPath {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct FSoftObjectPtr {
     pub weak_ptr: [u8; 8],     // 0x00
     pub tag_at_last_test: i32, // 0x08
@@ -135,6 +137,7 @@ impl<T> TSoftClassPtr<T> {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TSoftClassPtr<T = c_void> {
     pub soft_ptr: FSoftObjectPtr,
     _marker: std::marker::PhantomData<T>,
@@ -146,7 +149,7 @@ impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = widestring::U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		sinfo!(f; "Constructing fname for {}", path);
+		// sinfo!(f; "Constructing fname for {}", path);
 
 		CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 			&mut name as *mut FName,
@@ -155,7 +158,7 @@ impl FName {
 		))
 		.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			sinfo!(f; "1. Name is invalid for {}", wide_path.to_string_lossy());
+			// sinfo!(f; "1. Name is invalid for {}", wide_path.to_string_lossy());
 			CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 				&mut name as *mut FName,
 				wide_path.as_ptr(),

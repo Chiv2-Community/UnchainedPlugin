@@ -31,7 +31,7 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
     }
 
     sinfo!(f; "Scanning for {} missing signatures", resolvers_to_scan.len());
-    resolvers_to_scan.iter().for_each(|res| sdebug!(f; "  {}", res.name));
+    resolvers_to_scan.iter().for_each(|res| sinfo!(f; "  {}", res.name));
 
     let dyn_resolvers = resolvers_to_scan.iter()
         .map(|res| res.getter)

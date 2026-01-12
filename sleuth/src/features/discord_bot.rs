@@ -203,7 +203,7 @@ impl DiscordBridge {
     }
 
     fn build_win_embed(winner: String, map: String) -> CreateEmbed {
-        let server_name = globals().cli_args
+        let server_name = cli_args()
             .find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
             .unwrap_or("Server");
         CreateEmbed::new()

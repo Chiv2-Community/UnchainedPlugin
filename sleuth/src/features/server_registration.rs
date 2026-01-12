@@ -7,6 +7,7 @@ use a2s::A2SClient;
 use crate::discord::notifications::ServerStatus;
 use crate::features::Mod;
 
+use crate::tools::hook_globals::cli_args;
 use crate::{dispatch, globals, serror, sinfo, swarn};
 
 // --- Configuration Constants ---
@@ -99,7 +100,7 @@ enum WorkerState {
 struct BackendApi;
 impl BackendApi {
     fn base_url() -> String {
-        globals().cli_args.server_browser_backend.clone().unwrap_or_default()
+        cli_args().server_browser_backend.clone().unwrap_or_default()
     }
 
     fn register() -> String {
@@ -319,7 +320,7 @@ impl RegistrationInner {
     }
     fn register(&self, a2s: &A2SClient) -> Result<Identity, ()> {
         let info = self.poll_a2s_with_retry(a2s)?;
-        let args = &globals().cli_args;
+        let args = &cli_args();
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
         let mods;
         let mut all_mods: Vec<Mod> = Vec::new();
@@ -352,7 +353,7 @@ impl RegistrationInner {
             mods = self.mods.lock().unwrap().clone();
         }
 
-        let server_name = match globals().cli_args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
+        let server_name = match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
             Some(name_str) => name_str,
             _ => &info.name
         };
@@ -372,6 +373,7 @@ impl RegistrationInner {
             local_ip_address: "127.0.0.1",
             mods,
         };
+        sinfo!(f; "Request: {:#?}", request);
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {

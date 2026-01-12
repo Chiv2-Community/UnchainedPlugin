@@ -18,7 +18,7 @@ define_pattern_resolver!(
     ["48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"]
 );
 CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_1: *mut FString), {
-    let args = &globals().cli_args;
+    let args = &cli_args();
     static INITIALIZED: AtomicBool = AtomicBool::new(false);
     let pwd_opt = args.server_password.as_ref()
         .map(|p| format!("?Password={}", p))

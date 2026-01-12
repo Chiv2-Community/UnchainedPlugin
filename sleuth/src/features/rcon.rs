@@ -6,7 +6,9 @@ use crate::{tools::hook_globals::globals};
 
 #[cfg(feature="rcon_commands")]
 pub fn handle_rcon() {
-    let port = match globals().cli_args.rcon_port {
+    use crate::tools::hook_globals::cli_args;
+
+    let port = match cli_args().rcon_port {
         Some(p) => p,
         None => return,
     };
