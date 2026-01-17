@@ -10,8 +10,6 @@ use serenity::all::{Http, ChannelId, CreateMessage, MessageId, CreateEmbed, Edit
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
-use rand::seq::SliceRandom;
-use rand::rng;
 
 pub struct Dashboard {
     // Current State
@@ -185,7 +183,9 @@ impl DiscordSubscriber for Dashboard {
         // Update state based on events
         if let Some(_e) = any.downcast_ref::<JoinEvent>() {
             self.player_count += 1;
-            self.needs_refresh = true;
+            if self.message_id.is_some() {
+                self.needs_refresh = true;
+            }
         }
 
         
@@ -196,12 +196,16 @@ impl DiscordSubscriber for Dashboard {
         // We'd need a LeaveEvent in notifications.rs for this
         if event.event_type() == "LeaveEvent" {
             self.player_count = self.player_count.saturating_sub(1);
-            self.needs_refresh = true;
+            if self.message_id.is_some() {
+                self.needs_refresh = true;
+            }
         }
 
         if let Some(e) = any.downcast_ref::<MapChangeEvent>() {
             self.current_map = e.new_map.clone();
-            self.needs_refresh = true;
+            if self.message_id.is_some() {
+                self.needs_refresh = true;
+            }
         }
         
         if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
@@ -285,6 +289,10 @@ impl DiscordSubscriber for Dashboard {
 
     async fn on_tick(&mut self, http: &Arc<Http>, channel: ChannelId) -> Vec<BotResponse> {
         // Only refresh every 30 seconds or if a major event happened
+        if !self.needs_refresh && self.message_id.is_none() {
+            return NO_RESP;
+        }
+        
         if !self.needs_refresh && self.last_update.elapsed() < Duration::from_secs(30) {
             return NO_RESP;
         }
@@ -294,22 +302,22 @@ impl DiscordSubscriber for Dashboard {
         }
 
         let embed = self.build_embed();
-        let embed2 = self.build_embed2();
+        // let embed2 = self.build_embed2();
 
         match self.message_id {
             Some(id) => {
                 // Edit existing message
                 let _ = channel.edit_message(http, self.message_id.unwrap(), EditMessage::new().add_embed(embed)).await;
-                let _ = channel.edit_message(http, self.message_id2.unwrap(), EditMessage::new().add_embed(embed2)).await;
+                // let _ = channel.edit_message(http, self.message_id2.unwrap(), EditMessage::new().add_embed(embed2)).await;
             }
             None => {
                 // Create the initial dashboard message
                 if let Ok(msg) = channel.send_message(http, CreateMessage::new().add_embed(embed)).await {
                     self.message_id = Some(msg.id);
                 }
-                if let Ok(msg) = channel.send_message(http, CreateMessage::new().add_embed(embed2)).await {
-                    self.message_id2 = Some(msg.id);
-                }
+                // if let Ok(msg) = channel.send_message(http, CreateMessage::new().add_embed(embed2)).await {
+                //     self.message_id2 = Some(msg.id);
+                // }
             }
         }
 

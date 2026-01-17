@@ -311,7 +311,7 @@ impl GameCommandEvent {
             actor: CommandActor {
                 display_name: chat.sender.clone(),
                 identity: ActorIdentity::GamePlayer {
-                    player_id: 0, //chat.player_id, // FIXME
+                    player_id: 0, //chat.player_id, // FIXME: grab playerid from the game
                     display_name: chat.sender.clone(),
                 },
                 permissions: ActorPermissions { flags: perms },

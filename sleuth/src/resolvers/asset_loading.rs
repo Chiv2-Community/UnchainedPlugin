@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
 
-use crate::ue::{FString, TArray, UClass, UObject};
+use crate::ue::{FString};
 
 define_pattern_resolver!(LoadGameFromSlot,["48 8B C4 55 57 48 8D A8 E8 FE FF FF 48 81 EC 08 02 00 00 48 89 58 08 33 FF 48 89 70"]);
 // USaveGame * __cdecl UGameplayStatics::LoadGameFromSlot(FString *param_1,int param_2)

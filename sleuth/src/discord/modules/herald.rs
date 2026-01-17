@@ -5,11 +5,9 @@ use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;
 use crate::discord::notifications::*;
 use crate::discord::responses::*;
-use crate::game::chivalry2::EChatType;
 use serde::Deserialize;
 use serde::Serialize;
 use serenity::all::CreateAllowedMentions;
-use serenity::all::CreateEmbed;
 use serenity::all::{Http, ChannelId, CreateMessage, RoleId};
 use std::sync::Arc;
 

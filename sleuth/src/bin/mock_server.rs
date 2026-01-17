@@ -21,7 +21,7 @@ fn main() {
     });
     let ctx = Arc::new(SleuthContext {
             chat: Arc::new(ConsoleChatSink),
-            config: config
+            config
         });
     let handle = DiscordBridge::init(config_path, ctx);
     DISCORD_HANDLE.set(handle)

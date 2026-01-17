@@ -2,7 +2,7 @@ use std::os::raw::c_void;
 
 use crate::{game::engine::FText, ue::FString};
 
-
+// Console command permissions
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
     // "75 18 ?? ?? ?? ?? 75 12 4d 85 f6 74 0d 41 38 be ?? ?? ?? ?? 74 04 32 db eb 9b 48 8b 5d 7f 49 8b d5 4c 8b 45 77 4c 8b cb 49 8b cf", // EGS - latest
     // "75 17 45 84 ED", // STEAM
@@ -27,8 +27,6 @@ CREATE_HOOK!(ExecuteConsoleCommand, ACTIVE, NONE, c_void, (command: *mut FString
     CALL_ORIGINAL!(ExecuteConsoleCommand(command))
 });
 
-// FIXME: Unused
-// FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
 define_pattern_resolver![FText_AsCultureInvariant,  First, {
     EGS: ["48 89 5C 24 18 48 89 74 24 20 41 56 48 83 EC 60 33 C0 48 89 7C 24 78 48 63"],
     STEAM: [
@@ -37,8 +35,8 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
         ]
 
 }];
-
-CREATE_HOOK!(FText_AsCultureInvariant, INACTIVE, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
+// FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
+CREATE_HOOK!(FText_AsCultureInvariant, CALLED, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
 });
 
 // ,|ctx, patterns| {
@@ -61,11 +59,7 @@ CREATE_HOOK!(ConsoleCommand, ACTIVE, FString, (this_ptr: *mut c_void, command: *
     }
 });
 
-// FIXME: Unused
-define_pattern_resolver!(
-    BroadcastLocalizedChat,
-    ["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]
-);
+
 
 // Unused
 define_pattern_resolver![GetTBLGameMode, {

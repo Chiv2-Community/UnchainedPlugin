@@ -31,7 +31,6 @@ impl GameEvent for MapVoteEvent {
 
 use std::sync::Arc;
 use std::collections::HashSet;
-use async_trait::async_trait;
 use serenity::builder::CreateMessage;
 use serenity::model::id::ChannelId;
 use serenity::http::Http;

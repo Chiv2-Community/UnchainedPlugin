@@ -358,15 +358,15 @@ impl ModManager {
         sinfo!(f;"Enable Bots: {}", save_game.b_enable_bots);
         sinfo!(f;"PlayerBots:  {}", save_game.b_use_player_bots);
         sinfo!(f;"Bot count:   {}", save_game.num_player_bots);
-        for (cnt, Mod) in enumerate(save_game.enabled_mods.as_slice()) {
-            sinfo!(f;"{:02}: Mod: {}", cnt, Mod.soft_ptr.path.asset_path_name);
+        for (cnt, r#mod) in enumerate(save_game.enabled_mods.as_slice()) {
+            sinfo!(f;"{:02}: Mod: {}", cnt, r#mod.soft_ptr.path.asset_path_name);
         }
         // FIXME: apply mods from cli
         save_game.enabled_mods.clear();
         if let Some(mod_list) = cli_args().server_mods.as_ref() {
-            for Mod in mod_list.iter() {  
-                if let Some(name_short) = Mod.rsplit_once('.').map(|(_, n)| n) {                    
-                    let soft_ptr = TSoftClassPtr::from_path(Mod.as_str());
+            for r#mod in mod_list.iter() {  
+                if let Some(name_short) = r#mod.rsplit_once('.').map(|(_, n)| n) {                    
+                    let soft_ptr = TSoftClassPtr::from_path(r#mod.as_str());
                     sinfo!(f; "Enabling mod {}", name_short);
                     save_game.enabled_mods.push(soft_ptr);
                 }

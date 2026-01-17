@@ -1,7 +1,7 @@
 use crate::discord::responses::{BotResponse, IntoResponses, msg};
 use crate::discord::{core::*, responses::NO_RESP};
 use crate::discord::notifications::JoinEvent;
-use serenity::all::{Http, ChannelId, CreateMessage, CreateEmbed};
+use serenity::all::{Http, ChannelId};
 use std::sync::Arc;
 
 pub struct JoinBatcher {

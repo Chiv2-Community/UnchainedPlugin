@@ -5,7 +5,7 @@ pub trait ModuleConfig: Serialize + DeserializeOwned + Default {
     fn key() -> &'static str;
 }
 
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub trait ConfigProvider {

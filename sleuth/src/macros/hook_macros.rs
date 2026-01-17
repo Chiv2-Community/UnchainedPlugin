@@ -90,6 +90,8 @@ macro_rules! __create_hook_impl {
     // Internal helper to turn Status/Expressions into fn() -> bool
     (@as_cond ACTIVE) => { || true };
     (@as_cond INACTIVE) => { || false };
+    (@as_cond CALLED) => { || false };
+    (@as_cond DISABLED) => { || false };
     (@as_cond { $cond:expr }) => { $cond }; 
     (@as_cond $cond:expr) => { $cond };
 

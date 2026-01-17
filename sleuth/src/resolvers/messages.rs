@@ -1,7 +1,6 @@
 use std::os::raw::c_void;
 
 use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
-use crate::globals;
 
 
 // Chat messages
@@ -158,18 +157,6 @@ pub mod kismet_log {
 }
 
 // /*
-// * void __cdecl
-// UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
-// */
-// DECL_HOOK(void, execBroadcastLocalizedChat, (FString* msg, void* param_2, void* param_3))
-// {
-// 	/*log("execBroadcastLocalizedChat");
-// 	logWideString(msg->str);*/
-// 	o_execBroadcastLocalizedChat(msg, param_2, param_3);
-// }
-
-
-// /*
 // void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
 // }
 // */
@@ -181,21 +168,21 @@ pub mod kismet_log {
 // 	o_ClientReceiveChat_Implementation(SenderPlayerState, S, Type, IsSenderDev, OverrideColor);
 // }
 
-define_pattern_resolver!(execBroadcastLocalizedChat,["48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ?? ?? ?? ?? ?? 48 83 7B 20 00 48 8B"]);
-// UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
-CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
-    if !msg.is_null() {
-        let url_w = unsafe { (*msg).to_string() };
-        crate::sinfo![f; "Triggered! {url_w}"];
-    }
-});
+// TODO: Unused
+// define_pattern_resolver!(execBroadcastLocalizedChat,["48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ?? ?? ?? ?? ?? 48 83 7B 20 00 48 8B"]);
+// // UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
+// CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
+//     if !msg.is_null() {
+//         let url_w = unsafe { (*msg).to_string() };
+//         crate::sinfo![f; "Triggered! {url_w}"];
+//     }
+// });
 
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK!(BroadcastLocalizedChat, INACTIVE, (gamemode: *mut c_void, text: *mut FText, chat_type: EChatType),{
+CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut c_void, text: *mut FText, chat_type: EChatType),{
     crate::sinfo![f; "Triggered!"];
 });
-
 
 define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
 // void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
@@ -205,10 +192,5 @@ CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mu
         crate::sinfo![f; "Triggered! {url_w}"];
     }
 });
-
-	/* UTBLOnlineLibrary::execBroadcastLocalizedChat */
-	// "48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ? ? ? ? ? 48 83 7B 20 00 48 8B",
-	/*ClientReceiveChat_Implementation*/
-	// "40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48",
 
 

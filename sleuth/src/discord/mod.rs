@@ -12,79 +12,20 @@ use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::map_vote::ExtMapVote;
 use crate::discord::modules::{
-    batcher::JoinBatcher, dashboard::Dashboard, duel_manager::DuelManager, herald::AdminHerald,
-    killstreak::KillstreakModule, stats_tracker::StatsTracker,
+    batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
 };
 use crate::discord::notifications::{CommandRequest, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
-use crate::game::chivalry2::EChatType;
-use crate::game::engine::FText;
-use crate::ue::FString;
-use crate::{sinfo, swarn};
+use crate::{swarn};
 use censor::Censor;
-use crossbeam_channel::{bounded, Receiver, Sender};
-use serde::{Deserialize, Serialize};
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
 use serenity::client::EventHandler as DiscordHandler;
 use serenity::prelude::*;
 use std::sync::{Arc, OnceLock};
-use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
-use crate::resolvers::messages::o_BroadcastLocalizedChat;
-use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 use notify_debouncer_mini::{new_debouncer, notify::*, DebouncedEvent};
 use std::time::Duration;
 use tokio::sync::Mutex;
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct DiscordConfig {
-//     pub bot_token: String,
-//     pub channel_id: u64,
-//     pub admin_role_id: u64,
-
-//     #[serde(default = "default_modules")]
-//     pub enabled_modules: Vec<String>,
-
-//     #[serde(default = "default_filters")]
-//     pub notification_filter: Vec<String>,
-
-//     #[serde(default = "default_true")]
-//     pub enable_dashboard: bool,
-// }
-
-// fn default_modules() -> Vec<String> {
-//     vec![
-//         "JoinBatcher".into(),
-//         "Dashboard".into(),
-//         "AdminHerald".into(),
-//         "KillStreak".into(),
-//         "DuelManager".into(),
-//         "StatsTracker".into(),
-//     ]
-// }
-
-// fn default_filters() -> Vec<String> {
-//     vec![
-//         "Join".into(),
-//         "Chat".into(),
-//         "AdminAlert".into(),
-//         "MatchWon".into(),
-//     ]
-// }
-
-// #[derive(serde::Deserialize, Clone, Debug)]
-// pub struct DiscordConfig {
-//     pub bot_token: String,
-//     pub channel_id: u64,
-//     pub admin_channel_id: u64,
-//     pub general_channel_id: u64,
-//     pub admin_role_id: u64,
-//     pub disabled_modules: Vec<String>,
-//     pub blocked_notifications: Vec<String>,
-// }
-
-fn default_true() -> bool {
-    true
-}
 
 pub fn watch_config(path: &str, subscribers: Arc<Mutex<Vec<Box<dyn DiscordSubscriber>>>>) {
     let path_clone = path.to_string();

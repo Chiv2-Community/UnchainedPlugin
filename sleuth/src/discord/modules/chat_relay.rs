@@ -1,15 +1,9 @@
 use crate::discord::{ChatType, responses::*};
 use crate::discord::{core::*};
-use crate::discord::notifications::{BridgeChatEvent, CommandRequest, GameChatMessage};
-use crate::game::chivalry2::EChatType;
-use crate::game::engine::FText;
+use crate::discord::notifications::{CommandRequest, GameChatMessage};
 use crate::sinfo;
-use crate::ue::{FString}; // Assuming these are your internal types
-use serenity::all::{Http, ChannelId, CreateMessage};
+use serenity::all::{Http, ChannelId};
 use std::sync::Arc;
-use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
-use crate::resolvers::messages::o_BroadcastLocalizedChat;
-use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 
 pub struct ChatRelayModule {
     ctx: crate::discord::Ctx

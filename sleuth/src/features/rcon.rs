@@ -1,7 +1,6 @@
 use std::{
     io::{BufRead, BufReader}, net::TcpListener, thread
 };
-use crate::{tools::hook_globals::globals};
 
 
 #[cfg(feature="rcon_commands")]

@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use inventory;
 use once_cell::sync::Lazy;
 use crate::resolvers::unchained_integration::run_on_game_thread;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 pub type CommandResult = Result<()>;
 
