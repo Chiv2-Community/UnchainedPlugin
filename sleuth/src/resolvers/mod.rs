@@ -73,6 +73,9 @@ pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;
+pub mod desync;
+#[cfg(feature="move-autonomous-desync")]
+pub mod desync_tests;
 
 #[macro_use]
 pub mod chiv2_macros;
