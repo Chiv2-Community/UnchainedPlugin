@@ -2,7 +2,7 @@ extern crate proc_macro;
 use darling::{FromMeta, ast::NestedMeta};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{FnArg, ItemFn, Pat, parse_macro_input};
+use syn::{FnArg, ItemFn, LitBool, Pat, parse_macro_input};
 
 #[derive(FromMeta)]
 struct CommandArgs {
@@ -122,12 +122,16 @@ use syn::{LitStr, Token, parse::{Parse, ParseStream}};
 struct HandlerArgs {
     name: String,
     desc: String,
+    source: Option<String>,
+    elevated: bool,
 }
 
 impl Parse for HandlerArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name = String::new();
         let mut desc = String::new();
+        let mut source = None;
+        let mut elevated = false;
 
         // check if the first thing is just a string literal: #[handler_command("yes", ...)]
         if input.peek(LitStr) {
@@ -143,13 +147,28 @@ impl Parse for HandlerArgs {
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
             let _: Token![=] = input.parse()?;
-            let val: LitStr = input.parse()?;
             
             match ident.to_string().as_str() {
-                "name" => name = val.value(),
-                "desc" => desc = val.value(),
-                _ => return Err(syn::Error::new(ident.span(), "Unknown attribute key. Use 'name' or 'desc'.")),
+                "name" => {
+                    let val: LitStr = input.parse()?;
+                    name = val.value();
+                }
+                "desc" => {
+                    let val: LitStr = input.parse()?;
+                    desc = val.value();
+                }
+                "source" => {
+                    let val: LitStr = input.parse()?;
+                    source = Some(val.value());
+                }
+                "elevated" => {
+                    let val: syn::LitBool = input.parse()?;
+                    elevated = val.value();
+                }
+                _ => return Err(syn::Error::new(ident.span(), "Unknown attribute key.")),
             }
+
+            // 4. Handle the optional comma between attributes
             if input.peek(Token![,]) {
                 let _: Token![,] = input.parse()?;
             }
@@ -158,8 +177,7 @@ impl Parse for HandlerArgs {
         if name.is_empty() {
             return Err(input.error("Command name is required."));
         }
-
-        Ok(HandlerArgs { name, desc })
+        Ok(HandlerArgs { name, desc, source, elevated })
     }
 }
 
@@ -206,8 +224,41 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    let usage_str = usage_parts.join(" ");
+    let source_check = if let Some(src) = &attr_args.source {
+        let source_variant = format_ident!("{}", src);
+        quote! {
+            if cmd.source != crate::discord::notifications::CommandSource::#source_variant {
+                return crate::discord::responses::msg(
+                    format!("⚠️ This command can only be used from {}!", #src)
+                ).into_responses();
+            }
+        }
+    } else {
+        quote! {}
+    };
+    
+    let permission_check = if attr_args.elevated {
+        quote! {
+            if !cmd.actor.is_elevated() {
+                return crate::discord::responses::msg("🚫 You do not have permission to use this command.")
+                    .into_responses();
+            }
+        }
+    } else {
+        quote! {}
+    };
 
+    let is_elevated = attr_args.elevated;
+
+    let source_enum_val = if let Some(src) = &attr_args.source {
+        let variant = format_ident!("{}", src);
+        quote! { Some(crate::discord::notifications::CommandSource::#variant) }
+    } else {
+        quote! { None }
+    };
+
+    let usage_str = usage_parts.join(" ");
+    
     let expanded = quote! {
         #input_method
 
@@ -217,10 +268,15 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
                 name: #cmd_name.to_string(),
                 description: #cmd_desc.to_string(),
                 usage: #usage_str.to_string(),
+                source: #source_enum_val,
+                elevated: #is_elevated,
             }
         }
 
         pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommandEvent) -> Vec<crate::discord::responses::BotResponse> {
+            #permission_check
+            #source_check
+            
             let result: ::anyhow::Result<Vec<crate::discord::responses::BotResponse>> = (|| {
                 #(#arg_parsers)*
                 Ok(self.#fn_name(#(#call_args),*))

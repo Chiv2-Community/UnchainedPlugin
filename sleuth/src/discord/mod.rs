@@ -9,7 +9,7 @@ pub mod macros;
 pub mod config;
 
 use crate::discord::config::DiscordConfig;
-use serenity::all::CreateEmbed;
+use serenity::all::{CreateEmbed, CreateEmbedFooter};
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::voting::vote_kick::KickVote;
@@ -18,7 +18,7 @@ use crate::discord::modules::voting::*;
 use crate::discord::modules::{
     batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
 };
-use crate::discord::notifications::{CommandRequest, GameChatMessage, GameCommandEvent, PermissionFlags};
+use crate::discord::notifications::{CommandRequest, CommandSource, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::{sinfo, swarn};
 use censor::Censor;
@@ -348,10 +348,18 @@ impl DiscordBridge {
 
                                             let mut field_text = String::new();
                                             for c in module_cmds {
-                                                field_text.push_str(&format!("`{}` - {}\n", c.usage, c.description));
-                                            }
+                                                let source_tag = match c.source {
+                                                    Some(CommandSource::GameChat) => "🎮",
+                                                    Some(CommandSource::Discord) => "💬",
+                                                    _ => "",
+                                                };
+                                                let lock = if c.elevated { "🔒 " } else { "" };
 
+                                                field_text.push_str(&format!("{}{}`{}` - *{}*\n", source_tag, lock, c.usage, c.description));
+                                            }
                                             help_embed = help_embed.field(format!("📦 Module: {}", sub.name()), field_text, false);
+
+                                            help_embed = help_embed.footer(CreateEmbedFooter::new("💬-Discord Only | 🎮-Game Only | 🔒-Admin only"));
                                         }
 
                                         dispatch_responses(&http, BotResponse::from(CreateMessage::new().embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id).await;

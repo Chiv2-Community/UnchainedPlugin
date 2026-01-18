@@ -5,6 +5,8 @@ pub struct CommandInfo {
     pub name: String,
     pub description: String,
     pub usage: String,
+    pub source: Option<super::notifications::CommandSource>,
+    pub elevated: bool,
 }
 
 #[macro_export]

@@ -121,48 +121,6 @@ impl Dashboard {
             .field("Active Mods", mod_list, false)
             .field("All Mods", all_mod_list, false)
     }
-
-    fn build_embed2(&self) -> CreateEmbed {
-        let cur_status = self.status.clone().expect("No status available");
-        
-        // 1. Create a set of active mod names for quick lookup
-        let active_names: HashSet<_> = cur_status.active_mods
-            .iter()
-            .map(|m| &m.name)
-            .collect();
-
-        // 2. Build a single list where active mods are bolded
-        let combined_mod_list = if cur_status.mods.is_empty() {
-            "None".to_string()
-        } else {
-            cur_status.mods
-                .iter()
-                .map(|m| {
-                    let display = format!("{} *({})*", m.name, m.version);
-                    if active_names.contains(&m.name) {
-                        format!("__**{}**__", display) // Bold if active
-                    } else {
-                        format!("*{}*", display) // Normal if inactive
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-
-        let description = format!(
-            "{}",
-            cur_status.description
-        );
-
-        CreateEmbed::new()
-            .title(format!("🌐 {}", cur_status.name))
-            .color(0x2B2D31)
-            .description(description)
-            .field("Map", &cur_status.current_map, true)
-            .field("Players", format!("{}/{}", cur_status.player_count, cur_status.max_players), true)
-            // Single Mods section
-            .field("Mods", combined_mod_list, false)
-    }
     
     #[handler_command("cta", desc="Issue a Call to Arms on the discord server")]
     pub fn cmd_cta(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
@@ -316,22 +274,17 @@ impl DiscordSubscriber for Dashboard {
         }
 
         let embed = self.build_embed();
-        // let embed2 = self.build_embed2();
 
         match self.message_id {
             Some(id) => {
                 // Edit existing message
                 let _ = channel.edit_message(http, self.message_id.unwrap(), EditMessage::new().add_embed(embed)).await;
-                // let _ = channel.edit_message(http, self.message_id2.unwrap(), EditMessage::new().add_embed(embed2)).await;
             }
             None => {
                 // Create the initial dashboard message
                 if let Ok(msg) = channel.send_message(http, CreateMessage::new().add_embed(embed)).await {
                     self.message_id = Some(msg.id);
                 }
-                // if let Ok(msg) = channel.send_message(http, CreateMessage::new().add_embed(embed2)).await {
-                //     self.message_id2 = Some(msg.id);
-                // }
             }
         }
 
