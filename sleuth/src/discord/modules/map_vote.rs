@@ -1,7 +1,7 @@
 use std::any::Any;
 use crate::commands::NATIVE_COMMAND_QUEUE;
 use crate::discord::core::{DiscordSubscriber, GameEvent};
-use crate::discord::notifications::GameChatMessage;
+use crate::discord::notifications::{CommandSource, GameChatMessage, GameCommandEvent};
 use crate::discord::responses::*;
 
 #[derive(Debug)]
@@ -56,26 +56,34 @@ impl DiscordSubscriber for ExtMapVote {
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         let any = event.as_any();
+        
+        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
+            if cmd.source != CommandSource::GameChat { return NO_RESP; }
 
-        if let Some(chat) = any.downcast_ref::<GameChatMessage>() {
-            let msg = chat.message.trim();
-            
-            // Initiation
-            if msg.starts_with("!startvotemap ") {
-                let map_target = msg[14..].trim().to_string();
-                return BotResponse::from(self.init_vote(chat.sender.clone(), map_target).unwrap()).into_responses();
-            }
-
-            // Voting Logic
-            if let Some(ref mut state) = self.active_vote {
-                if msg.eq_ignore_ascii_case("!yes") {
-                    state.no_votes.remove(&chat.sender);
-                    state.yes_votes.insert(chat.sender.clone());
-                } else if msg.eq_ignore_ascii_case("!no") {
-                    state.yes_votes.remove(&chat.sender);
-                    state.no_votes.insert(chat.sender.clone());
+            let result = match self.active_vote {
+                Some(ref mut state) => {
+                    let actor_name = cmd.actor.display_name.clone();
+                    if cmd.name == "yes" {
+                        state.no_votes.remove(&actor_name);
+                        state.yes_votes.insert(actor_name.clone());
+                    }
+                    if cmd.name == "no" {
+                        state.yes_votes.remove(&actor_name);
+                        state.no_votes.insert(actor_name.clone());
+                    }
+                    return NO_RESP;
                 }
-            }
+                None => {
+                    if cmd.args.is_empty() || cmd.name != "startvotemap" { return NO_RESP; }
+                    match self.active_vote {
+                        Some(_) => msg("A vote is already in progress"),
+                        None => BotResponse::from(self.init_vote(cmd.actor.display_name.clone(), cmd.args.first().unwrap().clone()).unwrap())
+                    }
+                }
+            };
+
+            return result.into_responses();
+
         }
         NO_RESP
     }

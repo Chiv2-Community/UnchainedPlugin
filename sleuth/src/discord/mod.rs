@@ -10,7 +10,9 @@ pub mod config;
 use crate::discord::config::DiscordConfig;
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
-use crate::discord::modules::map_vote::ExtMapVote;
+use crate::discord::modules::voting::vote_kick::KickVote;
+use crate::discord::modules::voting::vote_module::VoteModule;
+use crate::discord::modules::voting::*;
 use crate::discord::modules::{
     batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
 };
@@ -286,7 +288,8 @@ impl DiscordBridge {
                     // Box::new(DuelManager::new()), // Not yet implemented (events)
                     // Box::new(StatsTracker::new("discord/leaderboard.json")), // Not yet implemented (events)
                     Box::new(ChatRelayModule::new(Arc::clone(&ctx))),
-                    Box::new(ExtMapVote::new(Arc::clone(&ctx))),
+                    // Box::new(ExtMapVote::new(Arc::clone(&ctx))),
+                    Box::new(VoteModule::new(Arc::clone(&ctx))),
                 ];
 
                 // 2. Filter modules based on config names
