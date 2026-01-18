@@ -9,7 +9,7 @@ pub mod macros;
 pub mod config;
 
 use crate::discord::config::DiscordConfig;
-use serenity::all::{CreateEmbed, CreateEmbedFooter};
+use serenity::all::{CreateEmbed, CreateEmbedFooter, RoleId};
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::voting::vote_kick::KickVote;
@@ -216,7 +216,7 @@ fn sanitize_text(input: &str) -> String {
     filter.censor(input)
 }
 
-fn normalize_event(event: Box<dyn GameEvent>) -> Box<dyn GameEvent> {
+fn normalize_event(event: Box<dyn GameEvent>, admin_role: RoleId) -> Box<dyn GameEvent> {
     // Try game chat → command
     if let Some(chat) = event.as_any().downcast_ref::<GameChatMessage>() {
         if let Some(cmd) = GameCommandEvent::from_game_chat(chat, PermissionFlags::USER) {
@@ -226,7 +226,11 @@ fn normalize_event(event: Box<dyn GameEvent>) -> Box<dyn GameEvent> {
 
     // Try Discord → command
     if let Some(req) = event.as_any().downcast_ref::<CommandRequest>() {
-        if let Some(cmd) = GameCommandEvent::from_discord(req, PermissionFlags::USER) {
+        let mut perms = PermissionFlags::USER;
+        if req.user_roles.contains(&admin_role){
+            perms = PermissionFlags::ADMIN;
+        }
+        if let Some(cmd) = GameCommandEvent::from_discord(req, perms) {
             return Box::new(cmd);
         }
     }
@@ -322,6 +326,7 @@ impl DiscordBridge {
                 let http = Arc::clone(&client.http);
                 let channel_id = ChannelId::new(cfg.channel_id);
                 let admin_channel_id = ChannelId::new(cfg.admin_channel_id);
+                let admin_role_id = RoleId::new(cfg.admin_role_id);
                 let general_channel_id = ChannelId::new(cfg.general_channel_id);
                 let blocked_set: std::collections::HashSet<String> = cfg.blocked_notifications.into_iter().collect();
 
@@ -332,7 +337,7 @@ impl DiscordBridge {
                         tokio::select! {
                             Some(mut event) = rx.recv() => {
                                 event.sanitize();
-                                let event = normalize_event(event);
+                                let event = normalize_event(event, admin_role_id);
 
                                 if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
                                     if cmd.name == "help" {
@@ -353,9 +358,9 @@ impl DiscordBridge {
                                                     Some(CommandSource::Discord) => "💬",
                                                     _ => "",
                                                 };
-                                                let lock = if c.elevated { "🔒 " } else { "" };
+                                                let lock = if c.elevated { "🔒" } else { "" };
 
-                                                field_text.push_str(&format!("{}{}`{}` - *{}*\n", source_tag, lock, c.usage, c.description));
+                                                field_text.push_str(&format!("`{}` - {}{}*{}*\n", c.usage, source_tag, lock, c.description));
                                             }
                                             help_embed = help_embed.field(format!("📦 Module: {}", sub.name()), field_text, false);
 

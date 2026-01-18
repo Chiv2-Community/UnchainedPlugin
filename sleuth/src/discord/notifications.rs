@@ -207,7 +207,7 @@ pub struct CommandActor {
 impl CommandActor {
     pub fn is_admin(&self) -> bool { self.permissions.flags.contains(PermissionFlags::ADMIN) }
     pub fn is_moderator(&self) -> bool { self.permissions.flags.contains(PermissionFlags::MODERATOR) }
-    pub fn is_elevated(&self) -> bool { self.permissions.flags != PermissionFlags::USER }
+    pub fn is_elevated(&self) -> bool { self.is_admin() || self.is_moderator() }
     pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &super::config::DiscordConfig) -> Self {
         let is_admin = roles.contains(&RoleId::new(config.admin_role_id));
 

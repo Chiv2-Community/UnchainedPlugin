@@ -141,6 +141,19 @@ impl VoteModule {
         BotResponse::from(self.get_help_embed()).into_responses()
     }
 
+    #[handler_command("cancelvote", desc = "Vote YES on the active poll", elevated = true)]
+    pub fn cmd_cancelvote(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if let Some(ref mut state) = self.active_vote {
+            let resp = BotResponse::from(CreateEmbed::new()
+            .title(format!("🗳️ Vote Cancelled by Admin: {}", state.logic.title()))
+            .description(format!("{}", state.logic.description()))
+            .color(0x3498db)).into_responses();
+            self.active_vote = None;
+            return resp;
+        }
+        msg("No active Vote found").into_responses()
+    }
+
     #[handler_command("yes", desc = "Vote YES on the active poll", source = "GameChat")]
     pub fn cmd_yes(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
@@ -164,13 +177,13 @@ impl VoteModule {
     // Dynamic command handlers
 
     #[handler_command(name = "votekick", desc = "Vote to remove a disruptive player. Ensure there is a valid reason.")]
-    pub fn cmd_votekick(&mut self, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
-        self.run_registry_vote("votekick", target, cmd)
+    pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votekick", player_name, cmd)
     }
 
     #[handler_command(name = "votemap", desc = "Vote to change the server to a new map.")]
-    pub fn cmd_votemap(&mut self, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
-        self.run_registry_vote("votemap", target, cmd)
+    pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votemap", map_name, cmd)
     }
 
     #[handler_command(name = "voterestart", desc = "Vote to restart the current round immediately.")]
@@ -223,6 +236,7 @@ impl DiscordSubscriber for VoteModule {
     fn get_commands(&self) -> Vec<CommandInfo> {
         crate::auto_help!(self, [
             cmd_help, 
+            cmd_cancelvote,
             cmd_yes, 
             cmd_no, 
             cmd_votekick, 
@@ -241,6 +255,7 @@ impl DiscordSubscriber for VoteModule {
         if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
             crate::auto_dispatch!(self, cmd, [
                 cmd_help, 
+                cmd_cancelvote,
                 cmd_yes, 
                 cmd_no, 
                 cmd_votekick, 
