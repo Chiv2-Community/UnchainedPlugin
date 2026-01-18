@@ -141,7 +141,7 @@ impl VoteModule {
         BotResponse::from(self.get_help_embed()).into_responses()
     }
 
-    #[handler_command("yes", desc = "Vote YES on the active poll")]
+    #[handler_command("yes", desc = "Vote YES on the active poll", source = "GameChat")]
     pub fn cmd_yes(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
@@ -151,7 +151,7 @@ impl VoteModule {
         NO_RESP
     }
 
-    #[handler_command("no", desc = "Vote YES on the active poll")]
+    #[handler_command("no", desc = "Vote YES on the active poll", source = "GameChat")]
     pub fn cmd_no(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();

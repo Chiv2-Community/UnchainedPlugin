@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serenity::all::CreateAllowedMentions;
 use serenity::all::{Http, ChannelId, CreateMessage, RoleId};
+use sleuth_macros::handler_command;
 use std::sync::Arc;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -50,26 +51,56 @@ impl AdminHerald {
     fn is_admin(&self, roles: &[RoleId]) -> bool {
         roles.contains(&self.admin_role_id)
     }
+
+    #[handler_command(name = "cmd", desc = "Execute a console command.", source = "Discord", elevated = true)]
+    pub fn cmd_cmd(&mut self, command: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());
+        return msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses();
+    }
+
+    #[handler_command(name = "say", desc = "Send a global message to the server.", source = "Discord", elevated = true)]
+    pub fn cmd_say(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
+        return msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses();
+    }
+
+    #[handler_command(name = "admin", desc = "Call for an admin", source = "GameChat")]
+    pub fn cmd_admin(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        let allowed_mentions = CreateAllowedMentions::new()
+            .roles(vec![self.admin_role_id]);
+        let alert_mention = match self.settings.mention_on_admin {
+            true => format!("<@&{}> ", self.admin_role_id),
+            false => "".into()
+        };
+        BotResponse::from(
+            CreateMessage::new().content(format!(
+                "⚠️ {}**Internal Alert**: `{}` reports: *\"{}\"*",
+                alert_mention, cmd.actor.display_name, cmd.raw_args
+            )).allowed_mentions(allowed_mentions)).into_responses()
+    }
 }
 
 #[async_trait::async_trait]
-impl DiscordSubscriber for AdminHerald {    
+impl DiscordSubscriber for AdminHerald {  
+    fn get_commands(&self) -> Vec<CommandInfo> {
+        crate::auto_help!(self, [
+            cmd_cmd,
+            cmd_say,
+            cmd_admin
+        ])
+    }  
     impl_reconfigure!(HeraldSettings);
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        
+        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+            crate::auto_dispatch!(self, cmd, [
+                cmd_cmd,
+                cmd_say,
+                cmd_admin
+            ]);
+        }
         let any = event.as_any();
-
-        // 1. Listen for In-Game Admin Alerts (Game -> Discord)
-        // if let Some(alert) = any.downcast_ref::<AdminAlert>() {
-        //     let allowed_mentions = CreateAllowedMentions::new()
-        //         .roles(vec![self.admin_role_id]);
-        //     return BotResponse::from(
-        //         CreateMessage::new().content(format!(
-        //             "⚠️ <@&{}> **Internal Alert**: `{}` reports: *\"{}\"*",
-        //             self.admin_role_id, alert.reporter, alert.reason
-        //         )).allowed_mentions(allowed_mentions)
-        //     ).into_responses();
-        // }
         
         if let Some(alert) = any.downcast_ref::<CrashEvent>() {
             let allowed_mentions = CreateAllowedMentions::new()
@@ -86,51 +117,6 @@ impl DiscordSubscriber for AdminHerald {
                     alert_mention, alert.event_type, alert.event_trace.join("\n")
                 )).allowed_mentions(allowed_mentions)
             ).into_responses();
-        }
-
-        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
-            let ensure_elevated = || {
-                if !cmd.actor.is_elevated() {
-                    Err(msg("🚫 You do not have permission to use this command.").into_responses())
-                } else {
-                    Ok(())
-                }
-            };
-            
-            match cmd.name.as_str() {
-                "cmd" => {
-                    if cmd.source != CommandSource::Discord { return NO_RESP; }
-                    if let Err(unauthorized_resp) = ensure_elevated() {
-                        return unauthorized_resp;
-                    }
-
-                    NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());
-                    return msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses();
-                },
-                "say" => {                    
-                    if cmd.source != CommandSource::Discord { return NO_RESP; }
-                    if let Err(unauthorized_resp) = ensure_elevated() {
-                        return unauthorized_resp;
-                    }
-                    self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
-                    return msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses();
-                },
-                "admin" => {
-                    if cmd.source != CommandSource::GameChat { return NO_RESP; }
-                    let allowed_mentions = CreateAllowedMentions::new()
-                        .roles(vec![self.admin_role_id]);
-                    let alert_mention = match self.settings.mention_on_admin {
-                        true => format!("<@&{}> ", self.admin_role_id),
-                        false => "".into()
-                    };
-                    return BotResponse::from(
-                        CreateMessage::new().content(format!(
-                            "⚠️ {}**Internal Alert**: `{}` reports: *\"{}\"*",
-                            alert_mention, cmd.actor.display_name, cmd.raw_args
-                        )).allowed_mentions(allowed_mentions)).into_responses();
-                },
-                _ => {}
-            };
         }
 
         NO_RESP
