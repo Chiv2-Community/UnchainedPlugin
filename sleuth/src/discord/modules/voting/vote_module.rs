@@ -4,6 +4,7 @@ use std::any::Any;
 use serenity::builder::{CreateMessage, CreateEmbed, CreateEmbedFooter};
 use serenity::model::id::ChannelId;
 use serenity::http::Http;
+use sleuth_macros::handler_command;
 use crate::discord::core::{DiscordSubscriber, GameEvent};
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
 use crate::discord::modules::voting::vote_kick::KickVote;
@@ -12,6 +13,7 @@ use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
 use crate::discord::modules::voting::vote_mod::ModVote;
 use crate::discord::notifications::{CommandSource, GameCommandEvent};
 use crate::discord::responses::*;
+
 
 /// Trait that defines a specific type of vote's behavior
 #[async_trait::async_trait]
@@ -46,26 +48,22 @@ struct ActiveVote {
     last_broadcast: std::time::Instant,
 }
 
-impl VoteModule {
-    // Matches your existing initialization pattern
-    pub fn new(ctx: crate::discord::Ctx) -> Self {
-        let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
+impl VoteModule {    
+    
 
-        registry.insert("votemap".into(), Box::new(MapVote));
-        registry.insert("voterestart".into(), Box::new(RestartVote));
-        registry.insert("voteendmap".into(), Box::new(EndMapVote));
-        registry.insert("votemod".into(), Box::new(ModVote));
-        registry.insert("votekick".into(), Box::new(KickVote));
-        registry.insert("voteaddbots".into(), Box::new(AddBotsVote));
-        registry.insert("votenobots".into(), Box::new(NoBotsVote));
-        registry.insert("voterestart".into(), Box::new(RestartVote));
-        registry.insert("voteendmap".into(), Box::new(EndMapVote));
+    fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if let Some(logic_prototype) = self.registry.get(vote_type) {
+            // Check prerequisites using the prototype
+            if let Err(err) = logic_prototype.check_prerequisites(cmd) {
+                return msg(format!("⚠️ {}", err)).into_responses();
+            }
 
-        Self {
-            active_vote: None,
-            registry,
-            ctx,
+            let logic = logic_prototype.clone_box();
+            let initiator = cmd.actor.display_name.clone();
+
+            return BotResponse::from(self.init_vote(logic, target, initiator)).into_responses();
         }
+        msg(format!("❌ Unknown vote type: {}", vote_type)).into_responses()
     }
 
     fn get_help_embed(&self) -> CreateMessage {
@@ -134,47 +132,125 @@ impl VoteModule {
 
         CreateMessage::new().add_embed(embed)
     }
+
+    // Command handlers
+
+    #[handler_command("votehelp")]
+    pub fn cmd_help(&mut self) -> Vec<BotResponse> {
+
+        BotResponse::from(self.get_help_embed()).into_responses()
+    }
+
+    #[handler_command("yes", desc = "Vote YES on the active poll")]
+    pub fn cmd_yes(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if let Some(ref mut state) = self.active_vote {
+            let voter = cmd.actor.display_name.clone();
+            state.no_votes.remove(&voter);
+            state.yes_votes.insert(voter);
+        }
+        NO_RESP
+    }
+
+    #[handler_command("no", desc = "Vote YES on the active poll")]
+    pub fn cmd_no(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if let Some(ref mut state) = self.active_vote {
+            let voter = cmd.actor.display_name.clone();
+            state.yes_votes.remove(&voter);
+            state.no_votes.insert(voter);
+        }
+        NO_RESP
+    }
+
+    // Dynamic command handlers
+
+    #[handler_command(name = "votekick", desc = "Vote to remove a disruptive player. Ensure there is a valid reason.")]
+    pub fn cmd_votekick(&mut self, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votekick", target, cmd)
+    }
+
+    #[handler_command(name = "votemap", desc = "Vote to change the server to a new map.")]
+    pub fn cmd_votemap(&mut self, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votemap", target, cmd)
+    }
+
+    #[handler_command(name = "voterestart", desc = "Vote to restart the current round immediately.")]
+    pub fn cmd_voterestart(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("voterestart", "Current Round".to_string(), cmd)
+    }
+
+    #[handler_command(name = "voteendmap", desc = "Vote to end the current map.")]
+    pub fn cmd_voteendmap(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("voteendmap", "Current Round".to_string(), cmd)
+    }
+
+    #[handler_command(name = "voteaddbots", desc = "Vote to add AI bots to the current game.")]
+    pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("voteaddbots", count, cmd)
+    }
+
+    #[handler_command(name = "votemod", desc = "Enable a mod.")]
+    pub fn cmd_votemod(&mut self, mod_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
+    }
+
+    #[handler_command(name = "votenobots", desc = "Vote to add AI bots to the current game.")]
+    pub fn cmd_votenobots(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        self.run_registry_vote("votenobots", "Current Round".to_string(), cmd)
+    }
+
+    // Matches your existing initialization pattern
+    pub fn new(ctx: crate::discord::Ctx) -> Self {
+        let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
+
+        registry.insert("votekick".into(), Box::new(KickVote));
+        registry.insert("votemap".into(), Box::new(MapVote));
+        registry.insert("voterestart".into(), Box::new(RestartVote));
+        registry.insert("voteendmap".into(), Box::new(EndMapVote));
+        registry.insert("votemod".into(), Box::new(ModVote));
+        registry.insert("voteaddbots".into(), Box::new(AddBotsVote));
+        registry.insert("votenobots".into(), Box::new(NoBotsVote));
+
+        Self {
+            active_vote: None,
+            registry,
+            ctx,
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for VoteModule {
+    fn get_commands(&self) -> Vec<CommandInfo> {
+        crate::auto_help!(self, [
+            cmd_help, 
+            cmd_yes, 
+            cmd_no, 
+            cmd_votekick, 
+            cmd_votemap, 
+            cmd_voterestart,
+            cmd_voteendmap,
+            cmd_votemod,
+            cmd_voteaddbots,
+            cmd_votenobots
+        ])
+    }
+
     fn name(&self) -> &'static str { "VoteModule" }
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-        
-        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
-
-
-            if cmd.name == "votehelp" {
-                return BotResponse::from(self.get_help_embed()).into_responses();
-            }
-
-            if cmd.source != CommandSource::GameChat { return NO_RESP; }
-            
-            // Handle voting input
-            if let Some(ref mut state) = self.active_vote {
-                let voter = cmd.actor.display_name.clone();
-                match cmd.name.as_str() {
-                    "yes" => { state.no_votes.remove(&voter); state.yes_votes.insert(voter); },
-                    "no" => { state.yes_votes.remove(&voter); state.no_votes.insert(voter); },
-                    _ => {}
-                }
-                return NO_RESP;
-            }   
-                    
-            if let Some(logic_prototype) = self.registry.get(&cmd.name) {
-                if let Err(err) = logic_prototype.check_prerequisites(cmd) {
-                    return msg(format!("⚠️ {}", err)).into_responses();
-                }
-
-                let logic = logic_prototype.clone_box();
-                
-                let target = cmd.args.first().cloned().unwrap_or_else(|| "Server".to_string());
-                let initiator = cmd.actor.display_name.clone();
-
-                return BotResponse::from(self.init_vote(logic, target, initiator)).into_responses();
-            }
+        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+            crate::auto_dispatch!(self, cmd, [
+                cmd_help, 
+                cmd_yes, 
+                cmd_no, 
+                cmd_votekick, 
+                cmd_votemap, 
+                cmd_voterestart,
+                cmd_voteendmap,
+                cmd_votemod,
+                cmd_voteaddbots,
+                cmd_votenobots
+            ]);
         }
         NO_RESP
     }

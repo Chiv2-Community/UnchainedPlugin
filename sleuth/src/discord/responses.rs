@@ -1,6 +1,41 @@
 use serenity::all::{ChannelId, CreateEmbed, CreateMessage, Http};
 use std::sync::Arc;
 
+pub struct CommandInfo {
+    pub name: String,
+    pub description: String,
+    pub usage: String,
+}
+
+#[macro_export]
+macro_rules! auto_dispatch {
+    ($self:ident, $cmd:ident, [ $($func:ident),* ]) => {
+        paste::paste! {
+            // 1. Generate the Match Dispatcher
+            let response = match $cmd.name.as_str() {
+                $(
+                    n if n == $self.[<__info_ $func>]().name => Some($self.[<__wrap_ $func>]($cmd)),
+                )*
+                _ => None,
+            };
+
+            if let Some(r) = response { return r; }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! auto_help {
+    ($self:ident, [ $($func:ident),* ]) => {
+        paste::paste! {
+            vec![
+                $( $self.[<__info_ $func>](), )*
+            ]
+        }
+    };
+}
+
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Target {
     Main,

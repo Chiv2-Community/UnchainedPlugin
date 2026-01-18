@@ -2,12 +2,14 @@
 pub mod core;
 pub mod modules;
 pub mod notifications;
+#[macro_use]
 pub mod responses;
 #[macro_use]
 pub mod macros;
 pub mod config;
 
 use crate::discord::config::DiscordConfig;
+use serenity::all::CreateEmbed;
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::voting::vote_kick::KickVote;
@@ -18,7 +20,7 @@ use crate::discord::modules::{
 };
 use crate::discord::notifications::{CommandRequest, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
-use crate::{swarn};
+use crate::{sinfo, swarn};
 use censor::Censor;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
@@ -330,15 +332,37 @@ impl DiscordBridge {
                         tokio::select! {
                             Some(mut event) = rx.recv() => {
                                 event.sanitize();
-                                // Parse chat starting with ! into a command event type
                                 let event = normalize_event(event);
-                                // sinfo![f; "Got Event {:#?}", event];
-                                
-                                let mut subs = shared_subs.lock().await;
-                                for sub in subs.iter_mut() {
-                                    // Get the responses (one or many)
-                                    let responses = sub.on_event(event.as_ref(), &http, channel_id).await;
-                                    dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
+
+                                if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+                                    if cmd.name == "help" {
+                                        let mut help_embed = CreateEmbed::new()
+                                            .title("🛠️ Sleuth System Help")
+                                            .description("All available commands across modules:")
+                                            .color(0x3498db);
+
+                                        let mut subs = shared_subs.lock().await;
+                                        for sub in subs.iter() {
+                                            let module_cmds = sub.get_commands();
+                                            if module_cmds.is_empty() { continue; }
+
+                                            let mut field_text = String::new();
+                                            for c in module_cmds {
+                                                field_text.push_str(&format!("`{}` - {}\n", c.usage, c.description));
+                                            }
+
+                                            help_embed = help_embed.field(format!("📦 Module: {}", sub.name()), field_text, false);
+                                        }
+
+                                        dispatch_responses(&http, BotResponse::from(CreateMessage::new().embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id).await;
+                                        continue;
+                                    }
+                                    let mut subs = shared_subs.lock().await;
+                                    for sub in subs.iter_mut() {
+                                        // Get the responses (one or many)
+                                        let responses = sub.on_event(event.as_ref(), &http, channel_id).await;
+                                        dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
+                                    }
                                 }
                             }
                             // Some(event) = rx.recv() => {

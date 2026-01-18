@@ -115,6 +115,126 @@ pub fn command(args: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+use syn::{ImplItemFn};
+use syn::{LitStr, Token, parse::{Parse, ParseStream}};
+
+// parse the macro attributes: #[handler_command(name = "...", desc = "...")]
+struct HandlerArgs {
+    name: String,
+    desc: String,
+}
+
+impl Parse for HandlerArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut name = String::new();
+        let mut desc = String::new();
+
+        // check if the first thing is just a string literal: #[handler_command("yes", ...)]
+        if input.peek(LitStr) {
+            let val: LitStr = input.parse()?;
+            name = val.value();
+            // If there's more, skip the comma and move to named arguments
+            if input.peek(Token![,]) {
+                let _: Token![,] = input.parse()?;
+            }
+        }
+
+        // parse remaining named arguments: desc = "...", etc.
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let _: Token![=] = input.parse()?;
+            let val: LitStr = input.parse()?;
+            
+            match ident.to_string().as_str() {
+                "name" => name = val.value(),
+                "desc" => desc = val.value(),
+                _ => return Err(syn::Error::new(ident.span(), "Unknown attribute key. Use 'name' or 'desc'.")),
+            }
+            if input.peek(Token![,]) {
+                let _: Token![,] = input.parse()?;
+            }
+        }
+
+        if name.is_empty() {
+            return Err(input.error("Command name is required."));
+        }
+
+        Ok(HandlerArgs { name, desc })
+    }
+}
+
+#[proc_macro_attribute]
+pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
+    let attr_args = parse_macro_input!(args as HandlerArgs);
+    let input_method = parse_macro_input!(input as ImplItemFn);
+
+    let fn_name = &input_method.sig.ident;
+    let wrapper_name = format_ident!("__wrap_{}", fn_name);
+    let info_name = format_ident!("__info_{}", fn_name);
+    
+    let cmd_name = attr_args.name;
+    let cmd_desc = attr_args.desc;
+
+    let mut arg_parsers = Vec::new();
+    let mut call_args = Vec::new();
+    let mut usage_parts = vec![format!("!{}", cmd_name)];
+    let mut arg_idx: usize = 0;
+
+    for arg in &input_method.sig.inputs {
+        if let FnArg::Typed(pat_type) = arg {
+            if let Pat::Ident(pat_ident) = &*pat_type.pat {
+                let arg_ident = &pat_ident.ident;
+                let arg_type = &pat_type.ty;
+                let type_str = quote!(#arg_type).to_string();
+
+                if type_str.contains("GameCommandEvent") {
+                    call_args.push(quote! { cmd });
+                } else {
+                    // build Usage String: e.g. "<count: i32>"
+                    usage_parts.push(format!("<{}: {}>", arg_ident, type_str));
+
+                    arg_parsers.push(quote! {
+                        let #arg_ident: #arg_type = cmd.args.get(#arg_idx)
+                            .ok_or_else(|| ::anyhow::anyhow!("Missing argument '{}'", stringify!(#arg_ident)))?
+                            .parse()
+                            .map_err(|_| ::anyhow::anyhow!("Invalid value for '{}' (expected {})", stringify!(#arg_ident), #type_str))?;
+                    });
+                    call_args.push(quote! { #arg_ident });
+                    arg_idx += 1;
+                }
+            }
+        }
+    }
+
+    let usage_str = usage_parts.join(" ");
+
+    let expanded = quote! {
+        #input_method
+
+        // metadata function for the help system
+        pub fn #info_name(&self) -> crate::discord::responses::CommandInfo {
+            crate::discord::responses::CommandInfo {
+                name: #cmd_name.to_string(),
+                description: #cmd_desc.to_string(),
+                usage: #usage_str.to_string(),
+            }
+        }
+
+        pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommandEvent) -> Vec<crate::discord::responses::BotResponse> {
+            let result: ::anyhow::Result<Vec<crate::discord::responses::BotResponse>> = (|| {
+                #(#arg_parsers)*
+                Ok(self.#fn_name(#(#call_args),*))
+            })();
+
+            match result {
+                Ok(resp) => resp,
+                Err(e) => crate::discord::responses::msg(format!("⚠️ {}", e)).into_responses()
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
 /* -- SIGNATURES -- */
 
 #[proc_macro_attribute]

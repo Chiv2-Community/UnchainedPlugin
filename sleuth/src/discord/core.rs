@@ -31,6 +31,10 @@ pub trait DiscordSubscriber: Send + Sync {
 
     fn reconfigure(&mut self, _config: &super::config::DiscordConfig) {}
 
+    fn get_commands(&self) -> Vec<super::responses::CommandInfo> {
+        vec![] 
+    }
+
     /// Called for every event. Returns an optional message to send to Discord.
     async fn on_event(&mut self, event: &dyn GameEvent, http: &Arc<Http>, channel: ChannelId) -> Vec<BotResponse>;
 

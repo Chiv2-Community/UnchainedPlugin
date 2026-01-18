@@ -3,10 +3,12 @@ use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;
 use crate::discord::responses::*;
 use crate::discord::notifications::*;
+use crate::sinfo;
 use rand::seq::IndexedRandom;
 use serde::Deserialize;
 use serde::Serialize;
 use serenity::all::{Http, ChannelId, CreateMessage, MessageId, CreateEmbed, EditMessage};
+use sleuth_macros::handler_command;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -161,10 +163,90 @@ impl Dashboard {
             // Single Mods section
             .field("Mods", combined_mod_list, false)
     }
+    
+    #[handler_command("cta", desc="Issue a Call to Arms on the discord server")]
+    pub fn cmd_cta(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if self.status.as_ref().is_none() {
+            return NO_RESP;
+        }
+        let cur_status = self.status.clone().expect("No status available");
+        let mod_list = if cur_status.active_mods.is_empty() {
+            "None".to_string()
+        } else {
+            format!("- {}", cur_status.active_mods
+                .iter()
+                .map(|m| format!("**{}** *({})*", m.name, m.version))
+                .collect::<Vec<_>>()
+                .join("\n- "))
+        };
+        
+        let sender = &cmd.actor.display_name;
+
+        let templates = [
+            // The Classic
+            format!("**{}** has issued a __**Call to Arms**__!\nJoin the server and fight for your honor!\nMessage: _{}_", sender, message),
+            format!("⚠️ **REINFORCEMENTS NEEDED!**\n**{}** is requesting immediate backup.\nOrders: _{}_", sender, message),
+            format!("📢 **BANNERS RAISED!**\n**{}** has sounded the war horn! Rally to their side!\nWar Cry: _{}_", sender, message),                    
+            format!("🔥 **TO THE FRONT LINES!**\n**{}** says: _{}_\nDon't let them stand alone!", sender, message),
+            format!("⚔️ **{}** is calling for all able-bodied warriors!\n> _{}_", sender, message),
+            format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. Join now!\nExcuse: *\"{}\"*", sender, message),
+            format!("🕹️ **STOP SLACKING!**\n**{}** has issued a Call to Arms. Your couch can wait, the server can't!\nMessage: _{}_", sender, message),
+            format!("📉 **STONKS ARE DOWN!**\n**{}** says the kill count is too low. Let's pump those numbers up!\nMemo: *\"{}\"*", sender, message),
+            format!("⚠️ **BROKEN ARROW!**\n**{}** is being overrun and has declared a Level 5 Emergency!\nComms: _{}_", sender, message),
+            format!("🚁 **REINFORCEMENTS REQ: IMMEDIATE**\n**{}** is popping smoke. ETA on your arrival?\nIntel: *\"{}\"*", sender, message),
+            format!("👊 **SQUAD UP!**\n**{}** is tired of fighting alone. Get in there and provide some fire support!\nNote: _{}_", sender, message),
+            format!("⚔️ **THE BANNERS ARE RAISED!**\n**{}** has sounded the Great Horn of Battle! Will you answer the call?\nWar Cry: *\"{}\"*", sender, message),
+            format!("🛡️ **TO GLORY!**\n**{}** is leading a charge and demands your presence on the field!\nOrders: _{}_", sender, message),
+            format!("🏰 **DEFEND THE REALM!**\n**{}** reports that the front lines are thinning. Rally to the server!\nStatus: *\"{}\"*", sender, message),
+        ];
+
+        let colors = [
+            0xe67e22,
+            0xe74c3c,
+            0xf1c40f,
+        ];
+
+        let mut rng = rand::rng();
+        let chosen_color = *colors.choose(&mut rng).unwrap_or(&0xe67e22);
+        let chosen_description = templates.choose(&mut rng).unwrap_or(&templates[0]).to_string();
+        
+        let mut embed = CreateEmbed::new()
+            .title("⚔️ CALL TO ARMS ⚔️")
+            .color(chosen_color)
+            .description(chosen_description)
+            .field("Server", cur_status.name, false)
+            .field("Description", cur_status.description, false)
+            .field("Current Map", cur_status.current_map, true)
+            .field("All Mods", mod_list, true);
+        return BotResponse::from(embed).to_main().into_responses(); // FIXME: also write to general
+    }
+    
+    #[handler_command("dash", desc="Display server dashboard (if available)")]
+    pub fn cmd_dash(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+        if cmd.source != CommandSource::Discord || cmd.name != "dash" { return NO_RESP; }
+        
+        if self.status.is_none() {
+            return msg("Dashboard: no server status available").into_responses();
+        }
+        else {
+            self.message_id = None; // Resetting this forces a new message on next tick
+            self.message_id2 = None; // Resetting this forces a new message on next tick
+            self.needs_refresh = true;
+        }
+        NO_RESP
+    }
+
 }
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for Dashboard {
+    fn get_commands(&self) -> Vec<CommandInfo> {
+        crate::auto_help!(self, [
+            cmd_cta,
+            cmd_dash
+        ])
+    }
+        
     fn name(&self) -> &'static str { DashboardSettings::key() }
 
     fn reconfigure(&mut self, config: &DiscordConfig) {
@@ -177,6 +259,14 @@ impl DiscordSubscriber for Dashboard {
     }
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        
+        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+            crate::auto_dispatch!(self, cmd, [
+                cmd_cta,
+                cmd_dash
+            ]);
+        }
+
         let any = event.as_any();
 
         // crate::sinfo!["Got Event {:#?}", event];
@@ -187,7 +277,6 @@ impl DiscordSubscriber for Dashboard {
                 self.needs_refresh = true;
             }
         }
-
         
         if let Some(new_status) = any.downcast_ref::<ServerStatus>() {
             self.status = Some(new_status.clone());
@@ -205,81 +294,6 @@ impl DiscordSubscriber for Dashboard {
             self.current_map = e.new_map.clone();
             if self.message_id.is_some() {
                 self.needs_refresh = true;
-            }
-        }
-        
-        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
-            if cmd.source != CommandSource::Discord || cmd.name != "dash" { return NO_RESP; }
-            
-            if self.status.is_none() {
-                return msg("Dashboard: no server status available").into_responses();
-            }
-            else {
-                self.message_id = None; // Resetting this forces a new message on next tick
-                self.message_id2 = None; // Resetting this forces a new message on next tick
-                self.needs_refresh = true;
-            }
-        }
-
-        if let Some(chat) = any.downcast_ref::<GameChatMessage>() {
-            let msg = chat.message.trim();
-            
-            if msg.starts_with("!cta ") {
-
-                if self.status.as_ref().is_none() {
-                    return NO_RESP;
-                }
-                let cur_status = self.status.clone().expect("No status available");
-                let mod_list = if cur_status.active_mods.is_empty() {
-                    "None".to_string()
-                } else {
-                    format!("- {}", cur_status.active_mods
-                        .iter()
-                        .map(|m| format!("**{}** *({})*", m.name, m.version))
-                        .collect::<Vec<_>>()
-                        .join("\n- "))
-                };
-
-                use rand::seq::SliceRandom; // Needs rand crate
-                let message = &chat.message[5..];
-
-                let templates = [
-                    // The Classic
-                    format!("**{}** has issued a __**Call to Arms**__!\nJoin the server and fight for your honor!\nMessage: _{}_", chat.sender, message),
-                    format!("⚠️ **REINFORCEMENTS NEEDED!**\n**{}** is requesting immediate backup.\nOrders: _{}_", chat.sender, message),
-                    format!("📢 **BANNERS RAISED!**\n**{}** has sounded the war horn! Rally to their side!\nWar Cry: _{}_", chat.sender, message),                    
-                    format!("🔥 **TO THE FRONT LINES!**\n**{}** says: _{}_\nDon't let them stand alone!", chat.sender, message),
-                    format!("⚔️ **{}** is calling for all able-bodied warriors!\n> _{}_", chat.sender, message),
-                    format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. Join now!\nExcuse: *\"{}\"*", chat.sender, message),
-                    format!("🕹️ **STOP SLACKING!**\n**{}** has issued a Call to Arms. Your couch can wait, the server can't!\nMessage: _{}_", chat.sender, message),
-                    format!("📉 **STONKS ARE DOWN!**\n**{}** says the kill count is too low. Let's pump those numbers up!\nMemo: *\"{}\"*", chat.sender, message),
-                    format!("⚠️ **BROKEN ARROW!**\n**{}** is being overrun and has declared a Level 5 Emergency!\nComms: _{}_", chat.sender, message),
-                    format!("🚁 **REINFORCEMENTS REQ: IMMEDIATE**\n**{}** is popping smoke. ETA on your arrival?\nIntel: *\"{}\"*", chat.sender, message),
-                    format!("👊 **SQUAD UP!**\n**{}** is tired of fighting alone. Get in there and provide some fire support!\nNote: _{}_", chat.sender, message),
-                    format!("⚔️ **THE BANNERS ARE RAISED!**\n**{}** has sounded the Great Horn of Battle! Will you answer the call?\nWar Cry: *\"{}\"*", chat.sender, message),
-                    format!("🛡️ **TO GLORY!**\n**{}** is leading a charge and demands your presence on the field!\nOrders: _{}_", chat.sender, message),
-                    format!("🏰 **DEFEND THE REALM!**\n**{}** reports that the front lines are thinning. Rally to the server!\nStatus: *\"{}\"*", chat.sender, message),
-                ];
-
-                let colors = [
-                    0xe67e22,
-                    0xe74c3c,
-                    0xf1c40f,
-                ];
-
-                let mut rng = rand::rng();
-                let chosen_color = *colors.choose(&mut rng).unwrap_or(&0xe67e22);
-                let chosen_description = templates.choose(&mut rng).unwrap_or(&templates[0]).to_string();
-                
-                let mut embed = CreateEmbed::new()
-                    .title("⚔️ CALL TO ARMS ⚔️")
-                    .color(chosen_color)
-                    .description(chosen_description)
-                    .field("Server", cur_status.name, false)
-                    .field("Description", cur_status.description, false)
-                    .field("Current Map", cur_status.current_map, true)
-                    .field("All Mods", mod_list, true);
-                return BotResponse::from(embed).to_main().into_responses(); // FIXME: also write to general
             }
         }
         
