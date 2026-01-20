@@ -13,6 +13,7 @@ pub struct ATBLPlayerController {
 
 // Chat type enum
 // FIXME: More compact, wtf is this
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum EChatType {

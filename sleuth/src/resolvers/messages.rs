@@ -184,12 +184,25 @@ CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut c_void, text: *mut 
     crate::sinfo![f; "Triggered!"];
 });
 
+// TODO: Not used?
 define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
 // void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
 CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
     if !S.is_null() {
         let url_w = unsafe { (*S).to_string() };
         crate::sinfo![f; "Triggered! {url_w}"];
+    }
+});
+
+// Console output (e.g. "Command not recognized: ...")
+define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
+// void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
+CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
+    unsafe {
+        if (!arg1.is_null()) {
+            let u16_cstr = widestring::U16CStr::from_ptr_str(arg1);
+            log::info![target: "Console", "{}" , u16_cstr.display()];
+        }
     }
 });
 

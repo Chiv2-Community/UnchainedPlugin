@@ -476,7 +476,7 @@ pub unsafe fn attach_hooks(
     for hook in inventory::iter::<resolvers::HookRegistration> {
         let cond = (hook.condition)();
         if !cond {
-            swarn!(f; "inactive hook: {}", hook.name);
+            // swarn!(f; "inactive hook: {}", hook.name);
             // Inactive hooks initialize but don't enable the detour
             // continue;
         }
