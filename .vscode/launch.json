@@ -18,6 +18,12 @@
             // "preLaunchTask": "build"
         },
         {
+            "name": "Attach to Chivalry 2",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        },
+        {
             "name": "Debug Mock Server (Integrated)",
             "type": "cppvsdbg",
             "request": "launch",
