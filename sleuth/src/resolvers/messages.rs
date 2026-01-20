@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
 
-use crate::{game::{chivalry2::EChatType, engine::FText}, ue::FString};
+use crate::{game::{chivalry2::{ATBLGameMode, EChatType}, engine::FText}, ue::FString};
 
 
 // Chat messages
@@ -180,7 +180,7 @@ pub mod kismet_log {
 
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut c_void, text: *mut FText, chat_type: EChatType),{
+CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
     crate::sinfo![f; "Triggered!"];
 });
 
