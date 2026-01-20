@@ -127,7 +127,7 @@ macro_rules! __create_hook_impl {
                         let detour_fn: &'static _ = Box::leak(detour_fn);
                         [<o_ $name>].initialize(target, detour_fn).unwrap();
                         // let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
-                        $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
+                        // $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition
                         // Note: We evaluate the condition here at attachment time

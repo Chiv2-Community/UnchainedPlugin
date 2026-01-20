@@ -12,7 +12,7 @@ CREATE_HOOK!(FString_AppendChars, ACTIVE, NONE, (),
 
 define_pattern_resolver!(
     PreLogin,
-    XrefLast,
+    XrefFirst,
     [patternsleuth::resolvers::unreal::util::utf8_pattern(
         " Minutes"
     )]

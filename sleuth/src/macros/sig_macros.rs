@@ -88,7 +88,6 @@ macro_rules! define_pocess {
     }};
 
     // Scan for Xrefs, return last
-    // FIXME: expects max. 2 results
     // FIXME: handles only one pattern
     (@emit_body $name:ident, XrefLast, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::resolvers::unreal::util;
@@ -98,9 +97,24 @@ macro_rules! define_pocess {
             let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            if fns.len() == 2 {
-                fns[0] = fns[1]; // FIXME: deque? last?
-                fns.pop();
+            if let Some(last_fn) = fns.last().cloned() {
+                fns.clear();
+                fns.push(last_fn);
+            }
+            ensure_one(fns)
+        })
+    }};
+    (@emit_body $name:ident, XrefFirst, $ctx:ident, $patterns:ident) => {{
+        use patternsleuth::resolvers::unreal::util;
+        use patternsleuth::resolvers::ensure_one;
+        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+            // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
+            let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
+            let refs = util::scan_xrefs($ctx, &strings).await;
+            let mut fns = util::root_functions($ctx, &refs)?;
+            if let Some(last_fn) = fns.first().cloned() {
+                fns.clear();
+                fns.push(last_fn);
             }
             ensure_one(fns)
         })
@@ -422,6 +436,7 @@ wrap_process_macro!(Simple);
 wrap_process_macro!(Call);
 wrap_process_macro!(First);
 wrap_process_macro!(XrefLast);
+wrap_process_macro!(XrefFirst);
 
 #[allow(unused_macros)]
 macro_rules! generate_stub {
