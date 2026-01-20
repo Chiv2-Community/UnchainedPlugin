@@ -10,6 +10,7 @@ pub mod game;
 pub mod features;
 pub mod commands;
 pub mod discord;
+pub mod gui;
 #[cfg(windows)]
 mod seh;
 
@@ -17,6 +18,8 @@ mod seh;
 
 use once_cell::sync::Lazy;
 use serenity::all::{ChannelId, CreateMessage};
+use winapi::um::wincon::GetConsoleWindow;
+use winapi::um::winuser::{SW_HIDE, SW_SHOW, ShowWindow};
 use std::collections::HashMap;
 use std::time::Duration;
 use std::{env, thread};
@@ -267,14 +270,68 @@ pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_cha
     *bi.get_offset(name.as_ref()).unwrap_or(&0)
 }
 
+
 #[no_mangle]
 pub extern "C" fn preinit_rustlib() {
+    let state = Arc::new(Mutex::new(gui::SharedState::new()));
+    let _ = gui::GUI_STATE.set(Arc::clone(&state));
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+
+    let state_for_thread = Arc::clone(&state);
+    // FIXME: is this still valid?
+    std::thread::spawn(move || {
+        loop {
+            // Check for commands from GUI (Non-blocking)
+            while let Ok(cmd) = rx.try_recv() {
+                // Now you can safely lock state here IF needed, 
+                // or just run your dispatch logic
+                println!("Executing: {}", cmd);
+                commands::process_single_command(cmd);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    });
+
+    std::thread::spawn(move || {
+        thread::sleep(Duration::from_secs(3));
+        // 2. Now 'state_for_thread' is owned by this closure.
+        // Inside here, we prepare the state for eframe specifically.
+        let state_for_gui = Arc::clone(&state_for_thread);
+
+        let mut options = eframe::NativeOptions::default();
+        // let mut options = eframe::NativeOptions {
+        //     // This is the critical part
+        //     renderer: eframe::Renderer::Glow,
+        //     hardware_acceleration: eframe::HardwareAcceleration::Off,
+        //     depth_buffer: 0,
+        //     stencil_buffer: 0,
+        //     multisampling: 0, // VPS drivers fail if this is > 0
+        //     ..Default::default()
+        // };
+        options.event_loop_builder = Some(Box::new(|builder| {
+            use winit::platform::windows::EventLoopBuilderExtWindows;
+            builder.with_any_thread(true);
+        }));
+
+        let _ = eframe::run_native(
+            "Unchained Debugger",
+            options,
+            Box::new(move |_cc| {
+                // 3. Move 'state_for_gui' into the eframe App
+                Ok(Box::new(gui::gui_frame::MyLibraryApp::new(state_for_gui, tx)))
+            }),
+        );
+    });
+
+    thread::sleep(Duration::from_millis(500));
+    
     let args = unsafe { tools::cli_args::load_cli().expect("Failed to load CLI ARGS") };
     sdebug!(f; "CLI Args: {:#?}", args);
     if CLI_ARGS.set(args).is_err() {
         eprintln!("Error: Cli args already initialized!");
     }
-    tools::logger::init_syslog().expect("Failed to init syslog");
+    
+    tools::logger::init_syslog(Arc::clone(&state)).expect("Failed to init syslog");
 }
 
 // Initialize Logger and Globals
@@ -289,6 +346,11 @@ pub extern "C" fn init_rustlib() {
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 static WORLD_READY: AtomicBool = AtomicBool::new(false);
+
+use eframe::egui;
+// You need this trait for the .with_any_thread() method
+use winit::platform::windows::EventLoopBuilderExtWindows; 
+
 
 #[no_mangle]
 pub extern "C" fn postinit_rustlib() {
@@ -347,6 +409,9 @@ pub extern "C" fn postinit_rustlib() {
         //     };
         // }
     }
+    
+    // This will block the current thread until the window is closed
+    
 
     thread::spawn(|| {
         crate::sinfo!("waiting for engine to start..");
@@ -354,8 +419,13 @@ pub extern "C" fn postinit_rustlib() {
         while !ENGINE_READY.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(500));
         }
-
-        world_init();
+        if (cli_args().is_server()) {
+            world_init();
+        }
+        else {
+            #[cfg(feature="cli_commands")]
+            spawn_cli_handler();
+        }
     });
 }
 

@@ -139,7 +139,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     crate::sinfo![f; "\x1b[32m{}\x1b[0m", url_w];
     
     // TODO: better check for server?
-    if globals().world().is_none() && cli_args().is_server() {
+    if globals().world().is_none() {
         if !ENGINE_READY.load(Ordering::SeqCst) {
             ENGINE_READY.store(true, Ordering::SeqCst);
             log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
