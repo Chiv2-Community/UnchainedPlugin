@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
-use crate::{game::engine::FText, ue::{FString, FVector, TArray}};
+use crate::{game::engine::FText, ue::{FName, FString, FVector, TArray}};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -144,9 +144,83 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct AGameModeBase {
+    // Inherited from AInfo (unknown layout)
+    pub _a_info: [u8; 0x258],
+    // 0x0258
+    pub options_string: FString,
+    // 0x0268
+    pub game_session_class: *mut c_void, // TSubclassOf<AGameSession>
+    // 0x0270
+    pub game_state_class: *mut c_void, // TSubclassOf<AGameStateBase>
+    // 0x0278
+    pub player_controller_class: *mut c_void, // TSubclassOf<APlayerController>
+    // 0x0280
+    pub player_state_class: *mut c_void, // TSubclassOf<APlayerState>
+    // 0x0288
+    pub hud_class: *mut c_void, // TSubclassOf<AHUD>
+    // 0x0290
+    pub default_pawn_class: *mut c_void, // TSubclassOf<APawn>
+    // 0x0298
+    pub spectator_class: *mut c_void, // TSubclassOf<ASpectatorPawn>
+    // 0x02A0
+    pub replay_spectator_player_controller_class: *mut c_void,
+    // 0x02A8
+    pub server_stat_replicator_class: *mut c_void,
+    // 0x02B0
+    pub game_session: *mut c_void, // AGameSession*
+    // 0x02B8
+    pub game_state: *mut c_void, // AGameStateBase*
+    // 0x02C0
+    pub server_stat_replicator: *mut c_void,
+    // 0x02C8
+    pub default_player_name: [u8; 0x18], //FText,
+    // 0x02E0
+    pub flags: u8, // bUseSeamlessTravel | bStartPlayersAsSpectators | bPauseable
+    // padding to 0x2F8
+    pub _padding: [u8; 0x17],
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AGameMode {
+    pub base: AGameModeBase, // 0x0000 → 0x02F8
+    // 0x02F8
+    pub match_state: FName,
+    // 0x0300
+    pub b_delayed_start: u8,
+    // 0x0301
+    pub _padding0: [u8; 0x3],
+    // 0x0304
+    pub num_spectators: i32,
+    // 0x0308
+    pub num_players: i32,
+    // 0x030C
+    pub num_bots: i32,
+    // 0x0310
+    pub min_respawn_delay: f32,
+    // 0x0314
+    pub num_travelling_players: i32,
+    // 0x0318
+    pub engine_message_class: *mut c_void, // TSubclassOf<ULocalMessage>
+    // 0x0320
+    pub inactive_player_array: TArray<*mut c_void>, // APlayerState*
+    // 0x0330
+    pub inactive_player_state_lifespan: f32,
+    // 0x0334
+    pub max_inactive_players: i32,
+    // 0x0338
+    pub b_handle_dedicated_server_replays: u8,
+    // padding to 0x340
+    pub _padding1: [u8; 0x7],
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ATBLGameMode {
     // 0x0000 -> 0x0340: Inherited from AGameMode
-    pub _base_padding: [u8; 0x340],
+    // pub _base_padding: [u8; 0x340],
+    pub base: AGameMode,
 
     // 0x0340 (size: 0x8)
     pub game_mode_settings_class: *mut c_void, // TSubclassOf<UTBLGameModeSettings>
