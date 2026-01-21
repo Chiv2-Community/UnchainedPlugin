@@ -62,4 +62,5 @@ target_link_libraries(${PROJECT_NAME}_interface INTERFACE
     psapi.lib
     bcrypt.lib
     Dbghelp.lib
+    Iphlpapi.lib
 )

@@ -26,6 +26,7 @@ use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
@@ -270,6 +271,17 @@ static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 static WORLD_READY: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
+pub extern "C" fn shutdown_rustlib() {
+    sinfo!("Shutting down rustlib");
+
+    #[cfg(feature="upnp")]
+    features::upnp::stop_upnp_manager();
+
+    // Give it a moment to clean up ports
+    thread::sleep(Duration::from_millis(500));
+}
+
+#[no_mangle]
 pub extern "C" fn postinit_rustlib() {
     
     unsafe {
@@ -358,6 +370,13 @@ pub fn world_init() {
     std::thread::spawn(|| {
         handle_rcon();
     });
+
+    #[cfg(feature="upnp")]
+    if globals().cli_args.enable_upnp_port_forwarding {
+        std::thread::spawn(|| {
+            features::upnp::run_upnp_manager();
+        });
+    }
 
     let args = &globals().cli_args;
     sinfo!(f; "Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
