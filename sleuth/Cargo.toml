@@ -11,7 +11,6 @@ path = "src/bin/mock_server.rs"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-Cforce-frame-pointers=yes"]
 
 [profile.dev]
 debug = "full"
@@ -58,6 +57,8 @@ rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest"] # register server with backend
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity" ]
+discord_integration_old = []
+move-autonomous-desync = []
 
 [dependencies]
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
