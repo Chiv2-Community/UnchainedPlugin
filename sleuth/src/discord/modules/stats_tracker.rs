@@ -1,4 +1,4 @@
-use serenity::all::{ChannelId, CreateMessage, Http};
+use serenity::all::{ChannelId, Http};
 
 use crate::discord::core::*;
 use crate::discord::notifications::{CommandRequest, KillEvent, MatchEndEvent};

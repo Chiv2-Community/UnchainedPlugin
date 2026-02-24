@@ -185,6 +185,7 @@ macro_rules! CALL_ORIGINAL {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
         paste::paste! {
             #[allow(clippy::macro_metavars_in_unsafe)] // FIXME: I guess
+            #[allow(unused_unsafe)]
             unsafe { [<o_ $name>].call($($arg),*) }
         }
     }};
@@ -197,7 +198,8 @@ macro_rules! CALL_ORIGINAL {
 macro_rules! TRY_CALL_ORIGINAL {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
         paste::paste! {
-            let is_init = [<o_ $name>].is_enabled() || [<o_ $name>].disable().is_ok();
+            #[allow(unused_unsafe)]
+            let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
             if !is_init {
                 eprintln!("⚠️ Detour {} is not initialized. Skipping.", stringify!($name));
                 return; // The "TRY" part: exit the caller

@@ -75,9 +75,12 @@ impl DiscordSubscriber for ExtMapVote {
                 }
                 None => {
                     if cmd.args.is_empty() || cmd.name != "startvotemap" { return NO_RESP; }
-                    match self.active_vote {
-                        Some(_) => msg("A vote is already in progress"),
-                        None => BotResponse::from(self.init_vote(cmd.actor.display_name.clone(), cmd.args.first().unwrap().clone()).unwrap())
+                    let actor_name = cmd.actor.display_name.clone();
+                    let map_name = cmd.args.first().unwrap().clone();
+                    if let Some(msg) = self.init_vote(actor_name, map_name) {
+                        BotResponse::from(msg)
+                    } else {
+                        NO_RESP
                     }
                 }
             };
@@ -97,7 +100,10 @@ impl DiscordSubscriber for ExtMapVote {
             // crate::sinfo!(f; "Vote Tick");
             // 1. Check for Final Timeout
             if now >= state.end_time {
-                return BotResponse::from(self.resolve_vote().unwrap()).into_responses();
+                if let Some(msg) = self.resolve_vote() {
+                    return BotResponse::from(msg).into_responses();
+                }
+                return NO_RESP;
             }
 
             // 2. Check for 5-second Interval Broadcast

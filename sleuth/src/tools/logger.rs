@@ -2,11 +2,11 @@
 
 use log4rs::{Config, append::{console::ConsoleAppender, file::FileAppender}, config::{Appender, Logger, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, init_config};
 
-#[cfg(feature="syslog-client")]
+#[allow(unused_imports)]
 use super::syslog::SyslogAppender;
 use std::backtrace::Backtrace;
 use std::panic;
-use log::{LevelFilter, error};
+use log::error;
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {

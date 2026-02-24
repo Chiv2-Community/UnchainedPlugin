@@ -1,5 +1,4 @@
-use serenity::all::{ChannelId, CreateEmbed, CreateMessage, Http};
-use std::sync::Arc;
+use serenity::all::{ChannelId, CreateEmbed, CreateMessage};
 
 pub struct CommandInfo {
     pub name: String,

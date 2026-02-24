@@ -1,4 +1,4 @@
-use crate::{commands::NATIVE_COMMAND_QUEUE, discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}}};
+use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}};
 
 pub struct KickVote;
 
@@ -37,8 +37,6 @@ impl VoteType for KickVote {
     }
     
     async fn on_success(&self, target: &str) {
-        let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
-        
         // TODO: implement
         // Find player by name?
         println!("[VoteSystem] Kick vote passed for target: {}", target);

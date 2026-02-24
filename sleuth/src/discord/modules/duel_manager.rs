@@ -8,7 +8,7 @@ use crate::discord::notifications::*;
 use crate::discord::responses::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 
 struct ActiveDuel {
     p1: String,

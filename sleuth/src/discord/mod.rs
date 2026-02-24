@@ -12,15 +12,14 @@ use crate::discord::config::DiscordConfig;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, RoleId};
 use crate::discord::core::*;
 use crate::discord::modules::chat_relay::ChatRelayModule;
-use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_module::VoteModule;
-use crate::discord::modules::voting::*;
+// use crate::discord::modules::voting::*;
 use crate::discord::modules::{
     batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
 };
 use crate::discord::notifications::{CommandRequest, CommandSource, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
-use crate::{sinfo, swarn};
+use crate::swarn;
 use censor::Censor;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
@@ -211,6 +210,7 @@ async fn dispatch_responses(
     }
 }
 
+#[allow(dead_code)]
 fn sanitize_text(input: &str) -> String {
     let filter = Censor::Standard;
     filter.censor(input)
@@ -328,7 +328,7 @@ impl DiscordBridge {
                 let admin_channel_id = ChannelId::new(cfg.admin_channel_id);
                 let admin_role_id = RoleId::new(cfg.admin_role_id);
                 let general_channel_id = ChannelId::new(cfg.general_channel_id);
-                let blocked_set: std::collections::HashSet<String> = cfg.blocked_notifications.into_iter().collect();
+                let _blocked_set: std::collections::HashSet<String> = cfg.blocked_notifications.into_iter().collect();
 
                 // 3. The Dispatch Loop
                 tokio::spawn(async move {
@@ -346,7 +346,7 @@ impl DiscordBridge {
                                             .description("All available commands across modules:")
                                             .color(0x3498db);
 
-                                        let mut subs = shared_subs.lock().await;
+                                        let subs = shared_subs.lock().await;
                                         for sub in subs.iter() {
                                             let module_cmds = sub.get_commands();
                                             if module_cmds.is_empty() { continue; }
@@ -390,10 +390,13 @@ impl DiscordBridge {
                             //     }
                             // }
                             _ = ticker.tick() => {
-                                let mut subs = shared_subs.lock().await;
-                                for sub in subs.iter_mut() {
-                                    if let resps = sub.on_tick(&http, channel_id).await {
-                                        dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
+                                {
+                                    let mut subs = shared_subs.lock().await;
+                                    for sub in subs.iter_mut() {
+                                        let resps = sub.on_tick(&http, channel_id).await;
+                                        {
+                                            dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
+                                        }
                                     }
                                 }
                             }

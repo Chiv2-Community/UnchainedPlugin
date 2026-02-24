@@ -1,4 +1,4 @@
-use crate::{commands::NATIVE_COMMAND_QUEUE, discord::modules::voting::vote_module::VoteType};
+use crate::discord::modules::voting::vote_module::VoteType;
 
 pub struct ModVote;
 
@@ -13,8 +13,8 @@ impl VoteType for ModVote {
         Box::new(ModVote) 
     }
 
-    async fn on_success(&self, target: &str) {
-        let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
+    async fn on_success(&self, _target: &str) {
+        // let _queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
         // TODO: implement
         // find mod by name
         // spawn actor

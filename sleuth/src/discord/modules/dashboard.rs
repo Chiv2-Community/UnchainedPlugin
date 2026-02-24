@@ -29,6 +29,7 @@ pub struct Dashboard {
     message_id2: Option<MessageId>,
     needs_refresh: bool,
     status: Option<ServerStatus>,
+    #[allow(dead_code)]
     ctx: crate::discord::Ctx,
     settings: DashboardSettings,
 }
@@ -173,7 +174,7 @@ impl Dashboard {
         let chosen_color = *colors.choose(&mut rng).unwrap_or(&0xe67e22);
         let chosen_description = templates.choose(&mut rng).unwrap_or(&templates[0]).to_string();
         
-        let mut embed = CreateEmbed::new()
+        let embed = CreateEmbed::new()
             .title("⚔️ CALL TO ARMS ⚔️")
             .color(chosen_color)
             .description(chosen_description)
@@ -185,7 +186,7 @@ impl Dashboard {
     }
     
     #[handler_command("dash", desc="Display server dashboard (if available)", source = "Discord")]
-    pub fn cmd_dash(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {        
+    pub fn cmd_dash(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {        
         if self.status.is_none() {
             return msg("Dashboard: no server status available").into_responses();
         }
@@ -198,7 +199,7 @@ impl Dashboard {
     }
     
     #[handler_command("playerlist", desc="Display server dashboard (if available)")]
-    pub fn cmd_playerlist(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_playerlist(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
         if let Some(world) = crate::globals().world() {
             let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
             let game = unsafe {game_ptr.as_mut().expect("GameMode was null")};
@@ -234,7 +235,7 @@ impl Dashboard {
                 let flag_str = flags.join("|");
 
                 let full_ip = player_state.base.saved_network_address.to_string(); // Assuming FString to String
-                let short_ip = if full_ip.len() >= 4 { &full_ip[..4] } else { &full_ip };
+                let _short_ip = if full_ip.len() >= 4 { &full_ip[..4] } else { &full_ip };
 
                 let raw_name = player_state.base.player_name_private.to_string();
                 let display_name = if raw_name.len() > 14 { format!("{}..", &raw_name[..12]) } else { raw_name };
@@ -353,7 +354,7 @@ impl DiscordSubscriber for Dashboard {
         match self.message_id {
             Some(id) => {
                 // Edit existing message
-                let _ = channel.edit_message(http, self.message_id.unwrap(), EditMessage::new().add_embed(embed)).await;
+                let _ = channel.edit_message(http, id, EditMessage::new().add_embed(embed)).await;
             }
             None => {
                 // Create the initial dashboard message
