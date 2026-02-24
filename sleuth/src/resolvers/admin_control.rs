@@ -53,9 +53,12 @@ define_pattern_resolver!(ConsoleCommand, First, [
     "40 53 48 83 EC 20 48 8B 89 D0 02 00 00 48 8B DA 48 85 C9 74 0E E8 ?? ?? ?? ?? 48 8B C3 48 83 C4 20 5B C3 33 C0 48 89 02 48 89 42 08 48 8B C3 48 83 C4 20 5B C3"
 ]);
 CREATE_HOOK!(ConsoleCommand, ACTIVE, FString, (this_ptr: *mut c_void, command: *mut FString, b: bool), {
-    let cmd = unsafe { command.as_mut().expect("Response was null") };
-    if !cmd.to_string().starts_with("RCON_INTERCEPT") {
-        unsafe { log::info!(target: "Console", "Executing: {}", (&*command)); };
+    if let Some(cmd) = unsafe { command.as_mut() } {
+        if !cmd.to_string().starts_with("RCON_INTERCEPT") {
+            unsafe { log::info!(target: "Console", "Executing: {}", (&*command)); };
+        }
+    } else {
+        log::error!(target: "Console", "ConsoleCommand: command was null");
     }
 });
 

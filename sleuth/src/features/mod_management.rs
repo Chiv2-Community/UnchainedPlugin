@@ -61,9 +61,14 @@ fn get_game_info() -> CommandResult {
     run_on_game_thread(move || {
         if let Some(world) = crate::globals().world() {
             let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
-            let game = unsafe {game_ptr.as_mut().expect("GameMode was null")};
+            let game = match unsafe { game_ptr.as_mut() } {
+                Some(g) => g,
+                None => {
+                    serror!(f; "GameMode was null");
+                    return;
+                }
+            };
 
-            
             sinfo!(f; "Name:{}", game.server_name);
             let maplist = game.maplist.as_slice().iter().join(", ");
             sinfo!(f; "MapList:{}", maplist);
@@ -71,11 +76,29 @@ fn get_game_info() -> CommandResult {
             sinfo!(f; "Idle spectate:{}", game.idle_kick_timer_spectate);
 
             let uworld_ptr = world as *mut UWorld;
-            let uworld = unsafe {uworld_ptr.as_mut().expect("World was null")};
+            let uworld = match unsafe { uworld_ptr.as_mut() } {
+                Some(w) => w,
+                None => {
+                    serror!(f; "World was null");
+                    return;
+                }
+            };
 
-            let game_state = unsafe {(uworld.game_state).as_mut().expect("GameState was null")};
+            let game_state = match unsafe { (uworld.game_state).as_mut() } {
+                Some(gs) => gs,
+                None => {
+                    serror!(f; "GameState was null");
+                    return;
+                }
+            };
             for player_raw in game_state.player_array.as_mut_slice() {
-                let player_state = unsafe {(player_raw).as_mut().expect("World was null")};
+                let player_state = match unsafe { (player_raw).as_mut() } {
+                    Some(ps) => ps,
+                    None => {
+                        swarn!(f; "PlayerState was null");
+                        continue;
+                    }
+                };
                 let pname = player_state.base.player_name_private.to_string();
                 sinfo!(f; "{}", pname);
                 let mut flags = "".to_string();

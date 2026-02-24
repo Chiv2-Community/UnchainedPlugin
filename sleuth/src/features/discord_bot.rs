@@ -122,10 +122,15 @@ impl DiscordBridge {
                 // let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
                 let intents = serenity::model::gateway::GatewayIntents::non_privileged() 
                         | serenity::model::gateway::GatewayIntents::MESSAGE_CONTENT;
-                let mut client = Client::builder(&cfg_clone.bot_token, intents)
+                let mut client = match Client::builder(&cfg_clone.bot_token, intents)
                     .event_handler(Handler { config: cfg_clone.clone(), to_game: in_tx })
-                    .await
-                    .expect("Err creating client");
+                    .await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            serror!(f; "Failed to create Discord client: {}", e);
+                            return;
+                        }
+                    };
 
                 // FIX: In 0.12, use client.http directly
                 let http = client.http.clone();
@@ -163,7 +168,16 @@ impl DiscordBridge {
                     }
                 });
 
-                client.start().await.expect("Discord bot crashed");
+                loop {
+                    if let Err(why) = client.start().await {
+                        serror!(f; "Discord client error: {:?}", why);
+                        // Wait before attempting to restart
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    } else {
+                        // If it finishes without error, we probably don't want to restart immediately or at all
+                        break;
+                    }
+                }
             });
         });
 

@@ -268,6 +268,19 @@ pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_cha
 
 #[no_mangle]
 pub extern "C" fn preinit_rustlib() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic".to_string()
+        };
+        let location = panic_info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
+        eprintln!("CRITICAL ERROR: {}{} - Application will exit in 10 seconds", message, location);
+        std::thread::sleep(std::time::Duration::from_secs(10));
+    }));
+
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     sdebug!(f; "CLI Args: {:#?}", args);
     if CLI_ARGS.set(args).is_err() {
