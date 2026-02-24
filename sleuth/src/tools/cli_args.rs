@@ -224,11 +224,31 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
     result
 }
 
-pub unsafe fn load_cli() -> Result<CLIArgs, clap::error::Error> {
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_invalid_int() {
+        let args = vec!["app".to_string(), "--rcon".to_string(), "not_an_int".to_string()];
+        let result = CLIArgs::try_parse_from(args);
+        assert!(result.is_err(), "Should fail to parse invalid integer");
+    }
+
+    #[test]
+    fn test_parse_valid_args() {
+        let args = vec!["app".to_string(), "--rcon".to_string(), "9001".to_string()];
+        let result = CLIArgs::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse valid arguments");
+        assert_eq!(result.unwrap().rcon_port, Some(9001));
+    }
+}
+
+pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     sdebug!(f; "CLI Args raw: {:#?}", args);
     let parsed = normalize_and_filter_args(args);
-    let mut cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI args");
+    let mut cli = CLIArgs::try_parse_from(parsed)?;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
     Ok(cli)
 }
