@@ -44,11 +44,6 @@ pub struct FNameEntryId {
 }
 
 impl std::fmt::Display for FName {
-    /// Formats the `FName` using Unreal Engine's internal string conversion.
-    ///
-    /// # Safety
-    /// This implementation is inherently unsafe because it calls `FName::ToString` via a 
-    /// function pointer resolved at runtime from the game's memory.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = FString::new();
         unsafe {
