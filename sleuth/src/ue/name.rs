@@ -20,12 +20,14 @@ impl FName {
 
     pub unsafe fn new(string: &FString) -> FName {
         let mut ret = FName::default();
-        o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add);
+        CALL_ORIGINAL_SAFE!(FNameCtorWchar(&mut ret, string.as_ptr(), EFindName::Add))
+            .expect("Failed to construct FName (Add)");
         ret
     }
     pub unsafe fn find(string: &FString) -> FName {
         let mut ret = FName::default();
-        o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Find);
+        CALL_ORIGINAL_SAFE!(FNameCtorWchar(&mut ret, string.as_ptr(), EFindName::Find))
+            .expect("Failed to construct FName (Find)");
         ret
     }
 }
