@@ -5,7 +5,9 @@ mod malloc;
 mod map;
 mod name;
 mod object;
+pub mod object_array;
 mod string;
+pub mod sync;
 
 pub use array::*;
 pub use malloc::*;

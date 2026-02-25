@@ -12,7 +12,7 @@ use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::{ serror, sinfo};
+use crate::{ serror, sinfo, swarn};
 use crate::ue::{FString, FVector, TArray, UClass, UObject};
 use crate::resolvers::{asset_registry::*, asset_loading::*};
 #[allow(unused_imports)]

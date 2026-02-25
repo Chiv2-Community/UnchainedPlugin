@@ -251,11 +251,47 @@ pub struct UClass {
 }
 
 
+use std::ops::Deref;
+use crate::globals;
+use super::object_array::FUObjectArray;
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct FWeakObjectPtr {
+    object_index: i32,
+    object_serial_number: i32,
+}
+impl FWeakObjectPtr {
+    pub fn new(object: &UObjectBase) -> Self {
+        Self::new_from_index(object.internal_index)
+    }
+    pub fn new_from_index(index: i32) -> Self {
+        Self {
+            object_index: index,
+            // serial allocation performs only atomic operations
+            object_serial_number: unsafe {
+                globals()
+                    .guobject_array_unchecked()
+                    .allocate_serial_number(index)
+            },
+        }
+    }
+    pub fn get<'a>(&self, object_array: &'a FUObjectArray) -> Option<&'a UObjectBase> {
+        // TODO check valid
+        unsafe {
+            let guard = object_array.objects();
+            let objects = guard.deref();
+            let item = objects.item(self.object_index);
+            item.object.as_ref()
+        }
+    }
+}
+
 impl UObjectBase {
-    pub fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
+    pub unsafe fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
         let mut string = FString::new();
         unsafe {
-            (globals().uobject_base_utility_get_path_name())(self, stop_outer, &mut string);
+            globals().uobject_base_utility_get_path_name()(self, stop_outer, &mut string);
         }
         string.to_string()
     }

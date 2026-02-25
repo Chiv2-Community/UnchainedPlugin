@@ -5,7 +5,6 @@ mod resolvers;
 pub mod scan;
 pub mod tools;
 mod ue;
-mod ue_old;
 pub mod game;
 pub mod features;
 pub mod commands;
@@ -31,37 +30,20 @@ use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::commands::spawn_cli_handler;
 use crate::discord::config::DiscordConfig;
-#[cfg(feature="cli_commands")]
-// use crate::features::commands::spawn_cli_handler;
-// use crate::features::discord_bot::{DiscordBridge, DiscordConfig, OutgoingEvent};
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
-// use crate::resolvers::unchained_integration::CHAT_QUEUE;
 use crate::tools::hook_globals::{CLI_ARGS, cli_args, globals, init_globals};
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
 
-// IEEE
-use std::arch::x86_64::{_mm_crc32_u64, _mm_crc32_u8};
 
-#[target_feature(enable = "sse4.2")]
-unsafe fn crc32_from_file(path: &str) -> std::io::Result<u32> {
+
+fn crc32_from_file(path: &str) -> std::io::Result<u32> {
     let file = File::open(path)?;
-    let mmap = memmap2::Mmap::map(&file)?;
-    let mut crc: u64 = 0;
-
-    let mut chunks = mmap.chunks_exact(8);
-    for chunk in chunks.by_ref() {
-        crc = _mm_crc32_u64(crc, u64::from_le_bytes(chunk.try_into().unwrap()));
-    }
-
-    for &byte in chunks.remainder() {
-        crc = _mm_crc32_u8(crc as u32, byte) as u64;
-    }
-
-    Ok((crc as u32) ^ 0xFFFFFFFF)
+    let mmap = unsafe { memmap2::Mmap::map(&file)? };
+    Ok(crc32c::crc32c(&mmap))
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -168,7 +150,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_default();
 
-        let crc32 = unsafe { crc32_from_file(&file_path) }.expect("Failed to compute CRC");
+        let crc32 = crc32_from_file(&file_path).expect("Failed to compute CRC");
 
         let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
             true => PlatformType::EGS,
@@ -209,19 +191,14 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
     static APPLIED: AtomicBool = AtomicBool::new(false);
 
     if !APPLIED.load(Ordering::Relaxed) {
-        let exe = patternsleuth::process::internal::read_image().map_err(|e| e.to_string()).expect("failed to read image");
         match current.as_ref() {
             None => sdebug!(f; "No current BuildInfo"),
             Some(bi) => {
                 // Attach hooks
                 
                 let offsets = bi.offsets.clone();
-                unsafe {
-                    apply_patches(exe.base_address, offsets.clone());
-                }
-                unsafe {
-                    attach_hooks(exe.base_address, offsets.clone()).unwrap();
-                }
+                apply_patches(offsets.clone());
+                attach_hooks(offsets.clone()).unwrap();
                 APPLIED.store(true, Ordering::Relaxed);
             },
         }
@@ -241,8 +218,7 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
 }
 
 #[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
+pub unsafe extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
     let bi = unsafe { &*bi };
     if let Err(e) = bi.save() {
         eprintln!("Failed to save build info: {}", e);
@@ -252,15 +228,13 @@ pub extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
 }
 
 #[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
+pub unsafe extern "C" fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
     let bi = unsafe { &*bi };
     bi.get_file_hash()
 }
 
 #[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
+pub unsafe extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
     let bi = unsafe { &*bi };
     let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
     *bi.get_offset(name.as_ref()).unwrap_or(&0)
@@ -294,9 +268,7 @@ pub extern "C" fn preinit_rustlib() {
 pub extern "C" fn init_rustlib() {
     print!("{CLI_LOGO}");
     // tools::logger::init_syslog().expect("Failed to init syslog");
-    unsafe {
-        init_globals().expect("Failed to init globals!");
-    };
+    init_globals().expect("Failed to init globals!");
 }
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
@@ -305,9 +277,7 @@ static WORLD_READY: AtomicBool = AtomicBool::new(false);
 #[no_mangle]
 pub extern "C" fn postinit_rustlib() {
     
-    unsafe {
-        seh::install();
-    }
+    seh::install();
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
     // #[cfg(feature="rcon_commands")]
@@ -478,9 +448,8 @@ pub fn world_init() {
     }
 }
 
-/// # Safety
-pub unsafe fn attach_hooks(
-    base_address: usize,
+/// The base program address of the running application will be used.
+pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!(f; "Attaching hooks via auto-discovery:");
@@ -494,7 +463,7 @@ pub unsafe fn attach_hooks(
             // continue;
         }
 
-        match (hook.hook_fn)(base_address, offsets.clone(), cond) {
+        match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
             Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e),
         }
@@ -503,12 +472,12 @@ pub unsafe fn attach_hooks(
     Ok(())
 }
 
-/// # Safety
-pub unsafe fn apply_patches(base: usize, offsets: std::collections::HashMap<String, u64>) {
+/// The base program address of the running application will be used.
+pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
     for p in inventory::iter::<resolvers::PatchRegistration> {
         // Run the condition check
         if (p.enabled_fn)() {
-            match (p.patch_fn)(base, offsets.clone()) {
+            match unsafe { (p.patch_fn)(offsets.clone()) } {
                 Ok(_) => sinfo!(f; "[+] Patch Applied: {} ({})", p.name, p.tag),
                 Err(e) => serror!(f; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }

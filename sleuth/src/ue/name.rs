@@ -17,17 +17,15 @@ pub struct FName {
     pub number: u32,
 }
 impl FName {
-    pub fn new(string: &FString) -> FName {
+
+    pub unsafe fn new(string: &FString) -> FName {
         let mut ret = FName::default();
-        
-        // unsafe { globals().fname_ctor_wchar()(&mut ret, string.as_ptr(), EFindName::Add) };
-        unsafe { o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add) };
+        o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add);
         ret
     }
-    pub fn find(string: &FString) -> FName {
+    pub unsafe fn find(string: &FString) -> FName {
         let mut ret = FName::default();
-        // unsafe { globals().fname_ctor_wchar()(&mut ret, string.as_ptr(), EFindName::Find) };
-        unsafe { o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add) };
+        o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Find);
         ret
     }
 }
@@ -44,10 +42,15 @@ pub struct FNameEntryId {
 }
 
 impl std::fmt::Display for FName {
+    /// Formats the `FName` using Unreal Engine's internal string conversion.
+    ///
+    /// # Safety
+    /// This implementation is inherently unsafe because it calls `FName::ToString` via a 
+    /// function pointer resolved at runtime from the game's memory.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = FString::new();
         unsafe {
-            (globals().fname_to_string())(self, &mut string);
+            globals().fname_to_string()(self, &mut string);
         };
         write!(f, "{string}")
     }

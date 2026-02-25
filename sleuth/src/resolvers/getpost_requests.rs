@@ -102,7 +102,7 @@ define_pattern_resolver!(CreateHttpRequest, [
         )
     })?;
 
-    let base_addr = crate::globals().get_base_address();
+    let base_addr = *crate::resolvers::BASE_ADDR;
     let mem = &ctx.image().memory;
     let str_offset = 0x49 + 0x3; // offset to LEA call + string addr
 
