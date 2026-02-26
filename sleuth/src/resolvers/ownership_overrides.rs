@@ -25,11 +25,11 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
 CREATE_HOOK!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, ACTIVE, POST,
     *mut FOwnershipResponse, (result: *mut FOwnershipResponse, PlayerController: *mut c_void, PlayerState: *mut c_void, AssetIdToCheck: *mut c_void, BaseOnly: bool),
     | response: *mut FOwnershipResponse | {
-        let resp = unsafe { response.as_mut().expect("Response was null") };
-        
-        resp.level = 0;
-        resp.owned = true;
-        resp
+        if let Some(resp) = unsafe { response.as_mut() } {
+            resp.level = 0;
+            resp.owned = true;
+        }
+        response
 });
 
 define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
@@ -47,13 +47,14 @@ define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
 CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
     *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, InLoadOutSelection: *mut c_void, InItem: *mut c_void), 
     | response: *mut FOwnershipResponse | {
-        let resp = unsafe { response.as_mut().expect("Response was null") };
-        let res = unsafe { result.as_mut().expect("Response was null") };
-        
-        resp.level = 0;
-        resp.owned = true;
-        res.owned = true;
-        resp
+        if let Some(resp) = unsafe { response.as_mut() } {
+            resp.level = 0;
+            resp.owned = true;
+        }
+        if let Some(res) = unsafe { result.as_mut() } {
+            res.owned = true;
+        }
+        response
 });
 
 define_pattern_resolver!(
@@ -66,11 +67,11 @@ define_pattern_resolver!(
 CREATE_HOOK!(ATBLPlayerController__CanUseCharacter, ACTIVE, POST,
     *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, CharacterSubclass: *mut c_void), 
     | response: *mut FOwnershipResponse | {
-        let resp = unsafe { response.as_mut().expect("Response was null") };
-        
-        resp.level = 0;
-        resp.owned = true;
-        resp
+        if let Some(resp) = unsafe { response.as_mut() } {
+            resp.level = 0;
+            resp.owned = true;
+        }
+        response
 });
 
 
@@ -88,8 +89,8 @@ use std::os::raw::c_void;
 use crate::game::chivalry2::ATBLPlayerController;
 CREATE_HOOK!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, ACTIVE, PRE,
     c_void, (this: *mut ATBLPlayerController, player_state: *mut c_void), {
-        let pc = unsafe { this.as_mut().expect("PlayerController was null") };
-        
-        pc.bOnlineInventoryInitialized = true;
-        pc.bPlayerCustomizationReceived = true;
+        if let Some(pc) = unsafe { this.as_mut() } {
+            pc.bOnlineInventoryInitialized = true;
+            pc.bPlayerCustomizationReceived = true;
+        }
 });

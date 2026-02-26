@@ -17,17 +17,17 @@ pub struct FName {
     pub number: u32,
 }
 impl FName {
-    pub fn new(string: &FString) -> FName {
+
+    pub unsafe fn new(string: &FString) -> FName {
         let mut ret = FName::default();
-        
-        // unsafe { globals().fname_ctor_wchar()(&mut ret, string.as_ptr(), EFindName::Add) };
-        unsafe { o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add) };
+        CALL_ORIGINAL_SAFE!(FNameCtorWchar(&mut ret, string.as_ptr(), EFindName::Add))
+            .expect("Failed to construct FName (Add)");
         ret
     }
-    pub fn find(string: &FString) -> FName {
+    pub unsafe fn find(string: &FString) -> FName {
         let mut ret = FName::default();
-        // unsafe { globals().fname_ctor_wchar()(&mut ret, string.as_ptr(), EFindName::Find) };
-        unsafe { o_FNameCtorWchar.call(&mut ret, string.as_ptr(), EFindName::Add) };
+        CALL_ORIGINAL_SAFE!(FNameCtorWchar(&mut ret, string.as_ptr(), EFindName::Find))
+            .expect("Failed to construct FName (Find)");
         ret
     }
 }
@@ -47,7 +47,7 @@ impl std::fmt::Display for FName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = FString::new();
         unsafe {
-            (globals().fname_to_string())(self, &mut string);
+            globals().fname_to_string()(self, &mut string);
         };
         write!(f, "{string}")
     }

@@ -92,12 +92,12 @@ macro_rules! __create_patch_impl {
         paste::paste! {
             #[allow(non_snake_case)]
             pub unsafe fn [<apply_patch_ $name _ $suffix>](
-                base_address: usize,
                 offsets: std::collections::HashMap<String, u64>
             ) -> Result<(), Box<dyn std::error::Error>> {
                 match offsets.get(stringify!($name)) {
                     None => Err(format!("Offset for {} not found", stringify!($name)).into()),
                     Some(offset) => {
+                        let base_address = * $crate::resolvers::BASE_ADDR;
                         let addr = (base_address + (*offset as usize) + ($extra as usize)) as *mut u8;
                         // Map to existing ops (memtools)
                         $crate::__apply_patch_op!($op, addr, $val);

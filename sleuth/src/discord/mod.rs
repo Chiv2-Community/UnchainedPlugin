@@ -318,10 +318,15 @@ impl DiscordBridge {
 
 
                 let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-                let mut client = Client::builder(&cfg.bot_token, intents)
+                let mut client = match Client::builder(&cfg.bot_token, intents)
                     .event_handler(Handler { config: cfg.clone() })
-                    .await
-                    .expect("Failed to create Discord client");
+                    .await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            swarn!(f; "Failed to create Discord client: {}", e);
+                            return;
+                        }
+                    };
 
                 let http = Arc::clone(&client.http);
                 let channel_id = ChannelId::new(cfg.channel_id);

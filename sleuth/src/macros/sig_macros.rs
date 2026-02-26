@@ -92,30 +92,38 @@ macro_rules! define_pocess {
     (@emit_body $name:ident, XrefLast, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
+        use patternsleuth::resolvers::ResolveError;
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
-            let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
+            let [first_pat, ..] = $patterns.as_slice() else {
+                return Err(ResolveError::Msg(format!("expected at least one pattern for {}", stringify!($name)).into()));
+            };
+            let strings = $ctx.scan(first_pat.clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            if let Some(last_fn) = fns.last().cloned() {
-                fns.clear();
-                fns.push(last_fn);
-            }
+            let [.., last_fn] = fns.as_slice() else { return Err(ResolveError::Msg(format!("expected at least one pattern to have matched for {}", stringify!($name)).into())) };
+            let last_fn = last_fn.clone();
+            fns.clear();
+            fns.push(last_fn);
             ensure_one(fns)
         })
     }};
     (@emit_body $name:ident, XrefFirst, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
+        use patternsleuth::resolvers::ResolveError;
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
-            let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
+            let [first_pat, ..] = $patterns.as_slice() else {
+                return Err(ResolveError::Msg(format!("expected at least one pattern for {}", stringify!($name)).into()));
+            };
+            let strings = $ctx.scan(first_pat.clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            if let Some(last_fn) = fns.first().cloned() {
-                fns.clear();
-                fns.push(last_fn);
-            }
+            let [first_fn, ..] = fns.as_slice() else { return Err(ResolveError::Msg(format!("expected at least one pattern to have matched for {}", stringify!($name)).into())) };
+            let first_fn = first_fn.clone();
+            fns.clear();
+            fns.push(first_fn);
             ensure_one(fns)
         })
     }};

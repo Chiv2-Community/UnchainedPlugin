@@ -9,7 +9,8 @@ use crate::features::discord_bot::DiscordBridge;
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
-use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, serror, sinfo, tools::cli_args::CLIArgs, ue, ue_old::FUObjectArray};
+use crate::{resolvers::{PLATFORM, PlatformType}, serror, sinfo, tools::cli_args::CLIArgs, ue};
+use ue::object_array::FUObjectArray;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use patternsleuth::{disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
@@ -154,6 +155,18 @@ macro_rules! global_ptr {
     };
 }
 
+macro_rules! resolution_fn {
+    ($name:ident, $res_field:ident, $ty:ty) => {
+        pub fn $name(&self) -> $ty {
+            let ptr = self.resolution.$res_field.0;
+            if ptr == 0 {
+                panic!("Critical: Global resolver '{}' failed to find its target address. Check memory patterns.", stringify!($res_field));
+            }
+            unsafe { std::mem::transmute(ptr) }
+        }
+    };
+}
+
 use std::sync::OnceLock;
 
 #[derive(Debug)]
@@ -164,7 +177,7 @@ pub struct Globals {
     guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
     pub main_thread_id: std::thread::ThreadId,
     platform: PlatformType,
-    base_address: usize,
+    // base_address: usize,
     is_server: bool,
     // pub(crate) cli_args: CLIArgs,
     pub world: RwLock<SyncPtr<c_void>>,
@@ -195,32 +208,30 @@ pub fn globals_initialized() -> bool {
 #[allow(dead_code)]
 impl Globals {
     pub fn gmalloc(&self) -> &ue::FMalloc {
-        unsafe { &**(self.resolution.gmalloc.0 as *const *const ue::FMalloc) }
+        let ptr = self.resolution.gmalloc.0 as *const *const ue::FMalloc;
+        if ptr.is_null() {
+            panic!("Critical: Global resolver 'gmalloc' failed. Memory allocation is required for plugin operation.");
+        } else {
+            unsafe { &**ptr }
+        }
     }
-    pub fn fframe_step(&self) -> ue::FnFFrameStep {
-        unsafe { std::mem::transmute(self.resolution.fframe_step.0) }
-    }
-    pub fn fframe_step_explicit_property(&self) -> ue::FnFFrameStepExplicitProperty {
-        unsafe { std::mem::transmute(self.resolution.fframe_step_explicit_property.0) }
-    }
-    pub fn fname_to_string(&self) -> ue::FnFNameToString {
-        unsafe { std::mem::transmute(self.resolution.fnametostring.0) }
-    }
-    pub fn uobject_base_utility_get_path_name(&self) -> ue::FnUObjectBaseUtilityGetPathName {
-        unsafe { std::mem::transmute(self.resolution.uobject_base_utility_get_path_name.0) }
-    }
+
+    resolution_fn!(fframe_step, fframe_step, ue::FnFFrameStep);
+    resolution_fn!(fframe_step_explicit_property, fframe_step_explicit_property, ue::FnFFrameStepExplicitProperty);
+    resolution_fn!(fname_to_string, fnametostring, ue::FnFNameToString);
+    resolution_fn!(uobject_base_utility_get_path_name, uobject_base_utility_get_path_name, ue::FnUObjectBaseUtilityGetPathName);
+
     pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
         self.guobject_array.lock()
     }
+    /// # Safety
+    /// Caller must ensure no concurrent mutable access to the object array.
     pub unsafe fn guobject_array_unchecked(&self) -> &FUObjectArray {
         // deref ptr to SyncFUObjectArray, then deref to FUObjectArray
         &( *self.guobject_array.data_ptr() )
     }
     pub fn get_platform(&self) -> PlatformType {
         self.platform
-    }
-    pub fn get_base_address(&self) -> usize {
-        self.base_address
     }
     pub fn is_server(&self) -> bool {
         self.is_server
@@ -231,7 +242,7 @@ impl Globals {
     global_ptr!(world, c_void);
 }
 
-pub unsafe fn init_globals() -> Result<(), String> {
+pub fn init_globals() -> Result<(), String> {
     let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
         true => PlatformType::EGS,
         false => PlatformType::STEAM,
@@ -242,10 +253,9 @@ pub unsafe fn init_globals() -> Result<(), String> {
         .expect("failed to read image");
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
-    BASE_ADDR.set(exe.base_address).expect("BASE_ADDR already set");
     sinfo!(f;
         "Platform: {} base_addr: '0x{:x?}'",
-        platform, exe.base_address
+        platform, *crate::resolvers::BASE_ADDR
     );
 
     // Load CLI ARGS
@@ -268,14 +278,13 @@ pub unsafe fn init_globals() -> Result<(), String> {
 
     // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =
-        &*(resolution.guobject_array.0 as *const FUObjectArray);
+        unsafe { &*(resolution.guobject_array.0 as *const FUObjectArray) };
 
     let globals_instance = Globals {
         // Wrap the reference in our Sync-promising struct
         guobject_array: parking_lot::FairMutex::new(SyncFUObjectArray(guobject_array)),
         resolution,
         main_thread_id: std::thread::current().id(),
-        base_address: exe.base_address,
         is_server: false,
         // cli_args: args,
         platform,

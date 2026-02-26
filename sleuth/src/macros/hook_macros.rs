@@ -109,7 +109,6 @@ macro_rules! __create_hook_impl {
 
             #[allow(non_snake_case)]
             pub unsafe fn [<attach_ $name>](
-                base_address: usize,
                 offsets: std::collections::HashMap<String, u64>,
                 auto_activate: bool
             ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
@@ -118,6 +117,7 @@ macro_rules! __create_hook_impl {
                     Some(off) => {
                         let rel_address = *off as usize;
                         type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+                        let base_address = * $crate::resolvers::BASE_ADDR;
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
                         
                         

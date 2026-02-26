@@ -130,15 +130,11 @@ impl CLIArgs {
             if let Some(stripped) = arg.strip_prefix("-ini:") {
                 // Split into File, Section, and Key=Value
                 let parts: Vec<&str> = stripped.splitn(3, ':').collect();
-                if parts.len() == 3 {
-                    let file = parts[0].to_string();
-                    let section = parts[1].to_string();
-                    let kv_pair = parts[2];
-
+                if let [file, section, kv_pair] = parts.as_slice() {
                     if let Some((key, value)) = kv_pair.split_once('=') {
-                        map.entry(file)
+                        map.entry(file.to_string())
                             .or_default()
-                            .entry(section)
+                            .entry(section.to_string())
                             .or_default()
                             .insert(key.to_string(), value.to_string());
                     }

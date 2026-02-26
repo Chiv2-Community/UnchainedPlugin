@@ -1,7 +1,7 @@
 // #[macro_use]
 // pub mod macros;
 
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -15,6 +15,7 @@ pub enum PlatformType {
 }
 
 pub static PLATFORM: OnceCell<PlatformType> = OnceCell::new();
+
 pub fn current_platform() -> PlatformType {
     *PLATFORM.get().expect("Platform not initialized")
 }
@@ -39,27 +40,33 @@ impl std::str::FromStr for PlatformType {
     }
 }
 
-pub static BASE_ADDR: OnceCell<usize> = OnceCell::new();
+pub static BASE_ADDR: Lazy<usize> = Lazy::new(|| unsafe {
+    windows::Win32::System::LibraryLoader::GetModuleHandleW(None)
+        .expect("Failed to get module handle")
+        .0 as usize
+});
 
-pub type HookFn = unsafe fn(usize, std::collections::HashMap<String, u64>, bool) -> Result<Option<usize>, Box<dyn std::error::Error>>;
+
+pub type CreateHookFn = unsafe fn(std::collections::HashMap<String, u64>, bool) -> Result<Option<usize>, Box<dyn std::error::Error>>;
 
 pub struct HookRegistration {
     pub name: &'static str,
-    pub hook_fn: HookFn,
+    pub hook_fn: CreateHookFn,
     pub condition: fn() -> bool,
     // pub auto_activate: bool,
 }
 
-pub type ConditionFn = fn() -> bool;
-pub type PatchFn = unsafe fn(usize, std::collections::HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
+pub type RegistrationPredicate = fn() -> bool;
+pub type CreatePatchFn = unsafe fn(std::collections::HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
 
 pub struct PatchRegistration {
     pub name: &'static str,
     pub tag: &'static str,
-    pub patch_fn: PatchFn,
-    pub enabled_fn: ConditionFn, // The runtime check
+    pub patch_fn: CreatePatchFn,
+    pub enabled_fn: RegistrationPredicate, // The runtime check
 }
 
+/// A named group of offsets to help categorize a set of named offsets.
 pub struct OffsetRegisty {
     pub name: &'static str,
     pub map: fn() -> std::collections::HashMap<String, u64>,

@@ -1,3 +1,4 @@
+use std::alloc::Layout;
 use std::ffi::c_void;
 
 #[derive(Debug)]
@@ -8,14 +9,21 @@ pub struct FMalloc {
 unsafe impl Sync for FMalloc {}
 unsafe impl Send for FMalloc {}
 impl FMalloc {
-    pub fn malloc(&self, count: usize, alignment: u32) -> *mut c_void {
-        unsafe { ((*self.vtable).malloc)(self, count, alignment) }
+    /// Safety: The layout must be correct for the type being allocated.
+    /// The allocator must be initialized and valid.
+    pub unsafe fn malloc(&self, layout: Layout) -> *mut c_void {
+        ((*self.vtable).malloc)(self, layout.size(), layout.align() as u32)
     }
-    pub fn realloc(&self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void {
-        unsafe { ((*self.vtable).realloc)(self, original, count, alignment) }
+    /// Safety: `original` must have been allocated by this allocator.
+    /// The layout must be correct for the new allocation.
+    pub unsafe fn realloc(&self, original: *mut c_void, layout: Layout) -> *mut c_void {
+        ((*self.vtable).realloc)(self, original, layout.size(), layout.align() as u32)
     }
-    pub fn free(&self, original: *mut c_void) {
-        unsafe { ((*self.vtable).free)(self, original) }
+    /// Safety: `original` must have been allocated by this allocator and not yet freed.
+    pub unsafe fn free(&self, original: *mut c_void) {
+        if !original.is_null() {
+            ((*self.vtable).free)(self, original)
+        }
     }
 }
 

@@ -26,9 +26,9 @@ impl VoteType for KickVote {
         if cmd.source != CommandSource::GameChat {
             return Err("Kick votes can only be started from in-game chat.".into());
         }
-        if cmd.args.is_empty() {
+        let [_player_name, ..] = cmd.args.as_slice() else {
             return Err("You must specify a player name to kick.".into());
-        }
+        };
         Ok(())
     }
 

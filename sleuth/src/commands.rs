@@ -23,9 +23,7 @@ inventory::collect!(ConsoleCommand);
 /// The Dispatcher: Handles parsing, matching, and thread safety
 pub fn dispatch_command(input: &str) -> bool {
     let parts: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
-    if parts.is_empty() { return false; }
-
-    let cmd_input = &parts[0];
+    let [cmd_input, ..] = parts.as_slice() else { return false; };
     
     let command = ::inventory::iter::<crate::commands::ConsoleCommand>.into_iter().find(|c| {
         let name_matches = c.name == cmd_input;
@@ -136,7 +134,7 @@ fn help_command(command_name: Option<String>) -> ::anyhow::Result<()> {
                     println!("  {:15} {:25} - {}", cmd.name, cmd.params, cmd.description);
                 }
             } else {
-                let sub_names: Vec<&str> = subs.iter().map(|c| c.subcommand.unwrap()).collect();
+                let sub_names: Vec<&str> = subs.iter().filter_map(|c| c.subcommand).collect();
                 println!("  {:15} [subs: {}]", parent, sub_names.join(", "));
             }
         }

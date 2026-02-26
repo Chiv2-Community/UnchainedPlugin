@@ -31,10 +31,11 @@ macro_rules! CREATE_REQUEST_HOOK {
                 request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
                 a4: *mut std::os::raw::c_void
             ), {
-                let (this, req) = unsafe {
-                    (this_ptr.as_mut().expect("GCGObj was null"),
-                     request.as_mut().expect("Request was null"))
-                };  
+                let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
+                    (Some(t), Some(r)) => (t, r),
+                    (None, _) => { $crate::serror!(f; "{} GCGObj was null", stringify!($name)); return std::ptr::null_mut(); }
+                    (_, None) => { $crate::serror!(f; "{} Request was null", stringify!($name)); return std::ptr::null_mut(); }
+                };
                 let old_url = unsafe { std::ptr::read(&this.url_base) };
                 let old_token = unsafe { std::ptr::read(&req.token) };
                 let backend_url = $crate::backend_url!("/api/tbio");
@@ -64,10 +65,10 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
                 a2: *mut std::os::raw::c_void, 
                 request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
                 a4: *mut std::os::raw::c_void), {
-                let (this, req) = unsafe {
-                    (this_ptr.as_mut().expect("GCGObj was null"),
-                     request.as_mut().expect("Request was null"))
-                };  
+                if this_ptr.is_null() || request.is_null() {
+                    $crate::serror!(f; "{} Dummy: null pointers", stringify!($name));
+                    return std::ptr::null_mut();
+                }
                 // $crate::sinfo!("{} Dummy: url_base={}", stringify!($name), this.url_base);
                 $crate::sinfo!(f; "{} Dummy", stringify!($name));
                 $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
@@ -98,7 +99,7 @@ define_pattern_resolver!(CreateHttpRequest, [
         )
     })?;
 
-    let base_addr = crate::globals().get_base_address();
+    let base_addr = *crate::resolvers::BASE_ADDR;
     let mem = &ctx.image().memory;
     let str_offset = 0x49 + 0x3; // offset to LEA call + string addr
 

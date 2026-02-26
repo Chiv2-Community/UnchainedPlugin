@@ -120,3 +120,4 @@ crossbeam-channel = { version = "0.5", optional = true}
 rand = "0.9.2"
 censor = "0.3.0"
 quote = "1.0.43"
+crc32c = "0.6.8"

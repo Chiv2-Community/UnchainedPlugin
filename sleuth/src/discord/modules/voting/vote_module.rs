@@ -23,9 +23,9 @@ pub trait VoteType: Send + Sync {
     fn clone_box(&self) -> Box<dyn VoteType>;
 
     fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
-        if cmd.args.is_empty() {
+        let [_target, ..] = cmd.args.as_slice() else {
             return Err("This vote requires a target argument.".into());
-        }
+        };
         Ok(())
     }
 }
