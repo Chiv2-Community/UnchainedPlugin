@@ -76,16 +76,16 @@ fn resolve_symbol(addr: u64) -> NameAndLocation {
         let mut displacement = 0u32;
         let mut file_line = None;
 
-        if SymGetLineFromAddr64(process, addr, &mut displacement, &mut line).is_ok() {
-            if !line.FileName.is_null() {
-                let file = CStr::from_ptr(line.FileName.0 as *const i8);
-                file_line = Some(format!(
-                    "{}:{} (+0x{:X})",
-                    file.to_string_lossy(),
-                    line.LineNumber,
-                    displacement
-                ));
-            }
+        if SymGetLineFromAddr64(process, addr, &mut displacement, &mut line).is_ok()
+            && !line.FileName.is_null()
+        {
+            let file = CStr::from_ptr(line.FileName.0 as *const i8);
+            file_line = Some(format!(
+                "{}:{} (+0x{:X})",
+                file.to_string_lossy(),
+                line.LineNumber,
+                displacement
+            ));
         }
 
         (name, file_line)
