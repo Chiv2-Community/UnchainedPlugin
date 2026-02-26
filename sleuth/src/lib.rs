@@ -198,7 +198,9 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
                 
                 let offsets = bi.offsets.clone();
                 apply_patches(offsets.clone());
-                attach_hooks(offsets.clone()).unwrap();
+                if let Err(e) = attach_hooks(offsets.clone()) {
+                    serror!(f; "Failed to attach hooks: {}", e);
+                }
                 APPLIED.store(true, Ordering::Relaxed);
             },
         }
