@@ -224,11 +224,223 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
     result
 }
 
-pub unsafe fn load_cli() -> Result<CLIArgs, clap::error::Error> {
+pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     sdebug!(f; "CLI Args raw: {:#?}", args);
     let parsed = normalize_and_filter_args(args);
-    let mut cli = CLIArgs::try_parse_from(parsed).expect("Failed to parse CLI args");
+    let mut cli = CLIArgs::try_parse_from(parsed)?;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
     Ok(cli)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_invalid_int() {
+        let args = vec!["app".to_string(), "--rcon".to_string(), "not_an_int".to_string()];
+        let result = CLIArgs::try_parse_from(args);
+        assert!(result.is_err(), "Should fail to parse invalid integer");
+    }
+
+    #[test]
+    fn test_parse_valid_args() {
+        let args = vec!["app".to_string(), "--rcon".to_string(), "9001".to_string()];
+        let result = CLIArgs::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse valid arguments");
+        assert_eq!(result.unwrap().rcon_port, Some(9001));
+    }
+
+    #[test]
+    fn test_normalize_ue_style_args() {
+        let args = vec![
+            "app".to_string(),
+            "-rcon".to_string(), "9001".to_string(),
+            "Port=7777".to_string(),
+            "-nullrhi".to_string(),
+            "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string(),
+            "UnknownArg=Value".to_string(),
+            "-UnknownFlag".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        
+        // Should include: app, --rcon, 9001, --Port, 7777, --nullrhi, -ini:...
+        // Should NOT include: UnknownArg=Value, -UnknownFlag
+        assert_eq!(normalized[0], "app");
+        assert!(normalized.contains(&"--rcon".to_string()));
+        assert!(normalized.contains(&"9001".to_string()));
+        assert!(normalized.contains(&"--Port".to_string()));
+        assert!(normalized.contains(&"7777".to_string()));
+        assert!(normalized.contains(&"--nullrhi".to_string()));
+        assert!(normalized.contains(&"-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string()));
+        
+        // Ensure unknown args are filtered out
+        assert!(!normalized.contains(&"UnknownArg=Value".to_string()));
+        assert!(!normalized.contains(&"--UnknownArg".to_string()));
+        assert!(!normalized.contains(&"--UnknownFlag".to_string()));
+        
+        // Check order of -ini (should be at the end)
+        assert_eq!(normalized.last().unwrap(), "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64");
+    }
+
+    #[test]
+    fn test_process_ini_map() {
+        let extra_args = vec![
+            "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string(),
+            "-ini:Engine:[Core.Log]:LogHttp=VeryVerbose".to_string(),
+            "not-an-ini".to_string(),
+        ];
+        let ini_map = CLIArgs::process_ini_map(&extra_args);
+
+        assert_eq!(
+            ini_map.get("Game").unwrap().get("/Script/Engine.GameSession").unwrap().get("MaxPlayers").unwrap(),
+            "64"
+        );
+        assert_eq!(
+            ini_map.get("Engine").unwrap().get("[Core.Log]").unwrap().get("LogHttp").unwrap(),
+            "VeryVerbose"
+        );
+    }
+
+    #[test]
+    fn test_find_ini_value() {
+        let mut ini_overrides = HashMap::new();
+        let mut engine_map = HashMap::new();
+        let mut log_map = HashMap::new();
+        log_map.insert("LogHttp".to_string(), "VeryVerbose".to_string());
+        engine_map.insert("[Core.Log]".to_string(), log_map);
+        ini_overrides.insert("Engine".to_string(), engine_map);
+
+        let cli = CLIArgs {
+            next_mod_actors: None,
+            mod_paks: None,
+            server_mods: None,
+            ini_overrides,
+            is_unchained: false,
+            rcon_port: None,
+            apply_desync_patch: false,
+            #[cfg(feature="move-autonomous-desync")]
+            tick_actor_patch: false,
+            use_backend_banlist: false,
+            is_headless: false,
+            next_map: None,
+            launched_profile: None,
+            playable_listen: false,
+            register: false,
+            server_browser_backend: None,
+            server_password: None,
+            platform: None,
+            game_server_ping_port: None,
+            game_server_query_port: None,
+            game_port: None,
+            discord_channel_id: None,
+            discord_admin_channel_id: None,
+            discord_general_channel_id: None,
+            discord_admin_role_id: None,
+            discord_bot_token: None,
+            extra_args: vec![],
+        };
+
+        let paths = [
+            ("Engine", "[Core.Log]", "LogHttp"),
+            ("Game", "/Script/Engine.GameSession", "MaxPlayers"),
+        ];
+
+        assert_eq!(cli.find_ini_value(&paths), Some("VeryVerbose"));
+        
+        let paths_missing = [
+            ("Missing", "Section", "Key"),
+        ];
+        assert_eq!(cli.find_ini_value(&paths_missing), None);
+    }
+
+    #[test]
+    fn test_is_server() {
+        let mut cli = CLIArgs {
+            next_mod_actors: None,
+            mod_paks: None,
+            server_mods: None,
+            ini_overrides: HashMap::new(),
+            is_unchained: false,
+            rcon_port: None,
+            apply_desync_patch: false,
+            #[cfg(feature="move-autonomous-desync")]
+            tick_actor_patch: false,
+            use_backend_banlist: false,
+            is_headless: false,
+            next_map: None,
+            launched_profile: None,
+            playable_listen: false,
+            register: false,
+            server_browser_backend: None,
+            server_password: None,
+            platform: None,
+            game_server_ping_port: None,
+            game_server_query_port: None,
+            game_port: None,
+            discord_channel_id: None,
+            discord_admin_channel_id: None,
+            discord_general_channel_id: None,
+            discord_admin_role_id: None,
+            discord_bot_token: None,
+            extra_args: vec![],
+        };
+
+        assert!(!cli.is_server());
+        cli.rcon_port = Some(9001);
+        assert!(cli.is_server());
+    }
+
+    #[test]
+    fn test_process_ini_map_complex() {
+        let extra_args = vec![
+            "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string(),
+            "-ini:Game:/Script/Engine.GameSession:ServerName=MyServer".to_string(),
+            "-ini:Engine:[Core.Log]:LogHttp=VeryVerbose".to_string(),
+        ];
+        let ini_map = CLIArgs::process_ini_map(&extra_args);
+
+        let game_session = ini_map.get("Game").unwrap().get("/Script/Engine.GameSession").unwrap();
+        assert_eq!(game_session.get("MaxPlayers").unwrap(), "64");
+        assert_eq!(game_session.get("ServerName").unwrap(), "MyServer");
+        
+        assert_eq!(
+            ini_map.get("Engine").unwrap().get("[Core.Log]").unwrap().get("LogHttp").unwrap(),
+            "VeryVerbose"
+        );
+    }
+
+    #[test]
+    fn test_normalize_mixed_order() {
+        let args = vec![
+            "app".to_string(),
+            "-ini:G:S:K=V".to_string(),
+            "--rcon".to_string(), "9001".to_string(),
+            "-unchained".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        
+        // -ini should be at the end
+        assert_eq!(normalized[0], "app");
+        assert_eq!(normalized[1], "--rcon");
+        assert_eq!(normalized[2], "9001");
+        assert_eq!(normalized[3], "--unchained");
+        assert_eq!(normalized[4], "-ini:G:S:K=V");
+    }
+
+    #[test]
+    fn test_extra_args_handling() {
+        let args = vec![
+            "app".to_string(),
+            "--rcon".to_string(), "9001".to_string(),
+            "SomethingElse".to_string(),
+            "-UnknownFlag".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+
+        assert_eq!(normalized, vec!["app".to_string(), "--rcon".to_string(), "9001".to_string(), "SomethingElse".to_string()]);
+        assert!(!normalized.contains(&"-UnknownFlag".to_string()));
+        assert!(!normalized.contains(&"--UnknownFlag".to_string()));
+    }
 }

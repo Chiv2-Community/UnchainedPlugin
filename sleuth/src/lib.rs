@@ -191,21 +191,21 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
     }
 
 
-        if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
-            match scan::scan(bi.platform, Some(bi.get_offsets())) {
-                Ok(new_offsets) if !new_offsets.is_empty() => {
-                    println!(
-                        "Found {} missing signatures, updating build info",
-                        new_offsets.len()
-                    );
-                    for (name, offset) in new_offsets {
-                        bi.add_offset(name, offset);
-                    }
+    if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
+        match scan::scan(bi.platform, Some(bi.get_offsets())) {
+            Ok(new_offsets) if !new_offsets.is_empty() => {
+                println!(
+                    "Found {} missing signatures, updating build info",
+                    new_offsets.len()
+                );
+                for (name, offset) in new_offsets {
+                    bi.add_offset(name, offset);
                 }
-                Ok(_) => {}
-                Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
             }
+            Ok(_) => {}
+            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
         }
+    }
     
     static APPLIED: AtomicBool = AtomicBool::new(false);
 
@@ -269,7 +269,7 @@ pub extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_cha
 
 #[no_mangle]
 pub extern "C" fn preinit_rustlib() {
-    let args = unsafe { tools::cli_args::load_cli().expect("Failed to load CLI ARGS") };
+    let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     sdebug!(f; "CLI Args: {:#?}", args);
     if CLI_ARGS.set(args).is_err() {
         eprintln!("Error: Cli args already initialized!");
@@ -355,7 +355,11 @@ pub extern "C" fn postinit_rustlib() {
             thread::sleep(Duration::from_millis(500));
         }
 
-        world_init();
+        #[cfg(feature="cli_commands")]
+        spawn_cli_handler();
+        if (cli_args().is_server()) {
+            world_init();
+        }
     });
 }
 
@@ -372,9 +376,6 @@ impl discord::ChatSink for GameChatSink {
 }
 
 pub fn world_init() {
-    #[cfg(feature="cli_commands")]
-    spawn_cli_handler();
-
     #[cfg(feature="rcon_commands")]
     std::thread::spawn(|| {
         handle_rcon();
