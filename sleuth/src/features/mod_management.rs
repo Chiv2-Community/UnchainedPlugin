@@ -76,8 +76,8 @@ fn get_game_info() -> CommandResult {
                 log_game_info(g);
             }
 
-            match unsafe { (game, uworld_ptr.as_mut(), (*uworld_ptr).game_state.as_mut()) } {
-                (Some(game), Some(uworld), Some(game_state)) => {
+            match unsafe { (game, uworld_ptr.as_mut().and_then(|w| w.game_state.as_mut())) } {
+                (Some(_), Some(game_state)) => {
                     for player_raw in game_state.player_array.as_mut_slice() {
                         let player_state = match unsafe { (player_raw).as_mut() } {
                             Some(ps) => ps,
@@ -123,9 +123,8 @@ fn get_game_info() -> CommandResult {
                         // println!("");
                     }
                 },
-                (g, w, gs) => {
+                (g, gs) => {
                     if g.is_none() { serror!(f; "GameMode was null"); }
-                    if w.is_none() { serror!(f; "World was null"); }
                     if gs.is_none() { serror!(f; "GameState was null"); }
                 }
             }
