@@ -54,6 +54,14 @@ fn dump_mods(path: Option<String>) -> CommandResult {
     Ok(())
 }
 
+fn log_game_info(game: &ATBLGameMode) {
+    sinfo!(f; "Name:{}", game.server_name);
+    let maplist = game.maplist.as_slice().iter().join(", ");
+    sinfo!(f; "MapList:{}", maplist);
+    sinfo!(f; "Idle disconnect:{}", game.idle_kick_timer_disconnect);
+    sinfo!(f; "Idle spectate:{}", game.idle_kick_timer_spectate);
+}
+
 #[command(name = "game", sub = "info", desc = "show game info")]
 fn get_game_info() -> CommandResult {
     use crate::{resolvers::unchained_integration::run_on_game_thread};
@@ -61,81 +69,65 @@ fn get_game_info() -> CommandResult {
     run_on_game_thread(move || {
         if let Some(world) = crate::globals().world() {
             let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
-            let game = match unsafe { game_ptr.as_mut() } {
-                Some(g) => g,
-                None => {
-                    serror!(f; "GameMode was null");
-                    return;
-                }
-            };
-
-            sinfo!(f; "Name:{}", game.server_name);
-            let maplist = game.maplist.as_slice().iter().join(", ");
-            sinfo!(f; "MapList:{}", maplist);
-            sinfo!(f; "Idle disconnect:{}", game.idle_kick_timer_disconnect);
-            sinfo!(f; "Idle spectate:{}", game.idle_kick_timer_spectate);
-
             let uworld_ptr = world as *mut UWorld;
-            let uworld = match unsafe { uworld_ptr.as_mut() } {
-                Some(w) => w,
-                None => {
-                    serror!(f; "World was null");
-                    return;
-                }
-            };
 
-            let game_state = match unsafe { (uworld.game_state).as_mut() } {
-                Some(gs) => gs,
-                None => {
-                    serror!(f; "GameState was null");
-                    return;
-                }
-            };
-            for player_raw in game_state.player_array.as_mut_slice() {
-                let player_state = match unsafe { (player_raw).as_mut() } {
-                    Some(ps) => ps,
-                    None => {
-                        swarn!(f; "PlayerState was null");
-                        continue;
-                    }
-                };
-                let pname = player_state.base.player_name_private.to_string();
-                sinfo!(f; "{}", pname);
-                let mut flags = "".to_string();
-                if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
-                    flags.push_str("spectator|");
-                }
-                if player_state.base.player_flags.contains(PlayerFlags::ONLY_SPECTATOR) {
-                    flags.push_str("onlyspectator|");
-                }
-                if player_state.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
-                    flags.push_str("bot|");
-                }
-
-                sinfo!(f; "{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}", 
-                    flags,
-                    player_state.base.player_flags,
-                    player_state.base.player_id,
-                    player_state.base.player_name_private,
-                    player_state.player_score,
-                    player_state.kills,
-                    player_state.assists,
-                    player_state.deaths,
-                    player_state.base.saved_network_address,
-                );
-                    // player_state.base.unique_id.internal_wrapper.as_slice().into_iter().join(""));
-                
-
-                // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
-                //     print!("{:X} ", bt);
-                // }
-                // println!("");
-                // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
-                //     print!("{:X} ", bt);
-                // }
-                // println!("");
+            let game = unsafe { game_ptr.as_mut() };
+            if let Some(g) = &game {
+                log_game_info(g);
             }
 
+            match unsafe { (game, uworld_ptr.as_mut().and_then(|w| w.game_state.as_mut())) } {
+                (Some(_), Some(game_state)) => {
+                    for player_raw in game_state.player_array.as_mut_slice() {
+                        let player_state = match unsafe { (player_raw).as_mut() } {
+                            Some(ps) => ps,
+                            None => {
+                                swarn!(f; "PlayerState was null");
+                                continue;
+                            }
+                        };
+                        let pname = player_state.base.player_name_private.to_string();
+                        sinfo!(f; "{}", pname);
+                        let mut flags = "".to_string();
+                        if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
+                            flags.push_str("spectator|");
+                        }
+                        if player_state.base.player_flags.contains(PlayerFlags::ONLY_SPECTATOR) {
+                            flags.push_str("onlyspectator|");
+                        }
+                        if player_state.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
+                            flags.push_str("bot|");
+                        }
+
+                        sinfo!(f; "{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}", 
+                            flags,
+                            player_state.base.player_flags,
+                            player_state.base.player_id,
+                            player_state.base.player_name_private,
+                            player_state.player_score,
+                            player_state.kills,
+                            player_state.assists,
+                            player_state.deaths,
+                            player_state.base.saved_network_address,
+                        );
+                            // player_state.base.unique_id.internal_wrapper.as_slice().into_iter().join(""));
+                        
+
+                        // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
+                        //     print!("{:X} ", bt);
+                        // }
+                        // println!("");
+                        // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
+                        //     print!("{:X} ", bt);
+                        // }
+                        // println!("");
+                    }
+                },
+                (g, gs) => {
+                    if g.is_none() { serror!(f; "GameMode was null"); }
+                    if gs.is_none() { serror!(f; "GameState was null"); }
+                }
+            }
         }
     }); 
     Ok(())
