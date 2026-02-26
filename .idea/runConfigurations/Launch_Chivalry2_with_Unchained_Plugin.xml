@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Launch Chivalry2 with Unchained Plugin" type="CppNativeToolchainDebugger" factoryName="Native Debugger">
+    <option name="targetPath" value="$PROJECT_DIR$/../../../$CHIVALRY2_DIR$/TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe" />
+    <option name="arguments" value="-fileopenlog" />
+    <option name="workingDirectory" value="$PROJECT_DIR$/../../../$CHIVALRY2_DIR$/TBL/Binaries/Win64" />
+    <option name="envFile" value="$PROJECT_DIR$/.env" />
+    <method v="2">
+      <option name="CARGO_COMMAND_RUN_CONFIGURATION" enabled="true" />
+    </method>
+  </configuration>
+</component>

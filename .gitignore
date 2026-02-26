@@ -10,16 +10,24 @@
 *.userosscache
 *.sln.docstates
 
-sleuth/target/
-sleuth/Cargo.lock
-sleuth/.vscode/*
-!sleuth/.vscode/launch.json
+# Crate-specific ignore patterns (Cleanup from previous reorganization)
+# (Removing old sleuth/ references since it was moved to root)
 
 CMakeFiles
 Output
+# .vscode files
 .vscode/*
 !.vscode/launch.json
 !.vscode/tasks.json
+.env
+
+# RustRover / IntelliJ IDEA
+.idea/*
+!.idea/runConfigurations
+!.idea/modules.xml
+!.idea/vcs.xml
+!.idea/misc.xml
+!.idea/UnchainedPlugin.iml
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -46,9 +54,8 @@ bld/
 [Bb]uild/
 [Bb]uild[Ff]iles/
 
-!sleuth/src/bin/
-sleuth/src/bin/mock_server/
-.idea
+# Removed sleuth directory structure
+# .idea is now partially tracked
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -375,3 +382,6 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+
+target/
