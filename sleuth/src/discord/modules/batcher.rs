@@ -46,18 +46,18 @@ impl DiscordSubscriber for JoinBatcher {
 
 impl JoinBatcher {
     fn flush(&mut self) -> Vec<BotResponse> {
-        if self.pending_joins.is_empty() {
-            return NO_RESP;
-        }
-
-        let content = if self.pending_joins.len() == 1 {
-            format!("📥 **{}** joined the fray.", self.pending_joins[0])
-        } else {
-            format!(
-                "📥 **{}** and **{}** others have joined the battle!",
-                self.pending_joins[0],
-                self.pending_joins.len() - 1
-            )
+        let content = match self.pending_joins.as_slice() {
+            [] => return NO_RESP,
+            [first] => {
+                format!("📥 **{}** joined the fray.", first)
+            }
+            [first, ..] => {
+                format!(
+                    "📥 **{}** and **{}** others have joined the battle!",
+                    first,
+                    self.pending_joins.len() - 1
+                )
+            }
         };
 
         self.pending_joins.clear();

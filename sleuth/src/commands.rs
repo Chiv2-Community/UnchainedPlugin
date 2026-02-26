@@ -134,7 +134,7 @@ fn help_command(command_name: Option<String>) -> ::anyhow::Result<()> {
                     println!("  {:15} {:25} - {}", cmd.name, cmd.params, cmd.description);
                 }
             } else {
-                let sub_names: Vec<&str> = subs.iter().map(|c| c.subcommand.unwrap()).collect();
+                let sub_names: Vec<&str> = subs.iter().filter_map(|c| c.subcommand).collect();
                 println!("  {:15} [subs: {}]", parent, sub_names.join(", "));
             }
         }

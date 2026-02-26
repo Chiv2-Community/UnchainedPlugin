@@ -89,27 +89,27 @@ impl Dashboard {
             .map(|m| &m.name)
             .collect();
 
-        let mod_list = if cur_status.active_mods.is_empty() {
-            "None".to_string()
-        } else {
-            cur_status.active_mods
+        let mod_list = match cur_status.active_mods.as_slice() {
+            [] => "None".to_string(),
+            active_mods => active_mods
                 .iter()
                 .map(|m| format!("{} *({})*", m.name, m.version))
                 .collect::<Vec<_>>()
-                .join("\n- ")
+                .join("\n- "),
         };
 
-        let all_mod_list = if cur_status.mods.is_empty() {
-            "None".to_string()
-        } else {
-            let list = cur_status.mods
-                .iter()
-                .filter(|m| !active_names.contains(&m.name))
-                .map(|m| format!("{} *({})*", m.name, m.version))
-                .collect::<Vec<_>>()
-                .join(", ");
+        let all_mod_list = match cur_status.mods.as_slice() {
+            [] => "None".to_string(),
+            mods => {
+                let list = mods
+                    .iter()
+                    .filter(|m| !active_names.contains(&m.name))
+                    .map(|m| format!("{} *({})*", m.name, m.version))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-            if list.is_empty() { "None".to_string() } else { format!("-# {list}") }
+                if list.is_empty() { "None".to_string() } else { format!("-# {list}") }
+            }
         };
 
         // The top text (Description) contains the build info and server type
@@ -134,14 +134,16 @@ impl Dashboard {
             return NO_RESP;
         }
         let cur_status = self.status.clone().expect("No status available");
-        let mod_list = if cur_status.active_mods.is_empty() {
-            "None".to_string()
-        } else {
-            format!("- {}", cur_status.active_mods
-                .iter()
-                .map(|m| format!("**{}** *({})*", m.name, m.version))
-                .collect::<Vec<_>>()
-                .join("\n- "))
+        let mod_list = match cur_status.active_mods.as_slice() {
+            [] => "None".to_string(),
+            active_mods => format!(
+                "- {}",
+                active_mods
+                    .iter()
+                    .map(|m| format!("**{}** *({})*", m.name, m.version))
+                    .collect::<Vec<_>>()
+                    .join("\n- ")
+            ),
         };
         
         let sender = &cmd.actor.display_name;
