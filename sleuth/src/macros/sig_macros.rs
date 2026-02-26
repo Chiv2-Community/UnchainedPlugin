@@ -97,10 +97,10 @@ macro_rules! define_pocess {
             let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            if let Some(last_fn) = fns.last().cloned() {
-                fns.clear();
-                fns.push(last_fn);
-            }
+            let [.., last_fn] = fns.as_slice() else { return Err(ResolveError::new_msg(format!("expected at least one pattern to have matched for {}", stringify!($name)))) };
+            let last_fn = last_fn.clone();
+            fns.clear();
+            fns.push(last_fn);
             ensure_one(fns)
         })
     }};
@@ -112,10 +112,10 @@ macro_rules! define_pocess {
             let strings = $ctx.scan($patterns.first().unwrap().clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            if let Some(last_fn) = fns.first().cloned() {
-                fns.clear();
-                fns.push(last_fn);
-            }
+            let [first_fn, ..] = fns.as_slice() else { return Err(ResolveError::new_msg(format!("expected at least one pattern to have matched for {}", stringify!($name)))) };
+            let first_fn = first_fn.clone();
+            fns.clear();
+            fns.push(first_fn);
             ensure_one(fns)
         })
     }};
