@@ -72,19 +72,12 @@ fn get_game_info() -> CommandResult {
             let uworld_ptr = world as *mut UWorld;
 
             let game = unsafe { game_ptr.as_mut() };
-            let uworld = unsafe { uworld_ptr.as_mut() };
-
             if let Some(g) = &game {
                 log_game_info(g);
             }
 
-            let game_state = match &uworld {
-                Some(w) => unsafe { w.game_state.as_mut() },
-                None => None,
-            };
-
-            match (game, uworld, game_state) {
-                (Some(_), Some(_), Some(game_state)) => {
+            match unsafe { (game, uworld_ptr.as_mut(), (*uworld_ptr).game_state.as_mut()) } {
+                (Some(game), Some(uworld), Some(game_state)) => {
                     for player_raw in game_state.player_array.as_mut_slice() {
                         let player_state = match unsafe { (player_raw).as_mut() } {
                             Some(ps) => ps,
