@@ -16,7 +16,6 @@ mod seh;
 
 
 use once_cell::sync::Lazy;
-use serenity::all::{ChannelId, CreateMessage};
 use std::collections::HashMap;
 use std::time::Duration;
 use std::{env, thread};
@@ -357,7 +356,7 @@ pub extern "C" fn postinit_rustlib() {
 
         #[cfg(feature="cli_commands")]
         spawn_cli_handler();
-        if (cli_args().is_server()) {
+        if cli_args().is_server() {
             world_init();
         }
     });

@@ -130,14 +130,12 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
         let mut settings_fstring = FString::from(message.as_str());
         let mut txt = FText::default();
 
-        unsafe {
-            let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
+        let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
 
-            let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+        let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
 
-            if !game_mode.is_null() {
-                TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
-            }
+        if !game_mode.is_null() {
+            TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
         }
     }
 }

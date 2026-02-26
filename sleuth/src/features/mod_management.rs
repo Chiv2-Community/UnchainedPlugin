@@ -1,22 +1,24 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::os::raw::c_void;
 use std::sync::{Arc, Mutex, mpsc};
 use itertools::{Itertools, enumerate};
+#[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::game::chivalry2::{ATBLGameMode, ATBLGameState, ATBLPlayerState, EChatType, PlayerFlags};
+use crate::game::chivalry2::{ATBLGameMode, EChatType, PlayerFlags};
 use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, UWorld, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
-use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
+#[allow(unused_imports)]
+use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
 use crate::{ serror, sinfo};
-use crate::ue::{FName, FNameEntryId, FString, FVector, TArray, TMap, UClass, UObject};
+use crate::ue::{FString, FVector, TArray, UClass, UObject};
 use crate::resolvers::{asset_registry::*, asset_loading::*};
+#[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::path::Path;
 use crate::game::engine::get_uobject_from_path;
 use std::collections::{HashMap, HashSet};
@@ -25,7 +27,7 @@ use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-use crate::commands::{CommandResult, ConsoleCommand};
+use crate::commands::CommandResult;
 
 #[macro_export]
 macro_rules! check_main_thread {
@@ -387,7 +389,7 @@ impl ModManager {
                 if let Some(world) = globals().world() {
                     let settings_file = "Spawned new Mod from console";
                     let mut settings_fstring = FString::from(settings_file);
-                    let res = unsafe { TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) } as *mut FText;
+                    let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
                     let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
                     TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
                 }
@@ -400,7 +402,7 @@ impl ModManager {
         }
     }
 
-    pub fn destroy_mod_actor(&self, actor_ptr: *mut UObject) {
+    pub fn destroy_mod_actor(&self, _actor_ptr: *mut UObject) {
         // TODO: implement
     }
 
@@ -412,7 +414,7 @@ impl ModManager {
     pub fn update_save_game(&self) {
         let settings_file = "ModLoader";
         let mut settings_fstring = FString::from(settings_file);
-        let save_game_ptr = unsafe { TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) } ;
+        let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;
         if save_game_ptr.is_null() {
             serror!(f; "save game is null");
             return;
@@ -436,7 +438,7 @@ impl ModManager {
                 }
             }      
         }  
-        let res = unsafe { TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0)) };
+        let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0));
         if res {
             sinfo!(f; "Modloader settings saved: {res}");
         }
@@ -495,7 +497,7 @@ impl ModManager {
     pub fn reset_active_mods(&self, rescan: bool) {
         self.active_paths.lock().unwrap().clear();
         if rescan {
-            self.scan_active_mod_actors();
+            let _ = self.scan_active_mod_actors();
         }
     }
 
@@ -509,7 +511,7 @@ impl ModManager {
         let active = self.active_paths.lock().unwrap();
         let registry = self.registry.lock().unwrap();
         registry.iter()
-            .filter(|&(k,v)| active.contains(k))
+            .filter(|&(k,_v)| active.contains(k))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }

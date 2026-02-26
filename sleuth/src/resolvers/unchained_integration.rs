@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
-use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, discord::notifications::MapChangeEvent, dispatch, event, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
+use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, discord::notifications::MapChangeEvent, event, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
 
 
 // Sets Server password and rcon flag
@@ -103,12 +103,10 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
     if let Ok(mut native_cmds) = NATIVE_COMMAND_QUEUE.try_lock() {
         for cmd_str in native_cmds.drain(..) {
             let mut f_cmd = FString::from(cmd_str.as_str());
-            unsafe {
-                // Wrap in a guard to ensure we don't crash the whole thread
-                let _ = std::panic::catch_unwind(move || {
-                    CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
-                });
-            }
+            // Wrap in a guard to ensure we don't crash the whole thread
+            let _ = std::panic::catch_unwind(move || {
+                CALL_ORIGINAL!(ExecuteConsoleCommand(&mut f_cmd));
+            });
         }
     }
 

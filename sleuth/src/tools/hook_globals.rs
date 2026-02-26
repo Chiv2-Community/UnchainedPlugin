@@ -9,10 +9,10 @@ use crate::features::discord_bot::DiscordBridge;
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
-use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, sdebug, serror, sinfo, tools::cli_args::CLIArgs, ue, ue_old::FUObjectArray};
+use crate::{resolvers::{BASE_ADDR, PLATFORM, PlatformType}, serror, sinfo, tools::cli_args::CLIArgs, ue, ue_old::FUObjectArray};
 use itertools::Itertools;
 use parking_lot::RwLock;
-use patternsleuth::{MemoryAccessError, disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
+use patternsleuth::{disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
 use patternsleuth::{ resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

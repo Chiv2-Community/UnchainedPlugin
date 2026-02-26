@@ -1,9 +1,6 @@
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
-use std::any::Any;
-use serenity::builder::{CreateMessage, CreateEmbed, CreateEmbedFooter};
-use serenity::model::id::ChannelId;
-use serenity::http::Http;
+use serenity::all::{ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
 use sleuth_macros::handler_command;
 use crate::discord::core::{DiscordSubscriber, GameEvent};
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
@@ -11,7 +8,7 @@ use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
 use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
 use crate::discord::modules::voting::vote_mod::ModVote;
-use crate::discord::notifications::{CommandSource, GameCommandEvent};
+use crate::discord::notifications::GameCommandEvent;
 use crate::discord::responses::*;
 
 
@@ -36,6 +33,7 @@ pub trait VoteType: Send + Sync {
 pub struct VoteModule {
     active_vote: Option<ActiveVote>,
     registry: HashMap<String, Box<dyn VoteType>>,
+    #[allow(dead_code)]
     ctx: crate::discord::Ctx,
 }
 
@@ -88,21 +86,22 @@ impl VoteModule {
     fn init_vote(&mut self, logic: Box<dyn VoteType>, target: String, initiator: String) -> CreateMessage {
         let now = std::time::Instant::now();
         
-        self.active_vote = Some(ActiveVote {
+        let state = ActiveVote {
             logic,
             target: target.clone(),
             yes_votes: HashSet::from([initiator.clone()]),
             no_votes: HashSet::new(),
             end_time: now + std::time::Duration::from_secs(20),
             last_broadcast: now,
-        });
+        };
 
-        let state = self.active_vote.as_ref().unwrap();
         let embed = CreateEmbed::new()
             .title(format!("🗳️ Vote Started: {}", state.logic.title()))
             .description(format!("{}\n\n**Target:** `{}`\n**By:** {}", state.logic.description(), target, initiator))
             .color(0x3498db)
             .footer(CreateEmbedFooter::new("Type !yes or !no in chat"));
+
+        self.active_vote = Some(state);
 
         CreateMessage::new().add_embed(embed)
     }
@@ -142,7 +141,7 @@ impl VoteModule {
     }
 
     #[handler_command("cancelvote", desc = "Vote YES on the active poll", elevated = true)]
-    pub fn cmd_cancelvote(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cancelvote(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let resp = BotResponse::from(CreateEmbed::new()
             .title(format!("🗳️ Vote Cancelled by Admin: {}", state.logic.title()))
@@ -202,7 +201,7 @@ impl VoteModule {
     }
 
     #[handler_command(name = "votemod", desc = "Enable a mod.")]
-    pub fn cmd_votemod(&mut self, mod_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
     }
 

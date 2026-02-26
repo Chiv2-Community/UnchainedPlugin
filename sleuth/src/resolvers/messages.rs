@@ -9,7 +9,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{discord::notifications::{AdminAlert, GameChatMessage}, event, game::chivalry2::EChatType, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
+    use crate::{discord::notifications::{AdminAlert, GameChatMessage}, event, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -88,7 +88,7 @@ mod client_message {
                         
                         #[cfg(feature="discord_integration_old")]
                         {
-                            if (msg_type == EChatType::AllSay && cli_args().is_server()) {
+                            if msg_type == EChatType::AllSay && cli_args().is_server() {
                                 
                                 crate::sinfo!(f; "pre Sending message to discord");
                                 if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
@@ -199,7 +199,7 @@ define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6
 // void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
 CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
     unsafe {
-        if (!arg1.is_null()) {
+        if !arg1.is_null() {
             let u16_cstr = widestring::U16CStr::from_ptr_str(arg1);
             log::info![target: "Console", "{}" , u16_cstr.display()];
         }

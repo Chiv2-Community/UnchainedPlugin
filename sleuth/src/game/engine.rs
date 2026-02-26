@@ -9,7 +9,7 @@ use widestring::U16CString;
 use crate::game::chivalry2::ATBLGameState;
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface, o_FNameCtorWchar};
 use crate::sinfo;
-use crate::ue::{EFindName, EObjectFlags, FName, FNameEntryId, FString, TArray, UObject};
+use crate::ue::{EFindName, EObjectFlags, FName, FString, TArray, UObject};
 use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
 // use crate::resolvers::asset_registry::o_StaticLoadObject;

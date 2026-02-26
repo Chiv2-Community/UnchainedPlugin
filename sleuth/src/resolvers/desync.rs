@@ -43,7 +43,7 @@ CREATE_HOOK!(ProcessEvent, { || false }, NONE, (), (
         return;
     }
     else {     
-        let mut current_class = unsafe { (*object).uobject_base_utility.uobject_base.class_private as *const UStruct };
+        let current_class = unsafe { (*object).uobject_base_utility.uobject_base.class_private as *const UStruct };
 
         let mut name: String = "".to_string();
         if !current_class.is_null() {
@@ -52,26 +52,6 @@ CREATE_HOOK!(ProcessEvent, { || false }, NONE, (), (
         crate::sdebug![f; "\x1b[32m[{}::{}]\x1b[0m ", name, func_name];   
         return CALL_ORIGINAL!(ProcessEvent(object, function, params));    
     }
-    // if func_name == "OnPostLoadMap" || func_name == "OnPreLoadMap" {
-    let spammy = [
-        "ReadyToStartMatch",
-        "ReadyToEndMatch",
-        "ExecuteUbergraph_MatchmakingStatus",
-        "MapToCurve",
-    ];
-    if !spammy.contains(&func_name.as_str())  {
-        let mut current_class = unsafe { (*object).uobject_base_utility.uobject_base.class_private as *const UStruct };
-
-        let mut name: String = "".to_string();
-        // 2. Walk up the SuperStruct chain
-        if !current_class.is_null() {
-            name = unsafe { (*current_class).ufield.uobject.uobject_base_utility.uobject_base.name_private.to_string() };
-        }
-            crate::sdebug![f; "\x1b[32m[{}::{}]\x1b[0m ", name, func_name];
-
-    }
-
-    CALL_ORIGINAL!(ProcessEvent(object, function, params));
 });
 
 // Desync for listen server
