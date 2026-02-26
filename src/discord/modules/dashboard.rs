@@ -29,8 +29,8 @@ pub struct Dashboard {
     message_id2: Option<MessageId>,
     needs_refresh: bool,
     status: Option<ServerStatus>,
-    #[allow(dead_code)]
-    ctx: crate::discord::Ctx,
+
+    _ctx: crate::discord::Ctx,
     settings: DashboardSettings,
 }
 
@@ -63,7 +63,7 @@ impl Dashboard {
             message_id2: None,
             needs_refresh: settings.auto_spawn_dash,
             status: None,
-            ctx,
+            _ctx: ctx,
             settings,
         }
     }

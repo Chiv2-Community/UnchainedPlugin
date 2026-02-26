@@ -170,7 +170,7 @@ macro_rules! resolution_fn {
 use std::sync::OnceLock;
 
 #[derive(Debug)]
-#[allow(dead_code)]
+
 pub struct Globals {
     resolution: DllHookResolution,
     // Use the wrapper here to satisfy the Sync requirement
@@ -200,12 +200,12 @@ pub fn globals() -> &'static Globals {
     GLOBALS.get().expect("Globals not initialized")
 }
 
-#[allow(dead_code)]
+
 pub fn globals_initialized() -> bool {
     GLOBALS.get().is_some()
 }
 
-#[allow(dead_code)]
+
 impl Globals {
     pub fn gmalloc(&self) -> &ue::FMalloc {
         let ptr = self.resolution.gmalloc.0 as *const *const ue::FMalloc;

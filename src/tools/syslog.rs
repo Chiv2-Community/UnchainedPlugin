@@ -245,13 +245,13 @@ impl fmt::Debug for SyslogAppender {
 // Filter
 
 // FIXME: Nihi: implement
-#[allow(dead_code)]
+
 pub struct MetaDataFilterConfig {
-    level: LevelFilter,
+    _level: LevelFilter,
 }
 
 // FIXME: Nihi: implement
-#[allow(dead_code)]
+
 /// A filter that rejects all events at a level below a provided threshold.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct MetaDataFilter {
@@ -259,7 +259,7 @@ pub struct MetaDataFilter {
 }
 
 // FIXME: Nihi: implement
-#[allow(dead_code)]
+
 impl MetaDataFilter {
     /// Creates a new `MetaDataFilter` with the specified threshold.
     pub fn new(level: LevelFilter) -> MetaDataFilter {
@@ -268,16 +268,10 @@ impl MetaDataFilter {
 }
 
 // FIXME: Nihi: implement
-#[allow(dead_code)]
+
 impl Filter for MetaDataFilter {
     fn filter(&self, record: &Record) -> Response {
-        fn strip_ansi_codes(input: &str) -> String {
-            let ansi_regex = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
-            ansi_regex.replace_all(input, "").into_owned()
-        }
-
         println!("FILTERING {record:#?}");
-        // let clean_str = strip_ansi_codes(asd);
         if record.level() > self.level {
             Response::Reject
         } else {

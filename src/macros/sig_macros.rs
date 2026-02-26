@@ -296,7 +296,7 @@ macro_rules! define_process {
 
 define_pattern_resolver!(@emit_header DefaultResult);
 impl DefaultResult {
-    #[allow(dead_code)]
+
     pub fn offset(&self) -> usize {
         self.0 // assuming it's something like `pub struct DefaultResult(pub usize)`
     }
@@ -320,7 +320,7 @@ pub struct Signature<'a> {
 }
 
 impl<'a> Signature<'a> {
-    #[allow(dead_code)]
+
     pub async fn calculate_offset(&self, ctx: &'a AsyncContext<'a>) -> Result<DefaultResult, ResolveError> {
         (self.offset_calculator)(ctx).await
     }
@@ -392,7 +392,7 @@ macro_rules! define_signature_fn {
         | $ctx:ident, $patterns:ident| $body:block
     ) => {
         #[allow(non_snake_case)]
-        #[allow(dead_code)]
+
         pub fn $fn_name<'a>(s: &'a str) -> $crate::macros::sig_macros::Signature<'a> {
             let calc: std::sync::Arc<
                 dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>

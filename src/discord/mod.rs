@@ -210,12 +210,6 @@ async fn dispatch_responses(
     }
 }
 
-#[allow(dead_code)]
-fn sanitize_text(input: &str) -> String {
-    let filter = Censor::Standard;
-    filter.censor(input)
-}
-
 fn normalize_event(event: Box<dyn GameEvent>, admin_role: RoleId) -> Box<dyn GameEvent> {
     // Try game chat → command
     if let Some(chat) = event.as_any().downcast_ref::<GameChatMessage>() {

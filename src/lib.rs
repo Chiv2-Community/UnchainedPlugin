@@ -327,29 +327,6 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         .unwrap_or(std::ptr::null())
 }
 
-#[allow(dead_code)]
-unsafe fn build_info_save(bi: *const BuildInfo) -> u8 {
-    let bi = unsafe { &*bi };
-    if let Err(e) = bi.save() {
-        eprintln!("Failed to save build info: {}", e);
-        return 0;
-    }
-    1
-}
-
-#[allow(dead_code)]
-unsafe fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
-    let bi = unsafe { &*bi };
-    bi.get_file_hash()
-}
-
-#[allow(dead_code)]
-unsafe fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
-    let bi = unsafe { &*bi };
-    let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
-    *bi.get_offset(name.as_ref()).unwrap_or(&0)
-}
-
 use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE};
 
 fn preinit_rustlib() {
