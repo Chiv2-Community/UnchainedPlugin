@@ -162,25 +162,30 @@ fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
 unsafe extern "system" fn veh(
     info: *mut EXCEPTION_POINTERS,
 ) -> i32 {
-    if info.is_null() {
+    let Some(info_ref) = (unsafe { info.as_ref() }) else {
         return EXCEPTION_CONTINUE_SEARCH;
-    }
+    };
 
-    let record = unsafe { (*info).ExceptionRecord };
-    let ctx = unsafe { (*info).ContextRecord };
+    let Some(record) = (unsafe { info_ref.ExceptionRecord.as_ref() }) else {
+        return EXCEPTION_CONTINUE_SEARCH;
+    };
 
-    if unsafe { (*record).ExceptionCode } == EXCEPTION_ACCESS_VIOLATION {
-        let rip = unsafe { (*ctx).Rip };
-        let rsp = unsafe { (*ctx).Rsp };
-
-        let av_type = unsafe { (*record).ExceptionInformation[0] };
-        let av_addr = unsafe { (*record).ExceptionInformation[1] };
+    if record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION {
+        let av_type = record.ExceptionInformation[0];
+        let av_addr = record.ExceptionInformation[1];
 
         let rw = match av_type {
             0 => "READ",
             1 => "WRITE",
             8 => "EXECUTE",
             _ => "UNKNOWN",
+        };
+
+        let (rip, rsp) = unsafe { info_ref.ContextRecord.as_ref() }
+            .map_or((0, 0), |ctx| (ctx.Rip, ctx.Rsp));
+        let trace = match unsafe { info_ref.ContextRecord.as_mut() } {
+            Some(ctx) => print_stack(ctx),
+            None => vec!["<null context>".to_string()],
         };
 
         let (func, file) = resolve_symbol(rip);
@@ -199,10 +204,6 @@ unsafe extern "system" fn veh(
             func.as_deref().unwrap_or("<unknown>"),
             file.as_deref().unwrap_or("<no line info>")
         );
-        let trace = match unsafe { ctx.as_mut() } {
-            Some(ctx_ref) => print_stack(ctx_ref),
-            None => vec!["<null context>".to_string()],
-        };
         dispatch!(CrashEvent{
             event_type: format!("ACCESS VIOLATION ({rw})"),
             event_trace: trace,
