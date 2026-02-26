@@ -31,13 +31,10 @@ macro_rules! CREATE_REQUEST_HOOK {
                 request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
                 a4: *mut std::os::raw::c_void
             ), {
-                let this = match unsafe { this_ptr.as_mut() } {
-                    Some(t) => t,
-                    None => { $crate::serror!(f; "{} GCGObj was null", stringify!($name)); return std::ptr::null_mut(); }
-                };
-                let req = match unsafe { request.as_mut() } {
-                    Some(r) => r,
-                    None => { $crate::serror!(f; "{} Request was null", stringify!($name)); return std::ptr::null_mut(); }
+                let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
+                    (Some(t), Some(r)) => (t, r),
+                    (None, _) => { $crate::serror!(f; "{} GCGObj was null", stringify!($name)); return std::ptr::null_mut(); }
+                    (_, None) => { $crate::serror!(f; "{} Request was null", stringify!($name)); return std::ptr::null_mut(); }
                 };
                 let old_url = unsafe { std::ptr::read(&this.url_base) };
                 let old_token = unsafe { std::ptr::read(&req.token) };
