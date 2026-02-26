@@ -74,9 +74,10 @@ impl DiscordSubscriber for ExtMapVote {
                     return NO_RESP;
                 }
                 None => {
-                    if cmd.args.is_empty() || cmd.name != "startvotemap" { return NO_RESP; }
+                    if cmd.name != "startvotemap" { return NO_RESP; }
+                    let [map_name, ..] = cmd.args.as_slice() else { return NO_RESP; };
                     let actor_name = cmd.actor.display_name.clone();
-                    let map_name = cmd.args.first().unwrap().clone();
+                    let map_name = map_name.clone();
                     if let Some(msg) = self.init_vote(actor_name, map_name) {
                         BotResponse::from(msg)
                     } else {
@@ -165,7 +166,7 @@ impl ExtMapVote {
             
             if yes > no && yes > 0 {
                 let map_clone = state.map_name.clone();
-                NATIVE_COMMAND_QUEUE.lock().unwrap().push(format!("servertravel {map_clone}"));
+                NATIVE_COMMAND_QUEUE.lock().unwrap_or_else(|e| e.into_inner()).push(format!("servertravel {map_clone}"));
                 return Some(CreateMessage::new().content(format!("✅ **Vote Passed!** {} to {}. Traveling...", yes, no)));
             }
             return Some(CreateMessage::new().content(format!("❌ **Vote Failed.** Final score: {} Yes, {} No.", yes, no)));
