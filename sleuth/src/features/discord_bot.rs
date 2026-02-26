@@ -168,9 +168,16 @@ impl DiscordBridge {
                     }
                 });
 
+                const MAX_RETRIES: u32 = 5;
+                let mut retries = 0;
                 loop {
                     if let Err(why) = client.start().await {
-                        serror!(f; "Discord client error: {:?}", why);
+                        retries += 1;
+                        if retries > MAX_RETRIES {
+                            serror!(f; "Discord client error: {:?}. Max retries ({}) reached, giving up.", why, MAX_RETRIES);
+                            break;
+                        }
+                        serror!(f; "Discord client error: {:?}. Retry {}/{}...", why, retries, MAX_RETRIES);
                         // Wait before attempting to restart
                         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                     } else {
