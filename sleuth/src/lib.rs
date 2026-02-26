@@ -138,8 +138,62 @@ impl BuildInfo {
 
 
 
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
+use windows::Win32::System::Threading::{CreateThread, THREAD_CREATION_FLAGS};
+
 #[no_mangle]
-pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn DllMain(
+    _h_module: HMODULE,
+    ul_reason_for_call: u32,
+    _lp_reserved: *mut std::ffi::c_void,
+) -> i32 {
+    match ul_reason_for_call {
+        DLL_PROCESS_ATTACH => {
+            // preinit needs to happen very early, before the new thread starts
+            preinit_rustlib();
+
+            // We can't do much in DllMain due to loader lock, so we spawn a thread
+            let _ = CreateThread(
+                None,
+                0,
+                Some(main_thread_adapter),
+                None,
+                THREAD_CREATION_FLAGS(0),
+                None,
+            );
+        }
+        DLL_PROCESS_DETACH => {
+            // Cleanup if needed
+        }
+        _ => (),
+    }
+    1
+}
+
+unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
+    let result = std::panic::catch_unwind(|| {
+        rust_main();
+    });
+    if let Err(e) = result {
+        eprintln!("Rust main thread panicked: {:?}", e);
+    }
+    0
+}
+
+fn rust_main() {
+    init_rustlib();
+
+    sinfo!(f; "Scanning for offsets...");
+    // This function handles both scanning and applying patches/hooks
+    let _ = load_current_build_info(true);
+
+    postinit_rustlib();
+    sinfo!(f; "Unchained Sleuth initialized.");
+}
+
+fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
@@ -219,8 +273,8 @@ pub extern "C" fn load_current_build_info(scan_missing: bool) -> *const BuildInf
         .unwrap_or(std::ptr::null())
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
+#[allow(dead_code)]
+unsafe fn build_info_save(bi: *const BuildInfo) -> u8 {
     let bi = unsafe { &*bi };
     if let Err(e) = bi.save() {
         eprintln!("Failed to save build info: {}", e);
@@ -229,21 +283,28 @@ pub unsafe extern "C" fn build_info_save(bi: *const BuildInfo) -> u8 {
     1
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
+#[allow(dead_code)]
+unsafe fn build_info_get_file_hash(bi: *const BuildInfo) -> u32 {
     let bi = unsafe { &*bi };
     bi.get_file_hash()
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
+#[allow(dead_code)]
+unsafe fn build_info_get_offset(bi: *const BuildInfo, name: *const c_char) -> u64 {
     let bi = unsafe { &*bi };
     let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
     *bi.get_offset(name.as_ref()).unwrap_or(&0)
 }
 
-#[no_mangle]
-pub extern "C" fn preinit_rustlib() {
+use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow};
+
+fn preinit_rustlib() {
+    unsafe {
+        if GetConsoleWindow().0 == 0 {
+            let _ = AllocConsole();
+        }
+    }
+
     std::panic::set_hook(Box::new(|panic_info| {
         let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             (*s).to_string()
@@ -266,8 +327,7 @@ pub extern "C" fn preinit_rustlib() {
 }
 
 // Initialize Logger and Globals
-#[no_mangle]
-pub extern "C" fn init_rustlib() {
+fn init_rustlib() {
     print!("{CLI_LOGO}");
     // tools::logger::init_syslog().expect("Failed to init syslog");
     init_globals().expect("Failed to init globals!");
@@ -276,8 +336,7 @@ pub extern "C" fn init_rustlib() {
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 static WORLD_READY: AtomicBool = AtomicBool::new(false);
 
-#[no_mangle]
-pub extern "C" fn postinit_rustlib() {
+fn postinit_rustlib() {
     
     seh::install();
     // #[cfg(feature="cli_commands")]

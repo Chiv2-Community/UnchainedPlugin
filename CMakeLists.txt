@@ -57,12 +57,7 @@ function(generate_include_all_header SOURCE_DIR FILE_NAME)
     file(WRITE "${SOURCE_DIR}/${FILE_NAME}" "${INCLUDE_ALL_CONTENT}")
 endfunction()
 
-generate_include_all_header("src/hooks" "all_hooks.h")
-generate_include_all_header("src/logging/formatters" "all_formatters.h")
 
-# File collection
-file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
-file(GLOB_RECURSE HEADERS CONFIGUE_DEPENDS "src/*.hpp" "src/*.h")
 
 # Configure version resource
 configure_file(
@@ -74,42 +69,27 @@ configure_file(
 # Add dependencies
 add_subdirectory(lib/MinHook)
 
-# Define the library
-add_library(${PROJECT_NAME} SHARED 
-    ${SOURCES} 
-    ${HEADERS} 
-    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-)
-
 # Target properties
 set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Output"
 )
 
-# Include directories
-target_include_directories(${PROJECT_NAME} PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_compile_options(${PROJECT_NAME} PRIVATE /MP)
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    NOMINMAX                             # Prevent Windows.h from defining min/max macros
-    _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # Fix mutex issues on some versions of the cpp redist
-    # CHAT_COMMANDS # Enable this to enable chat commands to be sent from clients to the server
-)
-
 add_subdirectory(sleuth)
 
-# Link libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    MinHook
-    winhttp
-    sleuthlib_interface
+# Define the library as a wrapper that links sleuthlib
+# Since sleuthlib is a cdylib, it will contain everything
+add_library(${PROJECT_NAME} SHARED 
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
 )
 
-# Source grouping for better organization in IDEs
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES} ${HEADERS})
+# Target properties for the wrapper
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    LINKER_LANGUAGE C
+)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    sleuthlib_interface
+)
 
 # Post-build copy
 if(POST_BUILD_COPY)
