@@ -74,9 +74,10 @@ impl DiscordSubscriber for ExtMapVote {
                     return NO_RESP;
                 }
                 None => {
-                    if cmd.args.is_empty() || cmd.name != "startvotemap" { return NO_RESP; }
+                    if cmd.name != "startvotemap" { return NO_RESP; }
+                    let [map_name, ..] = cmd.args.as_slice() else { return NO_RESP; };
                     let actor_name = cmd.actor.display_name.clone();
-                    let Some(map_name) = cmd.args.first().cloned() else { return NO_RESP; };
+                    let map_name = map_name.clone();
                     if let Some(msg) = self.init_vote(actor_name, map_name) {
                         BotResponse::from(msg)
                     } else {
