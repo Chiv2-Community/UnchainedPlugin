@@ -60,7 +60,7 @@ impl_event!(JoinEvent);
 
 // For simple notifications, we only override to_notification
 impl JoinEvent {
-
+    #[allow(dead_code)]
     fn to_notification(&self) -> Option<CreateMessage> {
         let embed = CreateEmbed::new()
             .title("📥 Reinforcements")
@@ -138,10 +138,10 @@ impl GameEvent for GameChatMessage {
 
 }
 
-// Optional: If you want these to show up in Discord even if the 
+// Optional: If you want these to show up in Discord even if the
 // ChatRelayModule is disabled, implement this:
 impl GameChatMessage {
-
+    #[allow(dead_code)]
     fn to_notification(&self) -> Option<CreateMessage> {
         // Formats the message for the Discord channel
         Some(CreateMessage::new().content(
@@ -381,6 +381,7 @@ pub struct AdminAlert {
 impl_event!(AdminAlert);
 
 impl AdminAlert {
+    #[allow(dead_code)]
     fn to_notification(&self) -> Option<CreateMessage> {
         Some(CreateMessage::new().content(format!("🚨 **Admin Request**: {} reports: {}", self.reporter, self.reason)))
     }

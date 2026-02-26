@@ -20,7 +20,6 @@ use std::time::Duration;
 use std::{env, thread};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

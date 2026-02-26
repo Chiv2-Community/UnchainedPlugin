@@ -34,7 +34,8 @@ pub struct VoteModule {
     active_vote: Option<ActiveVote>,
     registry: HashMap<String, Box<dyn VoteType>>,
 
-    ctx: crate::discord::Ctx,
+    #[allow(dead_code)]
+    _ctx: crate::discord::Ctx,
 }
 
 struct ActiveVote {
@@ -225,7 +226,7 @@ impl VoteModule {
         Self {
             active_vote: None,
             registry,
-            ctx,
+            _ctx: ctx,
         }
     }
 }

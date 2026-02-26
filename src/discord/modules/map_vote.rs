@@ -21,6 +21,7 @@ impl GameEvent for MapVoteEvent {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+    #[allow(dead_code)]
     fn to_notification(&self) -> Option<CreateMessage> {
         
         Some(CreateMessage::new().content(

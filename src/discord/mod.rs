@@ -20,7 +20,6 @@ use crate::discord::modules::{
 use crate::discord::notifications::{CommandRequest, CommandSource, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::swarn;
-use censor::Censor;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
 use serenity::client::EventHandler as DiscordHandler;
