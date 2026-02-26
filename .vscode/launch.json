@@ -1,21 +1,17 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
             "name": "Launch Chivalry2 with Unchained Plugin",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "U:/Games/Chivalry2_c/TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe",
+            "program": "${env:CHIVALRY2_DIR}/TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe",
             "args": ["-fileopenlog"],
             "stopAtEntry": false,
-            "cwd": "U:/Games/Chivalry2_c/TBL/Binaries/Win64",
-            
+            "cwd": "${env:CHIVALRY2_DIR}/TBL/Binaries/Win64",
+            "envFile": "${workspaceFolder}/.env",
             "environment": [],
-            "externalConsole": false,
-            // "preLaunchTask": "build"
+            "externalConsole": false
         },
         {
             "name": "Attach to Chivalry 2",
@@ -27,15 +23,15 @@
             "name": "Debug Mock Server (Integrated)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/sleuth/target/debug/mock_server.exe",
+            "program": "${workspaceFolder}/target/debug/mock_server.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/sleuth",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
             "environment": [],
-            "externalConsole": false,          // Disable the popup window
-            "console": "integratedTerminal",    // Force it into the VS Code tab
+            "externalConsole": false,
+            "console": "integratedTerminal",
             "preLaunchTask": "cargo-build-mock"
         }
-
     ]
 }

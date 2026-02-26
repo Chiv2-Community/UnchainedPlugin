@@ -2,14 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Sleuth (CMake)",
+            "label": "Build UnchainedPlugin",
             "type": "shell",
-            "command": "cmake --build build --target RustBuild",
-            "options": {
-                "env": {
-                    "CARGO_TERM_COLOR": "always" 
-                }
-            },
+            "command": "cargo build",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -25,7 +20,30 @@
             "type": "shell",
             "command": "cargo build --bin mock_server",
             "options": {
-                "cwd": "${workspaceFolder}/sleuth" 
+                "cwd": "${workspaceFolder}" 
+            },
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Install UnchainedPlugin",
+            "type": "shell",
+            "command": "cargo xtask install",
+            "dependsOn": "Build UnchainedPlugin",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Build and Install UnchainedPlugin",
+            "type": "shell",
+            "command": "cargo xtask install --rebuild",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
             },
             "problemMatcher": ["$rustc"]
         }

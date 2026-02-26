@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'  # Trigger on tags starting with 'v'
+      - 'v*'
 
 jobs:
   build:
@@ -25,10 +25,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            sleuth/target
+            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-Release
-
-      - uses: lukka/get-cmake@latest
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
@@ -37,22 +35,24 @@ jobs:
         id: get_version
         shell: bash
         run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          echo "Extracted version: ${GITHUB_REF#refs/tags/v}"
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
 
-      # Create build directory
-      - name: Create build directory
-        run: mkdir -p ${{github.workspace}}/build
-
-      # Configure CMake with the version from tag
-      - name: Configure CMake
+      # Check if version in Cargo.toml matches the tag
+      - name: Verify version matches tag
+        shell: bash
         run: |
-          cmake -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=Release -DVERSION="${{ steps.get_version.outputs.VERSION }}"
+          CARGO_VERSION=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          TAG_VERSION=${{ steps.get_version.outputs.VERSION }}
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($TAG_VERSION)"
+            exit 1
+          fi
 
       # Build the project
       - name: Build
-        run: |
-          cmake --build ${{github.workspace}}/build --config Release
+        run: cargo build --release
 
       # Create GitHub Release
       - name: Create Release
@@ -62,7 +62,7 @@ jobs:
           name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: ${{github.workspace}}/build/Output/Release/UnchainedPlugin.dll
+          files: target/release/UnchainedPlugin.dll
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

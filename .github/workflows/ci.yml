@@ -1,4 +1,4 @@
-﻿name: C++ CI
+﻿name: Rust CI
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        build_type: [Debug, Release]
+        build_type: [debug, release]
 
     steps:
       - uses: actions/checkout@v3
@@ -26,31 +26,26 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            sleuth/target
+            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.build_type }}
 
-      - uses: lukka/get-cmake@latest
-      
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      # Ensure build directory exists
-      - name: Create build directory
-        run: mkdir -p ${{github.workspace}}/build
-
-      # Use the latest Visual Studio toolset in CMake
-      - name: Configure CMake
-        run: |
-          cmake -B ${{github.workspace}}/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
 
       # Build the project
       - name: Build
+        shell: bash
         run: |
-          cmake --build ${{github.workspace}}/build --config ${{matrix.build_type}}
+          if [ "${{ matrix.build_type }}" == "release" ]; then
+            cargo build --release
+          else
+            cargo build
+          fi
 
       # Upload artifacts if build succeeds
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: UnchainedPlugin-${{matrix.build_type}}
-          path: ${{github.workspace}}/build/Output/*
-          if-no-files-found: warn  # Don't fail if no files are found
+          path: |
+            target/${{ matrix.build_type }}/UnchainedPlugin.dll
+          if-no-files-found: warn
