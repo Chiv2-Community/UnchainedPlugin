@@ -48,6 +48,7 @@ impl AdminHerald {
     }
 
     // Helper to check if a Discord user has the required admin role
+
     #[allow(dead_code)]
     fn is_admin(&self, roles: &[RoleId]) -> bool {
         roles.contains(&self.admin_role_id)
@@ -56,13 +57,13 @@ impl AdminHerald {
     #[handler_command(name = "cmd", desc = "Execute a console command.", source = "Discord", elevated = true)]
     pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());
-        return msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses();
+        msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "say", desc = "Send a global message to the server.", source = "Discord", elevated = true)]
     pub fn cmd_say(&mut self, _message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
         self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
-        return msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses();
+        msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "admin", desc = "Call for an admin", source = "GameChat")]

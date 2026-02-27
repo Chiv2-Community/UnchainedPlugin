@@ -985,6 +985,33 @@ impl APawn {
     }
 }
 
+bitflags! {
+    /// Character movement bitfield 1 (offset 0x0460)
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct CharacterMovementFlags1: u8 {
+        const IS_CROUCHED = 1 << 0;
+        const PROXY_IS_JUMP_FORCE_APPLIED = 1 << 1;
+        const PRESSED_JUMP = 1 << 2;
+        const CLIENT_UPDATING = 1 << 3;
+        const CLIENT_WAS_FALLING = 1 << 4;
+        const CLIENT_RESIMULATE_ROOT_MOTION = 1 << 5;
+        const CLIENT_RESIMULATE_ROOT_MOTION_SOURCES = 1 << 6;
+        const SIM_GRAVITY_DISABLED = 1 << 7;
+    }
+}
+
+bitflags! {
+    /// Character movement bitfield 2 (offset 0x0461)
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct CharacterMovementFlags2: u8 {
+        const CLIENT_CHECK_ENCROACHMENT_ON_NET_UPDATE = 1 << 0;
+        const SERVER_MOVE_IGNORE_ROOT_MOTION = 1 << 1;
+        const WAS_JUMPING = 1 << 2;
+    }
+}
+
 #[repr(C)]
 pub struct ACharacter {
     // 0x0000 - 0x03B0: Inherited from APawn
@@ -1010,17 +1037,9 @@ pub struct ACharacter {
     pub b_in_base_replication: bool,     // 0x0459
     pub padding_2: [u8; 0x2],            // 0x045A
     pub crouched_eye_height: f32,        // 0x045C
-    
-    // TODO: use bitflags
-    // 0x0460: Bitfield 1
-    // Bits: bIsCrouched(0), bProxyIsJumpForceApplied(1), bPressedJump(2), 
-    //       bClientUpdating(3), bClientWasFalling(4), bClientResimulateRootMotion(5), 
-    //       bClientResimulateRootMotionSources(6), bSimGravityDisabled(7)
-    pub bitfield_0460: u8, 
-    // TODO: use bitflags
-    // 0x0461: Bitfield 2
-    // Bits: bClientCheckEncroachmentOnNetUpdate(0), bServerMoveIgnoreRootMotion(1), bWasJumping(2)
-    pub bitfield_0461: u8,
+
+    pub movement_flags_1: CharacterMovementFlags1, // 0x0460
+    pub movement_flags_2: CharacterMovementFlags2, // 0x0461
     
     pub padding_3: [u8; 0x2],            // 0x0462
     pub jump_key_hold_time: f32,         // 0x0464
@@ -1048,17 +1067,17 @@ pub struct ACharacter {
 
 impl ACharacter {
     // Offset 0x0460 Helpers
-    pub fn is_crouched(&self) -> bool { (self.bitfield_0460 & (1 << 0)) != 0 }
-    pub fn proxy_is_jump_force_applied(&self) -> bool { (self.bitfield_0460 & (1 << 1)) != 0 }
-    pub fn pressed_jump(&self) -> bool { (self.bitfield_0460 & (1 << 2)) != 0 }
-    pub fn client_updating(&self) -> bool { (self.bitfield_0460 & (1 << 3)) != 0 }
-    pub fn client_was_falling(&self) -> bool { (self.bitfield_0460 & (1 << 4)) != 0 }
-    pub fn sim_gravity_disabled(&self) -> bool { (self.bitfield_0460 & (1 << 7)) != 0 }
+    pub fn is_crouched(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::IS_CROUCHED) }
+    pub fn proxy_is_jump_force_applied(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::PROXY_IS_JUMP_FORCE_APPLIED) }
+    pub fn pressed_jump(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::PRESSED_JUMP) }
+    pub fn client_updating(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::CLIENT_UPDATING) }
+    pub fn client_was_falling(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::CLIENT_WAS_FALLING) }
+    pub fn sim_gravity_disabled(&self) -> bool { self.movement_flags_1.contains(CharacterMovementFlags1::SIM_GRAVITY_DISABLED) }
 
     // Offset 0x0461 Helpers
-    pub fn client_check_encroachment(&self) -> bool { (self.bitfield_0461 & (1 << 0)) != 0 }
-    pub fn server_move_ignore_root_motion(&self) -> bool { (self.bitfield_0461 & (1 << 1)) != 0 }
-    pub fn was_jumping(&self) -> bool { (self.bitfield_0461 & (1 << 2)) != 0 }
+    pub fn client_check_encroachment(&self) -> bool { self.movement_flags_2.contains(CharacterMovementFlags2::CLIENT_CHECK_ENCROACHMENT_ON_NET_UPDATE) }
+    pub fn server_move_ignore_root_motion(&self) -> bool { self.movement_flags_2.contains(CharacterMovementFlags2::SERVER_MOVE_IGNORE_ROOT_MOTION) }
+    pub fn was_jumping(&self) -> bool { self.movement_flags_2.contains(CharacterMovementFlags2::WAS_JUMPING) }
 }
 
 

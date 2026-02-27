@@ -33,8 +33,9 @@ pub trait VoteType: Send + Sync {
 pub struct VoteModule {
     active_vote: Option<ActiveVote>,
     registry: HashMap<String, Box<dyn VoteType>>,
+
     #[allow(dead_code)]
-    ctx: crate::discord::Ctx,
+    _ctx: crate::discord::Ctx,
 }
 
 struct ActiveVote {
@@ -225,7 +226,7 @@ impl VoteModule {
         Self {
             active_vote: None,
             registry,
-            ctx,
+            _ctx: ctx,
         }
     }
 }

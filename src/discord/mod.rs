@@ -20,7 +20,6 @@ use crate::discord::modules::{
 use crate::discord::notifications::{CommandRequest, CommandSource, GameChatMessage, GameCommandEvent, PermissionFlags};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::swarn;
-use censor::Censor;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
 use serenity::client::EventHandler as DiscordHandler;
@@ -208,12 +207,6 @@ async fn dispatch_responses(
             }
         }
     }
-}
-
-#[allow(dead_code)]
-fn sanitize_text(input: &str) -> String {
-    let filter = Censor::Standard;
-    filter.censor(input)
 }
 
 fn normalize_event(event: Box<dyn GameEvent>, admin_role: RoleId) -> Box<dyn GameEvent> {

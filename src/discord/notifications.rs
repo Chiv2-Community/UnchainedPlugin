@@ -138,7 +138,7 @@ impl GameEvent for GameChatMessage {
 
 }
 
-// Optional: If you want these to show up in Discord even if the 
+// Optional: If you want these to show up in Discord even if the
 // ChatRelayModule is disabled, implement this:
 impl GameChatMessage {
     #[allow(dead_code)]

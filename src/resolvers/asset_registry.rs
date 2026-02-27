@@ -76,7 +76,7 @@ pub struct TScriptInterface {
     pub object: *mut UObject,
     pub interface: *mut c_void,
 }
-#[allow(dead_code)]
+
 impl TScriptInterface {
     pub fn new() -> Self {
         Self {

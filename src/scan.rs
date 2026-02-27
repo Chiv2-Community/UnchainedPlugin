@@ -38,11 +38,16 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         .map(|res| res.getter)
         .collect::<Vec<_>>();
 
-    let name = format!("PID={}", pid);
-    let game_name = format!("pid={}", pid); // fixme
     let exe = patternsleuth::process::internal::read_image()
         .context("Failed to read image")?;
-    sdebug!(f;"GAME '{:?}' '{:x?}'", name, exe.base_address);
+
+    let game_name = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .map(|name| format!("{} (PID={})", name, pid))
+        .unwrap_or_else(|| format!("PID={}", pid));
+
+    sdebug!(f;"GAME '{:?}' '{:x?}'", game_name, exe.base_address);
 
     let resolution = tracing::info_span!("scan", game = game_name)
         .in_scope(|| exe.resolve_many(&dyn_resolvers));
