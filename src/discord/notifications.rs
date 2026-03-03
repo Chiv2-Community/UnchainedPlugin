@@ -283,7 +283,6 @@ impl GameEvent for GameCommandEvent {
     fn event_type(&self) ->  &'static str {
         "GameCommandEvent"
     }
-
 }
 
 fn parse_command(input: &str) -> Option<(String, Vec<String>, String)> {

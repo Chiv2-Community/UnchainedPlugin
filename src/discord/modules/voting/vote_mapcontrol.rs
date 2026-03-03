@@ -1,5 +1,6 @@
 use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommandEvent};
 
+#[derive(Clone)]
 pub struct RestartVote;
 
 #[async_trait::async_trait]
@@ -13,10 +14,6 @@ impl VoteType for RestartVote {
         Ok(())
     }
 
-    fn clone_box(&self) -> Box<dyn VoteType> {
-        Box::new(RestartVote) 
-    }
-
     async fn on_success(&self, _target: &str) {
         // TODO: implement
         // Get current map name
@@ -25,6 +22,7 @@ impl VoteType for RestartVote {
     }
 }
 
+#[derive(Clone)]
 pub struct EndMapVote;
 
 #[async_trait::async_trait]
@@ -36,10 +34,6 @@ impl VoteType for EndMapVote {
 
     fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
         Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn VoteType> {
-        Box::new(EndMapVote) 
     }
 
     async fn on_success(&self, _target: &str) {

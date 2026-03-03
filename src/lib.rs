@@ -12,8 +12,6 @@ pub mod discord;
 #[cfg(windows)]
 mod seh;
 
-
-
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::time::Duration;

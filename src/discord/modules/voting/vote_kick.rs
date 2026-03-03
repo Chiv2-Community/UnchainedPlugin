@@ -1,5 +1,6 @@
 use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}};
 
+#[derive(Clone)]
 pub struct KickVote;
 
 #[async_trait::async_trait]
@@ -18,8 +19,8 @@ impl VoteType for KickVote {
     }
 
     /// Requires at least 4 people to participate to be valid
-    fn min_votes(&self) -> usize { 
-        4 
+    fn min_votes(&self) -> usize {
+        4
     }
 
     fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
@@ -32,10 +33,6 @@ impl VoteType for KickVote {
         Ok(())
     }
 
-    fn clone_box(&self) -> Box<dyn VoteType> {
-        Box::new(KickVote) 
-    }
-    
     async fn on_success(&self, target: &str) {
         // TODO: implement
         // Find player by name?

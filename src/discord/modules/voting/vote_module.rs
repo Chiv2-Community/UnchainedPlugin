@@ -13,14 +13,25 @@ use crate::discord::responses::*;
 
 
 /// Trait that defines a specific type of vote's behavior
+pub trait BoxClone {
+    fn clone_box(&self) -> Box<dyn VoteType>;
+}
+
+impl<T> BoxClone for T
+where
+    T: 'static + VoteType + Clone,
+{
+    fn clone_box(&self) -> Box<dyn VoteType> {
+        Box::new(self.clone())
+    }
+}
+
 #[async_trait::async_trait]
-pub trait VoteType: Send + Sync {
+pub trait VoteType: Send + Sync + BoxClone {
     fn title(&self) -> String;
     fn description(&self) -> String;
     fn min_ratio(&self) -> f32;
     fn min_votes(&self) -> usize;
-    async fn on_success(&self, target: &str);
-    fn clone_box(&self) -> Box<dyn VoteType>;
 
     fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
         let [_target, ..] = cmd.args.as_slice() else {
@@ -28,6 +39,10 @@ pub trait VoteType: Send + Sync {
         };
         Ok(())
     }
+    
+    async fn on_success(&self, target: &str);
+
+
 }
 
 pub struct VoteModule {
@@ -233,6 +248,8 @@ impl VoteModule {
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for VoteModule {
+    fn name(&self) -> &'static str { "VoteModule" }
+
     fn get_commands(&self) -> Vec<CommandInfo> {
         crate::auto_help!(self, [
             cmd_help, 
@@ -248,8 +265,6 @@ impl DiscordSubscriber for VoteModule {
             cmd_votenobots
         ])
     }
-
-    fn name(&self) -> &'static str { "VoteModule" }
 
     async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
