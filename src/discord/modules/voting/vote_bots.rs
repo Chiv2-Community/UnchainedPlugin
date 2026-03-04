@@ -1,4 +1,4 @@
-﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommandEvent};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommand};
 
 #[derive(Clone)]
 pub struct AddBotsVote;
@@ -9,7 +9,7 @@ impl VoteType for AddBotsVote {
     fn description(&self) -> String { "Vote to add AI bots to the current game.".into() }
     fn min_ratio(&self) -> f32 { 0.5 }
     fn min_votes(&self) -> usize { 1 }
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
     }
     async fn on_success(&self, _target: &str) {
@@ -31,7 +31,7 @@ impl VoteType for NoBotsVote {
     fn min_ratio(&self) -> f32 { 0.5 }
     fn min_votes(&self) -> usize { 1 }
     
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
     }
 

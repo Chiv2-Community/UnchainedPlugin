@@ -14,19 +14,19 @@ pub struct CommandRequest {
 
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
-pub struct JoinEvent {
+pub struct Join {
     pub name: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct CrashEvent {
+pub struct Crash {
     pub event_type: String,
     pub event_trace: Vec<String>,
 }
 
 /// Triggered when a kill occurs (Data-heavy event)
 #[derive(Debug, Clone)]
-pub struct KillEvent {
+pub struct Kill {
     pub killer: String,
     pub victim: String,
     pub weapon: String,
@@ -34,13 +34,13 @@ pub struct KillEvent {
 
 /// Triggered when the server changes maps
 #[derive(Debug, Clone)]
-pub struct MapChangeEvent { 
+pub struct MapChange {
     pub new_map: String 
 }
 
 /// Triggered when a match finishes (before the map change)
 #[derive(Debug, Clone)]
-pub struct MatchEndEvent {
+pub struct MatchEnd {
     pub winner_team: String,
     pub final_score: String,
 }
@@ -112,14 +112,14 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug, Clone)]
-pub struct BridgeChatEvent {
+pub struct BridgeChat {
     pub message: String,
     pub actor: CommandActor,
     pub source: CommandSource,
 }
 
 #[derive(Debug, Clone)]
-pub struct GameCommandEvent {
+pub struct GameCommand {
     pub name: String,
     pub args: Vec<String>,
     pub raw_args: String,
@@ -147,20 +147,20 @@ pub struct AdminAlert {
 }
 
 #[derive(Debug, Clone)]
-pub struct DuelStartEvent { pub challenger: String, pub opponent: String }
+pub struct DuelStart { pub challenger: String, pub opponent: String }
 #[derive(Debug, Clone)]
-pub struct AttackEvent { pub attacker: String, pub attack_type: String, pub was_parried: bool }
+pub struct Attack { pub attacker: String, pub attack_type: String, pub was_parried: bool }
 #[derive(Debug, Clone)]
-pub struct DamageEvent { pub attacker: String, pub victim: String, pub damage: f32 }
+pub struct Damage { pub attacker: String, pub victim: String, pub damage: f32 }
 
 #[derive(Debug, Clone)]
-pub struct MapVoteEvent {
+pub struct MapVote {
     pub initiator: String,
     pub map_target: String,
 }
 
 #[derive(Debug, Clone)]
-pub struct VoteCastEvent {
+pub struct VoteCast {
     pub voter_id: String,
     pub choice: bool, // true = Yes, false = No
 }
@@ -170,21 +170,21 @@ pub struct VoteCastEvent {
 #[derive(Debug, Clone)]
 pub enum GameEvent {
     CommandRequestEvent(CommandRequest),
-    JoinEvent(JoinEvent),
-    CrashEvent(CrashEvent),
-    KillEvent(KillEvent),
-    MapChangeEvent(MapChangeEvent),
-    MatchEndEvent(MatchEndEvent),
+    JoinEvent(Join),
+    CrashEvent(Crash),
+    KillEvent(Kill),
+    MapChangeEvent(MapChange),
+    MatchEndEvent(MatchEnd),
     GameChatMessageEvent(GameChatMessage),
-    BridgeChatEvent(BridgeChatEvent),
-    GameCommandEvent(GameCommandEvent),
+    BridgeChatEvent(BridgeChat),
+    GameCommandEvent(GameCommand),
     ServerStatusEvent(ServerStatus),
     AdminAlertEvent(AdminAlert),
-    DuelStartEvent(DuelStartEvent),
-    AttackEvent(AttackEvent),
-    DamageEvent(DamageEvent),
-    MapVoteEvent(MapVoteEvent),
-    VoteCastEvent(VoteCastEvent),
+    DuelStartEvent(DuelStart),
+    AttackEvent(Attack),
+    DamageEvent(Damage),
+    MapVoteEvent(MapVote),
+    VoteCastEvent(VoteCast),
 }
 
 impl GameEvent {
@@ -196,7 +196,7 @@ impl GameEvent {
             GameEvent::KillEvent(_) => "KillEvent",
             GameEvent::MapChangeEvent(_) => "MapChangeEvent",
             GameEvent::MatchEndEvent(_) => "MatchEndEvent",
-            GameEvent::GameChatMessageEvent(_) => "GameChatMessage",
+            GameEvent::GameChatMessageEvent(_) => "GameChatMessageEvent",
             GameEvent::BridgeChatEvent(_) => "BridgeChatEvent",
             GameEvent::GameCommandEvent(_) => "GameCommandEvent",
             GameEvent::ServerStatusEvent(_) => "ServerStatusEvent",
@@ -275,7 +275,7 @@ fn parse_command(input: &str) -> Option<(String, Vec<String>, String)> {
 }
 
 
-impl GameCommandEvent {
+impl GameCommand {
     pub fn from_game_chat(chat: &GameChatMessage, perms: PermissionFlags) -> Option<Self> {
         let (name, args, raw_args) = parse_command(&chat.message)?;
 
@@ -315,17 +315,17 @@ impl GameCommandEvent {
     }
 }
 // USAGE
-// // In your game's JoinEvent Hook
+// // In your game's Join Hook
 // pub fn on_player_joined(name: &str) {
 //     if let Some(bridge) = crate::discord::DISCORD_HANDLE.get() {
-//         bridge.dispatch(JoinEvent { name: name.to_string() });
+//         bridge.dispatch(Join { name: name.to_string() });
 //     }
 // }
 
-// // In your game's KillEvent Hook
+// // In your game's Kill Hook
 // pub fn on_player_kill(killer: &str, victim: &str, weapon: &str) {
 //     if let Some(bridge) = crate::discord::DISCORD_HANDLE.get() {
-//         bridge.dispatch(KillEvent {
+//         bridge.dispatch(Kill {
 //             killer: killer.to_string(),
 //             victim: victim.to_string(),
 //             weapon: weapon.to_string(),

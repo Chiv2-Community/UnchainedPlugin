@@ -15,9 +15,11 @@ use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::voting::vote_module::VoteModule;
 // use crate::discord::modules::voting::*;
 use crate::discord::modules::{
-    batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
+    batcher::JoinBatcher, dashboard::Dashboard, duel_manager::DuelManager,
+    herald::AdminHerald, killstreak::KillstreakModule,
+    stats_tracker::StatsTracker,
 };
-use crate::discord::notifications::{CommandRequest, CommandSource, GameCommandEvent, PermissionFlags, GameEvent};
+use crate::discord::notifications::{CommandRequest, CommandSource, GameCommand, PermissionFlags, GameEvent};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::swarn;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
@@ -213,7 +215,7 @@ fn preprocess_event(event: GameEvent, admin_role: RoleId) -> GameEvent {
     let new_event = match &event {
         // Try game chat → command
         GameEvent::GameChatMessageEvent(chat) =>
-            GameCommandEvent::from_game_chat(chat, PermissionFlags::USER)
+            GameCommand::from_game_chat(chat, PermissionFlags::USER)
                 .map(GameEvent::GameCommandEvent),
 
         // Try Discord → command
@@ -222,13 +224,13 @@ fn preprocess_event(event: GameEvent, admin_role: RoleId) -> GameEvent {
             if req.user_roles.contains(&admin_role) {
                 perms = PermissionFlags::ADMIN;
             }
-            GameCommandEvent::from_discord(req, perms)
+            GameCommand::from_discord(req, perms)
                 .map(GameEvent::GameCommandEvent)
         }
         _ => None,
     };
 
-    // Fall back to the input event if no GameCommandEvent was generated
+    // Fall back to the input event if no GameCommand was generated
     // then sanitize and return.
     new_event.unwrap_or_else(|| event).sanitized()
 }
@@ -284,11 +286,10 @@ impl DiscordBridge {
                     Box::new(Dashboard::new(Arc::clone(&ctx))),
                     Box::new(JoinBatcher::default()),
                     Box::new(AdminHerald::new(Arc::clone(&ctx), cfg.admin_role_id)),
-                    // Box::new(KillstreakModule::new()), // Not yet implemented (events)
-                    // Box::new(DuelManager::new()), // Not yet implemented (events)
-                    // Box::new(StatsTracker::new("discord/leaderboard.json")), // Not yet implemented (events)
+                    Box::new(KillstreakModule::new()),
+                    Box::new(DuelManager::new()),
+                    Box::new(StatsTracker::new("discord/leaderboard.json")),
                     Box::new(ChatRelayModule::new(Arc::clone(&ctx))),
-                    // Box::new(ExtMapVote::new(Arc::clone(&ctx))),
                     Box::new(VoteModule::new(Arc::clone(&ctx))),
                 ];
 

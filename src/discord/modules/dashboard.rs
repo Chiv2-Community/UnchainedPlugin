@@ -130,7 +130,7 @@ impl Dashboard {
     }
     
     #[handler_command("cta", desc="Issue a Call to Arms on the discord server", source = "GameChat")]
-    pub fn cmd_cta(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cta(&mut self, message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         if self.status.as_ref().is_none() {
             return NO_RESP;
         }
@@ -151,12 +151,12 @@ impl Dashboard {
 
         let templates = [
             // The Classic
-            format!("**{}** has issued a __**Call to Arms**__!\nJoinEvent the server and fight for your honor!\nMessage: _{}_", sender, message),
+            format!("**{}** has issued a __**Call to Arms**__!\nJoin the server and fight for your honor!\nMessage: _{}_", sender, message),
             format!("⚠️ **REINFORCEMENTS NEEDED!**\n**{}** is requesting immediate backup.\nOrders: _{}_", sender, message),
             format!("📢 **BANNERS RAISED!**\n**{}** has sounded the war horn! Rally to their side!\nWar Cry: _{}_", sender, message),                    
             format!("🔥 **TO THE FRONT LINES!**\n**{}** says: _{}_\nDon't let them stand alone!", sender, message),
             format!("⚔️ **{}** is calling for all able-bodied warriors!\n> _{}_", sender, message),
-            format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. JoinEvent now!\nExcuse: *\"{}\"*", sender, message),
+            format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. Join now!\nExcuse: *\"{}\"*", sender, message),
             format!("🕹️ **STOP SLACKING!**\n**{}** has issued a Call to Arms. Your couch can wait, the server can't!\nMessage: _{}_", sender, message),
             format!("📉 **STONKS ARE DOWN!**\n**{}** says the kill count is too low. Let's pump those numbers up!\nMemo: *\"{}\"*", sender, message),
             format!("⚠️ **BROKEN ARROW!**\n**{}** is being overrun and has declared a Level 5 Emergency!\nComms: _{}_", sender, message),
@@ -189,7 +189,7 @@ impl Dashboard {
     }
     
     #[handler_command("dash", desc="Display server dashboard (if available)", source = "Discord")]
-    pub fn cmd_dash(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {        
+    pub fn cmd_dash(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if self.status.is_none() {
             return msg("Dashboard: no server status available").into_responses();
         }
@@ -202,7 +202,7 @@ impl Dashboard {
     }
     
     #[handler_command("playerlist", desc="Display server dashboard (if available)")]
-    pub fn cmd_playerlist(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_playerlist(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(world) = crate::globals().world() {
             let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
             let game = unsafe {game_ptr.as_mut().expect("GameMode was null")};

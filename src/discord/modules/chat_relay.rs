@@ -61,11 +61,14 @@ impl DiscordSubscriber for ChatRelayModule {
             }
             // --- GAME -> DISCORD ---
             GameEvent::GameChatMessageEvent(game_msg) => {
-                if game_msg.message.starts_with('!') { return NO_RESP; }
-                msg(format!("💬 **{}**: {}", game_msg.sender, game_msg.message))
-                .into_responses()
+                if game_msg.message.starts_with('!') {
+                    NO_RESP
+                } else {
+                    msg(format!("💬 **{}**: {}", game_msg.sender, game_msg.message))
+                        .into_responses()
+                }
             }
-            _ => NO_RESP
+            _ => NO_RESP,
         }
     }
 }

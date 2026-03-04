@@ -1,4 +1,4 @@
-﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommandEvent};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommand};
 
 #[derive(Clone)]
 pub struct RestartVote;
@@ -10,7 +10,7 @@ impl VoteType for RestartVote {
     fn min_ratio(&self) -> f32 { 0.5 }
     fn min_votes(&self) -> usize { 3 }
 
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
     }
 
@@ -32,7 +32,7 @@ impl VoteType for EndMapVote {
     fn min_ratio(&self) -> f32 { 0.6 }
     fn min_votes(&self) -> usize { 3 }
 
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
     }
 

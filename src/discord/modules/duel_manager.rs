@@ -39,22 +39,22 @@ impl DiscordSubscriber for DuelManager {
     async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         match event {
             GameEvent::DuelStartEvent(e) => {
-                match std::mem::replace(&mut self.state, DuelState::Idle) {
-                    DuelState::Idle | DuelState::Active(_) => {
-                        self.state = DuelState::Active(ActiveDuel {
-                            p1: e.challenger.clone(),
-                            p2: e.opponent.clone(),
-                            start_time: Instant::now(),
-                            damage_dealt: HashMap::new(),
-                            attack_counts: HashMap::new(),
-                            parries: HashMap::new(),
-                        });
-                        return msg(format!("⚔️ **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent)).to_main().into_responses();
-                    }
-                }
+                self.state = DuelState::Active(ActiveDuel {
+                    p1: e.challenger.clone(),
+                    p2: e.opponent.clone(),
+                    start_time: Instant::now(),
+                    damage_dealt: HashMap::new(),
+                    attack_counts: HashMap::new(),
+                    parries: HashMap::new(),
+                });
+                msg(format!("⚔️ **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent))
+                    .to_main()
+                    .into_responses()
             }
             _ => {
-                if let DuelState::Active(mut duel) = std::mem::replace(&mut self.state, DuelState::Idle) {
+                if let DuelState::Active(mut duel) =
+                    std::mem::replace(&mut self.state, DuelState::Idle)
+                {
                     let responses = self.handle_active_event(&mut duel, event);
                     // If handler didn't transition state to Idle itself, we put it back.
                     if let DuelState::Idle = self.state {
@@ -62,11 +62,12 @@ impl DiscordSubscriber for DuelManager {
                             self.state = DuelState::Active(duel);
                         }
                     }
-                    return responses;
+                    responses
+                } else {
+                    NO_RESP
                 }
             }
         }
-        NO_RESP
     }
 }
 

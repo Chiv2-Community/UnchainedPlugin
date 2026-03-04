@@ -55,19 +55,19 @@ impl AdminHerald {
     }
 
     #[handler_command(name = "cmd", desc = "Execute a console command.", source = "Discord", elevated = true)]
-    pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommand) -> Vec<BotResponse> {
         NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());
         msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "say", desc = "Send a global message to the server.", source = "Discord", elevated = true)]
-    pub fn cmd_say(&mut self, _message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_say(&mut self, _message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
         msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "admin", desc = "Call for an admin", source = "GameChat")]
-    pub fn cmd_admin(&mut self, _message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_admin(&mut self, _message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         let allowed_mentions = CreateAllowedMentions::new()
             .roles(vec![self.admin_role_id]);
         let alert_mention = match self.settings.mention_on_admin {
@@ -94,16 +94,15 @@ impl DiscordSubscriber for AdminHerald {
     impl_reconfigure!(HeraldSettings);
 
     async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        
-        if let GameEvent::GameCommandEvent(cmd) = event {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_cmd,
-                cmd_say,
-                cmd_admin
-            ]);
-        }
-        
         match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_cmd,
+                    cmd_say,
+                    cmd_admin
+                ]);
+                NO_RESP
+            }
             GameEvent::CrashEvent(alert) => {
                 let allowed_mentions = CreateAllowedMentions::new()
                     .roles(vec![self.admin_role_id]);
@@ -113,16 +112,14 @@ impl DiscordSubscriber for AdminHerald {
                     false => "".into()
                 };
 
-                return BotResponse::from(
+                BotResponse::from(
                     CreateMessage::new().content(format!(
                         "💀 {}**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```",
                         alert_mention, alert.event_type, alert.event_trace.join("\n")
                     )).allowed_mentions(allowed_mentions)
-                ).into_responses();
+                ).into_responses()
             }
-            _ => {}
+            _ => NO_RESP,
         }
-
-        NO_RESP
     }
 }

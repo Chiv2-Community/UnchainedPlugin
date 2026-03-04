@@ -1,4 +1,4 @@
-﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommand}};
 
 #[derive(Clone)]
 pub struct KickVote;
@@ -23,7 +23,7 @@ impl VoteType for KickVote {
         4
     }
 
-    fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, cmd: &GameCommand) -> Result<(), String> {
         if cmd.source != CommandSource::GameChat {
             return Err("Kick votes can only be started from in-game chat.".into());
         }

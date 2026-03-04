@@ -23,15 +23,19 @@ impl DiscordSubscriber for JoinBatcher {
 
     async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         // We only care about JoinEvents
-        if let GameEvent::JoinEvent(join) = event {
-            self.pending_joins.push(join.name.clone());
+        match event {
+            GameEvent::JoinEvent(join) => {
+                self.pending_joins.push(join.name.clone());
 
-            // If we hit a massive wave (e.g., 10 people), flush immediately
-            if self.pending_joins.len() >= self.max_batch_size {
-                return self.flush();
+                // If we hit a massive wave (e.g., 10 people), flush immediately
+                if self.pending_joins.len() >= self.max_batch_size {
+                    self.flush()
+                } else {
+                    NO_RESP
+                }
             }
+            _ => NO_RESP,
         }
-        NO_RESP
     }
 
     async fn on_tick(&mut self, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {

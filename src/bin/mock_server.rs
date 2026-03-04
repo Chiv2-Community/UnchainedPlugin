@@ -1,6 +1,6 @@
 use serenity::all::UserId;
 use unchained_plugin::discord::config::DiscordConfig;
-use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, JoinEvent, KillEvent, GameEvent};
+use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
 use unchained_plugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
 use unchained_plugin::game::chivalry2::EChatType;
 use unchained_plugin::{serror, sinfo};
@@ -41,10 +41,10 @@ fn main() {
 
         match parts.as_slice() {
             ["join", name] => {
-                GameEvent::JoinEvent(JoinEvent { name: name.to_string() }).dispatch(None);
+                GameEvent::JoinEvent(Join { name: name.to_string() }).dispatch(None);
             }
             ["kill", k, v] => {
-                GameEvent::KillEvent(KillEvent {
+                GameEvent::KillEvent(Kill {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
                     weapon: "MockSword".to_string() 

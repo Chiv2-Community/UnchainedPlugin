@@ -205,7 +205,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
                 let arg_type = &pat_type.ty;
                 let type_str = quote!(#arg_type).to_string();
 
-                if type_str.contains("GameCommandEvent") {
+                if type_str.contains("GameCommand") {
                     call_args.push(quote! { cmd });
                 } else {
                     // build Usage String: e.g. "<count: i32>"
@@ -273,7 +273,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
 
-        pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommandEvent) -> Vec<crate::discord::responses::BotResponse> {
+        pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommand) -> Vec<crate::discord::responses::BotResponse> {
             #permission_check
             #source_check
             

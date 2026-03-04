@@ -9,7 +9,7 @@ use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
 use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
 use crate::discord::modules::voting::vote_mod::ModVote;
-use crate::discord::notifications::GameCommandEvent;
+use crate::discord::notifications::GameCommand;
 use crate::discord::responses::*;
 
 
@@ -34,7 +34,7 @@ pub trait VoteType: Send + Sync + BoxClone {
     fn min_ratio(&self) -> f32;
     fn min_votes(&self) -> usize;
 
-    fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, cmd: &GameCommand) -> Result<(), String> {
         let [_target, ..] = cmd.args.as_slice() else {
             return Err("This vote requires a target argument.".into());
         };
@@ -66,7 +66,7 @@ struct ActiveVote {
 impl VoteModule {    
     
 
-    fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(logic_prototype) = self.registry.get(vote_type) {
             // Check prerequisites using the prototype
             if let Err(err) = logic_prototype.check_prerequisites(cmd) {
@@ -158,7 +158,7 @@ impl VoteModule {
     }
 
     #[handler_command("cancelvote", desc = "Vote YES on the active poll", elevated = true)]
-    pub fn cmd_cancelvote(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cancelvote(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let resp = BotResponse::from(CreateEmbed::new()
             .title(format!("🗳️ Vote Cancelled by Admin: {}", state.logic.title()))
@@ -171,7 +171,7 @@ impl VoteModule {
     }
 
     #[handler_command("yes", desc = "Vote YES on the active poll", source = "GameChat")]
-    pub fn cmd_yes(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_yes(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
             state.no_votes.remove(&voter);
@@ -181,7 +181,7 @@ impl VoteModule {
     }
 
     #[handler_command("no", desc = "Vote YES on the active poll", source = "GameChat")]
-    pub fn cmd_no(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_no(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
             state.yes_votes.remove(&voter);
@@ -190,44 +190,41 @@ impl VoteModule {
         NO_RESP
     }
 
-    // Dynamic command handlers
-
     #[handler_command(name = "votekick", desc = "Vote to remove a disruptive player. Ensure there is a valid reason.")]
-    pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votekick", player_name, cmd)
     }
 
     #[handler_command(name = "votemap", desc = "Vote to change the server to a new map.")]
-    pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votemap", map_name, cmd)
     }
 
     #[handler_command(name = "voterestart", desc = "Vote to restart the current round immediately.")]
-    pub fn cmd_voterestart(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voterestart(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voterestart", "Current Round".to_string(), cmd)
     }
 
     #[handler_command(name = "voteendmap", desc = "Vote to end the current map.")]
-    pub fn cmd_voteendmap(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voteendmap(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteendmap", "Current Round".to_string(), cmd)
     }
 
     #[handler_command(name = "voteaddbots", desc = "Vote to add AI bots to the current game.")]
-    pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteaddbots", count, cmd)
     }
 
     #[handler_command(name = "votemod", desc = "Enable a mod.")]
-    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
     }
 
     #[handler_command(name = "votenobots", desc = "Vote to add AI bots to the current game.")]
-    pub fn cmd_votenobots(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votenobots(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votenobots", "Current Round".to_string(), cmd)
     }
 
-    // Matches your existing initialization pattern
     pub fn new(ctx: crate::discord::Ctx) -> Self {
         let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
 
@@ -268,22 +265,25 @@ impl DiscordSubscriber for VoteModule {
     }
 
     async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        if let GameEvent::GameCommandEvent(cmd) = event {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_help, 
-                cmd_cancelvote,
-                cmd_yes, 
-                cmd_no, 
-                cmd_votekick, 
-                cmd_votemap, 
-                cmd_voterestart,
-                cmd_voteendmap,
-                cmd_votemod,
-                cmd_voteaddbots,
-                cmd_votenobots
-            ]);
+        match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_help, 
+                    cmd_cancelvote,
+                    cmd_yes, 
+                    cmd_no, 
+                    cmd_votekick, 
+                    cmd_votemap, 
+                    cmd_voterestart,
+                    cmd_voteendmap,
+                    cmd_votemod,
+                    cmd_voteaddbots,
+                    cmd_votenobots
+                ]);
+                NO_RESP
+            }
+            _ => NO_RESP,
         }
-        NO_RESP
     }
 
     async fn on_tick(&mut self, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
