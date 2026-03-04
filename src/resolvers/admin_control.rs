@@ -23,12 +23,7 @@ define_pattern_resolver!(
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
 CREATE_HOOK!(ExecuteConsoleCommand, ACTIVE, NONE, c_void, (command: *mut FString), {
-    if let Some(cmd) = unsafe { command.as_mut() } {
-        if cmd.to_string().starts_with("RCON_INTERCEPT") {
-            return unsafe { std::mem::zeroed() };
-        }
-        unsafe { log::info!(target: "Command", "Executing: {}", (&*command)); }
-    }
+    unsafe { log::info!(target: "Command", "Executing: {}", (&*command)); }
     CALL_ORIGINAL!(ExecuteConsoleCommand(command))
 });
 
@@ -64,14 +59,12 @@ define_pattern_resolver!(ConsoleCommand, First, [
 ]);
 CREATE_HOOK!(ConsoleCommand, ACTIVE, FString, (this_ptr: *mut c_void, command: *mut FString, b: bool), {
     if let Some(cmd) = unsafe { command.as_mut() } {
-        if cmd.to_string().starts_with("RCON_INTERCEPT") {
-            return FString::from("");
+        if !cmd.to_string().starts_with("RCON_INTERCEPT") {
+            unsafe { log::info!(target: "Console", "Executing: {}", (&*command)); };
         }
-        unsafe { log::info!(target: "Console", "Executing: {}", (&*command)); };
     } else {
         log::error!(target: "Console", "ConsoleCommand: command was null");
     }
-    CALL_ORIGINAL!(ConsoleCommand(this_ptr, command, b))
 });
 
 
