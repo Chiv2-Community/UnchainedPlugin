@@ -21,7 +21,7 @@ use crate::discord::modules::{
 };
 use crate::discord::events::{CommandRequest, CommandSource, GameCommand, PermissionFlags, GameEvent};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
-use crate::swarn;
+use crate::{serror, swarn};
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
 use serenity::client::EventHandler as DiscordHandler;
@@ -398,7 +398,23 @@ impl DiscordBridge {
                     }
                 });
 
-                client.start().await.expect("Client crash");
+                if let Err(e) = client.start().await {
+                    match e {
+                        serenity::Error::Gateway(serenity::all::GatewayError::DisallowedGatewayIntents) => {
+                            serror!(f; "Discord Client Error: Disallowed Gateway Intents.");
+                            serror!(f; "The bot is missing the 'Message Content Intent'.");
+                            serror!(f; "Please enable it in the Discord Developer Portal:");
+                            serror!(f; "1. Go to https://discord.com/developers/applications");
+                            serror!(f; "2. Select your application.");
+                            serror!(f; "3. Go to 'Bot' in the left sidebar.");
+                            serror!(f; "4. Scroll down to 'Privileged Gateway Intents'.");
+                            serror!(f; "5. Enable 'MESSAGE CONTENT INTENT'.");
+                        }
+                        _ => {
+                            serror!(f; "Discord Client Error: {}", e);
+                        }
+                    }
+                }
             });
         });
 
