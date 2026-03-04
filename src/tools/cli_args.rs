@@ -80,7 +80,6 @@ pub struct CLIArgs {
     #[arg(long = "Port", default_value = "7777")]
     pub game_port: Option<u16>,
 
-    // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-channel-id")]
     pub discord_channel_id: Option<u64>,
     

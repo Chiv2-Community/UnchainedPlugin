@@ -3,8 +3,6 @@
 use std::sync::{Arc, Mutex};
 use std::{env, os::raw::c_void, panic};
 
-#[cfg(feature="discord_integration_old")]
-use crate::features::discord_bot::DiscordBridge;
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
@@ -185,8 +183,6 @@ pub struct Globals {
     pub registration: Mutex<Option<Arc<Registration>>>,
     #[cfg(feature="mod_management")]
     pub mod_manager: Mutex<Option<Arc<ModManager>>>,
-    #[cfg(feature="discord_integration_old")]
-    pub DISCORD_BRIDGE: OnceLock<DiscordBridge>,
 }
 
 pub static CLI_ARGS: OnceLock<CLIArgs> = OnceLock::new();
@@ -293,8 +289,6 @@ pub fn init_globals() -> Result<(), String> {
         registration: std::sync::Mutex::new(None),
         #[cfg(feature="mod_management")]
         mod_manager: std::sync::Mutex::new(None),
-        #[cfg(feature="discord_integration_old")]
-        DISCORD_BRIDGE: OnceLock::new(),
     };
 
     if GLOBALS.set(globals_instance).is_err() {

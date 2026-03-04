@@ -85,17 +85,6 @@ mod client_message {
                                 }).dispatch(None);
                             }
                         }
-                        
-                        #[cfg(feature="discord_integration_old")]
-                        {
-                            if msg_type == EChatType::AllSay && cli_args().is_server() {
-                                
-                                crate::sinfo!(f; "pre Sending message to discord");
-                                if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
-                                    bridge.recv_game_message(msg_type, chat.name, chat.message);
-                                }
-                            }
-                        }
                     }
                 };        
             }

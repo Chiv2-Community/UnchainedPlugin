@@ -1,8 +1,6 @@
 use serde::Serialize;
 
 pub mod rcon;
-#[cfg(feature="discord_integration_old")]
-pub mod discord_bot;
 #[cfg(feature="server_registration")]
 pub mod server_registration;
 #[cfg(feature="mod_management")]
