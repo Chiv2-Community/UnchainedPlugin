@@ -209,28 +209,28 @@ async fn dispatch_responses(
     }
 }
 
-fn normalize_event(mut event: GameEvent, admin_role: RoleId) -> GameEvent {
-    // Try game chat → command
-    if let GameEvent::GameChatMessageEvent(chat) = &event {
-        if let Some(cmd) = GameCommandEvent::from_game_chat(chat, PermissionFlags::USER) {
-            return GameEvent::GameCommandEvent(cmd);
-        }
-    }
+fn preprocess_event(event: GameEvent, admin_role: RoleId) -> GameEvent {
+    let new_event = match &event {
+        // Try game chat → command
+        GameEvent::GameChatMessageEvent(chat) =>
+            GameCommandEvent::from_game_chat(chat, PermissionFlags::USER)
+                .map(GameEvent::GameCommandEvent),
 
-    // Try Discord → command
-    if let GameEvent::CommandRequestEvent(req) = &event {
-        let mut perms = PermissionFlags::USER;
-        if req.user_roles.contains(&admin_role){
-            perms = PermissionFlags::ADMIN;
+        // Try Discord → command
+        GameEvent::CommandRequestEvent(req) => {
+            let mut perms = PermissionFlags::USER;
+            if req.user_roles.contains(&admin_role) {
+                perms = PermissionFlags::ADMIN;
+            }
+            GameCommandEvent::from_discord(req, perms)
+                .map(GameEvent::GameCommandEvent)
         }
-        if let Some(cmd) = GameCommandEvent::from_discord(req, perms) {
-            return GameEvent::GameCommandEvent(cmd);
-        }
-    }
+        _ => None,
+    };
 
-    // Fallback: unchanged
-    event.sanitize();
-    event
+    // Fall back to the input event if no GameCommandEvent was generated
+    // then sanitize and return.
+    new_event.unwrap_or_else(|| event).sanitized()
 }
 
 
@@ -293,16 +293,20 @@ impl DiscordBridge {
                 ];
 
                 // 2. Filter modules based on config names
-                let mut active_subs: Vec<Box<dyn DiscordSubscriber>> = all_subscribers
+                let (active_subs, inactive_subs): (Vec<_>, Vec<_>) = all_subscribers
                     .into_iter()
-                    .filter(|s| s.name() == "SimpleNotifier" || !cfg.disabled_modules.contains(&s.name().to_string()))
-                    .collect();
+                    .partition(|s| s.name() == "SimpleNotifier" || !cfg.disabled_modules.contains(&s.name().to_string()));
 
-                swarn!(f; "Active subs: {}, disabled: {:?}", active_subs.len(), cfg.disabled_modules);
+                swarn!(f; "Activating {} discord subscribers", active_subs.len());
+
                 for sub in &active_subs {
-                    swarn!(f; "Active: {}", sub.name());
+                    swarn!(f; "{}: ✅", sub.name());
+                }
+                for sub in &inactive_subs {
+                    swarn!(f; "{}: ❌", sub.name());
                 }
 
+                let mut active_subs = active_subs;
                 for sub in active_subs.iter_mut() {
                     sub.reconfigure(&cfg);
                 }
@@ -334,9 +338,9 @@ impl DiscordBridge {
                     let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
                     loop {
                         tokio::select! {
-                            Some(mut event) = rx.recv() => {
-                                event.sanitize();
-                                let event = normalize_event(event, admin_role_id);
+                            Some(event) = rx.recv() => {
+                                let event = event.sanitized();
+                                let event = preprocess_event(event, admin_role_id);
 
                                 if let GameEvent::GameCommandEvent(cmd) = &event {
                                     if cmd.name == "help" {

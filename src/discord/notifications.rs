@@ -209,11 +209,18 @@ impl GameEvent {
         }
     }
 
-    pub fn sanitize(&mut self) {
-        if let GameEvent::GameChatMessageEvent(chat) = self {
-            let filter = censor::Censor::Standard;
-            chat.message = filter.censor(&chat.message);
-            chat.sender = filter.censor(&chat.sender);
+    pub fn sanitized(mut self) -> Self {
+        match self {
+            GameEvent::GameChatMessageEvent(ref mut chat) => {
+                let filter = censor::Censor::Standard;
+
+                GameEvent::GameChatMessageEvent(GameChatMessage {
+                    sender: filter.censor(&chat.sender),
+                    message: filter.censor(&chat.message),
+                    chat_type: chat.chat_type
+                })
+            }
+            other => other
         }
     }
 
