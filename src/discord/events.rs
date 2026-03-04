@@ -172,21 +172,21 @@ pub struct VoteCast {
 #[derive(Debug, Clone)]
 pub enum GameEvent {
     CommandRequestEvent(CommandRequest),
-    JoinEvent(Join),
+    JoinEvent(Join), // Never dispatched
     CrashEvent(Crash),
-    KillEvent(Kill),
+    KillEvent(Kill), // Never dispatched
     MapChangeEvent(MapChange),
-    MatchEndEvent(MatchEnd),
+    MatchEndEvent(MatchEnd), // Never dispatched
     GameChatMessageEvent(GameChatMessage),
-    BridgeChatEvent(BridgeChat),
+    BridgeChatEvent(BridgeChat), // Never dispatched
     GameCommandEvent(GameCommand),
     ServerStatusEvent(ServerStatus),
     AdminAlertEvent(AdminAlert),
-    DuelStartEvent(DuelStart),
-    AttackEvent(Attack),
-    DamageEvent(Damage),
-    MapVoteEvent(MapVote),
-    VoteCastEvent(VoteCast),
+    DuelStartEvent(DuelStart), // Never dispatched
+    AttackEvent(Attack), // Never dispatched
+    DamageEvent(Damage), // Never dispatched
+    MapVoteEvent(MapVote), // Never dispatched
+    VoteCastEvent(VoteCast), // Never dispatched
 }
 
 impl GameEvent {
