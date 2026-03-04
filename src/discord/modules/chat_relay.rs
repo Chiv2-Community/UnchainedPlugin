@@ -47,7 +47,7 @@ impl DiscordSubscriber for ChatRelayModule {
     fn name(&self) -> &'static str { "ChatRelayModule" }
 
     async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        sinfo!(f; "ChatRelayModule::on_event {:#?}", event.event_type());
+        sinfo!(f; "ChatRelayModule::on_event {:#?}", event);
 
         match event {
             // --- DISCORD -> GAME ---

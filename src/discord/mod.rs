@@ -383,17 +383,6 @@ impl DiscordBridge {
                                     dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
                                 }
                             }
-                            // Some(event) = rx.recv() => {
-                            //     sinfo!(f; "Got event {:#?}", event.event_type());
-
-                            //     if blocked_set.contains(event.event_type()) { continue; }
-
-                            //     for sub in &mut active_subs {
-                            //         if let Some(msg) = sub.on_event(event.as_ref(), &http, channel_id).await {
-                            //             let _ = channel_id.send_message(&http, msg).await;
-                            //         }
-                            //     }
-                            // }
                             _ = ticker.tick() => {
                                 {
                                     let mut subs = shared_subs.lock().await;

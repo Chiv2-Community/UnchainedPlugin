@@ -1,5 +1,6 @@
 use crate::game::chivalry2::EChatType;
 use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
+use strum::IntoStaticStr;
 
 // --- Event Data Structs ---
 
@@ -17,6 +18,11 @@ pub struct CommandRequest {
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
 pub struct Join {
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Leave {
     pub name: String,
 }
 
@@ -169,10 +175,11 @@ pub struct VoteCast {
 
 // --- The Unified GameEvent Enum ---
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoStaticStr)]
 pub enum GameEvent {
     CommandRequestEvent(CommandRequest),
     JoinEvent(Join), // Never dispatched
+    LeaveEvent(Leave), // Never dispatched
     CrashEvent(Crash),
     KillEvent(Kill), // Never dispatched
     MapChangeEvent(MapChange),
@@ -190,27 +197,6 @@ pub enum GameEvent {
 }
 
 impl GameEvent {
-    pub fn event_type(&self) -> &'static str {
-        match self {
-            GameEvent::CommandRequestEvent(_) => "CommandRequestEvent",
-            GameEvent::JoinEvent(_) => "JoinEvent",
-            GameEvent::CrashEvent(_) => "CrashEvent",
-            GameEvent::KillEvent(_) => "KillEvent",
-            GameEvent::MapChangeEvent(_) => "MapChangeEvent",
-            GameEvent::MatchEndEvent(_) => "MatchEndEvent",
-            GameEvent::GameChatMessageEvent(_) => "GameChatMessageEvent",
-            GameEvent::BridgeChatEvent(_) => "BridgeChatEvent",
-            GameEvent::GameCommandEvent(_) => "GameCommandEvent",
-            GameEvent::ServerStatusEvent(_) => "ServerStatusEvent",
-            GameEvent::AdminAlertEvent(_) => "AdminAlertEvent",
-            GameEvent::DuelStartEvent(_) => "DuelStartEvent",
-            GameEvent::AttackEvent(_) => "AttackEvent",
-            GameEvent::DamageEvent(_) => "DamageEvent",
-            GameEvent::MapVoteEvent(_) => "MapVoteEvent",
-            GameEvent::VoteCastEvent(_) => "VoteCastEvent",
-        }
-    }
-
     pub fn sanitized(mut self) -> Self {
         match self {
             GameEvent::GameChatMessageEvent(ref mut chat) => {

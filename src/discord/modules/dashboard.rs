@@ -309,6 +309,12 @@ impl DiscordSubscriber for Dashboard {
                     self.needs_refresh = true;
                 }
             }
+            GameEvent::LeaveEvent(_) => {
+                self.player_count = self.player_count.saturating_sub(1);
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
+            }
             GameEvent::ServerStatusEvent(new_status) => {
                 self.status = Some(new_status.clone());
             }
@@ -318,15 +324,7 @@ impl DiscordSubscriber for Dashboard {
                     self.needs_refresh = true;
                 }
             }
-            _ => {
-                // We'd need a LeaveEvent in events for this
-                if event.event_type() == "LeaveEvent" {
-                    self.player_count = self.player_count.saturating_sub(1);
-                    if self.message_id.is_some() {
-                        self.needs_refresh = true;
-                    }
-                }
-            }
+            _ => {}
         }
 
         NO_RESP // The dashboard doesn't send "new" messages, it edits an existing one
