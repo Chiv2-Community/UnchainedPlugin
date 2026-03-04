@@ -1,7 +1,7 @@
 #[macro_use]
 pub mod core;
 pub mod modules;
-pub mod notifications;
+pub mod events;
 #[macro_use]
 pub mod responses;
 #[macro_use]
@@ -19,7 +19,7 @@ use crate::discord::modules::{
     herald::AdminHerald, killstreak::KillstreakModule,
     stats_tracker::StatsTracker,
 };
-use crate::discord::notifications::{CommandRequest, CommandSource, GameCommand, PermissionFlags, GameEvent};
+use crate::discord::events::{CommandRequest, CommandSource, GameCommand, PermissionFlags, GameEvent};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::swarn;
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
@@ -451,7 +451,7 @@ impl DiscordHandler for Handler {
     //     if msg.author.bot || msg.channel_id.get() != self.config.channel_id { return; }
     //     if let Some(handle) = DISCORD_HANDLE.get() {
     //         // Dispatch a CommandRequestEvent event from Discord
-    //         // (You'll define this struct in notifications.rs)
+    //         // (You'll define this struct in events)
     //     }
     // }
 }

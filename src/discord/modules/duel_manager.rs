@@ -4,7 +4,7 @@ use serenity::all::CreateMessage;
 use serenity::all::Http;
 
 use crate::discord::core::*;
-use crate::discord::notifications::*;
+use crate::discord::events::*;
 use crate::discord::responses::*;
 use std::collections::HashMap;
 use std::sync::Arc;

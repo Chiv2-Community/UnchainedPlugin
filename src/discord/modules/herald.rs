@@ -3,7 +3,7 @@ use crate::discord::ChatType;
 use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;
-use crate::discord::notifications::*;
+use crate::discord::events::*;
 use crate::discord::responses::*;
 use serde::Deserialize;
 use serde::Serialize;

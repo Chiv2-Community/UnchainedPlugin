@@ -1,6 +1,6 @@
 ﻿use crate::discord::{ChatType, responses::*};
 use crate::discord::core::DiscordSubscriber;
-use crate::discord::notifications::GameEvent;
+use crate::discord::events::GameEvent;
 use crate::sinfo;
 use serenity::all::{Http, ChannelId};
 use std::sync::Arc;

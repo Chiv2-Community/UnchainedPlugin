@@ -3,6 +3,8 @@ use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
 
 // --- Event Data Structs ---
 
+// TODO: Move this outside of the discord module. Event dispatch and handling is not necessarily specific to discord. Many different potential modules could benefit from this
+
 /// Triggered when a player sends a message in Discord
 #[derive(Debug, Clone)]
 pub struct CommandRequest {

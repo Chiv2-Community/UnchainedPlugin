@@ -4,7 +4,7 @@ pub struct CommandInfo {
     pub name: String,
     pub description: String,
     pub usage: String,
-    pub source: Option<super::notifications::CommandSource>,
+    pub source: Option<super::events::CommandSource>,
     pub elevated: bool,
 }
 

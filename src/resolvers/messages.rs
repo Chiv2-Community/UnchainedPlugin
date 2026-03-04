@@ -9,7 +9,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{discord::notifications::{AdminAlert, GameChatMessage, GameEvent}, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
+    use crate::{discord::events::{AdminAlert, GameChatMessage, GameEvent}, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {

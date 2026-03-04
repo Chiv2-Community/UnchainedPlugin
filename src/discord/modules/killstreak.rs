@@ -1,5 +1,5 @@
 ﻿use crate::discord::core::DiscordSubscriber;
-use crate::discord::notifications::GameEvent;
+use crate::discord::events::GameEvent;
 use serenity::all::{Http, ChannelId, CreateMessage, CreateEmbed};
 use std::collections::HashMap;
 use std::sync::Arc;

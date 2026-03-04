@@ -227,7 +227,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_check = if let Some(src) = &attr_args.source {
         let source_variant = format_ident!("{}", src);
         quote! {
-            if cmd.source != crate::discord::notifications::CommandSource::#source_variant {
+            if cmd.source != crate::discord::events::CommandSource::#source_variant {
                 return crate::discord::responses::msg(
                     format!("⚠️ This command can only be used from {}!", #src)
                 ).into_responses();
@@ -252,7 +252,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let source_enum_val = if let Some(src) = &attr_args.source {
         let variant = format_ident!("{}", src);
-        quote! { Some(crate::discord::notifications::CommandSource::#variant) }
+        quote! { Some(crate::discord::events::CommandSource::#variant) }
     } else {
         quote! { None }
     };
@@ -273,7 +273,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
 
-        pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommand) -> Vec<crate::discord::responses::BotResponse> {
+        pub fn #wrapper_name(&mut self, cmd: &crate::discord::events::GameCommand) -> Vec<crate::discord::responses::BotResponse> {
             #permission_check
             #source_check
             

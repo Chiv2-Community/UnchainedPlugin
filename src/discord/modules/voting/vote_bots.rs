@@ -1,4 +1,4 @@
-﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommand};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, events::GameCommand};
 
 #[derive(Clone)]
 pub struct AddBotsVote;

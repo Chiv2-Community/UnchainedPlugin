@@ -1,6 +1,6 @@
 use serenity::all::UserId;
 use unchained_plugin::discord::config::DiscordConfig;
-use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
+use unchained_plugin::discord::events::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
 use unchained_plugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
 use unchained_plugin::game::chivalry2::EChatType;
 use unchained_plugin::{serror, sinfo};

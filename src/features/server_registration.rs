@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
-use crate::discord::notifications::{ServerStatus, GameEvent};
+use crate::discord::events::{ServerStatus, GameEvent};
 use crate::features::Mod;
 
 use crate::tools::hook_globals::cli_args;

@@ -1,9 +1,9 @@
 ﻿use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
 use crate::discord::core::DiscordSubscriber;
-use crate::discord::notifications::GameEvent;
+use crate::discord::events::GameEvent;
 use crate::discord::responses::*;
-use crate::discord::notifications::*;
+use crate::discord::events::*;
 use crate::game::chivalry2::ATBLGameMode;
 use crate::game::chivalry2::PlayerFlags;
 use crate::game::engine::UWorld;
@@ -319,7 +319,7 @@ impl DiscordSubscriber for Dashboard {
                 }
             }
             _ => {
-                // We'd need a LeaveEvent in notifications.rs for this
+                // We'd need a LeaveEvent in events for this
                 if event.event_type() == "LeaveEvent" {
                     self.player_count = self.player_count.saturating_sub(1);
                     if self.message_id.is_some() {

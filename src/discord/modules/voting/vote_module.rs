@@ -3,13 +3,13 @@ use std::collections::{HashMap, HashSet};
 use serenity::all::{ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
 use sleuth_macros::handler_command;
 use crate::discord::core::DiscordSubscriber;
-use crate::discord::notifications::GameEvent;
+use crate::discord::events::GameEvent;
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
 use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
 use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
 use crate::discord::modules::voting::vote_mod::ModVote;
-use crate::discord::notifications::GameCommand;
+use crate::discord::events::GameCommand;
 use crate::discord::responses::*;
 
 
@@ -66,6 +66,7 @@ struct ActiveVote {
 impl VoteModule {    
     
 
+    // TODO: A single user should not be able to enact multiple consecutive votes rapidly.  A malicious user could spam a map vote or vote kick to avoid a vote kick being made against them.
     fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(logic_prototype) = self.registry.get(vote_type) {
             // Check prerequisites using the prototype
@@ -228,6 +229,7 @@ impl VoteModule {
     pub fn new(ctx: crate::discord::Ctx) -> Self {
         let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
 
+        // TODO: Clean this up. There is a tight and unchecked coupling between the record registry, the handler_command invocations above, and the run_registry_vote invocations. There is likely an effective way to move most of this in to an interface and define these relationships once.
         registry.insert("votekick".into(), Box::new(KickVote));
         registry.insert("votemap".into(), Box::new(MapVote));
         registry.insert("voterestart".into(), Box::new(RestartVote));

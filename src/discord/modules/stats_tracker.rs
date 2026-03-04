@@ -1,7 +1,7 @@
 ﻿use serenity::all::{ChannelId, Http};
 
 use crate::discord::core::DiscordSubscriber;
-use crate::discord::notifications::GameEvent;
+use crate::discord::events::GameEvent;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
