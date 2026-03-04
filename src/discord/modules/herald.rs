@@ -47,13 +47,6 @@ impl AdminHerald {
         }
     }
 
-    // Helper to check if a Discord user has the required admin role
-
-    #[allow(dead_code)]
-    fn is_admin(&self, roles: &[RoleId]) -> bool {
-        roles.contains(&self.admin_role_id)
-    }
-
     #[handler_command(name = "cmd", desc = "Execute a console command.", source = "Discord", elevated = true)]
     pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommand) -> Vec<BotResponse> {
         NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());

@@ -236,8 +236,10 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
     } else {
         quote! {}
     };
-    
-    let permission_check = if attr_args.elevated {
+
+    let required_elevation = attr_args.elevated;
+
+    let permission_check = if required_elevation {
         quote! {
             if !cmd.actor.is_elevated() {
                 return crate::discord::responses::msg("🚫 You do not have permission to use this command.")
@@ -248,7 +250,6 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let is_elevated = attr_args.elevated;
 
     let source_enum_val = if let Some(src) = &attr_args.source {
         let variant = format_ident!("{}", src);
@@ -269,7 +270,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
                 description: #cmd_desc.to_string(),
                 usage: #usage_str.to_string(),
                 source: #source_enum_val,
-                elevated: #is_elevated,
+                elevated: #required_elevation,
             }
         }
 
