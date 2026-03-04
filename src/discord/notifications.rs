@@ -217,6 +217,14 @@ impl GameEvent {
         }
     }
 
+    pub fn dispatch(self, handle: Option<&crate::discord::DiscordHandle>) {
+        if let Some(handle) = handle {
+            handle.dispatch(self);
+        } else if let Some(handle) = crate::discord::DISCORD_HANDLE.get() {
+            handle.dispatch(self);
+        }
+    }
+
     pub fn to_notification(&self) -> Option<CreateMessage> {
         match self {
             GameEvent::JoinEvent(e) => {

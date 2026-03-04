@@ -102,7 +102,6 @@ unsafe extern "system" fn get_module_base64(hprocess: HANDLE, addr: u64) -> u64 
 use winapi::um::winnt::IMAGE_FILE_MACHINE_AMD64;
 
 use crate::discord::notifications::{CrashEvent, GameEvent};
-use crate::dispatch;
 fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
     let process = unsafe { GetCurrentProcess() };
     let thread: HANDLE = HANDLE(-1); // current thread
@@ -205,10 +204,10 @@ unsafe extern "system" fn veh(
             func.as_deref().unwrap_or("<unknown>"),
             file.as_deref().unwrap_or("<no line info>")
         );
-        dispatch!(GameEvent::CrashEvent(CrashEvent {
+        GameEvent::CrashEvent(CrashEvent {
             event_type: format!("ACCESS VIOLATION ({rw})"),
             event_trace: trace,
-        }));
+        }).dispatch(None);
 
         sleep(Duration::from_secs(5));
     }

@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
-use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, discord::notifications::MapChangeEvent, event, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
+use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, discord::notifications::{MapChangeEvent, GameEvent}, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
 
 
 // Sets Server password and rcon flag
@@ -144,7 +144,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
         }
     }
     if cli_args().discord_enabled() {
-        event!(MapChangeEvent(MapChangeEvent { new_map: url_w }));
+        GameEvent::MapChangeEvent(MapChangeEvent { new_map: url_w }).dispatch(None);
     }
 });
 

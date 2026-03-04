@@ -3,7 +3,7 @@ use unchained_plugin::discord::config::DiscordConfig;
 use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, JoinEvent, KillEvent, GameEvent};
 use unchained_plugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
 use unchained_plugin::game::chivalry2::EChatType;
-use unchained_plugin::{dispatch, serror, sinfo};
+use unchained_plugin::{serror, sinfo};
 use unchained_plugin::tools::logger::init_syslog;
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -41,31 +41,31 @@ fn main() {
 
         match parts.as_slice() {
             ["join", name] => {
-                dispatch!(GameEvent::JoinEvent(JoinEvent { name: name.to_string() }));
+                GameEvent::JoinEvent(JoinEvent { name: name.to_string() }).dispatch(None);
             }
             ["kill", k, v] => {
-                dispatch!(GameEvent::KillEvent(KillEvent {
+                GameEvent::KillEvent(KillEvent {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
                     weapon: "MockSword".to_string() 
-                }));
+                }).dispatch(None);
             }
             ["chat", ..] => {
                 let msg = parts[1..].join(" ");
-                dispatch!(GameEvent::GameChatMessageEvent(GameChatMessage {
+                GameEvent::GameChatMessageEvent(GameChatMessage {
                     sender: "MockPlayer".to_string(), 
                     message: msg,
                     chat_type: EChatType::Admin, 
-                }));
+                }).dispatch(None);
             }
             ["dchat", ..] => {
                 let msg = parts[1..].join(" ");
-                dispatch!(GameEvent::CommandRequestEvent(CommandRequest {
+                GameEvent::CommandRequestEvent(CommandRequest {
                     command: msg,
                     user: "MockDiscUser".into(),
                     user_id: UserId::new(1234),
                     user_roles: [].into(),
-                }));
+                }).dispatch(None);
             }
             ["exit"] => break,
             _ => println!("Unknown command. Try 'join Arthur'"),

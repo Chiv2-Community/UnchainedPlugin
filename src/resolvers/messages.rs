@@ -9,7 +9,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{discord::notifications::{AdminAlert, GameChatMessage}, event, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
+    use crate::{discord::notifications::{AdminAlert, GameChatMessage, GameEvent}, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -70,19 +70,19 @@ mod client_message {
                         
                         if msg_type == EChatType::AllSay && cli_args().discord_enabled()  {
                             if chat.message.starts_with("!admin ") {
-                                event!(AdminAlertEvent(AdminAlert {
+                                GameEvent::AdminAlertEvent(AdminAlert {
                                     reporter: chat.name.into(),
                                     reason: chat.message.split_once(" ")
                                     .map(|(_, n)| n)
                                     .unwrap_or(chat.message).into(),
-                                }))
+                                }).dispatch(None);
 
                             } else {
-                                event!(GameChatMessageEvent(GameChatMessage {
+                                GameEvent::GameChatMessageEvent(GameChatMessage {
                                     sender: chat.name.into(),
                                     message: chat.message.into(),
                                     chat_type: msg_type,
-                                }));
+                                }).dispatch(None);
                             }
                         }
                         

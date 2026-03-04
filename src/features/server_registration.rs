@@ -8,7 +8,7 @@ use crate::discord::notifications::{ServerStatus, GameEvent};
 use crate::features::Mod;
 
 use crate::tools::hook_globals::cli_args;
-use crate::{dispatch, globals, serror, sinfo, swarn};
+use crate::{globals, serror, sinfo, swarn};
 
 // --- Configuration Constants ---
 const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
@@ -377,7 +377,7 @@ impl RegistrationInner {
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {
-            dispatch!(GameEvent::ServerStatusEvent(ServerStatus {
+            GameEvent::ServerStatusEvent(ServerStatus {
                 name: request.name.into(),
                 description: request.description.into(),
                 password_protected: request.password_protected,
@@ -386,7 +386,7 @@ impl RegistrationInner {
                 max_players: request.max_players,
                 mods: all_mods,
                 active_mods: request.mods,
-            }));
+            }).dispatch(None);
             let data: RegisterResponse = res.json().map_err(|_| ())?;
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
             let expiry = data.refresh_before as u64;

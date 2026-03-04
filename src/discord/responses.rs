@@ -11,16 +11,18 @@ pub struct CommandInfo {
 #[macro_export]
 macro_rules! auto_dispatch {
     ($self:ident, $cmd:ident, [ $($func:ident),* ]) => {
-        paste::paste! {
-            // 1. Generate the Match Dispatcher
-            let response = match $cmd.name.as_str() {
-                $(
-                    n if n == $self.[<__info_ $func>]().name => Some($self.[<__wrap_ $func>]($cmd)),
-                )*
-                _ => None,
-            };
+        {
+            paste::paste! {
+                // 1. Generate the Match Dispatcher
+                let response = match $cmd.name.as_str() {
+                    $(
+                        n if n == $self.[<__info_ $func>]().name => Some($self.[<__wrap_ $func>]($cmd)),
+                    )*
+                    _ => None,
+                };
 
-            if let Some(r) = response { return r; }
+                if let Some(r) = response { return r; }
+            }
         }
     };
 }
