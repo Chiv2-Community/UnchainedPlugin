@@ -1,33 +1,14 @@
-use std::any::Any;
+﻿use std::any::Any;
 use crate::commands::NATIVE_COMMAND_QUEUE;
-use crate::discord::core::{DiscordSubscriber, GameEvent};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::notifications::GameEvent;
 use crate::discord::notifications::{CommandSource, GameChatMessage, GameCommandEvent};
 use crate::discord::responses::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MapVoteEvent {
     pub initiator: String,
     pub map_target: String,
-}
-
-impl GameEvent for MapVoteEvent {
-    fn event_type(&self) -> &'static str {
-        "MapVoteEvent"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-    #[allow(dead_code)]
-    fn to_notification(&self) -> Option<CreateMessage> {
-        
-        Some(CreateMessage::new().content(
-            format!("{} started a vote to change map to {}", self.initiator, self.map_target)
-        ))
-    }
 }
 
 use std::sync::Arc;
@@ -55,42 +36,39 @@ struct VoteState {
 impl DiscordSubscriber for ExtMapVote {
     fn name(&self) -> &'static str { "ExtMapVote" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-        
-        if let Some(cmd) = any.downcast_ref::<GameCommandEvent>() {
-            if cmd.source != CommandSource::GameChat { return NO_RESP; }
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::GameCommand(cmd) => {
+                if cmd.source != CommandSource::GameChat { return NO_RESP; }
 
-            let result = match self.active_vote {
-                Some(ref mut state) => {
-                    let actor_name = cmd.actor.display_name.clone();
-                    if cmd.name == "yes" {
-                        state.no_votes.remove(&actor_name);
-                        state.yes_votes.insert(actor_name.clone());
-                    }
-                    if cmd.name == "no" {
-                        state.yes_votes.remove(&actor_name);
-                        state.no_votes.insert(actor_name.clone());
-                    }
-                    return NO_RESP;
-                }
-                None => {
-                    if cmd.name != "startvotemap" { return NO_RESP; }
-                    let [map_name, ..] = cmd.args.as_slice() else { return NO_RESP; };
-                    let actor_name = cmd.actor.display_name.clone();
-                    let map_name = map_name.clone();
-                    if let Some(msg) = self.init_vote(actor_name, map_name) {
-                        BotResponse::from(msg)
-                    } else {
+                match self.active_vote {
+                    Some(ref mut state) => {
+                        let actor_name = cmd.actor.display_name.clone();
+                        if cmd.name == "yes" {
+                            state.no_votes.remove(&actor_name);
+                            state.yes_votes.insert(actor_name.clone());
+                        }
+                        if cmd.name == "no" {
+                            state.yes_votes.remove(&actor_name);
+                            state.no_votes.insert(actor_name.clone());
+                        }
                         NO_RESP
                     }
+                    None => {
+                        if cmd.name != "startvotemap" { return NO_RESP; }
+                        let [map_name, ..] = cmd.args.as_slice() else { return NO_RESP; };
+                        let actor_name = cmd.actor.display_name.clone();
+                        let map_name = map_name.clone();
+                        if let Some(msg) = self.init_vote(actor_name, map_name) {
+                            BotResponse::from(msg).into_responses()
+                        } else {
+                            NO_RESP
+                        }
+                    }
                 }
-            };
-
-            return result.into_responses();
-
+            }
+            _ => NO_RESP
         }
-        NO_RESP
     }
 
     async fn on_tick(&mut self, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
@@ -176,14 +154,8 @@ impl ExtMapVote {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VoteCastEvent {
     pub voter_id: String,
     pub choice: bool, // true = Yes, false = No
-}
-
-impl GameEvent for VoteCastEvent {
-    fn event_type(&self) -> &'static str { "VoteCastEvent" }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any {self}
 }

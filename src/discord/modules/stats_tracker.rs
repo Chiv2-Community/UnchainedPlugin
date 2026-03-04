@@ -1,7 +1,7 @@
-use serenity::all::{ChannelId, Http};
+﻿use serenity::all::{ChannelId, Http};
 
-use crate::discord::core::*;
-use crate::discord::notifications::{CommandRequest, KillEvent, MatchEndEvent};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::notifications::GameEvent;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
@@ -71,17 +71,15 @@ impl StatsTracker {
 impl DiscordSubscriber for StatsTracker {
     fn name(&self) -> &'static str { "StatsTracker" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         // 1. Track Kills
-        if let Some(kill) = any.downcast_ref::<KillEvent>() {
+        if let GameEvent::KillEvent(kill) = event {
             *self.session_kills.entry(kill.killer.clone()).or_insert(0) += 1;
             *self.global_stats.total_kills.entry(kill.killer.clone()).or_insert(0) += 1;
         }
 
         // 2. Handle Match End (Report & Reset)
-        if let Some(_end) = any.downcast_ref::<MatchEndEvent>() {
+        if let GameEvent::MatchEndEvent(_end) = event {
             // Find Top Performer of the round
             let mvp = self.session_kills.iter()
                 .max_by_key(|entry| entry.1);
@@ -100,7 +98,7 @@ impl DiscordSubscriber for StatsTracker {
             return msg(report).into_responses();
         }
         
-        if let Some(cmd) = any.downcast_ref::<CommandRequest>() {
+        if let GameEvent::CommandRequestEvent(cmd) = event {
             match cmd.command.as_str() {
                 "!top" | "!leaderboard" => {
                     return msg(self.get_top_5_leaderboard()).into_responses();

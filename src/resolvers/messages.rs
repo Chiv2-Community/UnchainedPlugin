@@ -70,19 +70,19 @@ mod client_message {
                         
                         if msg_type == EChatType::AllSay && cli_args().discord_enabled()  {
                             if chat.message.starts_with("!admin ") {
-                                event!(AdminAlert {
-                                    reporter: chat.name,
+                                event!(AdminAlertEvent(AdminAlert {
+                                    reporter: chat.name.into(),
                                     reason: chat.message.split_once(" ")
                                     .map(|(_, n)| n)
-                                    .unwrap_or(chat.message),
-                                })
+                                    .unwrap_or(chat.message).into(),
+                                }))
 
                             } else {
-                                event!(GameChatMessage {
-                                    sender: chat.name,
-                                    message: chat.message,
+                                event!(GameChatMessageEvent(GameChatMessage {
+                                    sender: chat.name.into(),
+                                    message: chat.message.into(),
                                     chat_type: msg_type,
-                                });
+                                }));
                             }
                         }
                         

@@ -1,4 +1,4 @@
-use crate::{commands::NATIVE_COMMAND_QUEUE, discord::modules::voting::vote_module::VoteType};
+﻿use crate::{commands::NATIVE_COMMAND_QUEUE, discord::modules::voting::vote_module::VoteType};
 
 #[derive(Clone)]
 pub struct MapVote;

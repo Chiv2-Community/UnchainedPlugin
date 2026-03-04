@@ -144,7 +144,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
         }
     }
     if cli_args().discord_enabled() {
-        event!(MapChangeEvent { new_map: url_w });
+        event!(MapChangeEvent(MapChangeEvent { new_map: url_w }));
     }
 });
 

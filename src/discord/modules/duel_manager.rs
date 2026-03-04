@@ -1,4 +1,4 @@
-use serenity::all::ChannelId;
+﻿use serenity::all::ChannelId;
 use serenity::all::CreateEmbed;
 use serenity::all::CreateMessage;
 use serenity::all::Http;
@@ -19,79 +19,50 @@ struct ActiveDuel {
     parries: HashMap<String, u32>,
 }
 
+enum DuelState {
+    Idle,
+    Active(ActiveDuel),
+}
+
 pub struct DuelManager {
-    current_duel: Option<ActiveDuel>,
+    state: DuelState,
 }
 
 impl DuelManager {
-    pub fn new() -> Self { Self { current_duel: None } }
+    pub fn new() -> Self { Self { state: DuelState::Idle } }
 }
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for DuelManager {
     fn name(&self) -> &'static str { "DuelManager" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-
-        // 1. START DUEL
-        if let Some(e) = any.downcast_ref::<DuelStartEvent>() {
-            self.current_duel = Some(ActiveDuel {
-                p1: e.challenger.clone(),
-                p2: e.opponent.clone(),
-                start_time: Instant::now(),
-                damage_dealt: HashMap::new(),
-                attack_counts: HashMap::new(),
-                parries: HashMap::new(),
-            });
-            return msg(format!("⚔️ **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent)).to_main().into_responses();
-        }
-
-        // 2. TRACK ATTACKS & PARRIES
-        if let Some(duel) = &mut self.current_duel {
-            if let Some(e) = any.downcast_ref::<AttackEvent>() {
-                if e.attacker == duel.p1 || e.attacker == duel.p2 {
-                    let p_counts = duel.attack_counts.entry(e.attacker.clone()).or_default();
-                    *p_counts.entry(e.attack_type.clone()).or_insert(0) += 1;
-                    
-                    if e.was_parried {
-                        let defender = if e.attacker == duel.p1 { &duel.p2 } else { &duel.p1 };
-                        *duel.parries.entry(defender.clone()).or_insert(0) += 1;
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::DuelStartEvent(e) => {
+                match std::mem::replace(&mut self.state, DuelState::Idle) {
+                    DuelState::Idle | DuelState::Active(_) => {
+                        self.state = DuelState::Active(ActiveDuel {
+                            p1: e.challenger.clone(),
+                            p2: e.opponent.clone(),
+                            start_time: Instant::now(),
+                            damage_dealt: HashMap::new(),
+                            attack_counts: HashMap::new(),
+                            parries: HashMap::new(),
+                        });
+                        return msg(format!("⚔️ **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent)).to_main().into_responses();
                     }
                 }
             }
-
-            // 3. TRACK DAMAGE & END DUEL (When someone dies/wins)
-            if let Some(e) = any.downcast_ref::<DamageEvent>() {
-                let is_p1 = e.victim == duel.p1;
-                let is_p2 = e.victim == duel.p2;
-
-                if is_p1 || is_p2 {
-                    *duel.damage_dealt.entry(e.attacker.clone()).or_insert(0.0) += e.damage;
-                    
-                    // Logic: If damage kills them (or is the 'final blow' event)
-                    // For this example, let's assume a "DeathEvent" is handled elsewhere 
-                    // or we check if damage > 100.
-                } else if e.attacker == duel.p1 || e.attacker == duel.p2 {
-                    // "Interference" rule: If a duelist hits a random player, cancel the duel?
-                    self.current_duel = None;
-                    return msg("🚫 **Duel Cancelled**: Interference detected!").to_main().into_responses();
-                }
-            }
-            
-            // 4. WIN CONDITION (Example: listening for KillEvent)
-            if let Some(e) = any.downcast_ref::<KillEvent>() {
-                // Check if we even have a duel active first
-                if let Some(duel) = &self.current_duel {
-                    if (e.victim == duel.p1 && e.killer == duel.p2) || (e.victim == duel.p2 && e.killer == duel.p1) {
-                        
-                        // FIX: Remove the duel from self.current_duel. 
-                        // This yields ownership of the 'duel' data and 'un-borrows' self.
-                        if let Some(finished_duel) = self.current_duel.take() {
-                            let msg = self.format_results(&finished_duel, &e.killer, &e.victim);
-                            return BotResponse::from(msg).into_responses();
+            _ => {
+                if let DuelState::Active(mut duel) = std::mem::replace(&mut self.state, DuelState::Idle) {
+                    let responses = self.handle_active_event(&mut duel, event);
+                    // If handler didn't transition state to Idle itself, we put it back.
+                    if let DuelState::Idle = self.state {
+                        if responses.is_empty() {
+                            self.state = DuelState::Active(duel);
                         }
                     }
+                    return responses;
                 }
             }
         }
@@ -100,6 +71,41 @@ impl DiscordSubscriber for DuelManager {
 }
 
 impl DuelManager {
+    fn handle_active_event(&mut self, duel: &mut ActiveDuel, event: &GameEvent) -> Vec<BotResponse> {
+        match event {
+            GameEvent::AttackEvent(e) => {
+                if e.attacker == duel.p1 || e.attacker == duel.p2 {
+                    let p_counts = duel.attack_counts.entry(e.attacker.clone()).or_default();
+                    *p_counts.entry(e.attack_type.clone()).or_insert(0) += 1;
+
+                    if e.was_parried {
+                        let defender = if e.attacker == duel.p1 { &duel.p2 } else { &duel.p1 };
+                        *duel.parries.entry(defender.clone()).or_insert(0) += 1;
+                    }
+                }
+            }
+            GameEvent::DamageEvent(e) => {
+                let is_p1 = e.victim == duel.p1;
+                let is_p2 = e.victim == duel.p2;
+
+                if is_p1 || is_p2 {
+                    *duel.damage_dealt.entry(e.attacker.clone()).or_insert(0.0) += e.damage;
+                } else if e.attacker == duel.p1 || e.attacker == duel.p2 {
+                    self.state = DuelState::Idle;
+                    return msg("🚫 **Duel Cancelled**: Interference detected!").to_main().into_responses();
+                }
+            }
+            GameEvent::KillEvent(e) => {
+                if (e.victim == duel.p1 && e.killer == duel.p2) || (e.victim == duel.p2 && e.killer == duel.p1) {
+                    self.state = DuelState::Idle;
+                    return BotResponse::from(self.format_results(duel, &e.killer, &e.victim)).into_responses();
+                }
+            }
+            _ => {}
+        }
+
+        NO_RESP
+    }
     fn format_results(&self, duel: &ActiveDuel, winner: &str, loser: &str) -> CreateMessage {
         let duration = duel.start_time.elapsed().as_secs();
         let mut embed = CreateEmbed::new()

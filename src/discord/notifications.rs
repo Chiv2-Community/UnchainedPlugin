@@ -1,205 +1,64 @@
-use crate::{discord::core::GameEvent, game::chivalry2::EChatType};
+use crate::game::chivalry2::EChatType;
 use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
-use std::any::Any;
 
-/// This macro automates the boilerplate for GameEvents.
-/// It uses stringify! to turn the struct name into the event_type string.
-macro_rules! impl_event {
-    ($name:ident) => {
-        impl GameEvent for $name {
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-
-            fn as_any_mut(&mut self) -> &mut dyn Any { self }
-
-            fn sanitize(&mut self) {}
-
-            fn event_type(&self) -> &'static str {
-                stringify!($name)
-            }
-        }
-    };
-}
-
-// macro_rules! impl_event {
-//     ($name:ident) => {
-//         impl GameEvent for $name {
-//             fn as_any(&self) -> &dyn Any { self }
-//             fn event_type(&self) -> &'static str { stringify!($name) }
-//         }
-//     };
-//     // Version that accepts additional trait methods
-//     ($name:ident, { $($extra:item)* }) => {
-//         impl GameEvent for $name {
-//             fn as_any(&self) -> &dyn Any { self }
-//             fn event_type(&self) -> &'static str { stringify!($name) }
-//             $($extra)*
-//         }
-//     };
-// }
-
-// --- Event Definitions ---
+// --- Event Data Structs ---
 
 /// Triggered when a player sends a message in Discord
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandRequest {
     pub command: String,
     pub user: String,
     pub user_id: UserId,
     pub user_roles: Vec<RoleId>,
 }
-impl_event!(CommandRequest);
 
 /// Triggered when a player joins the game server
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JoinEvent {
     pub name: String,
 }
-impl_event!(JoinEvent);
 
-// For simple notifications, we only override to_notification
-impl JoinEvent {
-    #[allow(dead_code)]
-    fn to_notification(&self) -> Option<CreateMessage> {
-        let embed = CreateEmbed::new()
-            .title("📥 Reinforcements")
-            .description(format!("**{}** has joined the battle!", self.name))
-            .color(0x2ecc71);
-        Some(CreateMessage::new().add_embed(embed))
-    }
-}
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CrashEvent {
     pub event_type: String,
     pub event_trace: Vec<String>,
 }
-impl_event!(CrashEvent);
-// impl GameEvent for CrashEvent {
-//     fn event_type(&self) -> &'static str { "CrashEvent" }
-//     fn as_any(&self) -> &dyn std::any::Any { self }
-
-//     fn to_notification(&self) -> Option<CreateMessage> {
-//         crate::sinfo!(f; "to_notification called");
-//         let embed = CreateEmbed::new()
-//             .title("💀 SERVER CRASH")
-//             .description(format!("{}\nTrace:\n```\n{}\n```", self.event_type, self.event_trace.join("\n")))
-//             .color(0x2ecc71);
-//         Some(CreateMessage::new().add_embed(embed))
-//     }
-// }
 
 /// Triggered when a kill occurs (Data-heavy event)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KillEvent {
     pub killer: String,
     pub victim: String,
     pub weapon: String,
 }
-impl_event!(KillEvent);
-// Note: KillEvent does NOT override to_notification because we don't 
-// want to spam Discord for every single kill. Modules will handle this.
 
 /// Triggered when the server changes maps
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MapChangeEvent { 
     pub new_map: String 
 }
-impl_event!(MapChangeEvent);
 
 /// Triggered when a match finishes (before the map change)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MatchEndEvent {
     pub winner_team: String,
     pub final_score: String,
 }
-impl_event!(MatchEndEvent);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameChatMessage {
     pub sender: String,
     pub message: String,
     pub chat_type: EChatType,
 }
 
-impl GameEvent for GameChatMessage {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
-    fn sanitize(&mut self) {
-        let filter = censor::Censor::Standard;
-        // Mutate the fields in place!
-        self.message = filter.censor(&self.message);
-        self.sender = filter.censor(&self.sender);
-    }
-    
-    fn event_type(&self) ->  &'static str {
-        "GameChatMessage"
-    }
-
-}
-
-// Optional: If you want these to show up in Discord even if the
-// ChatRelayModule is disabled, implement this:
-impl GameChatMessage {
-    #[allow(dead_code)]
-    fn to_notification(&self) -> Option<CreateMessage> {
-        // Formats the message for the Discord channel
-        Some(CreateMessage::new().content(
-            format!("💬 **{}**: {}", self.sender, self.message)
-        ))
-    }
-}
-
-// Chat command (parsed from GameChatMessage)
-// pub struct GameChatCommandEvent {
-//     pub sender: String,
-//     pub name: String,
-//     pub args: Vec<String>,
-//     pub chat_type: EChatType,
-// }
-
-// impl GameEvent for GameChatCommandEvent {
-//     fn as_any(&self) -> &dyn Any {
-//         self
-//     }
-
-//     fn as_any_mut(&mut self) -> &mut dyn Any {
-//         self
-//     }
-
-//     fn event_type(&self) -> &'static str {
-//         "ChatCommand"
-//     }
-// }
-
-// impl GameChatCommandEvent {
-//     pub fn from_chat(chat: &GameChatMessage) -> Option<Self> {
-//         let msg = chat.message.trim();
-
-//         let without_bang = msg.strip_prefix('!')?;
-
-//         let mut parts = without_bang.split_whitespace();
-
-//         let name = parts.next()?.to_ascii_lowercase();
-//         let args = parts.map(|s| s.to_string()).collect();
-
-//         Some(Self {
-//             sender: chat.sender.clone(),
-//             name,
-//             args,
-//             chat_type: chat.chat_type,
-//         })
-//     }
-// }
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CommandSource {
     GameChat,
     Discord,
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandActor {
     pub identity: ActorIdentity,
     pub permissions: ActorPermissions,
@@ -210,7 +69,7 @@ impl CommandActor {
     pub fn is_admin(&self) -> bool { self.permissions.flags.contains(PermissionFlags::ADMIN) }
     pub fn is_moderator(&self) -> bool { self.permissions.flags.contains(PermissionFlags::MODERATOR) }
     pub fn is_elevated(&self) -> bool { self.is_admin() || self.is_moderator() }
-    pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &super::config::DiscordConfig) -> Self {
+    pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &crate::discord::config::DiscordConfig) -> Self {
         let is_admin = roles.contains(&RoleId::new(config.admin_role_id));
 
         Self {
@@ -224,7 +83,7 @@ impl CommandActor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ActorIdentity {
     GamePlayer {
         player_id: u64,
@@ -236,13 +95,13 @@ pub enum ActorIdentity {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ActorPermissions {
     pub flags: PermissionFlags,
 }
 
 bitflags::bitflags! {
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub struct PermissionFlags: u32 {
         const USER          = 0b00000001;
         const ADMIN         = 0b00000010;
@@ -252,17 +111,14 @@ bitflags::bitflags! {
     }
 }
 
-// This will be helpful for conversion if other input sources are added
-// we could just construct this instead of specific Discord/game chat events
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BridgeChatEvent {
     pub message: String,
     pub actor: CommandActor,
     pub source: CommandSource,
 }
-impl_event!(BridgeChatEvent);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameCommandEvent {
     pub name: String,
     pub args: Vec<String>,
@@ -271,17 +127,121 @@ pub struct GameCommandEvent {
     pub source: CommandSource,
 }
 
-impl GameEvent for GameCommandEvent {
-    fn as_any(&self) ->  &dyn Any {
-        self
+#[derive(Clone, Debug)]
+pub struct ServerStatus {
+    pub name: String,
+    pub description: String,
+    pub password_protected: bool,
+    pub current_map: String,
+    pub player_count: i32,
+    pub max_players: i32,
+    pub mods: Vec<crate::features::Mod>,
+    pub active_mods: Vec<crate::features::Mod>
+}
+
+/// Triggered when a player uses !admin in-game
+#[derive(Debug, Clone)]
+pub struct AdminAlert {
+    pub reporter: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DuelStartEvent { pub challenger: String, pub opponent: String }
+#[derive(Debug, Clone)]
+pub struct AttackEvent { pub attacker: String, pub attack_type: String, pub was_parried: bool }
+#[derive(Debug, Clone)]
+pub struct DamageEvent { pub attacker: String, pub victim: String, pub damage: f32 }
+
+#[derive(Debug, Clone)]
+pub struct MapVoteEvent {
+    pub initiator: String,
+    pub map_target: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct VoteCastEvent {
+    pub voter_id: String,
+    pub choice: bool, // true = Yes, false = No
+}
+
+// --- The Unified GameEvent Enum ---
+
+#[derive(Debug, Clone)]
+pub enum GameEvent {
+    CommandRequestEvent(CommandRequest),
+    JoinEvent(JoinEvent),
+    CrashEvent(CrashEvent),
+    KillEvent(KillEvent),
+    MapChangeEvent(MapChangeEvent),
+    MatchEndEvent(MatchEndEvent),
+    GameChatMessageEvent(GameChatMessage),
+    BridgeChatEvent(BridgeChatEvent),
+    GameCommandEvent(GameCommandEvent),
+    ServerStatusEvent(ServerStatus),
+    AdminAlertEvent(AdminAlert),
+    DuelStartEvent(DuelStartEvent),
+    AttackEvent(AttackEvent),
+    DamageEvent(DamageEvent),
+    MapVoteEvent(MapVoteEvent),
+    VoteCastEvent(VoteCastEvent),
+}
+
+impl GameEvent {
+    pub fn event_type(&self) -> &'static str {
+        match self {
+            GameEvent::CommandRequestEvent(_) => "CommandRequestEvent",
+            GameEvent::JoinEvent(_) => "JoinEvent",
+            GameEvent::CrashEvent(_) => "CrashEvent",
+            GameEvent::KillEvent(_) => "KillEvent",
+            GameEvent::MapChangeEvent(_) => "MapChangeEvent",
+            GameEvent::MatchEndEvent(_) => "MatchEndEvent",
+            GameEvent::GameChatMessageEvent(_) => "GameChatMessage",
+            GameEvent::BridgeChatEvent(_) => "BridgeChatEvent",
+            GameEvent::GameCommandEvent(_) => "GameCommandEvent",
+            GameEvent::ServerStatusEvent(_) => "ServerStatusEvent",
+            GameEvent::AdminAlertEvent(_) => "AdminAlertEvent",
+            GameEvent::DuelStartEvent(_) => "DuelStartEvent",
+            GameEvent::AttackEvent(_) => "AttackEvent",
+            GameEvent::DamageEvent(_) => "DamageEvent",
+            GameEvent::MapVoteEvent(_) => "MapVoteEvent",
+            GameEvent::VoteCastEvent(_) => "VoteCastEvent",
+        }
     }
-    fn as_any_mut(&mut self) ->  &mut dyn Any {
-        self
+
+    pub fn sanitize(&mut self) {
+        if let GameEvent::GameChatMessageEvent(chat) = self {
+            let filter = censor::Censor::Standard;
+            chat.message = filter.censor(&chat.message);
+            chat.sender = filter.censor(&chat.sender);
+        }
     }
-    fn sanitize(&mut self){}
-    
-    fn event_type(&self) ->  &'static str {
-        "GameCommandEvent"
+
+    pub fn to_notification(&self) -> Option<CreateMessage> {
+        match self {
+            GameEvent::JoinEvent(e) => {
+                let embed = CreateEmbed::new()
+                    .title("📥 Reinforcements")
+                    .description(format!("**{}** has joined the battle!", e.name))
+                    .color(0x2ecc71);
+                Some(CreateMessage::new().add_embed(embed))
+            }
+            GameEvent::GameChatMessageEvent(e) => {
+                // Formats the message for the Discord channel
+                Some(CreateMessage::new().content(
+                    format!("💬 **{}**: {}", e.sender, e.message)
+                ))
+            }
+            GameEvent::AdminAlertEvent(e) => {
+                Some(CreateMessage::new().content(format!("🚨 **Admin Request**: {} reports: {}", e.reporter, e.reason)))
+            }
+            GameEvent::MapVoteEvent(e) => {
+                Some(CreateMessage::new().content(
+                    format!("{} started a vote to change map to {}", e.initiator, e.map_target)
+                ))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -319,22 +279,7 @@ impl GameCommandEvent {
             },
         })
     }
-}
 
-// #[poise::command(prefix_command)]
-// async fn relay(ctx: Context<'_>, msg: String) -> Result<(), Error> {
-//     let event = CommandRequest {
-//         command: msg,
-//         user: ctx.author().name.clone(),
-//         user_roles: ctx.author().roles.clone(),
-//     };
-
-//     dispatcher.send(event).await?;
-//     Ok(())
-// }
-
-
-impl GameCommandEvent {
     pub fn from_discord(req: &CommandRequest, perms: PermissionFlags) -> Option<Self> {
         let (name, args, raw_args) = parse_command(&req.command)?;
 
@@ -354,57 +299,15 @@ impl GameCommandEvent {
         })
     }
 }
-
-
-
-
-#[derive(Clone, Debug)]
-pub struct ServerStatus {
-    pub name: String,
-    pub description: String,
-    pub password_protected: bool,
-    pub current_map: String,
-    pub player_count: i32,
-    pub max_players: i32,
-    pub mods: Vec<crate::features::Mod>,
-    pub active_mods: Vec<crate::features::Mod>
-}
-impl_event!(ServerStatus);
-
-/// Triggered when a player uses !admin in-game
-#[derive(Debug)]
-pub struct AdminAlert {
-    pub reporter: String,
-    pub reason: String,
-}
-impl_event!(AdminAlert);
-
-impl AdminAlert {
-    #[allow(dead_code)]
-    fn to_notification(&self) -> Option<CreateMessage> {
-        Some(CreateMessage::new().content(format!("🚨 **Admin Request**: {} reports: {}", self.reporter, self.reason)))
-    }
-}
-
-#[derive(Debug)]
-pub struct DuelStartEvent { pub challenger: String, pub opponent: String }
-#[derive(Debug)]
-pub struct AttackEvent { pub attacker: String, pub attack_type: String, pub was_parried: bool }
-#[derive(Debug)]
-pub struct DamageEvent { pub attacker: String, pub victim: String, pub damage: f32 }
-
-impl_event!(DuelStartEvent);
-impl_event!(AttackEvent);
-impl_event!(DamageEvent);
 // USAGE
-// // In your game's Join Hook
+// // In your game's JoinEvent Hook
 // pub fn on_player_joined(name: &str) {
 //     if let Some(bridge) = crate::discord::DISCORD_HANDLE.get() {
 //         bridge.dispatch(JoinEvent { name: name.to_string() });
 //     }
 // }
 
-// // In your game's Kill Hook
+// // In your game's KillEvent Hook
 // pub fn on_player_kill(killer: &str, victim: &str, weapon: &str) {
 //     if let Some(bridge) = crate::discord::DISCORD_HANDLE.get() {
 //         bridge.dispatch(KillEvent {

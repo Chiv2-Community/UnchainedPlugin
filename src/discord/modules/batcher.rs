@@ -1,6 +1,5 @@
-use crate::discord::responses::{BotResponse, IntoResponses, msg};
+﻿use crate::discord::responses::{BotResponse, IntoResponses, msg};
 use crate::discord::{core::*, responses::NO_RESP};
-use crate::discord::notifications::JoinEvent;
 use serenity::all::{Http, ChannelId};
 use std::sync::Arc;
 
@@ -22,9 +21,9 @@ impl JoinBatcher {
 impl DiscordSubscriber for JoinBatcher {
     fn name(&self) -> &'static str { "JoinBatcher" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         // We only care about JoinEvents
-        if let Some(join) = event.as_any().downcast_ref::<JoinEvent>() {
+        if let GameEvent::JoinEvent(join) = event {
             self.pending_joins.push(join.name.clone());
 
             // If we hit a massive wave (e.g., 10 people), flush immediately

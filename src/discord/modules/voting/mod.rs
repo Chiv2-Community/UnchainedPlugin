@@ -1,4 +1,4 @@
-
+﻿
 pub mod vote_module;
 pub mod vote_map;
 pub mod vote_kick;

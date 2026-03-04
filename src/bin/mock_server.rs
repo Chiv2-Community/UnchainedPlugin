@@ -1,6 +1,6 @@
 use serenity::all::UserId;
 use unchained_plugin::discord::config::DiscordConfig;
-use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, JoinEvent, KillEvent};
+use unchained_plugin::discord::notifications::{CommandRequest, GameChatMessage, JoinEvent, KillEvent, GameEvent};
 use unchained_plugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
 use unchained_plugin::game::chivalry2::EChatType;
 use unchained_plugin::{dispatch, serror, sinfo};
@@ -41,31 +41,31 @@ fn main() {
 
         match parts.as_slice() {
             ["join", name] => {
-                dispatch!(JoinEvent { name: name.to_string() });
+                dispatch!(GameEvent::JoinEvent(JoinEvent { name: name.to_string() }));
             }
             ["kill", k, v] => {
-                dispatch!(KillEvent { 
+                dispatch!(GameEvent::KillEvent(KillEvent {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
                     weapon: "MockSword".to_string() 
-                });
+                }));
             }
             ["chat", ..] => {
                 let msg = parts[1..].join(" ");
-                dispatch!(GameChatMessage { 
+                dispatch!(GameEvent::GameChatMessageEvent(GameChatMessage {
                     sender: "MockPlayer".to_string(), 
                     message: msg,
                     chat_type: EChatType::Admin, 
-                });
+                }));
             }
             ["dchat", ..] => {
                 let msg = parts[1..].join(" ");
-                dispatch!(CommandRequest {
+                dispatch!(GameEvent::CommandRequestEvent(CommandRequest {
                     command: msg,
                     user: "MockDiscUser".into(),
                     user_id: UserId::new(1234),
                     user_roles: [].into(),
-                });
+                }));
             }
             ["exit"] => break,
             _ => println!("Unknown command. Try 'join Arthur'"),

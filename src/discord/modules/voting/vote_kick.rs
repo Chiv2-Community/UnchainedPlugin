@@ -1,4 +1,4 @@
-use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, notifications::{CommandSource, GameCommandEvent}};
 
 #[derive(Clone)]
 pub struct KickVote;

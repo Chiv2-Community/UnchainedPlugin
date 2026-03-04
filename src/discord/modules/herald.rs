@@ -1,4 +1,4 @@
-use crate::commands::NATIVE_COMMAND_QUEUE;
+﻿use crate::commands::NATIVE_COMMAND_QUEUE;
 use crate::discord::ChatType;
 use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
@@ -93,32 +93,34 @@ impl DiscordSubscriber for AdminHerald {
     }  
     impl_reconfigure!(HeraldSettings);
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+        if let GameEvent::GameCommandEvent(cmd) = event {
             crate::auto_dispatch!(self, cmd, [
                 cmd_cmd,
                 cmd_say,
                 cmd_admin
             ]);
         }
-        let any = event.as_any();
         
-        if let Some(alert) = any.downcast_ref::<CrashEvent>() {
-            let allowed_mentions = CreateAllowedMentions::new()
-                .roles(vec![self.admin_role_id]);
-            // TODO: push to admin channel only
-            let alert_mention = match self.settings.mention_on_crash {
-                true => format!("<@&{}> ", self.admin_role_id),
-                false => "".into()
-            };
+        match event {
+            GameEvent::CrashEvent(alert) => {
+                let allowed_mentions = CreateAllowedMentions::new()
+                    .roles(vec![self.admin_role_id]);
+                // TODO: push to admin channel only
+                let alert_mention = match self.settings.mention_on_crash {
+                    true => format!("<@&{}> ", self.admin_role_id),
+                    false => "".into()
+                };
 
-            return BotResponse::from(
-                CreateMessage::new().content(format!(
-                    "💀 {}**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```",
-                    alert_mention, alert.event_type, alert.event_trace.join("\n")
-                )).allowed_mentions(allowed_mentions)
-            ).into_responses();
+                return BotResponse::from(
+                    CreateMessage::new().content(format!(
+                        "💀 {}**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```",
+                        alert_mention, alert.event_type, alert.event_trace.join("\n")
+                    )).allowed_mentions(allowed_mentions)
+                ).into_responses();
+            }
+            _ => {}
         }
 
         NO_RESP

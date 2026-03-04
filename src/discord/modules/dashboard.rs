@@ -1,6 +1,7 @@
-use crate::discord::config::DiscordConfig;
+﻿use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
-use crate::discord::core::*;
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::notifications::GameEvent;
 use crate::discord::responses::*;
 use crate::discord::notifications::*;
 use crate::game::chivalry2::ATBLGameMode;
@@ -150,12 +151,12 @@ impl Dashboard {
 
         let templates = [
             // The Classic
-            format!("**{}** has issued a __**Call to Arms**__!\nJoin the server and fight for your honor!\nMessage: _{}_", sender, message),
+            format!("**{}** has issued a __**Call to Arms**__!\nJoinEvent the server and fight for your honor!\nMessage: _{}_", sender, message),
             format!("⚠️ **REINFORCEMENTS NEEDED!**\n**{}** is requesting immediate backup.\nOrders: _{}_", sender, message),
             format!("📢 **BANNERS RAISED!**\n**{}** has sounded the war horn! Rally to their side!\nWar Cry: _{}_", sender, message),                    
             format!("🔥 **TO THE FRONT LINES!**\n**{}** says: _{}_\nDon't let them stand alone!", sender, message),
             format!("⚔️ **{}** is calling for all able-bodied warriors!\n> _{}_", sender, message),
-            format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. Join now!\nExcuse: *\"{}\"*", sender, message),
+            format!("🍖 **FRESH MEAT!**\n**{}** is getting beat up and needs someone to hide behind. JoinEvent now!\nExcuse: *\"{}\"*", sender, message),
             format!("🕹️ **STOP SLACKING!**\n**{}** has issued a Call to Arms. Your couch can wait, the server can't!\nMessage: _{}_", sender, message),
             format!("📉 **STONKS ARE DOWN!**\n**{}** says the kill count is too low. Let's pump those numbers up!\nMemo: *\"{}\"*", sender, message),
             format!("⚠️ **BROKEN ARROW!**\n**{}** is being overrun and has declared a Level 5 Emergency!\nComms: _{}_", sender, message),
@@ -293,46 +294,40 @@ impl DiscordSubscriber for Dashboard {
         self.settings = new_settings;
     }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_cta,
-                cmd_playerlist,
-                cmd_dash
-            ]);
-        }
-
-        let any = event.as_any();
-
-        // crate::sinfo!["Got Event {:#?}", event];
-        // Update state based on events
-        if let Some(_e) = any.downcast_ref::<JoinEvent>() {
-            self.player_count += 1;
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_cta,
+                    cmd_playerlist,
+                    cmd_dash
+                ])
+            }
+            GameEvent::JoinEvent(_) => {
+                self.player_count += 1;
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
+            }
+            GameEvent::ServerStatusEvent(new_status) => {
+                self.status = Some(new_status.clone());
+            }
+            GameEvent::MapChangeEvent(e) => {
+                self.current_map = e.new_map.clone();
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
+            }
+            _ => {
+                // We'd need a LeaveEvent in notifications.rs for this
+                if event.event_type() == "LeaveEvent" {
+                    self.player_count = self.player_count.saturating_sub(1);
+                    if self.message_id.is_some() {
+                        self.needs_refresh = true;
+                    }
+                }
             }
         }
-        
-        if let Some(new_status) = any.downcast_ref::<ServerStatus>() {
-            self.status = Some(new_status.clone());
-        }
-
-        // We'd need a LeaveEvent in notifications.rs for this
-        if event.event_type() == "LeaveEvent" {
-            self.player_count = self.player_count.saturating_sub(1);
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
-            }
-        }
-
-        if let Some(e) = any.downcast_ref::<MapChangeEvent>() {
-            self.current_map = e.new_map.clone();
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
-            }
-        }
-        
 
         NO_RESP // The dashboard doesn't send "new" messages, it edits an existing one
     }

@@ -1,4 +1,4 @@
-use crate::discord::modules::voting::vote_module::VoteType;
+﻿use crate::discord::modules::voting::vote_module::VoteType;
 
 #[derive(Clone)]
 pub struct ModVote;

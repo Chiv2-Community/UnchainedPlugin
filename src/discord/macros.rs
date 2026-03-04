@@ -1,10 +1,8 @@
 #[macro_export]
 macro_rules! event {
-    ($struct:ident { $($field:ident : $val:expr),* $(,)? }) => {
+    ($variant:ident($($inner:tt)*)) => {
         if let Some(handle) = $crate::discord::DISCORD_HANDLE.get() {
-            handle.dispatch($struct {
-                $( $field: $val.into() ),*
-            });
+            handle.dispatch($crate::discord::notifications::GameEvent::$variant($($inner)*));
         }
     };
 }

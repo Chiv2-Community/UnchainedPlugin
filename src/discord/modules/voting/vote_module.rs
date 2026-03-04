@@ -1,8 +1,9 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use serenity::all::{ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
 use sleuth_macros::handler_command;
-use crate::discord::core::{DiscordSubscriber, GameEvent};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::notifications::GameEvent;
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
 use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
@@ -266,8 +267,8 @@ impl DiscordSubscriber for VoteModule {
         ])
     }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        if let GameEvent::GameCommandEvent(cmd) = event {
             crate::auto_dispatch!(self, cmd, [
                 cmd_help, 
                 cmd_cancelvote,

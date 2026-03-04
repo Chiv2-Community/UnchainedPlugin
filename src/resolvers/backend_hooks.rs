@@ -51,7 +51,7 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     unsafe { o_PreLogin.call(this_ptr, _options, address, unique_id, error_message) };
 
     unsafe {
-        // Join already failed for a different reason
+        // JoinEvent already failed for a different reason
         if !(*error_message).is_empty() {
             return;
         }

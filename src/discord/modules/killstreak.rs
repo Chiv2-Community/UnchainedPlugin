@@ -1,12 +1,12 @@
-use crate::discord::core::*;
-use crate::discord::notifications::KillEvent;
+﻿use crate::discord::core::DiscordSubscriber;
+use crate::discord::notifications::GameEvent;
 use serenity::all::{Http, ChannelId, CreateMessage, CreateEmbed};
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::discord::responses::*;
 
 pub struct KillstreakModule {
-    // Tracks Name -> Current Kill Count
+    // Tracks Name -> Current KillEvent Count
     streaks: HashMap<String, u32>,
 }
 
@@ -22,9 +22,9 @@ impl KillstreakModule {
 impl DiscordSubscriber for KillstreakModule {
     fn name(&self) -> &'static str { "KillstreakModule" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
         // Look for KillEvents
-        if let Some(kill) = event.as_any().downcast_ref::<KillEvent>() {
+        if let GameEvent::KillEvent(kill) = event {
             // 1. Reset the victim's streak
             self.streaks.remove(&kill.victim);
 

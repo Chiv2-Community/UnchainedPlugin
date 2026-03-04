@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
-use crate::discord::notifications::ServerStatus;
+use crate::discord::notifications::{ServerStatus, GameEvent};
 use crate::features::Mod;
 
 use crate::tools::hook_globals::cli_args;
@@ -377,16 +377,16 @@ impl RegistrationInner {
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {
-            dispatch!(ServerStatus{
+            dispatch!(GameEvent::ServerStatusEvent(ServerStatus {
                 name: request.name.into(),
-                description: request.description,
+                description: request.description.into(),
                 password_protected: request.password_protected,
                 current_map: request.current_map.into(),
                 player_count: request.player_count,
                 max_players: request.max_players,
                 mods: all_mods,
                 active_mods: request.mods,
-            });
+            }));
             let data: RegisterResponse = res.json().map_err(|_| ())?;
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
             let expiry = data.refresh_before as u64;
