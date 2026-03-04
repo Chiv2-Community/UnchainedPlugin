@@ -131,7 +131,9 @@ impl VoteModule {
         let total = yes + no;
         
         let ratio = if total > 0 { yes as f32 / total as f32 } else { 0.0 };
-        let passed = ratio >= state.logic.min_ratio() && yes >= state.logic.min_votes();
+        let ratio_met = ratio >= state.logic.min_ratio();
+        let min_votes_met = yes >= state.logic.min_votes();
+        let passed = ratio_met && min_votes_met;
 
         let mut embed = CreateEmbed::new()
             .title(format!("Results: {}", state.logic.title()))
@@ -143,7 +145,13 @@ impl VoteModule {
             embed = embed.description(format!("✅ **Passed!** Target `{}` executed.", state.target))
                          .color(0x2ecc71);
         } else {
-            embed = embed.description(format!("❌ **Failed.** Requirements not met for `{}`.", state.target))
+            let reason = if ratio_met {
+                format!("At least {} votes must be cast.", state.logic.min_votes())
+            } else {
+                format!("Vote ratio of {}% was not met.", (state.logic.min_ratio()*100f32) as i32)
+            };
+
+            embed = embed.description(format!("❌ **Failed.** Requirements not met for `{}`. {}", state.target, reason))
                          .color(0xe74c3c);
         }
 
