@@ -493,10 +493,10 @@ pub fn world_init() {
 
         let cli = &cli_args();
         update(&mut config.bot_token, cli.discord_bot_token.clone());
-        update(&mut config.channel_id, cli.discord_channel_id);
-        update(&mut config.admin_channel_id, cli.discord_admin_channel_id);
-        update(&mut config.general_channel_id, cli.discord_general_channel_id);
-        update(&mut config.admin_role_id, cli.discord_admin_role_id);
+        update(&mut config.channel_id, Some(cli.discord_channel_id));
+        update(&mut config.admin_channel_id, Some(cli.discord_admin_channel_id));
+        update(&mut config.general_channel_id, Some(cli.discord_general_channel_id));
+        update(&mut config.admin_role_id, Some(cli.discord_admin_role_id));
 
         let ctx = Arc::new(discord::SleuthContext {
             chat: Arc::new(GameChatSink),

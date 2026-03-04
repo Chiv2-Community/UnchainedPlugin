@@ -38,10 +38,10 @@ pub struct AdminHerald {
 }
 
 impl AdminHerald {
-    pub fn new(ctx: crate::discord::Ctx, role_id: u64) -> Self {
+    pub fn new(ctx: crate::discord::Ctx, role_id: Option<u64>) -> Self {
         Self {
             // FIXME
-            admin_role_id: RoleId::new(if role_id>0 {role_id} else {1}),
+            admin_role_id: RoleId::new(role_id.unwrap_or(1)),
             settings: ctx.config.get_module_config::<HeraldSettings>().unwrap_or_default(),
             ctx,
         }

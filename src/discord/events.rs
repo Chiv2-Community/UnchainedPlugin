@@ -78,7 +78,7 @@ impl CommandActor {
     pub fn is_moderator(&self) -> bool { self.permissions.flags.contains(PermissionFlags::MODERATOR) }
     pub fn is_elevated(&self) -> bool { self.is_admin() || self.is_moderator() }
     pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &crate::discord::config::DiscordConfig) -> Self {
-        let is_admin = roles.contains(&RoleId::new(config.admin_role_id));
+        let is_admin = config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
 
         Self {
             display_name: username.clone(),

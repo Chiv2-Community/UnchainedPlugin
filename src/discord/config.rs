@@ -34,10 +34,10 @@ fn get_all_providers() -> Vec<Box<dyn ConfigProvider>> {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct DiscordConfig {
     pub bot_token: String,
-    pub channel_id: u64,
-    pub admin_channel_id: u64,
-    pub general_channel_id: u64,
-    pub admin_role_id: u64,
+    pub channel_id: Option<u64>,
+    pub admin_channel_id: Option<u64>,
+    pub general_channel_id: Option<u64>,
+    pub admin_role_id: Option<u64>,
     pub disabled_modules: Vec<String>,
     pub blocked_notifications: Vec<String>,
     
@@ -117,10 +117,10 @@ impl Default for DiscordConfig {
 
         Self {
             bot_token: "INSERT_TOKEN_HERE".into(),
-            channel_id: 0,
-            admin_channel_id: 0,
-            general_channel_id: 0,
-            admin_role_id: 0,
+            channel_id: None,
+            admin_channel_id: None,
+            general_channel_id: None,
+            admin_role_id: None,
             disabled_modules: vec![],
             blocked_notifications: vec![],
             modules,

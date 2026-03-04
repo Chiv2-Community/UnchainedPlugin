@@ -177,9 +177,9 @@ impl DiscordSubscriber for SimpleNotifier {
 async fn dispatch_responses(
     http: &Arc<Http>,
     responses: Vec<BotResponse>,
-    main_channel: ChannelId,
-    admin_channel: ChannelId,
-    general_channel: ChannelId,
+    main_channel: Option<ChannelId>,
+    admin_channel: Option<ChannelId>,
+    general_channel: Option<ChannelId>,
     // Add other channels here as needed
 ) {
     for resp in responses {
@@ -195,7 +195,11 @@ async fn dispatch_responses(
                 Target::Main => main_channel,
                 Target::Admin => admin_channel,
                 Target::General => general_channel,
-                Target::Custom(id) => id,
+                Target::Custom(id) => Some(id),
+            };
+
+            let Some(target_id) = target_id else {
+                continue;
             };
 
             match &resp.content {
@@ -211,7 +215,7 @@ async fn dispatch_responses(
     }
 }
 
-fn preprocess_event(event: GameEvent, admin_role: RoleId) -> GameEvent {
+fn preprocess_event(event: GameEvent, admin_role: Option<RoleId>) -> GameEvent {
     let new_event = match &event {
         // Try game chat → command
         GameEvent::GameChatMessageEvent(chat) =>
@@ -221,8 +225,10 @@ fn preprocess_event(event: GameEvent, admin_role: RoleId) -> GameEvent {
         // Try Discord → command
         GameEvent::CommandRequestEvent(req) => {
             let mut perms = PermissionFlags::USER;
-            if req.user_roles.contains(&admin_role) {
-                perms = PermissionFlags::ADMIN;
+            if let Some(admin_role) = admin_role {
+                if req.user_roles.contains(&admin_role) {
+                    perms = PermissionFlags::ADMIN;
+                }
             }
             GameCommand::from_discord(req, perms)
                 .map(GameEvent::GameCommandEvent)
@@ -328,10 +334,10 @@ impl DiscordBridge {
                     };
 
                 let http = Arc::clone(&client.http);
-                let channel_id = ChannelId::new(cfg.channel_id);
-                let admin_channel_id = ChannelId::new(cfg.admin_channel_id);
-                let admin_role_id = RoleId::new(cfg.admin_role_id);
-                let general_channel_id = ChannelId::new(cfg.general_channel_id);
+                let channel_id = cfg.channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
+                let admin_channel_id = cfg.admin_channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
+                let admin_role_id = cfg.admin_role_id.and_then(|id| (id != 0).then(|| RoleId::new(id)));
+                let general_channel_id = cfg.general_channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
                 let _blocked_set: std::collections::HashSet<String> = cfg.blocked_notifications.into_iter().collect();
 
                 // 3. The Dispatch Loop
@@ -379,7 +385,11 @@ impl DiscordBridge {
                                 let mut subs = shared_subs.lock().await;
                                 for sub in subs.iter_mut() {
                                     // Get the responses (one or many)
-                                    let responses = sub.on_event(&event, &http, channel_id).await;
+                                    let responses = if let Some(chan) = channel_id {
+                                        sub.on_event(&event, &http, chan).await
+                                    } else {
+                                        Vec::new()
+                                    };
                                     dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
                                 }
                             }
@@ -387,7 +397,11 @@ impl DiscordBridge {
                                 {
                                     let mut subs = shared_subs.lock().await;
                                     for sub in subs.iter_mut() {
-                                        let resps = sub.on_tick(&http, channel_id).await;
+                                        let resps = if let Some(chan) = channel_id {
+                                            sub.on_tick(&http, chan).await
+                                        } else {
+                                            Vec::new()
+                                        };
                                         {
                                             dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
                                         }
@@ -430,7 +444,7 @@ struct Handler {
 impl DiscordHandler for Handler {
     async fn message(&self, _ctx: Context, msg: Message) {
         // sinfo!(f; "Got message: {}", msg.content.clone());
-        if msg.author.bot || msg.channel_id.get() != self.config.channel_id {
+        if msg.author.bot || Some(msg.channel_id.get()) != self.config.channel_id {
             // swarn!(f; "Bot message or id mismatch");
             return;
         }
