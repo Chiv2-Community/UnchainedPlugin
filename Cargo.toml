@@ -64,7 +64,6 @@ rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest"] # register server with backend
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity" ]
-discord_integration_old = []
 move-autonomous-desync = []
 
 
@@ -129,3 +128,4 @@ rand = "0.9.2"
 censor = "0.3.0"
 quote = "1.0.43"
 crc32c = "0.6.8"
+strum = { version = "0.26", features = ["derive"] }

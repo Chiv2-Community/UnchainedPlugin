@@ -1,33 +1,49 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use serenity::all::{ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
 use sleuth_macros::handler_command;
-use crate::discord::core::{DiscordSubscriber, GameEvent};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::events::GameEvent;
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
-use crate::discord::modules::voting::vote_kick::KickVote;
+// use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
-use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
-use crate::discord::modules::voting::vote_mod::ModVote;
-use crate::discord::notifications::GameCommandEvent;
+use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote/*, RestartVote*/};
+//use crate::discord::modules::voting::vote_mod::ModVote;
+use crate::discord::events::GameCommand;
 use crate::discord::responses::*;
 
 
 /// Trait that defines a specific type of vote's behavior
+pub trait BoxClone {
+    fn clone_box(&self) -> Box<dyn VoteType>;
+}
+
+impl<T> BoxClone for T
+where
+    T: 'static + VoteType + Clone,
+{
+    fn clone_box(&self) -> Box<dyn VoteType> {
+        Box::new(self.clone())
+    }
+}
+
 #[async_trait::async_trait]
-pub trait VoteType: Send + Sync {
+pub trait VoteType: Send + Sync + BoxClone {
     fn title(&self) -> String;
     fn description(&self) -> String;
     fn min_ratio(&self) -> f32;
     fn min_votes(&self) -> usize;
-    async fn on_success(&self, target: &str);
-    fn clone_box(&self) -> Box<dyn VoteType>;
 
-    fn check_prerequisites(&self, cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, cmd: &GameCommand) -> Result<(), String> {
         let [_target, ..] = cmd.args.as_slice() else {
             return Err("This vote requires a target argument.".into());
         };
         Ok(())
     }
+    
+    async fn on_success(&self, target: &str);
+
+
 }
 
 pub struct VoteModule {
@@ -50,7 +66,8 @@ struct ActiveVote {
 impl VoteModule {    
     
 
-    fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    // TODO: A single user should not be able to enact multiple consecutive votes rapidly.  A malicious user could spam a map vote or vote kick to avoid a vote kick being made against them.
+    fn run_registry_vote(&mut self, vote_type: &str, target: String, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(logic_prototype) = self.registry.get(vote_type) {
             // Check prerequisites using the prototype
             if let Err(err) = logic_prototype.check_prerequisites(cmd) {
@@ -114,7 +131,9 @@ impl VoteModule {
         let total = yes + no;
         
         let ratio = if total > 0 { yes as f32 / total as f32 } else { 0.0 };
-        let passed = ratio >= state.logic.min_ratio() && yes >= state.logic.min_votes();
+        let ratio_met = ratio >= state.logic.min_ratio();
+        let min_votes_met = yes >= state.logic.min_votes();
+        let passed = ratio_met && min_votes_met;
 
         let mut embed = CreateEmbed::new()
             .title(format!("Results: {}", state.logic.title()))
@@ -126,7 +145,13 @@ impl VoteModule {
             embed = embed.description(format!("✅ **Passed!** Target `{}` executed.", state.target))
                          .color(0x2ecc71);
         } else {
-            embed = embed.description(format!("❌ **Failed.** Requirements not met for `{}`.", state.target))
+            let reason = if ratio_met {
+                format!("At least {} votes must be cast.", state.logic.min_votes())
+            } else {
+                format!("Vote ratio of {}% was not met.", (state.logic.min_ratio()*100f32) as i32)
+            };
+
+            embed = embed.description(format!("❌ **Failed.** Requirements not met for `{}`. {}", state.target, reason))
                          .color(0xe74c3c);
         }
 
@@ -141,8 +166,8 @@ impl VoteModule {
         BotResponse::from(self.get_help_embed()).into_responses()
     }
 
-    #[handler_command("cancelvote", desc = "Vote YES on the active poll", elevated = true)]
-    pub fn cmd_cancelvote(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    #[handler_command("cancelvote", desc = "Cancel the current active vote", elevated = true)]
+    pub fn cmd_cancelvote(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let resp = BotResponse::from(CreateEmbed::new()
             .title(format!("🗳️ Vote Cancelled by Admin: {}", state.logic.title()))
@@ -155,7 +180,7 @@ impl VoteModule {
     }
 
     #[handler_command("yes", desc = "Vote YES on the active poll", source = "GameChat")]
-    pub fn cmd_yes(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_yes(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
             state.no_votes.remove(&voter);
@@ -164,8 +189,8 @@ impl VoteModule {
         NO_RESP
     }
 
-    #[handler_command("no", desc = "Vote YES on the active poll", source = "GameChat")]
-    pub fn cmd_no(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    #[handler_command("no", desc = "Vote NO on the active poll", source = "GameChat")]
+    pub fn cmd_no(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
             state.yes_votes.remove(&voter);
@@ -174,52 +199,56 @@ impl VoteModule {
         NO_RESP
     }
 
-    // Dynamic command handlers
-
+    /*
     #[handler_command(name = "votekick", desc = "Vote to remove a disruptive player. Ensure there is a valid reason.")]
-    pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votekick", player_name, cmd)
     }
+     */
 
     #[handler_command(name = "votemap", desc = "Vote to change the server to a new map.")]
-    pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votemap", map_name, cmd)
     }
 
+    /*
     #[handler_command(name = "voterestart", desc = "Vote to restart the current round immediately.")]
-    pub fn cmd_voterestart(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voterestart(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voterestart", "Current Round".to_string(), cmd)
     }
+     */
 
     #[handler_command(name = "voteendmap", desc = "Vote to end the current map.")]
-    pub fn cmd_voteendmap(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voteendmap(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteendmap", "Current Round".to_string(), cmd)
     }
 
+    /*
+    #[handler_command(name = "votemod", desc = "Enable a mod.")]
+    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
+        self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
+    }
+     */
+
     #[handler_command(name = "voteaddbots", desc = "Vote to add AI bots to the current game.")]
-    pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteaddbots", count, cmd)
     }
 
-    #[handler_command(name = "votemod", desc = "Enable a mod.")]
-    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
-        self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
-    }
-
-    #[handler_command(name = "votenobots", desc = "Vote to add AI bots to the current game.")]
-    pub fn cmd_votenobots(&mut self, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    #[handler_command(name = "votenobots", desc = "Vote to remote all bots from the current game.")]
+    pub fn cmd_votenobots(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votenobots", "Current Round".to_string(), cmd)
     }
 
-    // Matches your existing initialization pattern
     pub fn new(ctx: crate::discord::Ctx) -> Self {
         let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
 
-        registry.insert("votekick".into(), Box::new(KickVote));
+        // TODO: Clean this up. There is a tight and unchecked coupling between the record registry, the handler_command invocations above, and the run_registry_vote invocations. There is likely an effective way to move most of this in to an interface and define these relationships once.
+        //registry.insert("votekick".into(), Box::new(KickVote));
         registry.insert("votemap".into(), Box::new(MapVote));
-        registry.insert("voterestart".into(), Box::new(RestartVote));
+        // registry.insert("voterestart".into(), Box::new(RestartVote));
         registry.insert("voteendmap".into(), Box::new(EndMapVote));
-        registry.insert("votemod".into(), Box::new(ModVote));
+        // registry.insert("votemod".into(), Box::new(ModVote));
         registry.insert("voteaddbots".into(), Box::new(AddBotsVote));
         registry.insert("votenobots".into(), Box::new(NoBotsVote));
 
@@ -233,41 +262,44 @@ impl VoteModule {
 
 #[async_trait::async_trait]
 impl DiscordSubscriber for VoteModule {
+    fn name(&self) -> &'static str { "VoteModule" }
+
     fn get_commands(&self) -> Vec<CommandInfo> {
         crate::auto_help!(self, [
             cmd_help, 
             cmd_cancelvote,
             cmd_yes, 
             cmd_no, 
-            cmd_votekick, 
+            //cmd_votekick,
             cmd_votemap, 
-            cmd_voterestart,
+            //cmd_voterestart,
             cmd_voteendmap,
-            cmd_votemod,
+            //cmd_votemod,
             cmd_voteaddbots,
             cmd_votenobots
         ])
     }
 
-    fn name(&self) -> &'static str { "VoteModule" }
-
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_help, 
-                cmd_cancelvote,
-                cmd_yes, 
-                cmd_no, 
-                cmd_votekick, 
-                cmd_votemap, 
-                cmd_voterestart,
-                cmd_voteendmap,
-                cmd_votemod,
-                cmd_voteaddbots,
-                cmd_votenobots
-            ]);
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_help, 
+                    cmd_cancelvote,
+                    cmd_yes, 
+                    cmd_no, 
+                    // cmd_votekick, 
+                    cmd_votemap, 
+                    // cmd_voterestart,
+                    cmd_voteendmap,
+                    // cmd_votemod,
+                    cmd_voteaddbots,
+                    cmd_votenobots
+                ]);
+                NO_RESP
+            }
+            _ => NO_RESP,
         }
-        NO_RESP
     }
 
     async fn on_tick(&mut self, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {

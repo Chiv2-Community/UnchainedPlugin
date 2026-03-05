@@ -1,8 +1,9 @@
-use crate::discord::config::DiscordConfig;
+﻿use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
-use crate::discord::core::*;
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::events::GameEvent;
 use crate::discord::responses::*;
-use crate::discord::notifications::*;
+use crate::discord::events::*;
 use crate::game::chivalry2::ATBLGameMode;
 use crate::game::chivalry2::PlayerFlags;
 use crate::game::engine::UWorld;
@@ -129,7 +130,7 @@ impl Dashboard {
     }
     
     #[handler_command("cta", desc="Issue a Call to Arms on the discord server", source = "GameChat")]
-    pub fn cmd_cta(&mut self, message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cta(&mut self, message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         if self.status.as_ref().is_none() {
             return NO_RESP;
         }
@@ -188,7 +189,7 @@ impl Dashboard {
     }
     
     #[handler_command("dash", desc="Display server dashboard (if available)", source = "Discord")]
-    pub fn cmd_dash(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {        
+    pub fn cmd_dash(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if self.status.is_none() {
             return msg("Dashboard: no server status available").into_responses();
         }
@@ -201,7 +202,7 @@ impl Dashboard {
     }
     
     #[handler_command("playerlist", desc="Display server dashboard (if available)")]
-    pub fn cmd_playerlist(&mut self, _cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_playerlist(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(world) = crate::globals().world() {
             let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
             let game = unsafe {game_ptr.as_mut().expect("GameMode was null")};
@@ -293,46 +294,38 @@ impl DiscordSubscriber for Dashboard {
         self.settings = new_settings;
     }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_cta,
-                cmd_playerlist,
-                cmd_dash
-            ]);
-        }
-
-        let any = event.as_any();
-
-        // crate::sinfo!["Got Event {:#?}", event];
-        // Update state based on events
-        if let Some(_e) = any.downcast_ref::<JoinEvent>() {
-            self.player_count += 1;
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_cta,
+                    cmd_playerlist,
+                    cmd_dash
+                ])
             }
-        }
-        
-        if let Some(new_status) = any.downcast_ref::<ServerStatus>() {
-            self.status = Some(new_status.clone());
-        }
-
-        // We'd need a LeaveEvent in notifications.rs for this
-        if event.event_type() == "LeaveEvent" {
-            self.player_count = self.player_count.saturating_sub(1);
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
+            GameEvent::JoinEvent(_) => {
+                self.player_count += 1;
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
             }
-        }
-
-        if let Some(e) = any.downcast_ref::<MapChangeEvent>() {
-            self.current_map = e.new_map.clone();
-            if self.message_id.is_some() {
-                self.needs_refresh = true;
+            GameEvent::LeaveEvent(_) => {
+                self.player_count = self.player_count.saturating_sub(1);
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
             }
+            GameEvent::ServerStatusEvent(new_status) => {
+                self.status = Some(new_status.clone());
+            }
+            GameEvent::MapChangeEvent(e) => {
+                self.current_map = e.new_map.clone();
+                if self.message_id.is_some() {
+                    self.needs_refresh = true;
+                }
+            }
+            _ => {}
         }
-        
 
         NO_RESP // The dashboard doesn't send "new" messages, it edits an existing one
     }

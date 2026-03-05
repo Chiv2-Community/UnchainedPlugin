@@ -1,5 +1,6 @@
-use crate::discord::{modules::voting::vote_module::VoteType, notifications::GameCommandEvent};
+﻿use crate::discord::{modules::voting::vote_module::VoteType, events::GameCommand};
 
+#[derive(Clone)]
 pub struct RestartVote;
 
 #[async_trait::async_trait]
@@ -9,12 +10,8 @@ impl VoteType for RestartVote {
     fn min_ratio(&self) -> f32 { 0.5 }
     fn min_votes(&self) -> usize { 3 }
 
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn VoteType> {
-        Box::new(RestartVote) 
     }
 
     async fn on_success(&self, _target: &str) {
@@ -25,6 +22,7 @@ impl VoteType for RestartVote {
     }
 }
 
+#[derive(Clone)]
 pub struct EndMapVote;
 
 #[async_trait::async_trait]
@@ -34,12 +32,8 @@ impl VoteType for EndMapVote {
     fn min_ratio(&self) -> f32 { 0.6 }
     fn min_votes(&self) -> usize { 3 }
 
-    fn check_prerequisites(&self, _cmd: &GameCommandEvent) -> Result<(), String> {
+    fn check_prerequisites(&self, _cmd: &GameCommand) -> Result<(), String> {
         Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn VoteType> {
-        Box::new(EndMapVote) 
     }
 
     async fn on_success(&self, _target: &str) {

@@ -1,9 +1,10 @@
 
-use std::{ffi::CStr, mem::zeroed, thread::sleep, time::Duration};
+use std::{ffi::CStr, mem::zeroed, path::Path, thread::sleep, time::Duration};
 
 // use tokio::time::Sleep;
 use winapi::vc::excpt::EXCEPTION_CONTINUE_SEARCH;
-use windows::Win32::{Foundation::EXCEPTION_ACCESS_VIOLATION, System::{Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS, SYMBOL_INFO, SymFromAddr, SymInitialize}, Threading::GetCurrentProcess}};
+use windows::Win32::{Foundation::EXCEPTION_ACCESS_VIOLATION, System::{Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS, SYMBOL_INFO, SymFromAddr, SymInitialize, SymGetModuleBase64}, Threading::GetCurrentProcess, LibraryLoader::{GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT}}};
+use windows::core::PCWSTR;
 
 
 
@@ -101,7 +102,7 @@ unsafe extern "system" fn get_module_base64(hprocess: HANDLE, addr: u64) -> u64 
 
 use winapi::um::winnt::IMAGE_FILE_MACHINE_AMD64;
 
-use crate::{discord::notifications::CrashEvent, dispatch};
+use crate::discord::events::{Crash, GameEvent};
 fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
     let process = unsafe { GetCurrentProcess() };
     let thread: HANDLE = HANDLE(-1); // current thread
@@ -159,6 +160,27 @@ fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
     trace
 }
 
+fn get_module_info(addr: u64) -> (String, u64) {
+    let mut h_module = HMODULE(0);
+    let flags = GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+
+    unsafe {
+        if GetModuleHandleExW(flags, PCWSTR(addr as *const u16), &mut h_module).is_ok() {
+            let mut filename = [0u16; 260];
+            let len = GetModuleFileNameW(h_module, &mut filename);
+            if len > 0 {
+                let path = String::from_utf16_lossy(&filename[..len as usize]);
+                let name = Path::new(&path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "unknown".to_string());
+                return (name, h_module.0 as u64);
+            }
+        }
+    }
+    ("unknown".to_string(), 0)
+}
+
 unsafe extern "system" fn veh(
     info: *mut EXCEPTION_POINTERS,
 ) -> i32 {
@@ -189,25 +211,31 @@ unsafe extern "system" fn veh(
         };
 
         let (func, file) = resolve_symbol(rip);
+        let (rip_mod, rip_base) = get_module_info(rip);
+        let (av_mod, av_base) = get_module_info(av_addr as u64);
 
         crate::serror!(
             f;
             "[veh] ACCESS VIOLATION\n\
-             rip=0x{:X} rsp=0x{:X}\n\
-             {} addr=0x{:X}\n\
+             rip=0x{:X} ({} + 0x{:X}) rsp=0x{:X}\n\
+             {} addr=0x{:X} ({} + 0x{:X})\n\
              function={}\n\
              location={}",
             rip,
+            rip_mod,
+            rip.saturating_sub(rip_base),
             rsp,
             rw,
             av_addr,
+            av_mod,
+            (av_addr as u64).saturating_sub(av_base),
             func.as_deref().unwrap_or("<unknown>"),
             file.as_deref().unwrap_or("<no line info>")
         );
-        dispatch!(CrashEvent{
+        GameEvent::CrashEvent(Crash {
             event_type: format!("ACCESS VIOLATION ({rw})"),
             event_trace: trace,
-        });
+        }).dispatch(None);
 
         sleep(Duration::from_secs(5));
     }

@@ -9,7 +9,7 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{discord::notifications::{AdminAlert, GameChatMessage}, event, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
+    use crate::{discord::events::{AdminAlert, GameChatMessage, GameEvent}, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -70,30 +70,19 @@ mod client_message {
                         
                         if msg_type == EChatType::AllSay && cli_args().discord_enabled()  {
                             if chat.message.starts_with("!admin ") {
-                                event!(AdminAlert {
-                                    reporter: chat.name,
+                                GameEvent::AdminAlertEvent(AdminAlert {
+                                    reporter: chat.name.into(),
                                     reason: chat.message.split_once(" ")
                                     .map(|(_, n)| n)
-                                    .unwrap_or(chat.message),
-                                })
+                                    .unwrap_or(chat.message).into(),
+                                }).dispatch(None);
 
                             } else {
-                                event!(GameChatMessage {
-                                    sender: chat.name,
-                                    message: chat.message,
+                                GameEvent::GameChatMessageEvent(GameChatMessage {
+                                    sender: chat.name.into(),
+                                    message: chat.message.into(),
                                     chat_type: msg_type,
-                                });
-                            }
-                        }
-                        
-                        #[cfg(feature="discord_integration_old")]
-                        {
-                            if msg_type == EChatType::AllSay && cli_args().is_server() {
-                                
-                                crate::sinfo!(f; "pre Sending message to discord");
-                                if let Some(bridge) = globals().DISCORD_BRIDGE.get() {
-                                    bridge.recv_game_message(msg_type, chat.name, chat.message);
-                                }
+                                }).dispatch(None);
                             }
                         }
                     }

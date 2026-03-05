@@ -12,8 +12,6 @@ pub mod discord;
 #[cfg(windows)]
 mod seh;
 
-
-
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -412,25 +410,6 @@ fn postinit_rustlib() {
     // }
     
     // let args = &cli_args();
-    #[cfg(feature="discord_integration_old")]
-    if args.discord_enabled() {
-        
-        // let config = DiscordConfig { 
-        //     bot_token: args.discord_bot_token.clone().expect("Token invalid"),
-        //     channel_id: args.discord_channel_id.unwrap()
-        // };
-        let global_bridge = &globals().DISCORD_BRIDGE;
-        let _ = global_bridge.set(DiscordBridge::new(config)).ok();
-        
-        // if let Some(bridge) = global_bridge.get() {
-        //     let on_player_win = |winner: &str, map_name: &str| {
-        //         bridge.send_event(OutgoingEvent::MatchWon {
-        //             winner_name: winner.to_string(),
-        //             map: map_name.to_string(),
-        //         });
-        //     };
-        // }
-    }
 
     thread::spawn(|| {
         crate::sinfo!("waiting for engine to start..");
@@ -514,10 +493,10 @@ pub fn world_init() {
 
         let cli = &cli_args();
         update(&mut config.bot_token, cli.discord_bot_token.clone());
-        update(&mut config.channel_id, cli.discord_channel_id);
-        update(&mut config.admin_channel_id, cli.discord_admin_channel_id);
-        update(&mut config.general_channel_id, cli.discord_general_channel_id);
-        update(&mut config.admin_role_id, cli.discord_admin_role_id);
+        update(&mut config.channel_id, Some(cli.discord_channel_id));
+        update(&mut config.admin_channel_id, Some(cli.discord_admin_channel_id));
+        update(&mut config.general_channel_id, Some(cli.discord_general_channel_id));
+        update(&mut config.admin_role_id, Some(cli.discord_admin_role_id));
 
         let ctx = Arc::new(discord::SleuthContext {
             chat: Arc::new(GameChatSink),

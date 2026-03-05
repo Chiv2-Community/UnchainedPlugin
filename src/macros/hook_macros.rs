@@ -103,7 +103,7 @@ macro_rules! __create_hook_impl {
             }
 
             #[allow(non_snake_case, unused_variables)]
-            pub fn [<$name _detour_fkt>]($( $arg: $ty ),+ ) -> $out_type {
+            pub unsafe extern "C" fn [<$name _detour_fkt>]($( $arg: $ty ),+ ) -> $out_type {
                 $crate::__hook_dispatch!($hook_type, $name, $out_type, ( $( $arg ),+ ), $body)
             }
 
@@ -121,12 +121,9 @@ macro_rules! __create_hook_impl {
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
                         
                         
-                        // Leak detour closure
-                        let detour_fn: Box<fn($( $ty ),+) -> $out_type> =
-                            Box::new([<$name _detour_fkt>]);
-                        let detour_fn: &'static _ = Box::leak(detour_fn);
-                        [<o_ $name>].initialize(target, detour_fn).unwrap();
-                        // let _ = [<o_ $name>].initialize(target, [<$name _detour_fkt>]);
+                        [<o_ $name>].initialize(target, |$( $arg ),+| {
+                            unsafe { [<$name _detour_fkt>]($( $arg ),+) }
+                        }).unwrap();
                         // $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition

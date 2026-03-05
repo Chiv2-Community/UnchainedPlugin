@@ -1,7 +1,7 @@
 #[macro_use]
 pub mod core;
 pub mod modules;
-pub mod notifications;
+pub mod events;
 #[macro_use]
 pub mod responses;
 #[macro_use]
@@ -15,11 +15,13 @@ use crate::discord::modules::chat_relay::ChatRelayModule;
 use crate::discord::modules::voting::vote_module::VoteModule;
 // use crate::discord::modules::voting::*;
 use crate::discord::modules::{
-    batcher::JoinBatcher, dashboard::Dashboard, herald::AdminHerald,
+    batcher::JoinBatcher, dashboard::Dashboard, duel_manager::DuelManager,
+    herald::AdminHerald, killstreak::KillstreakModule,
+    stats_tracker::StatsTracker,
 };
-use crate::discord::notifications::{CommandRequest, CommandSource, GameChatMessage, GameCommandEvent, PermissionFlags};
+use crate::discord::events::{CommandRequest, CommandSource, GameCommand, PermissionFlags, GameEvent};
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
-use crate::swarn;
+use crate::{serror, swarn};
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
 // use serenity::model::prelude::*;
 use serenity::client::EventHandler as DiscordHandler;
@@ -85,12 +87,12 @@ pub static DISCORD_HANDLE: OnceLock<DiscordHandle> = OnceLock::new();
 #[derive(Clone, Debug)]
 pub struct DiscordHandle {
     // Change Sender to tokio's version
-    pub sender: tokio::sync::mpsc::UnboundedSender<Box<dyn GameEvent>>,
+    pub sender: tokio::sync::mpsc::UnboundedSender<GameEvent>,
 }
 
 impl DiscordHandle {
-    pub fn dispatch<E: GameEvent + 'static>(&self, event: E) {
-        let _ = self.sender.send(Box::new(event));
+    pub fn dispatch(&self, event: GameEvent) {
+        let _ = self.sender.send(event);
     }
 }
 
@@ -104,7 +106,7 @@ impl DiscordSubscriber for SimpleNotifier {
     }
     async fn on_event(
         &mut self,
-        event: &dyn GameEvent,
+        event: &GameEvent,
         _: &Arc<Http>,
         _: ChannelId,
     ) -> Vec<BotResponse> {
@@ -171,13 +173,14 @@ impl DiscordSubscriber for SimpleNotifier {
 //     }
 // }
 
-
 async fn dispatch_responses(
+    source_event: Option<&GameEvent>,
     http: &Arc<Http>,
     responses: Vec<BotResponse>,
-    main_channel: ChannelId,
-    admin_channel: ChannelId,
-    general_channel: ChannelId,
+    main_channel: Option<ChannelId>,
+    admin_channel: Option<ChannelId>,
+    general_channel: Option<ChannelId>,
+    chat_relay_module: Option<Arc<ChatRelayModule>>
     // Add other channels here as needed
 ) {
     for resp in responses {
@@ -189,47 +192,78 @@ async fn dispatch_responses(
         };
 
         for target in targets {
-            let target_id = match target {
-                Target::Main => main_channel,
-                Target::Admin => admin_channel,
-                Target::General => general_channel,
-                Target::Custom(id) => id,
+            let (target_id, mut relay) = match (target, chat_relay_module.clone()) {
+                (Target::Main, relay) => (main_channel, relay),
+                (Target::Admin, _) => (admin_channel, None), // Never relay an admin message to in game chat.
+                (Target::General, relay) => (general_channel, relay),
+                (Target::Custom(id), relay) => (Some(id), relay)
             };
 
-            match &resp.content {
-                ResponseContent::Message(m) => {
-                    let _ = target_id.send_message(http, m.clone()).await;
+            // if the source event was a game chat message, we don't want to relay it to the game chat.
+            relay = match source_event {
+                Some(GameEvent::GameChatMessageEvent(_)) => None,
+                _ => relay
+            };
+
+            let Some(target_id) = target_id else {
+                continue;
+            };
+
+            let message_builder = match &resp.content {
+                ResponseContent::Message(m) => m.clone(),
+                ResponseContent::Embed(e) => CreateMessage::new().embed(e.clone()),
+            };
+
+            let result= target_id.send_message(http, message_builder.clone()).await;
+            if let (Some(relay), Ok(message)) = (relay, result) {
+                let mut message_string = format!("[SERVER]: {}", message.content);
+
+                for embed in &message.embeds {
+                    if !message_string.is_empty() { message_string.push('\n'); }
+                    if let Some(title) = &embed.title {
+                        message_string.push_str(&format!("[{}] ", title));
+                    }
+                    if let Some(desc) = &embed.description {
+                        message_string.push_str(desc);
+                    }
+                    for field in &embed.fields {
+                        message_string.push_str(&format!("\n{}: {}", field.name, field.value));
+                    }
+                    if let Some(footer) = &embed.footer {
+                        message_string.push_str(&format!("\n-- {}", footer.text));
+                    }
                 }
-                ResponseContent::Embed(e) => {
-                    let m = CreateMessage::new().embed(e.clone());
-                    let _ = target_id.send_message(http, m).await;
-                }
+
+                relay.relay_to_unreal(message_string);
             }
         }
     }
 }
 
-fn normalize_event(event: Box<dyn GameEvent>, admin_role: RoleId) -> Box<dyn GameEvent> {
-    // Try game chat → command
-    if let Some(chat) = event.as_any().downcast_ref::<GameChatMessage>() {
-        if let Some(cmd) = GameCommandEvent::from_game_chat(chat, PermissionFlags::USER) {
-            return Box::new(cmd);
-        }
-    }
+fn preprocess_event(event: GameEvent, admin_role: Option<RoleId>) -> GameEvent {
+    let new_event = match &event {
+        // Try game chat → command
+        GameEvent::GameChatMessageEvent(chat) =>
+            GameCommand::from_game_chat(chat, PermissionFlags::USER)
+                .map(GameEvent::GameCommandEvent),
 
-    // Try Discord → command
-    if let Some(req) = event.as_any().downcast_ref::<CommandRequest>() {
-        let mut perms = PermissionFlags::USER;
-        if req.user_roles.contains(&admin_role){
-            perms = PermissionFlags::ADMIN;
+        // Try Discord → command
+        GameEvent::CommandRequestEvent(req) => {
+            let mut perms = PermissionFlags::USER;
+            if let Some(admin_role) = admin_role {
+                if req.user_roles.contains(&admin_role) {
+                    perms = PermissionFlags::ADMIN;
+                }
+            }
+            GameCommand::from_discord(req, perms)
+                .map(GameEvent::GameCommandEvent)
         }
-        if let Some(cmd) = GameCommandEvent::from_discord(req, perms) {
-            return Box::new(cmd);
-        }
-    }
+        _ => None,
+    };
 
-    // Fallback: unchanged
-    event
+    // Fall back to the input event if no GameCommand was generated
+    // then sanitize and return.
+    new_event.unwrap_or_else(|| event).sanitized()
 }
 
 
@@ -269,7 +303,7 @@ pub struct DiscordBridge;
 impl DiscordBridge {
     pub fn init(config_path: &str, ctx: Ctx) -> DiscordHandle {
         // let (tx, rx) = bounded::<Box<dyn GameEvent>>(1000);
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Box<dyn GameEvent>>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<GameEvent>();
         let cfg = ctx.config.clone();
         let cfg_path = config_path.to_string();
 
@@ -278,30 +312,36 @@ impl DiscordBridge {
             rt.block_on(async {
                 // 1. Initialize all available modules
                 // In your init function
+                let relay = Arc::new(ChatRelayModule::new(Arc::clone(&ctx)));
                 let all_subscribers: Vec<Box<dyn DiscordSubscriber>> = vec![
                     Box::new(SimpleNotifier),
                     Box::new(Dashboard::new(Arc::clone(&ctx))),
                     Box::new(JoinBatcher::default()),
                     Box::new(AdminHerald::new(Arc::clone(&ctx), cfg.admin_role_id)),
-                    // Box::new(KillstreakModule::new()), // Not yet implemented (events)
-                    // Box::new(DuelManager::new()), // Not yet implemented (events)
-                    // Box::new(StatsTracker::new("discord/leaderboard.json")), // Not yet implemented (events)
-                    Box::new(ChatRelayModule::new(Arc::clone(&ctx))),
-                    // Box::new(ExtMapVote::new(Arc::clone(&ctx))),
+                    Box::new(KillstreakModule::new()),
+                    Box::new(DuelManager::new()),
+                    Box::new(StatsTracker::new("discord/leaderboard.json")),
+                    Box::new(ChatRelayModule::new(Arc::clone(&ctx))), // Keep it as subscriber if needed
                     Box::new(VoteModule::new(Arc::clone(&ctx))),
                 ];
 
-                // 2. Filter modules based on config names
-                let mut active_subs: Vec<Box<dyn DiscordSubscriber>> = all_subscribers
-                    .into_iter()
-                    .filter(|s| s.name() == "SimpleNotifier" || !cfg.disabled_modules.contains(&s.name().to_string()))
-                    .collect();
+                let relay_option = Some(relay);
 
-                swarn!(f; "Active subs: {}, disabled: {:?}", active_subs.len(), cfg.disabled_modules);
+                // 2. Filter modules based on config names
+                let (active_subs, inactive_subs): (Vec<_>, Vec<_>) = all_subscribers
+                    .into_iter()
+                    .partition(|s| s.name() == "SimpleNotifier" || !cfg.disabled_modules.contains(&s.name().to_string()));
+
+                swarn!(f; "Activating {} discord subscribers", active_subs.len());
+
                 for sub in &active_subs {
-                    swarn!(f; "Active: {}", sub.name());
+                    swarn!(f; "{}: ✅", sub.name());
+                }
+                for sub in &inactive_subs {
+                    swarn!(f; "{}: ❌", sub.name());
                 }
 
+                let mut active_subs = active_subs;
                 for sub in active_subs.iter_mut() {
                     sub.reconfigure(&cfg);
                 }
@@ -322,10 +362,10 @@ impl DiscordBridge {
                     };
 
                 let http = Arc::clone(&client.http);
-                let channel_id = ChannelId::new(cfg.channel_id);
-                let admin_channel_id = ChannelId::new(cfg.admin_channel_id);
-                let admin_role_id = RoleId::new(cfg.admin_role_id);
-                let general_channel_id = ChannelId::new(cfg.general_channel_id);
+                let channel_id = cfg.channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
+                let admin_channel_id = cfg.admin_channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
+                let admin_role_id = cfg.admin_role_id.and_then(|id| (id != 0).then(|| RoleId::new(id)));
+                let general_channel_id = cfg.general_channel_id.and_then(|id| (id != 0).then(|| ChannelId::new(id)));
                 let _blocked_set: std::collections::HashSet<String> = cfg.blocked_notifications.into_iter().collect();
 
                 // 3. The Dispatch Loop
@@ -333,11 +373,11 @@ impl DiscordBridge {
                     let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
                     loop {
                         tokio::select! {
-                            Some(mut event) = rx.recv() => {
-                                event.sanitize();
-                                let event = normalize_event(event, admin_role_id);
+                            Some(event) = rx.recv() => {
+                                let event = event.sanitized();
+                                let event = preprocess_event(event, admin_role_id);
 
-                                if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
+                                if let GameEvent::GameCommandEvent(cmd) = &event {
                                     if cmd.name == "help" {
                                         let mut help_embed = CreateEmbed::new()
                                             .title("🛠️ Sleuth System Help")
@@ -365,35 +405,33 @@ impl DiscordBridge {
                                             help_embed = help_embed.footer(CreateEmbedFooter::new("💬-Discord Only | 🎮-Game Only | 🔒-Admin only"));
                                         }
 
-                                        dispatch_responses(&http, BotResponse::from(CreateMessage::new().embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id).await;
+                                        dispatch_responses(Some(&event), &http, BotResponse::from(CreateMessage::new().add_embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                         continue;
                                     }
-                                    let mut subs = shared_subs.lock().await;
-                                    for sub in subs.iter_mut() {
-                                        // Get the responses (one or many)
-                                        let responses = sub.on_event(event.as_ref(), &http, channel_id).await;
-                                        dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
-                                    }
+                                }
+
+                                let mut subs = shared_subs.lock().await;
+                                for sub in subs.iter_mut() {
+                                    // Get the responses (one or many)
+                                    let responses = if let Some(chan) = channel_id {
+                                        sub.on_event(&event, &http, chan).await
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    dispatch_responses(Some(&event), &http, responses, channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                 }
                             }
-                            // Some(event) = rx.recv() => {
-                            //     sinfo!(f; "Got event {:#?}", event.event_type());
-
-                            //     if blocked_set.contains(event.event_type()) { continue; }
-
-                            //     for sub in &mut active_subs {
-                            //         if let Some(msg) = sub.on_event(event.as_ref(), &http, channel_id).await {
-                            //             let _ = channel_id.send_message(&http, msg).await;
-                            //         }
-                            //     }
-                            // }
                             _ = ticker.tick() => {
                                 {
                                     let mut subs = shared_subs.lock().await;
                                     for sub in subs.iter_mut() {
-                                        let resps = sub.on_tick(&http, channel_id).await;
+                                        let resps = if let Some(chan) = channel_id {
+                                            sub.on_tick(&http, chan).await
+                                        } else {
+                                            Vec::new()
+                                        };
                                         {
-                                            dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
+                                            dispatch_responses(None, &http, resps, channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                         }
                                     }
                                 }
@@ -402,7 +440,23 @@ impl DiscordBridge {
                     }
                 });
 
-                client.start().await.expect("Client crash");
+                if let Err(e) = client.start().await {
+                    match e {
+                        serenity::Error::Gateway(serenity::all::GatewayError::DisallowedGatewayIntents) => {
+                            serror!(f; "Discord Client Error: Disallowed Gateway Intents.");
+                            serror!(f; "The bot is missing the 'Message Content Intent'.");
+                            serror!(f; "Please enable it in the Discord Developer Portal:");
+                            serror!(f; "1. Go to https://discord.com/developers/applications");
+                            serror!(f; "2. Select your application.");
+                            serror!(f; "3. Go to 'Bot' in the left sidebar.");
+                            serror!(f; "4. Scroll down to 'Privileged Gateway Intents'.");
+                            serror!(f; "5. Enable 'MESSAGE CONTENT INTENT'.");
+                        }
+                        _ => {
+                            serror!(f; "Discord Client Error: {}", e);
+                        }
+                    }
+                }
             });
         });
 
@@ -418,13 +472,13 @@ struct Handler {
 impl DiscordHandler for Handler {
     async fn message(&self, _ctx: Context, msg: Message) {
         // sinfo!(f; "Got message: {}", msg.content.clone());
-        if msg.author.bot || msg.channel_id.get() != self.config.channel_id {
+        if msg.author.bot || Some(msg.channel_id.get()) != self.config.channel_id {
             // swarn!(f; "Bot message or id mismatch");
             return;
         }
 
         if let Some(handle) = DISCORD_HANDLE.get() {
-            let req = CommandRequest {
+            handle.dispatch(GameEvent::CommandRequestEvent(CommandRequest {
                 command: msg.content.clone(),
                 user: msg.author.name.clone(),
                 // Get roles from the member object (requires GatewayIntents::GUILD_MEMBERS)
@@ -434,19 +488,7 @@ impl DiscordHandler for Handler {
                     .as_ref()
                     .map(|m| m.roles.clone())
                     .unwrap_or_default(),
-            };
-            handle.dispatch(CommandRequest {
-                command: msg.content.clone(),
-                user: msg.author.name.clone(),
-                // Get roles from the member object (requires GatewayIntents::GUILD_MEMBERS)
-                user_id: msg.author.id,
-                user_roles: msg
-                    .member
-                    .as_ref()
-                    .map(|m| m.roles.clone())
-                    .unwrap_or_default(),
-            });
-            swarn!(f; "Dispatched command: {:#?}", req);
+            }));
         }
         else {
             swarn!(f; "No discord handle");
@@ -455,8 +497,8 @@ impl DiscordHandler for Handler {
     // async fn message(&self, _ctx: Context, msg: Message) {
     //     if msg.author.bot || msg.channel_id.get() != self.config.channel_id { return; }
     //     if let Some(handle) = DISCORD_HANDLE.get() {
-    //         // Dispatch a CommandRequest event from Discord
-    //         // (You'll define this struct in notifications.rs)
+    //         // Dispatch a CommandRequestEvent event from Discord
+    //         // (You'll define this struct in events)
     //     }
     // }
 }

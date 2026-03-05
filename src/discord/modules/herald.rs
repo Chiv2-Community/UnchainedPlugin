@@ -1,9 +1,9 @@
-use crate::commands::NATIVE_COMMAND_QUEUE;
+﻿use crate::commands::NATIVE_COMMAND_QUEUE;
 use crate::discord::ChatType;
 use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;
-use crate::discord::notifications::*;
+use crate::discord::events::*;
 use crate::discord::responses::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,36 +38,29 @@ pub struct AdminHerald {
 }
 
 impl AdminHerald {
-    pub fn new(ctx: crate::discord::Ctx, role_id: u64) -> Self {
+    pub fn new(ctx: crate::discord::Ctx, role_id: Option<u64>) -> Self {
         Self {
             // FIXME
-            admin_role_id: RoleId::new(if role_id>0 {role_id} else {1}),
+            admin_role_id: RoleId::new(role_id.unwrap_or(1)),
             settings: ctx.config.get_module_config::<HeraldSettings>().unwrap_or_default(),
             ctx,
         }
     }
 
-    // Helper to check if a Discord user has the required admin role
-
-    #[allow(dead_code)]
-    fn is_admin(&self, roles: &[RoleId]) -> bool {
-        roles.contains(&self.admin_role_id)
-    }
-
     #[handler_command(name = "cmd", desc = "Execute a console command.", source = "Discord", elevated = true)]
-    pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_cmd(&mut self, _command: String, cmd: &GameCommand) -> Vec<BotResponse> {
         NATIVE_COMMAND_QUEUE.lock().unwrap().push(cmd.raw_args.clone());
         msg(format!("✅ **Executed**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "say", desc = "Send a global message to the server.", source = "Discord", elevated = true)]
-    pub fn cmd_say(&mut self, _message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_say(&mut self, _message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
         msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses()
     }
 
     #[handler_command(name = "admin", desc = "Call for an admin", source = "GameChat")]
-    pub fn cmd_admin(&mut self, _message: String, cmd: &GameCommandEvent) -> Vec<BotResponse> {
+    pub fn cmd_admin(&mut self, _message: String, cmd: &GameCommand) -> Vec<BotResponse> {
         let allowed_mentions = CreateAllowedMentions::new()
             .roles(vec![self.admin_role_id]);
         let alert_mention = match self.settings.mention_on_admin {
@@ -93,34 +86,33 @@ impl DiscordSubscriber for AdminHerald {
     }  
     impl_reconfigure!(HeraldSettings);
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        
-        if let Some(cmd) = event.as_any().downcast_ref::<GameCommandEvent>() {
-            crate::auto_dispatch!(self, cmd, [
-                cmd_cmd,
-                cmd_say,
-                cmd_admin
-            ]);
-        }
-        let any = event.as_any();
-        
-        if let Some(alert) = any.downcast_ref::<CrashEvent>() {
-            let allowed_mentions = CreateAllowedMentions::new()
-                .roles(vec![self.admin_role_id]);
-            // TODO: push to admin channel only
-            let alert_mention = match self.settings.mention_on_crash {
-                true => format!("<@&{}> ", self.admin_role_id),
-                false => "".into()
-            };
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            GameEvent::GameCommandEvent(cmd) => {
+                crate::auto_dispatch!(self, cmd, [
+                    cmd_cmd,
+                    cmd_say,
+                    cmd_admin
+                ]);
+                NO_RESP
+            }
+            GameEvent::CrashEvent(alert) => {
+                let allowed_mentions = CreateAllowedMentions::new()
+                    .roles(vec![self.admin_role_id]);
+                // TODO: push to admin channel only
+                let alert_mention = match self.settings.mention_on_crash {
+                    true => format!("<@&{}> ", self.admin_role_id),
+                    false => "".into()
+                };
 
-            return BotResponse::from(
-                CreateMessage::new().content(format!(
-                    "💀 {}**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```",
-                    alert_mention, alert.event_type, alert.event_trace.join("\n")
-                )).allowed_mentions(allowed_mentions)
-            ).into_responses();
+                BotResponse::from(
+                    CreateMessage::new().content(format!(
+                        "💀 {}**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```",
+                        alert_mention, alert.event_type, alert.event_trace.join("\n")
+                    )).allowed_mentions(allowed_mentions)
+                ).into_responses()
+            }
+            _ => NO_RESP,
         }
-
-        NO_RESP
     }
 }

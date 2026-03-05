@@ -1,6 +1,6 @@
-use crate::discord::{ChatType, responses::*};
-use crate::discord::{core::*};
-use crate::discord::notifications::{CommandRequest, GameChatMessage};
+﻿use crate::discord::{ChatType, responses::*};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::events::GameEvent;
 use crate::sinfo;
 use serenity::all::{Http, ChannelId};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ impl ChatRelayModule {
     }
 
     /// Safely invokes Unreal Engine functions using the TRY_CALL_ORIGINAL macro
-    fn relay_to_unreal(&self, message: String) {
+    pub fn relay_to_unreal(&self, message: String) {
         self.ctx.chat.send(message, ChatType::Global);
         // send_ingame_message(message, None);
         // if let Some(world) = crate::globals().world() {
@@ -46,27 +46,29 @@ impl ChatRelayModule {
 impl DiscordSubscriber for ChatRelayModule {
     fn name(&self) -> &'static str { "ChatRelayModule" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-        sinfo!(f; "ChatRelayModule::on_event {:#?}", event.event_type());
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        sinfo!(f; "ChatRelayModule::on_event {:#?}", event);
 
-        // --- DISCORD -> GAME ---
-        if let Some(msg) = any.downcast_ref::<CommandRequest>() {
-            // Filter out bot commands so they don't clutter in-game chat
-            if !msg.command.starts_with('!') {
-                let formatted_text = format!("<D>{}: {}", msg.user, msg.command);
-                self.relay_to_unreal(formatted_text);
+        match event {
+            // --- DISCORD -> GAME ---
+            GameEvent::CommandRequestEvent(msg) => {
+                // Filter out bot commands so they don't clutter in-game chat
+                if !msg.command.starts_with('!') {
+                    let formatted_text = format!("<D>{}: {}", msg.user, msg.command);
+                    self.relay_to_unreal(formatted_text);
+                }
+                NO_RESP
             }
-            return NO_RESP;
+            // --- GAME -> DISCORD ---
+            GameEvent::GameChatMessageEvent(game_msg) => {
+                if game_msg.message.starts_with('!') {
+                    NO_RESP
+                } else {
+                    msg(format!("💬 **{}**: {}", game_msg.sender, game_msg.message))
+                        .into_responses()
+                }
+            }
+            _ => NO_RESP,
         }
-
-        // --- GAME -> DISCORD ---
-        if let Some(game_msg) = any.downcast_ref::<GameChatMessage>() {
-            if game_msg.message.starts_with("!") { return NO_RESP; }
-            return msg(format!("💬 **{}**: {}", game_msg.sender, game_msg.message))
-            .into_responses();
-        }
-
-        vec![]
     }
 }

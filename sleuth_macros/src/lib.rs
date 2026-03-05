@@ -205,7 +205,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
                 let arg_type = &pat_type.ty;
                 let type_str = quote!(#arg_type).to_string();
 
-                if type_str.contains("GameCommandEvent") {
+                if type_str.contains("GameCommand") {
                     call_args.push(quote! { cmd });
                 } else {
                     // build Usage String: e.g. "<count: i32>"
@@ -227,7 +227,7 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_check = if let Some(src) = &attr_args.source {
         let source_variant = format_ident!("{}", src);
         quote! {
-            if cmd.source != crate::discord::notifications::CommandSource::#source_variant {
+            if cmd.source != crate::discord::events::CommandSource::#source_variant {
                 return crate::discord::responses::msg(
                     format!("⚠️ This command can only be used from {}!", #src)
                 ).into_responses();
@@ -236,8 +236,10 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
     } else {
         quote! {}
     };
-    
-    let permission_check = if attr_args.elevated {
+
+    let required_elevation = attr_args.elevated;
+
+    let permission_check = if required_elevation {
         quote! {
             if !cmd.actor.is_elevated() {
                 return crate::discord::responses::msg("🚫 You do not have permission to use this command.")
@@ -248,11 +250,10 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    let is_elevated = attr_args.elevated;
 
     let source_enum_val = if let Some(src) = &attr_args.source {
         let variant = format_ident!("{}", src);
-        quote! { Some(crate::discord::notifications::CommandSource::#variant) }
+        quote! { Some(crate::discord::events::CommandSource::#variant) }
     } else {
         quote! { None }
     };
@@ -269,11 +270,11 @@ pub fn handler_command(args: TokenStream, input: TokenStream) -> TokenStream {
                 description: #cmd_desc.to_string(),
                 usage: #usage_str.to_string(),
                 source: #source_enum_val,
-                elevated: #is_elevated,
+                elevated: #required_elevation,
             }
         }
 
-        pub fn #wrapper_name(&mut self, cmd: &crate::discord::notifications::GameCommandEvent) -> Vec<crate::discord::responses::BotResponse> {
+        pub fn #wrapper_name(&mut self, cmd: &crate::discord::events::GameCommand) -> Vec<crate::discord::responses::BotResponse> {
             #permission_check
             #source_check
             

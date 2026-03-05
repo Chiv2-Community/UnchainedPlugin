@@ -1,7 +1,7 @@
-use serenity::all::{ChannelId, Http};
+﻿use serenity::all::{ChannelId, Http};
 
-use crate::discord::core::*;
-use crate::discord::notifications::{CommandRequest, KillEvent, MatchEndEvent};
+use crate::discord::core::DiscordSubscriber;
+use crate::discord::events::GameEvent;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
@@ -71,50 +71,51 @@ impl StatsTracker {
 impl DiscordSubscriber for StatsTracker {
     fn name(&self) -> &'static str { "StatsTracker" }
 
-    async fn on_event(&mut self, event: &dyn GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
-        let any = event.as_any();
-
-        // 1. Track Kills
-        if let Some(kill) = any.downcast_ref::<KillEvent>() {
-            *self.session_kills.entry(kill.killer.clone()).or_insert(0) += 1;
-            *self.global_stats.total_kills.entry(kill.killer.clone()).or_insert(0) += 1;
-        }
-
-        // 2. Handle Match End (Report & Reset)
-        if let Some(_end) = any.downcast_ref::<MatchEndEvent>() {
-            // Find Top Performer of the round
-            let mvp = self.session_kills.iter()
-                .max_by_key(|entry| entry.1);
-
-            let mut report = String::from("🏰 **Match Concluded!**\n");
-            if let Some((name, kills)) = mvp {
-                report.push_str(&format!("🏆 **MVP:** {} with {} kills!\n", name, kills));
+    async fn on_event(&mut self, event: &GameEvent, _http: &Arc<Http>, _channel: ChannelId) -> Vec<BotResponse> {
+        match event {
+            // 1. Track Kills
+            GameEvent::KillEvent(kill) => {
+                *self.session_kills.entry(kill.killer.clone()).or_insert(0) += 1;
+                *self.global_stats.total_kills.entry(kill.killer.clone()).or_insert(0) += 1;
+                NO_RESP
             }
 
-            // Save Lifetime stats to JSON
-            self.save_to_disk();
+            // 2. Handle Match End (Report & Reset)
+            GameEvent::MatchEndEvent(_end) => {
+                // Find Top Performer of the round
+                let mvp = self.session_kills.iter()
+                    .max_by_key(|entry| entry.1);
+
+                let mut report = String::from("🏰 **Match Concluded!**\n");
+                if let Some((name, kills)) = mvp {
+                    report.push_str(&format!("🏆 **MVP:** {} with {} kills!\n", name, kills));
+                }
+
+                // Save Lifetime stats to JSON
+                self.save_to_disk();
+                
+                // Clear Session for next round
+                self.session_kills.clear();
+
+                msg(report).into_responses()
+            }
             
-            // Clear Session for next round
-            self.session_kills.clear();
-
-            return msg(report).into_responses();
-        }
-        
-        if let Some(cmd) = any.downcast_ref::<CommandRequest>() {
-            match cmd.command.as_str() {
-                "!top" | "!leaderboard" => {
-                    return msg(self.get_top_5_leaderboard()).into_responses();
-                },
-                "!mystats" => {
-                    let total = self.global_stats.total_kills.get(&cmd.user).unwrap_or(&0);
-                    return msg(
-                        format!("📊 **{}**, you have **{}** total kills.", cmd.user, total)
-                    ).into_responses();
-                },
-                _ => return NO_RESP,
+            GameEvent::CommandRequestEvent(cmd) => {
+                match cmd.command.as_str() {
+                    "!top" | "!leaderboard" => {
+                        msg(self.get_top_5_leaderboard()).into_responses()
+                    },
+                    "!mystats" => {
+                        let total = self.global_stats.total_kills.get(&cmd.user).unwrap_or(&0);
+                        msg(
+                            format!("📊 **{}**, you have **{}** total kills.", cmd.user, total)
+                        ).into_responses()
+                    },
+                    _ => NO_RESP,
+                }
             }
-        }
 
-        NO_RESP
+            _ => NO_RESP,
+        }
     }
 }
