@@ -1,7 +1,7 @@
 use std::os::raw::c_void;
 use crate::{game::{chivalry2::{AController, ATBLGameMode, FDeathDamageTakenEvent, UDamageSource}, engine::{FActorSpawnParameters, FRotator}}, ue::{FString, FVector, UClass}};
 
-define_pattern_resolver!(ATBLGameMode_Killed, ["4C 89 4C 24 ?? 4C 89 44 24 ?? 48 89 54 24 ?? 55 53 56 41 54 41 55"]);
+define_pattern_resolver!(ATBLGameMode_Killed, ["4C 89 4C 24 ?? 4C 89 44 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 56 41 54 41 55 41 57 48 8D AC 24 ?? ?? ?? ?? 48 81 EC E8 02 00 00"]);
 CREATE_HOOK!(ATBLGameMode_Killed, ACTIVE, u8, (this: *mut ATBLGameMode, killer: *mut AController, killed_p: *mut AController, damage_source: *mut UDamageSource, damage_event: *const FDeathDamageTakenEvent, weapon_override: *mut c_void), {
     crate::sinfo!(f; "ATBLGameMode::Killed triggered!");
 	CALL_ORIGINAL!(ATBLGameMode_Killed(this, killer, killed_p, damage_source, damage_event, weapon_override))
