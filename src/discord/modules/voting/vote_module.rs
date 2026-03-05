@@ -5,10 +5,10 @@ use sleuth_macros::handler_command;
 use crate::discord::core::DiscordSubscriber;
 use crate::discord::events::GameEvent;
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
-use crate::discord::modules::voting::vote_kick::KickVote;
+// use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
-use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote, RestartVote};
-use crate::discord::modules::voting::vote_mod::ModVote;
+use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote/*, RestartVote*/};
+//use crate::discord::modules::voting::vote_mod::ModVote;
 use crate::discord::events::GameCommand;
 use crate::discord::responses::*;
 
