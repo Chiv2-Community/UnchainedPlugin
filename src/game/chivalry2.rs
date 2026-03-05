@@ -1,14 +1,15 @@
 #![allow(non_snake_case)]
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
-use crate::{game::engine::FText, ue::{FString, FVector, TArray}};
+use crate::{game::engine::{FText, FRotator}, ue::{FName, FString, FVector, FWeakObjectPtr, TArray}};
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ATBLPlayerController { 
-    _private: [u8; 0x1348],
-	pub bOnlineInventoryInitialized: bool,
-	pub bPlayerCustomizationReceived: bool,
+    pub base_controller: AController, // 0x0000
+    pub padding_0: [u8; 0x1B],         // 0x132D -> 0x1348 (0x1348 - 0x132D = 0x1B)
+	pub bOnlineInventoryInitialized: bool, // 0x1348
+	pub bPlayerCustomizationReceived: bool, // 0x1349
 }
 
 // Chat type enum
@@ -962,11 +963,118 @@ pub struct APawn {
     pub last_hit_by: *mut c_void,      // 0x0380 (AController*)
     pub controller: *mut c_void,        // 0x0388 (AController*)
     
+
     pub padding_5: [u8; 0x4],          // 0x0390
     
     pub control_input_vector: FVector,      // 0x0394 (size: 0xC)
     pub last_control_input_vector: FVector, // 0x03A0 (size: 0xC)
 } // Size: 0x3B0
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AController {
+    pub base_actor: [u8; 0x258], // Inherited from AActor
+    pub nav_agent_interface_vtable: *mut c_void, // 0x258 (Inherited from INavAgentInterface)
+    
+    pub padding_0: [u8; 0x6D],         // 0x260 -> 0x2CD
+    pub ignore_move_input: u8,          // 0x2CD
+    pub ignore_look_input: u8,          // 0x2CE
+    
+    pub padding_1: [u8; 0xFF9],        // 0x2CF -> 0x12C8 (0x12C8 - 0x2CF = 0xFF9)
+    pub player_state: *mut APlayerState, // 0x12C8
+    pub start_spot: FWeakObjectPtr,    // 0x12D0
+    pub on_instigated_any_damage: [u8; 0x10], // 0x12D8 (Delegate)
+    pub state_name: FName,             // 0x12E8
+    pub pawn: *mut APawn,               // 0x12F0
+    pub old_pawn: FWeakObjectPtr,      // 0x12F8
+    pub character: *mut ACharacter,     // 0x1300
+    pub transform_component: *mut c_void, // 0x1308 (USceneComponent*)
+    pub on_new_pawn: [u8; 0x10],       // 0x1310 (Multicast Delegate)
+    pub control_rotation: FRotator,     // 0x1320 (Size: 0xC)
+    
+    pub controller_bits: u8,            // 0x132C (bAttachToPawn: 1, bIsPlayerController: 1, bCanPossessWithoutAuthority: 1)
+}
+
+impl AController {
+    pub fn is_player_controller(&self) -> bool {
+        (self.controller_bits & (1 << 1)) != 0
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct UDamageSource {
+    pub base: [u8; 0xA8],             // Inherited from UAssemblyBlueprint
+    pub name: FString,                // 0x00A8
+    pub display_name: FText,          // 0x00B8
+    pub icon: [u8; 0x30],             // 0x00D0 (FCanvasIcon stub)
+    pub armour_penetration: f32,      // 0x0100
+    pub bonus_stamina_damage_percentage: f32, // 0x0104
+    pub b_does_siege_damage: u8,      // 0x0108
+    pub padding_0: [u8; 0x3],         // 0x0109 (Alignment)
+    pub friendly_fire_percent: f32,    // 0x010C
+    pub friendly_fire_can_interrupt: u8, // 0x0110
+    pub padding_1: [u8; 0x16F],       // 0x0111 -> 0x0280
+    
+    // Union/Inherited fields at 0x0280
+    pub parent_class: *mut c_void,    // 0x0280 (TSubclassOf<UObject>)
+    pub blueprint_type: u8,           // 0x0288 (EBlueprintType)
+    pub blueprint_bits: u8,           // 0x0289 (bRecompileOnLoad: 1, bHasBeenRegenerated: 1, bIsRegeneratingOnLoad: 1)
+    pub padding_final: [u8; 0x6],     // 0x028A -> 0x0290 (Total size align)
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct FDamageTakenEvent {
+    pub damage: f32, // 0x00
+    pub new_stat_value: f32, // 0x04
+    pub damage_source: *mut UDamageSource, // 0x08
+    pub damage_causer: *mut c_void, // 0x10 (AActor*)
+    pub damage_taker: *mut c_void, // 0x18 (AActor*)
+    pub damage_instigator: *mut c_void, // 0x20 (AActor*)
+    pub b_killing_blow: u8, // 0x28
+    pub b_suicide: u8, // 0x29
+    pub b_back_stab: u8, // 0x2A
+    pub b_entered_kill_volume: u8, // 0x2B
+    pub b_lose_limb_cheat: u8, // 0x2C
+    pub b_switched_teams_in_loadout_volume: u8, // 0x2D
+    pub padding_0: [u8; 0x2], // 0x2E
+    pub hit_result: [u8; 0x88], // 0x30 (FHitResult stub)
+    pub ability_spec: *mut c_void, // 0xB8 (UAbilitySpec*)
+    pub abilities_table_row: FName, // 0xC0
+    pub hit_direction: FVector, // 0xC8 (FVector_NetQuantizeNormal)
+    pub damage_taker_combat_state: FName, // 0xD4
+    pub apply_condition: u8, // 0xDC (EConditionType)
+    pub padding_1: [u8; 0x3], // 0xDD
+    pub post_damage_info: [u8; 0x28], // 0xE0 (FPostDamageEventInfo stub)
+    pub inventory_item: *mut c_void, // 0x108 (AInventoryItem*)
+    pub projectile: *mut c_void, // 0x110 (AActor*)
+    pub location_based_damage: u8, // 0x118 (ELocationBasedDamage)
+    pub padding_2: [u8; 0x7], // 0x119
+    pub attach_parent: *mut c_void, // 0x120 (AActor*)
+    pub b_parried: u8, // 0x128
+    pub padding_3: [u8; 0x7], // 0x129
+    pub character_who_parried: *mut c_void, // 0x130 (AActor*)
+    pub b_is_in_team_thwack_range: u8, // 0x138
+    pub padding_4: [u8; 0x3], // 0x139
+    pub gore_event: [u8; 0x4], // 0x13C (FGoreEvent stub)
+    pub kill_reason: u8, // 0x140 (EKillReason)
+    pub b_arrow_parried: u8, // 0x141
+    pub b_disarmed: u8, // 0x142
+    pub padding_5: [u8; 0x5], // 0x143
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct FDeathDamageTakenEvent {
+    pub damage_taken: FDamageTakenEvent, // 0x00
+    pub killers: TArray<*mut c_void>, // 0x148 (AActor*)
+    pub random_seed: i32, // 0x158
+    pub kill_reason: u8, // 0x15C (EKillReason)
+    pub dead_character_id: u8, // 0x15D
+    pub b_attach_to_projectile: u8, // 0x15E
+    pub padding: u8, // 0x15F
+} // Size: 0x160
 
 impl APawn {
     /// Helper to check bUseControllerRotationPitch (Bit 0)

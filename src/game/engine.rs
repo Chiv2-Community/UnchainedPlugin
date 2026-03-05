@@ -41,6 +41,8 @@ impl UEHash for *mut crate::ue::UObject {
         (hasher.finish() & 0xFFFF_FFFF) as u32
     }
 }
+#[repr(C)]
+#[derive(Debug)]
 pub struct FText
 {
     pub text_data: [u8; 0x10],
