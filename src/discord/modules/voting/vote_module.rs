@@ -166,7 +166,7 @@ impl VoteModule {
         BotResponse::from(self.get_help_embed()).into_responses()
     }
 
-    #[handler_command("cancelvote", desc = "Vote YES on the active poll", elevated = true)]
+    #[handler_command("cancelvote", desc = "Cancel the current active vote", elevated = true)]
     pub fn cmd_cancelvote(&mut self, _cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let resp = BotResponse::from(CreateEmbed::new()
@@ -189,7 +189,7 @@ impl VoteModule {
         NO_RESP
     }
 
-    #[handler_command("no", desc = "Vote YES on the active poll", source = "GameChat")]
+    #[handler_command("no", desc = "Vote NO on the active poll", source = "GameChat")]
     pub fn cmd_no(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         if let Some(ref mut state) = self.active_vote {
             let voter = cmd.actor.display_name.clone();
@@ -199,37 +199,43 @@ impl VoteModule {
         NO_RESP
     }
 
+    /*
     #[handler_command(name = "votekick", desc = "Vote to remove a disruptive player. Ensure there is a valid reason.")]
     pub fn cmd_votekick(&mut self, player_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votekick", player_name, cmd)
     }
+     */
 
     #[handler_command(name = "votemap", desc = "Vote to change the server to a new map.")]
     pub fn cmd_votemap(&mut self, map_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votemap", map_name, cmd)
     }
 
+    /*
     #[handler_command(name = "voterestart", desc = "Vote to restart the current round immediately.")]
     pub fn cmd_voterestart(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voterestart", "Current Round".to_string(), cmd)
     }
+     */
 
     #[handler_command(name = "voteendmap", desc = "Vote to end the current map.")]
     pub fn cmd_voteendmap(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteendmap", "Current Round".to_string(), cmd)
     }
 
+    /*
+    #[handler_command(name = "votemod", desc = "Enable a mod.")]
+    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
+        self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
+    }
+     */
+
     #[handler_command(name = "voteaddbots", desc = "Vote to add AI bots to the current game.")]
     pub fn cmd_voteaddbots(&mut self, count: String, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("voteaddbots", count, cmd)
     }
 
-    #[handler_command(name = "votemod", desc = "Enable a mod.")]
-    pub fn cmd_votemod(&mut self, _mod_name: String, cmd: &GameCommand) -> Vec<BotResponse> {
-        self.run_registry_vote("votemod", "Current Round".to_string(), cmd)
-    }
-
-    #[handler_command(name = "votenobots", desc = "Vote to add AI bots to the current game.")]
+    #[handler_command(name = "votenobots", desc = "Vote to remote all bots from the current game.")]
     pub fn cmd_votenobots(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
         self.run_registry_vote("votenobots", "Current Round".to_string(), cmd)
     }
@@ -238,11 +244,11 @@ impl VoteModule {
         let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
 
         // TODO: Clean this up. There is a tight and unchecked coupling between the record registry, the handler_command invocations above, and the run_registry_vote invocations. There is likely an effective way to move most of this in to an interface and define these relationships once.
-        registry.insert("votekick".into(), Box::new(KickVote));
+        //registry.insert("votekick".into(), Box::new(KickVote));
         registry.insert("votemap".into(), Box::new(MapVote));
-        registry.insert("voterestart".into(), Box::new(RestartVote));
+        // registry.insert("voterestart".into(), Box::new(RestartVote));
         registry.insert("voteendmap".into(), Box::new(EndMapVote));
-        registry.insert("votemod".into(), Box::new(ModVote));
+        // registry.insert("votemod".into(), Box::new(ModVote));
         registry.insert("voteaddbots".into(), Box::new(AddBotsVote));
         registry.insert("votenobots".into(), Box::new(NoBotsVote));
 
@@ -264,11 +270,11 @@ impl DiscordSubscriber for VoteModule {
             cmd_cancelvote,
             cmd_yes, 
             cmd_no, 
-            cmd_votekick, 
+            //cmd_votekick,
             cmd_votemap, 
-            cmd_voterestart,
+            //cmd_voterestart,
             cmd_voteendmap,
-            cmd_votemod,
+            //cmd_votemod,
             cmd_voteaddbots,
             cmd_votenobots
         ])

@@ -17,7 +17,7 @@ impl ChatRelayModule {
     }
 
     /// Safely invokes Unreal Engine functions using the TRY_CALL_ORIGINAL macro
-    fn relay_to_unreal(&self, message: String) {
+    pub fn relay_to_unreal(&self, message: String) {
         self.ctx.chat.send(message, ChatType::Global);
         // send_ingame_message(message, None);
         // if let Some(world) = crate::globals().world() {

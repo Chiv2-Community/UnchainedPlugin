@@ -20,7 +20,7 @@ impl VoteType for KickVote {
 
     /// Requires at least 4 people to participate to be valid
     fn min_votes(&self) -> usize {
-        4
+        1
     }
 
     fn check_prerequisites(&self, cmd: &GameCommand) -> Result<(), String> {

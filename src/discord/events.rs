@@ -228,16 +228,10 @@ impl GameEvent {
                     .description(format!("**{}** has joined the battle!", e.name))
                     .color(0x2ecc71);
                 Some(CreateMessage::new().add_embed(embed))
-            }
-            GameEvent::GameChatMessageEvent(e) => {
-                // Formats the message for the Discord channel
-                Some(CreateMessage::new().content(
-                    format!("💬 **{}**: {}", e.sender, e.message)
-                ))
-            }
+            },
             GameEvent::AdminAlertEvent(e) => {
                 Some(CreateMessage::new().content(format!("🚨 **Admin Request**: {} reports: {}", e.reporter, e.reason)))
-            }
+            },
             GameEvent::MapVoteEvent(e) => {
                 Some(CreateMessage::new().content(
                     format!("{} started a vote to change map to {}", e.initiator, e.map_target)

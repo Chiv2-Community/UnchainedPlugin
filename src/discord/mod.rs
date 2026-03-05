@@ -173,13 +173,14 @@ impl DiscordSubscriber for SimpleNotifier {
 //     }
 // }
 
-
 async fn dispatch_responses(
+    source_event: Option<&GameEvent>,
     http: &Arc<Http>,
     responses: Vec<BotResponse>,
     main_channel: Option<ChannelId>,
     admin_channel: Option<ChannelId>,
     general_channel: Option<ChannelId>,
+    chat_relay_module: Option<Arc<ChatRelayModule>>
     // Add other channels here as needed
 ) {
     for resp in responses {
@@ -191,25 +192,49 @@ async fn dispatch_responses(
         };
 
         for target in targets {
-            let target_id = match target {
-                Target::Main => main_channel,
-                Target::Admin => admin_channel,
-                Target::General => general_channel,
-                Target::Custom(id) => Some(id),
+            let (target_id, mut relay) = match (target, chat_relay_module.clone()) {
+                (Target::Main, relay) => (main_channel, relay),
+                (Target::Admin, _) => (admin_channel, None), // Never relay an admin message to in game chat.
+                (Target::General, relay) => (general_channel, relay),
+                (Target::Custom(id), relay) => (Some(id), relay)
+            };
+
+            // if the source event was a game chat message, we don't want to relay it to the game chat.
+            relay = match source_event {
+                Some(GameEvent::GameChatMessageEvent(_)) => None,
+                _ => relay
             };
 
             let Some(target_id) = target_id else {
                 continue;
             };
 
-            match &resp.content {
-                ResponseContent::Message(m) => {
-                    let _ = target_id.send_message(http, m.clone()).await;
+            let message_builder = match &resp.content {
+                ResponseContent::Message(m) => m.clone(),
+                ResponseContent::Embed(e) => CreateMessage::new().embed(e.clone()),
+            };
+
+            let result= target_id.send_message(http, message_builder.clone()).await;
+            if let (Some(relay), Ok(message)) = (relay, result) {
+                let mut message_string = format!("[SERVER]: {}", message.content);
+
+                for embed in &message.embeds {
+                    if !message_string.is_empty() { message_string.push('\n'); }
+                    if let Some(title) = &embed.title {
+                        message_string.push_str(&format!("[{}] ", title));
+                    }
+                    if let Some(desc) = &embed.description {
+                        message_string.push_str(desc);
+                    }
+                    for field in &embed.fields {
+                        message_string.push_str(&format!("\n{}: {}", field.name, field.value));
+                    }
+                    if let Some(footer) = &embed.footer {
+                        message_string.push_str(&format!("\n-- {}", footer.text));
+                    }
                 }
-                ResponseContent::Embed(e) => {
-                    let m = CreateMessage::new().embed(e.clone());
-                    let _ = target_id.send_message(http, m).await;
-                }
+
+                relay.relay_to_unreal(message_string);
             }
         }
     }
@@ -287,6 +312,7 @@ impl DiscordBridge {
             rt.block_on(async {
                 // 1. Initialize all available modules
                 // In your init function
+                let relay = Arc::new(ChatRelayModule::new(Arc::clone(&ctx)));
                 let all_subscribers: Vec<Box<dyn DiscordSubscriber>> = vec![
                     Box::new(SimpleNotifier),
                     Box::new(Dashboard::new(Arc::clone(&ctx))),
@@ -295,9 +321,11 @@ impl DiscordBridge {
                     Box::new(KillstreakModule::new()),
                     Box::new(DuelManager::new()),
                     Box::new(StatsTracker::new("discord/leaderboard.json")),
-                    Box::new(ChatRelayModule::new(Arc::clone(&ctx))),
+                    Box::new(ChatRelayModule::new(Arc::clone(&ctx))), // Keep it as subscriber if needed
                     Box::new(VoteModule::new(Arc::clone(&ctx))),
                 ];
+
+                let relay_option = Some(relay);
 
                 // 2. Filter modules based on config names
                 let (active_subs, inactive_subs): (Vec<_>, Vec<_>) = all_subscribers
@@ -377,7 +405,7 @@ impl DiscordBridge {
                                             help_embed = help_embed.footer(CreateEmbedFooter::new("💬-Discord Only | 🎮-Game Only | 🔒-Admin only"));
                                         }
 
-                                        dispatch_responses(&http, BotResponse::from(CreateMessage::new().embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id).await;
+                                        dispatch_responses(Some(&event), &http, BotResponse::from(CreateMessage::new().add_embed(help_embed)).into_responses(), channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                         continue;
                                     }
                                 }
@@ -390,7 +418,7 @@ impl DiscordBridge {
                                     } else {
                                         Vec::new()
                                     };
-                                    dispatch_responses(&http, responses, channel_id, admin_channel_id, general_channel_id).await;
+                                    dispatch_responses(Some(&event), &http, responses, channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                 }
                             }
                             _ = ticker.tick() => {
@@ -403,7 +431,7 @@ impl DiscordBridge {
                                             Vec::new()
                                         };
                                         {
-                                            dispatch_responses(&http, resps, channel_id, admin_channel_id, general_channel_id).await;
+                                            dispatch_responses(None, &http, resps, channel_id, admin_channel_id, general_channel_id, relay_option.clone()).await;
                                         }
                                     }
                                 }
