@@ -288,11 +288,11 @@ impl DiscordSubscriber for VoteModule {
                     cmd_cancelvote,
                     cmd_yes, 
                     cmd_no, 
-                    cmd_votekick, 
+                    // cmd_votekick, 
                     cmd_votemap, 
-                    cmd_voterestart,
+                    // cmd_voterestart,
                     cmd_voteendmap,
-                    cmd_votemod,
+                    // cmd_votemod,
                     cmd_voteaddbots,
                     cmd_votenobots
                 ]);
