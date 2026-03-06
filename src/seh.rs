@@ -117,7 +117,7 @@ fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
     frame.AddrStack.Offset = ctx.Rsp;
     frame.AddrFrame.Offset = ctx.Rbp;
 
-    for i in 0..10 {
+    for i in 0..20 {
         let ok = unsafe {
             StackWalk64::<HANDLE, HANDLE>(
                 IMAGE_FILE_MACHINE_AMD64.into(),
@@ -137,25 +137,22 @@ fn print_stack(ctx: &mut CONTEXT) -> Vec<String> {
             break;
         }
 
-        let mut buffer: SymBuffer = unsafe { zeroed() };
-        let sym = &mut buffer.sym;
+        let (name, file_line) = resolve_symbol(frame.AddrPC.Offset);
+        let (module, base) = get_module_info(frame.AddrPC.Offset);
 
-        sym.SizeOfStruct = std::mem::size_of::<SYMBOL_INFO>() as u32;
-        sym.MaxNameLen = 255;
+        let func_name = name.as_deref().unwrap_or("<unknown>");
+        let file_info = file_line.as_deref().unwrap_or("<no line info>");
 
-        if unsafe { SymFromAddr(process, frame.AddrPC.Offset, None, sym).is_ok() } {
-            let func_name = unsafe {
-                let name_ptr = sym.Name.as_ptr() as *const i8;
-                if !name_ptr.is_null() {
-                    std::ffi::CStr::from_ptr(name_ptr).to_string_lossy()
-                } else {
-                    "<unknown>".into()
-                }
-            };
-            let trace_entry = format!("  frame {}: {}", i, func_name);
-            log::error!("{trace_entry}");
-            trace.push(trace_entry.clone());
-        }
+        let trace_entry = format!(
+            "  frame {}: {} ({} + 0x{:X}) at {}",
+            i,
+            func_name,
+            module,
+            frame.AddrPC.Offset.saturating_sub(base),
+            file_info
+        );
+        log::error!("{trace_entry}");
+        trace.push(trace_entry);
     }
     trace
 }

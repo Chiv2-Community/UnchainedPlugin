@@ -45,9 +45,13 @@ fn main() {
             }
             ["kill", k, v] => {
                 GameEvent::KillEvent(Kill {
-                    killer: k.to_string(), 
-                    victim: v.to_string(), 
-                    weapon: "MockSword".to_string() 
+                    killer_name: k.to_string(), 
+                    victim_name: v.to_string(), 
+                    weapon_name: "MockSword".to_string(),
+                    killer: None,
+                    victim: None,
+                    weapon: None,
+                    death_damage_event: None
                 }).dispatch(None);
             }
             ["chat", ..] => {

@@ -75,8 +75,9 @@ impl DiscordSubscriber for StatsTracker {
         match event {
             // 1. Track Kills
             GameEvent::KillEvent(kill) => {
-                *self.session_kills.entry(kill.killer.clone()).or_insert(0) += 1;
-                *self.global_stats.total_kills.entry(kill.killer.clone()).or_insert(0) += 1;
+                let killer_name = &kill.killer_name;
+                *self.session_kills.entry(killer_name.clone()).or_insert(0) += 1;
+                *self.global_stats.total_kills.entry(killer_name.clone()).or_insert(0) += 1;
                 NO_RESP
             }
 

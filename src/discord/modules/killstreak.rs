@@ -26,24 +26,27 @@ impl DiscordSubscriber for KillstreakModule {
         // Look for KillEvents
         match event {
             GameEvent::KillEvent(kill) => {
+                let victim_name = &kill.victim_name;
+                let killer_name = &kill.killer_name;
+
                 // 1. Reset the victim's streak
-                self.streaks.remove(&kill.victim);
+                self.streaks.remove(victim_name);
 
                 // 2. Increment the killer's streak
-                let entry = self.streaks.entry(kill.killer.clone()).or_insert(0);
+                let entry = self.streaks.entry(killer_name.clone()).or_insert(0);
                 *entry += 1;
                 let current_streak = *entry;
 
                 // 3. Only return a message on milestones
                 match current_streak {
-                    5 => BotResponse::from(self.build_embed(&kill.killer, "is on a Killing Spree!", 0x3498db))
+                    5 => BotResponse::from(self.build_embed(killer_name, "is on a Killing Spree!", 0x3498db))
                         .into_responses(),
-                    10 => BotResponse::from(self.build_embed(&kill.killer, "is UNSTOPPABLE!", 0x9b59b6))
+                    10 => BotResponse::from(self.build_embed(killer_name, "is UNSTOPPABLE!", 0x9b59b6))
                         .into_responses(),
-                    15 => BotResponse::from(self.build_embed(&kill.killer, "is GODLIKE!", 0xe74c3c))
+                    15 => BotResponse::from(self.build_embed(killer_name, "is GODLIKE!", 0xe74c3c))
                         .into_responses(),
                     20 => BotResponse::from(
-                        self.build_embed(&kill.killer, "is a LEGENDARY WARRIOR!", 0xf1c40f),
+                        self.build_embed(killer_name, "is a LEGENDARY WARRIOR!", 0xf1c40f),
                     )
                     .into_responses(),
                     _ => NO_RESP,

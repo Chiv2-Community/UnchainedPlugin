@@ -1,4 +1,4 @@
-use crate::game::chivalry2::EChatType;
+use crate::game::chivalry2::{AController, EChatType, FDeathDamageTakenEvent, UDamageSource};
 use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
 use strum::IntoStaticStr;
 
@@ -35,9 +35,13 @@ pub struct Crash {
 /// Triggered when a kill occurs (Data-heavy event)
 #[derive(Debug, Clone)]
 pub struct Kill {
-    pub killer: String,
-    pub victim: String,
-    pub weapon: String,
+    pub killer_name: String,
+    pub victim_name: String,
+    pub weapon_name: String,
+    pub killer: Option<&'static AController>,
+    pub victim: Option<&'static AController>,
+    pub weapon: Option<&'static UDamageSource>,
+    pub death_damage_event: Option<&'static FDeathDamageTakenEvent>
 }
 
 /// Triggered when the server changes maps

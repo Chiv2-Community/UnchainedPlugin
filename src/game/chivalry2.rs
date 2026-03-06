@@ -999,7 +999,33 @@ impl AController {
     pub fn is_player_controller(&self) -> bool {
         (self.controller_bits & (1 << 1)) != 0
     }
+
+    pub fn get_name(&self) -> String {
+        unsafe {
+            if self.player_state.is_null() {
+                return "Unknown".to_string();
+            }
+            (*self.player_state).player_name_private.to_string()
+        }
+    }
 }
+
+impl UDamageSource {
+    pub fn get_name(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+unsafe impl Send for AController {}
+unsafe impl Sync for AController {}
+unsafe impl Send for UDamageSource {}
+unsafe impl Sync for UDamageSource {}
+unsafe impl Send for FDamageTakenEvent {}
+unsafe impl Sync for FDamageTakenEvent {}
+unsafe impl Send for FDeathDamageTakenEvent {}
+unsafe impl Sync for FDeathDamageTakenEvent {}
+unsafe impl Send for APlayerState {}
+unsafe impl Sync for APlayerState {}
 
 #[repr(C)]
 #[derive(Debug)]

@@ -97,9 +97,9 @@ impl DuelManager {
                 }
             }
             GameEvent::KillEvent(e) => {
-                if (e.victim == duel.p1 && e.killer == duel.p2) || (e.victim == duel.p2 && e.killer == duel.p1) {
+                if (e.victim_name == duel.p1 && e.killer_name == duel.p2) || (e.victim_name == duel.p2 && e.killer_name == duel.p1) {
                     self.state = DuelState::Idle;
-                    return BotResponse::from(self.format_results(duel, &e.killer, &e.victim)).into_responses();
+                    return BotResponse::from(self.format_results(duel, &e.killer_name, &e.victim_name)).into_responses();
                 }
             }
             _ => {}
