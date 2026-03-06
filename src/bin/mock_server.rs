@@ -1,10 +1,10 @@
 use serenity::all::UserId;
-use unchained_plugin::discord::config::DiscordConfig;
-use unchained_plugin::discord::events::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
-use unchained_plugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
-use unchained_plugin::game::chivalry2::EChatType;
-use unchained_plugin::{serror, sinfo};
-use unchained_plugin::tools::logger::init_syslog;
+use UnchainedPlugin::discord::config::DiscordConfig;
+use UnchainedPlugin::discord::events::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
+use UnchainedPlugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
+use UnchainedPlugin::game::chivalry2::EChatType;
+use UnchainedPlugin::{serror, sinfo};
+use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
 use std::sync::Arc;
 

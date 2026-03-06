@@ -47,5 +47,5 @@ jobs:
         with:
           name: UnchainedPlugin-${{matrix.build_type}}
           path: |
-            target/${{ matrix.build_type }}/unchained_plugin.dll
+            target/${{ matrix.build_type }}/UnchainedPlugin.dll
           if-no-files-found: warn
