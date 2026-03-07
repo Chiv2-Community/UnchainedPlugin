@@ -59,7 +59,7 @@ pub fn init_syslog() -> anyhow::Result<()> {
         .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}")))
         // .build(r"U:\Unchained\UnchainedSleuth\kismet.log")?;
     .build(r"kismet.log")?;
-    let console_filter = ThresholdFilter::new(log::LevelFilter::Debug);
+    let console_filter = ThresholdFilter::new(log::LevelFilter::Info);
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 
     // Build the config programmatically
