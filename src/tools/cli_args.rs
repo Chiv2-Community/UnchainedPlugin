@@ -40,7 +40,7 @@ pub struct CLIArgs {
     #[cfg(feature="move-autonomous-desync")]
     #[arg(long = "tick-actor-patch")]
     pub tick_actor_patch: bool,
-    //
+
     #[arg(long = "use-backend-banlist")]
     pub use_backend_banlist: bool,
     //

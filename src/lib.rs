@@ -324,7 +324,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         .unwrap_or(std::ptr::null())
 }
 
-use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE};
+use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE, ENABLE_QUICK_EDIT_MODE, ENABLE_EXTENDED_FLAGS};
 
 fn preinit_rustlib() {
     unsafe {
@@ -336,6 +336,15 @@ fn preinit_rustlib() {
                 let mut mode = CONSOLE_MODE(0);
                 if GetConsoleMode(handle, &mut mode).is_ok() {
                     let _ = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+                }
+            }
+
+            // Disable QuickEdit mode to prevent application freezing when console is clicked
+            if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
+                let mut mode = CONSOLE_MODE(0);
+                if GetConsoleMode(handle, &mut mode).is_ok() {
+                    // We must clear ENABLE_QUICK_EDIT_MODE and also include ENABLE_EXTENDED_FLAGS to make it effective.
+                    let _ = SetConsoleMode(handle, (mode & !ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS);
                 }
             }
         }

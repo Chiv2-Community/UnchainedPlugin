@@ -189,8 +189,12 @@ define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6
 CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
     unsafe {
         if !arg1.is_null() {
+            // get a rust string
             let u16_cstr = widestring::U16CStr::from_ptr_str(arg1);
-            log::info![target: "Console", "{}" , u16_cstr.display()];
+            let str = u16_cstr.to_string_lossy();
+            if !str.starts_with("Command not recognized: RCON_INTERCEPT") {
+                log::info![target: "Console", "{}" , u16_cstr.display()];
+            }
         }
     }
 });
