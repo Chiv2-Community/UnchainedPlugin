@@ -370,7 +370,7 @@ impl RegistrationInner {
             current_map: &info.map,
             player_count: info.players as i32,
             max_players: info.max_players as i32,
-            local_ip_address: "127.0.0.1",
+            local_ip_address: cli_args().local_ip.as_str(),
             mods,
         };
         //sinfo!(f; "Request: {:#?}", request);

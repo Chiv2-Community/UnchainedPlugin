@@ -64,6 +64,9 @@ pub struct CLIArgs {
         default_value = "https://servers.polehammer.net"
     )]
     pub server_browser_backend: Option<String>,
+
+    #[arg(long="local-ip", default_value = "127.0.0.1")]
+    pub local_ip: String,
     // //
     #[arg(long = "server-password")]
     pub server_password: Option<String>,
