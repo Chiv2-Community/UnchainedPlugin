@@ -11,28 +11,34 @@ CREATE_HOOK!(FString_AppendChars, ACTIVE, NONE, (),
 });
 
 define_pattern_resolver!(
-    PreLogin,
-    XrefFirst,
-    [patternsleuth::resolvers::unreal::util::utf8_pattern(
-        " Minutes"
-    )]
-);
-fn is_user_banned(addr: &String) -> bool {
+    PreLogin, [
+        "40 53 56 57 48 83 EC 30 48 89 6C 24"
+    ]);
+    //XrefLast,
+    //[patternsleuth::resolvers::unreal::util::utf8_pattern(
+    //    " Minutes"
+    //)]
+//);
+
+fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
     suffix.push_str(addr);
     let url = backend_url!(suffix);
+    crate::sinfo!(f; "Checking Unchained ban status for {}", addr);
     let response = ureq::get(&url.to_string()).call();
 
     match response {
         Ok(res) => {
             match res.into_body().read_to_string() {
                 Ok(body_str) => body_str.contains("true"),
-                _ => false
+                Err(error) => {
+                    crate::swarn!(f; "Failed to read ban-check response for {}: {:?}", addr, error);
+                    false
+                }
             }
         }
         Err(e) => {
             crate::sinfo!(f; "Ban check failed: {:?}", e);
-            // Do we return true here?
             false
         }
     }
@@ -45,32 +51,47 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     error_message: *mut FString
 ), {
 
-    if !cli_args().use_backend_banlist {
+    if !cli_args().use_backend_banlist || address.is_null()  {
         return unsafe { o_PreLogin.call(this_ptr, _options, address, unique_id, error_message) };
     }
 
-    let addr_string = &String::from_utf16_lossy((*address).as_slice());
+    let addr_string = unsafe { (*address).to_string() };
     crate::sinfo!("User joining from {}", addr_string);
+
+    if addr_string.is_empty() && !_options.is_null() {
+        unsafe {
+            crate::swarn!(
+                f;
+                "PreLogin address was empty. address_len={} address_cap={} options_len={} options_cap={} options={}",
+                (*address).len(),
+                (*address).capacity(),
+                (*_options).len(),
+                (*_options).capacity(),
+                (*_options).to_string()
+            );
+        }
+    }
 
     unsafe {
         o_PreLogin.call(this_ptr, _options, address, unique_id, error_message);
 
-        // Join already failed for a different reason
-        if !(*error_message).is_empty() {
+        // check if *error_message is not null and non-empty
+        if !error_message.is_null() && !(*error_message).is_empty() {
             return;
         }
     }
 
-    if is_user_banned(addr_string) {
+    if is_user_banned(&addr_string) {
         let msg = "You are banned from this server.";
         let wide_msg: Vec<u16> = msg.encode_utf16().collect();
         
         unsafe {
-            o_FString_AppendChars.call(
-                error_message, 
-                wide_msg.as_ptr(), 
-                wide_msg.len() as u32
-            );
+            if error_message.is_null() {
+                crate::swarn!(f; "Ban check returned banned for {}, but error_message was null", addr_string);
+                return;
+            }
+
+            o_FString_AppendChars.call(error_message, wide_msg.as_ptr(), wide_msg.len() as u32);
         }
         #[cfg(feature="verbose_hooks")]
         crate::swarn!(f; "User banned!");

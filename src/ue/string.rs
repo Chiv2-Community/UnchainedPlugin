@@ -2,32 +2,24 @@ use super::TArray;
 
 pub type FString = TArray<u16>;
 
+fn trim_trailing_nuls(slice: &[u16]) -> &[u16] {
+    let last_non_nul = slice.iter().rposition(|&code_unit| code_unit != 0);
+    match last_non_nul {
+        Some(index) => &slice[..=index],
+        None => &[],
+    }
+}
+
 impl From<&str> for FString {
     fn from(value: &str) -> Self {
-        Self::from(
-            widestring::U16CString::from_str(value)
-                .unwrap()
-                .as_slice_with_nul(),
-        )
+        let buffer: Vec<u16> = value.encode_utf16().chain(std::iter::once(0)).collect();
+        Self::from(buffer.as_slice())
     }
 }
 
 impl std::fmt::Display for FString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let slice = self.as_slice();
-        let last = slice.len()
-            - slice
-                .iter()
-                .cloned()
-                .rev()
-                .position(|c| c != 0)
-                .unwrap_or_default();
-        write!(
-            f,
-            "{}",
-            widestring::U16Str::from_slice(&slice[..last])
-                .to_string()
-                .unwrap()
-        )
+        let slice = trim_trailing_nuls(self.as_slice());
+        write!(f, "{}", String::from_utf16_lossy(slice))
     }
 }

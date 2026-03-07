@@ -51,26 +51,40 @@ impl<T> TArray<T> {
         }
     }
     pub fn len(&self) -> usize {
-        self.num as usize
+        self.num.max(0) as usize
     }
     pub fn capacity(&self) -> usize {
-        self.max as usize
+        self.max.max(0) as usize
     }
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
     pub fn as_slice(&self) -> &[T] {
-        if self.num == 0 {
+        if self.num <= 0 || self.data.is_null() || (self.data as usize % std::mem::align_of::<T>()) != 0 {
             &[]
         } else {
-            unsafe { std::slice::from_raw_parts(self.data, self.num as usize) }
+            let num = self.num as usize;
+            let size = std::mem::size_of::<T>();
+            // If T is a ZST, size is 0 and we only check align and null (already done above)
+            if size > 0 && num > (isize::MAX as usize / size) {
+                &[]
+            } else {
+                unsafe { std::slice::from_raw_parts(self.data, num) }
+            }
         }
     }
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        if self.num == 0 {
+        if self.num <= 0 || self.data.is_null() || (self.data as usize % std::mem::align_of::<T>()) != 0 {
             &mut []
         } else {
-            unsafe { std::slice::from_raw_parts_mut(self.data as *mut _, self.num as usize) }
+            let num = self.num as usize;
+            let size = std::mem::size_of::<T>();
+            // If T is a ZST, size is 0 and we only check align and null (already done above)
+            if size > 0 && num > (isize::MAX as usize / size) {
+                &mut []
+            } else {
+                unsafe { std::slice::from_raw_parts_mut(self.data as *mut _, num) }
+            }
         }
     }
     pub fn clear(&mut self) {
