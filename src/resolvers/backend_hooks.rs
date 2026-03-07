@@ -1,5 +1,7 @@
 use std::{ os::raw::c_void};
 use crate::{backend_url, tools::hook_globals::cli_args, ue::FString};
+use crate::discord::core::GameEvent::JoinEvent;
+use crate::discord::events::Join;
 
 define_pattern_resolver!(FString_AppendChars, [
     "45 85 C0 0F 84 89 00 00 00 48 89 5C 24 18 48 89 6C 24 20 56 48 83 EC 20 48 89 7C 24 30 48 8B EA 48 63 79 08 48 8B D9 4C 89 74 24 38 45 33 F6 85 FF 49 63 F0 41 8B C6 0F 94 C0 03 C7 03 C6 89 41 08 3B 41 0C 7E 07 8B D7 E8 ?? ?? ?? ?? 85 FF 49 8B C6 48 8B CF 48 8B D5 0F 95 C0 48 2B C8 48 8B 03 48 8D 1C 36 4C 8B C3 48 8D 3C 48 48 8B CF E8 ?? ?? ?? ?? 48 8B 6C 24 48 66 44 89 34 3B 4C 8B 74 24 38 48 8B 7C 24 30 48 8B 5C 24 40 48 83 C4 20 5E C3" // Universal
@@ -17,6 +19,23 @@ define_pattern_resolver!(
         " Minutes"
     )]
 );
+
+/// Extracts a value from UE4 options strings of the form `?Key1=Val1?Key2=Val2`.
+fn extract_option_value<'a>(options: &'a str, key: &str) -> Option<&'a str> {
+    let search = format!("?{}=", key);
+    let start = options.find(&search)? + search.len();
+    let rest = &options[start..];
+    let end = rest.find('?').unwrap_or(rest.len());
+    let value = &rest[..end];
+    if value.is_empty() { None } else { Some(value) }
+}
+
+fn resolve_player_display_name(options: &str) -> String {
+    extract_option_value(options, "Name")
+        .or_else(|| extract_option_value(options, "PlayFabId"))
+        .map(String::from)
+        .unwrap_or_else(|| "Error: Player name and identifier unknown".to_string())
+}
 
 fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
@@ -41,30 +60,34 @@ fn is_user_banned(addr: &str) -> bool {
         }
     }
 }
-CREATE_HOOK!(PreLogin, ACTIVE, NONE, *mut c_void, (
+CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     this_ptr: *mut crate::game::chivalry2::ATBLGameMode,
     options: *const FString,
     address: *const FString, 
     unique_id: *const c_void, // FUniqueNetIdRepl
     error_message: *mut FString
 ), {
-    if !cli_args().use_backend_banlist || address.is_null()  {
-        return unsafe { o_PreLogin.call(this_ptr, options, address, unique_id, error_message) };
+    let options_string = unsafe { options.as_ref() }
+        .map(|o| o.to_string())
+        .unwrap_or_else(|| "<empty-string>".to_string());
+
+    if !cli_args().use_backend_banlist || address.is_null() {
+        let result = CALL_ORIGINAL!(PreLogin(this_ptr, options, address, unique_id, error_message));
+        if !error_message.is_null() && !(*error_message).is_empty() {
+            return result;
+        }
+
+        let display_name = resolve_player_display_name(&options_string);
+        crate::sinfo!("Player '{}' joined (backend banlist disabled)", display_name);
+        JoinEvent(Join { name: display_name }).dispatch(None);
+        return result;
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    let options_string = if !options.is_null() {
-        unsafe { (*options).to_string() }
-    } else {
-        "<empty-string>".to_string()
-    }
-    
-    let addr_string = unsafe { (*address).to_string() };
-    crate::sinfo!("User joining from '{}' with options {}", addr_string);
+    crate::sinfo!("User joining from '{}' with options '{}'", addr_string, options_string);
 
-    let original_result = unsafe {
-        o_PreLogin.call(this_ptr, options, address, unique_id, error_message)
-    };
+    let original_result = CALL_ORIGINAL!(PreLogin(this_ptr, options, address, unique_id, error_message));
+
 
     unsafe {
         if !error_message.is_null() && !(*error_message).is_empty() {
@@ -88,8 +111,9 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, *mut c_void, (
         crate::swarn!(f; "User banned!");
     }
     else {
-        #[cfg(feature="verbose_hooks")]
-        crate::sinfo!(f; "User is not banned!");
+        let display_name = resolve_player_display_name(&options_string);
+        crate::sinfo!("Player '{}' joined", display_name);
+        JoinEvent(Join { name: display_name }).dispatch(None);
     }
 
     original_result
