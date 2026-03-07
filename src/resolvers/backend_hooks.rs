@@ -17,9 +17,9 @@ define_pattern_resolver!(
         " Minutes"
     )]
 );
-fn is_user_banned(addr_wide: &[u16]) -> bool {
+fn is_user_banned(addr: &String) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
-    suffix.push_str(&String::from_utf16_lossy(addr_wide));
+    suffix.push_str(addr);
     let url = backend_url!(suffix);
     let response = ureq::get(&url.to_string()).call();
 
@@ -44,22 +44,24 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     unique_id: *const c_void, // FUniqueNetIdRepl
     error_message: *mut FString
 ), {
+
     if !cli_args().use_backend_banlist {
         return unsafe { o_PreLogin.call(this_ptr, _options, address, unique_id, error_message) };
     }
 
-    unsafe { o_PreLogin.call(this_ptr, _options, address, unique_id, error_message) };
+    let addr_string = &String::from_utf16_lossy((*address).as_slice());
+    crate::sinfo!("User joining from {}", addr_string);
 
     unsafe {
+        o_PreLogin.call(this_ptr, _options, address, unique_id, error_message);
+
         // Join already failed for a different reason
         if !(*error_message).is_empty() {
             return;
         }
     }
 
-    let addr_raw = unsafe { (*address).as_slice() }; 
-    
-    if is_user_banned(addr_raw) {
+    if is_user_banned(addr_string) {
         let msg = "You are banned from this server.";
         let wide_msg: Vec<u16> = msg.encode_utf16().collect();
         
