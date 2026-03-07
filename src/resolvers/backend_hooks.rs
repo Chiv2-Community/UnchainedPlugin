@@ -11,14 +11,12 @@ CREATE_HOOK!(FString_AppendChars, ACTIVE, NONE, (),
 });
 
 define_pattern_resolver!(
-    PreLogin, [
-        "40 53 56 57 48 83 EC 30 48 89 6C 24"
-    ]);
-    //XrefLast,
-    //[patternsleuth::resolvers::unreal::util::utf8_pattern(
-    //    " Minutes"
-    //)]
-//);
+    PreLogin,
+    XrefFirst,
+    [patternsleuth::resolvers::unreal::util::utf8_pattern(
+        " Minutes"
+    )]
+);
 
 fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
@@ -43,41 +41,34 @@ fn is_user_banned(addr: &str) -> bool {
         }
     }
 }
-CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
-    this_ptr: *mut crate::game::chivalry2::ATBLGameMode, // ATBLGameMode
-    _options: *const FString, 
+CREATE_HOOK!(PreLogin, ACTIVE, NONE, *mut c_void, (
+    this_ptr: *mut crate::game::chivalry2::ATBLGameMode,
+    options: *const FString,
     address: *const FString, 
     unique_id: *const c_void, // FUniqueNetIdRepl
     error_message: *mut FString
 ), {
-
     if !cli_args().use_backend_banlist || address.is_null()  {
-        return unsafe { o_PreLogin.call(this_ptr, _options, address, unique_id, error_message) };
+        return unsafe { o_PreLogin.call(this_ptr, options, address, unique_id, error_message) };
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    crate::sinfo!("User joining from {}", addr_string);
-
-    if addr_string.is_empty() && !_options.is_null() {
-        unsafe {
-            crate::swarn!(
-                f;
-                "PreLogin address was empty. address_len={} address_cap={} options_len={} options_cap={} options={}",
-                (*address).len(),
-                (*address).capacity(),
-                (*_options).len(),
-                (*_options).capacity(),
-                (*_options).to_string()
-            );
-        }
+    let options_string = if !options.is_null() {
+        unsafe { (*options).to_string() }
+    } else {
+        "<empty-string>".to_string()
     }
+    
+    let addr_string = unsafe { (*address).to_string() };
+    crate::sinfo!("User joining from '{}' with options {}", addr_string);
+
+    let original_result = unsafe {
+        o_PreLogin.call(this_ptr, options, address, unique_id, error_message)
+    };
 
     unsafe {
-        o_PreLogin.call(this_ptr, _options, address, unique_id, error_message);
-
-        // check if *error_message is not null and non-empty
         if !error_message.is_null() && !(*error_message).is_empty() {
-            return;
+            return original_result;
         }
     }
 
@@ -88,7 +79,7 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
         unsafe {
             if error_message.is_null() {
                 crate::swarn!(f; "Ban check returned banned for {}, but error_message was null", addr_string);
-                return;
+                return original_result;
             }
 
             o_FString_AppendChars.call(error_message, wide_msg.as_ptr(), wide_msg.len() as u32);
@@ -100,6 +91,8 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
         #[cfg(feature="verbose_hooks")]
         crate::sinfo!(f; "User is not banned!");
     }
+
+    original_result
 });
 
 // Technically we had no name for this in the disassembly. This just seems to be what it is doing.
