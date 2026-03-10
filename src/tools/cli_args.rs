@@ -1,10 +1,31 @@
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
+use censor::Censor;
 use clap::{CommandFactory, Parser};
-
+use patternsleuth::resolvers::typetag::serde;
+use serde::Serialize;
 use crate::sdebug;
 
 pub type IniMap = HashMap<String, HashMap<String, HashMap<String, String>>>;
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CensorArg {
+    None,
+    Standard,
+    Sex,
+    Zealous
+}
+
+impl Into<Censor> for CensorArg {
+    fn into(self) -> Censor {
+        match self {
+            CensorArg::None => Censor::Custom(HashSet::new()),
+            CensorArg::Standard => Censor::Standard,
+            CensorArg::Sex => Censor::Sex,
+            CensorArg::Zealous => Censor::Zealous,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "Chivalry 2 Unchained", author = "Unchained Team", version, about, long_about = None)]
@@ -91,6 +112,9 @@ pub struct CLIArgs {
 
     #[arg(long = "discord-general-channel-id")]
     pub discord_general_channel_id: Option<u64>,
+
+    #[arg(long = "censor-mode", default_value = "None")]
+    pub censor_mode: CensorArg,
 
     #[arg(long = "discord-admin-role-id")]
     pub discord_admin_role_id: Option<u64>,

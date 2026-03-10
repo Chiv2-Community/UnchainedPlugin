@@ -1,7 +1,8 @@
+use censor::Censor;
 use crate::game::chivalry2::EChatType;
 use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
 use strum::IntoStaticStr;
-
+use crate::tools::hook_globals::{cli_args, globals};
 // --- Event Data Structs ---
 
 // TODO: Move this outside of the discord module. Event dispatch and handling is not necessarily specific to discord. Many different potential modules could benefit from this
@@ -200,7 +201,7 @@ impl GameEvent {
     pub fn sanitized(mut self) -> Self {
         match self {
             GameEvent::GameChatMessageEvent(ref mut chat) => {
-                let filter = censor::Censor::Standard;
+                let filter: Censor = cli_args().censor_mode.into();
 
                 GameEvent::GameChatMessageEvent(GameChatMessage {
                     sender: filter.censor(&chat.sender),
