@@ -475,6 +475,17 @@ pub fn world_init() {
         thread::sleep(Duration::from_millis(500));
     }
 
+    if let Some(motd) = cli_args().motd.clone() {
+        sinfo!(f; "Starting MOTD broadcast loop");
+        thread::spawn(move || {
+            loop {
+                sinfo!(f; "Broadcasting MOTD: {}", motd);
+                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
+                thread::sleep(Duration::from_secs(30 * 60));
+            }
+        });
+    }
+
     if cli_args().discord_enabled() {
         sinfo!(f; "Starting discord bridge");
         // let config = DiscordConfig {

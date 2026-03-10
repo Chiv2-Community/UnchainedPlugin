@@ -2,7 +2,7 @@ use censor::Censor;
 use crate::game::chivalry2::EChatType;
 use serenity::all::{CreateEmbed, CreateMessage, RoleId, UserId};
 use strum::IntoStaticStr;
-use crate::tools::hook_globals::{cli_args, globals};
+use crate::tools::hook_globals::cli_args;
 // --- Event Data Structs ---
 
 // TODO: Move this outside of the discord module. Event dispatch and handling is not necessarily specific to discord. Many different potential modules could benefit from this

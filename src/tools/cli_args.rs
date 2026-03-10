@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use censor::Censor;
 use clap::{CommandFactory, Parser};
-use patternsleuth::resolvers::typetag::serde;
 use serde::Serialize;
 use crate::sdebug;
 
@@ -122,6 +121,9 @@ pub struct CLIArgs {
     // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
+
+    #[arg(long = "motd")]
+    pub motd: Option<String>,
 
     // UNHANDLED START
     // #[arg(long = "AUTH_LOGIN")]

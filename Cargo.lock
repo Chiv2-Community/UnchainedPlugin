@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "UnchainedPlugin"
-version = "1.0.0-rc0"
+version = "1.0.0-rc1qjj"
 dependencies = [
  "a2s",
  "anyhow",
