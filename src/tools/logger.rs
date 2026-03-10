@@ -7,6 +7,17 @@ use super::syslog::SyslogAppender;
 use std::backtrace::Backtrace;
 use std::panic;
 use log::error;
+use std::path::PathBuf;
+use crate::tools::hook_globals::cli_args;
+
+fn expand_env_path(path: &str) -> Option<PathBuf> {
+    if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
+        if let Ok(base) = std::env::var("LOCALAPPDATA") {
+            return Some(PathBuf::from(base).join(stripped.trim_start_matches(['\\', '/'])));
+        }
+    }
+    None
+}
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {
@@ -48,17 +59,30 @@ pub fn init_syslog() -> anyhow::Result<()> {
         // )))
         // .build();
 
-        let file = FileAppender::builder()
+    let suffix =
+        cli_args()
+            .saved_dir_suffix.as_deref()
+            .map(|suffix| format!("_{}", suffix))
+            .unwrap_or("".into());
+
+    let log_dir = expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved{}", suffix))
+        .unwrap_or_else(|| PathBuf::from(".")).join("Logs");
+
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        eprintln!("Failed to create log directory {}: {}", log_dir.display(), e);
+    }
+
+    let file = FileAppender::builder()
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] [{M}] [{f}:{L}] {m}{n}\n")))
         // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] {P} [{l:6}] [{t}] {m}{n}")))
         .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}")))
         // .build("my_log_file.log")?;
         // .build(r"U:\Unchained\UnchainedSleuth\unchained.log")?; // FIXME: Nihi: LOCAL FILE
-    .build(r"unchained.log")?; // FIXME: Nihi: LOCAL FILE
-        let kismet = FileAppender::builder()
+        .build(log_dir.join("unchained.log"))?; // FIXME: Nihi: LOCAL FILE
+    let kismet = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}")))
         // .build(r"U:\Unchained\UnchainedSleuth\kismet.log")?;
-    .build(r"kismet.log")?;
+        .build(log_dir.join("kismet.log"))?;
     let console_filter = ThresholdFilter::new(log::LevelFilter::Info);
     // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
 

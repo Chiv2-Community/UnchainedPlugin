@@ -94,6 +94,9 @@ pub struct CLIArgs {
     #[arg(long = "platform")]
     pub platform: Option<String>,
 
+    #[arg(long = "saved-dir-suffix")]
+    pub saved_dir_suffix: Option<String>,
+
     #[arg(long = "GameServerPingPort", default_value = "3075")]
     pub game_server_ping_port: Option<u16>,
 
@@ -112,7 +115,7 @@ pub struct CLIArgs {
     #[arg(long = "discord-general-channel-id")]
     pub discord_general_channel_id: Option<u64>,
 
-    #[arg(long = "censor-mode", default_value = "None")]
+    #[arg(long = "censor-mode", default_value = "none")]
     pub censor_mode: CensorArg,
 
     #[arg(long = "discord-admin-role-id")]
@@ -193,20 +196,20 @@ impl CLIArgs {
 }
 
 // We're using a mix of cli arg types, normalize them to --key value(s)
-// e.g. -rcon 9001, -epicsomething=blablabla, Port=7777
+// e.g. -rcon 9001, -epicsomething=blablabla, Port=7777, -saveddirsuffix=test
 // This function converts all of those to --convention. It also drops game_identifier
 // To parse it all with clap, it checks against entries in CLIArgs and filters out unhandled ones
 fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
     let mut args = args.into_iter();
     let bin_name = args.next().unwrap_or_else(|| "app".to_string());
 
-    let known_flags: Vec<String> = CLIArgs::command()
+    let known_flags: HashMap<String, String> = CLIArgs::command()
         .get_arguments()
-        .filter_map(|a| a.get_long().map(|s| format!("--{s}")))
+        .filter_map(|a| a.get_long().map(|s| (s.to_lowercase().replace('-', ""), format!("--{s}"))))
         .collect();
 
     let mut result = vec![bin_name];
-    let mut ini_args = vec![]; 
+    let mut ini_args = vec![];
     let mut args = args.peekable();
 
     while let Some(arg) = args.next() {
@@ -217,17 +220,17 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         }
 
         // 2. Split or Normalize
-        let (flag, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=') {
-            (format!("--{}", k.trim_start_matches('-')), Some(v.to_string()))
-        } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
-            (format!("--{}", &arg[1..]), None)
+        let (flag_raw, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=') {
+            (k.trim_start_matches('-').to_string(), Some(v.to_string()))
+        } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 1 {
+            (arg[1..].to_string(), None)
         } else {
             (arg.clone(), None)
         };
 
-        // 3. Match against known flags
-        if known_flags.contains(&flag) {
-            result.push(flag);
+        // 3. Match against known flags (case-insensitive and ignoring hyphens)
+        if let Some(flag) = known_flags.get(&flag_raw.to_lowercase().replace('-', "")) {
+            result.push(flag.clone());
             if let Some(v) = value_opt {
                 result.push(v);
             } else {
@@ -327,6 +330,44 @@ mod tests {
         );
     }
 
+    impl Default for CLIArgs {
+        fn default() -> Self {
+            Self {
+                next_mod_actors: None,
+                mod_paks: None,
+                server_mods: None,
+                ini_overrides: HashMap::new(),
+                is_unchained: false,
+                rcon_port: None,
+                apply_desync_patch: false,
+                #[cfg(feature="move-autonomous-desync")]
+                tick_actor_patch: false,
+                use_backend_banlist: false,
+                is_headless: false,
+                next_map: None,
+                launched_profile: None,
+                playable_listen: false,
+                register: false,
+                server_browser_backend: None,
+                local_ip: "127.0.0.1".to_string(),
+                server_password: None,
+                platform: None,
+                saved_dir_suffix: None,
+                game_server_ping_port: None,
+                game_server_query_port: None,
+                game_port: None,
+                discord_channel_id: None,
+                discord_admin_channel_id: None,
+                discord_general_channel_id: None,
+                censor_mode: CensorArg::None,
+                discord_admin_role_id: None,
+                discord_bot_token: None,
+                motd: None,
+                extra_args: vec![],
+            }
+        }
+    }
+
     #[test]
     fn test_find_ini_value() {
         let mut ini_overrides = HashMap::new();
@@ -337,33 +378,8 @@ mod tests {
         ini_overrides.insert("Engine".to_string(), engine_map);
 
         let cli = CLIArgs {
-            next_mod_actors: None,
-            mod_paks: None,
-            server_mods: None,
             ini_overrides,
-            is_unchained: false,
-            rcon_port: None,
-            apply_desync_patch: false,
-            #[cfg(feature="move-autonomous-desync")]
-            tick_actor_patch: false,
-            use_backend_banlist: false,
-            is_headless: false,
-            next_map: None,
-            launched_profile: None,
-            playable_listen: false,
-            register: false,
-            server_browser_backend: None,
-            server_password: None,
-            platform: None,
-            game_server_ping_port: None,
-            game_server_query_port: None,
-            game_port: None,
-            discord_channel_id: None,
-            discord_admin_channel_id: None,
-            discord_general_channel_id: None,
-            discord_admin_role_id: None,
-            discord_bot_token: None,
-            extra_args: vec![],
+            ..Default::default()
         };
 
         let paths = [
@@ -382,33 +398,7 @@ mod tests {
     #[test]
     fn test_is_server() {
         let mut cli = CLIArgs {
-            next_mod_actors: None,
-            mod_paks: None,
-            server_mods: None,
-            ini_overrides: HashMap::new(),
-            is_unchained: false,
-            rcon_port: None,
-            apply_desync_patch: false,
-            #[cfg(feature="move-autonomous-desync")]
-            tick_actor_patch: false,
-            use_backend_banlist: false,
-            is_headless: false,
-            next_map: None,
-            launched_profile: None,
-            playable_listen: false,
-            register: false,
-            server_browser_backend: None,
-            server_password: None,
-            platform: None,
-            game_server_ping_port: None,
-            game_server_query_port: None,
-            game_port: None,
-            discord_channel_id: None,
-            discord_admin_channel_id: None,
-            discord_general_channel_id: None,
-            discord_admin_role_id: None,
-            discord_bot_token: None,
-            extra_args: vec![],
+            ..Default::default()
         };
 
         assert!(!cli.is_server());
@@ -451,6 +441,35 @@ mod tests {
         assert_eq!(normalized[2], "9001");
         assert_eq!(normalized[3], "--unchained");
         assert_eq!(normalized[4], "-ini:G:S:K=V");
+    }
+
+    #[test]
+    fn test_saved_dir_suffix() {
+        let args = vec![
+            "app".to_string(),
+            "-saveddirsuffix=test".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        assert!(normalized.contains(&"--saved-dir-suffix".to_string()));
+        assert!(normalized.contains(&"test".to_string()));
+
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.saved_dir_suffix, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_saved_dir_suffix_no_equals() {
+        let args = vec![
+            "app".to_string(),
+            "-saveddirsuffix".to_string(),
+            "test2".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        assert!(normalized.contains(&"--saved-dir-suffix".to_string()));
+        assert!(normalized.contains(&"test2".to_string()));
+
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.saved_dir_suffix, Some("test2".to_string()));
     }
 
     #[test]
