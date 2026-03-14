@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use patternsleuth::resolvers::resolvers;
+use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
 use crate::{resolvers::{self, PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
 
-pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u64>>) -> Result<HashMap<String, u64>> {
+pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
 
     if PLATFORM.get().is_none() {
@@ -15,19 +15,8 @@ pub fn scan(platform: PlatformType, existing_offsets: Option<&HashMap<String, u6
         anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, current_platform());
     }
 
-    let resolvers = resolvers().collect::<Vec<_>>();
-
-    // Filter resolvers to only scan for missing signatures
-    let resolvers_to_scan: Vec<_> = if let Some(existing) = existing_offsets {
-        resolvers.iter()
-            .filter(|res| !existing.contains_key(res.name))
-            .collect()
-    } else {
-        resolvers.iter().collect()
-    };
-
     if resolvers_to_scan.is_empty() {
-        println!("All signatures already found in cache");
+        println!("All signatures already found");
         return Ok(HashMap::new());
     }
 
