@@ -179,7 +179,7 @@ pub struct VoteCast {
 #[derive(Debug, Clone, IntoStaticStr)]
 pub enum GameEvent {
     CommandRequestEvent(CommandRequest),
-    JoinEvent(Join), // Never dispatched
+    JoinEvent(Join),
     LeaveEvent(Leave), // Never dispatched
     CrashEvent(Crash),
     KillEvent(Kill), // Never dispatched
