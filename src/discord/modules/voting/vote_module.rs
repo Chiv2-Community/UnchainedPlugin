@@ -7,6 +7,7 @@ use crate::discord::events::GameEvent;
 use crate::discord::modules::voting::vote_bots::{AddBotsVote, NoBotsVote};
 // use crate::discord::modules::voting::vote_kick::KickVote;
 use crate::discord::modules::voting::vote_map::MapVote;
+use crate::discord::modules::voting::vote_speed::SpeedVote;
 use crate::discord::modules::voting::vote_mapcontrol::{EndMapVote/*, RestartVote*/};
 //use crate::discord::modules::voting::vote_mod::ModVote;
 use crate::discord::events::GameCommand;
@@ -240,6 +241,11 @@ impl VoteModule {
         self.run_registry_vote("votenobots", "Current Round".to_string(), cmd)
     }
 
+    #[handler_command(name = "votespeed", desc = "Vote to set the game speed.")]
+    pub fn cmd_votespeed(&mut self, cmd: &GameCommand) -> Vec<BotResponse> {
+        self.run_registry_vote("votespeed", "Server".to_string(), cmd)
+    }
+
     pub fn new(ctx: crate::discord::Ctx) -> Self {
         let mut registry: HashMap<String, Box<dyn VoteType>> = HashMap::new();
 
@@ -251,6 +257,7 @@ impl VoteModule {
         // registry.insert("votemod".into(), Box::new(ModVote));
         registry.insert("voteaddbots".into(), Box::new(AddBotsVote));
         registry.insert("votenobots".into(), Box::new(NoBotsVote));
+        registry.insert("votespeed".into(), Box::new(SpeedVote));
 
         Self {
             active_vote: None,
@@ -276,7 +283,8 @@ impl DiscordSubscriber for VoteModule {
             cmd_voteendmap,
             //cmd_votemod,
             cmd_voteaddbots,
-            cmd_votenobots
+            cmd_votenobots,
+            cmd_votespeed
         ])
     }
 
@@ -294,7 +302,8 @@ impl DiscordSubscriber for VoteModule {
                     cmd_voteendmap,
                     // cmd_votemod,
                     cmd_voteaddbots,
-                    cmd_votenobots
+                    cmd_votenobots,
+                    cmd_votespeed
                 ]);
                 NO_RESP
             }
