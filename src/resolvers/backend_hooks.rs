@@ -13,12 +13,19 @@ CREATE_HOOK!(FString_AppendChars, ACTIVE, NONE, (),
 });
 
 define_pattern_resolver!(
-    PreLogin,
+    PreLogin, [
+        "4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"
+    ]
+);
+
+    /* seems to be broken, or just incorrect.
+       Looks right in the binary, but keeps matching the wrong func
     XrefFirst,
     [patternsleuth::resolvers::unreal::util::utf8_pattern(
         " Minutes"
     )]
 );
+     */
 
 /// Extracts a value from UE4 options strings of the form `?Key1=Val1?Key2=Val2`.
 fn extract_option_value<'a>(options: &'a str, key: &str) -> Option<&'a str> {
