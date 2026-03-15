@@ -11,6 +11,7 @@ pub mod commands;
 pub mod discord;
 #[cfg(windows)]
 mod seh;
+mod events;
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};

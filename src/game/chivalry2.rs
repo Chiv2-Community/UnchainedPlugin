@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
+use strum::Display;
 use crate::{game::engine::FText, ue::{FString, FVector, TArray}};
 
 #[repr(C)]
@@ -14,7 +15,7 @@ pub struct ATBLPlayerController {
 // Chat type enum
 // FIXME: More compact, wtf is this
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum EChatType {
     AllSay,

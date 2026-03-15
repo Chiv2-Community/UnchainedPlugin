@@ -267,16 +267,6 @@ fn preprocess_event(event: GameEvent, admin_role: Option<RoleId>) -> GameEvent {
 }
 
 
-pub enum ChatType { Admin, Global, Team }
-impl ChatType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Admin => "Admin",
-            Self::Global => "Global",
-            Self::Team => "Team",
-        }
-    }
-}
 
 // 1. The interface
 pub trait ChatSink: Send + Sync {
