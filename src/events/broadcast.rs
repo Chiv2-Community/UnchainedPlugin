@@ -53,6 +53,10 @@ impl BroadcastMessage {
         self.color = Some(color);
         self
     }
+
+    pub fn get_content(&self) -> Option<&String> {
+        self.content.as_ref()
+    }
 }
 
 impl Into<CreateMessage> for BroadcastMessage {

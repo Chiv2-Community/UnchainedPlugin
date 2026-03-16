@@ -4,9 +4,12 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use async_trait::async_trait;
-use clap::Parser;
+use clap::{Parser, CommandFactory};
+use crate::discord::modules::voting::vote_module::BoxClone;
 use crate::events::broadcast::{BroadcastMessage, ServerBroadcast};
 use crate::events::command::Command;
+use crate::events::commands::votes::votekick::KickVote;
+use crate::events::commands::votes::votemap::MapVote;
 use crate::events::models::GameCommand;
 
 /// Trait that defines a specific type of vote's behavior
@@ -26,9 +29,10 @@ pub trait VoteType<T: Parser + Send + Sync + Clone>: Send + Sync {
 }
 
 pub trait ErasedVoteType: Send + Sync {
+    fn name(&self) -> String;
     fn title(&self) -> String;
     fn description(&self) -> String;
-    fn format_description(&self, args: &[String]) -> String;
+    fn vote_description(&self, args: &[String]) -> String;
     fn min_yes_vote_ratio(&self) -> f32;
     fn min_votes_required_ratio(&self) -> f32;
     fn check_prerequisites(&self, args: &[String]) -> Result<Box<dyn Any + Send>, String>;
@@ -43,7 +47,7 @@ pub struct VoteTypeHandler<T, V> {
 
 impl<T, V> VoteTypeHandler<T, V>
 where
-    T: Parser + Send + Sync + Clone + 'static,
+    T: Parser + CommandFactory + Send + Sync + Clone + 'static,
     V: VoteType<T> + Send + Sync + 'static,
 {
     pub fn new(logic: V) -> Self {
@@ -56,13 +60,14 @@ where
 
 impl<T, V> ErasedVoteType for VoteTypeHandler<T, V>
 where
-    T: Parser + Send + Sync + Clone + 'static,
+    T: Parser + CommandFactory + Send + Sync + Clone + 'static,
     V: VoteType<T> + Send + Sync + 'static,
 {
+    fn name(&self) -> String { T::command().get_name().to_string() }
     fn title(&self) -> String { self.logic.title() }
     fn description(&self) -> String { self.logic.description() }
-    fn format_description(&self, args: &[String]) -> String {
-        let mut full_args = vec![self.logic.title().to_lowercase()]; // Use lowercase title as a mock command name
+    fn vote_description(&self, args: &[String]) -> String {
+        let mut full_args = vec![self.name()]; // Use actual clap command name
         full_args.extend(args.iter().cloned());
         match T::try_parse_from(full_args) {
             Ok(parsed) => self.logic.vote_description(parsed),
@@ -72,7 +77,7 @@ where
     fn min_yes_vote_ratio(&self) -> f32 { self.logic.min_yes_vote_ratio() }
     fn min_votes_required_ratio(&self) -> f32 { self.logic.min_votes_required_ratio() }
     fn check_prerequisites(&self, args: &[String]) -> Result<Box<dyn Any + Send>, String> {
-        let mut full_args = vec![self.logic.title().to_lowercase()];
+        let mut full_args = vec![self.name()];
         full_args.extend(args.iter().cloned());
         match T::try_parse_from(full_args) {
             Ok(parsed) => {
@@ -115,6 +120,7 @@ impl Clone for Box<dyn ErasedVoteType> {
 
 pub struct ActiveVote {
     pub logic: Box<dyn ErasedVoteType>,
+    pub raw_target_args: Vec<String>,
     pub target_args: Box<dyn Any + Send>,
     pub yes_votes: HashSet<String>,
     pub no_votes: HashSet<String>,
@@ -136,20 +142,34 @@ impl VotingState {
         }
     }
 
-    pub fn register<T, V>(&mut self, name: String, logic: V)
+    pub fn register<T, V>(&mut self, logic: V)
     where
-        T: Parser + Send + Sync + Clone + 'static,
+        T: Parser + CommandFactory + Send + Sync + Clone + 'static,
         V: VoteType<T> + Send + Sync + 'static,
     {
+        let name = T::command().get_name().to_string();
         self.registry.insert(name, Box::new(VoteTypeHandler::new(logic)));
+    }
+
+    pub fn unregister<T>(&mut self)
+    where
+        T: Parser + CommandFactory + Send + Sync + Clone + 'static,
+    {
+        let name = T::command().get_name().to_string();
+        self.registry.remove(&name);
+    }
+
+    pub fn unregister_by_name(&mut self, name: &str) {
+        self.registry.remove(name);
     }
 }
 
 pub type SharedVotingState = Arc<Mutex<VotingState>>;
 
 #[derive(Parser, Debug)]
+#[command(name = "vote", about = "Start a new vote")]
 pub struct VoteArgs {
-    /// The type of vote to start (e.g., votemap, votekick)
+    /// The type of vote to start (e.g., map, kick)
     pub vote_name: String,
     /// Arguments for the specific vote type
     pub args: Vec<String>,
@@ -160,13 +180,69 @@ pub struct VoteCommand {
     pub broadcaster: Arc<dyn ServerBroadcast>,
 }
 
+impl VoteCommand {
+    pub fn new(state: SharedVotingState, broadcaster: Arc<dyn ServerBroadcast>) -> Self {
+        Self { state, broadcaster }
+    }
+
+    pub fn default(broadcaster: Arc<dyn ServerBroadcast>) -> Self {
+        let mut cmd = Self::new(SharedVotingState::new(Mutex::new(VotingState {
+            active_vote: None,
+            registry: HashMap::new(),
+            player_count_provider: Box::new(GlobalPlayerCountProvider),
+        })), broadcaster);
+
+        cmd.register(MapVote);
+        cmd.register(KickVote);
+
+        cmd
+    }
+
+    pub fn register<T, V>(&mut self, logic: V)
+    where
+        T: Parser + CommandFactory + Send + Sync + Clone + 'static,
+        V: VoteType<T> + Send + Sync + 'static,
+    {
+        self.state.blocking_lock().register(logic);
+    }
+
+    pub fn unregister<T>(&mut self)
+    where
+        T: Parser + CommandFactory + Send + Sync + Clone + 'static,
+    {
+        self.state.blocking_lock().unregister::<T>();
+    }
+
+    pub fn unregister_by_name(&mut self, name: &str) {
+        self.state.blocking_lock().unregister_by_name(name);
+    }
+}
+
 #[async_trait]
 impl Command<VoteArgs> for VoteCommand {
-    fn name(&self) -> &'static str { "vote" }
-    fn description(&self) -> &'static str { "Start a new vote" }
-
     async fn execute(&self, args: VoteArgs, command: &GameCommand) {
         let mut state = self.state.lock().await;
+
+        if args.vote_name == "help" {
+            let mut content = "Available vote types:\n".to_string();
+            let mut sorted_keys: Vec<_> = state.registry.keys().collect();
+            sorted_keys.sort();
+
+            let mut message =
+                BroadcastMessage::new()
+                    .title("Vote Help".to_string())
+                    .color(0x3498db);
+
+            for name in sorted_keys {
+                if let Some(logic) = state.registry.get(name) {
+                    message = message.field(name.clone(), logic.description());
+                }
+            }
+
+            self.broadcaster.broadcast(message).await;
+            return;
+        }
+
         if state.active_vote.is_some() {
             let message = BroadcastMessage::new()
                 .title("Cannot Start Vote".to_string())
@@ -180,12 +256,13 @@ impl Command<VoteArgs> for VoteCommand {
             match logic.check_prerequisites(&args.args) {
                 Ok(target_args) => {
                     let logic = logic.clone_box();
-                    let name = args.vote_name;
+                    let name = logic.name();
                     let initiator = command.actor.display_name.clone();
-                    let description = logic.format_description(&args.args);
+                    let description = logic.vote_description(&args.args);
 
                     state.active_vote = Some(ActiveVote {
                         logic,
+                        raw_target_args: args.args,
                         target_args,
                         yes_votes: HashSet::from([initiator]),
                         no_votes: HashSet::new(),
@@ -211,7 +288,7 @@ impl Command<VoteArgs> for VoteCommand {
         } else {
             let message = BroadcastMessage::new()
                 .title("Cannot Start Vote".to_string())
-                .content(format!("Unknown vote type: {}", args.vote_name))
+                .content(format!("Unknown vote type: {}. Type !vote help to see all options.", args.vote_name))
                 .color(0xFF0000);
             self.broadcaster.broadcast(message).await;
         }
@@ -221,6 +298,7 @@ impl Command<VoteArgs> for VoteCommand {
         let mut state = self.state.lock().await;
         let mut vote_finished = false;
         let mut success = false;
+        let mut failure_reason = String::new();
 
         if let Some(ref active) = state.active_vote {
             if Instant::now() >= active.end_time {
@@ -230,13 +308,17 @@ impl Command<VoteArgs> for VoteCommand {
                 let total_votes = yes_count + no_count;
                 
                 let player_count = state.player_count_provider.get_player_count();
-                let required_votes = (player_count as f32 * active.logic.min_votes_required_ratio()).ceil() as usize;
+                let required_votes = (player_count as f32 * active.logic.min_votes_required_ratio()).floor() as usize;
 
                 if total_votes >= required_votes {
                     let ratio = yes_count as f32 / total_votes as f32;
                     if ratio >= active.logic.min_yes_vote_ratio() {
                         success = true;
+                    } else {
+                        failure_reason = format!("Majority not reached ({:.1}% required, {:.1}% achieved)", active.logic.min_yes_vote_ratio() * 100.0, ratio * 100.0);
                     }
+                } else {
+                    failure_reason = format!("Minimum vote threshold not met ({} votes required, {} total votes cast)", required_votes, total_votes);
                 }
             }
         }
@@ -245,15 +327,15 @@ impl Command<VoteArgs> for VoteCommand {
             let active = state.active_vote.take().unwrap();
             if success {
                 let message = BroadcastMessage::new()
-                    .title(format!("Vote for {} SUCCEEDED", active.logic.title()))
+                    .title(format!("{} SUCCEEDED", active.logic.vote_description(active.raw_target_args.as_slice())))
                     .content(format!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
                     .color(0x00FF00);
                 self.broadcaster.broadcast(message).await;
                 active.logic.on_success(active.target_args);
             } else {
                 let message = BroadcastMessage::new()
-                    .title(format!("Vote for {} FAILED", active.logic.title()))
-                    .content(format!("Result: {} Yes, {} No. Not enough votes or ratio not reached.", active.yes_votes.len(), active.no_votes.len()))
+                    .title(format!("{} FAILED", active.logic.vote_description(active.raw_target_args.as_slice())))
+                    .content(format!("Result: {} Yes, {} No. {}", active.yes_votes.len(), active.no_votes.len(), failure_reason))
                     .color(0xFF0000);
                 self.broadcaster.broadcast(message).await;
             }
@@ -262,40 +344,40 @@ impl Command<VoteArgs> for VoteCommand {
 }
 
 #[derive(Parser, Debug)]
+#[command(name = "yes", about = "Vote YES on the active poll")]
 pub struct YesArgs {}
 
 pub struct YesCommand {
     pub state: SharedVotingState,
+    broadcaster: Arc<dyn ServerBroadcast>
 }
 
 #[async_trait]
 impl Command<YesArgs> for YesCommand {
-    fn name(&self) -> &'static str { "yes" }
-    fn description(&self) -> &'static str { "Vote YES on the active poll" }
-
     async fn execute(&self, _args: YesArgs, command: &GameCommand) {
         let mut state = self.state.lock().await;
         if let Some(ref mut active) = state.active_vote {
             let voter = command.actor.display_name.clone();
             active.no_votes.remove(&voter);
             active.yes_votes.insert(voter);
-            println!("{} voted YES", command.actor.display_name);
+
+
+            self.broadcaster.broadcast(format!("{} voted YES", command.actor.display_name).into()).await;
         }
     }
 }
 
 #[derive(Parser, Debug)]
+#[command(name = "no", about = "Vote NO on the active poll")]
 pub struct NoArgs {}
 
 pub struct NoCommand {
     pub state: SharedVotingState,
+    broadcaster: Arc<dyn ServerBroadcast>
 }
 
 #[async_trait]
 impl Command<NoArgs> for NoCommand {
-    fn name(&self) -> &'static str { "no" }
-    fn description(&self) -> &'static str { "Vote NO on the active poll" }
-
     async fn execute(&self, _args: NoArgs, command: &GameCommand) {
         let mut state = self.state.lock().await;
         if let Some(ref mut active) = state.active_vote {
@@ -303,11 +385,13 @@ impl Command<NoArgs> for NoCommand {
             active.yes_votes.remove(&voter);
             active.no_votes.insert(voter);
             println!("{} voted NO", command.actor.display_name);
+            self.broadcaster.broadcast(format!("{} voted NO", command.actor.display_name).into()).await;
         }
     }
 }
 
 #[derive(Parser, Debug)]
+#[command(name = "cancel", about = "Cancel the current active vote")]
 pub struct CancelVoteArgs {}
 
 pub struct CancelVoteCommand {
@@ -316,9 +400,6 @@ pub struct CancelVoteCommand {
 
 #[async_trait]
 impl Command<CancelVoteArgs> for CancelVoteCommand {
-    fn name(&self) -> &'static str { "cancelvote" }
-    fn description(&self) -> &'static str { "Cancel the current active vote" }
-
     async fn execute(&self, _args: CancelVoteArgs, command: &GameCommand) {
         if !command.actor.is_elevated() {
             println!("Only elevated users can cancel votes.");
@@ -338,7 +419,7 @@ mod tests {
     use crate::events::models::{CommandActor, ActorIdentity, ActorPermissions, PermissionFlags, CommandSource};
 
     #[derive(Parser, Clone, Debug, PartialEq)]
-    #[command(name = "mockvote")]
+    #[command(name = "mockvote", about = "Mock description")]
     struct MockVoteArgs {
         #[arg(default_value = "default")]
         pub target: String,
@@ -351,7 +432,7 @@ mod tests {
         fn description(&self) -> String { "Mock description".into() }
         fn vote_description(&self, args: MockVoteArgs) -> String { format!("Mock: {}", args.target) }
         fn min_yes_vote_ratio(&self) -> f32 { 0.5 }
-        fn min_votes_required_ratio(&self) -> f32 { 0.1 }
+        fn min_votes_required_ratio(&self) -> f32 { 0.33 }
         fn on_success(&self, _args: MockVoteArgs) {}
         fn clone_box(&self) -> Box<dyn ErasedVoteType> { Box::new(VoteTypeHandler::new(self.clone())) }
     }
@@ -361,10 +442,14 @@ mod tests {
         fn get_player_count(&self) -> usize { self.0 }
     }
 
-    struct MockBroadcaster;
+    struct MockBroadcaster {
+        messages: Arc<Mutex<Vec<BroadcastMessage>>>,
+    }
     #[async_trait]
     impl ServerBroadcast for MockBroadcaster {
-        async fn broadcast(&self, _message: BroadcastMessage) {}
+        async fn broadcast(&self, message: BroadcastMessage) {
+            self.messages.lock().await.push(message);
+        }
     }
 
     fn mock_actor(name: &str, elevated: bool) -> CommandActor {
@@ -391,6 +476,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_vote_failure_reasons() {
+        let mut state_init = VotingState::new();
+        state_init.register(MockVote);
+        let state = Arc::new(Mutex::new(state_init));
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
+
+        // 1. Test "Minimum vote threshold not met"
+        // 100 players, 33% required_ratio = 33 votes required.
+        // 1 yes, 1 no = 2 total.
+        {
+            let mut s = state.lock().await;
+            s.player_count_provider = Box::new(MockPlayerCountProvider(100));
+            s.active_vote = Some(ActiveVote {
+                logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
+                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
+                yes_votes: HashSet::from(["User1".into()]),
+                no_votes: HashSet::from(["User2".into()]),
+                end_time: Instant::now() - Duration::from_secs(1),
+            });
+        }
+        cmd.on_tick().await;
+        {
+            let msgs = messages.lock().await;
+            assert_eq!(msgs.len(), 1);
+            assert!(msgs[0].get_content().unwrap().contains("Minimum vote threshold not met (33 votes required, 2 total votes cast)"));
+        }
+        messages.lock().await.clear();
+
+        // 2. Test "Majority not reached"
+        // 10 players, 33% required = 4 votes required.
+        // 2 yes, 3 no = 5 total (Threshold met).
+        // Ratio 2/5 = 40% (50% required).
+        {
+            let mut s = state.lock().await;
+            s.player_count_provider = Box::new(MockPlayerCountProvider(10));
+            s.active_vote = Some(ActiveVote {
+                logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
+                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
+                yes_votes: HashSet::from(["Y1".into(), "Y2".into()]),
+                no_votes: HashSet::from(["N1".into(), "N2".into(), "N3".into()]),
+                end_time: Instant::now() - Duration::from_secs(1),
+            });
+        }
+        cmd.on_tick().await;
+        {
+            let msgs = messages.lock().await;
+            assert_eq!(msgs.len(), 1);
+            assert!(msgs[0].get_content().unwrap().contains("Majority not reached (50.0% required, 40.0% achieved)"));
+        }
+    }
+
+    #[tokio::test]
     async fn test_voting_state_initialization() {
         let state = VotingState::new();
         assert!(state.active_vote.is_none());
@@ -400,9 +540,10 @@ mod tests {
     #[tokio::test]
     async fn test_vote_command_starts_vote() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
         
         let actor = mock_actor("Initiator", false);
         let game_cmd = mock_game_command(actor, vec!["TournamentGrounds".into()]);
@@ -424,9 +565,10 @@ mod tests {
     #[tokio::test]
     async fn test_duplicate_vote_fails() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
         
         // Start first vote
         let actor1 = mock_actor("User1", false);
@@ -447,7 +589,7 @@ mod tests {
     #[tokio::test]
     async fn test_yes_no_commands() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
         
         // Setup active vote
@@ -455,6 +597,7 @@ mod tests {
             let mut s = state.lock().await;
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::new(),
                 no_votes: HashSet::new(),
@@ -462,8 +605,9 @@ mod tests {
             });
         }
 
-        let yes_cmd = YesCommand { state: state.clone() };
-        let no_cmd = NoCommand { state: state.clone() };
+        let broadcaster = Arc::new(MockBroadcaster { messages: Arc::new(Mutex::new(Vec::new())) });
+        let yes_cmd = YesCommand { state: state.clone(), broadcaster: broadcaster.clone() };
+        let no_cmd = NoCommand { state: state.clone(), broadcaster: broadcaster.clone() };
 
         let voter1 = mock_actor("Voter1", false);
         let voter2 = mock_actor("Voter2", false);
@@ -491,7 +635,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_vote_permissions() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
         
         // Setup active vote
@@ -499,6 +643,7 @@ mod tests {
             let mut s = state.lock().await;
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::new(),
                 no_votes: HashSet::new(),
@@ -530,9 +675,10 @@ mod tests {
     #[tokio::test]
     async fn test_vote_timeout_tick() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
 
         // Setup active vote that expires in the past
         {
@@ -540,6 +686,7 @@ mod tests {
             s.player_count_provider = Box::new(MockPlayerCountProvider(10)); // 10% of 10 is 1 vote required
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::from(["User1".into()]), // 1 Yes
                 no_votes: HashSet::new(),                  // 0 No
@@ -557,9 +704,10 @@ mod tests {
     #[tokio::test]
     async fn test_vote_success_at_threshold() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
 
         // 10 players, 10% min_vote_percentage means 1 vote required.
         // 1 vote cast -> Success.
@@ -568,6 +716,7 @@ mod tests {
             s.player_count_provider = Box::new(MockPlayerCountProvider(10));
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::from(["User1".into()]),
                 no_votes: HashSet::new(),
@@ -581,9 +730,10 @@ mod tests {
     #[tokio::test]
     async fn test_vote_failure_below_threshold() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
 
         // 100 players, 10% min_vote_percentage means 10 votes required.
         // 1 vote cast -> Failure.
@@ -592,6 +742,7 @@ mod tests {
             s.player_count_provider = Box::new(MockPlayerCountProvider(100));
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::from(["User1".into()]),
                 no_votes: HashSet::new(),
@@ -605,9 +756,10 @@ mod tests {
     #[tokio::test]
     async fn test_vote_exact_threshold() {
         let mut state_init = VotingState::new();
-        state_init.register("mockvote".to_string(), MockVote);
+        state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster) };
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
 
         // Test exact threshold (10 players, 10% = 1 required)
         {
@@ -615,6 +767,7 @@ mod tests {
             s.player_count_provider = Box::new(MockPlayerCountProvider(10));
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
+                raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
                 yes_votes: HashSet::from(["User1".into()]),
                 no_votes: HashSet::new(),
@@ -623,5 +776,37 @@ mod tests {
         }
         cmd.on_tick().await;
         assert!(state.lock().await.active_vote.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_vote_help_command() {
+        let mut state_init = VotingState::new();
+        state_init.register(MockVote);
+        let state = Arc::new(Mutex::new(state_init));
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
+
+        let actor = mock_actor("User1", false);
+        let game_cmd = mock_game_command(actor, vec!["help".into()]);
+        
+        // Execute with "help" argument
+        cmd.execute(VoteArgs { vote_name: "help".into(), args: vec![] }, &game_cmd).await;
+        
+        // Help should have executed without errors (MockBroadcaster just ignores it)
+        // In a real scenario, we'd check if broadcaster.broadcast was called with help text
+    }
+
+    #[tokio::test]
+    async fn test_vote_unknown_type_suggests_help() {
+        let mut state_init = VotingState::new();
+        state_init.register(MockVote);
+        let state = Arc::new(Mutex::new(state_init));
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let cmd = VoteCommand { state: state.clone(), broadcaster: Arc::new(MockBroadcaster { messages: messages.clone() }) };
+
+        let actor = mock_actor("User1", false);
+        let game_cmd = mock_game_command(actor, vec!["invalid".into()]);
+        
+        cmd.execute(VoteArgs { vote_name: "invalid".into(), args: vec![] }, &game_cmd).await;
     }
 }

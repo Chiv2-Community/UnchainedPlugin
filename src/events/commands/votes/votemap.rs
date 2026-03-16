@@ -3,6 +3,7 @@ use crate::events::commands::vote::{VoteType, ErasedVoteType, VoteTypeHandler};
 use clap::Parser;
 
 #[derive(Parser, Clone, Debug)]
+#[command(name = "map")]
 pub struct MapVoteArgs {
     pub map_name: String,
 }
@@ -13,7 +14,7 @@ impl VoteType<MapVoteArgs> for MapVote {
     fn title(&self) -> String { "Map Change".into() }
     fn description(&self) -> String { "Vote to change the server to a new map.".into() }
     fn vote_description(&self, args: MapVoteArgs) -> String {
-        format!("Map: {}", args.map_name)
+        format!("Vote to change maps to {}", args.map_name)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.5 }
     fn min_votes_required_ratio(&self) -> f32 { 0.1 }

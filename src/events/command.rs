@@ -1,14 +1,12 @@
 ﻿use async_trait::async_trait;
-use clap::Parser;
+use clap::{Parser, CommandFactory};
 use crate::events::bus::Subscriber;
 use crate::events::models::{GameEvent, GameCommand};
 
 use std::marker::PhantomData;
 
 #[async_trait]
-pub trait Command<Args: Parser + Send + Sync>: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn description(&self) -> &'static str;
+pub trait Command<Args: Parser + CommandFactory + Send + Sync>: Send + Sync {
     fn check_permission(&self, command: &GameCommand) -> bool { true }
     async fn execute(&self, args: Args, command: &GameCommand);
     async fn on_tick(&self) {}
@@ -17,8 +15,8 @@ pub trait Command<Args: Parser + Send + Sync>: Send + Sync {
 
 #[async_trait]
 pub trait ErasedCommand: Send + Sync {
-    fn name(&self) -> &'static str;
-    fn description(&self) -> &'static str;
+    fn name(&self) -> String;
+    fn description(&self) -> String;
     fn check_permission(&self, command: &GameCommand) -> bool;
     async fn execute(&self, command: &GameCommand);
     async fn on_tick(&self);
@@ -47,14 +45,14 @@ where
 impl<T, Args> ErasedCommand for CommandHandler<T, Args>
 where
     T: Command<Args> + Send + Sync,
-    Args: Parser + Send + Sync,
+    Args: Parser + CommandFactory + Send + Sync,
 {
-    fn name(&self) -> &'static str {
-        self.command.name()
+    fn name(&self) -> String {
+        Args::command().get_name().to_string()
     }
 
-    fn description(&self) -> &'static str {
-        self.command.description()
+    fn description(&self) -> String {
+        Args::command().get_about().map(|a| a.to_string()).unwrap_or_default()
     }
 
     fn check_permission(&self, command: &GameCommand) -> bool {
@@ -98,7 +96,7 @@ impl CommandSubscriber {
     pub fn register_command<T, Args>(&mut self, command: T)
     where
         T: Command<Args> + 'static,
-        Args: Parser + Send + Sync + 'static,
+        Args: Parser + CommandFactory + Send + Sync + 'static,
     {
         self.commands.push(Box::new(CommandHandler::new(command)));
     }
@@ -156,14 +154,6 @@ mod tests {
 
     #[async_trait]
     impl Command<TestArgs> for TestCommand {
-        fn name(&self) -> &'static str {
-            "test"
-        }
-
-        fn description(&self) -> &'static str {
-            "A test command that demonstrates clap integration"
-        }
-
         async fn execute(&self, args: TestArgs, _command: &GameCommand) {
             println!("Test command executed with message: {} and flag: {}", args.message, args.flag);
         }
@@ -249,8 +239,6 @@ mod tests {
 
     #[async_trait]
     impl Command<SetBoolArgs> for SetBoolCommand {
-        fn name(&self) -> &'static str { "setbool" }
-        fn description(&self) -> &'static str { "sets a bool when executed" }
         async fn execute(&self, _args: SetBoolArgs, _command: &GameCommand) {
             self.executed.store(true, std::sync::atomic::Ordering::SeqCst);
         }
@@ -284,6 +272,7 @@ mod tests {
     #[tokio::test]
     async fn test_command_tick() {
         #[derive(Parser, Debug)]
+        #[command(name = "tick")]
         struct TickArgs {}
 
         struct TickCommand {
@@ -291,8 +280,6 @@ mod tests {
         }
         #[async_trait]
         impl Command<TickArgs> for TickCommand {
-            fn name(&self) -> &'static str { "tick" }
-            fn description(&self) -> &'static str { "tick" }
             async fn execute(&self, _args: TickArgs, _command: &GameCommand) {}
             async fn on_tick(&self) {
                 self.ticked.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -310,6 +297,7 @@ mod tests {
     #[tokio::test]
     async fn test_command_permission_denied() {
         #[derive(Parser, Debug)]
+        #[command(name = "restricted")]
         struct RestrictedArgs {}
 
         struct RestrictedCommand {
@@ -318,8 +306,6 @@ mod tests {
 
         #[async_trait]
         impl Command<RestrictedArgs> for RestrictedCommand {
-            fn name(&self) -> &'static str { "restricted" }
-            fn description(&self) -> &'static str { "restricted" }
             fn check_permission(&self, _command: &GameCommand) -> bool { false }
             async fn execute(&self, _args: RestrictedArgs, _command: &GameCommand) {
                 self.executed.store(true, std::sync::atomic::Ordering::SeqCst);

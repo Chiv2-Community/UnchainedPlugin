@@ -61,6 +61,7 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
             }
         }
     }
+
     for p in inventory::iter::<resolvers::OffsetRegisty> {
         let map: HashMap<String, u64> = (p.map)();
         sinfo!(f; "Offset Registry '{}': {} entries", p.name, map.len());
