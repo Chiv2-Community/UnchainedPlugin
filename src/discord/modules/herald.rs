@@ -1,5 +1,5 @@
 ﻿use crate::commands::NATIVE_COMMAND_QUEUE;
-use crate::discord::ChatType;
+use crate::events::models::ChatType;
 use crate::discord::config::DiscordConfig;
 use crate::discord::config::ModuleConfig;
 use crate::discord::core::*;

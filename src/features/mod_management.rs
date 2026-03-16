@@ -40,7 +40,7 @@ macro_rules! check_main_thread {
         }
     }
 }
-// in my_engine/src/commands.rs
+// in my_engine/src/command
 use sleuth_macros::command;
 
 #[command(name = "mod", sub = "dump", desc = "Dumps mod list. Path is optional")]

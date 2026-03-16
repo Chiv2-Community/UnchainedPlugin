@@ -439,11 +439,11 @@ fn postinit_rustlib() {
 
 struct GameChatSink;
 impl discord::ChatSink for GameChatSink {
-    fn send(&self, text: String, chat_type: discord::ChatType) {
+    fn send(&self, text: String, chat_type: crate::events::models::ChatType) {
         let game_chat_type = match chat_type {
-            discord::ChatType::Admin => Some(EChatType::Admin),
-            discord::ChatType::Global => Some(EChatType::AllSay),
-            discord::ChatType::Team => Some(EChatType::TeamSay),
+            crate::events::models::ChatType::Admin => Some(EChatType::Admin),
+            crate::events::models::ChatType::Global => Some(EChatType::AllSay),
+            crate::events::models::ChatType::Team => Some(EChatType::TeamSay),
         };
         game::chivalry2::send_ingame_message(text, game_chat_type);
     }

@@ -23,7 +23,7 @@ use crate::discord::events::{CommandRequest, CommandSource, GameCommand, Permiss
 use crate::discord::responses::{BotResponse, IntoResponses, ResponseContent, Target};
 use crate::{serror, swarn};
 use serenity::all::{ChannelId, CreateMessage, Http, Message};
-// use serenity::model::prelude::*;
+use crate::events::models::ChatType;
 use serenity::client::EventHandler as DiscordHandler;
 use serenity::prelude::*;
 use std::sync::{Arc, OnceLock};
@@ -284,7 +284,8 @@ pub type Ctx = Arc<SleuthContext>;
 pub struct ConsoleChatSink;
 impl ChatSink for ConsoleChatSink {
     fn send(&self, text: String, chat_type: ChatType) {
-        println!("[MOCK CHAT] <{}> {:?}", chat_type.as_str(), text);
+        let type_str: &str = chat_type.into();
+        println!("[MOCK CHAT] <{}> {:?}", type_str, text);
     }
 }
 

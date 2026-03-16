@@ -54,7 +54,7 @@ pub struct MatchEnd {
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
 pub enum ChatSource { Discord, Console, Game }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum ChatType { Admin, Global, Team }
 impl ChatType {
     pub fn from_chiv_chat_type(echat_type: EChatType) -> Self {

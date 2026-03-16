@@ -1,4 +1,5 @@
-﻿use crate::discord::{ChatType, responses::*};
+﻿use crate::discord::responses::*;
+use crate::events::models::ChatType;
 use crate::discord::core::DiscordSubscriber;
 use crate::discord::events::GameEvent;
 use crate::sinfo;

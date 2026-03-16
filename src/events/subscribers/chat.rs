@@ -74,7 +74,6 @@ impl ChatSink for DiscordChatSink {
     }
 }
 
-
 struct ChatRelaySubscriber {
     sinks: Vec<Box<dyn ChatSink>>
 }
