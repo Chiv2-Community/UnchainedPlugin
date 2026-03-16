@@ -73,6 +73,10 @@ impl<E> EventBus<E>
         subscribers.retain(|s| s.identifier() != name);
     }
 
+    pub fn get_subscribers(&self) -> Arc<Mutex<Vec<Box<dyn Subscriber<E>>>>> {
+        Arc::clone(&self.subscribers)
+    }
+
     pub fn start(self: Arc<Self>) -> EventPublisher<E> {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<E>();
         let bus = Arc::clone(&self);
