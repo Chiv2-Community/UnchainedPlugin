@@ -1,8 +1,8 @@
 use serenity::all::UserId;
 use UnchainedPlugin::discord::config::DiscordConfig;
-use UnchainedPlugin::discord::events::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
+use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, GameCommand};
+use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
-use UnchainedPlugin::game::chivalry2::EChatType;
 use UnchainedPlugin::{serror, sinfo};
 use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
@@ -21,7 +21,7 @@ fn main() {
     });
     let ctx = Arc::new(SleuthContext {
             chat: Arc::new(ConsoleChatSink),
-            config
+            config: config.clone()
         });
     let handle = DiscordBridge::init(config_path, ctx);
     DISCORD_HANDLE.set(handle)
@@ -41,31 +41,42 @@ fn main() {
 
         match parts.as_slice() {
             ["join", name] => {
-                GameEvent::JoinEvent(Join { name: name.to_string() }).dispatch(None);
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: name.to_string() }));
             }
             ["kill", k, v] => {
-                GameEvent::KillEvent(Kill {
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
                     weapon: "MockSword".to_string() 
-                }).dispatch(None);
+                }));
             }
             ["chat", ..] => {
                 let msg = parts[1..].join(" ");
-                GameEvent::GameChatMessageEvent(GameChatMessage {
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                    chat_source: ChatSource::Game,
+                    chat_type: ChatType::Admin,
                     sender: "MockPlayer".to_string(), 
                     message: msg,
-                    chat_type: EChatType::Admin, 
-                }).dispatch(None);
+                }));
             }
             ["dchat", ..] => {
                 let msg = parts[1..].join(" ");
-                GameEvent::CommandRequestEvent(CommandRequest {
-                    command: msg,
-                    user: "MockDiscUser".into(),
-                    user_id: UserId::new(1234),
-                    user_roles: [].into(),
-                }).dispatch(None);
+                let parts: Vec<String> = msg.split_whitespace().map(|s| s.to_string()).collect();
+                let name = parts.get(0).cloned().unwrap_or_default();
+                let args = if parts.len() > 1 { parts[1..].to_vec() } else { vec![] };
+                
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameCommandEvent(GameCommand {
+                    name,
+                    args,
+                    raw_args: msg,
+                    actor: CommandActor::from_discord(
+                        UserId::new(1234),
+                        "MockDiscUser".into(),
+                        &[],
+                        &config
+                    ),
+                    source: CommandSource::Discord,
+                }));
             }
             ["exit"] => break,
             _ => println!("Unknown command. Try 'join Arthur'"),

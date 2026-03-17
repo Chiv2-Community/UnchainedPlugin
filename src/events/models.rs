@@ -3,15 +3,6 @@ use strum::{Display, IntoStaticStr};
 use crate::game::chivalry2::EChatType;
 use crate::swarn;
 
-/// Triggered when a player sends a message in Discord
-#[derive(Debug, Clone)]
-pub struct CommandRequest {
-    pub command: String,
-    pub user: String,
-    pub user_id: UserId,
-    pub user_roles: Vec<RoleId>,
-}
-
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
 pub struct Join {
@@ -104,7 +95,7 @@ impl CommandActor {
                 user_id,
                 display_name: username,
             },
-            permissions: ActorPermissions { flags: if is_admin { PermissionFlags::ADMIN} else { PermissionFlags::USER} },
+            permissions: ActorPermissions { flags: if is_admin { PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER } else { PermissionFlags::USER} },
         }
     }
 }
@@ -195,7 +186,6 @@ pub struct VoteCast {
 
 #[derive(Debug, Clone, IntoStaticStr)]
 pub enum GameEvent {
-    CommandRequestEvent(CommandRequest),
     JoinEvent(Join),
     LeaveEvent(Leave), // Never dispatched
     CrashEvent(Crash),

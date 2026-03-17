@@ -1,5 +1,5 @@
 ﻿use crate::commands::NATIVE_COMMAND_QUEUE;
-use crate::events::commands::vote::{VoteType, ErasedVoteType, VoteTypeHandler};
+use crate::events::integrations::game_event::vote::{VoteType, ErasedVoteType, VoteTypeHandler};
 use clap::Parser;
 
 #[derive(Parser, Clone, Debug)]

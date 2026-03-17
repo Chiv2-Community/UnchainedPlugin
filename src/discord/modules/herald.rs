@@ -55,7 +55,7 @@ impl AdminHerald {
 
     #[handler_command(name = "say", desc = "Send a global message to the server.", source = "Discord", elevated = true)]
     pub fn cmd_say(&mut self, _message: String, cmd: &GameCommand) -> Vec<BotResponse> {
-        self.ctx.chat.send(cmd.raw_args.clone(), ChatType::Admin);
+        self.ctx.chat.send("sender".to_string(), cmd.raw_args.clone(), ChatType::Admin);
         msg(format!("✅ **Broadcasted**: {}", cmd.raw_args)).into_responses()
     }
 

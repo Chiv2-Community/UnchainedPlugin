@@ -11,7 +11,7 @@ pub mod commands;
 pub mod discord;
 #[cfg(windows)]
 mod seh;
-mod events;
+pub mod events;
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
@@ -28,12 +28,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::commands::spawn_cli_handler;
-use crate::discord::config::DiscordConfig;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
 use crate::tools::hook_globals::{CLI_ARGS, cli_args, globals, init_globals};
+use serenity::all::ChannelId;
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
 
@@ -327,6 +327,11 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 }
 
 use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE, ENABLE_QUICK_EDIT_MODE, ENABLE_EXTENDED_FLAGS};
+use crate::events::models::{ChatSource, ChatType, GameChatMessage};
+use crate::events::models::GameEvent::GameChatMessageEvent;
+use crate::features::tokio_runtime::TOKIO_RUNTIME;
+use crate::features::discord::DiscordConfig;
+use crate::features::events::EVENT_SYSTEM;
 
 fn preinit_rustlib() {
     unsafe {
@@ -387,7 +392,8 @@ static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 static WORLD_READY: AtomicBool = AtomicBool::new(false);
 
 fn postinit_rustlib() {
-    
+    let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
+    // crate::features::events::init_event_system();
     seh::install();
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
@@ -437,18 +443,6 @@ fn postinit_rustlib() {
     });
 }
 
-struct GameChatSink;
-impl discord::ChatSink for GameChatSink {
-    fn send(&self, text: String, chat_type: crate::events::models::ChatType) {
-        let game_chat_type = match chat_type {
-            crate::events::models::ChatType::Admin => Some(EChatType::Admin),
-            crate::events::models::ChatType::Global => Some(EChatType::AllSay),
-            crate::events::models::ChatType::Team => Some(EChatType::TeamSay),
-        };
-        game::chivalry2::send_ingame_message(text, game_chat_type);
-    }
-}
-
 pub fn world_init() {
     #[cfg(feature="rcon_commands")]
     std::thread::spawn(|| {
@@ -488,51 +482,37 @@ pub fn world_init() {
         });
     }
 
-    if cli_args().discord_enabled() {
-        sinfo!(f; "Starting discord bridge");
-        // let config = DiscordConfig {
-        //     bot_token: cli_args().discord_bot_token.clone().expect("Token invalid"),
-        //     channel_id: cli_args().discord_channel_id.unwrap(),
-        //     admin_channel_id: cli_args().discord_admin_channel_id.unwrap(),
-        //     general_channel_id: cli_args().discord_general_channel_id.unwrap(),
-        //     admin_role_id: 1113981344872140822,
-        //     disabled_modules: vec![],
-        //     blocked_notifications: vec![],
-        //     modules: HashMap::default()
-        // };
-        
-        fn update<T>(target: &mut T, source: Option<T>) {
-            if let Some(val) = source {
-                *target = val;
+    {
+        TOKIO_RUNTIME.spawn(async move {
+            let _ = features::events::initialize_subscribers().await;
+
+            EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
+                chat_source: ChatSource::Console,
+                chat_type: ChatType::Global,
+                sender: "Server".to_string(),
+                message: "Initialized Event System".to_string(),
+            }));
+
+            if let (Some(bot_token), Some(general_channel_id)) = (
+                cli_args().discord_bot_token.clone(),
+                cli_args().discord_general_channel_id.map(ChannelId::new)
+            ) {
+                features::discord::initialize_discord_system(DiscordConfig {
+                    bot_token,
+                    general_channel_id,
+                    admin_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
+                    admin_role_id: None,
+                });
+
+                EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
+                    chat_source: ChatSource::Console,
+                    chat_type: ChatType::Global,
+                    sender: "Server".to_string(),
+                    message: "Initialized Discord Event Handler System".to_string(),
+                }));
             }
-        }
 
-        let config_path = "discord_bot_config.json";
-        let mut config = DiscordConfig::load(config_path, true).unwrap_or_else(|e| {
-            serror!("Configuration Error, loading default: {}", e);
-            DiscordConfig::default()
         });
-
-        let cli = &cli_args();
-        update(&mut config.bot_token, cli.discord_bot_token.clone());
-        update(&mut config.channel_id, Some(cli.discord_channel_id));
-        update(&mut config.admin_channel_id, Some(cli.discord_admin_channel_id));
-        update(&mut config.general_channel_id, Some(cli.discord_general_channel_id));
-        update(&mut config.admin_role_id, Some(cli.discord_admin_role_id));
-
-        let ctx = Arc::new(discord::SleuthContext {
-            chat: Arc::new(GameChatSink),
-            config
-        });
-        
-        // This spawns the background thread and the Tokio runtime
-        let handle = crate::discord::DiscordBridge::init(config_path, ctx);
-
-        // Store the handle globally so the dispatch! macro can find it
-        crate::discord::DISCORD_HANDLE.set(handle)
-            .expect("Discord Handle was already initialized!");
-
-        sinfo!(f; "Discord Bridge is running in the background...");
     }
     
     #[cfg(feature="mod_management")]

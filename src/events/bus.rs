@@ -1,11 +1,12 @@
-﻿use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+﻿use std::sync::Arc;
+use std::time::Duration;
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
+use anyhow::Result;
 
 
+#[derive(Clone)]
 pub struct EventPublisher<T> {
     bus: UnboundedSender<T>
 }
@@ -27,35 +28,24 @@ pub trait Subscriber<T>: Send + Sync {
     /// Called for every event. Returns an optional message to send to Discord.
     async fn on_event(&mut self, event: &T);
 
-    /// Optional periodic task delay. If None, on_tick will not be called.
-    fn tick_delay(&self) -> Option<Duration> {
-        None
-    }
-
-    /// Called periodically if tick_delay returns Some.
+    /// Called periodically at the bus's tick rate.
     async fn on_tick(&mut self) {}
 }
 
 pub struct EventBus<E>
 {
-    subscribers: Arc<Mutex<Vec<Box<dyn Subscriber<E>>>>>
+    subscribers: Arc<Mutex<Vec<Box<dyn Subscriber<E>>>>>,
+    tick_rate: Duration,
 }
 
 impl<E> EventBus<E>
     where E: Send + Sync + 'static + Clone,
 {
-    pub fn new(subscribers: Vec<Box<dyn Subscriber<E>>>) -> Result<Self, String> {
-        let mut seen_ids = std::collections::HashSet::new();
-        for sub in &subscribers {
-            let id = sub.identifier();
-            if !seen_ids.insert(id) {
-                return Err(format!("Duplicate subscriber identifier: {}", id));
-            }
+    pub fn new(tick_rate: Duration) -> Self {
+        Self {
+            subscribers: Arc::new(Mutex::new(vec![])),
+            tick_rate,
         }
-
-        Ok(Self {
-            subscribers: Arc::new(Mutex::new(subscribers))
-        })
     }
 
     pub async fn subscribe(&self, subscriber: Box<dyn Subscriber<E>>) -> Result<(), String> {
@@ -80,9 +70,12 @@ impl<E> EventBus<E>
     pub fn start(self: Arc<Self>) -> EventPublisher<E> {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<E>();
         let bus = Arc::clone(&self);
+
+        let handle = tokio::runtime::Handle::try_current()
+            .unwrap_or_else(|_| crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE.clone());
         
         // Event processing task
-        tokio::spawn(async move {
+        handle.spawn(async move {
             while let Some(event) = receiver.recv().await {
                 bus.dispatch(event).await;
             }
@@ -90,38 +83,16 @@ impl<E> EventBus<E>
 
         // Tick management task
         let bus_for_ticks = Arc::clone(&self);
-        tokio::spawn(async move {
-            let mut last_ticks: HashMap<String, Instant> = HashMap::new();
-            let mut interval = tokio::time::interval(Duration::from_millis(100));
+        let tick_rate = self.tick_rate;
+        handle.spawn(async move {
+            let mut interval = tokio::time::interval(tick_rate);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 interval.tick().await;
-                // Use a separate scope to ensure the lock is dropped
-                let mut subscribers_to_tick = Vec::new();
-                {
-                    let mut subscribers = bus_for_ticks.subscribers.lock().await;
-                    let now = Instant::now();
-                    for (index, subscriber) in subscribers.iter_mut().enumerate() {
-                        if let Some(delay) = subscriber.tick_delay() {
-                            let id = format!("{}_{}", subscriber.identifier(), index);
-                            let last_tick = last_ticks.get(&id).cloned();
-
-                            if last_tick.is_none() || now.duration_since(last_tick.unwrap()) >= delay {
-                                subscribers_to_tick.push(index);
-                                last_ticks.insert(id, now);
-                            }
-                        }
-                    }
-                }
-
-                if !subscribers_to_tick.is_empty() {
-                    let mut subscribers = bus_for_ticks.subscribers.lock().await;
-                    for index in subscribers_to_tick {
-                        if let Some(subscriber) = subscribers.get_mut(index) {
-                            subscriber.on_tick().await;
-                        }
-                    }
+                let mut subscribers = bus_for_ticks.subscribers.lock().await;
+                for subscriber in subscribers.iter_mut() {
+                    subscriber.on_tick().await;
                 }
             }
         });
@@ -169,10 +140,6 @@ mod tests {
             events.push(event.clone());
         }
 
-        fn tick_delay(&self) -> Option<Duration> {
-            self.delay
-        }
-
         async fn on_tick(&mut self) {
             let mut ticks = self.ticks.lock().await;
             *ticks += 1;
@@ -200,7 +167,8 @@ mod tests {
         let sub = sub("test_subscriber");
         let events = Arc::clone(&sub.events);
 
-        let bus = Arc::new(EventBus::new(vec![Box::new(sub)]).unwrap());
+        let bus = Arc::new(EventBus::new(Duration::from_millis(100)));
+        bus.subscribe(Box::new(sub)).await.expect("Failed to subscribe");
         let publisher = Arc::clone(&bus).start();
 
         publisher.publish(TestEvent::Hello);
@@ -217,46 +185,42 @@ mod tests {
 
     #[tokio::test]
     async fn test_periodic_tick() {
-        let sub = sub("test_subscriber").with_delay(200);
+        let sub = sub("test_subscriber");
         let ticks = Arc::clone(&sub.ticks);
 
-        let bus = Arc::new(EventBus::new(vec![Box::new(sub)]).unwrap());
+        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
+        bus.subscribe(Box::new(sub)).await.unwrap();
         let _publisher = Arc::clone(&bus).start();
 
-        // Wait for at least 2 ticks (400ms + some buffer)
-        // Resolution is 100ms
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        // Wait for at least 2 ticks (200ms + some buffer)
+        tokio::time::sleep(Duration::from_millis(350)).await;
 
         let count = *ticks.lock().await;
-        // Should have ticked 2 or 3 times depending on exact timing
+        // Should have ticked about 3 times
         assert!(count >= 2, "Expected at least 2 ticks, got {}", count);
     }
 
     #[tokio::test]
-    async fn test_multiple_subscribers_different_delays() {
-        let sub1 = sub("sub1").with_delay(200);
+    async fn test_multiple_subscribers_same_rate() {
+        let sub1 = sub("sub1");
         let ticks1 = Arc::clone(&sub1.ticks);
 
-        let sub2 = sub("sub2").with_delay(400);
+        let sub2 = sub("sub2");
         let ticks2 = Arc::clone(&sub2.ticks);
 
-        let bus = Arc::new(EventBus::new(vec![]).unwrap());
+        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
         let _publisher = Arc::clone(&bus).start();
 
         bus.subscribe(Box::new(sub1)).await.unwrap();
         bus.subscribe(Box::new(sub2)).await.unwrap();
 
-        tokio::time::sleep(Duration::from_millis(800)).await;
+        tokio::time::sleep(Duration::from_millis(350)).await;
 
         let count1 = *ticks1.lock().await;
         let count2 = *ticks2.lock().await;
 
-        // First tick is immediate when they are first seen in the loop
-        // sub1 (200ms): 0ms (tick 1), 200ms (tick 2), 400ms (tick 3), 600ms (tick 4), 800ms (tick 5)
-        // sub2 (400ms): 0ms (tick 1), 400ms (tick 2), 800ms (tick 3)
-        assert!(count1 >= 3, "Subscriber 1 expected at least 3 ticks, got {}", count1);
+        assert!(count1 >= 2, "Subscriber 1 expected at least 2 ticks, got {}", count1);
         assert!(count2 >= 2, "Subscriber 2 expected at least 2 ticks, got {}", count2);
-        assert!(count1 > count2, "Subscriber 1 should have more ticks than Subscriber 2");
     }
 
     #[tokio::test]
@@ -275,18 +239,10 @@ mod tests {
             async fn on_event(&mut self, _: &TestEvent) {}
         }
 
-        // Should fail during construction
-        let bus_res = EventBus::new(vec![
-            Box::new(Sub1),
-            Box::new(Sub2),
-        ]);
-        match bus_res {
-            Err(e) => assert!(e.contains("Duplicate subscriber identifier: sub")),
-            _ => panic!("Should have failed"),
-        }
+        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
 
         // Should fail during runtime subscription
-        let bus = Arc::new(EventBus::new(vec![Box::new(Sub1)]).unwrap());
+        bus.subscribe(Box::new(Sub1)).await.unwrap();
         let sub2_res = bus.subscribe(Box::new(Sub2)).await;
         match sub2_res {
             Err(e) => assert!(e.contains("Duplicate subscriber identifier: sub")),
@@ -299,7 +255,7 @@ mod tests {
         let sub = sub("test_subscriber");
         let events = Arc::clone(&sub.events);
 
-        let bus = Arc::new(EventBus::new(vec![]).unwrap());
+        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
         let publisher = Arc::clone(&bus).start();
         let id = sub.identifier();
 

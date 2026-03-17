@@ -1,16 +1,18 @@
-﻿use async_trait::async_trait;
-use std::sync::Arc;
-use serenity::all::{ChannelId, Http};
-use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
-use crate::game::chivalry2::EChatType;
+﻿use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub enum Notify {
+    Admin
+}
+
+#[derive(Clone, Debug)]
 pub struct BroadcastMessage {
-    title: Option<String>,
-    content: Option<String>,
-    fields: Option<Vec<(String, String)>>,
-    footer: Option<String>,
-    color: Option<u32>,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub fields: Option<Vec<(String, String)>>,
+    pub footer: Option<String>,
+    pub color: Option<u32>,
+    pub notify: Vec<Notify>
 }
 
 impl BroadcastMessage {
@@ -21,6 +23,7 @@ impl BroadcastMessage {
             fields: None,
             footer: None,
             color: None,
+            notify: Vec::new(),
         }
     }
 
@@ -140,32 +143,8 @@ impl From<&str> for BroadcastMessage {
     }
 }
 
-#[async_trait]
-pub trait ServerBroadcast: Send + Sync {
-    async fn broadcast(&self, message: BroadcastMessage);
-}
 
-pub struct Broadcaster {
-    channel_id: ChannelId,
-    discord_http: Arc<Http>,
-}
 
-impl Broadcaster {
-    pub fn new(channel_id: ChannelId, discord_http: Arc<Http>) -> Self {
-        Self { channel_id, discord_http }
-    }
-}
-
-#[async_trait]
-impl ServerBroadcast for Broadcaster {
-    async fn broadcast(&self, message: BroadcastMessage) {
-        let chat_message: String = message.clone().into();
-        let discord_message: CreateMessage = message.into();
-
-        let _ = self.channel_id.send_message(&self.discord_http, discord_message).await;
-        crate::game::chivalry2::send_ingame_message(chat_message, Some(EChatType::ServerSay));
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,8 +161,7 @@ mod tests {
         assert!(s.contains("Test Title"));
         assert!(s.contains("Test Content"));
         
-        let cm: CreateMessage = msg.into();
-        // CreateMessage doesn't have easy getters, but we can verify it doesn't panic
+        let _cm: CreateMessage = msg.into();
     }
 
     #[tokio::test]

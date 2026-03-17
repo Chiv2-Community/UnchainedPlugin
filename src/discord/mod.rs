@@ -234,7 +234,7 @@ async fn dispatch_responses(
                     }
                 }
 
-                relay.relay_to_unreal(message_string);
+                relay.relay_to_unreal("SERVER".to_string(), message_string);
             }
         }
     }
@@ -270,7 +270,7 @@ fn preprocess_event(event: GameEvent, admin_role: Option<RoleId>) -> GameEvent {
 
 // 1. The interface
 pub trait ChatSink: Send + Sync {
-    fn send(&self, text: String, chat_type: ChatType);
+    fn send(&self, sender: String, text: String, chat_type: ChatType);
 }
 
 // 2. The container
@@ -283,9 +283,9 @@ pub type Ctx = Arc<SleuthContext>;
 
 pub struct ConsoleChatSink;
 impl ChatSink for ConsoleChatSink {
-    fn send(&self, text: String, chat_type: ChatType) {
+    fn send(&self, sender: String, text: String, chat_type: ChatType) {
         let type_str: &str = chat_type.into();
-        println!("[MOCK CHAT] <{}> {:?}", type_str, text);
+        println!("[MOCK CHAT] <{}> {}: {:?}", type_str, sender, text);
     }
 }
 

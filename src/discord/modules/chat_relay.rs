@@ -18,8 +18,8 @@ impl ChatRelayModule {
     }
 
     /// Safely invokes Unreal Engine functions using the TRY_CALL_ORIGINAL macro
-    pub fn relay_to_unreal(&self, message: String) {
-        self.ctx.chat.send(message, ChatType::Global);
+    pub fn relay_to_unreal(&self, sender: String, message: String) {
+        self.ctx.chat.send(sender, message, ChatType::Global);
         // send_ingame_message(message, None);
         // if let Some(world) = crate::globals().world() {
         //     let mut settings_fstring = FString::from(message.as_str());
@@ -56,7 +56,7 @@ impl DiscordSubscriber for ChatRelayModule {
                 // Filter out bot commands so they don't clutter in-game chat
                 if !msg.command.starts_with('!') {
                     let formatted_text = format!("<D>{}: {}", msg.user, msg.command);
-                    self.relay_to_unreal(formatted_text);
+                    self.relay_to_unreal(msg.user.clone(), formatted_text);
                 }
                 NO_RESP
             }

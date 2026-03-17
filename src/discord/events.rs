@@ -87,7 +87,7 @@ impl CommandActor {
                 user_id,
                 display_name: username,
             },
-            permissions: ActorPermissions { flags: if is_admin {PermissionFlags::ADMIN} else {PermissionFlags::USER} },
+            permissions: ActorPermissions { flags: if is_admin {PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER} else {PermissionFlags::USER} },
         }
     }
 }
