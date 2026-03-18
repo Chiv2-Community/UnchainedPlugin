@@ -1,10 +1,10 @@
 use std::os::raw::c_void;
-use std::sync::{Arc, Mutex, mpsc};
-use itertools::{Itertools, enumerate};
+use std::sync::{Arc, Mutex};
+use itertools::enumerate;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::game::chivalry2::{EChatType, PlayerFlags};
+use crate::game::chivalry2::EChatType;
 use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
 #[allow(unused_imports)]
@@ -12,7 +12,7 @@ use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::{ serror, sinfo, swarn};
+use crate::{ serror, sinfo};
 use crate::ue::{FString, FVector, TArray, UClass, UObject};
 use crate::resolvers::{asset_registry::*, asset_loading::*};
 #[allow(unused_imports)]
@@ -38,7 +38,6 @@ macro_rules! check_main_thread {
     }
 }
 
-use crate::commands::CommandResult;
 
 
 // CREATE_COMMAND!(

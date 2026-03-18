@@ -1,10 +1,9 @@
 ﻿use std::sync::Arc;
-use tokio::sync::Mutex;
 use async_trait::async_trait;
 use clap::Parser;
 use serenity::all::{ChannelId, CreateAllowedMentions, CreateMessage, Http, RoleId};
 use serenity::builder::CreateEmbed;
-use crate::events::broadcast::{BroadcastMessage, Notify};
+// use crate::events::broadcast::{BroadcastMessage, Notify};
 use crate::events::bus::{EventPublisher, Subscriber};
 
 use crate::commands::Command;

@@ -1,10 +1,5 @@
 extern crate proc_macro;
-use darling::{FromMeta, ast::NestedMeta};
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{FnArg, ItemFn, Pat, parse_macro_input};
-use syn::{ImplItemFn};
-use syn::{LitStr, Token, parse::{Parse, ParseStream}};
 
 /* -- SIGNATURES -- */
 

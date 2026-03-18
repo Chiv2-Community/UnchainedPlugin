@@ -4,7 +4,7 @@ use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
 use crate::game::engine::UWorld;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-use crate::{serror, sinfo, swarn, CALL_ORIGINAL};
+use crate::{serror, sinfo, swarn};
 use async_trait::async_trait;
 use clap::Parser;
 use itertools::Itertools;

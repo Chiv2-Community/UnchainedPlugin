@@ -7,7 +7,7 @@ use crate::events::bus::Subscriber;
 
 pub struct DiscordBroadcastSubscriber {
     channel_id: ChannelId,
-    admin_channel_id: Option<ChannelId>,
+    _admin_channel_id: Option<ChannelId>,
     admin_role_id: Option<RoleId>,
     discord_http: Arc<Http>,
 }
@@ -21,7 +21,7 @@ impl DiscordBroadcastSubscriber {
     ) -> Self {
         Self {
             channel_id,
-            admin_channel_id,
+            _admin_channel_id: admin_channel_id,
             admin_role_id,
             discord_http,
         }

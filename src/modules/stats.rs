@@ -8,7 +8,7 @@ use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::{EventPublisher, Subscriber};
 
 use crate::commands::Command;
-use crate::events::models::{CommandExecuted, CommandRequest, GameEvent, PermissionFlags};
+use crate::events::models::{CommandRequest, GameEvent, PermissionFlags};
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 struct GlobalStats {
@@ -130,7 +130,7 @@ impl Command<TopArgs> for TopCommand {
         PermissionFlags::USER
     }
 
-    async fn execute(&self, _args: TopArgs, command: &CommandRequest) {
+    async fn execute(&self, _args: TopArgs, _command: &CommandRequest) {
         let state = self.state.lock().await;
         self.broadcaster.publish(BroadcastMessage::from(state.get_top_5_leaderboard()));
     }

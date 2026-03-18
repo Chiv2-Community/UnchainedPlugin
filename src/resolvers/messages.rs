@@ -10,7 +10,7 @@ mod client_message {
     use regex::Regex;
     use std::os::raw::c_void;
     use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
-    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, CommandRequest, PermissionFlags};
+    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandRequest, PermissionFlags};
     use crate::features::events::EVENT_SYSTEM;
 
     #[derive(Debug)]

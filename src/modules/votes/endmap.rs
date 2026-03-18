@@ -1,7 +1,6 @@
 ﻿use clap::Parser;
 use crate::commands::NATIVE_COMMAND_QUEUE;
 use crate::modules::vote::{ErasedVoteType, VoteType, VoteTypeHandler};
-use crate::modules::votes::votemap::{MapVote, MapVoteArgs};
 
 #[derive(Parser, Clone, Debug)]
 #[command(name = "next-map")]

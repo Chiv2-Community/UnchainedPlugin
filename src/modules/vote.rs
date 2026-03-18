@@ -34,8 +34,8 @@ use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::EventPublisher;
 
 use crate::commands::Command;
-use crate::events::models::{CommandSource, CommandExecuted, CommandRequest, PermissionFlags};
-use crate::features::events::EVENT_SYSTEM;
+use crate::events::models::{CommandSource, CommandRequest, PermissionFlags};
+// use crate::features::events::EVENT_SYSTEM;
 
 /// Trait that defines a specific type of vote's behavior
 pub trait VoteType<T: Parser + Send + Sync + Clone>: Send + Sync {

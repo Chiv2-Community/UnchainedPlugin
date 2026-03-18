@@ -2,10 +2,9 @@ use serenity::all::UserId;
 use UnchainedPlugin::features::discord::DiscordConfig;
 use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted};
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
-use UnchainedPlugin::{serror, sinfo};
+use UnchainedPlugin::sinfo;
 use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
-use std::sync::Arc;
 use UnchainedPlugin::features::discord::initialize_discord_system;
 
 fn main() {

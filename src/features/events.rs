@@ -7,7 +7,7 @@ use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::{EventBus, EventPublisher, Subscriber};
 use async_trait::async_trait;
 use crate::modules::vote::{NoCommand, SharedVotingState, VoteCommand, VotingState, YesCommand};
-use crate::modules::votes::votekick::KickVote;
+// use crate::modules::votes::votekick::KickVote;
 use crate::modules::votes::votemap::MapVote;
 use crate::modules::votes::votebots::{AddBotsVote, NoBotsVote};
 use crate::events::broadcast_message::console::ConsoleChatBroadcastSubscriber;
@@ -21,8 +21,8 @@ use crate::modules::duel::DuelManagerSubscriber;
 use crate::modules::say::SayCommand;
 use crate::modules::cmd::CmdCommand;
 use crate::modules::crash::CrashSubscriber;
-use crate::modules::discord::admin_alert::AdminAlertModule;
-use crate::modules::discord::dashboard::DashboardSubscriber;
+// use crate::modules::discord::admin_alert::AdminAlertModule;
+// use crate::modules::discord::dashboard::DashboardSubscriber;
 use crate::modules::votes::votespeed::SpeedVote;
 use crate::modules::votes::votemod::ModVote;
 
@@ -104,7 +104,7 @@ pub async fn initialize_subscribers() {
     let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
     let game_event_bus = &EVENT_SYSTEM.game_event_bus;
     let broadcast_message_bus = &EVENT_SYSTEM.message_broadcast_event_bus;
-    let game_event_publisher = &EVENT_SYSTEM.game_event_publisher;
+    let _game_event_publisher = &EVENT_SYSTEM.game_event_publisher;
     let broadcast_message_publisher = &EVENT_SYSTEM.message_broadcast_event_publisher;
 
     {

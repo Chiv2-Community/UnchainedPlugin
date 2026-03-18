@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use serenity::all::{ChannelId, Context, GatewayIntents, Http, Message, MessageId, RoleId};
+use serenity::all::{ChannelId, Context, GatewayIntents, Http, Message, RoleId};
 use serenity::Client;
 use serenity::client::EventHandler as DiscordHandler;
 use crate::events::bus::EventPublisher;
-use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, CommandExecuted, CommandRequest, GameEvent, PermissionFlags};
+use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, CommandRequest, GameEvent, PermissionFlags};
 use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
 use crate::modules::chat::DiscordChatSink;
 use crate::modules::discord::admin_alert::AdminAlertModule;
