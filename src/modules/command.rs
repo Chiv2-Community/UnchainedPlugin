@@ -156,10 +156,7 @@ impl Subscriber<GameEvent> for CommandSubscriber {
 mod tests {
     use super::*;
     use std::sync::Arc;
-    use tokio::sync::Mutex;
-    use crate::events::models::{CommandActor, ActorIdentity, ActorPermissions, PermissionFlags, CommandSource};
-    use crate::events::broadcast::BroadcastMessage;
-    use crate::events::bus::EventPublisher;
+    use crate::events::models::PermissionFlags;
     use crate::test_utils::{mock_actor, mock_actor_elevated, mock_broadcaster, mock_game_event_publisher, TestArgs, TestCommand, mock_command_request};
 
     #[tokio::test]

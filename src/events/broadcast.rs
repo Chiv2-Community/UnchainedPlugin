@@ -171,8 +171,6 @@ impl From<&str> for BroadcastMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serenity::all::Http;
-    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_broadcast_message_conversions() {

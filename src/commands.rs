@@ -200,7 +200,7 @@ mod tests {
     use clap::Parser;
     use std::sync::{Arc, Mutex};
 
-    use crate::events::models::{ActorIdentity, ActorPermissions, CommandActor, CommandSource, PermissionFlags};
+    use crate::events::models::PermissionFlags;
     use crate::test_utils::{mock_actor, TestArgs, TestCommand, mock_command_request};
 
     #[derive(Parser, Clone)]
