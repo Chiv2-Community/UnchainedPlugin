@@ -91,8 +91,8 @@ pub trait Command<Args: Parser + CommandFactory + Send + Sync>: Send + Sync {
         }
         usage
     }
-    fn required_permissions(&self) -> crate::events::models::PermissionFlags;
-    fn required_source(&self) -> Option<crate::events::models::CommandSource> {
+    fn required_permissions(&self) -> PermissionFlags;
+    fn required_source(&self) -> Option<CommandSource> {
         None
     }
 
@@ -106,8 +106,8 @@ pub trait ErasedCommand: Send + Sync {
     fn name(&self) -> String;
     fn description(&self) -> String;
     fn usage(&self) -> String;
-    fn required_source(&self) -> Option<crate::events::models::CommandSource>;
-    fn required_permissions(&self) -> crate::events::models::PermissionFlags;
+    fn required_source(&self) -> Option<CommandSource>;
+    fn required_permissions(&self) -> PermissionFlags;
     fn help(&self) -> String;
     async fn execute(&self, command: &CommandRequest);
     async fn on_tick(&self);
@@ -150,11 +150,11 @@ where
         self.command.usage()
     }
 
-    fn required_source(&self) -> Option<crate::events::models::CommandSource> {
+    fn required_source(&self) -> Option<CommandSource> {
         self.command.required_source()
     }
 
-    fn required_permissions(&self) -> crate::events::models::PermissionFlags {
+    fn required_permissions(&self) -> PermissionFlags {
         self.command.required_permissions()
     }
 
@@ -219,7 +219,7 @@ mod tests {
             PermissionFlags::USER
         }
 
-        async fn execute(&self, args: ExampleCommandArgs, command: &CommandRequest) {
+        async fn execute(&self, args: ExampleCommandArgs, _command: &CommandRequest) {
             let mut executed = self.executed.lock().unwrap();
             *executed = Some(args.message);
         }

@@ -34,12 +34,6 @@ pub struct CLIArgs {
     // positional_args: Vec<String>,
     // #[arg()]
     // game_id: String,
-    #[deprecated]
-    #[arg(long = "next-map-mod-actors", value_delimiter = ',', required = false)]
-    pub next_mod_actors: Option<Vec<String>>,
-    #[deprecated]
-    #[arg(long = "all-mod-actors", value_delimiter = ',', required = false)]
-    pub mod_paks: Option<Vec<String>>,
 
     #[arg(long = "server-mods", value_delimiter = ',', required = false)]
     pub server_mods: Option<Vec<String>>,
@@ -336,8 +330,6 @@ mod tests {
     impl Default for CLIArgs {
         fn default() -> Self {
             Self {
-                next_mod_actors: None,
-                mod_paks: None,
                 server_mods: None,
                 ini_overrides: HashMap::new(),
                 is_unchained: false,

@@ -133,7 +133,7 @@ mod tests {
         let sink = Box::new(MockSink { messages: messages.clone() });
         
         let mut relay = ChatRelaySubscriber::new(vec![]);
-        let mut relay_clone = relay.clone();
+        let relay_clone = relay.clone();
         
         // Add sink to one clone
         relay_clone.add_sink(sink).await;

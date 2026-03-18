@@ -624,7 +624,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
         
         let actor = mock_actor("Initiator", false);
@@ -649,7 +649,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
         
         // Start first vote
@@ -688,7 +688,7 @@ mod tests {
         }
 
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let publisher: &'static EventPublisher<BroadcastMessage> = Box::leak(Box::new(crate::events::bus::EventPublisher::new(tx)));
+        let publisher: &'static EventPublisher<BroadcastMessage> = Box::leak(Box::new(EventPublisher::new(tx)));
         let yes_cmd = YesCommand { state, broadcaster: publisher };
         let no_cmd = NoCommand { state, broadcaster: publisher };
 
@@ -778,7 +778,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
 
         // Setup active vote that expires in the past
@@ -807,7 +807,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
 
         // 10 players, 10% min_vote_percentage means 1 vote required.
@@ -833,7 +833,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
 
         // 100 players, 10% min_vote_percentage means 10 votes required.
@@ -859,7 +859,7 @@ mod tests {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
         let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
+        let (broadcaster, _messages) = mock_broadcaster();
         let cmd = VoteCommand { state: state.clone(), broadcaster };
 
         // Test exact threshold (10 players, 10% = 1 required)

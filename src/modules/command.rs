@@ -191,7 +191,7 @@ mod tests {
     struct SetBoolArgs {}
 
     struct SetBoolCommand {
-        pub executed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        pub executed: Arc<std::sync::atomic::AtomicBool>,
     }
 
     #[async_trait]
@@ -200,7 +200,7 @@ mod tests {
             PermissionFlags::START_VOTE
         }
 
-        async fn execute(&self, _args: SetBoolArgs, command: &CommandRequest) {
+        async fn execute(&self, _args: SetBoolArgs, _command: &CommandRequest) {
             self.executed.store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
@@ -240,13 +240,13 @@ mod tests {
                 PermissionFlags::USER
             }
 
-            async fn execute(&self, _args: TickArgs, command: &CommandRequest) {}
+            async fn execute(&self, _args: TickArgs, _command: &CommandRequest) {}
             async fn on_tick(&self) {
                 self.ticked.store(true, std::sync::atomic::Ordering::SeqCst);
             }
         }
 
-        let ticked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let ticked = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (broadcaster, _messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
@@ -263,7 +263,7 @@ mod tests {
         struct AdminOnlyArgs {}
 
         struct AdminOnlyCommand {
-            executed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+            executed: Arc<std::sync::atomic::AtomicBool>,
         }
 
         #[async_trait]
@@ -276,7 +276,7 @@ mod tests {
             }
         }
 
-        let executed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let executed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (broadcaster, _messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
@@ -299,7 +299,7 @@ mod tests {
         struct UserCommandArgs {}
 
         struct UserCommand {
-            executed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+            executed: Arc<std::sync::atomic::AtomicBool>,
         }
 
         #[async_trait]
@@ -349,7 +349,7 @@ mod tests {
                 PermissionFlags::empty()
             }
 
-            async fn execute(&self, _args: Test2Args, command: &CommandRequest) {}
+            async fn execute(&self, _args: Test2Args, _command: &CommandRequest) {}
         }
         subscriber.register::<Test2Command, Test2Args>(Test2Command);
         

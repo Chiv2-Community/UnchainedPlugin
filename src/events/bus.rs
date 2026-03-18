@@ -166,7 +166,6 @@ mod tests {
         name: &'static str,
         events: Arc<Mutex<Vec<TestEvent>>>,
         ticks: Arc<Mutex<u32>>,
-        delay: Option<Duration>,
     }
 
     #[async_trait]
@@ -191,14 +190,6 @@ mod tests {
             name,
             events: Arc::new(Mutex::new(Vec::new())),
             ticks: Arc::new(Mutex::new(0)),
-            delay: None,
-        }
-    }
-
-    impl TestSubscriber {
-        fn with_delay(mut self, millis: u64) -> Self {
-            self.delay = Some(Duration::from_millis(millis));
-            self
         }
     }
 
