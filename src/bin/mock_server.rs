@@ -1,31 +1,25 @@
 use serenity::all::UserId;
-use UnchainedPlugin::discord::config::DiscordConfig;
-use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, GameCommand};
+use UnchainedPlugin::features::discord::DiscordConfig;
+use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted};
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
-use UnchainedPlugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
 use UnchainedPlugin::{serror, sinfo};
 use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
 use std::sync::Arc;
-
+use UnchainedPlugin::features::discord::initialize_discord_system;
 
 fn main() {
     println!("🚀 Discord Mock Server Starting!");
-    // 1. Load your real config so the mock bot actually connects to Discord
-    // sinfo!(f; "Starting discord bridge");
     
-    let config_path = "discord_config_mock.json";
-    let config = DiscordConfig::load(config_path, true).unwrap_or_else(|e| {
-        serror!("Configuration Error, loading default: {}", e);
-        DiscordConfig::default()
-    });
-    let ctx = Arc::new(SleuthContext {
-            chat: Arc::new(ConsoleChatSink),
-            config: config.clone()
-        });
-    let handle = DiscordBridge::init(config_path, ctx);
-    DISCORD_HANDLE.set(handle)
-        .expect("Discord Handle was already initialized!");
+    let config = DiscordConfig {
+        bot_token: "YOUR_TOKEN_HERE".to_string(),
+        admin_role_id: None,
+        general_channel_id: serenity::all::ChannelId::new(1),
+        admin_channel_id: None,
+        mention_on_admin: true,
+    };
+
+    initialize_discord_system(config.clone());
 
     init_syslog().expect("Failed to init syslog");
     sinfo!("Discord Mock Server Started!");
@@ -65,15 +59,15 @@ fn main() {
                 let name = parts.get(0).cloned().unwrap_or_default();
                 let args = if parts.len() > 1 { parts[1..].to_vec() } else { vec![] };
                 
-                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameCommandEvent(GameCommand {
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandExecutedEvent(CommandExecuted {
                     name,
                     args,
                     raw_args: msg,
                     actor: CommandActor::from_discord(
-                        UserId::new(1234),
+                        UserId::new(std::num::NonZeroU64::new(1234).unwrap().into()),
                         "MockDiscUser".into(),
                         &[],
-                        &config
+                        config.clone()
                     ),
                     source: CommandSource::Discord,
                 }));

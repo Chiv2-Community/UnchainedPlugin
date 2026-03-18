@@ -1,11 +1,13 @@
-﻿use std::sync::Arc;
-use serenity::all::{ChannelId, Context, GatewayIntents, Http, Message, RoleId};
+use std::sync::Arc;
+use serenity::all::{ChannelId, Context, GatewayIntents, Http, Message, MessageId, RoleId};
 use serenity::Client;
 use serenity::client::EventHandler as DiscordHandler;
 use crate::events::bus::EventPublisher;
-use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, GameCommand, GameEvent, PermissionFlags};
-use crate::events::integrations::broadcast_message::discord::DiscordBroadcastSubscriber;
-use crate::events::integrations::game_event::chat::DiscordChatSink;
+use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, CommandExecuted, CommandRequest, GameEvent, PermissionFlags};
+use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
+use crate::modules::chat::DiscordChatSink;
+use crate::modules::discord::admin_alert::AdminAlertModule;
+use crate::modules::discord::dashboard::DashboardSubscriber;
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::{sinfo, swarn};
@@ -16,6 +18,7 @@ pub struct DiscordConfig {
     pub admin_role_id: Option<u64>,
     pub general_channel_id: ChannelId,
     pub admin_channel_id: Option<ChannelId>,
+    pub mention_on_admin: bool,
 }
 
 pub struct Discord {
@@ -58,9 +61,32 @@ async fn register_discord_subscribers(config: DiscordConfig, http: Arc<Http>) {
         config.general_channel_id,
         config.admin_channel_id,
         config.admin_role_id.map(serenity::all::RoleId::new),
-        http,
+        http.clone(),
     );
     let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
+
+    // Admin Alert Module
+    if let Some(admin_channel_id) = config.admin_channel_id {
+        let admin_alert_module = AdminAlertModule::new(
+            config.mention_on_admin,
+            http.clone(),
+            admin_channel_id,
+            config.admin_role_id.map(RoleId::new),
+            &EVENT_SYSTEM.game_event_publisher,
+        );
+        let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
+        
+        let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
+        TOKIO_RUNTIME.spawn(async move {
+            let mut command_subscriber = command_subscriber.lock().await;
+            command_subscriber.register(admin_alert_module);
+        });
+    }
+
+    // Dashboard Subscriber
+    // Assuming we use the general channel for the dashboard, or we could add a dedicated field to DiscordConfig
+    let dashboard_subscriber = DashboardSubscriber::new(http.clone(), config.general_channel_id);
+    let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
 }
 
 fn add_discord_chat_sink(discord_config: DiscordConfig, discord_http: Arc<Http>) {
@@ -99,7 +125,7 @@ impl DiscordHandler for Discord {
             display_name: msg.author.name.clone(),
             identity: ActorIdentity::DiscordUser {
                 user_id: msg.author.id,
-                display_name: msg.author.name.clone(),
+                display_name: msg.author.display_name().to_string(),
             },
             permissions: ActorPermissions {
                 flags: if is_admin { PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER } else { PermissionFlags::USER },
@@ -121,7 +147,7 @@ impl DiscordHandler for Discord {
                 String::new()
             };
 
-            self.event_publisher.publish(GameEvent::GameCommandEvent(GameCommand {
+            self.event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
                 name,
                 args,
                 raw_args,

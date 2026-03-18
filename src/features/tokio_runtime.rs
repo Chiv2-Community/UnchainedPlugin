@@ -1,4 +1,4 @@
-﻿use once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use tokio::runtime::{Runtime, Handle};
 
 pub static TOKIO_RUNTIME: Lazy<Runtime> = Lazy::new(|| {

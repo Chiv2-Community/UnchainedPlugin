@@ -353,7 +353,6 @@ impl RegistrationInner {
         {
             mods = self.mods.lock().unwrap().clone();
         }
-
         let server_name = match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
             Some(name_str) => name_str,
             _ => &info.name

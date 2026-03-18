@@ -4,8 +4,8 @@ use itertools::{Itertools, enumerate};
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::game::chivalry2::{ATBLGameMode, EChatType, PlayerFlags};
-use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, UWorld, get_assets_by_class};
+use crate::game::chivalry2::{EChatType, PlayerFlags};
+use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
 #[allow(unused_imports)]
 use crate::resolvers::asset_registry::o_FNameCtorWchar;
@@ -26,9 +26,6 @@ use crate::resolvers::etc_hooks::*;
 use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
 use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
 use crate::resolvers::messages::o_BroadcastLocalizedChat;
-use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-use crate::commands::CommandResult;
-
 #[macro_export]
 macro_rules! check_main_thread {
     () => {
@@ -40,127 +37,9 @@ macro_rules! check_main_thread {
         }
     }
 }
-// in my_engine/src/command
-use sleuth_macros::command;
 
-#[command(name = "mod", sub = "dump", desc = "Dumps mod list. Path is optional")]
-fn dump_mods(path: Option<String>) -> CommandResult {
-    let target: &str = path.as_deref().unwrap_or("ingame_mod_registry.json");
-    let mm_lock = || globals().mod_manager.lock().unwrap();
-    if let Some(mm) = mm_lock().as_ref() {
-        let _ = mm.serialize_registry(target);
-    }
-    sinfo!(f; "Registry saved to \'{}\'", target);
-    Ok(())
-}
+use crate::commands::CommandResult;
 
-fn log_game_info(game: &ATBLGameMode) {
-    sinfo!(f; "Name:{}", game.server_name);
-    let maplist = game.maplist.as_slice().iter().join(", ");
-    sinfo!(f; "MapList:{}", maplist);
-    sinfo!(f; "Idle disconnect:{}", game.idle_kick_timer_disconnect);
-    sinfo!(f; "Idle spectate:{}", game.idle_kick_timer_spectate);
-}
-
-#[command(name = "game", sub = "info", desc = "show game info")]
-fn get_game_info() -> CommandResult {
-    use crate::{resolvers::unchained_integration::run_on_game_thread};
-    
-    run_on_game_thread(move || {
-        if let Some(world) = crate::globals().world() {
-            let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
-            let uworld_ptr = world as *mut UWorld;
-
-            let game = unsafe { game_ptr.as_mut() };
-            if let Some(g) = &game {
-                log_game_info(g);
-            }
-
-            match unsafe { (game, uworld_ptr.as_mut().and_then(|w| w.game_state.as_mut())) } {
-                (Some(_), Some(game_state)) => {
-                    for player_raw in game_state.player_array.as_mut_slice() {
-                        let player_state = match unsafe { (player_raw).as_mut() } {
-                            Some(ps) => ps,
-                            None => {
-                                swarn!(f; "PlayerState was null");
-                                continue;
-                            }
-                        };
-                        let pname = player_state.base.player_name_private.to_string();
-                        sinfo!(f; "{}", pname);
-                        let mut flags = "".to_string();
-                        if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
-                            flags.push_str("spectator|");
-                        }
-                        if player_state.base.player_flags.contains(PlayerFlags::ONLY_SPECTATOR) {
-                            flags.push_str("onlyspectator|");
-                        }
-                        if player_state.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
-                            flags.push_str("bot|");
-                        }
-
-                        sinfo!(f; "{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}", 
-                            flags,
-                            player_state.base.player_flags,
-                            player_state.base.player_id,
-                            player_state.base.player_name_private,
-                            player_state.player_score,
-                            player_state.kills,
-                            player_state.assists,
-                            player_state.deaths,
-                            player_state.base.saved_network_address,
-                        );
-                            // player_state.base.unique_id.internal_wrapper.as_slice().into_iter().join(""));
-                        
-
-                        // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
-                        //     print!("{:X} ", bt);
-                        // }
-                        // println!("");
-                        // for bt in player_state.base.unique_id.replication_bytes.as_slice() {
-                        //     print!("{:X} ", bt);
-                        // }
-                        // println!("");
-                    }
-                },
-                (g, gs) => {
-                    if g.is_none() { serror!(f; "GameMode was null"); }
-                    if gs.is_none() { serror!(f; "GameState was null"); }
-                }
-            }
-        }
-    }); 
-    Ok(())
-}
-
-#[command(name="mod", sub="list", alias="lsmods", desc="Spawn entity")]
-fn list_mods() -> CommandResult {
-    use crate::{resolvers::unchained_integration::run_on_game_thread};
-    let mm_lock = || globals().mod_manager.lock().unwrap();
-
-    if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
-        let (tx, rx) = mpsc::channel();
-        sinfo!(f; "Starting scan!");
-        
-        run_on_game_thread(move || {
-            if let Some(mm) = mm_lock().as_ref() {
-                mm.scan_asset_registry();
-                let _ = tx.send(());
-            }
-        }); 
-        let _ = rx.recv();
-    } else {
-        if let Some(mm) = mm_lock().as_ref() {
-        sinfo!(f; "Getting list!");
-            let _ = mm.scan_active_mod_actors();
-        }
-    }
-
-    if let Some(mm) = mm_lock().as_ref() {
-        mm.dump_to_console();
-    } 
-    Ok(())
-}
 
 // CREATE_COMMAND!(
 //     "spawnmod",

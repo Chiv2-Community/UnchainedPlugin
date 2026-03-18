@@ -125,6 +125,9 @@ pub struct CLIArgs {
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
 
+    #[arg(long = "discord-mention-on-admin", default_value = "true")]
+    pub discord_mention_on_admin: bool,
+
     #[arg(long = "motd")]
     pub motd: Option<String>,
 
@@ -362,6 +365,7 @@ mod tests {
                 censor_mode: CensorArg::None,
                 discord_admin_role_id: None,
                 discord_bot_token: None,
+                discord_mention_on_admin: false,
                 motd: None,
                 extra_args: vec![],
             }

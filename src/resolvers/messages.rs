@@ -10,7 +10,7 @@ mod client_message {
     use regex::Regex;
     use std::os::raw::c_void;
     use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
-    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameCommand, PermissionFlags};
+    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, CommandRequest, PermissionFlags};
     use crate::features::events::EVENT_SYSTEM;
 
     #[derive(Debug)]
@@ -88,12 +88,12 @@ mod client_message {
                                     String::new()
                                 };
 
-                                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameCommandEvent(GameCommand {
+                                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
                                     name,
                                     args,
                                     raw_args,
                                     actor,
-                                    source: CommandSource::Discord,
+                                    source: CommandSource::GameChat,
                                 }));
                             }
                         }

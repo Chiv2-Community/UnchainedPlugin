@@ -143,9 +143,8 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
             log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
         }
     }
-    if cli_args().discord_enabled() {
-        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange { new_map: url_w }));
-    }
+
+    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange { new_map: url_w }));
 });
 
 // TODO: looks like this had major changes, needs real signature

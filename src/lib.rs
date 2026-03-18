@@ -8,10 +8,12 @@ mod ue;
 pub mod game;
 pub mod features;
 pub mod commands;
-pub mod discord;
 #[cfg(windows)]
 mod seh;
 pub mod events;
+pub mod modules;
+#[cfg(test)]
+pub mod test_utils;
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
@@ -32,7 +34,7 @@ use crate::commands::spawn_cli_handler;
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
-use crate::tools::hook_globals::{CLI_ARGS, cli_args, globals, init_globals};
+use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
@@ -326,7 +328,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         .unwrap_or(std::ptr::null())
 }
 
-use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE, ENABLE_QUICK_EDIT_MODE, ENABLE_EXTENDED_FLAGS};
+use windows::Win32::System::Console::{AllocConsole, GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_EXTENDED_FLAGS, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
 use crate::events::models::{ChatSource, ChatType, GameChatMessage};
 use crate::events::models::GameEvent::GameChatMessageEvent;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
@@ -501,7 +503,8 @@ pub fn world_init() {
                     bot_token,
                     general_channel_id,
                     admin_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
-                    admin_role_id: None,
+                    admin_role_id: cli_args().discord_admin_role_id,
+                    mention_on_admin: cli_args().discord_mention_on_admin,
                 });
 
                 EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {

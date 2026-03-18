@@ -1,7 +1,8 @@
-﻿use serenity::all::{RoleId, UserId};
-use strum::{Display, IntoStaticStr};
+use serenity::all::{RoleId, UserId};
+use crate::features::discord::DiscordConfig;
 use crate::game::chivalry2::EChatType;
 use crate::swarn;
+use strum::{Display, IntoStaticStr};
 
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
@@ -69,10 +70,11 @@ pub struct GameChatMessage {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Display)]
 pub enum CommandSource {
     GameChat,
     Discord,
+    ServerConsole
 }
 
 #[derive(Debug, Clone)]
@@ -86,7 +88,7 @@ impl CommandActor {
     pub fn is_admin(&self) -> bool { self.permissions.flags.contains(PermissionFlags::ADMIN) }
     pub fn is_moderator(&self) -> bool { self.permissions.flags.contains(PermissionFlags::MODERATOR) }
     pub fn is_elevated(&self) -> bool { self.is_admin() || self.is_moderator() }
-    pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: &crate::discord::config::DiscordConfig) -> Self {
+    pub fn from_discord(user_id: UserId, username: String, roles: &[RoleId], config: DiscordConfig) -> Self {
         let is_admin = config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
 
         Self {
@@ -100,8 +102,9 @@ impl CommandActor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Display)]
 pub enum ActorIdentity {
+    ServerConsole,
     GamePlayer {
         player_id: u64,
         display_name: String,
@@ -127,16 +130,17 @@ bitflags::bitflags! {
         const FORCE_ACTION  = 0b00010000;
     }
 }
-
 #[derive(Debug, Clone)]
-pub struct BridgeChat {
-    pub message: String,
+pub struct CommandRequest {
+    pub name: String,
+    pub args: Vec<String>,
+    pub raw_args: String,
     pub actor: CommandActor,
     pub source: CommandSource,
 }
 
 #[derive(Debug, Clone)]
-pub struct GameCommand {
+pub struct CommandExecuted {
     pub name: String,
     pub args: Vec<String>,
     pub raw_args: String,
@@ -170,21 +174,9 @@ pub struct Attack { pub attacker: String, pub attack_type: String, pub was_parri
 #[derive(Debug, Clone)]
 pub struct Damage { pub attacker: String, pub victim: String, pub damage: f32 }
 
-#[derive(Debug, Clone)]
-pub struct MapVote {
-    pub initiator: String,
-    pub map_target: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct VoteCast {
-    pub voter_id: String,
-    pub choice: bool, // true = Yes, false = No
-}
-
 // --- The Unified GameEvent Enum ---
 
-#[derive(Debug, Clone, IntoStaticStr)]
+#[derive(Debug, Clone, IntoStaticStr, Display)]
 pub enum GameEvent {
     JoinEvent(Join),
     LeaveEvent(Leave), // Never dispatched
@@ -193,13 +185,11 @@ pub enum GameEvent {
     MapChangeEvent(MapChange),
     MatchEndEvent(MatchEnd), // Never dispatched
     GameChatMessageEvent(GameChatMessage),
-    BridgeChatEvent(BridgeChat), // Never dispatched
-    GameCommandEvent(GameCommand),
+    CommandRequestEvent(CommandRequest),
+    CommandExecutedEvent(CommandExecuted),
     ServerStatusEvent(ServerStatus),
     AdminAlertEvent(AdminAlert),
     DuelStartEvent(DuelStart), // Never dispatched
     AttackEvent(Attack), // Never dispatched
     DamageEvent(Damage), // Never dispatched
-    MapVoteEvent(MapVote), // Never dispatched
-    VoteCastEvent(VoteCast), // Never dispatched
 }

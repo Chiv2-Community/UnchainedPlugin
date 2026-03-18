@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "UnchainedPlugin"
-version = "1.0.0-rc1"
+version = "1.0.0-rc2"
 dependencies = [
  "a2s",
  "anyhow",
@@ -37,6 +37,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "serenity",
+ "shlex",
  "simple-log",
  "sleuth_macros",
  "strum 0.26.3",

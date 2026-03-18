@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use std::time::Duration;
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedSender;
@@ -30,6 +30,23 @@ pub trait Subscriber<T>: Send + Sync {
 
     /// Called periodically at the bus's tick rate.
     async fn on_tick(&mut self) {}
+}
+
+#[async_trait]
+impl Subscriber<crate::events::models::GameEvent> for Arc<Mutex<crate::modules::command::CommandSubscriber>> {
+    fn identifier(&self) -> &'static str {
+        "CommandSubscriber"
+    }
+
+    async fn on_event(&mut self, event: &crate::events::models::GameEvent) {
+        let mut sub = self.lock().await;
+        sub.on_event(event).await;
+    }
+
+    async fn on_tick(&mut self) {
+        let mut sub = self.lock().await;
+        sub.on_tick().await;
+    }
 }
 
 pub struct EventBus<E>

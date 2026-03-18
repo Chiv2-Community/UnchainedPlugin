@@ -1,4 +1,4 @@
-﻿use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
+use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
 
 #[derive(Clone, Debug)]
 pub enum Notify {

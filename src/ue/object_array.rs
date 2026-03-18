@@ -1,4 +1,4 @@
-﻿use std::cell::UnsafeCell;
+use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 use super::{TArray, UObjectBase};
 use super::sync::{FWindowsCriticalSection, CriticalSectionGuard};
