@@ -1,4 +1,4 @@
-﻿use std::{
+use std::{
     env,
     path::PathBuf,
     process::Command,

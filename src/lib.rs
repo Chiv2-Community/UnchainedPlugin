@@ -8,12 +8,15 @@ mod ue;
 pub mod game;
 pub mod features;
 pub mod commands;
-pub mod discord;
 #[cfg(windows)]
 mod seh;
+pub mod events;
+pub mod modules;
+#[cfg(test)]
+pub mod test_utils;
 
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::{env, thread};
 use std::fs::File;
@@ -22,16 +25,17 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
+use patternsleuth::resolvers::{resolvers, NamedResolver};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
 use crate::commands::spawn_cli_handler;
-use crate::discord::config::DiscordConfig;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
-use crate::tools::hook_globals::{CLI_ARGS, cli_args, globals, init_globals};
+use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
+use serenity::all::ChannelId;
 use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
 
@@ -46,6 +50,7 @@ fn crc32_from_file(path: &str) -> std::io::Result<u32> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct BuildInfo {
+    plugin_version: String,
     build: u32,
     file_hash: u32,
     name: String,
@@ -73,47 +78,61 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     ))
 }
 
+static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
+    HashSet::from([
+        "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
+        "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
+        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory"
+    ])
+);
+
 impl BuildInfo {
-    pub fn scan(crc32: u32, platform: PlatformType) -> Self {
-        println!("Scanning build...");
+    pub fn load_or_create(crc: u32, platform_type: PlatformType) -> Self {
+        let load_result =
+            get_build_path(crc, platform_type)
+                .context("Failed to expand path")
+                .and_then(|path| File::open(path).context("Failed to open build info file"))
+                .map(BufReader::new)
+                .and_then(|reader| serde_json::from_reader(reader).context("Failed to deserialize build info"))
+                .and_then(|result: BuildInfo|
+                    if result.plugin_version == env!("CARGO_PKG_VERSION") { Ok(result) }
+                    else { Err(anyhow::anyhow!("Build info version mismatch")) }
+                )
+                .map_err(|e| anyhow::anyhow!("Failed to load build info: {}", e));
 
-        let offsets = scan::scan(platform, None).expect("Failed to scan");
 
-        let mut file_path = String::new();
-        match env::current_exe() {
-            Ok(path) => file_path = path.to_string_lossy().into(),
-            Err(e) => eprintln!("Failed to get path: {}", e),
-        }
-
-        BuildInfo {
-            build: 0,
-            file_hash: crc32,
-            name: "".to_string(),
-            platform,
-            path: file_path.to_string(),
-            offsets,
+        match load_result {
+            Ok(bi) => bi,
+            Err(e) => {
+                swarn!(f; "Failed to load build info: {}", e);
+                swarn!(f; "Initializing new build info.");
+                BuildInfo {
+                    plugin_version: env!("CARGO_PKG_VERSION").to_string(),
+                    build: 0,
+                    file_hash: crc,
+                    name: "".to_string(),
+                    platform: platform_type,
+                    path: "".to_string(),
+                    offsets: HashMap::new(),
+                }
+            }
         }
     }
 
-    pub fn load(crc: u32, platform_type: PlatformType) -> Result<Self> {
-        let path = get_build_path(crc, platform_type).context("Failed to expand path")?;
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let build_info: BuildInfo = serde_json::from_reader(reader)?;
-        Ok(build_info)
-    }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<Self> {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
         sinfo!(f; "Saving build info to {}", path.to_string_lossy());
 
+        let self_with_path = self.with_path(path.to_string_lossy().into_owned());
+
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
-        to_writer_pretty(&mut writer, self)?;
+        to_writer_pretty(&mut writer, &self_with_path)?;
         writer.flush()?;
 
-        Ok(())
+        Ok(self_with_path)
     }
 
     pub fn get_file_hash(&self) -> u32 {
@@ -124,12 +143,40 @@ impl BuildInfo {
         self.offsets.get(name)
     }
 
-    pub fn get_offsets(&self) -> &HashMap<String, u64> {
-        &self.offsets
+    pub fn get_unresolved(&self, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
+        resolvers_in
+            .into_iter()
+            .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
+            .filter(|resolver| !self.offsets.contains_key(resolver.name))
+            .map(|resolver| resolver)
+            .collect()
     }
 
-    pub fn add_offset(&mut self, name: String, offset: u64) {
-        self.offsets.insert(name, offset);
+    pub fn with_scan(&self, all_resolvers: Vec<&'static NamedResolver>) -> Result<Self> {
+        scan::scan(self.platform, self.get_unresolved(all_resolvers))
+            .map(|new_offsets| {
+                let mut all_offsets = self.offsets.clone();
+                all_offsets.extend(new_offsets);
+                self.with_offsets(all_offsets)
+            })
+    }
+
+    pub fn with_offsets(&self, offsets: HashMap<String, u64>) -> Self {
+        let mut cloned = self.clone();
+        cloned.offsets = offsets;
+        cloned
+    }
+
+    pub fn with_additional_offsets(&self, offsets: HashMap<String, u64>) -> Self {
+        let mut cloned = self.clone();
+        cloned.offsets.extend(offsets);
+        cloned
+    }
+
+    pub fn with_path(&self, path: String) -> Self {
+        let mut cloned = self.clone();
+        cloned.path = path;
+        cloned
     }
 }
 
@@ -182,8 +229,10 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
 fn rust_main() {
     init_rustlib();
 
-    // Check if we need to scan for missing signatures
-    let need_rescan = check_for_missing_signatures();
+    let need_rescan = {
+        let current = CURRENT_BUILD_INFO.lock().unwrap();
+        current.is_none() || current.as_ref().unwrap().get_unresolved(resolvers().collect()).len() > 0
+    };
 
     if need_rescan {
         sinfo!(f; "Missing signatures detected, scanning...");
@@ -214,32 +263,6 @@ fn get_current_platform() -> PlatformType {
     }
 }
 
-fn scan_for_missing_offsets(bi: &BuildInfo) -> Result<HashMap<String, u64>> {
-    scan::scan(bi.platform, Some(bi.get_offsets()))
-}
-
-fn check_for_missing_signatures() -> bool {
-    let current = CURRENT_BUILD_INFO.lock().unwrap();
-
-    if let Some(bi) = current.as_ref() {
-        // Check if any signatures are missing by attempting to scan
-        match scan_for_missing_offsets(bi) {
-            Ok(new_offsets) if !new_offsets.is_empty() => {
-                sinfo!(f; "Found {} missing signatures", new_offsets.len());
-                return true;
-            }
-            Ok(_) => return false,
-            Err(e) => {
-                serror!(f; "Failed to check for missing signatures: {}", e);
-                return false;
-            }
-        }
-    }
-
-    // No build info loaded, need to scan
-    true
-}
-
 fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
@@ -254,34 +277,15 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         let crc32 = crc32_from_file(&file_path).expect("Failed to compute CRC");
         let platform = get_current_platform();
 
-        match BuildInfo::load(crc32, platform) {
-            Ok(bi) => {
-                sinfo!(f; "Loaded build info from cache");
-                *current = Some(bi);
-            }
-            Err(err) => {
-                eprintln!("Failed to load build info: {}", err);
-                if scan_missing {
-                    *current = Some(BuildInfo::scan(crc32, platform));
-                }
-            }
-        }
+        *current = Some(BuildInfo::load_or_create(crc32, platform));
     }
 
 
-    if let (true, Some(bi)) = (scan_missing, current.as_mut()) {
-        match scan_for_missing_offsets(bi) {
-            Ok(new_offsets) if !new_offsets.is_empty() => {
-                println!(
-                    "Found {} missing signatures, updating build info",
-                    new_offsets.len()
-                );
-                for (name, offset) in new_offsets {
-                    bi.add_offset(name, offset);
-                }
-            }
-            Ok(_) => {}
-            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e),
+    if let (true, Some(bi)) = (scan_missing, current.as_ref()) {
+        sinfo!("Scanning for missing signatures");
+        match bi.with_scan(resolvers().collect()) {
+            Ok(bi_with_scan_results) => *current = Some(bi_with_scan_results),
+            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e)
         }
     }
 
@@ -324,7 +328,12 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         .unwrap_or(std::ptr::null())
 }
 
-use windows::Win32::System::Console::{AllocConsole, GetConsoleWindow, GetStdHandle, GetConsoleMode, SetConsoleMode, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, CONSOLE_MODE, ENABLE_QUICK_EDIT_MODE, ENABLE_EXTENDED_FLAGS};
+use windows::Win32::System::Console::{AllocConsole, GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_EXTENDED_FLAGS, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+use crate::events::models::{ChatSource, ChatType, GameChatMessage};
+use crate::events::models::GameEvent::GameChatMessageEvent;
+use crate::features::tokio_runtime::TOKIO_RUNTIME;
+use crate::features::discord::DiscordConfig;
+use crate::features::events::EVENT_SYSTEM;
 
 fn preinit_rustlib() {
     unsafe {
@@ -385,7 +394,8 @@ static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 static WORLD_READY: AtomicBool = AtomicBool::new(false);
 
 fn postinit_rustlib() {
-    
+    let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
+    // crate::features::events::init_event_system();
     seh::install();
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
@@ -435,18 +445,6 @@ fn postinit_rustlib() {
     });
 }
 
-struct GameChatSink;
-impl discord::ChatSink for GameChatSink {
-    fn send(&self, text: String, chat_type: discord::ChatType) {
-        let game_chat_type = match chat_type {
-            discord::ChatType::Admin => Some(EChatType::Admin),
-            discord::ChatType::Global => Some(EChatType::AllSay),
-            discord::ChatType::Team => Some(EChatType::TeamSay),
-        };
-        game::chivalry2::send_ingame_message(text, game_chat_type);
-    }
-}
-
 pub fn world_init() {
     #[cfg(feature="rcon_commands")]
     std::thread::spawn(|| {
@@ -475,51 +473,49 @@ pub fn world_init() {
         thread::sleep(Duration::from_millis(500));
     }
 
-    if cli_args().discord_enabled() {
-        sinfo!(f; "Starting discord bridge");
-        // let config = DiscordConfig {
-        //     bot_token: cli_args().discord_bot_token.clone().expect("Token invalid"),
-        //     channel_id: cli_args().discord_channel_id.unwrap(),
-        //     admin_channel_id: cli_args().discord_admin_channel_id.unwrap(),
-        //     general_channel_id: cli_args().discord_general_channel_id.unwrap(),
-        //     admin_role_id: 1113981344872140822,
-        //     disabled_modules: vec![],
-        //     blocked_notifications: vec![],
-        //     modules: HashMap::default()
-        // };
-        
-        fn update<T>(target: &mut T, source: Option<T>) {
-            if let Some(val) = source {
-                *target = val;
+    if let Some(motd) = cli_args().motd.clone() {
+        sinfo!(f; "Starting MOTD broadcast loop");
+        thread::spawn(move || {
+            loop {
+                sinfo!(f; "Broadcasting MOTD: {}", motd);
+                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
+                thread::sleep(Duration::from_secs(30 * 60));
             }
-        }
-
-        let config_path = "discord_bot_config.json";
-        let mut config = DiscordConfig::load(config_path, true).unwrap_or_else(|e| {
-            serror!("Configuration Error, loading default: {}", e);
-            DiscordConfig::default()
         });
+    }
 
-        let cli = &cli_args();
-        update(&mut config.bot_token, cli.discord_bot_token.clone());
-        update(&mut config.channel_id, Some(cli.discord_channel_id));
-        update(&mut config.admin_channel_id, Some(cli.discord_admin_channel_id));
-        update(&mut config.general_channel_id, Some(cli.discord_general_channel_id));
-        update(&mut config.admin_role_id, Some(cli.discord_admin_role_id));
+    {
+        TOKIO_RUNTIME.spawn(async move {
+            let _ = features::events::initialize_subscribers().await;
 
-        let ctx = Arc::new(discord::SleuthContext {
-            chat: Arc::new(GameChatSink),
-            config
+            EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
+                chat_source: ChatSource::Console,
+                chat_type: ChatType::Global,
+                sender: "Server".to_string(),
+                message: "Initialized Event System".to_string(),
+            }));
+
+            if let (Some(bot_token), Some(general_channel_id)) = (
+                cli_args().discord_bot_token.clone(),
+                cli_args().discord_general_channel_id.map(ChannelId::new)
+            ) {
+                features::discord::initialize_discord_system(DiscordConfig {
+                    bot_token,
+                    general_channel_id,
+                    admin_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
+                    admin_role_id: cli_args().discord_admin_role_id,
+                    mention_on_admin: cli_args().discord_mention_on_admin,
+                });
+
+                EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
+                    chat_source: ChatSource::Console,
+                    chat_type: ChatType::Global,
+                    sender: "Server".to_string(),
+                    message: "Initialized Discord Event Handler System".to_string(),
+                }));
+            }
+
         });
-        
-        // This spawns the background thread and the Tokio runtime
-        let handle = crate::discord::DiscordBridge::init(config_path, ctx);
-
-        // Store the handle globally so the dispatch! macro can find it
-        crate::discord::DISCORD_HANDLE.set(handle)
-            .expect("Discord Handle was already initialized!");
-
-        sinfo!(f; "Discord Bridge is running in the background...");
     }
     
     #[cfg(feature="mod_management")]

@@ -12,7 +12,7 @@
 ///
 /// # Examples
 /// 
-/// ```rust
+/// ```rust,ignore
 /// // 1. Basic usage: NOP 2 bytes at the start of 'PatchSomething'
 /// CREATE_PATCH!(PatchSomething, NOP, 2);
 /// 
@@ -31,6 +31,10 @@
 /// // 5. Direct Value Write: Change a float constant in memory
 /// CREATE_PATCH!(GlobalMultiplier, WRITE, &1.5f32);
 /// ```
+///
+/// # Note on Testing
+/// These examples are marked `ignore` because they require external state (like `BASE_ADDR`) 
+/// and inventory registration which are complex to set up in a doctest.
 ///
 /// # Address Calculation
 /// The final target memory address is calculated as:
@@ -127,7 +131,7 @@ macro_rules! __apply_patch_op {
 
 /// A macro for registering platform-specific memory patches with support for offsets, tags and conditions.
 /// 
-/// ```rust
+/// ```rust,ignore
 /// //Platform-specific usage: Only apply on Steam
 /// CREATE_PATCH_PLATFORM!(STEAM, DRMCheck, NOP, 6);
 /// 

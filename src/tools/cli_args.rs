@@ -1,10 +1,30 @@
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
+use censor::Censor;
 use clap::{CommandFactory, Parser};
-
+use serde::Serialize;
 use crate::sdebug;
 
 pub type IniMap = HashMap<String, HashMap<String, HashMap<String, String>>>;
+
+#[derive(clap::ValueEnum, Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CensorArg {
+    None,
+    Standard,
+    Sex,
+    Zealous
+}
+
+impl Into<Censor> for CensorArg {
+    fn into(self) -> Censor {
+        match self {
+            CensorArg::None => Censor::Custom(HashSet::new()),
+            CensorArg::Standard => Censor::Standard,
+            CensorArg::Sex => Censor::Sex,
+            CensorArg::Zealous => Censor::Zealous,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "Chivalry 2 Unchained", author = "Unchained Team", version, about, long_about = None)]
@@ -14,12 +34,6 @@ pub struct CLIArgs {
     // positional_args: Vec<String>,
     // #[arg()]
     // game_id: String,
-    #[deprecated]
-    #[arg(long = "next-map-mod-actors", value_delimiter = ',', required = false)]
-    pub next_mod_actors: Option<Vec<String>>,
-    #[deprecated]
-    #[arg(long = "all-mod-actors", value_delimiter = ',', required = false)]
-    pub mod_paks: Option<Vec<String>>,
 
     #[arg(long = "server-mods", value_delimiter = ',', required = false)]
     pub server_mods: Option<Vec<String>>,
@@ -74,6 +88,9 @@ pub struct CLIArgs {
     #[arg(long = "platform")]
     pub platform: Option<String>,
 
+    #[arg(long = "saveddirsuffix")]
+    pub saved_dir_suffix: Option<String>,
+
     #[arg(long = "GameServerPingPort", default_value = "3075")]
     pub game_server_ping_port: Option<u16>,
 
@@ -92,12 +109,21 @@ pub struct CLIArgs {
     #[arg(long = "discord-general-channel-id")]
     pub discord_general_channel_id: Option<u64>,
 
+    #[arg(long = "censor-mode", default_value = "none")]
+    pub censor_mode: CensorArg,
+
     #[arg(long = "discord-admin-role-id")]
     pub discord_admin_role_id: Option<u64>,
 
     // #[cfg(feature="discord_integration_old")]
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
+
+    #[arg(long = "discord-mention-on-admin", default_value = "true")]
+    pub discord_mention_on_admin: bool,
+
+    #[arg(long = "motd")]
+    pub motd: Option<String>,
 
     // UNHANDLED START
     // #[arg(long = "AUTH_LOGIN")]
@@ -167,7 +193,7 @@ impl CLIArgs {
 }
 
 // We're using a mix of cli arg types, normalize them to --key value(s)
-// e.g. -rcon 9001, -epicsomething=blablabla, Port=7777
+// e.g. -rcon 9001, -epicsomething=blablabla, Port=7777, -saveddirsuffix=test
 // This function converts all of those to --convention. It also drops game_identifier
 // To parse it all with clap, it checks against entries in CLIArgs and filters out unhandled ones
 fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
@@ -180,7 +206,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         .collect();
 
     let mut result = vec![bin_name];
-    let mut ini_args = vec![]; 
+    let mut ini_args = vec![];
     let mut args = args.peekable();
 
     while let Some(arg) = args.next() {
@@ -301,6 +327,43 @@ mod tests {
         );
     }
 
+    impl Default for CLIArgs {
+        fn default() -> Self {
+            Self {
+                server_mods: None,
+                ini_overrides: HashMap::new(),
+                is_unchained: false,
+                rcon_port: None,
+                apply_desync_patch: false,
+                #[cfg(feature="move-autonomous-desync")]
+                tick_actor_patch: false,
+                use_backend_banlist: false,
+                is_headless: false,
+                next_map: None,
+                launched_profile: None,
+                playable_listen: false,
+                register: false,
+                server_browser_backend: None,
+                local_ip: "127.0.0.1".to_string(),
+                server_password: None,
+                platform: None,
+                saved_dir_suffix: None,
+                game_server_ping_port: None,
+                game_server_query_port: None,
+                game_port: None,
+                discord_channel_id: None,
+                discord_admin_channel_id: None,
+                discord_general_channel_id: None,
+                censor_mode: CensorArg::None,
+                discord_admin_role_id: None,
+                discord_bot_token: None,
+                discord_mention_on_admin: false,
+                motd: None,
+                extra_args: vec![],
+            }
+        }
+    }
+
     #[test]
     fn test_find_ini_value() {
         let mut ini_overrides = HashMap::new();
@@ -311,33 +374,8 @@ mod tests {
         ini_overrides.insert("Engine".to_string(), engine_map);
 
         let cli = CLIArgs {
-            next_mod_actors: None,
-            mod_paks: None,
-            server_mods: None,
             ini_overrides,
-            is_unchained: false,
-            rcon_port: None,
-            apply_desync_patch: false,
-            #[cfg(feature="move-autonomous-desync")]
-            tick_actor_patch: false,
-            use_backend_banlist: false,
-            is_headless: false,
-            next_map: None,
-            launched_profile: None,
-            playable_listen: false,
-            register: false,
-            server_browser_backend: None,
-            server_password: None,
-            platform: None,
-            game_server_ping_port: None,
-            game_server_query_port: None,
-            game_port: None,
-            discord_channel_id: None,
-            discord_admin_channel_id: None,
-            discord_general_channel_id: None,
-            discord_admin_role_id: None,
-            discord_bot_token: None,
-            extra_args: vec![],
+            ..Default::default()
         };
 
         let paths = [
@@ -356,33 +394,7 @@ mod tests {
     #[test]
     fn test_is_server() {
         let mut cli = CLIArgs {
-            next_mod_actors: None,
-            mod_paks: None,
-            server_mods: None,
-            ini_overrides: HashMap::new(),
-            is_unchained: false,
-            rcon_port: None,
-            apply_desync_patch: false,
-            #[cfg(feature="move-autonomous-desync")]
-            tick_actor_patch: false,
-            use_backend_banlist: false,
-            is_headless: false,
-            next_map: None,
-            launched_profile: None,
-            playable_listen: false,
-            register: false,
-            server_browser_backend: None,
-            server_password: None,
-            platform: None,
-            game_server_ping_port: None,
-            game_server_query_port: None,
-            game_port: None,
-            discord_channel_id: None,
-            discord_admin_channel_id: None,
-            discord_general_channel_id: None,
-            discord_admin_role_id: None,
-            discord_bot_token: None,
-            extra_args: vec![],
+            ..Default::default()
         };
 
         assert!(!cli.is_server());
@@ -425,6 +437,35 @@ mod tests {
         assert_eq!(normalized[2], "9001");
         assert_eq!(normalized[3], "--unchained");
         assert_eq!(normalized[4], "-ini:G:S:K=V");
+    }
+
+    #[test]
+    fn test_saved_dir_suffix() {
+        let args = vec![
+            "app".to_string(),
+            "-saveddirsuffix=test".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
+        assert!(normalized.contains(&"test".to_string()));
+
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.saved_dir_suffix, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_saved_dir_suffix_no_equals() {
+        let args = vec![
+            "app".to_string(),
+            "-saveddirsuffix".to_string(),
+            "test2".to_string(),
+        ];
+        let normalized = normalize_and_filter_args(args);
+        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
+        assert!(normalized.contains(&"test2".to_string()));
+
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.saved_dir_suffix, Some("test2".to_string()));
     }
 
     #[test]

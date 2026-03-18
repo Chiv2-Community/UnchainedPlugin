@@ -31,6 +31,16 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      # Run tests
+      - name: Test
+        shell: bash
+        run: |
+          if [ "${{ matrix.build_type }}" == "release" ]; then
+            cargo test --release
+          else
+            cargo test
+          fi
+
       # Build the project
       - name: Build
         shell: bash

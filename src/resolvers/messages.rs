@@ -9,7 +9,9 @@ mod client_message {
     use log::info;
     use regex::Regex;
     use std::os::raw::c_void;
-    use crate::{discord::events::{AdminAlert, GameChatMessage, GameEvent}, game::chivalry2::EChatType, tools::hook_globals::cli_args, ue::{FName, FString}};
+    use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
+    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandRequest, PermissionFlags};
+    use crate::features::events::EVENT_SYSTEM;
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -51,7 +53,6 @@ mod client_message {
     CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
-        let cmd_filter = |c| ['/', '.'].contains(&c);
         let message_repl = match message.contains('\n') {
             // TODO: Decide what to do with multi line text
             true => format!("\n{message}").replace("\r\n", "\\n"),
@@ -59,31 +60,57 @@ mod client_message {
         };
         match parse_chat_line(message_repl.as_str()) {
             Some(chat) => {
-                match chat.message.starts_with(cmd_filter) {
+                match chat.message.starts_with('!') {
                     true => {
-                        // TODO: handle console commands
-                        // Is checking by name sufficient?
+                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
+                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
+
+                        if msg_type == EChatType::AllSay {
+                            let actor = CommandActor {
+                                display_name: chat.name.into(),
+                                identity: ActorIdentity::GamePlayer {
+                                    player_id: 0, // TODO
+                                    display_name: chat.name.into(),
+                                },
+                                permissions: ActorPermissions {
+                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+                                },
+                            };
+
+                            let content = &chat.message[1..];
+                            let parts = shlex::split(content).unwrap_or_default();
+                            if !parts.is_empty() {
+                                let name = parts[0].clone();
+                                let args = parts[1..].to_vec();
+                                let raw_args = if content.len() > name.len() {
+                                    content[name.len()..].trim().to_string()
+                                } else {
+                                    String::new()
+                                };
+
+                                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
+                                    name,
+                                    args,
+                                    raw_args,
+                                    actor,
+                                    source: CommandSource::GameChat,
+                                }));
+                            }
+                        }
                     }
                     false => {
                         let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
                         info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
                         
-                        if msg_type == EChatType::AllSay && cli_args().discord_enabled()  {
-                            if chat.message.starts_with("!admin ") {
-                                GameEvent::AdminAlertEvent(AdminAlert {
-                                    reporter: chat.name.into(),
-                                    reason: chat.message.split_once(" ")
-                                    .map(|(_, n)| n)
-                                    .unwrap_or(chat.message).into(),
-                                }).dispatch(None);
-
-                            } else {
+                        if msg_type == EChatType::AllSay {
+                            EVENT_SYSTEM.game_event_publisher.publish(
                                 GameEvent::GameChatMessageEvent(GameChatMessage {
                                     sender: chat.name.into(),
                                     message: chat.message.into(),
-                                    chat_type: msg_type,
-                                }).dispatch(None);
-                            }
+                                    chat_type: ChatType::Global,
+                                    chat_source: ChatSource::Game,
+                                })
+                            );
                         }
                     }
                 };        

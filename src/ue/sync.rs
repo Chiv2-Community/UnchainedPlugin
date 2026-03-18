@@ -1,4 +1,4 @@
-﻿use std::cell::UnsafeCell;
+use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use windows::Win32::System::Threading::{
     EnterCriticalSection, LeaveCriticalSection, CRITICAL_SECTION,

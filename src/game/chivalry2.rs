@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
+use strum::Display;
 use crate::{game::engine::FText, ue::{FString, FVector, TArray}};
 
 #[repr(C)]
@@ -14,7 +15,7 @@ pub struct ATBLPlayerController {
 // Chat type enum
 // FIXME: More compact, wtf is this
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum EChatType {
     AllSay,
@@ -541,6 +542,43 @@ pub struct ATBLGameMode {
     
     // 0x1218 (size: 0x1)
     pub auto_balance_with_friends_blocked: bool,
+}
+
+impl ATBLGameState {
+    pub fn get_human_player_count(&self) -> usize {
+        let mut count = 0;
+        for player_ptr in self.player_array.as_slice() {
+            if let Some(player) = unsafe { player_ptr.as_ref() } {
+                if !player.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+}
+
+pub fn get_human_player_count() -> usize {
+    let world_ptr = match crate::globals().world() {
+        Some(ptr) => ptr as *mut crate::game::engine::UWorld,
+        None => return 0,
+    };
+
+    let world = unsafe {
+        match world_ptr.as_ref() {
+            Some(w) => w,
+            None => return 0,
+        }
+    };
+
+    let game_state = unsafe {
+        match world.game_state.as_ref() {
+            Some(gs) => gs,
+            None => return 0,
+        }
+    };
+
+    game_state.get_human_player_count()
 }
 
 #[repr(C)]

@@ -1,31 +1,24 @@
 use serenity::all::UserId;
-use UnchainedPlugin::discord::config::DiscordConfig;
-use UnchainedPlugin::discord::events::{CommandRequest, GameChatMessage, Join, Kill, GameEvent};
-use UnchainedPlugin::discord::{ConsoleChatSink, DISCORD_HANDLE, DiscordBridge, SleuthContext};
-use UnchainedPlugin::game::chivalry2::EChatType;
-use UnchainedPlugin::{serror, sinfo};
+use UnchainedPlugin::features::discord::DiscordConfig;
+use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted};
+use UnchainedPlugin::features::events::EVENT_SYSTEM;
+use UnchainedPlugin::sinfo;
 use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
-use std::sync::Arc;
-
+use UnchainedPlugin::features::discord::initialize_discord_system;
 
 fn main() {
     println!("🚀 Discord Mock Server Starting!");
-    // 1. Load your real config so the mock bot actually connects to Discord
-    // sinfo!(f; "Starting discord bridge");
     
-    let config_path = "discord_config_mock.json";
-    let config = DiscordConfig::load(config_path, true).unwrap_or_else(|e| {
-        serror!("Configuration Error, loading default: {}", e);
-        DiscordConfig::default()
-    });
-    let ctx = Arc::new(SleuthContext {
-            chat: Arc::new(ConsoleChatSink),
-            config
-        });
-    let handle = DiscordBridge::init(config_path, ctx);
-    DISCORD_HANDLE.set(handle)
-        .expect("Discord Handle was already initialized!");
+    let config = DiscordConfig {
+        bot_token: "YOUR_TOKEN_HERE".to_string(),
+        admin_role_id: None,
+        general_channel_id: serenity::all::ChannelId::new(1),
+        admin_channel_id: None,
+        mention_on_admin: true,
+    };
+
+    initialize_discord_system(config.clone());
 
     init_syslog().expect("Failed to init syslog");
     sinfo!("Discord Mock Server Started!");
@@ -41,31 +34,42 @@ fn main() {
 
         match parts.as_slice() {
             ["join", name] => {
-                GameEvent::JoinEvent(Join { name: name.to_string() }).dispatch(None);
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: name.to_string() }));
             }
             ["kill", k, v] => {
-                GameEvent::KillEvent(Kill {
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
                     weapon: "MockSword".to_string() 
-                }).dispatch(None);
+                }));
             }
             ["chat", ..] => {
                 let msg = parts[1..].join(" ");
-                GameEvent::GameChatMessageEvent(GameChatMessage {
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                    chat_source: ChatSource::Game,
+                    chat_type: ChatType::Admin,
                     sender: "MockPlayer".to_string(), 
                     message: msg,
-                    chat_type: EChatType::Admin, 
-                }).dispatch(None);
+                }));
             }
             ["dchat", ..] => {
                 let msg = parts[1..].join(" ");
-                GameEvent::CommandRequestEvent(CommandRequest {
-                    command: msg,
-                    user: "MockDiscUser".into(),
-                    user_id: UserId::new(1234),
-                    user_roles: [].into(),
-                }).dispatch(None);
+                let parts: Vec<String> = msg.split_whitespace().map(|s| s.to_string()).collect();
+                let name = parts.get(0).cloned().unwrap_or_default();
+                let args = if parts.len() > 1 { parts[1..].to_vec() } else { vec![] };
+                
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandExecutedEvent(CommandExecuted {
+                    name,
+                    args,
+                    raw_args: msg,
+                    actor: CommandActor::from_discord(
+                        UserId::new(std::num::NonZeroU64::new(1234).unwrap().into()),
+                        "MockDiscUser".into(),
+                        &[],
+                        config.clone()
+                    ),
+                    source: CommandSource::Discord,
+                }));
             }
             ["exit"] => break,
             _ => println!("Unknown command. Try 'join Arthur'"),

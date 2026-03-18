@@ -50,6 +50,10 @@ jobs:
             exit 1
           fi
 
+      # Run tests
+      - name: Test
+        run: cargo test --release
+
       # Build the project
       - name: Build
         run: cargo build --release
