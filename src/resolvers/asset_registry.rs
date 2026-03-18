@@ -49,7 +49,7 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut c_void, Class
     crate::sinfo![f; "Triggered! {}", ClassPathName];
     let res: bool;
     unsafe {
-        res = o_GetAssetsByClass.call(this_ptr, ClassPathName, OutAssetData, bSearchSubClasses);
+        res = CALL_ORIGINAL!(GetAssetsByClass(this_ptr, ClassPathName, OutAssetData, bSearchSubClasses));
         if res && ClassPathName.to_string() == "DA_ModMarker_C" {
             swarn!(f; "this_ptr: {:#?}", this_ptr);
             swarn!(f; "ClassPathName: {}", ClassPathName);
