@@ -416,6 +416,9 @@ impl RegistrationInner {
         }
     }
 
+    /// Extracts player count and max players from server info, adjusting for headless mode.
+    /// When headless, the server host is still counted as a player in the game, even though
+    /// they do not exist.
     fn players_from_info(info: &Info) -> (u8, u8) {
         let (max_players, player_count) = if cli_args().is_headless {
             (info.max_players - 1, info.players - 1)
