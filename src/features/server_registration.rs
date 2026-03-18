@@ -4,6 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
+use a2s::info::Info;
 use crate::events::models::{ServerStatus, GameEvent};
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::Mod;
@@ -358,6 +359,8 @@ impl RegistrationInner {
             _ => &info.name
         };
 
+        let (max_players, player_count) = Self::players_from_info(&info);
+
         let request = RegisterRequest {
             ports: Ports {
                 game: info.extended_server_info.port.unwrap_or(7777),
@@ -368,8 +371,8 @@ impl RegistrationInner {
             description,
             password_protected: args.server_password.is_some(),
             current_map: &info.map,
-            player_count: info.players as i32,
-            max_players: info.max_players as i32,
+            player_count: player_count as u32,
+            max_players: max_players as u32,
             local_ip_address: cli_args().local_ip.as_str(),
             mods,
         };
@@ -413,14 +416,25 @@ impl RegistrationInner {
         }
     }
 
+    fn players_from_info(info: &Info) -> (u8, u8) {
+        let (max_players, player_count) = if cli_args().is_headless {
+            (info.max_players - 1, info.players - 1)
+        } else {
+            (info.max_players, info.players)
+        };
+        (max_players, player_count)
+    }
+
     fn send_heartbeat_and_update(&self, a2s: &A2SClient, ident: &Identity) -> Result<u64, bool> {
         let info = self.poll_a2s_with_retry(a2s).map_err(|_| false)?;
         let start_time = Instant::now();
 
+        let (max_players, player_count) = Self::players_from_info(&info);
+
         // 1. Metadata Update (PUT)
         let payload = UpdatePayload {
-            player_count: info.players as i32,
-            max_players: info.max_players as i32,
+            player_count: player_count as i32,
+            max_players: max_players as i32,
             map_name: &info.map,
         };
         let upd_res = self.http.put(BackendApi::server(&ident.id))
