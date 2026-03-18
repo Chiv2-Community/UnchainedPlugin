@@ -88,7 +88,7 @@ pub struct CLIArgs {
     #[arg(long = "platform")]
     pub platform: Option<String>,
 
-    #[arg(long = "saved-dir-suffix")]
+    #[arg(long = "saveddirsuffix")]
     pub saved_dir_suffix: Option<String>,
 
     #[arg(long = "GameServerPingPort", default_value = "3075")]
@@ -200,9 +200,9 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
     let mut args = args.into_iter();
     let bin_name = args.next().unwrap_or_else(|| "app".to_string());
 
-    let known_flags: HashMap<String, String> = CLIArgs::command()
+    let known_flags: Vec<String> = CLIArgs::command()
         .get_arguments()
-        .filter_map(|a| a.get_long().map(|s| (s.to_lowercase().replace('-', ""), format!("--{s}"))))
+        .filter_map(|a| a.get_long().map(|s| format!("--{s}")))
         .collect();
 
     let mut result = vec![bin_name];
@@ -217,17 +217,17 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         }
 
         // 2. Split or Normalize
-        let (flag_raw, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=') {
-            (k.trim_start_matches('-').to_string(), Some(v.to_string()))
-        } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 1 {
-            (arg[1..].to_string(), None)
+        let (flag, value_opt): (String, Option<String>) = if let Some((k, v)) = arg.split_once('=') {
+            (format!("--{}", k.trim_start_matches('-')), Some(v.to_string()))
+        } else if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
+            (format!("--{}", &arg[1..]), None)
         } else {
             (arg.clone(), None)
         };
 
-        // 3. Match against known flags (case-insensitive and ignoring hyphens)
-        if let Some(flag) = known_flags.get(&flag_raw.to_lowercase().replace('-', "")) {
-            result.push(flag.clone());
+        // 3. Match against known flags
+        if known_flags.contains(&flag) {
+            result.push(flag);
             if let Some(v) = value_opt {
                 result.push(v);
             } else {
@@ -446,7 +446,7 @@ mod tests {
             "-saveddirsuffix=test".to_string(),
         ];
         let normalized = normalize_and_filter_args(args);
-        assert!(normalized.contains(&"--saved-dir-suffix".to_string()));
+        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
         assert!(normalized.contains(&"test".to_string()));
 
         let cli = CLIArgs::try_parse_from(normalized).unwrap();
@@ -461,7 +461,7 @@ mod tests {
             "test2".to_string(),
         ];
         let normalized = normalize_and_filter_args(args);
-        assert!(normalized.contains(&"--saved-dir-suffix".to_string()));
+        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
         assert!(normalized.contains(&"test2".to_string()));
 
         let cli = CLIArgs::try_parse_from(normalized).unwrap();
