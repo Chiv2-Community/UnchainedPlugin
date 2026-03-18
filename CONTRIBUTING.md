@@ -139,6 +139,45 @@ Register the subscriber to the appropriate bus in `src/features/events.rs`.
 let _ = game_event_bus.subscribe(Box::new(MySubscriber)).await;
 ```
 
+## Architecture and State Management
+
+### Global Statics vs. Dependency Injection
+
+This project operates by injecting a DLL into Chivalry 2. Because we do not have full control over the game's methods or their lifecycle, some **globally accessible mutable static values** are necessary to share state between DLL hooks.
+
+However, **you should avoid adding new global statics** whenever possible. 
+
+- **Global Statics**: Should only be used if the state *must* be accessible inside a low-level DLL Hook.
+- **Dependency Injection**: For all other components (Commands, Votes, Subscribers), you should inject the dependencies they need (such as event publishers or shared state) into their structs during initialization.
+
+### Example: Injecting Dependencies
+
+When creating a new component, pass its dependencies through its constructor:
+
+```rust
+pub struct MySubscriber {
+    broadcaster: &'static EventPublisher<BroadcastMessage>,
+    shared_data: Arc<Mutex<MyData>>,
+}
+
+impl MySubscriber {
+    pub fn new(
+        broadcaster: &'static EventPublisher<BroadcastMessage>, 
+        shared_data: Arc<Mutex<MyData>>
+    ) -> Self {
+        Self { broadcaster, shared_data }
+    }
+}
+```
+
+Then, initialize and register it in `src/features/events.rs`:
+
+```rust
+let my_data = Arc::new(Mutex::new(MyData::new()));
+let my_subscriber = MySubscriber::new(broadcast_message_publisher, my_data);
+let _ = game_event_bus.subscribe(Box::new(my_subscriber)).await;
+```
+
 ---
 
 ## Logs Location
