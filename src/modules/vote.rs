@@ -265,7 +265,7 @@ impl Command<VoteArgs> for VoteCommand {
 
             let mut message =
                 BroadcastMessage::new()
-                    .title("??? Vote Help".to_string())
+                    .title("🗳️ Vote Help".to_string())
                     .color(0x3498db)
                     .footer("Type !vote <type> to start a vote".to_string());
 
@@ -899,7 +899,7 @@ mod tests {
         let msgs = messages.lock().await;
         assert_eq!(msgs.len(), 1);
         let msg = &msgs[0];
-        assert_eq!(msg.title, Some("??? Vote Help".to_string()));
+        assert_eq!(msg.title, Some("🗳️ Vote Help".to_string()));
         let fields = msg.fields.as_ref().unwrap();
         let field = &fields[0];
         assert_eq!(field.0, "Available Votes");
