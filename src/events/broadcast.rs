@@ -1,3 +1,26 @@
+//! The broadcast system is used for distributing rich messages to multiple message backends.
+//!
+//! # Architecture
+//!
+//! [`BroadcastMessage`] is the core model that represents a notification to be sent to users.
+//! It supports both simple text content and "rich" features (title, fields, footer, color, embed support)
+//! that can be rendered by sophisticated backends like Discord.
+//!
+//! # Backends
+//!
+//! The system broadcasts messages to several backends via subscribers:
+//! - **Discord**: Messages are converted to embeds or content and sent via [`DiscordBroadcastSubscriber`].
+//! - **Game Chat**: Messages are sent to the in-game chat via [`InGameChatBroadcastSubscriber`].
+//! - **Server Console**: Messages are printed to the server console via [`ConsoleChatBroadcastSubscriber`].
+//!
+//! # Usage in Project
+//!
+//! Broadcasts are triggered throughout the project for:
+//! - **Game Events**: Announcements like killstreaks, player joins/leaves.
+//! - **Admin Notifications**: Critical server alerts or crash reports (using [`Notify::Admin`]).
+//! - **Commands**: Feedback from commands like `!say` or `!vote`.
+//!
+//! Messages are typically published to the `message_broadcast_event_bus` defined in `src/features/events.rs`.
 use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
 
 #[derive(Clone, Debug)]

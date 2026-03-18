@@ -1,3 +1,28 @@
+//! The voting system allows players to initiate and participate in server-wide polls.
+//!
+//! It works similarly to the command system, using a trait-based approach ([`VoteType`])
+//! and type-erased handlers ([`ErasedVoteType`]).
+//!
+//! # Architecture
+//!
+//! - [`VoteType`]: The primary trait for defining a new vote's behavior (title, description, success logic).
+//! - [`VotingState`]: Manages the currently active vote and registered vote types.
+//! - [`VoteCommand`]: A command that allows users to start votes (e.g., `!vote <type>`).
+//! - [`YesCommand`] / [`NoCommand`]: Commands for players to cast their votes.
+//!
+//! # Registration
+//!
+//! Vote types are registered to a `VoteCommand` instance, which is usually part of the
+//! central [`CommandSubscriber`](crate::modules::command::CommandSubscriber).
+//!
+//! Multiple specific vote types (e.g., `EndMapVote`, `MapVote`, `KickVote`) are
+//! implemented in the `src/modules/votes` directory.
+//!
+//! # Usage in Project
+//!
+//! The voting system is initialized in `src/features/events.rs` within `initalize_vote_commands`.
+//! It relies on the [`BroadcastMessage`](crate::events::broadcast::BroadcastMessage) bus
+//! to communicate vote status and results to players.
 use std::any::Any;
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};

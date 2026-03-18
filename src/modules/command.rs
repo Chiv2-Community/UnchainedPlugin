@@ -1,3 +1,28 @@
+//! The command subscriber is the central hub for handling game commands.
+//!
+//! It implements the [`Subscriber`] trait for [`GameEvent`] and listens specifically
+//! for [`CommandRequest`](crate::events::models::CommandRequest) events.
+//!
+//! # Architecture
+//!
+//! - [`CommandSubscriber`]: Manages a collection of registered commands and dispatches requests to them.
+//! - [`ErasedCommand`]: The type-erased trait used to store different commands in a single collection.
+//!
+//! # Integration
+//!
+//! The `CommandSubscriber` is a key component of the event system, typically initialized
+//! in `src/features/events.rs`. It bridges the gap between the low-level event bus and
+//! the high-level [`Command`](crate::commands::Command) trait definitions.
+//!
+//! For more details on how to define commands, see the documentation in [`src/commands.rs`](crate::commands).
+//!
+//! # Execution Flow
+//!
+//! 1. A `CommandRequest` is published to the `game_event_bus`.
+//! 2. The `CommandSubscriber` receives the event via `on_event`.
+//! 3. It identifies the target command by name.
+//! 4. It verifies permissions and execution source.
+//! 5. It executes the command and publishes results to the [`BroadcastMessage`] bus.
 use async_trait::async_trait;
 use clap::{Parser, CommandFactory};
 use crate::events::bus::{Subscriber, EventPublisher};

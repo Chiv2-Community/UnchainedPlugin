@@ -1,3 +1,27 @@
+//! The command system provides a trait-based approach to defining and handling game commands.
+//!
+//! # Architecture
+//!
+//! - [`Command<Args>`]: The primary trait for defining a new command with specific arguments.
+//!   It leverages [`clap`] for argument parsing and provides hooks for execution, ticks, and events.
+//! - [`ErasedCommand`]: A type-erased version of the `Command` trait, allowing different commands
+//!   to be stored and managed in a single collection.
+//! - [`CommandHandler`]: A wrapper that bridges the gap between `Command<Args>` and `ErasedCommand`.
+//!
+//! # Adding New Commands
+//!
+//! To add a new command to the project:
+//! 1. Define a struct for your command arguments and derive [`clap::Parser`] and [`clap::CommandFactory`].
+//! 2. Define a struct for your command and implement `Command<MyCommandArgs>` for it.
+//! 3. Register your command in the appropriate place:
+//!    - **Always active**: Register in `src/features/events.rs` within `initialize_subscribers`.
+//!    - **Discord only**: Register in `src/features/discord.rs` if it should only be active with Discord.
+//!
+//! # Registration & Execution
+//!
+//! Commands are registered to a [`CommandSubscriber`], which is defined in `src/modules/command.rs`.
+//! The `CommandSubscriber` is initialized in `src/features/events.rs` and subscribed to the
+//! central game event bus to listen for [`CommandRequest`](crate::events::models::CommandRequest) events.
 use std::marker::PhantomData;
 use std::sync::Mutex;
 use async_trait::async_trait;

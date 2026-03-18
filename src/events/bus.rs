@@ -1,3 +1,26 @@
+//! The event bus is a lightweight asynchronous event distribution system.
+//!
+//! It is used to send `game_events` to various subscribers that can react to game state changes,
+//! commands, or periodic ticks.
+//!
+//! # Architecture
+//!
+//! - [`EventBus`]: The central coordinator that manages subscribers and dispatches events.
+//! - [`EventPublisher`]: A handle used to send events into the bus. It can be easily cloned and shared.
+//! - [`Subscriber`]: A trait implemented by components that want to receive events or receive periodic ticks.
+//!
+//! # Usage in Project
+//!
+//! The main event system is initialized in `src/features/events.rs`.
+//!
+//! There are two primary buses used in the project:
+//! 1. **Game Event Bus**: Distributes [`GameEvent`](crate::events::models::GameEvent) to modules like
+//!    [`KillstreakSubscriber`], [`StatsTrackerSubscriber`], and [`CommandSubscriber`].
+//! 2. **Broadcast Event Bus**: Distributes [`BroadcastMessage`](crate::events::broadcast::BroadcastMessage)
+//!    to backends (Discord, Game Chat, Console) via subscribers like [`ConsoleChatBroadcastSubscriber`].
+//!
+//! Events are dispatched asynchronously, and subscribers can also receive periodic `on_tick` calls
+//! at a rate configured when the bus is created.
 use std::sync::Arc;
 use std::time::Duration;
 use async_trait::async_trait;
