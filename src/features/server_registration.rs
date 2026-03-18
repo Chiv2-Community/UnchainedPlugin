@@ -371,8 +371,8 @@ impl RegistrationInner {
             description,
             password_protected: args.server_password.is_some(),
             current_map: &info.map,
-            player_count: player_count as u32,
-            max_players: max_players as u32,
+            player_count: player_count as i32,
+            max_players: max_players as i32,
             local_ip_address: cli_args().local_ip.as_str(),
             mods,
         };
