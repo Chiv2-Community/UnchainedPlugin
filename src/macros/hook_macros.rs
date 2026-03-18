@@ -6,29 +6,33 @@
 ///
 /// # Supported Formats
 ///
-/// 1. **Basic Shorthand** (Defaults: ACTIVE, NONE, void)
-///    ```rust
+/// 1. **Basic Shorthand** (Defaults: ACTIVE, PRE, void)
+///    ```rust,ignore
 ///    CREATE_HOOK!(Name, (args), { body }); 
 ///    ```
-/// 2. **Explicit Status** (Defaults: NONE, void)
-///    ```rust
+/// 2. **Explicit Status** (Defaults: PRE, void)
+///    ```rust,ignore
 ///    CREATE_HOOK!(Name, Status, (args), { body });
 ///    ```
 ///
-/// 3. **Explicit Return Type** (Defaults: ACTIVE, NONE)
-///    ```rust
+/// 3. **Explicit Return Type** (Defaults: ACTIVE, PRE)
+///    ```rust,ignore
 ///    CREATE_HOOK!(Name, RetType, (args), { body });
 ///    ```
 ///
-/// 4. **Status & Return Type** (Defaults: NONE)
-///    ```rust
+/// 4. **Status & Return Type** (Defaults: PRE)
+///    ```rust,ignore
 ///    CREATE_HOOK!(Name, Status, RetType, (args), { body });
 ///    ```
 ///
 /// 5. **Full Configuration**
-///    ```rust
+///    ```rust,ignore
 ///    CREATE_HOOK!(Name, Status, HookType, RetType, (args), { body });
 ///    ```
+///
+/// # Note on Testing
+/// These examples are marked `ignore` because they require external state (like `o_Name` statics) 
+/// and complex boilerplate to be fully runnable in a doctest.
 ///
 /// # Arguments
 /// * `Name` - The identifier of the function (used to generate `o_Name` and `attach_Name`).

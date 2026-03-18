@@ -148,10 +148,19 @@ macro_rules! serror {
 
 /// ## Example usage
 /// ```rust
+/// use UnchainedPlugin::debug_where;
+/// # use UnchainedPlugin::function;
+/// # fn main() {
 /// debug_where!();
+/// # }
 /// ```
 /// ```rust
+/// use UnchainedPlugin::debug_where;
+/// # use UnchainedPlugin::function;
+/// # fn main() {
+/// let state = "initializing";
 /// debug_where!("Entering important state {}", state);
+/// # }
 /// ```
 #[macro_export]
 macro_rules! debug_where {
