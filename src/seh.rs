@@ -1,8 +1,7 @@
 use std::{ffi::CStr, mem::zeroed, thread::sleep, time::Duration};
 
-use tokio::time::Sleep;
 use winapi::vc::excpt::EXCEPTION_CONTINUE_SEARCH;
-use windows::Win32::{Foundation::EXCEPTION_ACCESS_VIOLATION, System::{Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS, SYMBOL_INFO, SymFromAddr, SymInitialize}, Threading::{GetCurrentProcess, GetCurrentThreadId}}};
+use windows::Win32::{Foundation::EXCEPTION_ACCESS_VIOLATION, System::{Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS, SYMBOL_INFO, SymFromAddr, SymInitialize}, Threading::GetCurrentProcess}};
 
 
 
@@ -23,7 +22,7 @@ unsafe fn ensure_symbols() {
     let process = GetCurrentProcess();
 
     // Load symbols for all modules
-    SymInitialize(process, None, TRUE);
+    let _ = SymInitialize(process, None, TRUE);
     SymSetOptions(
         SYMOPT_DEFERRED_LOADS
             | SYMOPT_UNDNAME
