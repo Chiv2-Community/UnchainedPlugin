@@ -28,50 +28,38 @@ pub enum Notify {
     Admin
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BroadcastMessage {
     pub title: Option<String>,
     pub content: Option<String>,
-    pub fields: Option<Vec<(String, String)>>,
+    pub fields: Vec<(String, String)>,
     pub footer: Option<String>,
     pub color: Option<u32>,
-    pub notify: Vec<Notify>
+    pub notify: Vec<Notify>,
 }
 
 impl BroadcastMessage {
     pub fn new() -> Self {
-        Self {
-            title: None,
-            content: None,
-            fields: None,
-            footer: None,
-            color: None,
-            notify: Vec::new(),
-        }
+        Self::default()
     }
 
-    fn is_rich(&self) -> bool {
-        self.title.is_some() || self.fields.is_some() || self.footer.is_some() || self.color.is_some()
-    }
-
-    pub fn title(mut self, title: String) -> Self {
-        self.title = Some(title);
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
         self
     }
 
-    pub fn content(mut self, content: String) -> Self {
-        self.content = Some(content);
+    pub fn content(mut self, content: impl Into<String>) -> Self {
+        self.content = Some(content.into());
         self
     }
 
-    pub fn field(mut self, name: String, value: String) -> Self {
-        let fields = self.fields.get_or_insert_with(Vec::new);
-        fields.push((name, value));
+    pub fn field(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.fields.push((name.into(), value.into()));
         self
     }
 
-    pub fn footer(mut self, footer: String) -> Self {
-        self.footer = Some(footer);
+    pub fn footer(mut self, footer: impl Into<String>) -> Self {
+        self.footer = Some(footer.into());
         self
     }
 
@@ -80,38 +68,57 @@ impl BroadcastMessage {
         self
     }
 
-    pub fn get_content(&self) -> Option<&String> {
-        self.content.as_ref()
+    pub fn notify(mut self, notify: Notify) -> Self {
+        self.notify.push(notify);
+        self
+    }
+
+    pub fn content_ref(&self) -> Option<&str> {
+        self.content.as_deref()
+    }
+
+    pub fn get_content(&self) -> Option<&str> {
+        self.content_ref()
+    }
+
+    pub fn notify_roles(&self) -> &[Notify] {
+        &self.notify
     }
 }
 
-impl Into<CreateMessage> for BroadcastMessage {
-    fn into(self) -> CreateMessage {
+impl From<BroadcastMessage> for CreateMessage {
+    fn from(broadcast_message: BroadcastMessage) -> Self {
         let mut message = CreateMessage::new();
+        let BroadcastMessage {
+            title,
+            content,
+            fields,
+            footer,
+            color,
+            notify: _,
+        } = broadcast_message;
 
-        let should_create_embed = self.is_rich();
+        let should_create_embed = title.is_some() || !fields.is_empty() || footer.is_some() || color.is_some();
 
         if should_create_embed {
             let mut embed = CreateEmbed::new();
-            if let Some(title) = self.title {
+            if let Some(title) = title {
                 embed = embed.title(title);
             }
-            if let Some(content) = self.content {
+            if let Some(content) = content {
                 embed = embed.description(content);
             }
-            if let Some(fields) = self.fields {
-                for (name, value) in fields {
-                    embed = embed.field(name, value, false);
-                }
+            for (name, value) in fields {
+                embed = embed.field(name, value, false);
             }
-            if let Some(footer) = self.footer {
+            if let Some(footer) = footer {
                 embed = embed.footer(CreateEmbedFooter::new(footer));
             }
-            if let Some(color) = self.color {
+            if let Some(color) = color {
                 embed = embed.color(color);
             }
             message = message.embed(embed);
-        } else if let Some(content) = self.content {
+        } else if let Some(content) = content {
             message = message.content(content);
         }
 
@@ -119,30 +126,39 @@ impl Into<CreateMessage> for BroadcastMessage {
     }
 }
 
-impl Into<String> for BroadcastMessage {
-    fn into(self) -> String {
+impl From<BroadcastMessage> for String {
+    fn from(broadcast_message: BroadcastMessage) -> Self {
         let mut message = String::new();
+        let BroadcastMessage {
+            title,
+            content,
+            fields,
+            footer,
+            color,
+            notify: _,
+        } = broadcast_message;
+        let is_rich = title.is_some() || !fields.is_empty() || footer.is_some() || color.is_some();
 
-        if !self.is_rich() && self.content.is_some() {
-            message.push_str(&self.content.unwrap());
-        } else if self.is_rich() {
+        if !is_rich {
+            if let Some(content) = content {
+                message.push_str(&content);
+            }
+        } else {
             message.push_str("\n\n=====================\n\n");
 
-            if let Some(title) = self.title {
+            if let Some(title) = title {
                 message.push_str(&format!("------------ {} ------------\n\n", title));
             }
 
-            if let Some(content) = self.content {
+            if let Some(content) = content {
                 message.push_str(&content);
             }
 
-            if let Some(fields) = self.fields {
-                for (name, value) in fields {
-                    message.push_str(&format!("\n**{}**: {}", name, value));
-                }
+            for (name, value) in fields {
+                message.push_str(&format!("\n**{}**: {}", name, value));
             }
 
-            if let Some(footer) = self.footer {
+            if let Some(footer) = footer {
                 message.push_str(&format!("\n\n------------ {} ------------", footer));
             }
 
@@ -162,7 +178,7 @@ impl From<String> for BroadcastMessage {
 
 impl From<&str> for BroadcastMessage {
     fn from(content: &str) -> Self {
-        Self::new().content(content.to_string())
+        Self::new().content(content)
     }
 }
 
@@ -172,8 +188,8 @@ impl From<&str> for BroadcastMessage {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_broadcast_message_conversions() {
+    #[test]
+    fn test_broadcast_message_conversions() {
         let msg = BroadcastMessage::new()
             .title("Test Title".to_string())
             .content("Test Content".to_string());
@@ -185,12 +201,12 @@ mod tests {
         let _cm: CreateMessage = msg.into();
     }
 
-    #[tokio::test]
-    async fn test_from_conversions() {
+    #[test]
+    fn test_from_conversions() {
         let msg1 = BroadcastMessage::from("hello");
-        assert_eq!(msg1.content, Some("hello".to_string()));
+        assert_eq!(msg1.content_ref(), Some("hello"));
         
         let msg2 = BroadcastMessage::from("world".to_string());
-        assert_eq!(msg2.content, Some("world".to_string()));
+        assert_eq!(msg2.content_ref(), Some("world"));
     }
 }

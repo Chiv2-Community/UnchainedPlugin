@@ -900,7 +900,7 @@ mod tests {
         assert_eq!(msgs.len(), 1);
         let msg = &msgs[0];
         assert_eq!(msg.title, Some("🗳️ Vote Help".to_string()));
-        let fields = msg.fields.as_ref().unwrap();
+        let fields: &[(String, String)] = msg.fields.as_ref();
         let field = &fields[0];
         assert_eq!(field.0, "Available Votes");
         assert!(field.1.contains("`!vote mockvote <target>`"));

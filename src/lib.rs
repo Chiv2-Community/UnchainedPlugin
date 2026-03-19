@@ -396,7 +396,7 @@ static WORLD_READY: AtomicBool = AtomicBool::new(false);
 fn postinit_rustlib() {
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
     // crate::features::events::init_event_system();
-    seh::install();
+    unsafe { seh::install() };
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
     // #[cfg(feature="rcon_commands")]

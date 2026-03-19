@@ -12,6 +12,15 @@ pub struct ATBLPlayerController {
 	pub bPlayerCustomizationReceived: bool,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+pub struct AController {
+    // 0x0000 -> 0x0260: inherited AActor data (layout simplified as padding)
+    pub _base_actor_padding: [u8; 0x260],
+    // 0x0260: APlayerState* PlayerState (UE4 Controller.h)
+    pub player_state: *mut APlayerState,
+}
+
 // Chat type enum
 // FIXME: More compact, wtf is this
 #[repr(C)]

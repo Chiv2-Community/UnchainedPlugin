@@ -39,10 +39,10 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
         let http = Arc::clone(&self.discord_http);
         let channel_id = self.channel_id;
 
-        if !event.notify.is_empty() {
-            let mut content = event.content.clone().unwrap_or_default();
+        if !event.notify_roles().is_empty() {
+            let mut content = event.content_ref().map(str::to_owned).unwrap_or_default();
 
-            for notify_role in event.notify.iter() {
+            for notify_role in event.notify_roles().iter() {
                 let notify_role_id = match notify_role {
                     Notify::Admin => self.admin_role_id,
                     // Add others as we create them
