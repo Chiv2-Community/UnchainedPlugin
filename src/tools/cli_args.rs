@@ -109,6 +109,12 @@ pub struct CLIArgs {
     #[arg(long = "discord-general-channel-id")]
     pub discord_general_channel_id: Option<u64>,
 
+    #[arg(long = "discord-dashboard-channel-id")]
+    pub discord_dashboard_channel_id: Option<u64>,
+
+    #[arg(long = "discord-event-log-channel-id")]
+    pub discord_event_log_channel_id: Option<u64>,
+
     #[arg(long = "censor-mode", default_value = "none")]
     pub censor_mode: CensorArg,
 
@@ -174,7 +180,7 @@ impl CLIArgs {
 
     // #[cfg(feature="discord_integration_old")]
     pub fn discord_enabled(&self) -> bool {
-        self.is_server() && self.discord_bot_token.is_some() && self.discord_channel_id.is_some()
+        self.is_server() && self.discord_bot_token.is_some()
     }
 
     pub fn is_server(&self) -> bool {
@@ -354,6 +360,8 @@ mod tests {
                 discord_channel_id: None,
                 discord_admin_channel_id: None,
                 discord_general_channel_id: None,
+                discord_dashboard_channel_id: None,
+                discord_event_log_channel_id: None,
                 censor_mode: CensorArg::None,
                 discord_admin_role_id: None,
                 discord_bot_token: None,

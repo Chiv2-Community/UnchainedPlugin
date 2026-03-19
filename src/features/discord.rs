@@ -1,7 +1,8 @@
 use std::sync::Arc;
-use serenity::all::{ChannelId, Context, GatewayIntents, Http, Message, RoleId};
+use serenity::all::{ChannelId, Context, CreateMessage, GatewayIntents, Http, Message, RoleId};
 use serenity::Client;
 use serenity::client::EventHandler as DiscordHandler;
+use tokio::sync::RwLock;
 use crate::events::bus::EventPublisher;
 use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, CommandRequest, GameEvent, PermissionFlags};
 use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
@@ -16,25 +17,53 @@ use crate::{sinfo, swarn};
 pub struct DiscordConfig {
     pub bot_token: String,
     pub admin_role_id: Option<u64>,
-    pub general_channel_id: ChannelId,
-    pub admin_channel_id: Option<ChannelId>,
+    pub dashboard_channel_id: Option<ChannelId>,
+    pub general_chat_channel_id: Option<ChannelId>,
+    pub admin_notification_channel_id: Option<ChannelId>,
+    pub event_log_channel_id: Option<ChannelId>,
     pub mention_on_admin: bool,
 }
 
+pub type SharedDiscordConfig = Arc<RwLock<DiscordConfig>>;
+
+pub async fn send_to_channel(
+    http: &Http,
+    channel_id: Option<ChannelId>,
+    message: CreateMessage,
+) {
+    match channel_id {
+        Some(id) => {
+            if let Err(e) = id.send_message(http, message).await {
+                swarn!(f; "Failed to send to channel {}: {}", id, e);
+            }
+        }
+        None => {
+            swarn!(f; "Attempted to send to a channel that is not configured.");
+        }
+    }
+}
+
 pub struct Discord {
-    config: DiscordConfig,
+    config: SharedDiscordConfig,
     event_publisher: EventPublisher<GameEvent>,
 }
 
-pub fn initialize_discord_system(config: DiscordConfig) {
+pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
     let event_publisher = EVENT_SYSTEM.game_event_publisher.clone();
+    let shared_config = Arc::new(RwLock::new(config));
+    let task_config = Arc::clone(&shared_config);
 
     TOKIO_RUNTIME.spawn(async move {
         let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-        
-        let mut client = match Client::builder(&config.bot_token, intents)
+
+        let bot_token = {
+            let config = task_config.read().await;
+            config.bot_token.clone()
+        };
+
+        let mut client = match Client::builder(&bot_token, intents)
             .event_handler(Discord { 
-                config: config.clone(),
+                config: Arc::clone(&task_config),
                 event_publisher
             })
             .await {
@@ -45,61 +74,47 @@ pub fn initialize_discord_system(config: DiscordConfig) {
             }
         };
 
-        register_discord_subscribers(config.clone(), client.http.clone()).await;
-        add_discord_chat_sink(config.clone(), client.http.clone());
+        register_discord_subscribers(Arc::clone(&task_config), client.http.clone()).await;
+        add_discord_chat_sink(Arc::clone(&task_config), client.http.clone());
 
         if let Err(e) = client.start().await {
             swarn!(f; "Discord bot error: {}", e);
         }
     });
+
+    shared_config
 }
 
-async fn register_discord_subscribers(config: DiscordConfig, http: Arc<Http>) {
+async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Http>) {
     let broadcast_message_bus = &EVENT_SYSTEM.message_broadcast_event_bus;
 
-    let discord_subscriber = DiscordBroadcastSubscriber::new(
-        config.general_channel_id,
-        config.admin_channel_id,
-        config.admin_role_id.map(serenity::all::RoleId::new),
-        http.clone(),
-    );
+    let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), Arc::clone(&config));
     let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
 
     // Admin Alert Module
-    if let Some(admin_channel_id) = config.admin_channel_id {
-        let admin_alert_module = AdminAlertModule::new(
-            config.mention_on_admin,
-            http.clone(),
-            admin_channel_id,
-            config.admin_role_id.map(RoleId::new),
-            &EVENT_SYSTEM.game_event_publisher,
-        );
-        let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
-        
-        let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
-        TOKIO_RUNTIME.spawn(async move {
-            let mut command_subscriber = command_subscriber.lock().await;
-            command_subscriber.register(admin_alert_module);
-        });
-    }
+    let admin_alert_module = AdminAlertModule::new(
+        http.clone(),
+        Arc::clone(&config),
+        &EVENT_SYSTEM.game_event_publisher,
+    );
+    let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
+    
+    let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
+    TOKIO_RUNTIME.spawn(async move {
+        let mut command_subscriber = command_subscriber.lock().await;
+        command_subscriber.register(admin_alert_module);
+    });
 
     // Dashboard Subscriber
-    // Assuming we use the general channel for the dashboard, or we could add a dedicated field to DiscordConfig
-    let dashboard_subscriber = DashboardSubscriber::new(http.clone(), config.general_channel_id);
+    let dashboard_subscriber = DashboardSubscriber::new(http.clone(), Arc::clone(&config));
     let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
 }
 
-fn add_discord_chat_sink(discord_config: DiscordConfig, discord_http: Arc<Http>) {
+fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http: Arc<Http>) {
     TOKIO_RUNTIME.spawn(async move {
-        if let Some(admin_id) = discord_config.admin_channel_id {
-            EVENT_SYSTEM.chat_relay_subscriber.add_sink(Box::new(DiscordChatSink::new(
-                discord_config.general_channel_id,
-                admin_id,
-                discord_http,
-            ))).await;
-        } else {
-            swarn!(f; "Discord chat sink not added because admin channel id is missing.");
-        }
+        EVENT_SYSTEM.chat_relay_subscriber
+            .add_sink(Box::new(DiscordChatSink::new(discord_config, discord_http)))
+            .await;
     });
 }
 
@@ -114,12 +129,18 @@ impl DiscordHandler for Discord {
             return;
         }
 
-        if Some(msg.channel_id) != Some(self.config.general_channel_id) && Some(msg.channel_id) != self.config.admin_channel_id {
+        let config = self.config.read().await.clone();
+
+        let is_known_channel =
+            config.general_chat_channel_id == Some(msg.channel_id)
+            || config.admin_notification_channel_id == Some(msg.channel_id);
+
+        if !is_known_channel {
             return;
         }
 
         let roles = msg.member.as_ref().map(|m| m.roles.clone()).unwrap_or_default();
-        let is_admin = self.config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
+        let is_admin = config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
 
         let actor = CommandActor {
             display_name: msg.author.name.clone(),
@@ -154,7 +175,7 @@ impl DiscordHandler for Discord {
                 actor,
                 source: CommandSource::Discord,
             }));
-        } else if Some(msg.channel_id) == Some(self.config.general_channel_id) {
+        } else if config.general_chat_channel_id == Some(msg.channel_id) {
             self.event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
                 chat_source: ChatSource::Discord,
                 chat_type: ChatType::Global,

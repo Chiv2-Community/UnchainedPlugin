@@ -1,9 +1,11 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use serenity::all::{ChannelId, Http, CreateMessage, MessageId, EditMessage};
 use crate::events::bus::Subscriber;
 use crate::events::models::{GameEvent, ServerStatus};
+use crate::features::discord::SharedDiscordConfig;
+use crate::swarn;
 
 pub struct DashboardSubscriber {
     // Current State
@@ -15,7 +17,8 @@ pub struct DashboardSubscriber {
     
     // Discord Reference
     http: Arc<Http>,
-    channel_id: ChannelId,
+    discord_config: SharedDiscordConfig,
+    active_channel_id: Option<ChannelId>,
     message_id: Option<MessageId>,
     needs_refresh: bool,
     
@@ -23,7 +26,7 @@ pub struct DashboardSubscriber {
 }
 
 impl DashboardSubscriber {
-    pub fn new(http: Arc<Http>, channel_id: ChannelId) -> Self {
+    pub fn new(http: Arc<Http>, discord_config: SharedDiscordConfig) -> Self {
         Self {
             player_count: 0,
             max_players: 0,
@@ -31,7 +34,8 @@ impl DashboardSubscriber {
             server_name: "Unchained Server".to_string(),
             last_update: Instant::now(),
             http,
-            channel_id,
+            discord_config,
+            active_channel_id: None,
             message_id: None,
             needs_refresh: true,
             status: None,
@@ -100,23 +104,36 @@ impl Subscriber<GameEvent> for DashboardSubscriber {
     }
 
     async fn on_tick(&mut self) {
-        // Only refresh every 30 seconds or if a major event happened
         if !self.needs_refresh && self.message_id.is_none() {
             return;
         }
-        
+
         if !self.needs_refresh && self.last_update.elapsed() < Duration::from_secs(30) {
             return;
+        }
+
+        let channel_id = match self.discord_config.read().await.dashboard_channel_id {
+            Some(id) => id,
+            None => {
+                swarn!(f; "Attempted to update dashboard, but dashboard channel is not configured.");
+                return;
+            }
+        };
+
+        if self.active_channel_id != Some(channel_id) {
+            self.active_channel_id = Some(channel_id);
+            self.message_id = None;
+            self.needs_refresh = true;
         }
 
         let embed = self.build_embed();
 
         match self.message_id {
             Some(id) => {
-                let _ = self.channel_id.edit_message(&self.http, id, EditMessage::new().add_embed(embed)).await;
+                let _ = channel_id.edit_message(&self.http, id, EditMessage::new().add_embed(embed)).await;
             }
             None => {
-                if let Ok(msg) = self.channel_id.send_message(&self.http, CreateMessage::new().add_embed(embed)).await {
+                if let Ok(msg) = channel_id.send_message(&self.http, CreateMessage::new().add_embed(embed)).await {
                     self.message_id = Some(msg.id);
                 }
             }

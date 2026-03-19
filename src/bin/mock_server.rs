@@ -13,8 +13,10 @@ fn main() {
     let config = DiscordConfig {
         bot_token: "YOUR_TOKEN_HERE".to_string(),
         admin_role_id: None,
-        general_channel_id: serenity::all::ChannelId::new(1),
-        admin_channel_id: None,
+        dashboard_channel_id: Some(serenity::all::ChannelId::new(1)),
+        general_chat_channel_id: Some(serenity::all::ChannelId::new(1)),
+        admin_notification_channel_id: Some(serenity::all::ChannelId::new(1)),
+        event_log_channel_id: Some(serenity::all::ChannelId::new(1)),
         mention_on_admin: true,
     };
 
