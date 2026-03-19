@@ -111,7 +111,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     error_message: *mut FString
 ), {
     let options_string = unsafe { options.as_ref() }
-        .map(|o| o.to_string())
+        .and_then(|o| o.copy_to_string().ok())
         .unwrap_or_else(|| "<empty-string>".to_string());
 
     if !cli_args().use_backend_banlist || address.is_null() {
