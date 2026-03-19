@@ -1,5 +1,5 @@
-﻿use async_trait::async_trait;
-use crate::events::broadcast::{BroadcastMessage, Notify};
+use async_trait::async_trait;
+use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::{EventPublisher, Subscriber};
 use crate::events::models::GameEvent;
 
@@ -22,12 +22,12 @@ impl Subscriber<GameEvent> for CrashSubscriber {
 
     async fn on_event(&mut self, event: &GameEvent) {
         if let GameEvent::CrashEvent(alert) = event {
-            let mut msg = BroadcastMessage::new()
+            let msg = BroadcastMessage::new()
                 .title("🚨 SERVER CRASH".to_string())
-                .content(format!("**SERVER CRASH**: `{}` \ntrace: \n```\n{}\n```", alert.event_type, alert.event_trace.join("\n")));
-            
+                .content(format!("**{}** \ntrace: \n```\n{}\n```", alert.event_type, alert.event_trace.join("\n")));
+
             if self.mention_on_crash {
-                msg.notify.push(Notify::Admin);
+                // msg = msg.notify(Notify::Admin);
             }
             self.broadcaster.publish(msg);
         }

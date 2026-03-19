@@ -179,7 +179,7 @@ pub struct Damage { pub attacker: String, pub victim: String, pub damage: f32 }
 #[derive(Debug, Clone, IntoStaticStr, Display)]
 pub enum GameEvent {
     JoinEvent(Join),
-    LeaveEvent(Leave), // Never dispatched
+    LeaveEvent(Leave),
     CrashEvent(Crash),
     KillEvent(Kill), // Never dispatched
     MapChangeEvent(MapChange),

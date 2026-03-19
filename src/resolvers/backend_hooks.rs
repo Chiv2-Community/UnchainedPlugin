@@ -1,7 +1,8 @@
-use std::{ os::raw::c_void};
-use crate::{backend_url, tools::hook_globals::cli_args, ue::FString};
-use crate::events::models::{GameEvent, Join};
+use std::os::raw::c_void;
+use crate::{backend_url, tools::hook_globals::cli_args, ue::{FString, FStringCopyError}};
+use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
+use crate::game::chivalry2::{AController, ATBLGameMode};
 
 define_pattern_resolver!(FString_AppendChars, [
     "45 85 C0 0F 84 89 00 00 00 48 89 5C 24 18 48 89 6C 24 20 56 48 83 EC 20 48 89 7C 24 30 48 8B EA 48 63 79 08 48 8B D9 4C 89 74 24 38 45 33 F6 85 FF 49 63 F0 41 8B C6 0F 94 C0 03 C7 03 C6 89 41 08 3B 41 0C 7E 07 8B D7 E8 ?? ?? ?? ?? 85 FF 49 8B C6 48 8B CF 48 8B D5 0F 95 C0 48 2B C8 48 8B 03 48 8D 1C 36 4C 8B C3 48 8D 3C 48 48 8B CF E8 ?? ?? ?? ?? 48 8B 6C 24 48 66 44 89 34 3B 4C 8B 74 24 38 48 8B 7C 24 30 48 8B 5C 24 40 48 83 C4 20 5E C3" // Universal
@@ -10,7 +11,7 @@ CREATE_HOOK!(FString_AppendChars, CALLED, (), (this_ptr: *mut FString, str_ptr: 
 });
 
 define_pattern_resolver!(
-    PreLogin, [
+    ATBLGameMode__PreLogin, [
         "4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"
     ]
 );
@@ -64,7 +65,45 @@ fn is_user_banned(addr: &str) -> bool {
         }
     }
 }
-CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
+
+#[derive(Debug, Clone, Copy)]
+enum LeaveNameResolutionError {
+    NullController,
+    NullPlayerState,
+    PlayerNameCopyFailed(FStringCopyError),
+    EmptyPlayerName,
+}
+
+impl LeaveNameResolutionError {
+    fn as_str(self) -> &'static str {
+        match self {
+            LeaveNameResolutionError::NullController => "Logout received null AController pointer",
+            LeaveNameResolutionError::NullPlayerState => "Logout controller had null PlayerState pointer",
+            LeaveNameResolutionError::PlayerNameCopyFailed(error) => error.as_str(),
+            LeaveNameResolutionError::EmptyPlayerName => "Logout PlayerState name was empty",
+        }
+    }
+}
+
+fn resolve_leave_name_from_controller(exiting_player: *mut AController) -> Result<String, LeaveNameResolutionError> {
+    let controller = unsafe { exiting_player.as_ref() }
+        .ok_or(LeaveNameResolutionError::NullController)?;
+
+    let player_state = unsafe { controller.player_state.as_ref() }
+        .ok_or(LeaveNameResolutionError::NullPlayerState)?;
+
+    let display_name = player_state
+        .player_name_private
+        .copy_to_string()
+        .map_err(LeaveNameResolutionError::PlayerNameCopyFailed)?;
+
+    if display_name.trim().is_empty() {
+        Err(LeaveNameResolutionError::EmptyPlayerName)
+    } else {
+        Ok(display_name)
+    }
+}
+CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     this_ptr: *mut crate::game::chivalry2::ATBLGameMode,
     options: *const FString,
     address: *const FString, 
@@ -72,11 +111,11 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     error_message: *mut FString
 ), {
     let options_string = unsafe { options.as_ref() }
-        .map(|o| o.to_string())
+        .and_then(|o| o.copy_to_string().ok())
         .unwrap_or_else(|| "<empty-string>".to_string());
 
     if !cli_args().use_backend_banlist || address.is_null() {
-        let result = CALL_ORIGINAL!(PreLogin(this_ptr, options, address, unique_id, error_message));
+        let result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
         if !error_message.is_null() && !(*error_message).is_empty() {
             return result;
         }
@@ -90,7 +129,7 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
     let addr_string = unsafe { (*address).to_string() };
     crate::sinfo!("User joining with options '{}'", options_string);
 
-    let original_result = CALL_ORIGINAL!(PreLogin(this_ptr, options, address, unique_id, error_message));
+    let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
 
     unsafe {
@@ -122,6 +161,31 @@ CREATE_HOOK!(PreLogin, ACTIVE, NONE, (), (
 
     original_result
 });
+
+define_pattern_resolver!(ATBLGameMode__Logout, [
+    "48 8B C4 55 56 41 54 41 57 48 8B EC"
+]);
+CREATE_HOOK!(ATBLGameMode__Logout, ACTIVE, NONE, (), (this_ptr: *mut ATBLGameMode, exiting_player: *mut AController), {
+    crate::strace!(f; "ATBLGameMode::Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
+    let leave_name = match resolve_leave_name_from_controller(exiting_player) {
+        Ok(name) => {
+            crate::sdebug!(f; "Resolved logout player name '{}'", name);
+            name
+        }
+        Err(error) => {
+            crate::swarn!(f; "{}. Publishing placeholder LeaveEvent.", error.as_str());
+            "Unknown (logout name unavailable)".to_string()
+        }
+    };
+
+    CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
+
+    crate::sinfo!(f; "Player '{}' left", leave_name);
+    EVENT_SYSTEM
+        .game_event_publisher
+        .publish(GameEvent::LeaveEvent(Leave { name: leave_name }));
+});
+
 
 // Technically we had no name for this in the disassembly. This just seems to be what it is doing.
 define_pattern_resolver!(AllowAlternateBackend, [
