@@ -91,6 +91,9 @@ pub struct CLIArgs {
     #[arg(long = "saveddirsuffix")]
     pub saved_dir_suffix: Option<String>,
 
+    #[arg(long = "log4rs-yaml")]
+    pub log4rs_yaml: Option<String>,
+
     #[arg(long = "GameServerPingPort", default_value = "3075")]
     pub game_server_ping_port: Option<u16>,
 
@@ -352,6 +355,7 @@ mod tests {
                 server_password: None,
                 platform: None,
                 saved_dir_suffix: None,
+                log4rs_yaml: None,
                 game_server_ping_port: None,
                 game_server_query_port: None,
                 game_port: None,

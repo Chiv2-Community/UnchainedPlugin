@@ -1,23 +1,19 @@
-
-
-use log4rs::{Config, append::{console::ConsoleAppender, file::FileAppender}, config::{Appender, Logger, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, init_config};
+use anyhow::Context;
+use log4rs::init_raw_config;
+use log4rs::config::RawConfig;
 
 #[allow(unused_imports)]
 use super::syslog::SyslogAppender;
 use std::backtrace::Backtrace;
 use std::panic;
 use log::error;
-use std::path::PathBuf;
 use crate::tools::hook_globals::cli_args;
+use std::path::PathBuf;
 
-fn expand_env_path(path: &str) -> Option<PathBuf> {
-    if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
-        if let Ok(base) = std::env::var("LOCALAPPDATA") {
-            return Some(PathBuf::from(base).join(stripped.trim_start_matches(['\\', '/'])));
-        }
-    }
-    None
-}
+const EMBEDDED_LOG4RS_YAML: &str = include_str!("log4rs.default.yaml");
+const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
+const UNCHAINED_LOG_PATH_PLACEHOLDER: &str = "__UNCHAINED_LOG_PATH__";
+const KISMET_LOG_PATH_PLACEHOLDER: &str = "__KISMET_LOG_PATH__";
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {
@@ -41,87 +37,81 @@ pub fn setup_panic_logger() {
 }
 
 pub fn init_syslog() -> anyhow::Result<()> {
-    // use function name
-    let console = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new(
-            // TODO: make this configurable opt? Maybe only for syslog or only file log
-            // "[{d(%Y-%m-%d %H:%M:%S)} {h({l:5})}] [{f}:{L}] {m}{n}", // Log file name and line
-            "{h([{d(%H:%M:%S)} {l:5}])} {m}{n}",
-        )))
-        .build();
-
-        // #[cfg(feature="syslog-client")]
-        // let syslog = SyslogAppender::builder()
-        // .encoder(Box::new(PatternEncoder::new(
-        //     // TODO: make this configurable opt? Maybe only for syslog or only file log
-        //     // FIXME: Nihi: add valid syslog pattern in Appender
-        //     "[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] {m}{n}", // Log file name and line
-        // )))
-        // .build();
-
-    let suffix =
-        cli_args()
-            .saved_dir_suffix.as_deref()
-            .map(|suffix| format!("_{}", suffix))
-            .unwrap_or("".into());
-
-    let log_dir = expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved{}", suffix))
-        .unwrap_or_else(|| PathBuf::from(".")).join("Logs");
-
-    if let Err(e) = std::fs::create_dir_all(&log_dir) {
-        eprintln!("Failed to create log directory {}: {}", log_dir.display(), e);
-    }
-
-    let file = FileAppender::builder()
-        // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] [{l:5}] [{M}] [{f}:{L}] {m}{n}\n")))
-        // .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)}] {P} [{l:6}] [{t}] {m}{n}")))
-        .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}")))
-        // .build("my_log_file.log")?;
-        // .build(r"U:\Unchained\UnchainedSleuth\unchained.log")?; // FIXME: Nihi: LOCAL FILE
-        .build(log_dir.join("unchained.log"))?; // FIXME: Nihi: LOCAL FILE
-    let kismet = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}")))
-        // .build(r"U:\Unchained\UnchainedSleuth\kismet.log")?;
-        .build(log_dir.join("kismet.log"))?;
-    let console_filter = ThresholdFilter::new(log::LevelFilter::Debug);
-    // let console_filter: MetaDataFilter = MetaDataFilter::new(log::LevelFilter::Info);
-
-    // Build the config programmatically
-    let mut builder = Config::builder()
-    .appender(Appender::builder()
-    .filter(Box::new(console_filter))
-    .build("console", Box::new(console)));
-
-    builder = builder
-        .logger(Logger::builder().build("serenity", log::LevelFilter::Warn))
-        .logger(Logger::builder().build("tracing", log::LevelFilter::Warn))
-        .logger(Logger::builder().build("patternsleuth", log::LevelFilter::Warn));
-
-    // #[cfg(feature="syslog-client")]
-    // {
-    //     builder = builder
-    //     .appender(Appender::builder().build("syslog", Box::new(syslog)));
-    // }
-
-    // let config = Config::builder()
-    //     .appender(Appender::builder().filter(Box::new(console_filter)).build("console", Box::new(console)))
-    //     // .appender(Appender::builder().build("syslog", Box::new(syslog)))
-    let config = builder
-        .appender(Appender::builder().build("file", Box::new(file)))
-        .appender(Appender::builder().build("kismet", Box::new(kismet)))
-        // .appender(Appender::builder().build("syslog", Box::new(syslog)))
-        .build(
-            Root::builder()
-                .appender("console")
-                // .appender("syslog")
-                .appender("file")
-                // .additive(false)
-                // .appender("kismet")
-                .build(log::LevelFilter::Debug),
-        )?;
-
-    init_config(config)?;
+    let cli = cli_args();
+    let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
+    let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
+    let resolved_yaml = apply_logger_placeholders(&yaml);
+    init_logger_from_yaml(&resolved_yaml, config_source_name)?;
     setup_panic_logger();
 
     Ok(())
+}
+
+fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
+    match override_path {
+        Some(path) => std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read logger config file: {}", path)),
+        None => Ok(EMBEDDED_LOG4RS_YAML.to_string()),
+    }
+}
+
+fn init_logger_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<()> {
+    let raw_config: RawConfig = serde_yaml::from_str(yaml).with_context(|| {
+        format!(
+            "Failed to parse logger config {}",
+            config_source_name
+        )
+    })?;
+    init_raw_config(raw_config).with_context(|| {
+        format!(
+            "Failed to initialize logger from config {}",
+            config_source_name
+        )
+    })?;
+    Ok(())
+}
+
+fn apply_logger_placeholders(yaml: &str) -> String {
+    let suffix = cli_args()
+        .saved_dir_suffix
+        .as_deref()
+        .map(|value| format!("_{}", value))
+        .unwrap_or_default();
+
+    let log_dir = expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved{}", suffix))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Logs");
+
+    if let Err(error) = std::fs::create_dir_all(&log_dir) {
+        eprintln!(
+            "Failed to create log directory {}: {}",
+            log_dir.display(),
+            error
+        );
+    }
+
+    let unchained_log_path = yaml_escape_double_quoted(
+        &log_dir.join("unchained.log").to_string_lossy()
+    );
+    let kismet_log_path = yaml_escape_double_quoted(
+        &log_dir.join("kismet.log").to_string_lossy()
+    );
+
+    yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &unchained_log_path)
+        .replace(KISMET_LOG_PATH_PLACEHOLDER, &kismet_log_path)
+}
+
+fn yaml_escape_double_quoted(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+}
+
+fn expand_env_path(path: &str) -> Option<PathBuf> {
+    if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
+        if let Ok(base) = std::env::var("LOCALAPPDATA") {
+            return Some(PathBuf::from(base).join(stripped.trim_start_matches(['\\', '/'])));
+        }
+    }
+    None
 }
