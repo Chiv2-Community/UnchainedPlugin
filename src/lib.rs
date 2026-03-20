@@ -495,16 +495,15 @@ pub fn world_init() {
                 message: "Initialized Event System".to_string(),
             }));
 
-            if let (Some(bot_token), Some(general_channel_id)) = (
-                cli_args().discord_bot_token.clone(),
-                cli_args().discord_general_channel_id.map(ChannelId::new)
-            ) {
-                features::discord::initialize_discord_system(DiscordConfig {
+            if let Some(bot_token) = cli_args().discord_bot_token.clone() {
+                let _discord_config = features::discord::initialize_discord_system(DiscordConfig {
                     bot_token,
-                    general_channel_id,
-                    admin_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
+                    dashboard_channel_id: cli_args().discord_dashboard_channel_id.map(ChannelId::new),
+                    general_chat_channel_id: cli_args().discord_general_channel_id.map(ChannelId::new),
+                    admin_notification_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
+                    event_log_channel_id: cli_args().discord_event_log_channel_id.map(ChannelId::new),
                     admin_role_id: cli_args().discord_admin_role_id,
-                    mention_on_admin: cli_args().discord_mention_on_admin,
+                    mention_on_admin: cli_args().discord_mention_admins,
                 });
 
                 EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {

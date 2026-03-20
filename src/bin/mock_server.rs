@@ -1,6 +1,6 @@
 use serenity::all::UserId;
 use UnchainedPlugin::features::discord::DiscordConfig;
-use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted};
+use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::sinfo;
 use UnchainedPlugin::tools::logger::init_syslog;
@@ -13,8 +13,10 @@ fn main() {
     let config = DiscordConfig {
         bot_token: "YOUR_TOKEN_HERE".to_string(),
         admin_role_id: None,
-        general_channel_id: serenity::all::ChannelId::new(1),
-        admin_channel_id: None,
+        dashboard_channel_id: Some(serenity::all::ChannelId::new(1)),
+        general_chat_channel_id: Some(serenity::all::ChannelId::new(1)),
+        admin_notification_channel_id: Some(serenity::all::ChannelId::new(1)),
+        event_log_channel_id: Some(serenity::all::ChannelId::new(1)),
         mention_on_admin: true,
     };
 
@@ -40,7 +42,15 @@ fn main() {
                 EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
-                    weapon: "MockSword".to_string() 
+                    source: Damage {
+                        attacker: k.to_string(),
+                        victim: v.to_string(),
+                        damage: DamageSource {
+                            amount: 50.0,
+                            source: "MockSword".to_string(),
+                            attack_type: "Slash".to_string(),
+                        },
+                    }
                 }));
             }
             ["chat", ..] => {

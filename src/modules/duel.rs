@@ -76,7 +76,7 @@ impl DuelManagerSubscriber {
                 let is_p2 = e.victim == duel.p2;
 
                 if is_p1 || is_p2 {
-                    *duel.damage_dealt.entry(e.attacker.clone()).or_insert(0.0) += e.damage;
+                    *duel.damage_dealt.entry(e.attacker.clone()).or_insert(0.0) += e.damage.amount;
                 } else if e.attacker == duel.p1 || e.attacker == duel.p2 {
                     self.state = DuelState::Idle;
                     self.broadcaster.publish(BroadcastMessage::from("?? **Duel Cancelled**: Interference detected!"));

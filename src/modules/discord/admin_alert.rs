@@ -1,36 +1,30 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use async_trait::async_trait;
 use clap::Parser;
-use serenity::all::{ChannelId, CreateAllowedMentions, CreateMessage, Http, RoleId};
+use serenity::all::{CreateAllowedMentions, CreateMessage, Http, RoleId};
 use serenity::builder::CreateEmbed;
-// use crate::events::broadcast::{BroadcastMessage, Notify};
 use crate::events::bus::{EventPublisher, Subscriber};
+use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 
 use crate::commands::Command;
 use crate::events::models::{AdminAlert, CommandRequest, GameEvent, PermissionFlags};
 use crate::swarn;
 
 pub struct AdminAlertModule {
-    mention_on_admin: bool,
     http: Arc<Http>,
-    channel_id: ChannelId,
-    admin_role_id: Option<RoleId>,
+    discord_config: SharedDiscordConfig,
     game_event_publisher: &'static EventPublisher<GameEvent>,
 }
 
 impl AdminAlertModule {
     pub fn new(
-        mention_on_admin: bool,
         http: Arc<Http>,
-        channel_id: ChannelId,
-        admin_role_id: Option<RoleId>,
+        discord_config: SharedDiscordConfig,
         game_event_publisher: &'static EventPublisher<GameEvent>,
     ) -> Self {
         Self {
-            mention_on_admin,
             http,
-            channel_id,
-            admin_role_id,
+            discord_config,
             game_event_publisher,
         }
     }
@@ -39,10 +33,8 @@ impl AdminAlertModule {
 impl Clone for AdminAlertModule {
     fn clone(&self) -> Self {
         Self {
-            mention_on_admin: self.mention_on_admin,
             http: self.http.clone(),
-            channel_id: self.channel_id,
-            admin_role_id: self.admin_role_id,
+            discord_config: self.discord_config.clone(),
             game_event_publisher: self.game_event_publisher,
         }
     }
@@ -56,17 +48,18 @@ impl Subscriber<GameEvent> for AdminAlertModule {
 
     async fn on_event(&mut self, event: &GameEvent) {
         if let GameEvent::AdminAlertEvent(alert) = event {
+            let config = self.discord_config.read().await.clone();
             let mut msg = CreateMessage::new().embed(
                 CreateEmbed::new()
                     .title("🚨 Admin Alert".to_string())
                     .description(format!("`{}` reports: *\"{}\"*", alert.reporter, alert.reason)),
             );
 
-            if self.mention_on_admin {
-                if let Some(role_id) = &self.admin_role_id {
+            if config.mention_on_admin {
+                if let Some(role_id) = config.admin_role_id.map(RoleId::new) {
                     msg = msg
                         .allowed_mentions(
-                            CreateAllowedMentions::default().roles(vec![role_id.clone()]),
+                            CreateAllowedMentions::default().roles(vec![role_id]),
                         )
                         .content(format!("<@&{}> ", role_id));
                 } else {
@@ -74,7 +67,12 @@ impl Subscriber<GameEvent> for AdminAlertModule {
                 }
             }
 
-            let _ = self.channel_id.send_message(&self.http, msg).await;
+            send_to_channel(
+                &self.http,
+                config.admin_notification_channel_id,
+                msg,
+            )
+            .await;
         }
     }
 }

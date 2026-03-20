@@ -1,28 +1,20 @@
 use std::sync::Arc;
 use async_trait::async_trait;
-use serenity::all::{ChannelId, Http, RoleId};
+use serenity::all::{Http, RoleId};
 use serenity::builder::{CreateAllowedMentions, CreateMessage};
 use crate::events::broadcast::{BroadcastMessage, Notify};
 use crate::events::bus::Subscriber;
+use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 
 pub struct DiscordBroadcastSubscriber {
-    channel_id: ChannelId,
-    _admin_channel_id: Option<ChannelId>,
-    admin_role_id: Option<RoleId>,
+    discord_config: SharedDiscordConfig,
     discord_http: Arc<Http>,
 }
 
 impl DiscordBroadcastSubscriber {
-    pub fn new(
-        channel_id: ChannelId,
-        admin_channel_id: Option<ChannelId>,
-        admin_role_id: Option<RoleId>,
-        discord_http: Arc<Http>,
-    ) -> Self {
+    pub fn new(discord_http: Arc<Http>, discord_config: SharedDiscordConfig) -> Self {
         Self {
-            channel_id,
-            _admin_channel_id: admin_channel_id,
-            admin_role_id,
+            discord_config,
             discord_http,
         }
     }
@@ -35,17 +27,17 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
+        let config = self.discord_config.read().await.clone();
+        let admin_role_id = config.admin_role_id.map(RoleId::new);
+
         let mut discord_message: CreateMessage = event.clone().into();
-        let http = Arc::clone(&self.discord_http);
-        let channel_id = self.channel_id;
 
         if !event.notify_roles().is_empty() {
             let mut content = event.content_ref().map(str::to_owned).unwrap_or_default();
 
             for notify_role in event.notify_roles().iter() {
                 let notify_role_id = match notify_role {
-                    Notify::Admin => self.admin_role_id,
-                    // Add others as we create them
+                    Notify::Admin => admin_role_id,
                 };
 
                 if let Some(notify_role_id) = notify_role_id {
@@ -57,18 +49,9 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
             discord_message = discord_message.content(content);
         }
 
-        let allowed_mention =
-            CreateAllowedMentions::new()
-                .roles(self.admin_role_id.into_iter());
+        let allowed_mention = CreateAllowedMentions::new().roles(admin_role_id.into_iter());
+        discord_message = discord_message.allowed_mentions(allowed_mention);
 
-
-
-        tokio::spawn(async move {
-            let _ = channel_id.send_message(
-                &http,
-                discord_message
-                    .allowed_mentions(allowed_mention)
-            ).await;
-        });
+        send_to_channel(&self.discord_http, config.general_chat_channel_id, discord_message).await;
     }
 }
