@@ -26,7 +26,7 @@
 use async_trait::async_trait;
 use clap::{Parser, CommandFactory};
 use crate::events::bus::{Subscriber, EventPublisher};
-use crate::events::models::{GameEvent, CommandExecuted, CommandRequest};
+use crate::events::models::{CommandExecuted, CommandRejected, CommandRequest, GameEvent};
 use crate::events::broadcast::BroadcastMessage;
 // use crate::features::events::EVENT_SYSTEM;
 
@@ -38,6 +38,11 @@ pub struct CommandSubscriber {
     commands: Vec<Box<dyn ErasedCommand>>,
     broadcaster: &'static EventPublisher<BroadcastMessage>,
     game_event_publisher: &'static EventPublisher<GameEvent>,
+}
+
+enum CommandOutcome {
+    Executed,
+    Rejected(CommandRejected),
 }
 
 impl CommandSubscriber {
@@ -85,25 +90,48 @@ impl CommandSubscriber {
         }
     }
 
-    async fn handle_command(&self, command: &Box<dyn ErasedCommand>, req: &CommandRequest) {
+    async fn handle_command(&self, command: &dyn ErasedCommand, req: &CommandRequest) -> CommandOutcome {
         if let Some(required_source) = command.required_source() {
             if required_source != req.source {
+                let rejection_reason = format!(
+                    "Command '{}' must be executed from {}, but request source was {}",
+                    req.name, required_source, req.source
+                );
                 self
                     .broadcaster
                     .publish(format!("Error: User '{}' attempted to execute command '{}' from {}, but it must be executed from {}", req.actor.display_name, req.name, req.source, required_source).into());
-                return;
+                return CommandOutcome::Rejected(CommandRejected {
+                    name: req.name.clone(),
+                    args: req.args.clone(),
+                    raw_args: req.raw_args.clone(),
+                    actor: req.actor.clone(),
+                    source: req.source.clone(),
+                    rejection_reason,
+                });
             }
         }
 
         if !req.actor.permissions.flags.contains(command.required_permissions()) {
+            let rejection_reason = format!(
+                "User '{}' is missing required permissions to execute '{}'",
+                req.actor.display_name, req.name
+            );
             self
                 .broadcaster
                 .publish(format!("Error: User '{}' is not allowed to execute command '{}'.", req.actor.display_name, req.name).into());
-            return;
+            return CommandOutcome::Rejected(CommandRejected {
+                name: req.name.clone(),
+                args: req.args.clone(),
+                raw_args: req.raw_args.clone(),
+                actor: req.actor.clone(),
+                source: req.source.clone(),
+                rejection_reason,
+            });
         }
 
         sinfo!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
         command.execute(req).await;
+        CommandOutcome::Executed
     }
 }
 
@@ -128,20 +156,35 @@ impl Subscriber<GameEvent> for CommandSubscriber {
                 self.commands.iter().find(|c| c.name() == req.name);
 
             if maybe_command.is_none() {
+                let rejection_reason = format!("Command '{}' does not exist", req.name);
                 self.broadcaster.publish(format!("User '{}' attempted to execute non-existent command '{}'.", req.actor.display_name, req.name).into());
+                let rejected = CommandRejected {
+                    name: req.name.clone(),
+                    args: req.args.clone(),
+                    raw_args: req.raw_args.clone(),
+                    actor: req.actor.clone(),
+                    source: req.source.clone(),
+                    rejection_reason,
+                };
+                self.game_event_publisher.publish(GameEvent::CommandRejectedEvent(rejected));
                 return;
             }
 
-            self.handle_command(maybe_command.unwrap(), req).await;
-
-            let cmd = CommandExecuted {
-                name: req.name.clone(),
-                args: req.args.clone(),
-                raw_args: req.raw_args.clone(),
-                actor: req.actor.clone(),
-                source: req.source.clone(),
-            };
-            self.game_event_publisher.publish(GameEvent::CommandExecutedEvent(cmd));
+            match self.handle_command(maybe_command.unwrap().as_ref(), req).await {
+                CommandOutcome::Executed => {
+                    let cmd = CommandExecuted {
+                        name: req.name.clone(),
+                        args: req.args.clone(),
+                        raw_args: req.raw_args.clone(),
+                        actor: req.actor.clone(),
+                        source: req.source.clone(),
+                    };
+                    self.game_event_publisher.publish(GameEvent::CommandExecutedEvent(cmd));
+                }
+                CommandOutcome::Rejected(rejected) => {
+                    self.game_event_publisher.publish(GameEvent::CommandRejectedEvent(rejected));
+                }
+            }
         }
     }
 

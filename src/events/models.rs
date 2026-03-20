@@ -26,13 +26,21 @@ pub struct Crash {
 pub struct Kill {
     pub killer: String,
     pub victim: String,
-    pub weapon: String,
+    pub source: Damage,
+}
+
+#[derive(Debug, Clone)]
+pub struct DamageSource {
+    pub amount: f32,
+    pub source: String, // weapon or throwable name
+    pub attack_type: String // slash/overhead/throw/stab/etc;
 }
 
 /// Triggered when the server changes maps
 #[derive(Debug, Clone)]
 pub struct MapChange {
-    pub new_map: String
+    pub new_map_url: String,
+    pub new_map_name: String,
 }
 
 /// Triggered when a match finishes (before the map change)
@@ -148,6 +156,16 @@ pub struct CommandExecuted {
     pub source: CommandSource,
 }
 
+#[derive(Debug, Clone)]
+pub struct CommandRejected {
+    pub name: String,
+    pub args: Vec<String>,
+    pub raw_args: String,
+    pub actor: CommandActor,
+    pub source: CommandSource,
+    pub rejection_reason: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct ServerStatus {
     pub name: String,
@@ -172,7 +190,7 @@ pub struct DuelStart { pub challenger: String, pub opponent: String }
 #[derive(Debug, Clone)]
 pub struct Attack { pub attacker: String, pub attack_type: String, pub was_parried: bool }
 #[derive(Debug, Clone)]
-pub struct Damage { pub attacker: String, pub victim: String, pub damage: f32 }
+pub struct Damage { pub attacker: String, pub victim: String, pub damage: DamageSource }
 
 // --- The Unified GameEvent Enum ---
 
@@ -187,6 +205,7 @@ pub enum GameEvent {
     GameChatMessageEvent(GameChatMessage),
     CommandRequestEvent(CommandRequest),
     CommandExecutedEvent(CommandExecuted),
+    CommandRejectedEvent(CommandRejected),
     ServerStatusEvent(ServerStatus),
     AdminAlertEvent(AdminAlert),
     DuelStartEvent(DuelStart), // Never dispatched

@@ -20,7 +20,6 @@ use crate::modules::stats::{StatsTrackerSubscriber, StatsTrackerState, TopComman
 use crate::modules::duel::DuelManagerSubscriber;
 use crate::modules::say::SayCommand;
 use crate::modules::cmd::CmdCommand;
-use crate::modules::crash::CrashSubscriber;
 // use crate::modules::discord::admin_alert::AdminAlertModule;
 // use crate::modules::discord::dashboard::DashboardSubscriber;
 use crate::modules::votes::votespeed::SpeedVote;
@@ -42,7 +41,6 @@ pub struct UnchainedEventSystem {
 
     pub chat_relay_subscriber: ChatRelaySubscriber,
     pub command_subscriber: Arc<Mutex<CommandSubscriber>>,
-    pub mention_on_crash: bool,
 }
 
 pub struct CommandSubscriberProxy {
@@ -96,7 +94,6 @@ fn initialize_event_buses() -> UnchainedEventSystem {
         message_broadcast_event_publisher: message_broadcast_event_publisher.clone(),
         chat_relay_subscriber,
         command_subscriber,
-        mention_on_crash: true,
     }
 }
 
@@ -135,7 +132,6 @@ pub async fn initialize_subscribers() {
     let _ = game_event_bus.subscribe(Box::new(StatsTrackerSubscriber::new(stats_state, broadcast_message_publisher))).await;
     let _ = game_event_bus.subscribe(Box::new(DuelManagerSubscriber::new(broadcast_message_publisher))).await;
 
-    let _ = game_event_bus.subscribe(Box::new(CrashSubscriber::new(EVENT_SYSTEM.mention_on_crash, broadcast_message_publisher))).await;
 }
 
 async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>) {

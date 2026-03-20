@@ -9,6 +9,7 @@ use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
 use crate::modules::chat::DiscordChatSink;
 use crate::modules::discord::admin_alert::AdminAlertModule;
 use crate::modules::discord::dashboard::DashboardSubscriber;
+use crate::modules::discord::event_log::EventLogSubscriber;
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::{sinfo, swarn};
@@ -108,6 +109,18 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Htt
     // Dashboard Subscriber
     let dashboard_subscriber = DashboardSubscriber::new(http.clone(), Arc::clone(&config));
     let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
+
+    // Event Log Subscriber
+    let should_register_event_log = {
+        let cfg = config.read().await;
+        cfg.event_log_channel_id.is_some()
+    };
+    if should_register_event_log {
+        let event_log_subscriber = EventLogSubscriber::new(http.clone(), Arc::clone(&config));
+        let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(event_log_subscriber)).await;
+    } else {
+        swarn!(f; "Discord event log subscriber not registered because event log channel is not configured.");
+    }
 }
 
 fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http: Arc<Http>) {

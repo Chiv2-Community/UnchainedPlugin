@@ -100,9 +100,6 @@ pub struct CLIArgs {
     #[arg(long = "Port", default_value = "7777")]
     pub game_port: Option<u16>,
 
-    #[arg(long = "discord-channel-id")]
-    pub discord_channel_id: Option<u64>,
-    
     #[arg(long = "discord-admin-channel-id")]
     pub discord_admin_channel_id: Option<u64>,
 
@@ -115,9 +112,6 @@ pub struct CLIArgs {
     #[arg(long = "discord-event-log-channel-id")]
     pub discord_event_log_channel_id: Option<u64>,
 
-    #[arg(long = "censor-mode", default_value = "none")]
-    pub censor_mode: CensorArg,
-
     #[arg(long = "discord-admin-role-id")]
     pub discord_admin_role_id: Option<u64>,
 
@@ -125,8 +119,12 @@ pub struct CLIArgs {
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
 
-    #[arg(long = "discord-mention-on-admin", default_value = "true")]
-    pub discord_mention_on_admin: bool,
+    #[arg(long = "discord-mention-admins", default_value = "true")]
+    pub discord_mention_admins: bool,
+
+    //TODO: Reimplement
+    #[arg(long = "censor-mode", default_value = "none")]
+    pub censor_mode: CensorArg,
 
     #[arg(long = "motd")]
     pub motd: Option<String>,
@@ -357,15 +355,14 @@ mod tests {
                 game_server_ping_port: None,
                 game_server_query_port: None,
                 game_port: None,
-                discord_channel_id: None,
                 discord_admin_channel_id: None,
                 discord_general_channel_id: None,
                 discord_dashboard_channel_id: None,
                 discord_event_log_channel_id: None,
-                censor_mode: CensorArg::None,
                 discord_admin_role_id: None,
                 discord_bot_token: None,
-                discord_mention_on_admin: false,
+                discord_mention_admins: false,
+                censor_mode: CensorArg::None,
                 motd: None,
                 extra_args: vec![],
             }

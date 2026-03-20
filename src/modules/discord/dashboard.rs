@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use serenity::all::{ChannelId, Http, CreateMessage, MessageId, EditMessage};
@@ -96,7 +96,7 @@ impl Subscriber<GameEvent> for DashboardSubscriber {
                 self.needs_refresh = true;
             }
             GameEvent::MapChangeEvent(e) => {
-                self.current_map = e.new_map.clone();
+                self.current_map = e.new_map_url.clone();
                 self.needs_refresh = true;
             }
             _ => {}

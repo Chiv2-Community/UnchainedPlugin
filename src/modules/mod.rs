@@ -1,4 +1,4 @@
-﻿pub mod chat;
+pub mod chat;
 pub mod command;
 pub mod killstreak;
 pub mod join_batcher;
@@ -9,7 +9,6 @@ pub mod cmd;
 pub mod mod_dump;
 pub mod game_info;
 pub mod mod_list;
-pub mod crash;
 pub mod vote;
 pub mod votes;
 pub mod discord;

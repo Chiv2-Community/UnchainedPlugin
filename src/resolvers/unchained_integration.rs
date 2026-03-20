@@ -132,11 +132,9 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
-    let original_ptr = map_url;
-    let url_w = unsafe { (*map_url).to_string() };
+    let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     crate::sinfo![f; "\x1b[32m{}\x1b[0m", url_w];
     
-    // TODO: better check for server?
     if globals().world().is_none() && cli_args().is_server() {
         if !ENGINE_READY.load(Ordering::SeqCst) {
             ENGINE_READY.store(true, Ordering::SeqCst);
@@ -144,7 +142,14 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
         }
     }
 
-    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange { new_map: url_w }));
+
+    let map_url = url_w.as_str();
+    let map_name = map_url.split('/').last().unwrap_or("UnknownMapName");
+
+    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
+        new_map_url: map_url.to_string(),
+        new_map_name: map_name.to_string()
+    }));
 });
 
 // TODO: looks like this had major changes, needs real signature

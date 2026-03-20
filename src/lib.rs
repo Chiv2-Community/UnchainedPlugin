@@ -503,7 +503,7 @@ pub fn world_init() {
                     admin_notification_channel_id: cli_args().discord_admin_channel_id.map(ChannelId::new),
                     event_log_channel_id: cli_args().discord_event_log_channel_id.map(ChannelId::new),
                     admin_role_id: cli_args().discord_admin_role_id,
-                    mention_on_admin: cli_args().discord_mention_on_admin,
+                    mention_on_admin: cli_args().discord_mention_admins,
                 });
 
                 EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
