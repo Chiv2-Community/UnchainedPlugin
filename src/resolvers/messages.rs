@@ -6,7 +6,7 @@ use crate::{game::{chivalry2::{ATBLGameMode, EChatType}, engine::FText}, ue::FSt
 // Chat messages
 // #[cfg(feature="client_message")]
 mod client_message {
-    use log::info;
+    use log::{info, warn};
     use regex::Regex;
     use std::os::raw::c_void;
     use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
@@ -34,18 +34,34 @@ mod client_message {
             })
     }
     
-    pub fn parse_msg_line(line: &str) -> Option<(EChatType, &str)> {
-        let re = Regex::new(r#"<(\d+)>: (.+)"#).unwrap();
+    fn parse_msg(line: &str) -> Result<(EChatType, &str), String> {
+        static RE: once_cell::sync::Lazy<Result<Regex, regex::Error>> =
+            once_cell::sync::Lazy::new(|| Regex::new(r#"(?s)<(\d+)>:\s+(.+)"#));
 
-        if let Some(caps) = re.captures(line) {
-            let msg_type_str: u8 = caps.get(1)?.as_str().parse().ok()?;
-            let msg_type = EChatType::try_from(msg_type_str).expect("Failed to parse EChatType");
-            let message = caps.get(2)?.as_str();
-            Some((msg_type, message))
-        } else {
-            None
-        }
+        // `(?s)` enables dotall so the message capture includes newlines.
+        let re = RE
+            .as_ref()
+            .map_err(|e| format!("parse_msg regex compile failed: {e}"))?;
+        let caps = re
+            .captures(line)
+            .ok_or_else(|| "parse_msg input did not match '<type>: <message>'".to_string())?;
+        let msg_type_raw = caps
+            .get(1)
+            .ok_or_else(|| "parse_msg missing chat type capture".to_string())?
+            .as_str();
+        let msg_type_u8: u8 = msg_type_raw
+            .parse()
+            .map_err(|e| format!("parse_msg failed to parse chat type '{msg_type_raw}': {e}"))?;
+        let msg_type = EChatType::try_from(msg_type_u8)
+            .map_err(|_| format!("parse_msg invalid EChatType value: {msg_type_u8}"))?;
+        let message = caps
+            .get(2)
+            .ok_or_else(|| "parse_msg missing message capture".to_string())?
+            .as_str();
+        Ok((msg_type, message))
     }
+
+    
     define_pattern_resolver!(ClientMessage, [
         "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
     ]);
@@ -54,7 +70,6 @@ mod client_message {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
         let message_repl = match message.contains('\n') {
-            // TODO: Decide what to do with multi line text
             true => format!("\n{message}").replace("\r\n", "\\n"),
             false => message,
         };
@@ -116,16 +131,18 @@ mod client_message {
                 };        
             }
             _ => {
-                if let Some((chat_type, message)) = parse_msg_line(message_repl.as_str()) {
-                    if let Some(msg) = parse_chat_line(message_repl.as_str()) {
-                        info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                match parse_msg(message_repl.as_str()) {
+                    Ok((chat_type, message)) => {
+                        if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                            info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                        }
+                        else {
+                            info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                        }
                     }
-                    else {
-                        info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                    Err(error) => {
+                        warn!(target: "system_chat", "Failed to parse system chat message; skipping publish. error={error}");
                     }
-                }
-                else {
-                    println!("something went wrong");
                 }
             }
         }

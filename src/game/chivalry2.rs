@@ -147,6 +147,8 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
         if !game_mode.is_null() {
             TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
         }
+    } else {
+        crate::swarn!(f; "send_ingame_message: globals.world was None; skipping chat broadcast");
     }
 }
 
@@ -570,7 +572,10 @@ impl ATBLGameState {
 pub fn get_human_player_count() -> usize {
     let world_ptr = match crate::globals().world() {
         Some(ptr) => ptr as *mut crate::game::engine::UWorld,
-        None => return 0,
+        None => {
+            crate::swarn!(f; "get_human_player_count: globals.world was None; returning 0 and skipping player count scan");
+            return 0;
+        }
     };
 
     let world = unsafe {

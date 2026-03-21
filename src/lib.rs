@@ -391,7 +391,6 @@ fn init_rustlib() {
 }
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
-static WORLD_READY: AtomicBool = AtomicBool::new(false);
 
 fn postinit_rustlib() {
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
@@ -430,24 +429,30 @@ fn postinit_rustlib() {
     
     // let args = &cli_args();
 
-    thread::spawn(|| {
-        crate::sinfo!("waiting for engine to start..");
-        
-        while !ENGINE_READY.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(500));
-        }
-
-        #[cfg(feature="cli_commands")]
-        spawn_cli_handler();
+    #[cfg(feature="cli_commands")]
+    {
         if cli_args().is_server() {
-            world_init();
+            thread::spawn(move || {
+                crate::sinfo!("waiting for engine to start..");
+                
+                while !ENGINE_READY.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(500));
+                }
+
+                spawn_cli_handler();
+                if cli_args().is_server() {
+                    world_init();
+                }
+            });
+        } else {
+            sinfo!(f; "Not a server, skipping server cli initialization");
         }
-    });
+    }
 }
 
 pub fn world_init() {
     #[cfg(feature="rcon_commands")]
-    std::thread::spawn(|| {
+    thread::spawn(|| {
         handle_rcon();
     });
 
@@ -469,7 +474,7 @@ pub fn world_init() {
     }
 
     // Mod manager requires world
-    while !WORLD_READY.load(Ordering::Relaxed) {
+    while globals().world().is_none() {
         thread::sleep(Duration::from_millis(500));
     }
 

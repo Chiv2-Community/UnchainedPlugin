@@ -144,10 +144,8 @@ impl From<BroadcastMessage> for String {
                 message.push_str(&content);
             }
         } else {
-            message.push_str("\n\n=====================\n\n");
-
             if let Some(title) = title {
-                message.push_str(&format!("------------ {} ------------\n\n", title));
+                message.push_str(&format!("{}\n", title));
             }
 
             if let Some(content) = content {
@@ -155,14 +153,12 @@ impl From<BroadcastMessage> for String {
             }
 
             for (name, value) in fields {
-                message.push_str(&format!("\n**{}**: {}", name, value));
+                message.push_str(&format!("\n{}: {}", name, value));
             }
 
             if let Some(footer) = footer {
-                message.push_str(&format!("\n\n------------ {} ------------", footer));
+                message.push_str(&format!("\n{}", footer));
             }
-
-            message.push_str("\n\n=====================\n\n");
         }
 
 

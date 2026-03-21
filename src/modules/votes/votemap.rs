@@ -17,7 +17,7 @@ impl VoteType<MapVoteArgs> for MapVote {
         format!("Vote to change maps to {}", args.map_name)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.5 }
-    fn min_votes_required_ratio(&self) -> f32 { 0.1 }
+    fn min_votes_required_ratio(&self) -> f32 { 0.3 }
     fn on_success(&self, args: MapVoteArgs) {
         let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
         queue.push(format!("servertravel {}", args.map_name));

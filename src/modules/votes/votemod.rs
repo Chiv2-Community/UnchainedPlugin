@@ -20,7 +20,7 @@ impl VoteType<ModVoteArgs> for ModVote {
         format!("Vote to {} modifier: {}", action, args.mod_name)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.6 }
-    fn min_votes_required_ratio(&self) -> f32 { 0.1 }
+    fn min_votes_required_ratio(&self) -> f32 { 0.5 }
     fn on_success(&self, args: ModVoteArgs) {
         let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
         let cmd = if args.enable { "enablemod" } else { "disablemod" };

@@ -1,5 +1,5 @@
 use std::os::raw::c_void;
-use crate::{game::engine::{FActorSpawnParameters, FRotator}, ue::{FString, FVector, UClass}};
+use crate::{game::engine::{FActorSpawnParameters, FRotator}, tools::hook_globals::globals, ue::{FString, FVector, UClass}};
 
 define_pattern_resolver!(GetGameInfo, {
     // "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00", // Universal
@@ -45,6 +45,20 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
 	
 	let string_ref: &FString = unsafe{ &*arg1 };
 
+    let previous_world = globals().world();
+    globals().set_world(std::ptr::null_mut());
+    match previous_world {
+        Some(world_ptr) => crate::swarn!(
+            f;
+            "ClientTravelInternal: map travel started; invalidated globals.world ({:p}) and skipping world-dependent operations until post-load world is set",
+            world_ptr
+        ),
+        None => crate::sdebug!(
+            f;
+            "ClientTravelInternal: map travel started with globals.world already None; world-dependent operations remain skipped until post-load world is set"
+        ),
+    }
+
 	match parse_connection_info(string_ref.to_string().as_str()) {
         Ok(info) => {
 			crate::sinfo!(f; "info: {:#?}", info);
@@ -62,7 +76,15 @@ CREATE_HOOK!(SpawnActor, INACTIVE, *mut c_void, (world: *mut c_void, class: *mut
 /*
 ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 */
-define_pattern_resolver!(GetTBLGameMode,["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"]);
+define_pattern_resolver![GetTBLGameMode, {
+    EGS : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"], // EGS
+    OTHER : [
+        "40 53 48 83 EC 20 48 8B D9 48 85 C9 74 60 48 8B 01 FF 90 ?? ?? ?? ?? 48 85 C0 75 23 0F 1F 40 00 48 8B 5B 20 48 85 DB 74 11 48 8B 03 48 8B CB FF 90 ?? ?? ?? ?? 48 85 C0 74 E6 48 85 C0 74 2F 48 8B 98 28",
+        "40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51" // EGS 2.11.4
+        ]
+}];
+
+
 CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut c_void),{
     crate::sinfo![f; "Triggered!"];
 });

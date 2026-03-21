@@ -18,7 +18,7 @@ impl VoteType<KickVoteArgs> for KickVote {
         format!("Vote to kick {}", args.player_name)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.6 }
-    fn min_votes_required_ratio(&self) -> f32 { 0.2 }
+    fn min_votes_required_ratio(&self) -> f32 { 0.1 }
     fn on_success(&self, args: KickVoteArgs) {
         println!("Kicking player: {}", args.player_name);
         // Real implementation would call game API to kick

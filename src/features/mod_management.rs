@@ -222,10 +222,18 @@ impl ModManager {
             return Err("Base class not found".to_string());
         }
 
+        let world = match globals().world() {
+            Some(world) => world,
+            None => {
+                crate::swarn!(f; "scan_active_mod_actors: globals.world was None; skipping active mod actor scan");
+                return Err("globals.world was None".to_string());
+            }
+        };
+
         let mut res_arr = TArray::<*mut UObject>::default();
         
         CALL_ORIGINAL_SAFE!(GetAllActorsOfClass(
-            globals().world().expect("No world found") as *const UObject,
+            world as *const UObject,
             mod_base_class,
             &mut res_arr
         ))?;
@@ -260,12 +268,20 @@ impl ModManager {
     /// Spawn/Destroy Stubs
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
         // (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
+        let world = match globals().world() {
+            Some(world) => world,
+            None => {
+                crate::swarn!(f; "spawn_mod_actor: globals.world was None; skipping actor spawn");
+                return;
+            }
+        };
+
         let mut loc: FVector = FVector { x: 0.0, y: 0.0, z: 0.0 };
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
         let new_actor = CALL_ORIGINAL!(SpawnActor(
-            globals().world().unwrap(),
+            world,
             mod_class,
             &mut loc,
             &mut rot,
@@ -285,6 +301,8 @@ impl ModManager {
                     let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
                     let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
                     TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
+                } else {
+                    crate::swarn!(f; "spawn_mod_actor: globals.world missing; skipping spawn confirmation chat");
                 }
             }
         }

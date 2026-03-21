@@ -311,12 +311,12 @@ impl Command<VoteArgs> for VoteCommand {
                         target_args,
                         yes_votes: HashSet::from([initiator]),
                         no_votes: HashSet::new(),
-                        end_time: Instant::now() + Duration::from_secs(15),
+                        end_time: Instant::now() + Duration::from_secs(30),
                     });
 
                     let message =
                         BroadcastMessage::new()
-                            .title(format!("Vote for '{} {}' started by '{}'", name, command.raw_args, command.actor.display_name))
+                            .title(format!("Vote for '{}' started by '{}'", command.raw_args, command.actor.display_name))
                             .content(format!("Type !yes or !no in chat to vote. {}", description))
                             .color(0x00FF00);
 

@@ -18,7 +18,7 @@ impl VoteType<SpeedVoteArgs> for SpeedVote {
         format!("Vote to set game speed to {:.2}%", args.speed)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.6 }
-    fn min_votes_required_ratio(&self) -> f32 { 0.1 }
+    fn min_votes_required_ratio(&self) -> f32 { 0.5 }
     fn on_success(&self, args: SpeedVoteArgs) {
         let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
         queue.push(format!("slomo {:.2}", (args.speed as f64) / 100f64));

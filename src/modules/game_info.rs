@@ -1,4 +1,4 @@
-﻿
+
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
@@ -73,6 +73,8 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                         if gs.is_none() { serror!(f; "GameState was null"); }
                     }
                 }
+            } else {
+                crate::swarn!(f; "game-info: globals.world was None; skipping game info collection");
             }
         });
     }

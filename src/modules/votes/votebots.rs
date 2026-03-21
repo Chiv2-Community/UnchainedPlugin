@@ -17,7 +17,7 @@ impl VoteType<AddBotsVoteArgs> for AddBotsVote {
         format!("Vote to add {} AI bots", args.count)
     }
     fn min_yes_vote_ratio(&self) -> f32 { 0.5 }
-    fn min_votes_required_ratio(&self) -> f32 { 0.1 }
+    fn min_votes_required_ratio(&self) -> f32 { 0.3 }
     fn on_success(&self, args: AddBotsVoteArgs) {
         let mut queue = NATIVE_COMMAND_QUEUE.lock().unwrap();
         queue.push(format!("addplayerbots {}", args.count));

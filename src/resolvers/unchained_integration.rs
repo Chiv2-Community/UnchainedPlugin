@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
-use crate::{ENGINE_READY, WORLD_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
+use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
 
 
 // Sets Server password and rcon flag
@@ -134,12 +134,13 @@ define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 0
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     crate::sinfo![f; "\x1b[32m{}\x1b[0m", url_w];
+
+    globals().set_world(std::ptr::null_mut());
+    crate::sdebug!(f; "OnPreLoadMap: reset globals.world to nullptr; world-dependent actions are skipped until post-load");
     
-    if globals().world().is_none() && cli_args().is_server() {
-        if !ENGINE_READY.load(Ordering::SeqCst) {
-            ENGINE_READY.store(true, Ordering::SeqCst);
-            log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
-        }
+    if !ENGINE_READY.load(Ordering::SeqCst) {
+        ENGINE_READY.store(true, Ordering::SeqCst);
+        log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
     }
 
 
@@ -157,15 +158,18 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
-    // TODO: Store a single world global, skip the atomic bool+global
     crate::sinfo![f; "\x1b[32mTriggered\x1b[0m"];
-    if !WORLD_READY.load(Ordering::SeqCst) {
-        WORLD_READY.store(true, Ordering::SeqCst);
-        log::info!(target: "World", "\x1b[32mWorld signaled for initialization\x1b[0m");
-    }
-
-    if globals().world() != Some(world) {
-        globals().set_world(world);
+    match globals().world() {
+        Some(current_world) => {
+            if current_world != world {
+                crate::swarn!(f; "OnPostLoadMap: world changed from {:p} to {:p} without ever being unset", current_world, world);
+                globals().set_world(world);
+            }
+        }
+        None => {
+            crate::sdebug!(f; "OnPostLoadMap: globals.world was None before update; setting world from post-load hook");
+            globals().set_world(world);
+        }
     }
 });
 
