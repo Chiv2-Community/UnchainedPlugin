@@ -108,7 +108,7 @@ pub trait ErasedCommand: Send + Sync {
     fn usage(&self) -> String;
     fn required_source(&self) -> Option<CommandSource>;
     fn required_permissions(&self) -> PermissionFlags;
-    fn help(&self) -> String;
+    fn help(&self, show_emojis: bool, show_key: bool) -> String;
     async fn execute(&self, command: &CommandRequest);
     async fn on_tick(&self);
     async fn on_event(&self, _event: &GameEvent) {}
@@ -158,17 +158,37 @@ where
         self.command.required_permissions()
     }
 
-    fn help(&self) -> String {
+    fn help(&self, show_emojis: bool, show_key: bool) -> String {
         use crate::events::models::{CommandSource, PermissionFlags};
-        let source_tag = match self.required_source() {
-            Some(CommandSource::GameChat) => "🎮",
-            Some(CommandSource::Discord) => "💬",
-            Some(CommandSource::ServerConsole) => "🖳",
-            None => "🌐",
-        };
-        let lock = if self.required_permissions().contains(PermissionFlags::ADMIN) { "🔒" } else { "" };
 
-        format!("`{}` - {}{}*{}*", self.usage(), source_tag, lock, self.description())
+        let source_tag =
+            if show_key {
+                if show_emojis {
+                    match self.required_source() {
+                        Some(CommandSource::GameChat) => "🎮",
+                        Some(CommandSource::Discord) => "💬",
+                        Some(CommandSource::ServerConsole) => "🖳",
+                        None => "🌐",
+                    }
+                } else {
+                    match self.required_source() {
+                        Some(CommandSource::GameChat) => "[Game]",
+                        Some(CommandSource::Discord) => "[Discord]",
+                        Some(CommandSource::ServerConsole) => "[Console]",
+                        None => "[Global]",
+                    }
+                }
+            } else {
+                ""
+            };
+
+        let lock = if self.required_permissions().contains(PermissionFlags::ADMIN) { 
+            if show_emojis { "🔒" } else { "[Admin]" }
+        } else { 
+            "" 
+        };
+
+        format!("`{}` - {}{} *{}*", self.usage(), source_tag, lock, self.description())
     }
 
     async fn execute(&self, command: &CommandRequest) {

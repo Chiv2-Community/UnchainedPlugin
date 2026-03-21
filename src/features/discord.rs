@@ -76,7 +76,15 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
         };
 
         register_discord_subscribers(Arc::clone(&task_config), client.http.clone()).await;
-        add_discord_chat_sink(Arc::clone(&task_config), client.http.clone());
+        
+        let should_add_chat_sink = {
+            let config = task_config.read().await;
+            config.general_chat_channel_id.is_some()
+        };
+
+        if should_add_chat_sink {
+            add_discord_chat_sink(Arc::clone(&task_config), client.http.clone());
+        }
 
         if let Err(e) = client.start().await {
             swarn!(f; "Discord bot error: {}", e);
@@ -87,40 +95,58 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
 }
 
 async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Http>) {
+    let cfg = config.read().await;
+
     let broadcast_message_bus = &EVENT_SYSTEM.message_broadcast_event_bus;
 
-    let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), Arc::clone(&config));
-    let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
+    if cfg.general_chat_channel_id.is_some() {
+        let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), Arc::clone(&config));
+        let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
+    } else {
+        swarn!(f; "Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
+    }
 
     // Admin Alert Module
-    let admin_alert_module = AdminAlertModule::new(
-        http.clone(),
-        Arc::clone(&config),
-        &EVENT_SYSTEM.game_event_publisher,
-    );
-    let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
-    
-    let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
-    TOKIO_RUNTIME.spawn(async move {
-        let mut command_subscriber = command_subscriber.lock().await;
-        command_subscriber.register(admin_alert_module);
-    });
+    if cfg.admin_notification_channel_id.is_some() {
+        let admin_alert_module = AdminAlertModule::new(
+            http.clone(),
+            Arc::clone(&config),
+            &EVENT_SYSTEM.game_event_publisher,
+        );
+        let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
+
+        let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
+        TOKIO_RUNTIME.spawn(async move {
+            let mut command_subscriber = command_subscriber.lock().await;
+            command_subscriber.register(admin_alert_module);
+        });
+    } else {
+        swarn!(f; "Discord admin alert subscriber not registered because admin notification channel is not configured.");
+    }
 
     // Dashboard Subscriber
-    let dashboard_subscriber = DashboardSubscriber::new(http.clone(), Arc::clone(&config));
-    let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
+    if cfg.dashboard_channel_id.is_some() {
+        let dashboard_subscriber = DashboardSubscriber::new(http.clone(), Arc::clone(&config));
+        let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
+    } else {
+        swarn!(f; "Discord dashboard subscriber not registered because dashboard channel is not configured.");
+    }
 
-    // Event Log Subscriber
-    let should_register_event_log = {
-        let cfg = config.read().await;
-        cfg.event_log_channel_id.is_some()
-    };
-    if should_register_event_log {
+    if cfg.event_log_channel_id.is_some() {
         let event_log_subscriber = EventLogSubscriber::new(http.clone(), Arc::clone(&config));
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(event_log_subscriber)).await;
     } else {
         swarn!(f; "Discord event log subscriber not registered because event log channel is not configured.");
     }
+
+    // Register Discord Connection with Command Subscriber
+    let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
+    let http_clone = http.clone();
+    let config_clone = Arc::clone(&config);
+    TOKIO_RUNTIME.spawn(async move {
+        let mut command_subscriber = command_subscriber.lock().await;
+        command_subscriber.set_discord_connection(config_clone, http_clone);
+    });
 }
 
 fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http: Arc<Http>) {

@@ -78,7 +78,7 @@ pub struct GameChatMessage {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 pub enum CommandSource {
     GameChat,
     Discord,
