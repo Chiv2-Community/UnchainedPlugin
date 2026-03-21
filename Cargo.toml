@@ -132,3 +132,5 @@ censor = "0.3.0"
 quote = "1.0.43"
 crc32c = "0.6.8"
 strum = { version = "0.26", features = ["derive"] }
+emojis = "0.6"
+unicode-segmentation = "1.12"
