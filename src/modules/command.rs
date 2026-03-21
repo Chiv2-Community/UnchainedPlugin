@@ -162,7 +162,7 @@ impl CommandSubscriber {
             CommandSource::GameChat => {
                 let full_msg = format!("{}: {}\n{}\n{}", title, content, field_text, footer);
                 #[cfg(not(test))]
-                crate::game::chivalry2::send_ingame_message(full_msg, Some(crate::game::chivalry2::EChatType::ServerSay));
+                crate::game::chivalry2::send_ingame_message(full_msg, None);
                 #[cfg(test)]
                 self.broadcaster.publish(full_msg.into());
             }
