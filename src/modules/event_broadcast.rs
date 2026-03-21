@@ -3,14 +3,14 @@ use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::{EventPublisher, Subscriber};
 use crate::events::models::GameEvent;
 
-pub struct JoinBatcherSubscriber {
+pub struct EventBroadcastSubscriber {
     pending_joins: Vec<String>,
     pending_leaves: Vec<String>,
     max_batch_size: usize,
     broadcaster: &'static EventPublisher<BroadcastMessage>,
 }
 
-impl JoinBatcherSubscriber {
+impl EventBroadcastSubscriber {
     pub fn new(broadcaster: &'static EventPublisher<BroadcastMessage>) -> Self {
         Self {
             pending_joins: Vec::new(),
@@ -74,9 +74,9 @@ enum PresenceAction {
 }
 
 #[async_trait]
-impl Subscriber<GameEvent> for JoinBatcherSubscriber {
+impl Subscriber<GameEvent> for EventBroadcastSubscriber {
     fn identifier(&self) -> &'static str {
-        "JoinBatcherSubscriber"
+        "EventBroadcastSubscriber"
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
@@ -92,6 +92,24 @@ impl Subscriber<GameEvent> for JoinBatcherSubscriber {
                 if self.pending_leaves.len() >= self.max_batch_size {
                     self.flush_leaves();
                 }
+            }
+            GameEvent::MapChangeEvent(map_change) => {
+                let new_map_name = map_change.new_map_name.clone();
+                self.broadcaster.publish(
+                    BroadcastMessage::new()
+                        .title("🗺️ Map Change")
+                        .content(format!("Map changed to {}.", new_map_name))
+                        .color(0x5865F2)
+                );
+            },
+            GameEvent::MatchEndEvent(match_end) => {
+                self.broadcaster.publish(
+                    BroadcastMessage::new()
+                        .title("🏁 Match Ended")
+                        .field("Winner", match_end.winner_team.to_string())
+                        .field("Score", match_end.final_score.to_string())
+                        .color(0x5865F2)
+                );
             }
             _ => {}
         }

@@ -1,7 +1,7 @@
 pub mod chat;
 pub mod command;
 pub mod killstreak;
-pub mod join_batcher;
+pub mod event_broadcast;
 pub mod stats;
 pub mod duel;
 pub mod say;

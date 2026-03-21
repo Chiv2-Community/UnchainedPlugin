@@ -15,7 +15,7 @@ use crate::events::broadcast_message::game_chat::InGameChatBroadcastSubscriber;
 use crate::modules::command::CommandSubscriber;
 use crate::modules::chat::{ChatRelaySubscriber, GameChatSink, ConsoleChatSink};
 use crate::modules::killstreak::KillstreakSubscriber;
-use crate::modules::join_batcher::JoinBatcherSubscriber;
+use crate::modules::event_broadcast::EventBroadcastSubscriber;
 use crate::modules::stats::{StatsTrackerSubscriber, StatsTrackerState, TopCommand, MyStatsCommand};
 use crate::modules::duel::DuelManagerSubscriber;
 use crate::modules::say::SayCommand;
@@ -128,7 +128,7 @@ pub async fn initialize_subscribers() {
     // Discord ported subscribers
     let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json"))); // Need it again for subscriber
     let _ = game_event_bus.subscribe(Box::new(KillstreakSubscriber::new(broadcast_message_publisher))).await;
-    let _ = game_event_bus.subscribe(Box::new(JoinBatcherSubscriber::new(broadcast_message_publisher))).await;
+    let _ = game_event_bus.subscribe(Box::new(EventBroadcastSubscriber::new(broadcast_message_publisher))).await;
     let _ = game_event_bus.subscribe(Box::new(StatsTrackerSubscriber::new(stats_state, broadcast_message_publisher))).await;
     let _ = game_event_bus.subscribe(Box::new(DuelManagerSubscriber::new(broadcast_message_publisher))).await;
 
