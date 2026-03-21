@@ -73,6 +73,8 @@ enum PresenceAction {
     Left,
 }
 
+static mut SERVER_STARTED: bool = false;
+
 #[async_trait]
 impl Subscriber<GameEvent> for EventBroadcastSubscriber {
     fn identifier(&self) -> &'static str {
@@ -95,12 +97,23 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
             }
             GameEvent::MapChangeEvent(map_change) => {
                 let new_map_name = map_change.new_map_name.clone();
-                self.broadcaster.publish(
-                    BroadcastMessage::new()
-                        .title("🗺️ Map Change")
-                        .content(format!("Map changed to {}.", new_map_name))
-                        .color(0x5865F2)
-                );
+
+                if !unsafe { SERVER_STARTED } {
+                    self.broadcaster.publish(
+                        BroadcastMessage::new()
+                            .title("🚀️ Server Started")
+                            .content(format!("Map {}.", new_map_name))
+                            .color(0x5865F2)
+                    );
+                    unsafe { SERVER_STARTED = true };
+                } else {
+                    self.broadcaster.publish(
+                        BroadcastMessage::new()
+                            .title("🗺️ Map Change")
+                            .content(format!("Map changed to {}.", new_map_name))
+                            .color(0x5865F2)
+                    );
+                }
             },
             GameEvent::MatchEndEvent(match_end) => {
                 self.broadcaster.publish(
