@@ -355,6 +355,9 @@ impl Command<VoteArgs> for VoteCommand {
                     .content(format!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
                     .color(0x00FF00);
                 self.broadcaster.publish(message);
+
+                // Pause for a second so that the message can go through and people have time to read it
+                tokio::time::sleep(Duration::from_millis(1000)).await;
                 active.logic.on_success(active.target_args);
             } else {
                 let message = BroadcastMessage::new()
