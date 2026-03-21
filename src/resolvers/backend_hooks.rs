@@ -47,7 +47,7 @@ fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
     suffix.push_str(addr);
     let url = backend_url!(suffix);
-    crate::sinfo!(f; "Checking Unchained ban status for {}", addr);
+    crate::sinfo!(f; "Checking Unchained ban status for player");
     let response = ureq::get(&url.to_string()).call();
 
     match response {
@@ -55,7 +55,7 @@ fn is_user_banned(addr: &str) -> bool {
             match res.into_body().read_to_string() {
                 Ok(body_str) => body_str.contains("true"),
                 Err(error) => {
-                    crate::swarn!(f; "Failed to read ban-check response for {}: {:?}", addr, error);
+                    crate::swarn!(f; "Failed to read ban-check response for player: {:?}", error);
                     false
                 }
             }
