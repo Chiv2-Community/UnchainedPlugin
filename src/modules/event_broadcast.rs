@@ -123,6 +123,14 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
                         .field("Score", match_end.final_score.to_string())
                         .color(0x5865F2)
                 );
+            },
+            GameEvent::ServerRestartEvent => {
+                self.broadcaster.publish(
+                    BroadcastMessage::new()
+                        .title("🔄 Server Restart")
+                        .content("Server is restarting")
+                        .color(0xE67E22)
+                );
             }
             _ => {}
         }

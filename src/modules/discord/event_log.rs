@@ -178,6 +178,12 @@ impl EventLogSubscriber {
                 ),
                 0xE74C3C,
             ),
+            GameEvent::ServerRestartEvent => (
+                "🔄",
+                "Restart Server Event",
+                "Server is restarting".to_string(),
+                0xE67E22,
+            ),
         };
 
         CreateEmbed::new()

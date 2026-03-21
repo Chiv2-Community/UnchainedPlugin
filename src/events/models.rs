@@ -211,4 +211,5 @@ pub enum GameEvent {
     DuelStartEvent(DuelStart), // Never dispatched
     AttackEvent(Attack), // Never dispatched
     DamageEvent(Damage), // Never dispatched
+    ServerRestartEvent
 }

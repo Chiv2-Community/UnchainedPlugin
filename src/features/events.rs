@@ -29,6 +29,7 @@ use crate::modules::mod_dump::DumpModsCommand;
 use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
 use crate::modules::votes::endmap::EndMapVote;
+use crate::modules::votes::voterestartserver::RestartServerVote;
 
 pub struct UnchainedEventSystem {
     // Used to distribute game events to various subscribers for arbitrary processing
@@ -101,12 +102,12 @@ pub async fn initialize_subscribers() {
     let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
     let game_event_bus = &EVENT_SYSTEM.game_event_bus;
     let broadcast_message_bus = &EVENT_SYSTEM.message_broadcast_event_bus;
-    let _game_event_publisher = &EVENT_SYSTEM.game_event_publisher;
+    let game_event_publisher = &EVENT_SYSTEM.game_event_publisher;
     let broadcast_message_publisher = &EVENT_SYSTEM.message_broadcast_event_publisher;
 
     {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
-        initalize_vote_commands(&mut command_subscriber, broadcast_message_publisher).await;
+        initalize_vote_commands(&mut command_subscriber, broadcast_message_publisher, game_event_publisher).await;
 
         // Discord ported commands
         let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json")));
@@ -134,7 +135,7 @@ pub async fn initialize_subscribers() {
 
 }
 
-async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>) {
+async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
     let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(VotingState::new()))));
 
     command_subscriber.register(YesCommand::new(shared_state, broadcast_event_publisher));
@@ -152,6 +153,7 @@ async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, bro
     vote_command.register(NoBotsVote).await;
     vote_command.register(SpeedVote).await;
     vote_command.register(ModVote).await;
+    vote_command.register(RestartServerVote::new(game_event_publisher)).await;
 
     command_subscriber.register(vote_command);
 }

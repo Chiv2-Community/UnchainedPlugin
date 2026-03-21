@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::Subscriber;
-use crate::game::chivalry2::EChatType;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct InGameChatBroadcastSubscriber;
