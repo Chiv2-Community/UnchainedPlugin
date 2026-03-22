@@ -421,7 +421,7 @@ impl RegistrationInner {
     /// they do not exist.
     fn players_from_info(info: &Info) -> (u8, u8) {
         let (max_players, player_count) = if cli_args().is_headless {
-            (info.max_players - 1, info.players - 1)
+            (info.max_players.saturating_sub(1), info.players.saturating_sub(1))
         } else {
             (info.max_players, info.players)
         };
