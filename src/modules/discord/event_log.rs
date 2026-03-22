@@ -45,14 +45,42 @@ impl EventLogSubscriber {
             GameEvent::KillEvent(kill) => (
                 "⚔️",
                 "Kill Event",
-                format!(
-                    "**Killer:** {}\n**Victim:** {}\n**Weapon:** {}\n**Attack Type:** {}\n**Damage:** {:.2}",
-                    kill.killer,
-                    kill.victim,
-                    kill.source.damage.source,
-                    kill.source.damage.attack_type,
-                    kill.source.damage.amount
-                ),
+                {
+                    let killer_display = if kill.killer_actor.is_bot {
+                        format!("(bot) {}", kill.killer)
+                    } else {
+                        kill.killer.clone()
+                    };
+                    let victim_display = if kill.victim_actor.is_bot {
+                        format!("(bot) {}", kill.victim)
+                    } else {
+                        kill.victim.clone()
+                    };
+                    let all_killers = kill
+                        .killers
+                        .iter()
+                        .map(|actor| {
+                            if actor.is_bot {
+                                format!("(bot) {}", actor.name)
+                            } else {
+                                actor.name.clone()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    format!(
+                        "**Killer:** {}\n**Victim:** {}\n**All Killers:** {}\n**Kill Reason:** {}\n**Weapon:** {}\n**Attack Type:** {}\n**Damage:** {:.2}\n**Attach To Projectile:** {}",
+                        killer_display,
+                        victim_display,
+                        all_killers,
+                        kill.kill_reason,
+                        kill.source.damage.source,
+                        kill.source.damage.attack_type,
+                        kill.source.damage.amount,
+                        kill.attach_to_projectile
+                    )
+                },
                 0xC53030,
             ),
             GameEvent::MapChangeEvent(map_change) => (
@@ -169,9 +197,11 @@ impl EventLogSubscriber {
                 "🩸",
                 "Damage Event",
                 format!(
-                    "**Attacker:** {}\n**Victim:** {}\n**Damage:** {:.2}\n**Source:** {}\n**Attack Type:** {}",
+                    "**Attacker:** {} (bot: {})\n**Victim:** {} (bot: {})\n**Damage:** {:.2}\n**Source:** {}\n**Attack Type:** {}",
                     damage.attacker,
+                    damage.attacker_actor.is_bot,
                     damage.victim,
+                    damage.victim_actor.is_bot,
                     damage.damage.amount,
                     damage.damage.source,
                     damage.damage.attack_type

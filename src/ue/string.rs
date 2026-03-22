@@ -34,6 +34,10 @@ impl FStringCopyError {
 }
 
 impl TArray<u16> {
+    /// Using direct to_string on TArray<u16> (or the FString type) binds a reference to a string
+    /// in the FString's backing buffer, which is not safe to do in a multithreaded environment.
+    /// This function copies the buffer to a new string, which is safe to do in a multithreaded
+    /// environment.
     pub fn copy_to_string(&self) -> Result<String, FStringCopyError> {
         let utf16_len = self.len();
         let utf16_ptr = self.as_ptr();

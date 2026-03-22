@@ -1,6 +1,6 @@
 use serenity::all::UserId;
 use UnchainedPlugin::features::discord::DiscordConfig;
-use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
+use UnchainedPlugin::events::models::{CombatActor, GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::sinfo;
 use UnchainedPlugin::tools::logger::init_syslog;
@@ -42,9 +42,18 @@ fn main() {
                 EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
                     killer: k.to_string(), 
                     victim: v.to_string(), 
+                    killer_actor: CombatActor::new(k.to_string(), false),
+                    victim_actor: CombatActor::new(v.to_string(), false),
+                    killers: vec![CombatActor::new(k.to_string(), false)],
+                    kill_reason: "Damage".to_string(),
+                    random_seed: 0,
+                    dead_character_id: 0,
+                    attach_to_projectile: false,
                     source: Damage {
                         attacker: k.to_string(),
                         victim: v.to_string(),
+                        attacker_actor: CombatActor::new(k.to_string(), false),
+                        victim_actor: CombatActor::new(v.to_string(), false),
                         damage: DamageSource {
                             amount: 50.0,
                             source: "MockSword".to_string(),

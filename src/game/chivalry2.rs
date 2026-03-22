@@ -2,7 +2,7 @@
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
 use strum::Display;
-use crate::{game::engine::FText, ue::{FString, FVector, TArray}};
+use crate::{game::engine::FText, ue::{FString, FVector, TArray, UObject}};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -20,6 +20,117 @@ pub struct AController {
     // 0x0260: APlayerState* PlayerState (UE4 Controller.h)
     pub player_state: *mut APlayerState,
 }
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+pub enum EKillReason {
+    Damage = 0,
+    FallDamage = 1,
+    Suicide = 2,
+    TapOut = 3,
+    OutOfCombat = 4,
+    FellOutOfWorld = 5,
+    Disconnect = 6,
+    ForwardSpawn = 7,
+    SwitchedTeams = 8,
+    Spectator = 9,
+}
+
+impl EKillReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EKillReason::Damage => "Damage",
+            EKillReason::FallDamage => "FallDamage",
+            EKillReason::Suicide => "Suicide",
+            EKillReason::TapOut => "TapOut",
+            EKillReason::OutOfCombat => "OutOfCombat",
+            EKillReason::FellOutOfWorld => "FellOutOfWorld",
+            EKillReason::Disconnect => "Disconnect",
+            EKillReason::ForwardSpawn => "ForwardSpawn",
+            EKillReason::SwitchedTeams => "SwitchedTeams",
+            EKillReason::Spectator => "Spectator",
+        }
+    }
+}
+
+impl TryFrom<u8> for EKillReason {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(EKillReason::Damage),
+            1 => Ok(EKillReason::FallDamage),
+            2 => Ok(EKillReason::Suicide),
+            3 => Ok(EKillReason::TapOut),
+            4 => Ok(EKillReason::OutOfCombat),
+            5 => Ok(EKillReason::FellOutOfWorld),
+            6 => Ok(EKillReason::Disconnect),
+            7 => Ok(EKillReason::ForwardSpawn),
+            8 => Ok(EKillReason::SwitchedTeams),
+            9 => Ok(EKillReason::Spectator),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x148`).
+#[repr(C)]
+#[derive(Debug)]
+pub struct FDamageTakenEvent {
+    pub damage: f32,
+    pub new_stat_value: f32,
+    pub damage_source: *mut UObject,  // UDamageSource*
+    pub damage_causer: *mut c_void,   // AActor*
+    pub damage_taker: *mut c_void,    // AActor*
+    pub damage_instigator: *mut c_void, // AActor*
+    pub b_killing_blow: bool,
+    pub b_suicide: bool,
+    pub b_back_stab: bool,
+    pub b_entered_kill_volume: bool,
+    pub b_lose_limb_cheat: bool,
+    pub b_switched_teams_in_loadout_volume: bool,
+    pub _pad_after_flags: [u8; 0x2], // 0x002E
+    pub hit_result: [u8; 0x88], // 0x0030
+    pub ability_spec: *mut c_void, // 0x00B8
+    pub abilities_table_row: crate::ue::FName, // 0x00C0
+    pub hit_direction: crate::ue::FVector, // 0x00C8 (FVector_NetQuantizeNormal)
+    pub damage_taker_combat_state: crate::ue::FName, // 0x00D4
+    pub apply_condition: u8, // EConditionType, 0x00DC
+    pub _pad_after_apply_condition: [u8; 0x3], // 0x00DD
+    pub post_damage_info: [u8; 0x0C], // 0x00E0
+    pub _pad_before_inventory_item: [u8; 0x4], // 0x00EC
+    pub inventory_item: *mut c_void, // 0x00F0
+    pub projectile: *mut c_void, // 0x00F8
+    pub location_based_damage: u8, // ELocationBasedDamage, 0x0100
+    pub _pad_after_location_based_damage: [u8; 0x7], // 0x0101
+    pub attach_parent: *mut c_void, // 0x0108
+    pub b_parried: bool, // 0x0110
+    pub _pad_after_b_parried: [u8; 0x7], // 0x0111
+    pub character_who_parried: *mut c_void, // 0x0118
+    pub b_is_in_team_thwack_range: bool, // 0x0120
+    pub _pad_before_gore_event: [u8; 0x3], // 0x0121
+    pub gore_event: [u8; 0x1C], // 0x0124
+    pub kill_reason: EKillReason, // 0x0140
+    pub b_arrow_parried: bool, // 0x0141
+    pub b_disarmed: bool, // 0x0142
+    pub _pad_end: [u8; 0x5], // 0x0143
+}
+
+/// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x160`).
+#[repr(C)]
+#[derive(Debug)]
+pub struct FDeathDamageTakenEvent {
+    pub damage_taken: FDamageTakenEvent,
+    pub killers: TArray<*mut c_void>, // 0x0148
+    pub random_seed: i32, // 0x0158
+    pub kill_reason: EKillReason, // 0x015C
+    pub dead_character_id: u8, // 0x015D
+    pub b_attach_to_projectile: bool, // 0x015E
+    pub _pad_end: [u8; 0x1], // 0x015F
+}
+
+const _: [(); 0x148] = [(); std::mem::size_of::<FDamageTakenEvent>()];
+const _: [(); 0x160] = [(); std::mem::size_of::<FDeathDamageTakenEvent>()];
 
 // Chat type enum
 // FIXME: More compact, wtf is this

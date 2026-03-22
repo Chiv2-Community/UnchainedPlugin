@@ -88,6 +88,7 @@ pub mod desync_tests;
 pub mod chiv2_macros;
 #[macro_use]
 pub mod getpost_requests;
+pub mod gameplay;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);

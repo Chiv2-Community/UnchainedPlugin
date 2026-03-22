@@ -26,7 +26,26 @@ pub struct Crash {
 pub struct Kill {
     pub killer: String,
     pub victim: String,
+    pub killer_actor: CombatActor,
+    pub victim_actor: CombatActor,
+    pub killers: Vec<CombatActor>,
+    pub kill_reason: String,
+    pub random_seed: i32,
+    pub dead_character_id: u8,
+    pub attach_to_projectile: bool,
     pub source: Damage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CombatActor {
+    pub name: String,
+    pub is_bot: bool,
+}
+
+impl CombatActor {
+    pub fn new(name: String, is_bot: bool) -> Self {
+        Self { name, is_bot }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -190,7 +209,13 @@ pub struct DuelStart { pub challenger: String, pub opponent: String }
 #[derive(Debug, Clone)]
 pub struct Attack { pub attacker: String, pub attack_type: String, pub was_parried: bool }
 #[derive(Debug, Clone)]
-pub struct Damage { pub attacker: String, pub victim: String, pub damage: DamageSource }
+pub struct Damage {
+    pub attacker: String,
+    pub victim: String,
+    pub attacker_actor: CombatActor,
+    pub victim_actor: CombatActor,
+    pub damage: DamageSource
+}
 
 // --- The Unified GameEvent Enum ---
 
