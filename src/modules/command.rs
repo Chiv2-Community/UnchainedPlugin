@@ -240,14 +240,16 @@ impl Subscriber<GameEvent> for CommandSubscriber {
         }
 
         if let GameEvent::CommandRequestEvent(req) = event {
-            if req.name == "help" {
+            let cmd_name = req.name.to_lowercase();
+
+            if cmd_name == "help" {
                 let show_all = req.args.iter().any(|arg| arg == "--all");
                 self.send_help(req.source.clone(), show_all).await;
                 return;
             }
 
             let maybe_command =
-                self.commands.iter().find(|c| c.name() == req.name);
+                self.commands.iter().find(|c| c.name().to_lowercase() == cmd_name);
 
             if maybe_command.is_none() {
                 let rejection_reason = format!("Command '{}' does not exist", req.name);

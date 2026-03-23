@@ -49,7 +49,22 @@ pub fn spawn_cli_handler() {
                     let command_slice = command_parts.as_slice();
                     let (command, args) = match command_slice.first().map(|s| s.as_str()) {
                         Some("help") => ("help".to_string(), command_slice[1..].to_vec()),
-                        Some(name) => (name.to_string(), command_slice[1..].to_vec()),
+                        Some(name) => {
+                            let is_unchained_command = EVENT_SYSTEM.command_subscriber.blocking_lock().get_registered_commands()
+                                .iter()
+                                .any(|registered_command|
+                                    registered_command.name().to_lowercase() == name.to_string().to_lowercase()
+                                        && (registered_command.required_source() == Some(CommandSource::ServerConsole)
+                                            || registered_command.required_source() == None
+                                        )
+                                );
+
+                            if is_unchained_command {
+                                (name.to_string(), command_slice[1..].to_vec())
+                            } else {
+                                ("cmd".to_string(), command_slice.to_vec())
+                            }
+                        },
                         None => continue,
                     };
 

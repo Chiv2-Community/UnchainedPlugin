@@ -184,7 +184,7 @@ impl VotingState {
         V: VoteType<T> + Send + Sync + 'static,
     {
         let name = T::command().get_name().to_string();
-        self.registry.insert(name, Box::new(VoteTypeHandler::new(logic)));
+        self.registry.insert(name.to_lowercase(), Box::new(VoteTypeHandler::new(logic)));
     }
 
     pub fn unregister<T>(&mut self)
@@ -256,9 +256,9 @@ impl Command<VoteArgs> for VoteCommand {
     async fn execute(&self, args: VoteArgs, command: &CommandRequest) {
         let mut state = self.state.lock().await;
 
-        let maybe_vote_name = args.vote_name.as_deref();
+        let maybe_vote_name = args.vote_name.as_deref().map(|name| name.to_lowercase());
 
-        if maybe_vote_name.is_none_or(|name| name == "help") {
+        if maybe_vote_name.clone().is_none_or(|name| name == "help") {
             let sorted_keys: Vec<_> = {
                 let mut keys: Vec<_> = state.registry.keys().collect();
                 keys.sort();
