@@ -40,10 +40,8 @@ fn main() {
             }
             ["kill", k, v] => {
                 EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
-                    killer: k.to_string(), 
-                    victim: v.to_string(), 
-                    killer_actor: CombatActor::new(k.to_string(), false),
-                    victim_actor: CombatActor::new(v.to_string(), false),
+                    killer: CombatActor::new(k.to_string(), false),
+                    victim: CombatActor::new(v.to_string(), false),
                     killers: vec![CombatActor::new(k.to_string(), false)],
                     kill_reason: "Damage".to_string(),
                     random_seed: 0,

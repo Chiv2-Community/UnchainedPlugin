@@ -24,10 +24,8 @@ pub struct Crash {
 /// Triggered when a kill occurs (Data-heavy event)
 #[derive(Debug, Clone)]
 pub struct Kill {
-    pub killer: String,
-    pub victim: String,
-    pub killer_actor: CombatActor,
-    pub victim_actor: CombatActor,
+    pub killer: CombatActor,
+    pub victim: CombatActor,
     pub killers: Vec<CombatActor>,
     pub kill_reason: String,
     pub random_seed: i32,

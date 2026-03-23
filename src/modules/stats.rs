@@ -86,8 +86,8 @@ impl Subscriber<GameEvent> for StatsTrackerSubscriber {
         
         match event {
             GameEvent::KillEvent(kill) => {
-                *state.session_kills.entry(kill.killer.clone()).or_insert(0) += 1;
-                *state.global_stats.total_kills.entry(kill.killer.clone()).or_insert(0) += 1;
+                *state.session_kills.entry(kill.killer.name.clone()).or_insert(0) += 1;
+                *state.global_stats.total_kills.entry(kill.killer.name.clone()).or_insert(0) += 1;
             }
             GameEvent::MatchEndEvent(_) => {
                 let mvp = state.session_kills.iter().max_by_key(|entry| entry.1);

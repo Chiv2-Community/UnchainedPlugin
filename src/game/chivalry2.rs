@@ -6,6 +6,12 @@ use crate::{game::engine::FText, ue::{FString, FVector, TArray, UObject}};
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct AActor {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ATBLPlayerController { 
     _private: [u8; 0x1348],
 	pub bOnlineInventoryInitialized: bool,
@@ -80,9 +86,9 @@ pub struct FDamageTakenEvent {
     pub damage: f32,
     pub new_stat_value: f32,
     pub damage_source: *mut UObject,  // UDamageSource*
-    pub damage_causer: *mut c_void,   // AActor*
-    pub damage_taker: *mut c_void,    // AActor*
-    pub damage_instigator: *mut c_void, // AActor*
+    pub damage_causer: *mut AActor,   // AActor*
+    pub damage_taker: *mut AActor,    // AActor*
+    pub damage_instigator: *mut AActor, // AActor*
     pub b_killing_blow: bool,
     pub b_suicide: bool,
     pub b_back_stab: bool,
@@ -1118,7 +1124,7 @@ pub struct APawn {
     pub padding_3: [u8; 0x5],          // 0x0363
     
     pub ai_controller_class: *mut c_void, // 0x0368 (TSubclassOf<AController>)
-    pub player_state: *mut c_void,        // 0x0370 (APlayerState*)
+    pub player_state: *mut APlayerState,        // 0x0370 (APlayerState*)
     
     pub padding_4: [u8; 0x8],          // 0x0378
     

@@ -46,15 +46,15 @@ impl EventLogSubscriber {
                 "⚔️",
                 "Kill Event",
                 {
-                    let killer_display = if kill.killer_actor.is_bot {
-                        format!("(bot) {}", kill.killer)
+                    let killer_display = if kill.killer.is_bot {
+                        format!("(bot) {}", kill.killer.name)
                     } else {
-                        kill.killer.clone()
+                        kill.killer.name.clone()
                     };
-                    let victim_display = if kill.victim_actor.is_bot {
-                        format!("(bot) {}", kill.victim)
+                    let victim_display = if kill.victim.is_bot {
+                        format!("(bot) {}", kill.victim.name)
                     } else {
-                        kill.victim.clone()
+                        kill.victim.name.clone()
                     };
                     let all_killers = kill
                         .killers

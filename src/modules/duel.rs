@@ -83,8 +83,10 @@ impl DuelManagerSubscriber {
                 }
             }
             GameEvent::KillEvent(e) => {
-                if (e.victim == duel.p1 && e.killer == duel.p2) || (e.victim == duel.p2 && e.killer == duel.p1) {
-                    let results = self.format_results(duel, &e.killer, &e.victim);
+                if (e.victim.name == duel.p1 && e.killer.name == duel.p2)
+                    || (e.victim.name == duel.p2 && e.killer.name == duel.p1)
+                {
+                    let results = self.format_results(duel, &e.killer.name, &e.victim.name);
                     self.state = DuelState::Idle;
                     self.broadcaster.publish(results);
                 }

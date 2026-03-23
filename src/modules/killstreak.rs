@@ -34,19 +34,19 @@ impl Subscriber<GameEvent> for KillstreakSubscriber {
     async fn on_event(&mut self, event: &GameEvent) {
         if let GameEvent::KillEvent(kill) = event {
             // 1. Reset the victim's streak
-            self.streaks.remove(&kill.victim);
+            self.streaks.remove(&kill.victim.name);
 
             // 2. Increment the killer's streak
-            let entry = self.streaks.entry(kill.killer.clone()).or_insert(0);
+            let entry = self.streaks.entry(kill.killer.name.clone()).or_insert(0);
             *entry += 1;
             let current_streak = *entry;
 
             // 3. Only publish on milestones
             let msg = match current_streak {
-                5 => Some(self.build_message(&kill.killer, "is on a Killing Spree!", 0x3498db)),
-                10 => Some(self.build_message(&kill.killer, "is UNSTOPPABLE!", 0x9b59b6)),
-                15 => Some(self.build_message(&kill.killer, "is GODLIKE!", 0xe74c3c)),
-                20 => Some(self.build_message(&kill.killer, "is a LEGENDARY WARRIOR!", 0xf1c40f)),
+                5 => Some(self.build_message(&kill.killer.name, "is on a Killing Spree!", 0x3498db)),
+                10 => Some(self.build_message(&kill.killer.name, "is UNSTOPPABLE!", 0x9b59b6)),
+                15 => Some(self.build_message(&kill.killer.name, "is GODLIKE!", 0xe74c3c)),
+                20 => Some(self.build_message(&kill.killer.name, "is a LEGENDARY WARRIOR!", 0xf1c40f)),
                 _ => None,
             };
 
