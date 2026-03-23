@@ -196,16 +196,27 @@ impl EventLogSubscriber {
             GameEvent::DamageEvent(damage) => (
                 "🩸",
                 "Damage Event",
-                format!(
-                    "**Attacker:** {} (bot: {})\n**Victim:** {} (bot: {})\n**Damage:** {:.2}\n**Source:** {}\n**Attack Type:** {}",
-                    damage.attacker,
-                    damage.attacker_actor.is_bot,
-                    damage.victim,
-                    damage.victim_actor.is_bot,
-                    damage.damage.amount,
-                    damage.damage.source,
-                    damage.damage.attack_type
-                ),
+                {
+                    let attacker_display = if damage.attacker_actor.is_bot {
+                        format!("(bot) {}", damage.attacker_actor.name)
+                    } else {
+                        damage.attacker_actor.name.clone()
+                    };
+                    let victim_display = if damage.victim_actor.is_bot {
+                        format!("(bot) {}", damage.victim_actor.name)
+                    } else {
+                        damage.victim_actor.name.clone()
+                    };
+
+                    format!(
+                        "**Attacker:** {}\n**Victim:** {}\n**Damage:** {:.2}\n**Source:** {}\n**Attack Type:** {}",
+                        attacker_display,
+                        victim_display,
+                        damage.damage.amount,
+                        damage.damage.source,
+                        damage.damage.attack_type
+                    )
+                },
                 0xE74C3C,
             ),
             GameEvent::ServerRestartEvent => (

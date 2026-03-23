@@ -5,10 +5,6 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::game::chivalry2::{AController, APlayerState, ATBLCharacter, FDeathDamageTakenEvent, FDamageTakenEvent, PlayerFlags};
 use crate::ue::{UObject, UStruct};
 
-define_pattern_resolver!(ATBLCharacter__OnKilled, [
-    "4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"
-]);
-
 fn object_class_name(ptr: *mut c_void) -> Option<String> {
     let obj = unsafe { (ptr as *const UObject).as_ref() }?;
     let class = unsafe { obj.uobject_base_utility.uobject_base.class_private.as_ref() }?;
@@ -151,7 +147,9 @@ fn attack_type_from_damage_event(damage_event: &FDamageTakenEvent) -> String {
     "Damage".into()
 }
 
-
+define_pattern_resolver!(ATBLCharacter__OnKilled, [
+    "4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"
+]);
 CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLCharacter,
     damage_event: *const FDeathDamageTakenEvent
@@ -196,4 +194,52 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     }));
 
     CALL_ORIGINAL!(ATBLCharacter__OnKilled(this_ptr, damage_event));
+});
+
+
+define_pattern_resolver!(ATBLCharacter__OnDamageTaken, [
+    "4C 8B DC 55 57 41 55 41 56 49 8D AB ?? ?? ?? ?? 48 81 EC 58 02 00 00"
+]);
+CREATE_HOOK!(ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
+    this_ptr: *mut ATBLCharacter,
+    damage_event: *const FDamageTakenEvent
+), {
+    if this_ptr.is_null() || damage_event.is_null() {
+        CALL_ORIGINAL!(ATBLCharacter__OnDamageTaken(this_ptr, damage_event));
+        return;
+    }
+
+    let damage_taken = unsafe { &*damage_event };
+    let attacker = resolve_killer_from_damage_event(damage_taken)
+        .unwrap_or_else(|| CombatActor::new("UnknownAttacker".into(), false));
+    let victim = resolve_victim(damage_taken)
+        .or_else(|| combat_actor_from_actor(this_ptr.cast()))
+        .unwrap_or_else(|| CombatActor::new("UnknownVictim".into(), false));
+
+    let source = damage_source_name(damage_taken);
+    let attack_type = attack_type_from_damage_event(damage_taken);
+
+    crate::sdebug!(
+        f;
+        "Damage: {} -> {} via {} ({:.2} dmg, type={})",
+        attacker.name,
+        victim.name,
+        source,
+        damage_taken.damage,
+        attack_type
+    );
+
+    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::DamageEvent(Damage {
+        attacker: attacker.name.clone(),
+        victim: victim.name.clone(),
+        attacker_actor: attacker,
+        victim_actor: victim,
+        damage: DamageSource {
+            amount: damage_taken.damage,
+            source,
+            attack_type,
+        },
+    }));
+
+    CALL_ORIGINAL!(ATBLCharacter__OnDamageTaken(this_ptr, damage_event));
 });

@@ -222,7 +222,7 @@ pub enum GameEvent {
     JoinEvent(Join),
     LeaveEvent(Leave),
     CrashEvent(Crash),
-    KillEvent(Kill), // Never dispatched
+    KillEvent(Kill),
     MapChangeEvent(MapChange),
     MatchEndEvent(MatchEnd), // Never dispatched
     GameChatMessageEvent(GameChatMessage),
@@ -233,6 +233,6 @@ pub enum GameEvent {
     AdminAlertEvent(AdminAlert),
     DuelStartEvent(DuelStart), // Never dispatched
     AttackEvent(Attack), // Never dispatched
-    DamageEvent(Damage), // Never dispatched
+    DamageEvent(Damage),
     ServerRestartEvent
 }
