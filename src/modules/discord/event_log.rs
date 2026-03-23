@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 use async_trait::async_trait;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
 use crate::events::bus::Subscriber;
@@ -8,6 +9,8 @@ use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 pub struct EventLogSubscriber {
     http: Arc<Http>,
     discord_config: SharedDiscordConfig,
+    embed_buffer: Vec<CreateEmbed>,
+    last_flush: Instant,
 }
 
 impl EventLogSubscriber {
@@ -15,6 +18,8 @@ impl EventLogSubscriber {
         Self {
             http,
             discord_config,
+            embed_buffer: Vec::with_capacity(10),
+            last_flush: Instant::now(),
         }
     }
 
@@ -233,6 +238,23 @@ impl EventLogSubscriber {
             .color(color)
             .footer(CreateEmbedFooter::new("Unchained Event Log"))
     }
+
+    async fn flush(&mut self) {
+        if self.embed_buffer.is_empty() {
+            self.last_flush = Instant::now();
+            return;
+        }
+
+        let event_log_channel_id = self.discord_config.read().await.event_log_channel_id;
+        let mut message = CreateMessage::new();
+
+        for embed in self.embed_buffer.drain(..) {
+            message = message.embed(embed);
+        }
+
+        send_to_channel(&self.http, event_log_channel_id, message).await;
+        self.last_flush = Instant::now();
+    }
 }
 
 #[async_trait]
@@ -242,8 +264,15 @@ impl Subscriber<GameEvent> for EventLogSubscriber {
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
-        let event_log_channel_id = self.discord_config.read().await.event_log_channel_id;
-        let message = CreateMessage::new().embed(Self::build_embed(event));
-        send_to_channel(&self.http, event_log_channel_id, message).await;
+        self.embed_buffer.push(Self::build_embed(event));
+        if self.embed_buffer.len() >= 10 {
+            self.flush().await;
+        }
+    }
+
+    async fn on_tick(&mut self) {
+        if !self.embed_buffer.is_empty() && self.last_flush.elapsed().as_secs() >= 5 {
+            self.flush().await;
+        }
     }
 }
