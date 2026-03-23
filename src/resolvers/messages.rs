@@ -1,0 +1,246 @@
+use std::os::raw::c_void;
+
+use crate::{game::{chivalry2::{ATBLGameMode, EChatType}, engine::FText}, ue::FString};
+
+
+// Chat messages
+// #[cfg(feature="client_message")]
+mod client_message {
+    use log::{info, warn};
+    use regex::Regex;
+    use std::os::raw::c_void;
+    use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
+    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandRequest, PermissionFlags};
+    use crate::features::events::EVENT_SYSTEM;
+
+    #[derive(Debug)]
+    pub struct ChatMessage<'a> {
+        pub name: &'a str,
+        pub channel: u32,
+        pub message: &'a str,
+    }
+    
+    pub fn parse_chat_line(line: &str) -> Option<ChatMessage<'_>> {
+        static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+            Regex::new(r"^(.*?)\s+<(\d+)>:\s+(.*)$").unwrap()
+        });
+
+        let caps = RE.captures(line)?;
+
+            Some(ChatMessage {
+                name: caps.get(1)?.as_str().trim(), // trim to remove trailing space before the middle word
+                channel: caps.get(2)?.as_str().parse().ok()?,
+                message: caps.get(3)?.as_str(),
+            })
+    }
+    
+    fn parse_msg(line: &str) -> Result<(EChatType, &str), String> {
+        static RE: once_cell::sync::Lazy<Result<Regex, regex::Error>> =
+            once_cell::sync::Lazy::new(|| Regex::new(r#"(?s)<(\d+)>:\s+(.+)"#));
+
+        // `(?s)` enables dotall so the message capture includes newlines.
+        let re = RE
+            .as_ref()
+            .map_err(|e| format!("parse_msg regex compile failed: {e}"))?;
+        let caps = re
+            .captures(line)
+            .ok_or_else(|| "parse_msg input did not match '<type>: <message>'".to_string())?;
+        let msg_type_raw = caps
+            .get(1)
+            .ok_or_else(|| "parse_msg missing chat type capture".to_string())?
+            .as_str();
+        let msg_type_u8: u8 = msg_type_raw
+            .parse()
+            .map_err(|e| format!("parse_msg failed to parse chat type '{msg_type_raw}': {e}"))?;
+        let msg_type = EChatType::try_from(msg_type_u8)
+            .map_err(|_| format!("parse_msg invalid EChatType value: {msg_type_u8}"))?;
+        let message = caps
+            .get(2)
+            .ok_or_else(|| "parse_msg missing message capture".to_string())?
+            .as_str();
+        Ok((msg_type, message))
+    }
+
+    
+    define_pattern_resolver!(ClientMessage, [
+        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+    ]);
+
+    CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+        let string_ref: &FString = unsafe{ &*S };
+        let message = string_ref.to_string();
+        let message_repl = match message.contains('\n') {
+            true => format!("\n{message}").replace("\r\n", "\\n"),
+            false => message,
+        };
+        match parse_chat_line(message_repl.as_str()) {
+            Some(chat) => {
+                match chat.message.starts_with('!') {
+                    true => {
+                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
+                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
+
+                        if msg_type == EChatType::AllSay {
+                            let actor = CommandActor {
+                                display_name: chat.name.into(),
+                                identity: ActorIdentity::GamePlayer {
+                                    player_id: 0, // TODO
+                                    display_name: chat.name.into(),
+                                },
+                                permissions: ActorPermissions {
+                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+                                },
+                            };
+
+                            let content = &chat.message[1..];
+                            let parts = shlex::split(content).unwrap_or_default();
+                            if !parts.is_empty() {
+                                let name = parts[0].clone();
+                                let args = parts[1..].to_vec();
+                                let raw_args = if content.len() > name.len() {
+                                    content[name.len()..].trim().to_string()
+                                } else {
+                                    String::new()
+                                };
+
+                                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
+                                    name,
+                                    args,
+                                    raw_args,
+                                    actor,
+                                    source: CommandSource::GameChat,
+                                }));
+                            }
+                        }
+                    }
+                    false => {
+                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
+                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
+                        
+                        if msg_type == EChatType::AllSay {
+                            EVENT_SYSTEM.game_event_publisher.publish(
+                                GameEvent::GameChatMessageEvent(GameChatMessage {
+                                    sender: chat.name.into(),
+                                    message: chat.message.into(),
+                                    chat_type: ChatType::Global,
+                                    chat_source: ChatSource::Game,
+                                })
+                            );
+                        }
+                    }
+                };        
+            }
+            _ => {
+                match parse_msg(message_repl.as_str()) {
+                    Ok((chat_type, message)) => {
+                        if let Some(msg) = parse_chat_line(message_repl.as_str()) {
+                            info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
+                        }
+                        else {
+                            info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                        }
+                    }
+                    Err(error) => {
+                        warn!(target: "system_chat", "Failed to parse system chat message; skipping publish. error={error}");
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Kismet error messages
+#[cfg(feature="kismet_log")]
+pub mod kismet_log {
+    use crate::ue::{FName, UObject};
+    
+    // Chiv is spamming these from time to time. Shame, Shame, Shame
+    // TODO: Maybe make it dynamic
+    static LIST_OF_SHAME: [&str; 4] = [
+        "/Game/Maps/Frontend/CIT/FE_Citadel_Atmospherics.FE_Citadel_Atmospherics_C",
+        "Divide by zero: ProjectVectorOnToVector with zero Target vector",
+        "A null object was passed as a world context object to UEngine::GetWorldFromContextObject().",
+        "/Game/Maps/Frontend/Blueprints/Customization_Rotation.Customization_Rotation_C",
+    ];
+
+    define_pattern_resolver!(KismetExecutionMessage, [
+        "48 89 5C 24 08 57 48 83 EC 30 0F B6 DA 48 8B F9 80 FA 01 ?? ?? ?? ?? ?? ?? ?? ?? ?? BA",
+    ]);
+
+    // void __cdecl FFrame::KismetExecutionMessage(wchar_t *param_1,Type param_2,FName param_3)
+    CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const u16, Type: u8, fname: FName), {
+        
+        if !Message.is_null() {
+            unsafe {
+                let msg = widestring::U16CStr::from_ptr_str(Message);
+                let mut message = msg.to_string_lossy();
+                message = match message.contains('\n') {
+                    true => format!("\n{message}"),
+                    false => message,
+                };
+                
+                match LIST_OF_SHAME.iter().any(|x| message.contains(x)) {
+                    true => {}
+                    false => log::debug!(target: "kismet", "{message}"),
+                }
+            }
+        }
+
+    });
+}
+
+// /*
+// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
+// }
+// */
+// DECL_HOOK(void, ClientReceiveChat_Implementation, (/*ATBLPlayerState * */void* SenderPlayerState, FString* S, /*TEnumAsByte<EChatType::Type>*/void * Type, bool IsSenderDev, /*FColor*/void * OverrideColor))
+// {
+// 	/*std::wcout << "crc: " << *S->str << std::endl;
+// 	log("ClientReceiveChat_Implementation");
+// 	logWideString(S->str);*/
+// 	o_ClientReceiveChat_Implementation(SenderPlayerState, S, Type, IsSenderDev, OverrideColor);
+// }
+
+// TODO: Unused
+// define_pattern_resolver!(execBroadcastLocalizedChat,["48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ?? ?? ?? ?? ?? 48 83 7B 20 00 48 8B"]);
+// // UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
+// CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
+//     if !msg.is_null() {
+//         let url_w = unsafe { (*msg).to_string() };
+//         crate::sinfo![f; "Triggered! {url_w}"];
+//     }
+// });
+
+define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
+//void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
+CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
+    crate::sinfo![f; "Triggered!"];
+});
+
+// TODO: Not used?
+define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
+// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
+CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
+    if !S.is_null() {
+        let url_w = unsafe { (*S).to_string() };
+        crate::sinfo![f; "Triggered! {url_w}"];
+    }
+});
+
+// Console output (e.g. "Command not recognized: ...")
+define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
+// void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
+CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
+    unsafe {
+        if !arg1.is_null() {
+            // get a rust string
+            let u16_cstr = widestring::U16CStr::from_ptr_str(arg1);
+            let str = u16_cstr.to_string_lossy();
+            if !str.starts_with("Command not recognized: RCON_INTERCEPT") {
+                log::info![target: "Console", "{}" , u16_cstr.display()];
+            }
+        }
+    }
+});
+
+

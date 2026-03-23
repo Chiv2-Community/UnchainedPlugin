@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/Chiv2Turbo" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/ExampleMod" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/FilthyPeasants" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/FlashBlades" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/GiantSlayers" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/ManlyMen" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/AgMods/Sharingan" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/ArgonSDK/Content/Mods/ArgonSDK" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extra-context/UnrealEngine4" vcs="Git" />
+  </component>
+</project>
