@@ -155,6 +155,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     }
 });
 
+
 // TODO: looks like this had major changes, needs real signature
 // old: "40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
@@ -176,6 +177,8 @@ CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
 
     if let Some(map_url) = get_current_map_name(world) {
         let map_name = map_url.split('/').last().unwrap_or("UnknownMapName");
+        // We do this here instead of using the map_url in OnPreLoadMap, because OnPreLoadMap is not reliably called before OnPostLoadMap.
+        // OnPostLoadMap seems to always happen on a map change, while OnPreLoadMap does not.
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
             new_map_url: map_url.to_string(),
             new_map_name: map_name.to_string()
