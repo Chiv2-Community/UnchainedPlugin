@@ -2,7 +2,7 @@ use std::os::raw::c_void;
 use crate::{backend_url, tools::hook_globals::cli_args, ue::{FString, FStringCopyError}};
 use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
-use crate::game::chivalry2::{AController, ATBLGameMode};
+use crate::game::chivalry2::{AController, ATBLGameMode, PlayerFlags};
 use crate::tools::hook_globals::globals;
 
 define_pattern_resolver!(FString_AppendChars, [
@@ -86,12 +86,16 @@ impl LeaveNameResolutionError {
     }
 }
 
-fn resolve_leave_name_from_controller(exiting_player: *mut AController) -> Result<String, LeaveNameResolutionError> {
+fn resolve_leave_name_from_controller(exiting_player: *mut AController) -> Result<Option<String>, LeaveNameResolutionError> {
     let controller = unsafe { exiting_player.as_ref() }
         .ok_or(LeaveNameResolutionError::NullController)?;
 
     let player_state = unsafe { controller.player_state.as_ref() }
         .ok_or(LeaveNameResolutionError::NullPlayerState)?;
+
+    if player_state.player_flags.contains(PlayerFlags::IS_A_BOT) {
+        return Ok(None);
+    }
 
     let display_name = player_state
         .player_name_private
@@ -101,7 +105,7 @@ fn resolve_leave_name_from_controller(exiting_player: *mut AController) -> Resul
     if display_name.trim().is_empty() {
         Err(LeaveNameResolutionError::EmptyPlayerName)
     } else {
-        Ok(display_name)
+        Ok(Some(display_name))
     }
 }
 CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
@@ -176,7 +180,11 @@ CREATE_HOOK!(ATBLGameMode__Logout, ACTIVE, NONE, (), (this_ptr: *mut ATBLGameMod
     }
     
     let leave_name = match resolve_leave_name_from_controller(exiting_player) {
-        Ok(name) => {
+        Ok(None) => {
+            crate::swarn!(f; "Player is a bot; skipping leave event");
+            return CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
+        },
+        Ok(Some(name)) => {
             crate::sdebug!(f; "Resolved logout player name '{}'", name);
             name
         },
