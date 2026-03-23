@@ -20,6 +20,13 @@ fn object_name(ptr: *mut c_void) -> Option<String> {
     Some(obj.uobject_base_utility.uobject_base.name_private.to_string())
 }
 
+fn object_display_name(ptr: *mut c_void) -> Option<String> {
+    object_name(ptr)
+        .or_else(|| object_class_name(ptr))
+        .map(|name| normalize_display_name(&name))
+        .filter(|name| !name.trim().is_empty())
+}
+
 fn object_inherits_from(ptr: *mut c_void, needle: &str) -> bool {
     let mut curr = unsafe { (ptr as *const UObject).as_ref() }
         .and_then(|o| unsafe { o.uobject_base_utility.uobject_base.class_private.as_ref() })
@@ -115,16 +122,26 @@ fn resolve_victim(damage_event: &FDamageTakenEvent) -> Option<CombatActor> {
 }
 
 fn damage_source_name(damage_event: &FDamageTakenEvent) -> String {
-    let ptr = damage_event.damage_source as *mut c_void;
-    if ptr.is_null() {
-        return "UnknownDamageSource".to_string();
+    // Prefer concrete weapon/projectile identity over abstract UDamageSource.
+    let candidates = [
+        ("inventory_item", damage_event.inventory_item),
+        ("projectile", damage_event.projectile),
+        ("damage_source", damage_event.damage_source.cast::<c_void>()),
+    ];
+
+    for (kind, ptr) in candidates {
+        if ptr.is_null() {
+            continue;
+        }
+        if let Some(name) = object_display_name(ptr) {
+            if kind != "damage_source" {
+                crate::strace!(f; "OnKilled source resolved via {}='{}'", kind, name);
+            }
+            return name;
+        }
     }
 
-    object_name(ptr)
-        .or_else(|| object_class_name(ptr))
-        .map(|name| normalize_display_name(&name))
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| "UnknownDamageSource".to_string())
+    "UnknownDamageSource".to_string()
 }
 
 fn attack_type_from_damage_event(damage_event: &FDamageTakenEvent) -> String {
@@ -139,12 +156,11 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLCharacter,
     damage_event: *const FDeathDamageTakenEvent
 ), {
-    let death_event = unsafe { damage_event.as_ref() };
-    if this_ptr.is_null() || death_event.is_none() {
+    if this_ptr.is_null() || damage_event.is_null() {
         CALL_ORIGINAL!(ATBLCharacter__OnKilled(this_ptr, damage_event));
         return;
     }
-    let death_event = death_event.unwrap();
+    let death_event = unsafe { &*damage_event };
     let damage_taken = &death_event.damage_taken;
 
     let victim = resolve_victim(damage_taken)
