@@ -15,6 +15,7 @@ pub struct ListModsCommand;
 
 #[async_trait]
 impl Command<ListModsArgs> for ListModsCommand {
+    fn group(&self) -> &'static str { "Mod Management" }
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: ListModsArgs, _command: &CommandRequest) {

@@ -16,6 +16,7 @@ pub struct DumpModsCommand;
 
 #[async_trait]
 impl Command<DumpModsArgs> for DumpModsCommand {
+    fn group(&self) -> &'static str { "Mod Management" }
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, args: DumpModsArgs, _command: &CommandRequest) {

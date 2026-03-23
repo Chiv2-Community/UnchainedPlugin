@@ -252,6 +252,9 @@ impl Command<VoteArgs> for VoteCommand {
     fn required_source(&self) -> Option<CommandSource> {
         Some(CommandSource::GameChat)
     }
+    fn group(&self) -> String {
+        "Voting".to_string()
+    }
 
     async fn execute(&self, args: VoteArgs, command: &CommandRequest) {
         let mut state = self.state.lock().await;
@@ -394,6 +397,9 @@ impl Command<YesArgs> for YesCommand {
     fn required_source(&self) -> Option<CommandSource> {
         Some(CommandSource::GameChat)
     }
+    fn group(&self) -> String {
+        "Voting".to_string()
+    }
 
     async fn execute(&self, _args: YesArgs, command: &CommandRequest) {
         let mut state = self.state.lock().await;
@@ -430,6 +436,9 @@ impl Command<NoArgs> for NoCommand {
 
     fn required_source(&self) -> Option<CommandSource> {
         Some(CommandSource::GameChat)
+    }
+    fn group(&self) -> String {
+        "Voting".to_string()
     }
 
     async fn execute(&self, _args: NoArgs, command: &CommandRequest) {

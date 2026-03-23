@@ -20,6 +20,10 @@ impl Command<CmdArgs> for CmdCommand {
         PermissionFlags::ADMIN
     }
 
+    fn group(&self) -> String {
+        "Administration".to_string()
+    }
+
     async fn execute(&self, args: CmdArgs, _command: &CommandRequest) {
         let full_command = args.command.join(" ");
         NATIVE_COMMAND_QUEUE.lock().unwrap().push(full_command.clone());

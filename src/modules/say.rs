@@ -29,6 +29,10 @@ impl Command<SayArgs> for SayCommand {
         PermissionFlags::ADMIN
     }
 
+    fn group(&self) -> String {
+        "Administration".to_string()
+    }
+
     async fn execute(&self, args: SayArgs, _command: &CommandRequest) {
         let message = args.message.join(" ");
         self.broadcaster.publish(BroadcastMessage::from(message));

@@ -106,6 +106,9 @@ pub trait Command<Args: Parser + CommandFactory + Send + Sync>: Send + Sync {
         }
         usage
     }
+    fn group(&self) -> String {
+        "General".to_string()
+    }
     fn required_permissions(&self) -> PermissionFlags;
     fn required_source(&self) -> Option<CommandSource> {
         None
@@ -121,6 +124,7 @@ pub trait ErasedCommand: Send + Sync {
     fn name(&self) -> String;
     fn description(&self) -> String;
     fn usage(&self) -> String;
+    fn group(&self) -> String;
     fn required_source(&self) -> Option<CommandSource>;
     fn required_permissions(&self) -> PermissionFlags;
     fn help(&self, show_emojis: bool, show_key: bool) -> String;
@@ -163,6 +167,10 @@ where
 
     fn usage(&self) -> String {
         self.command.usage()
+    }
+
+    fn group(&self) -> String {
+        self.command.group()
     }
 
     fn required_source(&self) -> Option<CommandSource> {

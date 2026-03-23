@@ -23,6 +23,7 @@
 //! 3. It identifies the target command by name.
 //! 4. It verifies permissions and execution source.
 //! 5. It executes the command and publishes results to the [`BroadcastMessage`] bus.
+use std::collections::HashMap;
 use async_trait::async_trait;
 use clap::{Parser, CommandFactory};
 use crate::events::bus::{Subscriber, EventPublisher};
@@ -38,7 +39,7 @@ use std::sync::Arc;
 use serenity::all::Http;
 
 pub struct CommandSubscriber {
-    commands: Vec<Box<dyn ErasedCommand>>,
+    commands: HashMap<String, Box<dyn ErasedCommand>>,
     broadcaster: &'static EventPublisher<BroadcastMessage>,
     game_event_publisher: &'static EventPublisher<GameEvent>,
     discord_config: Option<SharedDiscordConfig>,
@@ -56,7 +57,7 @@ impl CommandSubscriber {
         game_event_publisher: &'static EventPublisher<GameEvent>,
     ) -> Self {
         Self {
-            commands: Vec::new(),
+            commands: HashMap::new(),
             broadcaster,
             game_event_publisher,
             discord_config: None,
@@ -70,7 +71,7 @@ impl CommandSubscriber {
     }
 
     pub fn get_registered_commands(&self) -> Vec<&dyn ErasedCommand> {
-        self.commands.iter().map(|c| c.as_ref()).collect()
+        self.commands.values().map(|c| c.as_ref()).collect()
     }
 
     pub fn register<T, Args>(&mut self, command: T)
@@ -78,7 +79,9 @@ impl CommandSubscriber {
         T: Command<Args> + 'static,
         Args: Parser + CommandFactory + Send + Sync + 'static,
     {
-        self.commands.push(Box::new(CommandHandler::new(command)));
+        let cmd_handler = CommandHandler::new(command);
+        let name = cmd_handler.name().to_lowercase();
+        self.commands.insert(name, Box::new(cmd_handler));
     }
 
     async fn send_help(&self, source: CommandSource, show_all: bool) {
@@ -91,10 +94,10 @@ impl CommandSubscriber {
             format!("Available commands for {}:", source) 
         };
 
-        let mut field_text = String::new();
+        let mut commands_by_group: HashMap<String, Vec<&dyn ErasedCommand>> = HashMap::new();
         let mut seen_sources = std::collections::HashSet::new();
 
-        for command in &self.commands {
+        for command in self.commands.values() {
             let req_source = command.required_source();
             
             if !show_all {
@@ -105,16 +108,36 @@ impl CommandSubscriber {
                 }
             }
 
-            if !field_text.is_empty() {
-                field_text.push('\n');
-            }
-            field_text.push_str(&command.help(show_emojis, show_all));
+            commands_by_group.entry(command.group()).or_default().push(command.as_ref());
             
             if let Some(rs) = req_source {
                 seen_sources.insert(Some(rs));
             } else {
                 seen_sources.insert(None);
             }
+        }
+
+        let mut sorted_groups: Vec<String> = commands_by_group.keys().cloned().collect();
+        sorted_groups.sort();
+
+        let mut fields = Vec::new();
+        let mut full_text_game = String::new();
+
+        for group_name in sorted_groups {
+            let mut commands = commands_by_group.remove(&group_name).unwrap();
+            commands.sort_by_key(|c| c.name());
+
+            let group_text = commands.iter()
+                .map(|c| c.help(show_emojis, show_all))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            fields.push((group_name.clone(), group_text.clone()));
+
+            if !full_text_game.is_empty() {
+                full_text_game.push_str("\n\n");
+            }
+            full_text_game.push_str(&format!("--- {} ---\n{}", group_name, group_text));
         }
 
         let mut footer = String::new();
@@ -139,35 +162,38 @@ impl CommandSubscriber {
         
         footer.push_str(&footer_parts.join(" | "));
 
-        if field_text.is_empty() {
+        if fields.is_empty() {
             return;
         }
 
         match source {
             CommandSource::Discord => {
                 if let (Some(config), Some(http)) = (&self.discord_config, &self.discord_http) {
-                    let help_msg = serenity::all::CreateMessage::new()
-                        .embed(serenity::all::CreateEmbed::new()
-                            .title(title)
-                            .description(content)
-                            .field("Commands", field_text, false)
-                            .footer(serenity::all::CreateEmbedFooter::new(footer))
-                            .color(0x3498db)
-                        );
+                    let mut embed = serenity::all::CreateEmbed::new()
+                        .title(title)
+                        .description(content)
+                        .footer(serenity::all::CreateEmbedFooter::new(footer))
+                        .color(0x3498db);
+                    
+                    for (name, text) in fields {
+                        embed = embed.field(name, text, false);
+                    }
+
+                    let help_msg = serenity::all::CreateMessage::new().embed(embed);
                     
                     let channel_id = config.read().await.general_chat_channel_id;
                     send_to_channel(http, channel_id, help_msg).await;
                 }
             }
             CommandSource::GameChat => {
-                let full_msg = format!("{}: {}\n{}\n{}", title, content, field_text, footer);
+                let full_msg = format!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
                 #[cfg(not(test))]
                 crate::game::chivalry2::send_ingame_message(full_msg, None);
                 #[cfg(test)]
                 self.broadcaster.publish(full_msg.into());
             }
             CommandSource::ServerConsole => {
-                crate::sinfo!("{}: {}\n{}\n{}", title, content, field_text, footer);
+                crate::sinfo!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
             }
         }
     }
@@ -235,7 +261,7 @@ impl Subscriber<GameEvent> for CommandSubscriber {
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
-        for command in &self.commands {
+        for command in self.commands.values() {
             command.on_event(event).await;
         }
 
@@ -248,8 +274,7 @@ impl Subscriber<GameEvent> for CommandSubscriber {
                 return;
             }
 
-            let maybe_command =
-                self.commands.iter().find(|c| c.name().to_lowercase() == cmd_name);
+            let maybe_command = self.commands.get(&cmd_name);
 
             if maybe_command.is_none() {
                 let rejection_reason = format!("Command '{}' does not exist", req.name);
@@ -285,7 +310,7 @@ impl Subscriber<GameEvent> for CommandSubscriber {
     }
 
     async fn on_tick(&mut self) {
-        for command in &self.commands {
+        for command in self.commands.values() {
             command.on_tick().await;
         }
     }
