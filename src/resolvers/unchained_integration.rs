@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
-use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
+use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}, swarn, sinfo};
 
 
 // Sets Server password and rcon flag
@@ -129,6 +129,17 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
 });
 
 
+// class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
+define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]);
+CREATE_HOOK!(UWorld__GetMapName, INACTIVE, bool, (this_ptr: *mut c_void, return_value: *mut FString), {});
+pub fn get_current_map_name(uworld: *mut c_void) -> Option<String> {
+    let mut map_name = FString::default();
+    CALL_ORIGINAL!(UWorld__GetMapName(uworld, &mut map_name));
+    map_name.copy_to_string().ok()
+}
+
+
+
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
@@ -137,20 +148,11 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
 
     globals().set_world(std::ptr::null_mut());
     crate::sdebug!(f; "OnPreLoadMap: reset globals.world to nullptr; world-dependent actions are skipped until post-load");
-    
+
     if !ENGINE_READY.load(Ordering::SeqCst) {
         ENGINE_READY.store(true, Ordering::SeqCst);
         log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
     }
-
-
-    let map_url = url_w.as_str();
-    let map_name = map_url.split('/').last().unwrap_or("UnknownMapName");
-
-    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
-        new_map_url: map_url.to_string(),
-        new_map_name: map_name.to_string()
-    }));
 });
 
 // TODO: looks like this had major changes, needs real signature
@@ -158,11 +160,11 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
-    crate::sinfo![f; "\x1b[32mTriggered\x1b[0m"];
+    sinfo![f; "\x1b[32mTriggered\x1b[0m"];
     match globals().world() {
         Some(current_world) => {
             if current_world != world {
-                crate::swarn!(f; "OnPostLoadMap: world changed from {:p} to {:p} without ever being unset", current_world, world);
+                swarn!(f; "OnPostLoadMap: world changed from {:p} to {:p} without ever being unset", current_world, world);
                 globals().set_world(world);
             }
         }
@@ -170,6 +172,16 @@ CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
             crate::sdebug!(f; "OnPostLoadMap: globals.world was None before update; setting world from post-load hook");
             globals().set_world(world);
         }
+    }
+
+    if let Some(map_url) = get_current_map_name(world) {
+        let map_name = map_url.split('/').last().unwrap_or("UnknownMapName");
+        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
+            new_map_url: map_url.to_string(),
+            new_map_name: map_name.to_string()
+        }));
+    } else {
+        swarn!(f; "OnPostLoadMap: get_current_map_name returned None");
     }
 });
 
