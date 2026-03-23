@@ -246,12 +246,7 @@ impl EventLogSubscriber {
         }
 
         let event_log_channel_id = self.discord_config.read().await.event_log_channel_id;
-        let mut message = CreateMessage::new();
-
-        for embed in self.embed_buffer.drain(..) {
-            message = message.embed(embed);
-        }
-
+        let message = CreateMessage::new().embeds(self.embed_buffer.drain(..).collect());
         send_to_channel(&self.http, event_log_channel_id, message).await;
         self.last_flush = Instant::now();
     }
