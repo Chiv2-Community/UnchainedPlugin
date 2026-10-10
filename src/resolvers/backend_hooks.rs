@@ -286,6 +286,6 @@ define_pattern_resolver!(
 CREATE_HOOK!(SetStatInner, ACTIVE, NONE, (),
     (this_ptr: *mut c_void, p1: i32, p2: i32),
 {
-    crate::sinfo!(f; "SetStatInner: {:?} {:?}", p1, p2);
+    // crate::sinfo!(f; "SetStatInner: {:?} {:?}", p1, p2);
     // CALL_ORIGINAL!(SetStatInner(this_ptr, p1, p2));
 });
