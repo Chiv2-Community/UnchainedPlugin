@@ -260,3 +260,32 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut c_void, (
 
     CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, a_val))
 });
+
+// Disable stat increase to prevent stutters in offline play (and server mode?)
+// bool __thiscall FTBLOnlineStats::IncStat(FTBLOnlineStats *this,int param_1,int param_2)
+// define_pattern_resolver!(IncStat, [
+//     "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 80 79 10 00 41 8B E8 48 63 FA 48 8B D9 ?? ?? ?? ?? ?? ?? 48 8B 05 52 86 1F 04 80 3C" // Universal
+// ]);
+// CREATE_HOOK!(IncStat, ACTIVE, NONE, (),
+//     (this_ptr: *mut c_void, p1: i32, p2: i32),
+// {
+//     // crate::sinfo!(f; "IncStat: {:?}", p1);
+//     // CALL_ORIGINAL!(IncStat(this_ptr, p1, p2));
+// });
+
+// Disable stat change to prevent stutters in offline play (and server mode?)
+// Nihi: Other OnlineStats-related functions could also impair performance. Needs some investigation. Alternatively, look into what exactly causes this (network connection?)
+// bool __thiscall FTBLOnlineStats::SetStatInner(FTBLOnlineStats *this,int param_1,int param_2)
+define_pattern_resolver!(
+    SetStatInner,
+    [
+    // "48 89 5C 24 08 55 56 57 48 83 EC 40 48 63 FA 41 8B E8 48 8B F1 83 FF" // PDB
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 48 8B F9 48 63 F2 48 8D 4C 24 20 41 8B E8" // Universal
+]
+);
+CREATE_HOOK!(SetStatInner, ACTIVE, NONE, (),
+    (this_ptr: *mut c_void, p1: i32, p2: i32),
+{
+    crate::sinfo!(f; "SetStatInner: {:?} {:?}", p1, p2);
+    // CALL_ORIGINAL!(SetStatInner(this_ptr, p1, p2));
+});
