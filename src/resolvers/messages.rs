@@ -66,6 +66,7 @@ mod client_message {
         "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
     ]);
 
+    // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
     CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
@@ -242,5 +243,4 @@ CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16
         }
     }
 });
-
 

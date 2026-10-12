@@ -43,6 +43,8 @@
 ///     * `POST`: The original function runs first, then the result is passed to your body.
 ///     * If no HookType is provided, defaults to PRE
 /// * `RetType` - The Rust type returned by the original function (e.g., `*mut c_void`, `bool`).
+///   Shorthands without a return type are only for native `void` functions;
+///   pointer-returning targets must specify their pointer type explicitly.
 /// * `(args)` - A comma-separated list of `name: Type` pairs matching the function signature.
 /// * `{ body }` - The code block for the detour. Must return `RetType`.
 /// 
@@ -59,17 +61,17 @@ macro_rules! CREATE_HOOK {
 macro_rules! __create_hook_inner {
     // 1. Basic Shorthand: Name, (args), {body}
     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, ACTIVE, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, ACTIVE, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 2. Status Identifier: Name, ACTIVE/INACTIVE, (args), {body}
     ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, $status, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, $status, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 3. NEW: Explicit Condition Block/Closure: Name, { || cond }, (args), {body}
     ($name:ident, { $cond:expr }, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, { $cond }, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, { $cond }, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 4. Explicit Return Type: Name, OutType, (args), {body}
@@ -238,4 +240,32 @@ macro_rules! TRY_OR_RETURN {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    CREATE_HOOK!(TestVoidBasic, (value: i32), {});
+    CREATE_HOOK!(TestVoidStatus, INACTIVE, (value: i32), {});
+    CREATE_HOOK!(TestVoidCondition, { || false }, (value: i32), {});
+    CREATE_HOOK!(TestConstPointer, INACTIVE, *const std::ffi::c_void,
+        (value: *const std::ffi::c_void), {});
+
+    #[test]
+    fn shorthand_hooks_return_unit() {
+        // Check the generated detours and original-call signatures without
+        // attaching hooks or calling uninitialized detours.
+        let _: unsafe extern "C" fn(i32) = TestVoidBasic_detour_fkt;
+        let _: unsafe extern "C" fn(i32) = TestVoidStatus_detour_fkt;
+        let _: unsafe extern "C" fn(i32) = TestVoidCondition_detour_fkt;
+        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidBasic(value));
+        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidStatus(value));
+        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidCondition(value));
+    }
+
+    #[test]
+    fn explicit_const_pointer_return_is_preserved() {
+        type Pointer = *const std::ffi::c_void;
+        let _: unsafe extern "C" fn(Pointer) -> Pointer = TestConstPointer_detour_fkt;
+        let _: fn(Pointer) -> Pointer = |value| CALL_ORIGINAL!(TestConstPointer(value));
+    }
 }

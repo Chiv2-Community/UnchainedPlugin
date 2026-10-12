@@ -6,9 +6,23 @@ define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
 // IAssetRegistry * __thiscall UAssetManager::GetAssetRegistry(UAssetManager *this)
-CREATE_HOOK!(GetAssetRegistry, CALLED, (asset_manager: *mut c_void),{
+CREATE_HOOK!(GetAssetRegistry, CALLED, *mut c_void, (asset_manager: *mut c_void),{
     // crate::sinfo![f; "Triggered!"];
 });
+
+#[cfg(test)]
+mod hook_signature_tests {
+    use super::*;
+
+    #[test]
+    fn get_asset_registry_preserves_pointer_return_signature() {
+        // Both the detour entry point and original trampoline must return the
+        // native IAssetRegistry pointer, even when the hook body ignores it.
+        let _: unsafe extern "C" fn(*mut c_void) -> *mut c_void = GetAssetRegistry_detour_fkt;
+        let _: fn(*mut c_void) -> *mut c_void =
+            |asset_manager| CALL_ORIGINAL!(GetAssetRegistry(asset_manager));
+    }
+}
 
 
 #[repr(C)]
