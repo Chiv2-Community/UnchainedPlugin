@@ -192,6 +192,7 @@ CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
 define_pattern_resolver!(SetMatchState,[
     "48 89 5C 24 ?? 56 48 83 EC 20 48 8B DA 48 8B F1 48 39 91 ?? ?? ?? ??"
     ]);
+// void AGameMode::SetMatchState(FName NewState)
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
     log::info![target: "Match", "Match state: \x1b[32m{}\x1b[0m", new_state];
 });

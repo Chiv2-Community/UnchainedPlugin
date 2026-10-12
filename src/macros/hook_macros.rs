@@ -43,6 +43,8 @@
 ///     * `POST`: The original function runs first, then the result is passed to your body.
 ///     * If no HookType is provided, defaults to PRE
 /// * `RetType` - The Rust type returned by the original function (e.g., `*mut c_void`, `bool`).
+///   Shorthands without a return type are only for native `void` functions;
+///   pointer-returning targets must specify their pointer type explicitly.
 /// * `(args)` - A comma-separated list of `name: Type` pairs matching the function signature.
 /// * `{ body }` - The code block for the detour. Must return `RetType`.
 /// 
@@ -245,6 +247,8 @@ mod tests {
     CREATE_HOOK!(TestVoidBasic, (value: i32), {});
     CREATE_HOOK!(TestVoidStatus, INACTIVE, (value: i32), {});
     CREATE_HOOK!(TestVoidCondition, { || false }, (value: i32), {});
+    CREATE_HOOK!(TestConstPointer, INACTIVE, *const std::ffi::c_void,
+        (value: *const std::ffi::c_void), {});
 
     #[test]
     fn shorthand_hooks_return_unit() {
@@ -256,5 +260,12 @@ mod tests {
         let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidBasic(value));
         let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidStatus(value));
         let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidCondition(value));
+    }
+
+    #[test]
+    fn explicit_const_pointer_return_is_preserved() {
+        type Pointer = *const std::ffi::c_void;
+        let _: unsafe extern "C" fn(Pointer) -> Pointer = TestConstPointer_detour_fkt;
+        let _: fn(Pointer) -> Pointer = |value| CALL_ORIGINAL!(TestConstPointer(value));
     }
 }
