@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Attach to Chivalry 2" type="CppNativeToolchainDebugger" factoryName="Native Debugger">
+    <option name="attachToProcess" value="true" />
+    <method v="2">
+      <option name="CARGO_COMMAND_RUN_CONFIGURATION" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Chivalry2 with Unchained Plugin",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${env:CHIVALRY2_DIR}/TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe",
+            "args": ["-fileopenlog"],
+            "stopAtEntry": false,
+            "cwd": "${env:CHIVALRY2_DIR}/TBL/Binaries/Win64",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [],
+            "externalConsole": false
+        },
+        {
+            "name": "Attach to Chivalry 2",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Debug Mock Server (Integrated)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/mock_server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [],
+            "externalConsole": false,
+            "console": "integratedTerminal",
+            "preLaunchTask": "cargo-build-mock"
+        }
+    ]
+}

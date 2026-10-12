@@ -1,0 +1,7 @@
+﻿<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Launch Chivalry 2" type="CidrLauncherConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="UnchainedPlugin" TARGET_NAME="UnchainedPlugin" CONFIG_NAME="Debug" WORKING_DIR="file://$CHIVALRY2_DIR$/TBL/Binaries/Win64" PROGRAM_PARAMS="-fileopenlog" EXE_PATH="$CHIVALRY2_DIR$/TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe">
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="Install UnchainedPlugin" run_configuration_type="CargoCommandRunConfiguration" />
+    </method>
+  </configuration>
+</component>

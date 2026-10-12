@@ -1,0 +1,38 @@
+appenders:
+  console:
+    kind: console
+    filters:
+      - kind: threshold
+        level: debug
+    encoder:
+      pattern: "{h([{d(%H:%M:%S)} {l:5}])} {m}{n}"
+  file:
+    kind: file
+    path: "__UNCHAINED_LOG_PATH__"
+    encoder:
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}"
+  kismet:
+    kind: file
+    path: "__KISMET_LOG_PATH__"
+    encoder:
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}"
+
+loggers:
+  serenity:
+    level: warn
+  tracing:
+    level: warn
+  patternsleuth:
+    level: warn
+  "h2::codec":
+    level: warn
+  "hyper_util::client":
+    level: warn
+  "reqwest::connect":
+    level: warn
+
+root:
+  level: debug
+  appenders:
+    - console
+    - file
