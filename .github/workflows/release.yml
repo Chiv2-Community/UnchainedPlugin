@@ -9,7 +9,18 @@ on:
       - 'v*'
 
 jobs:
+  validate-plugin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
+        with:
+          plugin_file: plugin.json
+
   build:
+    needs: validate-plugin
     runs-on: windows-2022
 
     steps:
@@ -46,7 +57,7 @@ jobs:
           TAG_VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           CARGO_VERSION=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+          if [ "${CARGO_VERSION%%+*}" != "${TAG_VERSION%%+*}" ]; then
             echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($TAG_VERSION)"
             exit 1
           fi
@@ -77,34 +88,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     concurrency:
       group: registry-release-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - name: Check registry token
-        env:
-          REGISTRY_ISSUE_TOKEN: ${{ secrets.C2MODREGISTRY_ISSUE_TOKEN }}
-        run: |
-          if [ -z "$REGISTRY_ISSUE_TOKEN" ]; then
-            echo "::error::Configure C2MODREGISTRY_ISSUE_TOKEN with Issues write access to Chiv2-Community/C2ModRegistry."
-            exit 1
-          fi
-      - name: Verify published DLL and prepare registry request
-        id: request
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { prepareRequest } = require('./.github/scripts/registry-release.cjs');
-            return await prepareRequest(github, context.repo, process.env.GITHUB_REF_NAME);
       - name: Submit DLL release request
-        uses: actions/github-script@v7
-        env:
-          REGISTRY_REQUEST: ${{ steps.request.outputs.result }}
+        uses: Chiv2-Community/zero-infra-mod-registry/actions/automated-publish@v1
         with:
-          github-token: ${{ secrets.C2MODREGISTRY_ISSUE_TOKEN }}
-          script: |
-            const { submitRequest } = require('./.github/scripts/registry-release.cjs');
-            const issue = await submitRequest(github, JSON.parse(process.env.REGISTRY_REQUEST));
-            core.info(`Registry request: ${issue.html_url}`);
-            await core.summary.addLink('Registry release request', issue.html_url).write();
+          endpoint: https://registry.polehammer.net/registrations
+          kind: plugin
+          asset_name: UnchainedPlugin.dll

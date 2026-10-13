@@ -28,6 +28,16 @@ Both VS Code and RustRover configurations rely on the `CHIVALRY2_DIR` environmen
         - **Install Task**: The **Install UnchainedPlugin** run configuration uses `cargo xtask install` which handles `.env` internally.
 
 
+## Registry integration
+
+CI and release workflows validate `plugin.json` using zero-infra-mod-registry's
+metadata action. Release publication waits for validation.
+`actions/automated-publish` automatically creates an issue in
+[C2ModRegistry](https://github.com/Chiv2-Community/C2ModRegistry) for approval.
+
+See [plugin workflow setup](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/v1/docs/plugin/README.md)
+and [release-request inputs](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/v1/docs/plugin/release-requests.md).
+
 ## Credits
 * DrLong
 * Nihilianth

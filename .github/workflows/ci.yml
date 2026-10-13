@@ -6,16 +6,15 @@ on:
   pull_request:
 
 jobs:
-  registry-release-tests:
+  validate-plugin:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
         with:
-          node-version: '22'
-      - run: node --test .github/scripts/registry-release.test.cjs
+          plugin_file: plugin.json
 
   build:
     runs-on: windows-2022
