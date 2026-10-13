@@ -15,7 +15,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@91583711a43d2ca53bf88e097d7a788165d9cf68
+      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@40bbc32f36bd8b1e1a5cebd18b9e5037402bf01f
         with:
           plugin_file: plugin.json
 
@@ -88,13 +88,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     concurrency:
       group: registry-release-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - name: Submit DLL release request
-        uses: Chiv2-Community/zero-infra-mod-registry/actions/request-release@91583711a43d2ca53bf88e097d7a788165d9cf68
+        uses: Chiv2-Community/zero-infra-mod-registry/actions/automated-publish@40bbc32f36bd8b1e1a5cebd18b9e5037402bf01f
         with:
+          endpoint: https://registry.polehammer.net/registrations
           kind: plugin
           asset_name: UnchainedPlugin.dll
-          registry_token: ${{ secrets.C2MODREGISTRY_ISSUE_TOKEN }}

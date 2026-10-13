@@ -31,14 +31,9 @@ Both VS Code and RustRover configurations rely on the `CHIVALRY2_DIR` environmen
 ## Registry integration
 
 CI and release workflows validate `plugin.json` using zero-infra-mod-registry's
-metadata action. Release publication waits for validation. After the DLL is
-published, its release-request action opens or reuses an approval issue in
-C2ModRegistry.
-
-Configure `C2MODREGISTRY_ISSUE_TOKEN` with Issues write access to
-`Chiv2-Community/C2ModRegistry`. The actions are pinned to upstream commit
-`91583711a43d2ca53bf88e097d7a788165d9cf68`. Update the metadata and release-request
-action references together when upgrading.
+metadata action. Release publication waits for validation.
+`actions/automated-publish` automatically creates an issue in
+[C2ModRegistry](https://github.com/Chiv2-Community/C2ModRegistry) for approval.
 
 See [plugin workflow setup](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/feature/shared-registry-workflows/docs/plugin/README.md)
 and [release-request inputs](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/feature/shared-registry-workflows/docs/plugin/release-requests.md).
