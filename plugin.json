@@ -1,7 +1,7 @@
 {
   "name": "Unchained Core Plugin",
   "description": "Allows users to run mods and connect to unchained servers. Required for modded play and self-hosted servers.",
-  "authors": ["Dr Long", "Jacoby6000", "Nihilianth", "Reciate"],
+  "authors": ["Dr Long", "Jacoby6000", "Nihilianth", "Reciate", "@wiseLlama0"],
   "plugin_dependencies": [],
   "mod_dependencies": [],
   "target": "shared"

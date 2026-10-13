@@ -1,6 +1,6 @@
 [package]
 name = "UnchainedPlugin"
-version = "1.0.0-RC2"
+version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
