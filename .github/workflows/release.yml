@@ -57,7 +57,7 @@ jobs:
           TAG_VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           CARGO_VERSION=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+          if [ "${CARGO_VERSION%%+*}" != "${TAG_VERSION%%+*}" ]; then
             echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($TAG_VERSION)"
             exit 1
           fi
