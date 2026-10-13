@@ -35,8 +35,8 @@ metadata action. Release publication waits for validation.
 `actions/automated-publish` automatically creates an issue in
 [C2ModRegistry](https://github.com/Chiv2-Community/C2ModRegistry) for approval.
 
-See [plugin workflow setup](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/feature/shared-registry-workflows/docs/plugin/README.md)
-and [release-request inputs](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/feature/shared-registry-workflows/docs/plugin/release-requests.md).
+See [plugin workflow setup](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/v1/docs/plugin/README.md)
+and [release-request inputs](https://github.com/Chiv2-Community/zero-infra-mod-registry/blob/v1/docs/plugin/release-requests.md).
 
 ## Credits
 * DrLong

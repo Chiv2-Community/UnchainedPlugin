@@ -12,7 +12,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@40bbc32f36bd8b1e1a5cebd18b9e5037402bf01f
+      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
         with:
           plugin_file: plugin.json
 
