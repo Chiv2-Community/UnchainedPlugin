@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  registry-release-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test .github/scripts/registry-release.test.cjs
+
   build:
     runs-on: windows-2022
     strategy:
@@ -13,7 +24,7 @@ jobs:
         build_type: [debug, release]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
