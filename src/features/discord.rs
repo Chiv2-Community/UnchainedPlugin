@@ -1,8 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use serenity::all::{ChannelId, Context, CreateMessage, GatewayIntents, Http, Message, RoleId};
 use serenity::Client;
 use serenity::client::EventHandler as DiscordHandler;
-use tokio::sync::RwLock;
 use crate::events::bus::EventPublisher;
 use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, GameChatMessage, CommandRequest, GameEvent, PermissionFlags};
 use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
@@ -12,9 +11,9 @@ use crate::modules::discord::dashboard::DashboardSubscriber;
 use crate::modules::discord::event_log::EventLogSubscriber;
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
+use crate::tools::command_parser::parse_command;
 use crate::{sinfo, swarn};
 
-#[derive(Clone)]
 pub struct DiscordConfig {
     pub bot_token: String,
     pub admin_role_id: Option<u64>,
@@ -25,7 +24,27 @@ pub struct DiscordConfig {
     pub mention_on_admin: bool,
 }
 
-pub type SharedDiscordConfig = Arc<RwLock<DiscordConfig>>;
+/// Immutable application-lifetime settings, initialized once from CLI arguments.
+pub type SharedDiscordConfig = &'static DiscordConfig;
+
+static DISCORD_CONFIG: OnceLock<DiscordConfig> = OnceLock::new();
+
+/// The winner installs the settings; other callers receive the original settings
+/// as an error so they cannot start a second client with a different configuration.
+fn store_config(
+    storage: &OnceLock<DiscordConfig>,
+    config: DiscordConfig,
+) -> Result<&DiscordConfig, &DiscordConfig> {
+    let installed = storage.set(config).is_ok();
+    let config = storage
+        .get()
+        .expect("Discord configuration was initialized");
+    if installed {
+        Ok(config)
+    } else {
+        Err(config)
+    }
+}
 
 pub async fn send_to_channel(
     http: &Http,
@@ -50,24 +69,25 @@ pub struct Discord {
 }
 
 pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
+    let shared_config = match store_config(&DISCORD_CONFIG, config) {
+        Ok(config) => config,
+        Err(config) => {
+            swarn!("Discord is already initialized; keeping the original configuration.");
+            return config;
+        }
+    };
     let event_publisher = EVENT_SYSTEM.game_event_publisher.clone();
-    let shared_config = Arc::new(RwLock::new(config));
-    let task_config = Arc::clone(&shared_config);
 
     TOKIO_RUNTIME.spawn(async move {
         let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
-        let bot_token = {
-            let config = task_config.read().await;
-            config.bot_token.clone()
-        };
-
-        let mut client = match Client::builder(&bot_token, intents)
-            .event_handler(Discord { 
-                config: Arc::clone(&task_config),
-                event_publisher
+        let mut client = match Client::builder(&shared_config.bot_token, intents)
+            .event_handler(Discord {
+                config: shared_config,
+                event_publisher,
             })
-            .await {
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 swarn!(f; "Failed to create Discord client: {}", e);
@@ -75,15 +95,10 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
             }
         };
 
-        register_discord_subscribers(Arc::clone(&task_config), client.http.clone()).await;
-        
-        let should_add_chat_sink = {
-            let config = task_config.read().await;
-            config.general_chat_channel_id.is_some()
-        };
+        register_discord_subscribers(shared_config, client.http.clone()).await;
 
-        if should_add_chat_sink {
-            add_discord_chat_sink(Arc::clone(&task_config), client.http.clone());
+        if shared_config.general_chat_channel_id.is_some() {
+            add_discord_chat_sink(shared_config, client.http.clone()).await;
         }
 
         if let Err(e) = client.start().await {
@@ -95,66 +110,52 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
 }
 
 async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Http>) {
-    let cfg = config.read().await;
-
     let broadcast_message_bus = &EVENT_SYSTEM.message_broadcast_event_bus;
 
-    if cfg.general_chat_channel_id.is_some() {
-        let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), Arc::clone(&config));
+    if config.general_chat_channel_id.is_some() {
+        let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), config);
         let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
     } else {
         swarn!(f; "Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
     }
 
     // Admin Alert Module
-    if cfg.admin_notification_channel_id.is_some() {
+    if config.admin_notification_channel_id.is_some() {
         let admin_alert_module = AdminAlertModule::new(
             http.clone(),
-            Arc::clone(&config),
+            config,
             &EVENT_SYSTEM.game_event_publisher,
         );
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(admin_alert_module.clone())).await;
 
-        let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
-        TOKIO_RUNTIME.spawn(async move {
-            let mut command_subscriber = command_subscriber.lock().await;
-            command_subscriber.register(admin_alert_module);
-        });
+        EVENT_SYSTEM.command_subscriber.lock().await.register(admin_alert_module);
     } else {
         swarn!(f; "Discord admin alert subscriber not registered because admin notification channel is not configured.");
     }
 
     // Dashboard Subscriber
-    if cfg.dashboard_channel_id.is_some() {
-        let dashboard_subscriber = DashboardSubscriber::new(http.clone(), Arc::clone(&config));
+    if config.dashboard_channel_id.is_some() {
+        let dashboard_subscriber = DashboardSubscriber::new(http.clone(), config);
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
     } else {
         swarn!(f; "Discord dashboard subscriber not registered because dashboard channel is not configured.");
     }
 
-    if cfg.event_log_channel_id.is_some() {
-        let event_log_subscriber = EventLogSubscriber::new(http.clone(), Arc::clone(&config));
+    if config.event_log_channel_id.is_some() {
+        let event_log_subscriber = EventLogSubscriber::new(http.clone(), config);
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(event_log_subscriber)).await;
     } else {
         swarn!(f; "Discord event log subscriber not registered because event log channel is not configured.");
     }
 
     // Register Discord Connection with Command Subscriber
-    let command_subscriber = EVENT_SYSTEM.command_subscriber.clone();
-    let http_clone = http.clone();
-    let config_clone = Arc::clone(&config);
-    TOKIO_RUNTIME.spawn(async move {
-        let mut command_subscriber = command_subscriber.lock().await;
-        command_subscriber.set_discord_connection(config_clone, http_clone);
-    });
+    EVENT_SYSTEM.command_subscriber.lock().await.set_discord_connection(config, http);
 }
 
-fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http: Arc<Http>) {
-    TOKIO_RUNTIME.spawn(async move {
-        EVENT_SYSTEM.chat_relay_subscriber
-            .add_sink(Box::new(DiscordChatSink::new(discord_config, discord_http)))
-            .await;
-    });
+async fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http: Arc<Http>) {
+    EVENT_SYSTEM.chat_relay_subscriber
+        .add_sink(Box::new(DiscordChatSink::new(discord_config, discord_http)))
+        .await;
 }
 
 #[async_trait::async_trait]
@@ -168,7 +169,7 @@ impl DiscordHandler for Discord {
             return;
         }
 
-        let config = self.config.read().await.clone();
+        let config = self.config;
 
         let is_known_channel =
             config.general_chat_channel_id == Some(msg.channel_id)
@@ -178,33 +179,24 @@ impl DiscordHandler for Discord {
             return;
         }
 
-        let roles = msg.member.as_ref().map(|m| m.roles.clone()).unwrap_or_default();
-        let is_admin = config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
-
-        let actor = CommandActor {
-            display_name: msg.author.name.clone(),
-            identity: ActorIdentity::DiscordUser {
-                user_id: msg.author.id,
-                display_name: msg.author.display_name().to_string(),
-            },
-            permissions: ActorPermissions {
-                flags: if is_admin { PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER } else { PermissionFlags::USER },
-            },
-        };
-
         if msg.content.starts_with('!') {
             let content = &msg.content[1..];
-            let parts = shlex::split(content).unwrap_or_default();
-            if parts.is_empty() {
+            let Some((name, args, raw_args)) = parse_command(content) else {
                 return;
-            }
+            };
 
-            let name = parts[0].clone();
-            let args = parts[1..].to_vec();
-            let raw_args = if content.len() > name.len() {
-                content[name.len()..].trim().to_string()
-            } else {
-                String::new()
+            let roles = msg.member.as_ref().map(|m| m.roles.as_slice()).unwrap_or_default();
+            let is_admin = config.admin_role_id.map(|id| roles.contains(&RoleId::new(id))).unwrap_or(false);
+            let identity_display_name = msg.author.display_name().to_string();
+            let actor = CommandActor {
+                display_name: msg.author.name,
+                identity: ActorIdentity::DiscordUser {
+                    user_id: msg.author.id,
+                    display_name: identity_display_name,
+                },
+                permissions: ActorPermissions {
+                    flags: if is_admin { PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER } else { PermissionFlags::USER },
+                },
             };
 
             self.event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
@@ -218,9 +210,92 @@ impl DiscordHandler for Discord {
             self.event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
                 chat_source: ChatSource::Discord,
                 chat_type: ChatType::Global,
-                sender: msg.author.name.clone(),
-                message: msg.content.clone(),
+                sender: msg.author.name,
+                message: msg.content,
             }));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(token: &str) -> DiscordConfig {
+        DiscordConfig {
+            bot_token: token.into(),
+            admin_role_id: Some(7),
+            dashboard_channel_id: Some(ChannelId::new(10)),
+            general_chat_channel_id: Some(ChannelId::new(11)),
+            admin_notification_channel_id: Some(ChannelId::new(12)),
+            event_log_channel_id: Some(ChannelId::new(13)),
+            mention_on_admin: true,
+        }
+    }
+
+    #[test]
+    fn configuration_is_stored_once_and_shared_without_copying() {
+        let storage = OnceLock::new();
+        let original = store_config(&storage, config("original"))
+            .unwrap_or_else(|_| panic!("first initialization must succeed"));
+        assert!(std::ptr::eq(original, storage.get().unwrap()));
+        assert_eq!(original.admin_role_id, Some(7));
+        assert_eq!(original.dashboard_channel_id, Some(ChannelId::new(10)));
+        assert_eq!(original.general_chat_channel_id, Some(ChannelId::new(11)));
+        assert_eq!(
+            original.admin_notification_channel_id,
+            Some(ChannelId::new(12))
+        );
+        assert_eq!(original.event_log_channel_id, Some(ChannelId::new(13)));
+        assert!(original.mention_on_admin);
+
+        let existing = store_config(&storage, config("replacement"))
+            .err()
+            .expect("duplicate initialization must not start another client");
+        assert!(std::ptr::eq(original, existing));
+        assert_eq!(existing.bot_token, "original");
+    }
+
+    #[test]
+    fn concurrent_initialization_has_only_one_winner() {
+        let storage = OnceLock::new();
+        let barrier = std::sync::Barrier::new(4);
+        let winners = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..4)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        store_config(&storage, config("shared")).is_ok()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .filter(|won| *won)
+                .count()
+        });
+        assert_eq!(winners, 1);
+        assert_eq!(storage.get().unwrap().bot_token, "shared");
+    }
+
+    #[test]
+    fn actor_permissions_read_borrowed_configuration() {
+        let settings = config("unused");
+        let admin = CommandActor::from_discord(
+            serenity::all::UserId::new(1),
+            "Admin".into(),
+            &[RoleId::new(7)],
+            &settings,
+        );
+        assert!(admin.permissions.flags.contains(PermissionFlags::ADMIN));
+        let player = CommandActor::from_discord(
+            serenity::all::UserId::new(2),
+            "Player".into(),
+            &[RoleId::new(8)],
+            &settings,
+        );
+        assert!(!player.permissions.flags.contains(PermissionFlags::ADMIN));
+        assert!(player.permissions.flags.contains(PermissionFlags::USER));
     }
 }

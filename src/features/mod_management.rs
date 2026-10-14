@@ -1,5 +1,5 @@
 use std::os::raw::c_void;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use itertools::enumerate;
 #[allow(unused_imports)]
 use widestring::U16CString;
@@ -120,16 +120,16 @@ macro_rules! check_main_thread {
 #[derive(Debug)]
 pub struct ModManager {
     /// Static metadata lookup (Path -> Mod Metadata)
-    registry: Arc<Mutex<HashMap<String, Mod>>>,
+    registry: Mutex<HashMap<String, Mod>>,
     /// Set of active object paths
-    active_paths: Arc<Mutex<HashSet<String>>>,
+    active_paths: Mutex<HashSet<String>>,
 }
 
 impl ModManager {
     pub fn new() -> Self {
         Self {
-            registry: Arc::new(Mutex::new(HashMap::new())),
-            active_paths: Arc::new(Mutex::new(HashSet::new())),
+            registry: Mutex::new(HashMap::new()),
+            active_paths: Mutex::new(HashSet::new()),
         }
     }
 
@@ -425,5 +425,28 @@ impl ModManager {
             .filter(|&(k,_v)| active.contains(k))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owned_collections_preserve_mod_queries_and_reset() {
+        let manager = ModManager::new();
+        let metadata = Mod {
+            name: "Example".into(), organization: "Tests".into(),
+            version: "1.0.0".into(), object_path: "/Game/Mods/Example".into(),
+        };
+        manager.registry.lock().unwrap().insert(metadata.object_path.clone(), metadata.clone());
+        manager.active_paths.lock().unwrap().insert(metadata.object_path.clone());
+        assert_eq!(manager.get_available().get(&metadata.object_path), Some(&metadata));
+        assert_eq!(manager.get_active().get(&metadata.object_path), Some(&metadata));
+        assert_eq!(manager.get_active_mod_metadata(), vec![metadata]);
+        manager.reset_active_mods(false);
+        assert!(manager.get_active().is_empty());
+        assert!(manager.get_active_mod_metadata().is_empty());
+        assert_eq!(manager.get_available().len(), 1);
     }
 }
