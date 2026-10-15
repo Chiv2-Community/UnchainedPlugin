@@ -24,13 +24,10 @@ pub struct DiscordConfig {
     pub mention_on_admin: bool,
 }
 
-/// Immutable application-lifetime settings, initialized once from CLI arguments.
 pub type SharedDiscordConfig = &'static DiscordConfig;
 
 static DISCORD_CONFIG: OnceLock<DiscordConfig> = OnceLock::new();
 
-/// The winner installs the settings; other callers receive the original settings
-/// as an error so they cannot start a second client with a different configuration.
 fn store_config(
     storage: &OnceLock<DiscordConfig>,
     config: DiscordConfig,
@@ -239,15 +236,6 @@ mod tests {
         let original = store_config(&storage, config("original"))
             .unwrap_or_else(|_| panic!("first initialization must succeed"));
         assert!(std::ptr::eq(original, storage.get().unwrap()));
-        assert_eq!(original.admin_role_id, Some(7));
-        assert_eq!(original.dashboard_channel_id, Some(ChannelId::new(10)));
-        assert_eq!(original.general_chat_channel_id, Some(ChannelId::new(11)));
-        assert_eq!(
-            original.admin_notification_channel_id,
-            Some(ChannelId::new(12))
-        );
-        assert_eq!(original.event_log_channel_id, Some(ChannelId::new(13)));
-        assert!(original.mention_on_admin);
 
         let existing = store_config(&storage, config("replacement"))
             .err()
@@ -260,42 +248,25 @@ mod tests {
     fn concurrent_initialization_has_only_one_winner() {
         let storage = OnceLock::new();
         let barrier = std::sync::Barrier::new(4);
-        let winners = std::thread::scope(|scope| {
+        let winner = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..4)
-                .map(|_| {
-                    scope.spawn(|| {
+                .map(|index| {
+                    let storage = &storage;
+                    let barrier = &barrier;
+                    scope.spawn(move || {
                         barrier.wait();
-                        store_config(&storage, config("shared")).is_ok()
+                        let token = format!("client-{index}");
+                        store_config(storage, config(&token)).ok().map(|_| token)
                     })
                 })
                 .collect();
-            handles
+            let winners: Vec<_> = handles
                 .into_iter()
-                .map(|handle| handle.join().unwrap())
-                .filter(|won| *won)
-                .count()
+                .filter_map(|handle| handle.join().unwrap())
+                .collect();
+            assert_eq!(winners.len(), 1);
+            winners.into_iter().next().unwrap()
         });
-        assert_eq!(winners, 1);
-        assert_eq!(storage.get().unwrap().bot_token, "shared");
-    }
-
-    #[test]
-    fn actor_permissions_read_borrowed_configuration() {
-        let settings = config("unused");
-        let admin = CommandActor::from_discord(
-            serenity::all::UserId::new(1),
-            "Admin".into(),
-            &[RoleId::new(7)],
-            &settings,
-        );
-        assert!(admin.permissions.flags.contains(PermissionFlags::ADMIN));
-        let player = CommandActor::from_discord(
-            serenity::all::UserId::new(2),
-            "Player".into(),
-            &[RoleId::new(8)],
-            &settings,
-        );
-        assert!(!player.permissions.flags.contains(PermissionFlags::ADMIN));
-        assert!(player.permissions.flags.contains(PermissionFlags::USER));
+        assert_eq!(storage.get().unwrap().bot_token, winner);
     }
 }

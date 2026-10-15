@@ -3,6 +3,8 @@ use crate::features::discord::DiscordConfig;
 use crate::game::chivalry2::EChatType;
 use crate::swarn;
 use strum::{Display, IntoStaticStr};
+use itertools::Itertools;
+use std::fmt;
 
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
@@ -43,6 +45,15 @@ pub struct CombatActor {
 impl CombatActor {
     pub fn new(name: String, is_bot: bool) -> Self {
         Self { name, is_bot }
+    }
+}
+
+impl fmt::Display for CombatActor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_bot {
+            f.write_str("(bot) ")?;
+        }
+        f.write_str(&self.name)
     }
 }
 
@@ -107,6 +118,18 @@ pub struct CommandActor {
     pub identity: ActorIdentity,
     pub permissions: ActorPermissions,
     pub display_name: String,
+}
+
+pub struct Args<'a>(pub &'a [String]);
+
+impl fmt::Display for Args<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            f.write_str("<none>")
+        } else {
+            write!(f, "{}", self.0.iter().format(" "))
+        }
+    }
 }
 
 impl CommandActor {
@@ -235,4 +258,63 @@ pub enum GameEvent {
     AttackEvent(Attack), // Never dispatched
     DamageEvent(Damage),
     ServerRestartEvent
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combat_actor_display_includes_name_and_bot_status() {
+        for name in ["Knight", "🩸", ""] {
+            let human = CombatActor::new(name.into(), false).to_string();
+            let bot = CombatActor::new(name.into(), true).to_string();
+            assert!(human.contains(name));
+            assert!(bot.contains(name));
+            assert_ne!(human, bot, "bot status must be distinguishable");
+        }
+    }
+
+    #[test]
+    fn args_display_includes_argument_values() {
+        for args in [
+            vec![],
+            vec![String::new()],
+            vec!["hello".into(), "🩸".into()],
+            vec!["hello world".into(), String::new(), "last".into()],
+        ] {
+            let text = Args(&args).to_string();
+            for arg in args.iter().filter(|arg| !arg.is_empty()) {
+                assert!(text.contains(arg), "missing {arg:?} in {text:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn discord_actor_permissions_follow_configured_admin_role() {
+        let mut config = DiscordConfig {
+            bot_token: "unused".into(),
+            admin_role_id: Some(7),
+            dashboard_channel_id: None,
+            general_chat_channel_id: None,
+            admin_notification_channel_id: None,
+            event_log_channel_id: None,
+            mention_on_admin: false,
+        };
+        for (admin_role_id, roles, expected_flags) in [
+            (
+                Some(7),
+                vec![RoleId::new(7)],
+                PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER,
+            ),
+            (Some(7), vec![RoleId::new(8)], PermissionFlags::USER),
+            (Some(7), vec![], PermissionFlags::USER),
+            (None, vec![RoleId::new(7)], PermissionFlags::USER),
+        ] {
+            config.admin_role_id = admin_role_id;
+            let actor =
+                CommandActor::from_discord(UserId::new(1), "Player".into(), &roles, &config);
+            assert_eq!(actor.permissions.flags, expected_flags);
+        }
+    }
 }

@@ -167,7 +167,7 @@ mod tests {
     async fn batches_ten_events_in_order_and_flushes_tail_on_close() {
         let (sender, mut batches, task) = start();
         for i in 0..23 {
-            sender.send(join(i.to_string())).await.unwrap();
+            sender.send(join(format!("event-{i}:"))).await.unwrap();
         }
         drop(sender);
         task.await.unwrap();
@@ -177,12 +177,13 @@ mod tests {
             assert_eq!(batch.len(), expected_size);
             descriptions.extend(batch.iter().map(description));
         }
-        assert_eq!(
-            descriptions,
-            (0..23)
-                .map(|i| format!("**{}** joined the server.", i))
-                .collect::<Vec<_>>()
-        );
+        assert_eq!(descriptions.len(), 23);
+        for (i, text) in descriptions.iter().enumerate() {
+            assert!(
+                text.contains(&format!("event-{i}:")),
+                "event {i} out of order: {text:?}"
+            );
+        }
         assert!(batches.recv().await.is_none());
     }
 

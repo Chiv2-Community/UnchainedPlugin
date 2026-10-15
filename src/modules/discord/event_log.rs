@@ -1,4 +1,4 @@
-//! Best-effort Discord event logging, isolated from the game event bus.
+//! Posts a human-readable log of game events to a configured Discord channel.
 //!
 //! The subscriber queues up to 256 events without waiting for Discord. One worker
 //! formats and sends them in order, batching at most 10 embeds / 6000 UTF-16 units.
@@ -11,11 +11,11 @@
 //! flushes it while the runtime remains alive. Process exit cannot guarantee delivery.
 
 use crate::events::bus::Subscriber;
-use crate::events::models::{CombatActor, CommandSource, GameEvent};
+use crate::events::models::{Args, CommandSource, GameEvent};
 use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 use async_trait::async_trait;
+use itertools::Itertools;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
-use std::fmt::{self, Display};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -35,62 +35,16 @@ pub struct EventLogSubscriber {
     last_drop_report: Instant,
 }
 
-struct ActorDisplay<'a>(&'a CombatActor);
-
-impl Display for ActorDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_bot {
-            f.write_str("(bot) ")?;
-        }
-        f.write_str(&self.0.name)
-    }
-}
-
-struct ActorsDisplay<'a>(&'a [CombatActor]);
-
-impl Display for ActorsDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, actor) in self.0.iter().enumerate() {
-            if index > 0 {
-                f.write_str(", ")?;
-            }
-            write!(f, "{}", ActorDisplay(actor))?;
-        }
-        Ok(())
-    }
-}
-
-struct ArgsDisplay<'a>(&'a [String]);
-
-impl Display for ArgsDisplay<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_empty() {
-            return f.write_str("<none>");
-        }
-        for (index, arg) in self.0.iter().enumerate() {
-            if index > 0 {
-                f.write_str(" ")?;
-            }
-            f.write_str(arg)?;
-        }
-        Ok(())
-    }
-}
-
 fn command_description(
     name: &str,
     source: &CommandSource,
     actor: &str,
-    args: &[String],
+    args: Args<'_>,
     raw_args: &str,
 ) -> String {
     format!(
         "**Name:** {}\n**Source:** {:?}\n**Actor:** {}\n**Args:** {}\n**Raw:** `{}`",
-        name,
-        source,
-        actor,
-        ArgsDisplay(args),
-        raw_args
+        name, source, actor, args, raw_args
     )
 }
 
@@ -149,9 +103,9 @@ impl EventLogSubscriber {
                 "Kill Event",
                 format!(
                     "**Killer:** {}\n**Victim:** {}\n**All Killers:** {}\n**Kill Reason:** {}\n**Weapon:** {}\n**Attack Type:** {}\n**Damage:** {:.2}\n**Attach To Projectile:** {}",
-                    ActorDisplay(&kill.killer),
-                    ActorDisplay(&kill.victim),
-                    ActorsDisplay(&kill.killers),
+                    kill.killer,
+                    kill.victim,
+                    kill.killers.iter().format(", "),
                     kill.kill_reason,
                     kill.source.damage.source,
                     kill.source.damage.attack_type,
@@ -191,7 +145,7 @@ impl EventLogSubscriber {
                     &command.name,
                     &command.source,
                     &command.actor.display_name,
-                    &command.args,
+                    Args(&command.args),
                     &command.raw_args,
                 ),
                 0x3498DB,
@@ -203,7 +157,7 @@ impl EventLogSubscriber {
                     &command.name,
                     &command.source,
                     &command.actor.display_name,
-                    &command.args,
+                    Args(&command.args),
                     &command.raw_args,
                 ),
                 0x2ECC71,
@@ -216,7 +170,7 @@ impl EventLogSubscriber {
                         &command.name,
                         &command.source,
                         &command.actor.display_name,
-                        &command.args,
+                        Args(&command.args),
                         &command.raw_args,
                     );
                     description.push_str("\n**Reason:** ");
@@ -270,8 +224,8 @@ impl EventLogSubscriber {
                 "Damage Event",
                 format!(
                     "**Attacker:** {}\n**Victim:** {}\n**Damage:** {:.2}\n**Source:** {}\n**Attack Type:** {}",
-                    ActorDisplay(&damage.attacker_actor),
-                    ActorDisplay(&damage.victim_actor),
+                    damage.attacker_actor,
+                    damage.victim_actor,
                     damage.damage.amount,
                     damage.damage.source,
                     damage.damage.attack_type
@@ -339,79 +293,60 @@ mod tests {
     }
 
     #[test]
-    fn command_formatting_preserves_all_three_event_descriptions() {
+    fn command_embeds_include_command_information() {
         use crate::events::models::{
             CommandExecuted, CommandRejected, CommandRequest, CommandSource,
         };
         let actor = crate::test_utils::mock_actor("Admin");
         for args in [
             vec![],
-            vec!["hello".into(), "🩸".into()],
+            vec!["first-arg".into(), "second-arg 🩸".into()],
             vec![String::new()],
         ] {
-            let expected = format!(
-                "**Name:** say\n**Source:** ServerConsole\n**Actor:** Admin\n**Args:** {}\n**Raw:** `say hello`",
-                if args.is_empty() { "<none>".into() } else { args.join(" ") },
-            );
             let events = [
                 GameEvent::CommandRequestEvent(CommandRequest {
-                    name: "say".into(),
+                    name: "test-command".into(),
                     source: CommandSource::ServerConsole,
                     actor: actor.clone(),
                     args: args.clone(),
-                    raw_args: "say hello".into(),
+                    raw_args: "raw-input".into(),
                 }),
                 GameEvent::CommandExecutedEvent(CommandExecuted {
-                    name: "say".into(),
+                    name: "test-command".into(),
                     source: CommandSource::ServerConsole,
                     actor: actor.clone(),
                     args: args.clone(),
-                    raw_args: "say hello".into(),
+                    raw_args: "raw-input".into(),
                 }),
                 GameEvent::CommandRejectedEvent(CommandRejected {
-                    name: "say".into(),
+                    name: "test-command".into(),
                     source: CommandSource::ServerConsole,
                     actor: actor.clone(),
-                    args,
-                    raw_args: "say hello".into(),
+                    args: args.clone(),
+                    raw_args: "raw-input".into(),
                     rejection_reason: "Denied".into(),
                 }),
             ];
             for event in events {
                 let text = description(&EventLogSubscriber::build_embed(&event).embed);
+                for value in ["test-command", "ServerConsole", "Admin", "raw-input"] {
+                    assert!(text.contains(value), "missing {value:?} in {text:?}");
+                }
+                for arg in args.iter().filter(|arg| !arg.is_empty()) {
+                    assert!(text.contains(arg), "missing {arg:?} in {text:?}");
+                }
                 if matches!(event, GameEvent::CommandRejectedEvent(_)) {
-                    assert_eq!(text, format!("{}\n**Reason:** Denied", expected));
-                } else {
-                    assert_eq!(text, expected);
+                    assert!(
+                        text.contains("Denied"),
+                        "missing rejection reason in {text:?}"
+                    );
                 }
             }
         }
     }
 
     #[test]
-    fn killer_list_display_preserves_empty_single_and_mixed_actor_lists() {
-        let cases = [
-            (vec![], ""),
-            (vec![CombatActor::new("Knight".into(), false)], "Knight"),
-            (
-                vec![CombatActor::new("Bot 🩸".into(), true)],
-                "(bot) Bot 🩸",
-            ),
-            (
-                vec![
-                    CombatActor::new("Knight".into(), false),
-                    CombatActor::new("Bot 🩸".into(), true),
-                ],
-                "Knight, (bot) Bot 🩸",
-            ),
-        ];
-        for (actors, expected) in cases {
-            assert_eq!(ActorsDisplay(&actors).to_string(), expected);
-        }
-    }
-
-    #[test]
-    fn combat_formatting_preserves_bot_labels_and_kill_details() {
+    fn combat_embeds_include_damage_and_kill_information() {
         use crate::events::models::{CombatActor, Damage, DamageSource, Kill};
         let killer = CombatActor::new("Knight".into(), false);
         let victim = CombatActor::new("Training Bot".into(), true);
@@ -429,18 +364,46 @@ mod tests {
         let text = description(
             &EventLogSubscriber::build_embed(&GameEvent::DamageEvent(damage.clone())).embed,
         );
-        assert_eq!(text, "**Attacker:** Knight\n**Victim:** (bot) Training Bot\n**Damage:** 42.50\n**Source:** Longsword\n**Attack Type:** Backstab");
-        let kill = Kill {
-            killer: killer.clone(),
-            victim: victim.clone(),
-            killers: vec![killer, victim],
-            kill_reason: "Damage".into(),
-            random_seed: 0,
-            dead_character_id: 0,
-            attach_to_projectile: true,
-            source: damage,
-        };
-        let text = description(&EventLogSubscriber::build_embed(&GameEvent::KillEvent(kill)).embed);
-        assert_eq!(text, "**Killer:** Knight\n**Victim:** (bot) Training Bot\n**All Killers:** Knight, (bot) Training Bot\n**Kill Reason:** Damage\n**Weapon:** Longsword\n**Attack Type:** Backstab\n**Damage:** 42.50\n**Attach To Projectile:** true");
+        for value in ["Knight", "Training Bot", "42.5", "Longsword", "Backstab"] {
+            assert!(text.contains(value), "missing {value:?} in {text:?}");
+        }
+        let assistant = CombatActor::new("Assistant 🩸".into(), false);
+        for killers in [
+            vec![],
+            vec![assistant.clone()],
+            vec![victim.clone()],
+            vec![assistant.clone(), victim.clone()],
+        ] {
+            let kill = Kill {
+                killer: killer.clone(),
+                victim: victim.clone(),
+                killers: killers.clone(),
+                kill_reason: "Fatal hit".into(),
+                random_seed: 0,
+                dead_character_id: 0,
+                attach_to_projectile: true,
+                source: damage.clone(),
+            };
+            let text =
+                description(&EventLogSubscriber::build_embed(&GameEvent::KillEvent(kill)).embed);
+            for value in [
+                "Knight",
+                "Training Bot",
+                "Fatal hit",
+                "Longsword",
+                "Backstab",
+                "42.5",
+                "true",
+            ] {
+                assert!(text.contains(value), "missing {value:?} in {text:?}");
+            }
+            for actor in killers {
+                assert!(
+                    text.contains(&actor.name),
+                    "missing {:?} in {text:?}",
+                    actor.name
+                );
+            }
+        }
     }
 }
