@@ -203,7 +203,7 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
-    pub fn gmalloc(&self) -> &ue::FMalloc {
+    pub fn gmalloc(&self) -> ue::FMallocHandle {
         ue::try_gmalloc().expect("Critical: GMalloc is unresolved or uninitialized. Memory allocation is required for plugin operation.")
     }
 

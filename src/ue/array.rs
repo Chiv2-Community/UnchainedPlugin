@@ -14,7 +14,7 @@ impl<T> TArray<T> {
     ///
     /// # Safety
     /// `allocator` must be the engine allocator that owns this array's buffer.
-    pub(crate) unsafe fn push_in(&mut self, value: T, allocator: &super::FMalloc) {
+    pub(crate) unsafe fn push_in(&mut self, value: T, allocator: super::FMallocHandle) {
         let required = self.num.checked_add(1).expect("TArray length overflow");
         if required > self.max {
             self.grow_in(required as usize, allocator);
@@ -27,7 +27,7 @@ impl<T> TArray<T> {
     /// # Safety
     /// `allocator` must be the engine allocator. Transfer the result to the engine
     /// before dropping it, since `Drop` uses plugin globals.
-    pub(crate) unsafe fn from_slice_in(value: &[T], allocator: &super::FMalloc) -> Self
+    pub(crate) unsafe fn from_slice_in(value: &[T], allocator: super::FMallocHandle) -> Self
     where
         T: Copy,
     {
@@ -43,7 +43,7 @@ impl<T> TArray<T> {
     /// # Safety
     /// `allocator` must own the returned buffer. Transfer it to the engine before
     /// dropping it if plugin globals are not initialized.
-    pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: &super::FMalloc) -> Self {
+    pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: super::FMallocHandle) -> Self {
         if capacity == 0 {
             return Self::new();
         }
@@ -56,7 +56,7 @@ impl<T> TArray<T> {
         Self { data, num: 0, max }
     }
 
-    unsafe fn grow_in(&mut self, capacity: usize, allocator: &super::FMalloc) {
+    unsafe fn grow_in(&mut self, capacity: usize, allocator: super::FMallocHandle) {
         let max = i32::try_from(capacity).expect("TArray capacity overflow");
         let layout = Layout::array::<T>(capacity).expect("Layout error");
         let data = allocator.realloc(self.data.cast(), layout).cast::<T>();
@@ -69,7 +69,7 @@ impl<T> TArray<T> {
 
     /// # Safety
     /// `allocator` must own this array's buffer.
-    pub(crate) unsafe fn reserve_in(&mut self, additional: usize, allocator: &super::FMalloc) {
+    pub(crate) unsafe fn reserve_in(&mut self, additional: usize, allocator: super::FMallocHandle) {
         let required = self.len().checked_add(additional).expect("TArray length overflow");
         if required > self.capacity() {
             let capacity = required.checked_next_power_of_two().expect("TArray capacity overflow");
