@@ -1,5 +1,124 @@
 use std::os::raw::c_void;
-use crate::{game::engine::{FActorSpawnParameters, FRotator}, tools::hook_globals::globals, ue::{FString, FVector, UClass}};
+use crate::{game::engine::{FActorSpawnParameters, FRotator}, tools::hook_globals::{globals, globals_initialized}, ue::{FString, FVector, UClass, UObject}};
+
+
+
+// FString * __thiscall UClass::GetConfigName(UClass *this,FString *__return_storage_ptr__)
+define_pattern_resolver!(GetConfigName,[
+    "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"
+]);
+CREATE_HOOK!(GetConfigName, CALLED, *mut FString, (uclass: *mut UClass),{
+    // crate::sinfo![f; "Triggered!"];
+});
+
+
+// void __thiscall UObject::LoadConfig(UObject *this,UClass *param_1,wchar_t *param_2,uint param_3,FProperty *param_4)
+define_pattern_resolver!(LoadConfig, [
+    "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
+]);
+
+CREATE_HOOK!(LoadConfig, ACTIVE, NONE, (), (
+    uObject: *mut UObject,
+    config_class: *mut UClass,    // UClass* ConfigClass
+    filename: *mut u16,            // const TCHAR* Filename
+    propagation_flags: u32,        // uint32 PropagationFlags
+    property_to_load: *mut c_void  // FProperty* PropertyToLoad
+), {    
+    let config_name = if filename.is_null() {
+        String::from("<null>")
+    } else {
+        let msg = widestring::U16CStr::from_ptr_str(filename);
+        msg.to_string_lossy()
+    };
+
+    if !uObject.is_null() && globals_initialized() {
+        let obj = unsafe { &*uObject };
+
+        let object_name = obj
+            .uobject_base_utility
+            .uobject_base
+            .name_private
+            .to_string();
+
+        
+        let actual_class_private = obj.uobject_base_utility.uobject_base.class_private;
+
+        let config_filename_fstr: *mut FString = CALL_ORIGINAL!(
+            GetConfigName(actual_class_private as *mut UClass)
+        );
+
+        let config_filename = if config_filename_fstr.is_null() {
+            String::from("<null>")
+        } else {
+            unsafe { (*config_filename_fstr).to_string() }
+        };
+
+        
+        let class_path_name = actual_class_private.as_ref().map(|class| {
+            class
+                .ustruct
+                .ufield
+                .uobject
+                .uobject_base_utility
+                .uobject_base.get_path_name(None)
+        }).unwrap_or_else(|| "<null class>".to_string());
+
+        // if !config_filename.is_null() {
+        //     let cfn = unsafe { (*config_filename).to_string() };
+        //     crate::sinfo![f; "config_filename! {cfn}"];
+        // }
+        // crate::sinfo!(f; "config_filename: {}", (&*config_filename).to_string());
+
+        let actual_class = actual_class_private.as_ref()
+            .map(|class| {
+                class
+                    .ustruct
+                    .ufield
+                    .uobject
+                    .uobject_base_utility
+                    .uobject_base
+                    .name_private
+                    .to_string()
+            })
+            .unwrap_or_else(|| "<null class>".to_string());
+
+        crate::sinfo![f; "LoadConfig: class_path={class_path_name}, actual_class={actual_class}, filename={config_filename}"];
+    }
+
+
+
+    let orig = CALL_ORIGINAL!(LoadConfig(
+        uObject,
+        config_class,
+        filename,
+        propagation_flags,
+        property_to_load
+    ));
+
+    if !filename.is_null() {
+        let msg = widestring::U16CStr::from_ptr_str(filename);
+        let filename = msg.to_string_lossy();
+        crate::sinfo![f; "LoadConfig: filename={filename}"];
+    }
+
+    orig
+});
+
+
+// UTBLMapSummary * __cdecl UTBLSystemLibrary::GetMapSummary(UObject *param_1,FString *param_2,bool param_3)
+define_pattern_resolver!(GetMapSummary, [
+    // "40 55 53 41 54 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 BD 6B FB 03 48 33 C4"
+    "40 55 53 41 54 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 7D 08 FB 03"
+]);
+
+CREATE_HOOK!(GetMapSummary, ACTIVE, NONE, *mut c_void, (
+    uObject: *mut c_void, fstring: *mut FString, p3: bool
+), {
+    let url_w = unsafe { (*fstring).to_string() };
+    crate::sinfo![f; "GetMapSummary: {url_w}"];
+
+    CALL_ORIGINAL!(GetMapSummary(uObject, fstring, p3))
+});
 
 define_pattern_resolver!(GetGameInfo, {
     // "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00", // Universal
