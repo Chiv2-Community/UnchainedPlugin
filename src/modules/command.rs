@@ -181,7 +181,7 @@ impl CommandSubscriber {
 
                     let help_msg = serenity::all::CreateMessage::new().embed(embed);
                     
-                    let channel_id = config.read().await.general_chat_channel_id;
+                    let channel_id = config.general_chat_channel_id;
                     send_to_channel(http, channel_id, help_msg).await;
                 }
             }

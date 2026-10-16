@@ -10,6 +10,7 @@ use crate::commands::Command;
 use crate::events::models::{AdminAlert, CommandRequest, GameEvent, PermissionFlags};
 use crate::swarn;
 
+#[derive(Clone)]
 pub struct AdminAlertModule {
     http: Arc<Http>,
     discord_config: SharedDiscordConfig,
@@ -30,16 +31,6 @@ impl AdminAlertModule {
     }
 }
 
-impl Clone for AdminAlertModule {
-    fn clone(&self) -> Self {
-        Self {
-            http: self.http.clone(),
-            discord_config: self.discord_config.clone(),
-            game_event_publisher: self.game_event_publisher,
-        }
-    }
-}
-
 #[async_trait]
 impl Subscriber<GameEvent> for AdminAlertModule {
     fn identifier(&self) -> &'static str {
@@ -48,7 +39,7 @@ impl Subscriber<GameEvent> for AdminAlertModule {
 
     async fn on_event(&mut self, event: &GameEvent) {
         if let GameEvent::AdminAlertEvent(alert) = event {
-            let config = self.discord_config.read().await.clone();
+            let config = self.discord_config;
             let mut msg = CreateMessage::new().embed(
                 CreateEmbed::new()
                     .title("🚨 Admin Alert".to_string())

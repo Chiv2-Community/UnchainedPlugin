@@ -27,7 +27,7 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
-        let config = self.discord_config.read().await.clone();
+        let config = self.discord_config;
         let admin_role_id = config.admin_role_id.map(RoleId::new);
 
         let mut discord_message: CreateMessage = event.clone().into();

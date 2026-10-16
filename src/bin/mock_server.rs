@@ -20,7 +20,7 @@ fn main() {
         mention_on_admin: true,
     };
 
-    initialize_discord_system(config.clone());
+    let config = initialize_discord_system(config);
 
     init_syslog().expect("Failed to init syslog");
     sinfo!("Discord Mock Server Started!");
@@ -83,7 +83,7 @@ fn main() {
                         UserId::new(std::num::NonZeroU64::new(1234).unwrap().into()),
                         "MockDiscUser".into(),
                         &[],
-                        config.clone()
+                        config
                     ),
                     source: CommandSource::Discord,
                 }));
