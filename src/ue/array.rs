@@ -11,6 +11,47 @@ pub struct TArray<T> {
     max: i32,
 }
 impl<T> TArray<T> {
+    /// Append before plugin globals exist, using the engine's allocator.
+    ///
+    /// # Safety
+    /// `allocator` must be the engine allocator that owns this array's buffer.
+    pub(crate) unsafe fn push_in(&mut self, value: T, allocator: &super::FMalloc) {
+        let required = self.num.checked_add(1).expect("TArray length overflow");
+        if required > self.max {
+            let layout = Layout::array::<T>(required as usize).expect("Layout error");
+            let data = allocator.realloc(self.data.cast(), layout).cast::<T>();
+            if data.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            self.data = data;
+            self.max = required;
+        }
+        std::ptr::write(self.data.add(self.num as usize), value);
+        self.num = required;
+    }
+
+    /// Copy a buffer before plugin globals exist.
+    ///
+    /// # Safety
+    /// `allocator` must be the engine allocator. Transfer the result to the engine
+    /// before dropping it, since `Drop` uses plugin globals.
+    pub(crate) unsafe fn from_slice_in(value: &[T], allocator: &super::FMalloc) -> Self
+    where
+        T: Copy,
+    {
+        if value.is_empty() {
+            return Self::new();
+        }
+        let num = i32::try_from(value.len()).expect("TArray length overflow");
+        let layout = Layout::array::<T>(value.len()).expect("Layout error");
+        let data = allocator.malloc(layout).cast::<T>();
+        if data.is_null() {
+            std::alloc::handle_alloc_error(layout);
+        }
+        std::ptr::copy_nonoverlapping(value.as_ptr(), data, value.len());
+        Self { data, num, max: num }
+    }
+
     pub fn new() -> Self {
         Self {
             data: std::ptr::null_mut(),

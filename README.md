@@ -1,6 +1,12 @@
 # Unchained Plugin
 The Unchained Plugin patches the Chivalry 2 binary to allow connection to unofficial servers via an unofficial server browser. It also enables loading of non-vanilla pak files (mods).
 
+## Additional pak directory
+
+Pass `--additional-pak-dir "C:\Mods\Paks"` to the game to load paks from an
+additional directory. The directory must already exist. Relative paths are
+resolved from the game's working directory; the default pak directories remain enabled.
+
 ## Development with VS Code and RustRover
 
 ### Prerequisites

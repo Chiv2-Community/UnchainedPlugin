@@ -38,6 +38,11 @@ pub struct CLIArgs {
     #[arg(long = "server-mods", value_delimiter = ',', required = false)]
     pub server_mods: Option<Vec<String>>,
 
+    #[arg(long = "additional-pak-dir", value_name = "DIRECTORY",
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Load paks from this directory in addition to the game's pak directories")]
+    pub additional_pak_dir: Option<String>,
+
     #[arg(skip)]
     pub ini_overrides: IniMap,
 
@@ -234,9 +239,15 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 
         // 3. Match against known flags
         if known_flags.contains(&flag) {
+            let is_pak_dir = flag == "--additional-pak-dir";
             result.push(flag);
             if let Some(v) = value_opt {
                 result.push(v);
+            } else if is_pak_dir {
+                // A directory may contain '='; do not interpret its value as another flag.
+                if args.peek().is_some_and(|value| !value.starts_with('-')) {
+                    result.push(args.next().unwrap());
+                }
             } else {
                 // Peek for the value if not provided via '='
                 while let Some(peek) = args.peek() {
@@ -267,6 +278,42 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn additional_pak_dir_is_optional() {
+        let cli = CLIArgs::try_parse_from(["app"]).unwrap();
+        assert_eq!(cli.additional_pak_dir, None);
+    }
+
+    #[test]
+    fn additional_pak_dir_normalizes_supported_forms() {
+        for flag in ["--additional-pak-dir", "-additional-pak-dir"] {
+            for path in [r"C:\Mod Paks", r"C:\Mods=custom\Paks", "mods/日本語"] {
+                for raw in [
+                    vec!["app".to_string(), flag.to_string(), path.to_string()],
+                    vec!["app".to_string(), format!("{flag}={path}")],
+                ] {
+                    let mut raw = raw;
+                    raw.extend(["--rcon".to_string(), "9001".to_string()]);
+                    let cli = CLIArgs::try_parse_from(normalize_and_filter_args(raw)).unwrap();
+                    assert_eq!(cli.additional_pak_dir.as_deref(), Some(path));
+                    assert_eq!(cli.rcon_port, Some(9001));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn additional_pak_dir_requires_a_nonempty_value() {
+        for raw in [
+            vec!["app", "--additional-pak-dir"],
+            vec!["app", "--additional-pak-dir="],
+            vec!["app", "--additional-pak-dir", "--rcon", "9001"],
+        ] {
+            let normalized = normalize_and_filter_args(raw.into_iter().map(str::to_string));
+            assert!(CLIArgs::try_parse_from(normalized).is_err());
+        }
+    }
 
     #[test]
     fn test_parse_invalid_int() {
@@ -338,6 +385,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 server_mods: None,
+                additional_pak_dir: None,
                 ini_overrides: HashMap::new(),
                 is_unchained: false,
                 rcon_port: None,
