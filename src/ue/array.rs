@@ -1,5 +1,4 @@
 use std::alloc::Layout;
-use std::ffi::c_void;
 
 use crate::globals;
 
@@ -18,16 +17,9 @@ impl<T> TArray<T> {
     pub(crate) unsafe fn push_in(&mut self, value: T, allocator: &super::FMalloc) {
         let required = self.num.checked_add(1).expect("TArray length overflow");
         if required > self.max {
-            let layout = Layout::array::<T>(required as usize).expect("Layout error");
-            let data = allocator.realloc(self.data.cast(), layout).cast::<T>();
-            if data.is_null() {
-                std::alloc::handle_alloc_error(layout);
-            }
-            self.data = data;
-            self.max = required;
+            self.grow_in(required as usize, allocator);
         }
-        std::ptr::write(self.data.add(self.num as usize), value);
-        self.num = required;
+        self.push_reserved(value);
     }
 
     /// Copy a buffer before plugin globals exist.
@@ -42,14 +34,52 @@ impl<T> TArray<T> {
         if value.is_empty() {
             return Self::new();
         }
-        let num = i32::try_from(value.len()).expect("TArray length overflow");
-        let layout = Layout::array::<T>(value.len()).expect("Layout error");
+        let mut array = Self::with_capacity_in(value.len(), allocator);
+        std::ptr::copy_nonoverlapping(value.as_ptr(), array.data, value.len());
+        array.num = array.max;
+        array
+    }
+
+    /// # Safety
+    /// `allocator` must own the returned buffer. Transfer it to the engine before
+    /// dropping it if plugin globals are not initialized.
+    pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: &super::FMalloc) -> Self {
+        if capacity == 0 {
+            return Self::new();
+        }
+        let max = i32::try_from(capacity).expect("TArray capacity overflow");
+        let layout = Layout::array::<T>(capacity).expect("Layout error");
         let data = allocator.malloc(layout).cast::<T>();
         if data.is_null() {
             std::alloc::handle_alloc_error(layout);
         }
-        std::ptr::copy_nonoverlapping(value.as_ptr(), data, value.len());
-        Self { data, num, max: num }
+        Self { data, num: 0, max }
+    }
+
+    unsafe fn grow_in(&mut self, capacity: usize, allocator: &super::FMalloc) {
+        let max = i32::try_from(capacity).expect("TArray capacity overflow");
+        let layout = Layout::array::<T>(capacity).expect("Layout error");
+        let data = allocator.realloc(self.data.cast(), layout).cast::<T>();
+        if data.is_null() {
+            std::alloc::handle_alloc_error(layout);
+        }
+        self.data = data;
+        self.max = max;
+    }
+
+    /// # Safety
+    /// `allocator` must own this array's buffer.
+    pub(crate) unsafe fn reserve_in(&mut self, additional: usize, allocator: &super::FMalloc) {
+        let required = self.len().checked_add(additional).expect("TArray length overflow");
+        if required > self.capacity() {
+            let capacity = required.checked_next_power_of_two().expect("TArray capacity overflow");
+            self.grow_in(capacity, allocator);
+        }
+    }
+
+    unsafe fn push_reserved(&mut self, value: T) {
+        std::ptr::write(self.data.add(self.num as usize), value);
+        self.num += 1;
     }
 
     pub fn new() -> Self {
@@ -80,16 +110,7 @@ impl<T> TArray<T> {
         if capacity == 0 {
             return Self::new();
         }
-        let layout = Layout::array::<T>(capacity).expect("Layout error");
-        Self {
-            data: unsafe {
-                globals()
-                    .gmalloc()
-                    .malloc(layout)
-            } as *mut _,
-            num: 0,
-            max: capacity as i32,
-        }
+        unsafe { Self::with_capacity_in(capacity, globals().gmalloc()) }
     }
     pub fn len(&self) -> usize {
         self.num.max(0) as usize
@@ -137,24 +158,15 @@ impl<T> TArray<T> {
         }
     }
     pub fn reserve(&mut self, additional: usize) {
-        let required_cap = self.len() + additional;
+        let required_cap = self.len().checked_add(additional).expect("TArray length overflow");
         if required_cap > self.capacity() {
-            let new_cap = required_cap.next_power_of_two();
-            let layout = Layout::array::<T>(new_cap).expect("Layout error");
-            let new = unsafe {
-                globals()
-                    .gmalloc()
-                    .realloc(self.data as *mut c_void, layout)
-            } as *mut _;
-            self.data = new;
-            self.max = new_cap as i32;
+            unsafe { self.reserve_in(additional, globals().gmalloc()) };
         }
     }
     pub fn push(&mut self, new_value: T) {
         self.reserve(1);
         unsafe {
-            std::ptr::write(self.data.add(self.num as usize), new_value);
-            self.num += 1;
+            self.push_reserved(new_value);
         }
     }
     pub fn extend_from_slice(&mut self, other: &[T])
@@ -213,8 +225,9 @@ where
     T: Copy,
 {
     fn from(value: &[T]) -> Self {
-        let mut new = Self::with_capacity(value.len());
-        new.extend_from_slice(value);
-        new
+        if value.is_empty() {
+            return Self::new();
+        }
+        unsafe { Self::from_slice_in(value, globals().gmalloc()) }
     }
 }

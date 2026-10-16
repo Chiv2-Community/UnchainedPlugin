@@ -2,13 +2,10 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use crate::tools::hook_globals::cli_args;
-use crate::ue::{FMalloc, FString, TArray};
+use crate::ue::{FString, TArray};
 
-// Pak discovery can run before Globals is initialized. Cache the address of the
-// GMalloc slot, not its value: the engine initializes the allocator during startup.
 struct AdditionalPakDirectory {
     path: String,
-    gmalloc: usize,
 }
 
 static ADDITIONAL_PAK_DIRECTORY: OnceLock<AdditionalPakDirectory> = OnceLock::new();
@@ -30,7 +27,7 @@ fn normalize_directory(path: &Path) -> std::io::Result<String> {
     Ok(path)
 }
 
-pub(crate) fn initialize(offsets: &std::collections::HashMap<String, u64>) {
+pub(crate) fn initialize() {
     let Some(path) = &cli_args().additional_pak_dir else { return };
     let path = match normalize_directory(Path::new(path)) {
         Ok(path) => path,
@@ -39,14 +36,11 @@ pub(crate) fn initialize(offsets: &std::collections::HashMap<String, u64>) {
             return;
         }
     };
-    let Some(offset) = offsets.get("GMalloc") else {
+    if !crate::ue::gmalloc_resolved() {
         crate::serror!("Cannot load additional pak directory: GMalloc was not resolved");
         return;
-    };
-    let _ = ADDITIONAL_PAK_DIRECTORY.set(AdditionalPakDirectory {
-        path,
-        gmalloc: *crate::resolvers::BASE_ADDR + *offset as usize,
-    });
+    }
+    let _ = ADDITIONAL_PAK_DIRECTORY.set(AdditionalPakDirectory { path });
 }
 
 // FPakPlatformFile::GetPakFolders(const TCHAR* CmdLine, TArray<FString>& OutPakFolders).
@@ -62,8 +56,7 @@ CREATE_HOOK!(GetPakFolders, { || ADDITIONAL_PAK_DIRECTORY.get().is_some() }, NON
         if folders.is_null() {
             return;
         }
-        let allocator = unsafe { *(config.gmalloc as *const *const FMalloc) };
-        let Some(allocator) = (unsafe { allocator.as_ref() }) else {
+        let Some(allocator) = crate::ue::try_gmalloc() else {
             crate::serror!("Cannot load additional pak directory: GMalloc is not initialized");
             return;
         };

@@ -299,7 +299,10 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
             Some(bi) => {
                 // Attach hooks and apply patches
                 let offsets = bi.offsets.clone();
-                resolvers::additional_paks::initialize(&offsets);
+                if let Some(offset) = offsets.get("GMalloc") {
+                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
+                }
+                resolvers::additional_paks::initialize();
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
                     serror!(f; "Failed to attach hooks: {}", e);
