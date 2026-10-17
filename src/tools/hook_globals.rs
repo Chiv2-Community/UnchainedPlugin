@@ -203,13 +203,8 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
-    pub fn gmalloc(&self) -> &ue::FMalloc {
-        let ptr = self.resolution.gmalloc.0 as *const *const ue::FMalloc;
-        if ptr.is_null() {
-            panic!("Critical: Global resolver 'gmalloc' failed. Memory allocation is required for plugin operation.");
-        } else {
-            unsafe { &**ptr }
-        }
+    pub fn gmalloc(&self) -> ue::FMallocHandle {
+        ue::try_gmalloc().expect("Critical: GMalloc is unresolved or uninitialized. Memory allocation is required for plugin operation.")
     }
 
     resolution_fn!(fframe_step, fframe_step, ue::FnFFrameStep);
@@ -271,6 +266,9 @@ pub fn init_globals() -> Result<(), String> {
             return Err("Global initialization aborted. Check logs.".into());
         }
     };
+
+    // Standalone callers may initialize Globals without running preinit.
+    unsafe { ue::set_gmalloc_slot(resolution.gmalloc.0) };
 
     // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =

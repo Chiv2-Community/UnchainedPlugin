@@ -294,14 +294,29 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     // Apply patches and hooks if we have build info and haven't applied yet
     // Only apply when not scanning (i.e., during preinit)
     if !scan_missing && !APPLIED.load(Ordering::Relaxed) {
-        match current.as_ref() {
+        match current.as_mut() {
             None => sdebug!(f; "No current BuildInfo"),
             Some(bi) => {
                 // Attach hooks and apply patches
-                let offsets = bi.offsets.clone();
+                let mut offsets = bi.offsets.clone();
+                if let Err(error) = resolvers::server_archive::resolve_missing(&mut offsets) {
+                    serror!(f; "Cannot initialize server archive hooks: {}", error);
+                }
+                if offsets != bi.offsets {
+                    bi.offsets = offsets.clone();
+                    if let Err(error) = bi.save() {
+                        serror!(f; "Failed to save server archive offsets: {}", error);
+                    }
+                }
+                if let Some(offset) = offsets.get("GMalloc") {
+                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
+                }
+                resolvers::additional_paks::initialize();
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
                     serror!(f; "Failed to attach hooks: {}", e);
+                    // Do not resume startup without the archive hook.
+                    std::process::exit(-67);
                 }
                 APPLIED.store(true, Ordering::Relaxed);
                 sinfo!(f; "Applied patches and hooks in preinit");
@@ -559,6 +574,7 @@ pub fn attach_hooks(
         }
     }
 
+    unsafe { resolvers::server_archive::enable()? };
     Ok(())
 }
 
