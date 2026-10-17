@@ -9,6 +9,7 @@ resolved from the game's working directory; the default pak directories remain e
 
 Mod paks do not need `.sig` sidecars. This build currently supports Steam only;
 EGS startup is disabled until its replacement archive hooks are validated.
+Do not pass `-signed` or `-signedpak`; these force signed reader setup.
 
 ## Development with VS Code and RustRover
 

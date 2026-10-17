@@ -315,7 +315,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
                     serror!(f; "Failed to attach hooks: {}", e);
-                    // Do not resume startup with only part of the archive path active.
+                    // Do not resume startup without the archive hook.
                     std::process::exit(-67);
                 }
                 APPLIED.store(true, Ordering::Relaxed);
@@ -558,8 +558,6 @@ pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!(f; "Attaching hooks via auto-discovery:");
-
-    unsafe { resolvers::server_archive::initialize(&offsets)? };
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
