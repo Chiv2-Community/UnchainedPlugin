@@ -40,8 +40,8 @@ pub struct CLIArgs {
 
     #[arg(long = "additional-pak-dir", value_name = "DIRECTORY",
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
-        help = "Load paks from this directory in addition to the game's pak directories")]
-    pub additional_pak_dir: Option<String>,
+        help = "Add a pak directory; repeat for multiple directories")]
+    pub additional_pak_dirs: Vec<String>,
 
     #[arg(skip)]
     pub ini_overrides: IniMap,
@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn additional_pak_dir_is_optional() {
         let cli = CLIArgs::try_parse_from(["app"]).unwrap();
-        assert_eq!(cli.additional_pak_dir, None);
+        assert!(cli.additional_pak_dirs.is_empty());
     }
 
     #[test]
@@ -296,7 +296,7 @@ mod tests {
                     let mut raw = raw;
                     raw.extend(["--rcon".to_string(), "9001".to_string()]);
                     let cli = CLIArgs::try_parse_from(normalize_and_filter_args(raw)).unwrap();
-                    assert_eq!(cli.additional_pak_dir.as_deref(), Some(path));
+                    assert_eq!(cli.additional_pak_dirs, [path]);
                     assert_eq!(cli.rcon_port, Some(9001));
                 }
             }
@@ -309,10 +309,30 @@ mod tests {
             vec!["app", "--additional-pak-dir"],
             vec!["app", "--additional-pak-dir="],
             vec!["app", "--additional-pak-dir", "--rcon", "9001"],
+            vec!["app", "--additional-pak-dir", "mods", "--additional-pak-dir"],
+            vec!["app", "--additional-pak-dir", "mods", "--additional-pak-dir="],
         ] {
             let normalized = normalize_and_filter_args(raw.into_iter().map(str::to_string));
             assert!(CLIArgs::try_parse_from(normalized).is_err());
         }
+    }
+
+    #[test]
+    fn additional_pak_dirs_preserve_repeated_values_in_order() {
+        let raw = [
+            "app",
+            "--additional-pak-dir", r"C:\Mod Paks",
+            "--additional-pak-dir=mods/日本語",
+            "-additional-pak-dir", r"C:\Mods=custom\Paks",
+            "--additional-pak-dir", r"C:\Mod Paks",
+            "--rcon", "9001",
+        ];
+        let normalized = normalize_and_filter_args(raw.into_iter().map(str::to_string));
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.additional_pak_dirs, [
+            r"C:\Mod Paks", "mods/日本語", r"C:\Mods=custom\Paks", r"C:\Mod Paks",
+        ]);
+        assert_eq!(cli.rcon_port, Some(9001));
     }
 
     #[test]
@@ -385,7 +405,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 server_mods: None,
-                additional_pak_dir: None,
+                additional_pak_dirs: Vec::new(),
                 ini_overrides: HashMap::new(),
                 is_unchained: false,
                 rcon_port: None,

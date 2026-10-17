@@ -1,11 +1,18 @@
 # Unchained Plugin
 The Unchained Plugin patches the Chivalry 2 binary to allow connection to unofficial servers via an unofficial server browser. It also enables loading of non-vanilla pak files (mods).
 
-## Additional pak directory
+## Additional pak directories
 
-Pass `--additional-pak-dir "C:\Mods\Paks"` to the game to load paks from an
-additional directory. The directory must already exist. Relative paths are
-resolved from the game's working directory; the default pak directories remain enabled.
+Repeat `--additional-pak-dir` to load paks from multiple directories:
+
+```text
+--additional-pak-dir "C:\Mods\Paks" --additional-pak-dir "D:\More Mods"
+```
+
+Directories must already exist. Relative paths are resolved from the game's
+working directory. Valid directories are appended in command-line order;
+duplicates are skipped and the default pak directories remain enabled.
+An invalid directory is logged and skipped without discarding valid directories.
 
 Mod paks do not need `.sig` sidecars. Steam and EGS use the same archive-hook
 signature; runtime loading has been verified on Steam only.
