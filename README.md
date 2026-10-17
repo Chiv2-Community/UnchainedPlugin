@@ -7,8 +7,8 @@ Pass `--additional-pak-dir "C:\Mods\Paks"` to the game to load paks from an
 additional directory. The directory must already exist. Relative paths are
 resolved from the game's working directory; the default pak directories remain enabled.
 
-Mod paks do not need `.sig` sidecars. This build currently supports Steam only;
-EGS startup is disabled until its replacement archive hooks are validated.
+Mod paks do not need `.sig` sidecars. Steam and EGS use the same archive-hook
+signature; runtime loading has been verified on Steam only.
 Do not pass `-signed` or `-signedpak`; these force signed reader setup.
 
 ## Development with VS Code and RustRover

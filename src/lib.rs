@@ -299,7 +299,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
             Some(bi) => {
                 // Attach hooks and apply patches
                 let mut offsets = bi.offsets.clone();
-                if let Err(error) = resolvers::server_archive::resolve_missing(&mut offsets, bi.platform) {
+                if let Err(error) = resolvers::server_archive::resolve_missing(&mut offsets) {
                     serror!(f; "Cannot initialize server archive hooks: {}", error);
                 }
                 if offsets != bi.offsets {

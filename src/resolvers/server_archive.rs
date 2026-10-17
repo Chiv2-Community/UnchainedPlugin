@@ -2,9 +2,7 @@ use std::{collections::HashMap, ffi::c_void};
 
 const CONFIGURE_PATTERN: &str = "48 89 5C 24 08 57 48 83 EC 20 65 48 8B 04 25 58 00 00 00 48 8B F9 8B 15 ?? ?? ?? ?? B9 78 00 00 00 4C 8B 04 D0 42 8B 04 01 39 05 ?? ?? ?? ?? 0F 8F BD 00 00 00";
 
-define_pattern_resolver!(ConfigureServerArchive, {
-    STEAM: [CONFIGURE_PATTERN]
-});
+define_pattern_resolver!(ConfigureServerArchive, [CONFIGURE_PATTERN]);
 
 type ArchiveCallback = unsafe extern "C" fn(*mut c_void, *mut c_void);
 
@@ -15,16 +13,12 @@ CREATE_HOOK!(ConfigureServerArchive, INACTIVE, NONE, (),
 // Cache upgrades run under the loader lock; the regular scanner uses Rayon.
 pub fn resolve_missing(
     offsets: &mut HashMap<String, u64>,
-    platform: super::PlatformType,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if offsets
         .get("ConfigureServerArchive")
         .is_some_and(|offset| *offset != 0)
     {
         return Ok(());
-    }
-    if platform != super::PlatformType::STEAM {
-        return Err("Server archive patterns are only verified for Steam".into());
     }
     let image = patternsleuth::process::internal::read_image()?;
     let section = image
@@ -88,14 +82,7 @@ mod tests {
     #[test]
     fn cached_offset_skips_scan() {
         let mut offsets = HashMap::from([("ConfigureServerArchive".to_string(), 1)]);
-        resolve_missing(&mut offsets, super::super::PlatformType::STEAM).unwrap();
+        resolve_missing(&mut offsets).unwrap();
         assert_eq!(offsets["ConfigureServerArchive"], 1);
-    }
-
-    #[test]
-    fn unsupported_platform_does_not_populate_offset() {
-        let mut offsets = HashMap::new();
-        assert!(resolve_missing(&mut offsets, super::super::PlatformType::EGS).is_err());
-        assert!(offsets.is_empty());
     }
 }
