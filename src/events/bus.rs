@@ -74,7 +74,7 @@ impl Subscriber<crate::events::models::GameEvent> for Arc<Mutex<crate::modules::
 
 pub struct EventBus<E>
 {
-    subscribers: Arc<Mutex<Vec<Box<dyn Subscriber<E>>>>>,
+    subscribers: Mutex<Vec<Box<dyn Subscriber<E>>>>,
     tick_rate: Duration,
 }
 
@@ -83,7 +83,7 @@ impl<E> EventBus<E>
 {
     pub fn new(tick_rate: Duration) -> Self {
         Self {
-            subscribers: Arc::new(Mutex::new(vec![])),
+            subscribers: Mutex::new(vec![]),
             tick_rate,
         }
     }
@@ -101,10 +101,6 @@ impl<E> EventBus<E>
     pub async fn unsubscribe_by_id(&self, name: &str) {
         let mut subscribers = self.subscribers.lock().await;
         subscribers.retain(|s| s.identifier() != name);
-    }
-
-    pub fn get_subscribers(&self) -> Arc<Mutex<Vec<Box<dyn Subscriber<E>>>>> {
-        Arc::clone(&self.subscribers)
     }
 
     pub fn start(self: Arc<Self>) -> EventPublisher<E> {
@@ -308,4 +304,5 @@ mod tests {
             assert_eq!(received.len(), 1, "Should not have received more events after unsubscribe");
         }
     }
+
 }
