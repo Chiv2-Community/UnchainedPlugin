@@ -58,7 +58,7 @@ impl DiscordChatSink {
 impl ChatSink for DiscordChatSink {
     async fn send(&self, chat_source: &ChatSource, chat_type: &ChatType, sender: &String, text: &String) {
         if chat_source == &ChatSource::Discord { return };
-        let config = self.discord_config.read().await.clone();
+        let config = self.discord_config;
 
         let chat_type_string = match chat_type {
             ChatType::Admin => "[Admin] ",
@@ -154,4 +154,3 @@ mod tests {
         assert_eq!(msgs[0], "TestUser: Hello world");
     }
 }
-

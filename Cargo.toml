@@ -134,3 +134,6 @@ crc32c = "0.6.8"
 strum = { version = "0.26", features = ["derive"] }
 emojis = "0.6"
 unicode-segmentation = "1.12"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["test-util"] }
