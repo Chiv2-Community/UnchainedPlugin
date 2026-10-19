@@ -46,6 +46,9 @@ pub struct CLIArgs {
     //
     #[arg(long = "rcon")]
     pub rcon_port: Option<u16>,
+
+    #[arg(long = "rcon-psk-file")]
+    pub rcon_psk_file: Option<std::path::PathBuf>,
     // //
     #[arg(long = "desync-patch")]
     pub apply_desync_patch: bool,
@@ -269,6 +272,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_rcon_psk_file_is_parsed_without_loading_secret_into_arguments() {
+        let cli = CLIArgs::try_parse_from([
+            "app", "--rcon", "9001", "--rcon-psk-file", "private/rcon.psk",
+        ]).unwrap();
+        assert_eq!(cli.rcon_psk_file.as_deref(), Some(std::path::Path::new("private/rcon.psk")));
+    }
+
+    #[test]
     fn test_parse_invalid_int() {
         let args = vec!["app".to_string(), "--rcon".to_string(), "not_an_int".to_string()];
         let result = CLIArgs::try_parse_from(args);
@@ -341,6 +352,7 @@ mod tests {
                 ini_overrides: HashMap::new(),
                 is_unchained: false,
                 rcon_port: None,
+                rcon_psk_file: None,
                 apply_desync_patch: false,
                 #[cfg(feature="move-autonomous-desync")]
                 tick_actor_patch: false,
