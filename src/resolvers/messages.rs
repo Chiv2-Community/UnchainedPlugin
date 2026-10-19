@@ -12,6 +12,7 @@ mod client_message {
     use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
     use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandRequest, PermissionFlags};
     use crate::features::events::EVENT_SYSTEM;
+    use crate::tools::command_parser::parse_command;
 
     #[derive(Debug)]
     pub struct ChatMessage<'a> {
@@ -82,28 +83,18 @@ mod client_message {
                         info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
 
                         if msg_type == EChatType::AllSay {
-                            let actor = CommandActor {
-                                display_name: chat.name.into(),
-                                identity: ActorIdentity::GamePlayer {
-                                    player_id: 0, // TODO
-                                    display_name: chat.name.into(),
-                                },
-                                permissions: ActorPermissions {
-                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
-                                },
-                            };
-
                             let content = &chat.message[1..];
-                            let parts = shlex::split(content).unwrap_or_default();
-                            if !parts.is_empty() {
-                                let name = parts[0].clone();
-                                let args = parts[1..].to_vec();
-                                let raw_args = if content.len() > name.len() {
-                                    content[name.len()..].trim().to_string()
-                                } else {
-                                    String::new()
+                            if let Some((name, args, raw_args)) = parse_command(content) {
+                                let actor = CommandActor {
+                                    display_name: chat.name.into(),
+                                    identity: ActorIdentity::GamePlayer {
+                                        player_id: 0, // TODO
+                                        display_name: chat.name.into(),
+                                    },
+                                    permissions: ActorPermissions {
+                                        flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+                                    },
                                 };
-
                                 EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
                                     name,
                                     args,
