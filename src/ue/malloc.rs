@@ -14,10 +14,6 @@ pub(crate) unsafe fn set_gmalloc_slot(slot: usize) {
     GMALLOC_SLOT.store(slot, Ordering::Release);
 }
 
-pub(crate) fn gmalloc_resolved() -> bool {
-    GMALLOC_SLOT.load(Ordering::Acquire) != 0
-}
-
 pub(crate) fn try_gmalloc() -> Option<FMallocHandle> {
     unsafe { gmalloc_from_slot(GMALLOC_SLOT.load(Ordering::Acquire) as *const *mut FMalloc) }
 }
@@ -308,6 +304,24 @@ mod tests {
         assert_eq!(state.allocations.get(), 0);
         assert_eq!(state.reallocations.get(), 0);
         assert_eq!(state.frees.get(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "GMalloc is not initialized")]
+    fn array_capacity_uses_early_allocator_accessor() {
+        let _ = TArray::<u16>::with_capacity(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "GMalloc is not initialized")]
+    fn string_conversion_uses_early_allocator_accessor() {
+        let _ = crate::ue::FString::from("pak directory");
+    }
+
+    #[test]
+    #[should_panic(expected = "GMalloc is not initialized")]
+    fn array_push_uses_early_allocator_accessor() {
+        TArray::<u16>::new().push(1);
     }
 
     #[test]

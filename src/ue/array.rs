@@ -110,7 +110,9 @@ impl<T> TArray<T> {
         if capacity == 0 {
             return Self::new();
         }
-        unsafe { Self::with_capacity_in(capacity, globals().gmalloc()) }
+        unsafe {
+            Self::with_capacity_in(capacity, super::try_gmalloc().expect("GMalloc is not initialized"))
+        }
     }
     pub fn len(&self) -> usize {
         self.num.max(0) as usize
@@ -160,7 +162,9 @@ impl<T> TArray<T> {
     pub fn reserve(&mut self, additional: usize) {
         let required_cap = self.len().checked_add(additional).expect("TArray length overflow");
         if required_cap > self.capacity() {
-            unsafe { self.reserve_in(additional, globals().gmalloc()) };
+            unsafe {
+                self.reserve_in(additional, super::try_gmalloc().expect("GMalloc is not initialized"))
+            };
         }
     }
     pub fn push(&mut self, new_value: T) {
@@ -228,6 +232,6 @@ where
         if value.is_empty() {
             return Self::new();
         }
-        unsafe { Self::from_slice_in(value, globals().gmalloc()) }
+        unsafe { Self::from_slice_in(value, super::try_gmalloc().expect("GMalloc is not initialized")) }
     }
 }

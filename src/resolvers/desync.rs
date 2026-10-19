@@ -11,6 +11,13 @@ define_pattern_resolver!(UNetDriver_GetNetMode, [
 CREATE_PATCH!(UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch });  // mov eax, 1; ret
 
 
+// APlayerController::DedicatedServerInit(undefined8 param_1)
+define_pattern_resolver!(DedicatedServerInit, [
+   "41 56 48 83 EC 30 48 89 6C 24 48 48 89 74 24 50 48 89 7C 24 28 4C 89 7C 24 20 4C 8B F9 ?? ?? ?? ?? ?? 48 8B C8 4C 8B F0"
+]);
+CREATE_HOOK!(DedicatedServerInit, ACTIVE, NONE, (), (this_ptr: *mut c_void), {});
+
+
 // PROCESSEVENT FILTERING
 
 // Always block these functions in PRocessEvent
