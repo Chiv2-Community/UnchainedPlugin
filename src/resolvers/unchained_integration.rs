@@ -4,7 +4,7 @@ use windows::Win32::System::Memory::IsBadReadPtr;
 use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}, swarn, sinfo};
 
 
-// Sets Server password and rcon flag
+// Sets server password and startup flag
 define_pattern_resolver!(
     LoadFrontEndMap,
     ["48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"]
@@ -15,8 +15,6 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_
     let pwd_opt = args.server_password.as_ref()
         .map(|p| format!("?Password={}", p))
         .unwrap_or_default();
-    // Old RCON widget
-    let rcon_opt = if args.rcon_port.is_some() {"?rcon"} else {""};
     let init_opt = match INITIALIZED.load(Ordering::Relaxed) {
         true => "",
         false => {
@@ -25,7 +23,7 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_
         }
     };
 
-    let map_url = format!("Frontend{pwd_opt}{rcon_opt}{init_opt}");
+    let map_url = format!("Frontend{pwd_opt}{init_opt}");
     #[cfg(feature="verbose_hooks")]
     crate::sinfo!(f; "{}", map_url);
 

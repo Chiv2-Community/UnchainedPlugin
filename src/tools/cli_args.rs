@@ -46,6 +46,9 @@ pub struct CLIArgs {
     //
     #[arg(long = "rcon")]
     pub rcon_port: Option<u16>,
+
+    #[arg(long = "rcon-psk-file")]
+    pub rcon_psk_file: Option<std::path::PathBuf>,
     // //
     #[arg(long = "desync-patch")]
     pub apply_desync_patch: bool,
@@ -207,9 +210,9 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
     let mut args = args.into_iter();
     let bin_name = args.next().unwrap_or_else(|| "app".to_string());
 
-    let known_flags: Vec<String> = CLIArgs::command()
+    let known_flags: HashMap<String, bool> = CLIArgs::command()
         .get_arguments()
-        .filter_map(|a| a.get_long().map(|s| format!("--{s}")))
+        .filter_map(|a| a.get_long().map(|s| (format!("--{s}"), a.get_action().takes_values())))
         .collect();
 
     let mut result = vec![bin_name];
@@ -233,17 +236,16 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
         };
 
         // 3. Match against known flags
-        if known_flags.contains(&flag) {
+        if let Some(takes_value) = known_flags.get(&flag) {
             result.push(flag);
             if let Some(v) = value_opt {
                 result.push(v);
-            } else {
-                // Peek for the value if not provided via '='
-                while let Some(peek) = args.peek() {
-                    if !peek.starts_with('-') && !peek.contains('=') {
+            } else if *takes_value {
+                // Current value-taking options consume one token (lists use delimiters).
+                // '=' belongs to that value, not to a new Unreal argument.
+                if let Some(peek) = args.peek() {
+                    if !peek.starts_with('-') {
                         result.push(args.next().unwrap());
-                    } else {
-                        break;
                     }
                 }
             }
@@ -258,6 +260,10 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     sdebug!(f; "CLI Args raw: {:#?}", args);
+    load_cli_from(args)
+}
+
+fn load_cli_from(args: impl IntoIterator<Item = String>) -> Result<CLIArgs, clap::error::Error> {
     let parsed = normalize_and_filter_args(args);
     let mut cli = CLIArgs::try_parse_from(parsed)?;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
@@ -267,6 +273,14 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_rcon_psk_file_is_parsed_without_loading_secret_into_arguments() {
+        let cli = load_cli_from([
+            "app", "--rcon", "9001", "--rcon-psk-file", "private/rcon.psk",
+        ].map(str::to_owned)).unwrap();
+        assert_eq!(cli.rcon_psk_file.as_deref(), Some(std::path::Path::new("private/rcon.psk")));
+    }
 
     #[test]
     fn test_parse_invalid_int() {
@@ -341,6 +355,7 @@ mod tests {
                 ini_overrides: HashMap::new(),
                 is_unchained: false,
                 rcon_port: None,
+                rcon_psk_file: None,
                 apply_desync_patch: false,
                 #[cfg(feature="move-autonomous-desync")]
                 tick_actor_patch: false,
@@ -487,8 +502,63 @@ mod tests {
         ];
         let normalized = normalize_and_filter_args(args);
 
-        assert_eq!(normalized, vec!["app".to_string(), "--rcon".to_string(), "9001".to_string(), "SomethingElse".to_string()]);
+        assert_eq!(normalized, vec!["app".to_string(), "--rcon".to_string(), "9001".to_string()]);
         assert!(!normalized.contains(&"-UnknownFlag".to_string()));
         assert!(!normalized.contains(&"--UnknownFlag".to_string()));
+    }
+
+    #[test]
+    fn test_load_cli_psk_path_with_equals() {
+        let path = r"C:\server=prod\rcon.psk";
+        for flag in ["-rcon-psk-file", "--rcon-psk-file"] {
+            for attached in [false, true] {
+                let mut args = vec!["app".to_owned(), "-rcon=9001".to_owned()];
+                if attached {
+                    args.push(format!("{flag}={path}"));
+                } else {
+                    args.extend([flag.to_owned(), path.to_owned()]);
+                }
+                args.extend(["UnknownArg=Value", "-UnknownFlag", "Port=7778", "-nullrhi",
+                    "-ini:Game:Session:ServerName=Test=Server"].map(str::to_owned));
+                let cli = load_cli_from(args).unwrap();
+                assert_eq!(cli.rcon_psk_file.as_deref(), Some(std::path::Path::new(path)));
+                assert_eq!(cli.rcon_port, Some(9001));
+                assert!(cli.is_server());
+                assert_eq!(cli.game_port, Some(7778));
+                assert!(cli.is_headless);
+                assert_eq!(cli.extra_args, ["-ini:Game:Session:ServerName=Test=Server"]);
+                assert_eq!(cli.find_ini_value(&[("Game", "Session", "ServerName")]), Some("Test=Server"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_cli_psk_path_alone_does_not_classify_server() {
+        let cli = load_cli_from(["app", "--rcon-psk-file", "private=prod/rcon.psk"].map(str::to_owned)).unwrap();
+        assert!(cli.rcon_psk_file.is_some());
+        assert!(!cli.is_server());
+    }
+
+    #[test]
+    fn test_load_cli_value_boundaries() {
+        let cli = load_cli_from([
+            "app", "-nullrhi", "UnknownArg=Value", "--rcon", "9001", "OtherArg=Value",
+            "--server-mods", "first,second", "--motd", "Welcome=everyone",
+            "--server-password=-private=prod",
+        ].map(str::to_owned)).unwrap();
+        assert!(cli.is_headless);
+        assert_eq!(cli.rcon_port, Some(9001));
+        assert_eq!(cli.server_mods.unwrap(), ["first", "second"]);
+        assert_eq!(cli.motd.as_deref(), Some("Welcome=everyone"));
+        assert_eq!(cli.server_password.as_deref(), Some("-private=prod"));
+        assert!(cli.extra_args.is_empty());
+
+        for args in [
+            vec!["app", "--rcon", "-1"],
+            vec!["app", "--rcon=-1"],
+            vec!["app", "--rcon-psk-file", "--nullrhi"],
+        ] {
+            assert!(load_cli_from(args.into_iter().map(str::to_owned)).is_err());
+        }
     }
 }

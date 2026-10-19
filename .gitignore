@@ -387,4 +387,6 @@ MigrationBackup/
 target/
 
 extra-context
+!/src/bin/
+*.psk
 /annals/
