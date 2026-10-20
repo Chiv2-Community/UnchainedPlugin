@@ -24,22 +24,22 @@ mod client_message {
     fn parse_client_message(line: &str) -> Result<ChatMessage<'_>, String> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
             // Leading typed headers take precedence; only the body may span lines.
-            Regex::new(r"^(?:<(\d+)>:|([^\r\n]*?)[ \t]+<(\d+)>:)[ \t]*((?s:.*))$").unwrap()
+            Regex::new(r"^(?:<(?P<system_type>\d+)>:|(?P<sender>[^\r\n]*?)[ \t]+<(?P<player_type>\d+)>:)[ \t]*(?P<message>(?s:.*))$").unwrap()
         });
 
         let Some(caps) = RE.captures(line) else {
             return Ok(ChatMessage { sender: None, chat_type: None, message: line });
         };
         // Validate after matching so invalid leading headers cannot fall back to player chat.
-        let value = caps.get(1).or_else(|| caps.get(3)).unwrap().as_str();
+        let value = caps.name("system_type").or_else(|| caps.name("player_type")).unwrap().as_str();
         let value: u8 = value.parse()
             .map_err(|error| format!("Invalid chat type '{value}': {error}"))?;
         let chat_type = EChatType::try_from(value)
             .map_err(|_| format!("Invalid EChatType value: {value}"))?;
         Ok(ChatMessage {
-            sender: caps.get(2).map(|sender| sender.as_str().trim()),
+            sender: caps.name("sender").map(|sender| sender.as_str().trim()),
             chat_type: Some(chat_type),
-            message: caps.get(4).unwrap().as_str(),
+            message: caps.name("message").unwrap().as_str(),
         })
     }
 
