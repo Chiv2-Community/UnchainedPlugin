@@ -14,6 +14,60 @@ mod client_message {
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
 
+    define_pattern_resolver!(ClientMessage, [
+        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+    ]);
+
+    // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
+    CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+        let string_ref: &FString = unsafe{ &*S };
+        let message = string_ref.to_string();
+        match parse_client_message(message.as_str()) {
+            Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
+                info!(target: "game_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m[ {sender} ]\x1b[38;5;255m: \x1b[38;5;251m{message}\x1b[38;5;255m");
+                if chat_type == EChatType::AllSay {
+                    if let Some(content) = message.strip_prefix('!') {
+                        if let Some((name, args, raw_args)) = parse_command(content) {
+                            let actor = CommandActor {
+                                display_name: sender.into(),
+                                identity: ActorIdentity::GamePlayer {
+                                    player_id: 0, // TODO
+                                    display_name: sender.into(),
+                                },
+                                permissions: ActorPermissions {
+                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+                                },
+                            };
+                            EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
+                                name,
+                                args,
+                                raw_args,
+                                actor,
+                                source: CommandSource::GameChat,
+                            }));
+                        }
+                    } else {
+                        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                            sender: sender.into(),
+                            message: message.into(),
+                            chat_type: ChatType::Global,
+                            chat_source: ChatSource::Game,
+                        }));
+                    }
+                }
+            }
+            Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
+                info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+            }
+            Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
+                info!(target: "system_chat", "{message}");
+            }
+            Err(error) => {
+                warn!(target: "system_chat", "Failed to parse chat message. error={error}");
+            }
+        }
+    });
+
     #[derive(Debug, PartialEq)]
     struct UserChat<'a> {
         sender: &'a str,
@@ -257,60 +311,6 @@ mod client_message {
         }
     }
 
-    
-    define_pattern_resolver!(ClientMessage, [
-        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
-    ]);
-
-    // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
-    CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
-        let string_ref: &FString = unsafe{ &*S };
-        let message = string_ref.to_string();
-        match parse_client_message(message.as_str()) {
-            Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
-                info!(target: "game_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m[ {sender} ]\x1b[38;5;255m: \x1b[38;5;251m{message}\x1b[38;5;255m");
-                if chat_type == EChatType::AllSay {
-                    if let Some(content) = message.strip_prefix('!') {
-                        if let Some((name, args, raw_args)) = parse_command(content) {
-                            let actor = CommandActor {
-                                display_name: sender.into(),
-                                identity: ActorIdentity::GamePlayer {
-                                    player_id: 0, // TODO
-                                    display_name: sender.into(),
-                                },
-                                permissions: ActorPermissions {
-                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
-                                },
-                            };
-                            EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
-                                name,
-                                args,
-                                raw_args,
-                                actor,
-                                source: CommandSource::GameChat,
-                            }));
-                        }
-                    } else {
-                        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-                            sender: sender.into(),
-                            message: message.into(),
-                            chat_type: ChatType::Global,
-                            chat_source: ChatSource::Game,
-                        }));
-                    }
-                }
-            }
-            Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
-                info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
-            }
-            Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
-                info!(target: "system_chat", "{message}");
-            }
-            Err(error) => {
-                warn!(target: "system_chat", "Failed to parse chat message. error={error}");
-            }
-        }
-    });
 }
 
 // Kismet error messages
