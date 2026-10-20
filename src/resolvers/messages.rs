@@ -23,15 +23,21 @@ mod client_message {
 
     fn parse_client_message(line: &str) -> Result<ChatMessage<'_>, String> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            // Leading typed headers take precedence; only the body may span lines.
-            Regex::new(r"^(?:<(?P<system_type>\d+)>:|(?P<sender>[^\r\n]*?)[ \t]+<(?P<player_type>\d+)>:)[ \t]*(?P<message>(?s:.*))$").unwrap()
+            Regex::new(concat!(
+                r"^",                                 // Start of input.
+                r"(?:(?P<sender>[^\r\n]*?)[ \t]+)??", // Optional single-line sender; prefer no sender.
+                r"<(?P<chat_type>\d+)>:",             // Numeric chat type header.
+                r"[ \t]*",                            // Skip horizontal whitespace before the body.
+                r"(?P<message>(?s:.*))",              // Body, including newlines or empty text.
+                r"$",                                 // End of input.
+            )).unwrap()
         });
 
         let Some(caps) = RE.captures(line) else {
             return Ok(ChatMessage { sender: None, chat_type: None, message: line });
         };
         // Validate after matching so invalid leading headers cannot fall back to player chat.
-        let value = caps.name("system_type").or_else(|| caps.name("player_type")).unwrap().as_str();
+        let value = caps.name("chat_type").unwrap().as_str();
         let value: u8 = value.parse()
             .map_err(|error| format!("Invalid chat type '{value}': {error}"))?;
         let chat_type = EChatType::try_from(value)
@@ -54,6 +60,27 @@ mod client_message {
             assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
                 sender: None, chat_type: Some(EChatType::ServerSay), message,
             });
+        }
+
+        #[test]
+        fn player_messages_distinguish_all_chat_from_team_chat() {
+            for body in ["Hello", "", "!help", "Hello\nworld", "!vote kick\r\nreason"] {
+                for (channel, chat_type) in [(0, EChatType::AllSay), (1, EChatType::TeamSay)] {
+                    let line = format!("Player Name <{channel}>: {body}");
+                    assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
+                        sender: Some("Player Name"), chat_type: Some(chat_type), message: body,
+                    }, "input: {line:?}");
+                }
+            }
+        }
+
+        #[test]
+        fn senderless_messages_distinguish_all_chat_from_team_chat() {
+            for (line, chat_type) in [("<0>: Hello", EChatType::AllSay), ("<1>: Hello", EChatType::TeamSay)] {
+                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
+                    sender: None, chat_type: Some(chat_type), message: "Hello",
+                }, "input: {line:?}");
+            }
         }
 
         #[test]
