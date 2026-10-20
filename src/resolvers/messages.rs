@@ -23,7 +23,7 @@ mod client_message {
     
     pub fn parse_chat_line(line: &str) -> Option<ChatMessage<'_>> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            Regex::new(r"^(.*?)\s+<(\d+)>:\s+(.*)$").unwrap()
+            Regex::new(r"(?s)^(.*?)\s+<(\d+)>:[ \t]*(.*)$").unwrap()
         });
 
         let caps = RE.captures(line)?;
@@ -35,17 +35,18 @@ mod client_message {
             })
     }
     
-    fn parse_msg(line: &str) -> Result<(EChatType, &str), String> {
+    fn parse_msg(line: &str) -> Result<Option<(EChatType, &str)>, String> {
         static RE: once_cell::sync::Lazy<Result<Regex, regex::Error>> =
-            once_cell::sync::Lazy::new(|| Regex::new(r#"(?s)<(\d+)>:\s+(.+)"#));
+            once_cell::sync::Lazy::new(|| Regex::new(r#"(?s)^<(\d+)>:[ \t]*(.*)$"#));
 
         // `(?s)` enables dotall so the message capture includes newlines.
         let re = RE
             .as_ref()
             .map_err(|e| format!("parse_msg regex compile failed: {e}"))?;
-        let caps = re
-            .captures(line)
-            .ok_or_else(|| "parse_msg input did not match '<type>: <message>'".to_string())?;
+        // ClientMessage also receives plain server/system text without a chat header.
+        let Some(caps) = re.captures(line) else {
+            return Ok(None);
+        };
         let msg_type_raw = caps
             .get(1)
             .ok_or_else(|| "parse_msg missing chat type capture".to_string())?
@@ -59,7 +60,58 @@ mod client_message {
             .get(2)
             .ok_or_else(|| "parse_msg missing message capture".to_string())?
             .as_str();
-        Ok((msg_type, message))
+        Ok(Some((msg_type, message)))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn plain_motd_has_no_chat_header() {
+            for message in ["Welcome to the server!", "Welcome\nRead the rules.", ""] {
+                assert!(parse_chat_line(message).is_none());
+                assert_eq!(parse_msg(message).unwrap(), None);
+            }
+        }
+
+        #[test]
+        fn server_say_preserves_multiline_motd() {
+            let message = "Welcome\r\nRead the rules.\nEnjoy!";
+            let line = format!("<6>: {message}");
+            assert_eq!(parse_msg(&line).unwrap(), Some((EChatType::ServerSay, message)));
+        }
+
+        #[test]
+        fn system_messages_allow_empty_text_and_no_separator_space() {
+            assert_eq!(parse_msg("<6>:").unwrap(), Some((EChatType::ServerSay, "")));
+            assert_eq!(parse_msg("<6>:Welcome").unwrap(), Some((EChatType::ServerSay, "Welcome")));
+        }
+
+        #[test]
+        fn header_like_text_inside_motd_is_not_a_header() {
+            assert_eq!(parse_msg("Welcome! Example: <99>: text").unwrap(), None);
+        }
+
+        #[test]
+        fn invalid_chat_types_still_report_errors() {
+            assert!(parse_msg("<99>: text").is_err());
+            assert!(parse_msg("<256>: text").is_err());
+        }
+
+        #[test]
+        fn player_chat_preserves_sender_channel_and_multiline_text() {
+            let chat = parse_chat_line("Player Name <0>: Hello\r\nworld").unwrap();
+            assert_eq!(chat.name, "Player Name");
+            assert_eq!(chat.channel, 0);
+            assert_eq!(chat.message, "Hello\r\nworld");
+        }
+
+        #[test]
+        fn multiline_commands_keep_command_prefix() {
+            let chat = parse_chat_line("Player <0>: !vote kick\nreason").unwrap();
+            assert!(chat.message.starts_with('!'));
+        }
     }
 
     
@@ -71,11 +123,7 @@ mod client_message {
     CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
-        let message_repl = match message.contains('\n') {
-            true => format!("\n{message}").replace("\r\n", "\\n"),
-            false => message,
-        };
-        match parse_chat_line(message_repl.as_str()) {
+        match parse_chat_line(message.as_str()) {
             Some(chat) => {
                 match chat.message.starts_with('!') {
                     true => {
@@ -123,17 +171,15 @@ mod client_message {
                 };        
             }
             _ => {
-                match parse_msg(message_repl.as_str()) {
-                    Ok((chat_type, message)) => {
-                        if let Some(msg) = parse_chat_line(message_repl.as_str()) {
-                            info!("Chat: channel {}, name {}, message {}, ", msg.channel, msg.name, msg.message);
-                        }
-                        else {
-                            info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
-                        }
+                match parse_msg(message.as_str()) {
+                    Ok(Some((chat_type, message))) => {
+                        info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                    }
+                    Ok(None) => {
+                        info!(target: "system_chat", "{message}");
                     }
                     Err(error) => {
-                        warn!(target: "system_chat", "Failed to parse system chat message; skipping publish. error={error}");
+                        warn!(target: "system_chat", "Failed to parse system chat message. error={error}");
                     }
                 }
             }
