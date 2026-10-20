@@ -23,7 +23,8 @@ mod client_message {
     
     pub fn parse_chat_line(line: &str) -> Option<ChatMessage<'_>> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            Regex::new(r"(?s)^(.*?)\s+<(\d+)>:[ \t]*(.*)$").unwrap()
+            // Only the body may span lines; system text must not become a sender.
+            Regex::new(r"^([^\r\n]*?)[ \t]+<(\d+)>:[ \t]*((?s:.*))$").unwrap()
         });
 
         let caps = RE.captures(line)?;
@@ -94,6 +95,35 @@ mod client_message {
         }
 
         #[test]
+        fn typed_multiline_system_text_never_matches_player_chat() {
+            for newline in ["\n", "\r\n", "\r"] {
+                for channel in ["0", "99", "256", "4294967296"] {
+                    for text in ["text", "!help"] {
+                        let message = format!("Welcome{newline}Example <{channel}>: {text}");
+                        let line = format!("<6>: {message}");
+                        assert!(parse_chat_line(&line).is_none(), "input: {line:?}");
+                        assert_eq!(parse_msg(&line).unwrap(), Some((EChatType::ServerSay, message.as_str())));
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn untyped_multiline_system_text_never_matches_player_chat() {
+            for newline in ["\n", "\r\n", "\r"] {
+                for channel in ["0", "99", "256", "4294967296"] {
+                    for text in ["text", "!help"] {
+                        for sender in ["Example ", ""] {
+                            let line = format!("Welcome{newline}{sender}<{channel}>: {text}");
+                            assert!(parse_chat_line(&line).is_none(), "input: {line:?}");
+                            assert_eq!(parse_msg(&line).unwrap(), None);
+                        }
+                    }
+                }
+            }
+        }
+
+        #[test]
         fn invalid_chat_types_still_report_errors() {
             assert!(parse_msg("<99>: text").is_err());
             assert!(parse_msg("<256>: text").is_err());
@@ -110,7 +140,12 @@ mod client_message {
         #[test]
         fn multiline_commands_keep_command_prefix() {
             let chat = parse_chat_line("Player <0>: !vote kick\nreason").unwrap();
-            assert!(chat.message.starts_with('!'));
+            assert_eq!(chat.name, "Player");
+            assert_eq!(chat.channel, 0);
+            assert_eq!(chat.message, "!vote kick\nreason");
+            assert_eq!(parse_command(&chat.message[1..]).unwrap(), (
+                "vote".to_owned(), vec!["kick".to_owned(), "reason".to_owned()], "kick\nreason".to_owned(),
+            ));
         }
     }
 
