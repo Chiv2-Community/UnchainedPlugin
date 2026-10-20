@@ -180,6 +180,29 @@ impl BuildInfo {
     }
 }
 
+#[cfg(test)]
+mod build_info_tests {
+    use super::*;
+
+    #[test]
+    fn incomplete_cache_requires_normal_rescan() {
+        let required: Vec<_> = resolvers().filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name)).collect();
+        let mut info = BuildInfo {
+            plugin_version: String::new(), build: 0, file_hash: 0,
+            name: String::new(), platform: PlatformType::STEAM, path: String::new(),
+            offsets: required.iter().map(|resolver| (resolver.name.to_string(), 1)).collect(),
+        };
+        assert!(info.get_unresolved(required.clone()).is_empty());
+        for resolver in &required {
+            info.offsets.remove(resolver.name);
+            let missing = info.get_unresolved(required.clone());
+            assert!(!missing.is_empty());
+            assert!(missing.iter().all(|missing| missing.name == resolver.name));
+            info.offsets.insert(resolver.name.to_string(), 1);
+        }
+    }
+}
+
 
 
 use windows::Win32::Foundation::HMODULE;
@@ -227,8 +250,6 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
 }
 
 fn rust_main() {
-    init_rustlib();
-
     let need_rescan = {
         let current = CURRENT_BUILD_INFO.lock().unwrap();
         current.is_none() || current.as_ref().unwrap().get_unresolved(resolvers().collect()).len() > 0
@@ -252,6 +273,7 @@ fn rust_main() {
         std::process::exit(-67);
     }
 
+    init_rustlib();
     postinit_rustlib();
     sinfo!(f; "Unchained Sleuth initialized.");
 }
@@ -297,11 +319,19 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         match current.as_ref() {
             None => sdebug!(f; "No current BuildInfo"),
             Some(bi) => {
-                // Attach hooks and apply patches
+                // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
+                if !bi.get_unresolved(resolvers().collect()).is_empty() {
+                    sinfo!(f; "Missing signatures; deferring initialization until scan and restart");
+                    return bi as *const BuildInfo;
+                }
                 let offsets = bi.offsets.clone();
+                if let Some(offset) = offsets.get("GMalloc") {
+                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
+                }
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
                     serror!(f; "Failed to attach hooks: {}", e);
+                    std::process::exit(-67);
                 }
                 APPLIED.store(true, Ordering::Relaxed);
                 sinfo!(f; "Applied patches and hooks in preinit");
@@ -555,7 +585,12 @@ pub fn attach_hooks(
 
         match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
             Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
-            Err(e) => serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e),
+            Err(e) => {
+                serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e);
+                if cond {
+                    return Err(e);
+                }
+            },
         }
     }
 
