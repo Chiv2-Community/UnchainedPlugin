@@ -14,72 +14,32 @@ mod client_message {
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct ChatMessage<'a> {
-        pub name: &'a str,
-        pub channel: u32,
+        pub sender: Option<&'a str>,
+        pub chat_type: Option<EChatType>,
         pub message: &'a str,
     }
-    
-    pub fn parse_chat_line(line: &str) -> Option<ChatMessage<'_>> {
+
+    fn parse_client_message(line: &str) -> Result<ChatMessage<'_>, String> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            // Only the body may span lines; system text must not become a sender.
-            Regex::new(r"^([^\r\n]*?)[ \t]+<(\d+)>:[ \t]*((?s:.*))$").unwrap()
+            // Leading typed headers take precedence; only the body may span lines.
+            Regex::new(r"^(?:<(\d+)>:|([^\r\n]*?)[ \t]+<(\d+)>:)[ \t]*((?s:.*))$").unwrap()
         });
 
-        let caps = RE.captures(line)?;
-
-            Some(ChatMessage {
-                name: caps.get(1)?.as_str().trim(), // trim to remove trailing space before the middle word
-                channel: caps.get(2)?.as_str().parse().ok()?,
-                message: caps.get(3)?.as_str(),
-            })
-    }
-    
-    fn parse_msg(line: &str) -> Result<Option<(EChatType, &str)>, String> {
-        static RE: once_cell::sync::Lazy<Result<Regex, regex::Error>> =
-            once_cell::sync::Lazy::new(|| Regex::new(r#"(?s)^<(\d+)>:[ \t]*(.*)$"#));
-
-        // `(?s)` enables dotall so the message capture includes newlines.
-        let re = RE
-            .as_ref()
-            .map_err(|e| format!("parse_msg regex compile failed: {e}"))?;
-        // ClientMessage also receives plain server/system text without a chat header.
-        let Some(caps) = re.captures(line) else {
-            return Ok(None);
+        let Some(caps) = RE.captures(line) else {
+            return Ok(ChatMessage { sender: None, chat_type: None, message: line });
         };
-        let msg_type_raw = caps
-            .get(1)
-            .ok_or_else(|| "parse_msg missing chat type capture".to_string())?
-            .as_str();
-        let msg_type_u8: u8 = msg_type_raw
-            .parse()
-            .map_err(|e| format!("parse_msg failed to parse chat type '{msg_type_raw}': {e}"))?;
-        let msg_type = EChatType::try_from(msg_type_u8)
-            .map_err(|_| format!("parse_msg invalid EChatType value: {msg_type_u8}"))?;
-        let message = caps
-            .get(2)
-            .ok_or_else(|| "parse_msg missing message capture".to_string())?
-            .as_str();
-        Ok(Some((msg_type, message)))
-    }
-
-    #[derive(Debug)]
-    enum ParsedClientMessage<'a> {
-        System(EChatType, &'a str),
-        Player(ChatMessage<'a>),
-        Plain(&'a str),
-    }
-
-    fn parse_client_message(line: &str) -> Result<ParsedClientMessage<'_>, String> {
-        // A leading typed header owns the whole message, even if its body looks like player chat.
-        // Invalid typed headers must not fall through to player commands either.
-        if let Some((chat_type, message)) = parse_msg(line)? {
-            return Ok(ParsedClientMessage::System(chat_type, message));
-        }
-        Ok(match parse_chat_line(line) {
-            Some(chat) => ParsedClientMessage::Player(chat),
-            None => ParsedClientMessage::Plain(line),
+        // Validate after matching so invalid leading headers cannot fall back to player chat.
+        let value = caps.get(1).or_else(|| caps.get(3)).unwrap().as_str();
+        let value: u8 = value.parse()
+            .map_err(|error| format!("Invalid chat type '{value}': {error}"))?;
+        let chat_type = EChatType::try_from(value)
+            .map_err(|_| format!("Invalid EChatType value: {value}"))?;
+        Ok(ChatMessage {
+            sender: caps.get(2).map(|sender| sender.as_str().trim()),
+            chat_type: Some(chat_type),
+            message: caps.get(4).unwrap().as_str(),
         })
     }
 
@@ -88,83 +48,47 @@ mod client_message {
         use super::*;
 
         #[test]
-        fn plain_motd_has_no_chat_header() {
-            for message in ["Welcome to the server!", "Welcome\nRead the rules.", ""] {
-                assert!(parse_chat_line(message).is_none());
-                assert_eq!(parse_msg(message).unwrap(), None);
-            }
-        }
-
-        #[test]
         fn server_say_preserves_multiline_motd() {
             let message = "Welcome\r\nRead the rules.\nEnjoy!";
             let line = format!("<6>: {message}");
-            assert_eq!(parse_msg(&line).unwrap(), Some((EChatType::ServerSay, message)));
+            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
+                sender: None, chat_type: Some(EChatType::ServerSay), message,
+            });
         }
 
         #[test]
-        fn system_messages_allow_empty_text_and_no_separator_space() {
-            assert_eq!(parse_msg("<6>:").unwrap(), Some((EChatType::ServerSay, "")));
-            assert_eq!(parse_msg("<6>:Welcome").unwrap(), Some((EChatType::ServerSay, "Welcome")));
-        }
-
-        #[test]
-        fn header_like_text_inside_motd_is_not_a_header() {
-            assert_eq!(parse_msg("Welcome! Example: <99>: text").unwrap(), None);
-        }
-
-        #[test]
-        fn typed_multiline_system_text_never_matches_player_chat() {
-            for newline in ["\n", "\r\n", "\r"] {
-                for channel in ["0", "99", "256", "4294967296"] {
-                    for text in ["text", "!help"] {
-                        let message = format!("Welcome{newline}Example <{channel}>: {text}");
-                        let line = format!("<6>: {message}");
-                        assert!(parse_chat_line(&line).is_none(), "input: {line:?}");
-                        assert_eq!(parse_msg(&line).unwrap(), Some((EChatType::ServerSay, message.as_str())));
+        fn chat_types_are_validated_without_truncation_or_panics() {
+            for channel in ["16", "99", "256", "257", "4294967296"] {
+                for message in ["text", "!help", "!help\nreason"] {
+                    for prefix in ["", "Player "] {
+                        let line = format!("{prefix}<{channel}>: {message}");
+                        assert!(parse_client_message(&line).is_err(), "input: {line:?}");
                     }
+                }
+            }
+            for chat_type in EChatType::ALL {
+                for (prefix, sender) in [("", None), ("Player ", Some("Player"))] {
+                    let line = format!("{prefix}<{}>: text", chat_type as u8);
+                    assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
+                        sender, chat_type: Some(chat_type), message: "text",
+                    });
                 }
             }
         }
 
         #[test]
-        fn untyped_multiline_system_text_never_matches_player_chat() {
-            for newline in ["\n", "\r\n", "\r"] {
-                for channel in ["0", "99", "256", "4294967296"] {
-                    for text in ["text", "!help"] {
-                        for sender in ["Example ", ""] {
-                            let line = format!("Welcome{newline}{sender}<{channel}>: {text}");
-                            assert!(parse_chat_line(&line).is_none(), "input: {line:?}");
-                            assert_eq!(parse_msg(&line).unwrap(), None);
-                        }
-                    }
-                }
+        fn horizontal_separators_trim_sender_but_preserve_body() {
+            for (line, sender, message) in [
+                ("  Player Name \t<0>:\t Hello \t", Some("Player Name"), "Hello \t"),
+                ("\t<0>:Hello", Some(""), "Hello"),
+                ("Player <0>:", Some("Player"), ""),
+                ("<0>:\t \r\nHello", None, "\r\nHello"),
+                ("Player <0>:\n Hello", Some("Player"), "\n Hello"),
+            ] {
+                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
+                    sender, chat_type: Some(EChatType::AllSay), message,
+                });
             }
-        }
-
-        #[test]
-        fn invalid_chat_types_still_report_errors() {
-            assert!(parse_msg("<99>: text").is_err());
-            assert!(parse_msg("<256>: text").is_err());
-        }
-
-        #[test]
-        fn player_chat_preserves_sender_channel_and_multiline_text() {
-            let chat = parse_chat_line("Player Name <0>: Hello\r\nworld").unwrap();
-            assert_eq!(chat.name, "Player Name");
-            assert_eq!(chat.channel, 0);
-            assert_eq!(chat.message, "Hello\r\nworld");
-        }
-
-        #[test]
-        fn multiline_commands_keep_command_prefix() {
-            let chat = parse_chat_line("Player <0>: !vote kick\nreason").unwrap();
-            assert_eq!(chat.name, "Player");
-            assert_eq!(chat.channel, 0);
-            assert_eq!(chat.message, "!vote kick\nreason");
-            assert_eq!(parse_command(&chat.message[1..]).unwrap(), (
-                "vote".to_owned(), vec!["kick".to_owned(), "reason".to_owned()], "kick\nreason".to_owned(),
-            ));
         }
 
         #[test]
@@ -178,13 +102,9 @@ mod client_message {
                             format!("Example <{channel}>: {text}"),
                         ] {
                             let line = format!("<6>: {body}");
-                            match parse_client_message(&line).unwrap() {
-                                ParsedClientMessage::System(chat_type, message) => {
-                                    assert_eq!(chat_type, EChatType::ServerSay);
-                                    assert_eq!(message, body);
-                                }
-                                other => panic!("input: {line:?}, route: {other:?}"),
-                            }
+                            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
+                                sender: None, chat_type: Some(EChatType::ServerSay), message: &body,
+                            }, "input: {line:?}");
                         }
                     }
                 }
@@ -193,7 +113,7 @@ mod client_message {
 
         #[test]
         fn routing_rejects_invalid_leading_headers_without_player_fallback() {
-            for outer_channel in ["99", "256", "4294967296"] {
+            for outer_channel in ["16", "99", "256", "257", "4294967296"] {
                 for newline in ["\n", "\r\n", "\r"] {
                     for channel in ["0", "99", "256", "4294967296"] {
                         for text in ["text", "!help"] {
@@ -213,21 +133,24 @@ mod client_message {
 
         #[test]
         fn routing_preserves_plain_and_empty_system_text() {
-            for line in ["", "Welcome!", "Welcome\nRead the rules."] {
-                assert!(matches!(parse_client_message(line).unwrap(),
-                    ParsedClientMessage::Plain(message) if message == line));
+            for line in ["", "Welcome!", "Welcome\nRead the rules.", "Unknown <x>: text", "<6> text"] {
+                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
+                    sender: None, chat_type: None, message: line,
+                });
             }
             for (line, body) in [("<6>:", ""), ("<6>:Welcome", "Welcome")] {
-                assert!(matches!(parse_client_message(line).unwrap(),
-                    ParsedClientMessage::System(EChatType::ServerSay, message) if message == body));
+                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
+                    sender: None, chat_type: Some(EChatType::ServerSay), message: body,
+                });
             }
             for newline in ["\n", "\r\n", "\r"] {
                 for channel in ["0", "99", "256", "4294967296"] {
                     for text in ["text", "!help"] {
                         for sender in ["Example ", ""] {
                             let line = format!("Welcome{newline}{sender}<{channel}>: {text}");
-                            assert!(matches!(parse_client_message(&line).unwrap(),
-                                ParsedClientMessage::Plain(message) if message == line));
+                            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
+                                sender: None, chat_type: None, message: &line,
+                            });
                         }
                     }
                 }
@@ -243,15 +166,16 @@ mod client_message {
                     format!("Example <6>: text{newline}<99>: !help"),
                 ] {
                     let line = format!("Player Name <0>: {body}");
-                    let ParsedClientMessage::Player(chat) = parse_client_message(&line).unwrap() else {
-                        panic!("player message routed as system text: {line:?}");
-                    };
-                    assert_eq!(chat.name, "Player Name");
-                    assert_eq!(chat.channel, 0);
+                    let chat = parse_client_message(&line).unwrap();
+                    assert_eq!(chat.sender, Some("Player Name"));
+                    assert_eq!(chat.chat_type, Some(EChatType::AllSay));
                     assert_eq!(chat.message, body);
                     if let Some(command) = chat.message.strip_prefix('!') {
-                        let (name, _, raw_args) = parse_command(command).unwrap();
+                        let (name, args, raw_args) = parse_command(command).unwrap();
                         assert_eq!(name, "vote");
+                        if newline == "\n" {
+                            assert_eq!(args, ["kick", "reason"]);
+                        }
                         assert_eq!(raw_args, format!("kick{newline}reason"));
                     }
                 }
@@ -269,60 +193,47 @@ mod client_message {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
         match parse_client_message(message.as_str()) {
-            Ok(ParsedClientMessage::Player(chat)) => {
-                match chat.message.starts_with('!') {
-                    true => {
-                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
-                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
-
-                        if msg_type == EChatType::AllSay {
-                            let content = &chat.message[1..];
-                            if let Some((name, args, raw_args)) = parse_command(content) {
-                                let actor = CommandActor {
-                                    display_name: chat.name.into(),
-                                    identity: ActorIdentity::GamePlayer {
-                                        player_id: 0, // TODO
-                                        display_name: chat.name.into(),
-                                    },
-                                    permissions: ActorPermissions {
-                                        flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
-                                    },
-                                };
-                                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
-                                    name,
-                                    args,
-                                    raw_args,
-                                    actor,
-                                    source: CommandSource::GameChat,
-                                }));
-                            }
+            Ok(ChatMessage { sender: Some(sender), chat_type: Some(chat_type), message }) => {
+                info!(target: "game_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m[ {sender} ]\x1b[38;5;255m: \x1b[38;5;251m{message}\x1b[38;5;255m");
+                if chat_type == EChatType::AllSay {
+                    if let Some(content) = message.strip_prefix('!') {
+                        if let Some((name, args, raw_args)) = parse_command(content) {
+                            let actor = CommandActor {
+                                display_name: sender.into(),
+                                identity: ActorIdentity::GamePlayer {
+                                    player_id: 0, // TODO
+                                    display_name: sender.into(),
+                                },
+                                permissions: ActorPermissions {
+                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+                                },
+                            };
+                            EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
+                                name,
+                                args,
+                                raw_args,
+                                actor,
+                                source: CommandSource::GameChat,
+                            }));
                         }
+                    } else {
+                        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                            sender: sender.into(),
+                            message: message.into(),
+                            chat_type: ChatType::Global,
+                            chat_source: ChatSource::Game,
+                        }));
                     }
-                    false => {
-                        let msg_type = EChatType::try_from(chat.channel as u8).expect("Failed to parse EChatType");
-                        info!(target: "game_chat", "\x1b[38;5;214m[ {:10?} ] \x1b[38;5;251m[ {} ]\x1b[38;5;255m: \x1b[38;5;251m{}\x1b[38;5;255m", msg_type, chat.name, chat.message);
-                        
-                        if msg_type == EChatType::AllSay {
-                            EVENT_SYSTEM.game_event_publisher.publish(
-                                GameEvent::GameChatMessageEvent(GameChatMessage {
-                                    sender: chat.name.into(),
-                                    message: chat.message.into(),
-                                    chat_type: ChatType::Global,
-                                    chat_source: ChatSource::Game,
-                                })
-                            );
-                        }
-                    }
-                };        
+                }
             }
-            Ok(ParsedClientMessage::System(chat_type, message)) => {
+            Ok(ChatMessage { chat_type: Some(chat_type), message, .. }) => {
                 info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
             }
-            Ok(ParsedClientMessage::Plain(message)) => {
+            Ok(ChatMessage { message, .. }) => {
                 info!(target: "system_chat", "{message}");
             }
             Err(error) => {
-                warn!(target: "system_chat", "Failed to parse system chat message. error={error}");
+                warn!(target: "system_chat", "Failed to parse chat message. error={error}");
             }
         }
     });
