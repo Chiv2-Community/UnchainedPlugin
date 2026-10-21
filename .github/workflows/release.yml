@@ -56,6 +56,31 @@ jobs:
         with:
           toolchain: nightly-2026-03-23
 
+      - name: Align root package lock version without updating dependencies
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, tomllib
+          from pathlib import Path
+          path = Path('Cargo.lock')
+          text = path.read_text(encoding='utf-8-sig')
+          before = tomllib.loads(text)
+          roots = [p for p in before['package'] if p['name'] == 'UnchainedPlugin']
+          assert len(roots) == 1
+          old = roots[0]['version']
+          version = os.environ['TAG'][1:]
+          if old != version:
+              source = f'name = "UnchainedPlugin"\nversion = "{old}"'
+              replacement = f'name = "UnchainedPlugin"\nversion = "{version}"'
+              assert text.count(source) == 1
+              updated = text.replace(source, replacement, 1)
+              roots[0]['version'] = version
+              assert tomllib.loads(updated) == before
+              path.write_text(updated, encoding='utf-8')
+              print(f'Aligned root package {old} -> {version}; dependency records unchanged.')
+          PY
+          git diff -- Cargo.lock
+
       - name: Test original release source
         run: cargo +${{ env.TOOLCHAIN }} test --release --locked
 
@@ -78,7 +103,8 @@ jobs:
               'The repository was deleted and recreated to disassociate it from the old '
               '`nihilianth/UnchainedPlugin` fork, so this release had to be republished. '
               'Minor differences in the Cargo build change the DLL hash.\n\n'
-              f"- Original tag: `{tag}` at `{os.environ['EXPECTED_SHA']}`; source and tag unchanged.\n"
+              f"- Original tag: `{tag}` at `{os.environ['EXPECTED_SHA']}`; Rust source and tag unchanged.\n"
+              '- RC2 only: align the stale root Cargo.lock version with Cargo.toml; dependency records unchanged.\n'
               f"- Toolchain: `{os.environ['TOOLCHAIN']}`; locked release tests and build passed.\n"
               f'- SHA-256: `{digest}`.\n'
               f'- Size: `{dll.stat().st_size}` bytes.\n'
@@ -95,6 +121,7 @@ jobs:
             target/release/UnchainedPlugin.dll
             release-provenance.json
             release-notes.md
+            Cargo.lock
 
       - name: Publish missing release without replacing assets or changing latest
         shell: bash
