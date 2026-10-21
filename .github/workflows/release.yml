@@ -1,131 +1,110 @@
-name: Restore RC1/RC2 releases
+name: Restore v0.5.0 release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing release tag to restore without moving it
-        required: true
-        type: choice
-        options:
-          - v1.0.0-RC1
-          - v1.0.0-RC2
 
 permissions:
   contents: write
 
 concurrency:
-  group: restore-release-${{ inputs.tag }}
+  group: restore-release-v0.5.0
   cancel-in-progress: false
 
 jobs:
   restore:
     runs-on: windows-2022
     env:
-      TAG: ${{ inputs.tag }}
-      TOOLCHAIN: nightly-2026-03-23
+      TAG: v0.5.0
+      EXPECTED_SHA: 3b0e0356a98cb73ebd1a0028b20878821e1d821d
+      RUSTUP_TOOLCHAIN: nightly-2025-06-19
       GH_TOKEN: ${{ github.token }}
       GH_REPO: Chiv2-Community/UnchainedPlugin
     steps:
-      - name: Validate historical tag
-        shell: bash
-        run: |
-          case "$TAG" in
-            v1.0.0-RC1) echo 'EXPECTED_SHA=b5ba0c6927bd0572a3053d030e734571b381c9d0' >> "$GITHUB_ENV" ;;
-            v1.0.0-RC2) echo 'EXPECTED_SHA=4c3373a071ffa9390b62c9661c153b6f08ce1174' >> "$GITHUB_ENV" ;;
-            *) echo 'Only the original RC1 and RC2 tags may be restored.' >&2; exit 1 ;;
-          esac
-
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: 3b0e0356a98cb73ebd1a0028b20878821e1d821d
           fetch-depth: 0
           submodules: recursive
 
-      - name: Verify source and package version
+      - name: Verify historical source
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-          test "$(git rev-parse "$TAG^{commit}")" = "$EXPECTED_SHA"
-          CARGO_VERSION=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          test "$CARGO_VERSION" = "${TAG#v}"
           test -z "$(git status --porcelain)"
+          # This tag survived in the pre-recreation local checkout.
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            test "$(git rev-parse "$TAG^{commit}")" = "$EXPECTED_SHA"
+          fi
 
-      # New nightlies reject these tags' historical c_void-returning hooks.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly-2026-03-23
+          toolchain: nightly-2025-06-19
 
-      - name: Align root package lock version without updating dependencies
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install compatible CMake
+        run: python -m pip install cmake==3.31.6
+
+      - name: Test historical Rust helper
+        working-directory: sleuth
+        run: cargo test --release --locked
+
+      - name: Build locked Rust helper
+        working-directory: sleuth
+        run: cargo build --release --locked
+
+      - name: Configure original CMake release
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_CXX_COMPILER=cl -DCMAKE_C_COMPILER=cl -T v143 -DCMAKE_BUILD_TYPE=Release -DVERSION="0.5.0"
+
+      - name: Build original CMake release
+        run: cmake --build build --config Release
+
+      - name: Verify dependency lock and record provenance
         shell: bash
         run: |
-          python - <<'PY'
-          import os, tomllib
-          from pathlib import Path
-          path = Path('Cargo.lock')
-          text = path.read_text(encoding='utf-8-sig')
-          before = tomllib.loads(text)
-          roots = [p for p in before['package'] if p['name'] == 'UnchainedPlugin']
-          assert len(roots) == 1
-          old = roots[0]['version']
-          version = os.environ['TAG'][1:]
-          if old != version:
-              source = f'name = "UnchainedPlugin"\nversion = "{old}"'
-              replacement = f'name = "UnchainedPlugin"\nversion = "{version}"'
-              assert text.count(source) == 1
-              updated = text.replace(source, replacement, 1)
-              roots[0]['version'] = version
-              assert tomllib.loads(updated) == before
-              path.write_text(updated, encoding='utf-8')
-              print(f'Aligned root package {old} -> {version}; dependency records unchanged.')
-          PY
-          git diff -- Cargo.lock
-
-      - name: Test original release source
-        run: cargo +${{ env.TOOLCHAIN }} test --release --locked
-
-      - name: Build original release source
-        run: cargo +${{ env.TOOLCHAIN }} build --release --locked
-
-      - name: Restore original notes and record provenance
-        shell: bash
-        run: |
+          git diff --exit-code -- sleuth/Cargo.lock
           gh api 'repos/Chiv2-Community/C2ModRegistry/contents/dll_db/packages/Chiv2-Community/UnchainedPlugin.json?ref=770ba5162a0f980d601ec7ceb1782b3978a5a69e' --jq .content | base64 --decode > registry-original.json
           python - <<'PY'
           import hashlib, json, os
           from pathlib import Path
-          tag = os.environ['TAG']
-          release = next(r for r in json.loads(Path('registry-original.json').read_text())['releases'] if r['tag'] == tag)
-          dll = Path('target/release/UnchainedPlugin.dll')
+          release = next(r for r in json.loads(Path('registry-original.json').read_text())['releases'] if r['tag'] == os.environ['TAG'])
+          dll = Path('build/Output/Release/UnchainedPlugin.dll')
           digest = hashlib.sha256(dll.read_bytes()).hexdigest()
           provenance = (
               '\n\n## Restored release\n\n'
               'The repository was deleted and recreated to disassociate it from the old '
-              '`nihilianth/UnchainedPlugin` fork, so this release had to be republished. '
-              'Minor differences in the Cargo build change the DLL hash.\n\n'
-              f"- Original tag: `{tag}` at `{os.environ['EXPECTED_SHA']}`; Rust source and tag unchanged.\n"
-              '- RC2 only: align the stale root Cargo.lock version with Cargo.toml; dependency records unchanged.\n'
-              f"- Toolchain: `{os.environ['TOOLCHAIN']}`; locked release tests and build passed.\n"
+              '`nihilianth/UnchainedPlugin` fork, so this release and its original tag had to be restored. '
+              'Build-environment differences change the DLL hash.\n\n'
+              f"- Original source: `{os.environ['EXPECTED_SHA']}`; no source changes.\n"
+              '- Build: Windows 2022, Visual Studio 2022, CMake 3.31.6, nightly-2025-06-19; Cargo dependency lock unchanged.\n'
               f'- SHA-256: `{digest}`.\n'
               f'- Size: `{dll.stat().st_size}` bytes.\n'
           )
           Path('release-notes.md').write_text(release['release_notes_markdown'] + provenance, encoding='utf-8')
-          Path('release-provenance.json').write_text(json.dumps({'tag': tag, 'source_sha': os.environ['EXPECTED_SHA'], 'toolchain': os.environ['TOOLCHAIN'], 'sha256': digest, 'size': dll.stat().st_size}, indent=2))
+          Path('release-provenance.json').write_text(json.dumps({'tag': os.environ['TAG'], 'source_sha': os.environ['EXPECTED_SHA'], 'toolchain': os.environ['RUSTUP_TOOLCHAIN'], 'sha256': digest, 'size': dll.stat().st_size}, indent=2))
           PY
           cat release-provenance.json >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: restored-${{ inputs.tag }}
+          name: restored-v0.5.0
           path: |
-            target/release/UnchainedPlugin.dll
+            build/Output/Release/UnchainedPlugin.dll
             release-provenance.json
             release-notes.md
-            Cargo.lock
 
-      - name: Publish missing release without replacing assets or changing latest
+      - name: Restore tag and publish without replacing assets or changing latest
         shell: bash
         run: |
           gh api "repos/$GH_REPO/releases/tags/$TAG" > existing-release.json 2> release-query-error.txt && { echo 'Release already exists; refusing to replace it.' >&2; exit 1; }
           grep -q 'HTTP 404' release-query-error.txt
-          gh release create "$TAG" target/release/UnchainedPlugin.dll --verify-tag --latest=false --title "UnchainedPlugin $TAG" --notes-file release-notes.md
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > existing-tag.json 2> tag-query-error.txt; then
+            test "$(python -c 'import json;print(json.load(open("existing-tag.json"))["object"]["sha"])')" = "$EXPECTED_SHA"
+          else
+            grep -q 'HTTP 404' tag-query-error.txt
+            # GITHUB_TOKEN avoids triggering the obsolete tag-push workflow.
+            gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$EXPECTED_SHA"
+          fi
+          gh release create "$TAG" build/Output/Release/UnchainedPlugin.dll --verify-tag --latest=false --title "UnchainedPlugin $TAG" --notes-file release-notes.md
