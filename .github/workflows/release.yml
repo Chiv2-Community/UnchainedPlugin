@@ -1,101 +1,104 @@
-﻿name: Release
+name: Restore RC1/RC2 releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to restore without moving it
+        required: true
+        type: choice
+        options:
+          - v1.0.0-RC1
+          - v1.0.0-RC2
 
 permissions:
   contents: write
 
-on:
-  push:
-    tags:
-      - 'v*'
+concurrency:
+  group: restore-release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  validate-plugin:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
-        with:
-          plugin_file: plugin.json
-
-  build:
-    needs: validate-plugin
+  restore:
     runs-on: windows-2022
-
+    env:
+      TAG: ${{ inputs.tag }}
+      TOOLCHAIN: nightly-2026-03-23
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: Chiv2-Community/UnchainedPlugin
     steps:
+      - name: Validate historical tag
+        shell: bash
+        run: |
+          case "$TAG" in
+            v1.0.0-RC1) echo 'EXPECTED_SHA=b5ba0c6927bd0572a3053d030e734571b381c9d0' >> "$GITHUB_ENV" ;;
+            v1.0.0-RC2) echo 'EXPECTED_SHA=4c3373a071ffa9390b62c9661c153b6f08ce1174' >> "$GITHUB_ENV" ;;
+            *) echo 'Only the original RC1 and RC2 tags may be restored.' >&2; exit 1 ;;
+          esac
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
           submodules: recursive
 
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-Release
-
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      # Extract version from tag (remove 'v' prefix)
-      - name: Get version from tag
-        id: get_version
+      - name: Verify source and package version
         shell: bash
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Extracted version: $VERSION"
-
-      # Check if version in Cargo.toml matches the tag
-      - name: Verify version matches tag
-        shell: bash
-        env:
-          TAG_VERSION: ${{ steps.get_version.outputs.VERSION }}
-        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse "$TAG^{commit}")" = "$EXPECTED_SHA"
           CARGO_VERSION=$(grep -m 1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-          if [ "${CARGO_VERSION%%+*}" != "${TAG_VERSION%%+*}" ]; then
-            echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($TAG_VERSION)"
-            exit 1
-          fi
+          test "$CARGO_VERSION" = "${TAG#v}"
+          test -z "$(git status --porcelain)"
 
-      # Run tests
-      - name: Test
-        run: cargo test --release
-
-      # Build the project
-      - name: Build
-        run: cargo build --release
-
-      # Create GitHub Release
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
+      # New nightlies reject these tags' historical c_void-returning hooks.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
-          draft: false
-          prerelease: false
-          files: target/release/UnchainedPlugin.dll
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: nightly-2026-03-23
 
-  request-registry-release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    concurrency:
-      group: registry-release-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - name: Submit DLL release request
-        uses: Chiv2-Community/zero-infra-mod-registry/actions/automated-publish@v1
+      - name: Test original release source
+        run: cargo +${{ env.TOOLCHAIN }} test --release --locked
+
+      - name: Build original release source
+        run: cargo +${{ env.TOOLCHAIN }} build --release --locked
+
+      - name: Restore original notes and record provenance
+        shell: bash
+        run: |
+          gh api 'repos/Chiv2-Community/C2ModRegistry/contents/dll_db/packages/Chiv2-Community/UnchainedPlugin.json?ref=770ba5162a0f980d601ec7ceb1782b3978a5a69e' --jq .content | base64 --decode > registry-original.json
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          tag = os.environ['TAG']
+          release = next(r for r in json.loads(Path('registry-original.json').read_text())['releases'] if r['tag'] == tag)
+          dll = Path('target/release/UnchainedPlugin.dll')
+          digest = hashlib.sha256(dll.read_bytes()).hexdigest()
+          provenance = (
+              '\n\n## Restored release\n\n'
+              'The repository was deleted and recreated to disassociate it from the old '
+              '`nihilianth/UnchainedPlugin` fork, so this release had to be republished. '
+              'Minor differences in the Cargo build change the DLL hash.\n\n'
+              f"- Original tag: `{tag}` at `{os.environ['EXPECTED_SHA']}`; source and tag unchanged.\n"
+              f"- Toolchain: `{os.environ['TOOLCHAIN']}`; locked release tests and build passed.\n"
+              f'- SHA-256: `{digest}`.\n'
+              f'- Size: `{dll.stat().st_size}` bytes.\n'
+          )
+          Path('release-notes.md').write_text(release['release_notes_markdown'] + provenance, encoding='utf-8')
+          Path('release-provenance.json').write_text(json.dumps({'tag': tag, 'source_sha': os.environ['EXPECTED_SHA'], 'toolchain': os.environ['TOOLCHAIN'], 'sha256': digest, 'size': dll.stat().st_size}, indent=2))
+          PY
+          cat release-provenance.json >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
         with:
-          endpoint: https://registry.polehammer.net/registrations
-          kind: plugin
-          asset_name: UnchainedPlugin.dll
+          name: restored-${{ inputs.tag }}
+          path: |
+            target/release/UnchainedPlugin.dll
+            release-provenance.json
+            release-notes.md
+
+      - name: Publish missing release without replacing assets or changing latest
+        shell: bash
+        run: |
+          gh api "repos/$GH_REPO/releases/tags/$TAG" > existing-release.json 2> release-query-error.txt && { echo 'Release already exists; refusing to replace it.' >&2; exit 1; }
+          grep -q 'HTTP 404' release-query-error.txt
+          gh release create "$TAG" target/release/UnchainedPlugin.dll --verify-tag --latest=false --title "UnchainedPlugin $TAG" --notes-file release-notes.md
