@@ -67,9 +67,7 @@ pub struct CLIArgs {
     #[arg(long = "launched-profile")]
     pub launched_profile: Option<String>,
     //
-    #[arg(
-        long = "server-profile-location",
-        default_value = "U:\\Unchained\\2026\\UnchainedPlugin\\test-configs")]
+    #[arg(long = "server-profile-location")]
     pub server_profile_location: Option<String>,
     //
     #[arg(long = "playable-listen")]
