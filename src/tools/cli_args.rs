@@ -67,8 +67,8 @@ pub struct CLIArgs {
     #[arg(long = "launched-profile")]
     pub launched_profile: Option<String>,
     //
-    #[arg(long = "server-profile-location")]
-    pub server_profile_location: Option<String>,
+    #[arg(long = "unchained-profile-location")]
+    pub unchained_profile_location: Option<String>,
     //
     #[arg(long = "playable-listen")]
     pub playable_listen: bool,
@@ -351,7 +351,7 @@ mod tests {
                 is_headless: false,
                 next_map: None,
                 launched_profile: None,
-                server_profile_location: None,
+                unchained_profile_location: None,
                 playable_listen: false,
                 register: false,
                 server_browser_backend: None,
