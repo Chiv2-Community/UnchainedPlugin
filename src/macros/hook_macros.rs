@@ -59,17 +59,17 @@ macro_rules! CREATE_HOOK {
 macro_rules! __create_hook_inner {
     // 1. Basic Shorthand: Name, (args), {body}
     ($name:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, ACTIVE, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, ACTIVE, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 2. Status Identifier: Name, ACTIVE/INACTIVE, (args), {body}
     ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, $status, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, $status, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 3. NEW: Explicit Condition Block/Closure: Name, { || cond }, (args), {body}
     ($name:ident, { $cond:expr }, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
-        $crate::__create_hook_impl!($name, { $cond }, PRE, ::std::ffi::c_void, ( $( $arg: $ty ),+ ), $body);
+        $crate::__create_hook_impl!($name, { $cond }, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
     // 4. Explicit Return Type: Name, OutType, (args), {body}
