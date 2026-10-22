@@ -41,3 +41,7 @@ Native Linux library tests remain blocked by `retour`'s unsupported `stdcall`/`f
 - An independent full review was still in progress when this was recorded. The CI result validates the submitted head; it does not establish that the unresolved live HTTP failures are fixed.
 
 Source: session `ses_ed7be2d91ffeonK4Di8UKbHXLI`, response `msg_164ba78bb0016txRGoAAb7kiT2`. The supplied conversation was compacted; this update relies only on the response's CI status and its retained run output.
+
+## Subsequent developments (2026-10-22)
+
+The policy's 6000-unit boundary was corrected in [Flush Discord batches at the exact character ceiling](2026-10-22-discord-exact-character-ceiling.md), implemented by `0b6a0289e1db432ff26bac9ef32e44fbf2a7f636`. The prior wording "before exceeding 6000 UTF-16 units" was incomplete: a batch exactly at 6000 units also now flushes immediately. The ten-embed and one-second inactivity rules remain current.
