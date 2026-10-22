@@ -12,6 +12,7 @@ const DEFAULT_MOD_ROOT: &str = "/Game/Mods/AgMods";
 const MODS_TREE_PREFIX: &str = "/Game/Mods/";
 const MAP_ROTATION_DIR: &str = "map-rotation-config";
 
+#[allow(unused_macros)]
 #[cfg(feature = "config_overrides_verbose_hooks")]
 macro_rules! config_debug {
     ($($arg:tt)*) => {
@@ -19,6 +20,7 @@ macro_rules! config_debug {
     };
 }
 
+#[allow(unused_macros)]
 #[cfg(not(feature = "config_overrides_verbose_hooks"))]
 macro_rules! config_debug {
     ($($arg:tt)*) => {};
