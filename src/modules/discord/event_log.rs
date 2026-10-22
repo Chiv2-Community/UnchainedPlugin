@@ -1,38 +1,24 @@
 //! Posts a human-readable log of game events to a configured Discord channel.
 //!
-//! The subscriber queues up to 256 events without waiting for Discord. One worker
-//! formats and sends them in order, batching at most 10 embeds / 6000 UTF-16 units.
-//! Partial batches flush five seconds after their first event, independently of
-//! bus ticks. Descriptions exceeding 4096 units are truncated with an ellipsis.
-//!
-//! On overload, new events are dropped and counted in warnings at most once every
-//! five seconds. Failed sends retain the shared Discord helper's log-and-discard
-//! behavior (no retry). Unsubscribing closes the queue; the worker drains and
-//! flushes it while the runtime remains alive. Process exit cannot guarantee delivery.
+//! Publishes to the shared Discord outbox without waiting for network I/O.
+//! Event-log batches preserve FIFO order; interactive traffic has reserved capacity.
 
 use crate::events::bus::Subscriber;
 use crate::events::models::{Args, CommandSource, GameEvent};
-use crate::features::discord::{send_to_channel, SharedDiscordConfig};
+use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 use async_trait::async_trait;
 use itertools::Itertools;
-use serenity::all::{CreateEmbed, CreateEmbedFooter, CreateMessage, Http};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::time::Instant;
+use serenity::all::{CreateEmbed, CreateEmbedFooter};
 
-mod worker;
+pub(crate) mod batch;
 
-const QUEUE_CAPACITY: usize = 256;
 const FOOTER: &str = "Unchained Event Log";
-const DROP_REPORT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Discord I/O and formatting never run under the game event bus's subscriber lock.
 /// On overload, discard new log events rather than block commands and gameplay subscribers.
 pub struct EventLogSubscriber {
-    sender: mpsc::Sender<GameEvent>,
-    dropped_events: usize,
-    last_drop_report: Instant,
+    outbox: DiscordOutbox,
+    discord_config: SharedDiscordConfig,
 }
 
 fn command_description(
@@ -49,32 +35,14 @@ fn command_description(
 }
 
 impl EventLogSubscriber {
-    pub fn new(http: Arc<Http>, discord_config: SharedDiscordConfig) -> Self {
-        let (sender, receiver) = mpsc::channel(QUEUE_CAPACITY);
-        let handle = tokio::runtime::Handle::try_current()
-            .unwrap_or_else(|_| crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE.clone());
-        handle.spawn(async move {
-            // Own the handles for the worker's lifetime; each send only borrows them.
-            worker::run(receiver, |embeds| {
-                let http = &http;
-                async move {
-                    let channel_id = discord_config.event_log_channel_id;
-                    if channel_id.is_some() {
-                        send_to_channel(http, channel_id, CreateMessage::new().embeds(embeds))
-                            .await;
-                    }
-                }
-            })
-            .await;
-        });
+    pub fn new(outbox: DiscordOutbox, discord_config: SharedDiscordConfig) -> Self {
         Self {
-            sender,
-            dropped_events: 0,
-            last_drop_report: Instant::now(),
+            outbox,
+            discord_config,
         }
     }
 
-    fn build_embed(event: &GameEvent) -> worker::LogEmbed {
+    pub(crate) fn build_embed(event: &GameEvent) -> batch::LogEmbed {
         let (emoji, title, description, color) = match event {
             GameEvent::JoinEvent(join) => (
                 "📥",
@@ -241,10 +209,10 @@ impl EventLogSubscriber {
         };
 
         let title = format!("{} {}", emoji, title);
-        let (description, description_units) = worker::truncate_description(description);
+        let (description, description_units) = batch::truncate_description(description);
         let characters =
             title.encode_utf16().count() + description_units + FOOTER.encode_utf16().count();
-        worker::LogEmbed {
+        batch::LogEmbed {
             embed: CreateEmbed::new()
                 .title(title)
                 .description(description)
@@ -262,22 +230,8 @@ impl Subscriber<GameEvent> for EventLogSubscriber {
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
-        // Reserve first so overload does not clone an event that will be discarded.
-        match self.sender.try_reserve() {
-            Ok(permit) => permit.send(event.clone()),
-            Err(_) => self.dropped_events = self.dropped_events.saturating_add(1),
-        }
-    }
-
-    async fn on_tick(&mut self) {
-        if self.dropped_events > 0 && self.last_drop_report.elapsed() >= DROP_REPORT_INTERVAL {
-            crate::swarn!(
-                "Discord event log dropped {} events: worker queue full or closed",
-                self.dropped_events
-            );
-            self.dropped_events = 0;
-            self.last_drop_report = Instant::now();
-        }
+        self.outbox
+            .log(self.discord_config.event_log_channel_id, event);
     }
 }
 

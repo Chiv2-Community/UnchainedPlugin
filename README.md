@@ -28,6 +28,11 @@ Both VS Code and RustRover configurations rely on the `CHIVALRY2_DIR` environmen
         - **Install Task**: The **Install UnchainedPlugin** run configuration uses `cargo xtask install` which handles `.env` internally.
 
 
+## Discord delivery
+
+See [Discord delivery](docs/discord-delivery.md) for queueing, batching, ordering,
+and diagnosing delayed messages.
+
 ## Registry integration
 
 CI and release workflows validate `plugin.json` using zero-infra-mod-registry's
