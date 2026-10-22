@@ -33,3 +33,11 @@ The launcher emits `--discord-mention-admins false`. The plugin previously treat
 Evidence: `/home/jbarber/.cache/opencode/discord-outbound-headless-v2-20261022/` (`summary.json`, `samples.json`, `source-hashes.json`, `mapped-dll.json`, `discord-messages.json`, and redacted logs). Private configuration and credentials are excluded from the repository.
 
 Native Linux library tests remain blocked by `retour`'s unsupported `stdcall`/`fastcall` ABIs. Live results cover this pre-review implementation, not later review fixes.
+
+## Subsequent developments (2026-10-22)
+
+- Pull request [#11](https://github.com/Chiv2-Community/UnchainedPlugin/pull/11) was opened from `fix/discord-outbound-bus` at `00ebacbe94bf854ee7095a632958e6e6d47fbcf1`.
+- GitHub Actions run [39824235248](https://github.com/Chiv2-Community/UnchainedPlugin/actions/runs/39824235248) passed metadata validation plus Windows debug and release tests and builds at that exact SHA.
+- An independent full review was still in progress when this was recorded. The CI result validates the submitted head; it does not establish that the unresolved live HTTP failures are fixed.
+
+Source: session `ses_ed7be2d91ffeonK4Di8UKbHXLI`, response `msg_164ba78bb0016txRGoAAb7kiT2`. The supplied conversation was compacted; this update relies only on the response's CI status and its retained run output.
