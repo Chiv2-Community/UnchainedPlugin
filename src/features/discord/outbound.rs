@@ -3,7 +3,10 @@
 //! Dashboard updates replace pending state rather than building a backlog.
 use super::{diagnostics, SharedDiscordConfig};
 use crate::events::models::GameEvent;
-use crate::modules::discord::event_log::{batch::Batch, EventLogSubscriber};
+use crate::modules::discord::event_log::{
+    batch::{Batch, MAX_CHARACTERS},
+    EventLogSubscriber,
+};
 use futures::FutureExt;
 use serenity::all::{ChannelId, CreateEmbed, CreateMessage, EditMessage, Http, MessageId};
 use serenity::http::Route;
@@ -324,7 +327,8 @@ where
                 }
                 batch.push(entry);
                 if batch.is_full() {
-                    send_batch(&mut send, &mut requests, &mut batch, worker, "embed_limit", first_event, (rx.events.len(), rx.messages.len()));
+                    let reason = if batch.characters() >= MAX_CHARACTERS { "character_limit" } else { "embed_limit" };
+                    send_batch(&mut send, &mut requests, &mut batch, worker, reason, first_event, (rx.events.len(), rx.messages.len()));
                 }
             }
         }
@@ -473,6 +477,57 @@ mod tests {
             .sum();
             assert!(units <= 6000);
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn exact_character_limit_flushes_immediately_with_formatted_chat_events() {
+        use crate::events::models::{ChatSource, ChatType, GameChatMessage};
+
+        let mut chat = GameChatMessage {
+            chat_source: ChatSource::Discord,
+            chat_type: ChatType::Global,
+            sender: "Player".into(),
+            message: String::new(),
+        };
+        let overhead =
+            EventLogSubscriber::build_embed(&GameEvent::GameChatMessageEvent(chat.clone()))
+                .characters;
+        chat.message = "🩸".repeat((2000 - overhead) / 2);
+        if (2000 - overhead) % 2 != 0 {
+            chat.message.push('a');
+        }
+        let event = GameEvent::GameChatMessageEvent(chat);
+        assert_eq!(EventLogSubscriber::build_embed(&event).characters, 2000);
+
+        let (sender, mut received, task) = start();
+        let started = Instant::now();
+        for _ in 0..2 {
+            sender.events.try_send(Queued::new(event.clone())).unwrap();
+        }
+        tokio::task::yield_now().await;
+        assert!(received.try_recv().is_err());
+        sender.events.try_send(Queued::new(event)).unwrap();
+        tokio::task::yield_now().await;
+        let value = received
+            .try_recv()
+            .expect("6000 UTF-16 units must flush without waiting");
+        assert_eq!(Instant::now(), started, "no inactivity time has elapsed");
+        let embeds = value["embeds"].as_array().unwrap();
+        assert_eq!(embeds.len(), 3);
+        for embed in embeds {
+            let units: usize = [
+                embed["title"].as_str().unwrap(),
+                embed["description"].as_str().unwrap(),
+                embed["footer"]["text"].as_str().unwrap(),
+            ]
+            .iter()
+            .map(|text| text.encode_utf16().count())
+            .sum();
+            assert_eq!(units, 2000);
+        }
+        drop(sender);
+        task.await.unwrap();
+        assert!(received.try_recv().is_err());
     }
 
     #[tokio::test(start_paused = true)]

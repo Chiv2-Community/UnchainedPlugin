@@ -2,7 +2,7 @@
 use serenity::all::CreateEmbed;
 
 const MAX_EMBEDS: usize = 10;
-const MAX_CHARACTERS: usize = 6000;
+pub(crate) const MAX_CHARACTERS: usize = 6000;
 const MAX_DESCRIPTION: usize = 4096;
 
 pub(crate) struct LogEmbed {
@@ -46,7 +46,7 @@ impl Batch {
         self.embeds.is_empty()
     }
     pub fn is_full(&self) -> bool {
-        self.embeds.len() == MAX_EMBEDS
+        self.embeds.len() >= MAX_EMBEDS || self.characters >= MAX_CHARACTERS
     }
     pub fn fits(&self, entry: &LogEmbed) -> bool {
         !self.is_full() && self.characters + entry.characters <= MAX_CHARACTERS
