@@ -1,6 +1,6 @@
 use anyhow::Context;
-use log4rs::init_raw_config;
-use log4rs::config::RawConfig;
+use log4rs::config::{Config, Deserializers, RawConfig};
+use super::console_encoder::ConsoleEncoderDeserializer;
 
 #[allow(unused_imports)]
 use super::syslog::SyslogAppender;
@@ -56,19 +56,29 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
 }
 
 fn init_logger_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<()> {
+    let config = config_from_yaml(yaml, config_source_name)?;
+    log4rs::init_config(config).with_context(|| {
+        format!("Failed to initialize logger from config {}", config_source_name)
+    })?;
+    Ok(())
+}
+
+fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
     let raw_config: RawConfig = serde_yaml::from_str(yaml).with_context(|| {
         format!(
             "Failed to parse logger config {}",
             config_source_name
         )
     })?;
-    init_raw_config(raw_config).with_context(|| {
-        format!(
-            "Failed to initialize logger from config {}",
-            config_source_name
-        )
-    })?;
-    Ok(())
+    let mut deserializers = Deserializers::default();
+    deserializers.insert("module_console", ConsoleEncoderDeserializer);
+    let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
+    anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
+    Config::builder()
+        .appenders(appenders)
+        .loggers(raw_config.loggers())
+        .build(raw_config.root())
+        .with_context(|| format!("Invalid logger config {}", config_source_name))
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {
@@ -84,7 +94,8 @@ fn apply_logger_placeholders(yaml: &str) -> String {
 
     if let Err(error) = std::fs::create_dir_all(&log_dir) {
         eprintln!(
-            "Failed to create log directory {}: {}",
+            "[{}] Failed to create log directory {}: {}",
+            module_path!(),
             log_dir.display(),
             error
         );
@@ -114,4 +125,82 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use log::{Level, Log, Metadata};
+
+    #[test]
+    fn embedded_console_config_loads() {
+        let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
+        // Exercise the shipped console config without opening log files.
+        yaml["appenders"].as_mapping_mut().unwrap()
+            .retain(|name, _| name.as_str() == Some("console"));
+        yaml["root"]["appenders"] = serde_yaml::from_str("[console]").unwrap();
+        let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "embedded").unwrap();
+        let logger = log4rs::Logger::new(config);
+        assert!(logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::tools::logger").level(Level::Debug).build()));
+        assert!(!logger.enabled(&Metadata::builder()
+            .target("serenity::client").level(Level::Info).build()));
+    }
+
+    #[test]
+    fn module_filters_apply_to_descendants_without_hiding_siblings() {
+        let config = config_from_yaml(r#"
+appenders:
+  console:
+    kind: console
+    encoder:
+      kind: module_console
+loggers:
+  "UnchainedPlugin::modules::vote":
+    level: warn
+  "UnchainedPlugin::features::rcon":
+    level: off
+root:
+  level: debug
+  appenders: [console]
+"#, "test").unwrap();
+        let logger = log4rs::Logger::new(config);
+        for target in ["UnchainedPlugin::modules::vote", "UnchainedPlugin::modules::vote::child"] {
+            assert!(!logger.enabled(&Metadata::builder().target(target).level(Level::Debug).build()));
+            assert!(logger.enabled(&Metadata::builder().target(target).level(Level::Warn).build()));
+        }
+        assert!(logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::modules::votekick").level(Level::Debug).build()));
+        assert!(!logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::features::rcon").level(Level::Error).build()));
+    }
+
+    #[test]
+    fn standard_pattern_overrides_still_work() {
+        config_from_yaml(r#"
+appenders:
+  console:
+    kind: console
+    encoder:
+      pattern: "{l} [{t}] {m}{n}"
+root:
+  level: info
+  appenders: [console]
+"#, "override").unwrap();
+    }
+
+    #[test]
+    fn invalid_encoder_is_not_silently_dropped() {
+        let error = config_from_yaml(r#"
+appenders:
+  console:
+    kind: console
+    encoder:
+      kind: missing_encoder
+root:
+  level: debug
+  appenders: [console]
+"#, "bad.yaml").unwrap_err();
+        assert!(error.to_string().contains("bad.yaml"));
+    }
 }

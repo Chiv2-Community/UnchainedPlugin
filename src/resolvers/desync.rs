@@ -205,7 +205,6 @@ CREATE_HOOK!(
                     process_event_names(object, function);
 
                 log::error!(
-                    target: "ProcessEvent",
                     "Depth limit {} reached at {}::{}; dropping event",
                     PROCESS_EVENT_MAX_DEPTH,
                     class_name,

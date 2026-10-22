@@ -18,7 +18,6 @@ macro_rules! __slog_internal {
         // use std::io::Write;
 
         let mut context_parts = vec![];
-        let mut target: Option<String> = None;
 
         $(
             match stringify!($flag) {
@@ -32,11 +31,8 @@ macro_rules! __slog_internal {
                     }
                     let short_name = extract_segment($crate::function!()).unwrap();
                     context_parts.push(format!("{}", short_name));
-                    // target = Some(short_name);              
-                    target = Some("function".to_string());
                 }
                 "func" => {
-                    target = Some("function".to_string());
                     context_parts.push(format!("{}", $crate::function!()))
                 },
                 "file" => context_parts.push(file!().to_string()),
@@ -46,18 +42,14 @@ macro_rules! __slog_internal {
                 _        => {}
             }
         )+
-        if let Some(tgt) = target {
-            log::$level!(target: &tgt, "[{}] {}", context_parts.join("|"), format_args!($($arg)*));
-        }
-        else {
-            log::$level!("[{}] {}", context_parts.join("|"), format_args!($($arg)*));
-        }
+        log::$level!(target: module_path!(), "[{}] {}", context_parts.join("|"), format_args!($($arg)*));
 
     }};
 
     // No flags
     ( $level:ident, $($arg:tt)* ) => {{
         log::$level!(
+            target: module_path!(),
             "[{}:{}:{}] {}",
             $crate::function!(),
             std::line!(),
@@ -165,14 +157,63 @@ macro_rules! serror {
 #[macro_export]
 macro_rules! debug_where {
     () => {
-        log::debug!(target: "function", "From: {}", $crate::function!());
+        log::debug!(target: module_path!(), "From: {}", $crate::function!());
     };
     ($($arg:tt)*) => {
         log::debug!(
-            target: "function",
+            target: module_path!(),
             "[{}] - {}",
             $crate::function!(),
             format!($($arg)*)
         );
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    struct Capture(Mutex<Vec<(String, String)>>);
+    static CAPTURE: Capture = Capture(Mutex::new(Vec::new()));
+
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool { true }
+        fn log(&self, record: &log::Record) {
+            if record.target().starts_with(module_path!()) {
+                self.0.lock().unwrap().push((record.target().into(), record.args().to_string()));
+            }
+        }
+        fn flush(&self) {}
+    }
+
+    mod child {
+        pub fn emit() { crate::sinfo!(f; "child message"); }
+    }
+
+    #[test]
+    fn helpers_use_calling_module_for_every_level_and_flag() {
+        log::set_logger(&CAPTURE).unwrap();
+        log::set_max_level(log::LevelFilter::Trace);
+        crate::sinfo!("plain info");
+        crate::swarn!("plain warning");
+        crate::serror!("plain error");
+        crate::sdebug!("plain debug");
+        crate::strace!("plain trace");
+        crate::sinfo!(f; "short function");
+        crate::swarn!(func; "full function");
+        crate::serror!(file, line, column, mod; "source context");
+        crate::sdebug!(f, line; "debug context");
+        crate::strace!(func, mod; "trace context");
+        crate::debug_where!();
+        crate::debug_where!("state: {}", "ready");
+        child::emit();
+
+        let records = CAPTURE.0.lock().unwrap();
+        assert_eq!(records.len(), 13);
+        for (target, _) in &records[..12] {
+            assert_eq!(target, module_path!());
+        }
+        assert!(records[5].1.contains("helpers_use_calling_module_for_every_level_and_flag"));
+        assert_eq!(records[12].0, concat!(module_path!(), "::child"));
+    }
 }

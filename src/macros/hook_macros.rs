@@ -204,7 +204,7 @@ macro_rules! TRY_CALL_ORIGINAL {
             #[allow(unused_unsafe)]
             let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
             if !is_init {
-                eprintln!("⚠️ Detour {} is not initialized. Skipping.", stringify!($name));
+                log::warn!("Detour {} is not initialized. Skipping.", stringify!($name));
                 return; // The "TRY" part: exit the caller
             }
             
@@ -235,7 +235,7 @@ macro_rules! TRY_OR_RETURN {
         match $call {
             Ok(val) => val,
             Err(e) => {
-                eprintln!("Error: {}", e);
+                log::error!("Error: {}", e);
                 return;
             }
         }

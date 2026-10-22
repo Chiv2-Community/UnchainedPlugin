@@ -63,7 +63,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
         Ok(info) => {
 			crate::sinfo!(f; "info: {:#?}", info);
         }
-        Err(e) => eprintln!("Error: {}", e),
+        Err(e) => log::error!("Error: {}", e),
     }
 });
 

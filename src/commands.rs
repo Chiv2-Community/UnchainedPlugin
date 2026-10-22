@@ -223,7 +223,7 @@ where
                 self.command.execute(parsed, command).await;
             }
             Err(e) => {
-                println!("Failed to parse command arguments for {}: {}", command.name, e);
+                log::warn!("Failed to parse command arguments for {}: {}", command.name, e);
             }
         }
     }
