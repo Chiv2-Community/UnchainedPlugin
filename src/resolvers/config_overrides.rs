@@ -16,7 +16,7 @@ const MAP_INDICES_DIR: &str = "map-indices";
 #[cfg(feature = "map_profiles")]
 const MAP_PROFILES_DIR: &str = "map-profiles";
 #[cfg(feature = "map_profiles")]
-const SERVER_SETTINGS_FILE: &str = "server-settings.yaml";
+const SERVER_SETTINGS_FILE: &str = "unchained.yaml";
 
 /// One override layer below `<profile>/ini-overrides/`. Layers are applied in the order they are
 /// collected, so a later layer takes precedence over an earlier one.
@@ -199,7 +199,7 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
 
 #[cfg(feature = "map_profiles")]
 pub fn current_map_profile_name(profile_root: &str) -> Option<String> {
-    // Replaces the map-indices layer: the rotation index is looked up in server-settings.yaml and the
+    // Replaces the map-indices layer: the rotation index is looked up in unchained.yaml and the
     // resulting name selects the map-profiles/<name>/ folder. Unmapped indices get no profile layer.
     let index = current_map_list_index()?;
     let profile = server_settings(profile_root).map_profiles.get(&index)?;
@@ -385,7 +385,7 @@ mod tests {
     fn fixture_map_profile_resolves_to_existing_override() {
         // Same steps as the runtime path (yaml -> profile name -> override path), using the repo fixture.
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/test-configs");
-        let yaml = std::fs::read_to_string(format!("{root}/ini-overrides/server-settings.yaml")).unwrap();
+        let yaml = std::fs::read_to_string(format!("{root}/ini-overrides/unchained.yaml")).unwrap();
         let settings = super::parse_server_settings(&yaml).unwrap();
         let profile = settings.map_profiles.get(&1).expect("fixture maps index 1");
         let paths = build_override_paths(root, &["Engine.ini".to_string()], &[(OverrideLayer::MapProfile, profile.clone())]);
