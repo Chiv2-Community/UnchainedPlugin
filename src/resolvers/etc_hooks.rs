@@ -1,7 +1,7 @@
 use std::{iter::Enumerate, os::raw::c_void};
 
 use crate::{
-    game::engine::{FActorSpawnParameters, FRotator}, resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config}, tools::hook_globals::{globals, globals_initialized}, ue::{FString, FVector, UClass, UObject},
+    game::engine::{FActorSpawnParameters, FRotator}, resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config}, tools::hook_globals::{cli_args, globals, globals_initialized}, ue::{FString, FVector, UClass, UObject},
 };
 
 #[cfg(feature = "config_overrides_verbose_hooks")]
@@ -92,7 +92,7 @@ define_pattern_resolver!(GetConfigName, [
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"
 ]);
 
-CREATE_HOOK!(GetConfigName, ACTIVE, NONE, *mut FString, (uclass: *mut UClass, ret_ptr: *mut FString), {
+CREATE_HOOK!(GetConfigName,  { || cli_args().server_profile_location.is_some() }, NONE, *mut FString, (uclass: *mut UClass, ret_ptr: *mut FString), {
     let orig = CALL_ORIGINAL!(GetConfigName(uclass, ret_ptr));
 
     let config_filename = if orig.is_null() {
@@ -119,7 +119,7 @@ define_pattern_resolver!(LoadConfig, [
     "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
 ]);
 
-CREATE_HOOK!(LoadConfig, ACTIVE, NONE, (), (
+CREATE_HOOK!(LoadConfig, { || cli_args().server_profile_location.is_some() }, NONE, (), (
     uObject: *mut UObject,
     config_class: *mut UClass,    // UClass* ConfigClass
     filename: *mut u16,            // const TCHAR* Filename
