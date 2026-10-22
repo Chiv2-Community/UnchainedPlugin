@@ -292,7 +292,7 @@ pub fn init_globals() -> Result<(), String> {
     };
 
     if GLOBALS.set(globals_instance).is_err() {
-        eprintln!("Error: Globals already initialized!");
+        serror!(f; "Error: Globals already initialized!");
     }
     // sdebug!(f; "{GLOBALS:#?}");
     Ok(())
