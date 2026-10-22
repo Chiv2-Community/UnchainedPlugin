@@ -1,170 +1,250 @@
-use std::os::raw::c_void;
-use itertools::Itertools;
+use std::{iter::Enumerate, os::raw::c_void};
 
-use crate::{game::{chivalry2::ATBLGameMode, engine::{FActorSpawnParameters, FRotator, UWorld}}, resolvers::unchained_integration::run_on_game_thread, sinfo, tools::hook_globals::{globals, globals_initialized}, ue::{FString, FVector, UClass, UObject}};
+use crate::{
+    game::engine::{FActorSpawnParameters, FRotator}, resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config}, tools::hook_globals::{globals, globals_initialized}, ue::{FString, FVector, UClass, UObject},
+};
+
+#[cfg(feature = "config_overrides_verbose_hooks")]
+macro_rules! load_config_debug {
+    ($($arg:tt)*) => {
+        crate::sinfo!($($arg)*);
+    };
+}
+
+#[cfg(not(feature = "config_overrides_verbose_hooks"))]
+macro_rules! load_config_debug {
+    ($($arg:tt)*) => {};
+}
 
 // FString * __thiscall UClass::GetConfigName(UClass *this,FString *__return_storage_ptr__)
-define_pattern_resolver!(GetConfigName,[
+// define_pattern_resolver!(GetConfigName,[
+//     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"
+// ]);
+// CREATE_HOOK!(GetConfigName, ACTIVE, NONE, *mut FString, (uclass: *mut UClass, ret_ptr: *mut FString),{
+//     let cls = unsafe { &*uclass };
+//     let mut orig = CALL_ORIGINAL!(GetConfigName(uclass, ret_ptr)) as *mut FString;
+//     unsafe {
+//         let class_path_name = cls
+//             .ustruct
+//             .ufield
+//             .uobject
+//             .uobject_base_utility
+//             .uobject_base
+//             .get_path_name(None);
+//
+//         if class_path_name.contains("ConfigSwapMod_C") {
+//             if let Some(world) = crate::globals().world()  {
+//                 let wrld = &*(world as *mut UWorld);
+//                 let level = (wrld.persistent_level as *mut UObject).as_mut().expect("PersistentLevel was null");
+//                 let level_outer = level
+//                     .uobject_base_utility
+//                     .uobject_base
+//                     .outer_private
+//                     .as_ref().expect("no outer");
+//
+//                 let level_name = level_outer
+//                     .uobject_base_utility
+//                     .uobject_base
+//                     .name_private
+//                     .to_string();
+//                 let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
+//                 let game = game_ptr.as_mut().expect("GameMode was null");
+//                 sinfo!(f; "Level Name:{}", level_name);
+//
+//                 if level_name.contains("TDM_QuarryKP") {
+//                     sinfo!(f; "quarry Level  Detected");
+//                 } else {
+//                     sinfo!(f; "quarry Level NOT Detected");
+//                     let config_filename = if orig.is_null() {
+//                         String::from("<null>")
+//                     } else {
+//                         (*orig).to_string()
+//                     };
+//
+//                     let repl_config_filename = config_filename.replace("Engine.ini", "Engine2.ini");
+//                     let new_fstr = Box::new(FString::from(repl_config_filename.as_str()));
+//                     orig = Box::into_raw(new_fstr);
+//                     if !ret_ptr.is_null() {
+//                         let new_fstr2 = Box::new(FString::from(repl_config_filename.as_str()));
+//                         std::ptr::write(ret_ptr, *new_fstr2);
+//                     }
+//                 }
+//             }
+//
+//             let config_filename_final = if orig.is_null() {
+//                 String::from("<null>")
+//             } else {
+//                 (*orig).to_string()
+//             };
+//             sinfo!(f; "GetConfigName: config_filename_final={config_filename_final}");
+//         }
+//     }
+//
+//     orig
+// });
+
+
+
+// FString * __thiscall UClass::GetConfigName(UClass *this,FString *__return_storage_ptr__)
+// This hook is a lookup-only probe: it records the config filename the engine would use, but it
+// does not replace or redirect the filename. The real override trigger remains in UObject::LoadConfig.
+define_pattern_resolver!(GetConfigName, [
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"
 ]);
-CREATE_HOOK!(GetConfigName, ACTIVE, NONE, *mut FString, (uclass: *mut UClass, ret_ptr: *mut FString),{
-    // crate::sinfo![f; "Triggered!"];
-    
-    let cls = unsafe { &*uclass };
-    let mut orig = CALL_ORIGINAL!(GetConfigName(uclass, ret_ptr)) as *mut FString;
-    unsafe {
-        let class_path_name = cls
-            .ustruct
-            .ufield
-            .uobject
-            .uobject_base_utility
-            .uobject_base
-            .get_path_name(None);
 
+CREATE_HOOK!(GetConfigName, ACTIVE, NONE, *mut FString, (uclass: *mut UClass, ret_ptr: *mut FString), {
+    let orig = CALL_ORIGINAL!(GetConfigName(uclass, ret_ptr));
 
-        if class_path_name.contains("ConfigSwapMod_C") {
+    let config_filename = if orig.is_null() {
+        String::from("<null>")
+    } else {
+        unsafe { (*orig).to_string() }
+    };
 
-            // run_on_game_thread(move || {
-                crate::sinfo![f; "test: class_path_name={class_path_name}"];
-                
-                if let Some(world) = crate::globals().world()  {
-                    let wrld = &*(world as *mut UWorld);
-                    let level = (wrld.persistent_level as *mut UObject).as_mut().expect("PersistentLevel was null");
-                    let level_outer = level
-                        .uobject_base_utility
-                        .uobject_base
-                        .outer_private
-                        .as_ref().expect("no outer");
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    crate::sdebug!(f; "🧭 [GetConfigName] config_name={config_filename}");
 
-                    let level_name = level_outer
-                        .uobject_base_utility
-                        .uobject_base
-                        .name_private
-                        .to_string();
-                    let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
-                    let game = game_ptr.as_mut().expect("GameMode was null");
-                    sinfo!(f; "Level Name:{}", level_name);
-
-                    if level_name.contains("TDM_QuarryKP") {
-                        sinfo!(f; "quarry Level  Detected");  
-                    }else {
-                        sinfo!(f; "quarry Level NOT Detected");  
-                        let config_filename = if orig.is_null() {
-                            String::from("<null>")
-                        } else {
-                            (*orig).to_string()
-                        };
-
-                        let repl_config_filename = config_filename.replace("Engine.ini", "Engine2.ini");
-                        // allocate a new FString and return a raw pointer to it
-                        let new_fstr = Box::new(FString::from(repl_config_filename.as_str()));
-                        orig =  Box::into_raw(new_fstr);
-                        if !ret_ptr.is_null() {
-                            let new_fstr2 = Box::new(FString::from(repl_config_filename.as_str()));
-                            std::ptr::write(ret_ptr, *new_fstr2);
-                        }
-                    }
-
-                    // let maplist = game.maplist.as_slice().iter().join(", ");
-                    // sinfo!(f; "MapList:{}", maplist);
-                    // sinfo!(f; "MapList Count:{}", game.maplist.as_slice().len());
-                    // sinfo!(f; "MapList Index:{}", game.map_list_index);
-                    
-                }
-
-            // });
-            
-            let config_filename_final = if orig.is_null() {
-                String::from("<null>")
-            } else {
-                (*orig).to_string()
-            };
-            sinfo!(f; "GetConfigName: config_filename_final={config_filename_final}");  
-        }
-    }
-    
     orig
 });
 
-
-
 // void __thiscall UObject::LoadConfig(UObject *this,UClass *param_1,wchar_t *param_2,uint param_3,FProperty *param_4)
+// This hook intentionally does not replace the original config path. Instead it first lets the
+// engine do the normal load for the requested ini, then re-enters the same LoadConfig call for any
+// override file(s) discovered from the server-profile root (for example map-rotation or mod-root
+// overrides). In practice this is a layered load: base config -> normal engine load -> override
+// loads. The re-entry guard prevents an infinite recursion loop if an override file triggers the
+// same hook again. Depending on the current map/mod context, the effective behavior can look like
+// a "triple load": the original config file plus one or more profile overrides.
 define_pattern_resolver!(LoadConfig, [
     "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
 ]);
 
-CREATE_HOOK!(LoadConfig, INACTIVE, NONE, (), (
+CREATE_HOOK!(LoadConfig, ACTIVE, NONE, (), (
     uObject: *mut UObject,
     config_class: *mut UClass,    // UClass* ConfigClass
     filename: *mut u16,            // const TCHAR* Filename
     propagation_flags: u32,        // uint32 PropagationFlags
     property_to_load: *mut c_void  // FProperty* PropertyToLoad
-), {    
-
-    // INACTIVE
-
-    let config_name = if filename.is_null() {
-        String::from("<null>")
-    } else {
-        let msg = widestring::U16CStr::from_ptr_str(filename);
-        msg.to_string_lossy()
-    };
-
-    if !uObject.is_null() && globals_initialized() {
-        let obj = unsafe { &*uObject };
-
-        let object_name = obj
-            .uobject_base_utility
-            .uobject_base
-            .name_private
-            .to_string();
-
-        
-        let actual_class_private = obj.uobject_base_utility.uobject_base.class_private;
-
-        let config_filename_fstr: *mut FString = CALL_ORIGINAL!(
-            GetConfigName(actual_class_private as *mut UClass, std::ptr::null_mut())
-        );
-
-        let config_filename = if config_filename_fstr.is_null() {
-            String::from("<null>")
-        } else {
-            unsafe { (*config_filename_fstr).to_string() }
-        };
-
-        
-        let class_path_name = actual_class_private.as_ref().map(|class| {
-            class
-                .ustruct
-                .ufield
-                .uobject
-                .uobject_base_utility
-                .uobject_base.get_path_name(None)
-        }).unwrap_or_else(|| "<null class>".to_string());
-
-        // if !config_filename.is_null() {
-        //     let cfn = unsafe { (*config_filename).to_string() };
-        //     crate::sinfo![f; "config_filename! {cfn}"];
-        // }
-        // crate::sinfo!(f; "config_filename: {}", (&*config_filename).to_string());
-
-        let actual_class = actual_class_private.as_ref()
-            .map(|class| {
-                class
-                    .ustruct
-                    .ufield
-                    .uobject
-                    .uobject_base_utility
-                    .uobject_base
-                    .name_private
-                    .to_string()
-            })
-            .unwrap_or_else(|| "<null class>".to_string());
-
-        crate::sinfo![f; "LoadConfig: class_path={class_path_name}, actual_class={actual_class}, filename={config_filename}"];
+), {
+    if LOAD_CONFIG_REENTRY.with(|state| state.get()) || !globals_initialized() {
+        return CALL_ORIGINAL!(LoadConfig(
+            uObject,
+            config_class,
+            filename,
+            propagation_flags,
+            property_to_load
+        ));
     }
 
+    let obj = unsafe { &*uObject };
+    let actual_class_private = obj.uobject_base_utility.uobject_base.class_private as *mut UClass;
 
+    let lookup_config_name = if actual_class_private.is_null() {
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sdebug!(f; "🧭 [LoadConfig] lookup_config_name config_class is null");
+        None
+    } else {
+        let mut lookup_storage = FString::default();
+        let lookup_ptr = CALL_ORIGINAL!(GetConfigName(actual_class_private, &mut lookup_storage as *mut FString));
+        let resolved = if lookup_ptr.is_null() {
+            if lookup_storage.is_empty() {
+                None
+            } else {
+                Some(lookup_storage.to_string())
+            }
+        } else {
+            Some(unsafe { (*lookup_ptr).to_string() })
+        };
+
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sdebug!(f; "🧭 [LoadConfig] GetConfigName fallback={:?}", resolved);
+        resolved
+    };
+
+    let original_filename = if filename.is_null() {
+        lookup_config_name
+    } else {
+        let msg = widestring::U16CStr::from_ptr_str(filename);
+        let parsed = msg.to_string_lossy().to_owned();
+        if parsed.trim().is_empty() {
+            lookup_config_name
+        } else {
+            Some(parsed)
+        }
+    };
+
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    crate::sdebug!(f; "🧨 [LoadConfig] ENTRY original={:?} reentry={}", original_filename, LOAD_CONFIG_REENTRY.with(|state| state.get()));
+
+    let object_path = if uObject.is_null() {
+        None
+    } else {
+        let obj = unsafe { &*uObject };
+        let path = obj
+            .uobject_base_utility
+            .uobject_base
+            .get_path_name(None);
+        if path.trim().is_empty() {
+            None
+        } else {
+            Some(path)
+        }
+    };
+
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    crate::sdebug!(f; "🧩 [LoadConfig] object_path={:?}", object_path);
+
+    let override_filenames = resolve_profile_override_paths_for_config(
+        original_filename.as_deref(),
+        object_path.as_deref(),
+    );
+
+
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    crate::sdebug!(f; "🔀 [LoadConfig] override_filenames={:?}", override_filenames);
+
+    if !override_filenames.is_empty() {
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sdebug!(f; "🧩 [LoadConfig] override_filenames for object {:?}", object_path);
+    }
+    for (i, override_name) in override_filenames.iter().enumerate() {
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        load_config_debug!(f; "LoadConfig: override_name={override_name}");
+    }
+
+    if !override_filenames.is_empty() {
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sinfo!(f; "✅ [LoadConfig] executing layered override load for {} override(s)", override_filenames.len());
+
+        LOAD_CONFIG_REENTRY.with(|state| state.set(true));
+
+        CALL_ORIGINAL!(LoadConfig(
+            uObject,
+            config_class,
+            filename,
+            propagation_flags,
+            property_to_load
+        ));
+
+        for override_name in &override_filenames {
+            let override_path = widestring::U16CString::from_str(override_name.as_str()).unwrap();
+            CALL_ORIGINAL!(LoadConfig(
+                uObject,
+                config_class,
+                override_path.as_ptr() as *mut u16,
+                propagation_flags,
+                property_to_load
+            ));
+        }
+
+        LOAD_CONFIG_REENTRY.with(|state| state.set(false));
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sdebug!(f; "🧹 [LoadConfig] finished override chain");
+        return;
+    }
+
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    crate::sdebug!(f; "⏭️ [LoadConfig] no override list -> continuing original path");
 
     let orig = CALL_ORIGINAL!(LoadConfig(
         uObject,
@@ -174,15 +254,13 @@ CREATE_HOOK!(LoadConfig, INACTIVE, NONE, (), (
         property_to_load
     ));
 
-    if !filename.is_null() {
-        let msg = widestring::U16CStr::from_ptr_str(filename);
-        let filename = msg.to_string_lossy();
-        crate::sinfo![f; "LoadConfig: filename={filename}"];
+    if let Some(ref name) = original_filename {
+        #[cfg(feature = "config_overrides_verbose_hooks")]
+        crate::sinfo![f; "LoadConfig: filename={name}"];
     }
 
     orig
 });
-
 
 // UTBLMapSummary * __cdecl UTBLSystemLibrary::GetMapSummary(UObject *param_1,FString *param_2,bool param_3)
 define_pattern_resolver!(GetMapSummary, [
@@ -261,7 +339,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
         Ok(info) => {
 			crate::sinfo!(f; "info: {:#?}", info);
         }
-        Err(e) => eprintln!("Error: {}", e),
+        Err(e) => crate::serror!(f; "Error: {}", e),
     }
 });
 
