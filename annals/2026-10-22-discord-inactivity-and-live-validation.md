@@ -3,6 +3,7 @@
 - Date: 2026-10-22
 - Implementation: `1683ccf` on `fix/discord-outbound-bus`, based on `292d904`.
 - Supersedes: [five-second flush policy](2026-10-22-discord-outbound-batch-flush-and-diagnostics.md).
+- Source confirmation: session `ses_ed7be2d91ffeonK4Di8UKbHXLI`, response `msg_1649f7989001hizSH3n2CJkkNo`. The supplied transcript is compacted; this response confirmed the implemented one-second policy, detached HTTP delivery, and an earlier 91-passed/3-ignored Wine run. Later validation below is separately evidenced.
 
 ## Final policy
 
