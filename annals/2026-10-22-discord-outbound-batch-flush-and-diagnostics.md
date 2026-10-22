@@ -1,5 +1,7 @@
 # Discord outbound batch flush policy and delivery diagnostics
 
+> Superseded by [the inactivity-timer and detached-delivery follow-up](2026-10-22-discord-inactivity-and-live-validation.md). The five-second policy and deployment status below describe this earlier decision only.
+
 - Date: 2026-10-22
 - Status: implemented (uncommitted)
 - Scope: Discord event-log batching and outbound delivery observability
