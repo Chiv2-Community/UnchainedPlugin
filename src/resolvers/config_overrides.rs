@@ -236,7 +236,8 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
     let mut candidates = Vec::new();
 
     if let Some(name) = original_path {
-        let file_name = name.rsplit('/').next().unwrap_or(name).trim();
+        let name = name.replace('\\', "/");
+        let file_name = name.rsplit('/').next().unwrap_or(&name).trim();
         if !file_name.is_empty() {
             candidates.push(file_name.to_string());
         }

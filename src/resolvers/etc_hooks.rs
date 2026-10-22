@@ -47,9 +47,26 @@ CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() },
     let obj = unsafe { &*uObject };
     let actual_class_private = obj.uobject_base_utility.uobject_base.class_private as *mut UClass;
 
-    let lookup_config_name = if actual_class_private.is_null() {
-        None
-    } else {
+    // Mirror the engine's early return in UObject::LoadConfig: classes without CLASS_Config never
+    // reach GetConfigName there, and GetConfigName is fatal for a class whose config name is None.
+    // LoadConfig also runs for every non-dynamic CDO, config class or not.
+    // https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Obj.cpp#L2017-L2020
+    // https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Class.cpp#L5244-L5247
+    // https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/UObjectGlobals.cpp#L2767-L2770
+    const CLASS_CONFIG: u32 = 0x0000_0004;
+    let is_config_class = !actual_class_private.is_null()
+        && unsafe { (*actual_class_private).class_flags } & CLASS_CONFIG != 0;
+    if !is_config_class {
+        return CALL_ORIGINAL!(LoadConfig(
+            uObject,
+            config_class,
+            filename,
+            propagation_flags,
+            property_to_load
+        ));
+    }
+
+    let lookup_config_name = {
         let mut lookup_storage = FString::default();
         let lookup_ptr = CALL_ORIGINAL!(GetConfigName(actual_class_private, &mut lookup_storage as *mut FString));
         if lookup_ptr.is_null() {
