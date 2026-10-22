@@ -271,7 +271,6 @@ impl MetaDataFilter {
 
 impl Filter for MetaDataFilter {
     fn filter(&self, record: &Record) -> Response {
-        println!("FILTERING {record:#?}");
         if record.level() > self.level {
             Response::Reject
         } else {

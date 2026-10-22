@@ -16,7 +16,7 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
     }
 
     if resolvers_to_scan.is_empty() {
-        println!("All signatures already found");
+        log::info!("All signatures already found");
         return Ok(HashMap::new());
     }
 

@@ -187,3 +187,38 @@ If you need to debug or check the plugin's output, you can find the logs in the 
 `%localappdata%/Chivalry 2/Saved_{saveddirsuffix}/Logs`
 
 Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.g., `Steam` or `Epic`).
+
+### Colors and module filters
+
+The default console output includes each message's target. Debug and trace lines
+are gray; INFO headers are blue, WARN headers yellow, and ERROR headers red.
+File logs do not use console colors. Redirected console output is also uncolored.
+
+Use `log` macros or the `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`
+helpers for diagnostics, not `println!`. Targets default to the calling Rust
+module, including when function context flags (`f` or `func`) are used.
+Explicit targets must stay under `module_path!()`, for example
+`concat!(module_path!(), "::game_chat")`.
+
+To filter modules, copy `src/tools/log4rs.default.yaml` to a local file and pass
+its path with `--log4rs-yaml <path>`. Add entries under `loggers`, preserving the
+existing dependency filters:
+
+```yaml
+loggers:
+  "UnchainedPlugin::modules::vote":
+    level: warn
+  "UnchainedPlugin::features::rcon":
+    level: off
+  "UnchainedPlugin::resolvers::messages::client_message::game_chat":
+    level: off
+```
+
+Levels apply to the named module and its descendants, unless a more specific
+entry overrides them. Copy targets from console output or `unchained.log`.
+Legacy targets such as `function`, `RCON`, `game_chat`, and `system_chat` must be
+replaced with their module-scoped targets in existing custom configurations.
+The `module_console` encoder supplies the default colors; standard `pattern`
+encoders remain supported in custom configurations.
+
+Startup failures before the logger is initialized still write directly to stderr.

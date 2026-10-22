@@ -144,14 +144,14 @@ define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 0
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
-    crate::sinfo![f; "\x1b[32m{}\x1b[0m", url_w];
+    crate::sinfo![f; "{}", url_w];
 
     globals().set_world(std::ptr::null_mut());
     crate::sdebug!(f; "OnPreLoadMap: reset globals.world to nullptr; world-dependent actions are skipped until post-load");
 
     if !ENGINE_READY.load(Ordering::SeqCst) {
         ENGINE_READY.store(true, Ordering::SeqCst);
-        log::info!(target: "Engine", "\x1b[32mEngine signaled for initialization\x1b[0m");
+        log::info!("Engine signaled for initialization");
     }
 });
 
@@ -161,7 +161,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
-    sinfo![f; "\x1b[32mTriggered\x1b[0m"];
+    sinfo![f; "Triggered"];
     match globals().world() {
         Some(current_world) => {
             if current_world != world {
@@ -194,7 +194,7 @@ define_pattern_resolver!(SetMatchState,[
     ]);
 // void AGameMode::SetMatchState(FName NewState)
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
-    log::info![target: "Match", "Match state: \x1b[32m{}\x1b[0m", new_state];
+    log::info!["Match state: {}", new_state];
 });
 
 // TODO: FViewport unused

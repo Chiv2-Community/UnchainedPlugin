@@ -363,22 +363,22 @@ impl ModManager {
         let registry = self.registry.lock().unwrap();
         let active = self.active_paths.lock().unwrap();
 
-        println!("\n--- Registered Mods ({}) ---", registry.len());
+        log::info!("--- Registered Mods ({}) ---", registry.len());
         let mut sorted_mods: Vec<&Mod> = registry.values().collect();
         sorted_mods.sort_by(|a, b| a.name.cmp(&b.name));
         for (idx, m) in sorted_mods.iter().enumerate() {
             let is_active = active.contains(&m.object_path);
             let status_tag = if is_active {
-                "\x1b[32m[ Active ]\x1b[0m " // Green
+                "[ Active ]"
             } else {
-                "\x1b[90m[Inactive]\x1b[0m " // Grey
+                "[Inactive]"
             };
-            println!(
+            log::info!(
                 "[{:02}] {status_tag} \"{}\" v{} by {}", 
                 idx, m.name, m.version, m.organization
             );
         }
-        println!("----------------------------\n");
+        log::info!("----------------------------");
     }
 
     pub fn serialize_registry(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> 
