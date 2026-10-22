@@ -60,6 +60,7 @@ kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
 verbose_hooks = [] # print (some) hook triggers to console
+config_overrides_verbose_hooks = [] # print (config_override) hook triggers to console
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest"] # register server with backend
