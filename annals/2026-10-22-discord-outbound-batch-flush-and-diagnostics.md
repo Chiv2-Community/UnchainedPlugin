@@ -3,7 +3,7 @@
 > Superseded by [the inactivity-timer and detached-delivery follow-up](2026-10-22-discord-inactivity-and-live-validation.md). The five-second policy and deployment status below describe this earlier decision only.
 
 - Date: 2026-10-22
-- Status: implemented (uncommitted)
+- Status: superseded
 - Scope: Discord event-log batching and outbound delivery observability
 - Repository: UnchainedPlugin
 - Canonical remote: https://github.com/Chiv2-Community/UnchainedPlugin.git
@@ -78,3 +78,7 @@ The recorded Windows release cross-build completed successfully. The isolated Wi
 - What caused the observed groups of five messages remains unknown.
 - The original multi-minute delivery pauses and live game-process HTTP failures remain undiagnosed.
 - No post-change live-server validation or implementation commit exists at recording time.
+
+## Subsequent developments (2026-10-22)
+
+The five-second post-flush policy was superseded by the one-second inactivity policy implemented in `1683ccf` and recorded in [Discord inactivity batching and live validation](2026-10-22-discord-inactivity-and-live-validation.md). That follow-up also replaced per-channel serial HTTP delivery with bounded detached Tokio tasks. The uncommitted/deployment statements above remain historical descriptions of this earlier version.
