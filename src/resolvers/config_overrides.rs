@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn fixture_map_profile_resolves_to_existing_override() {
         // Same steps as the runtime path (yaml -> profile name -> override path), using the repo fixture.
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/test-configs");
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/test-resources/test-configs");
         let yaml = std::fs::read_to_string(format!("{root}/ini-overrides/unchained.yaml")).unwrap();
         let settings = super::parse_server_settings(&yaml).unwrap();
         let profile = settings.map_profiles.get(&1).expect("fixture maps index 1");
