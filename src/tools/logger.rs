@@ -1,6 +1,6 @@
 use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
-use super::console_encoder::ConsoleEncoderDeserializer;
+use super::console_encoder::{ConsoleAppenderDeserializer, ConsoleEncoderDeserializer};
 
 #[allow(unused_imports)]
 use super::syslog::SyslogAppender;
@@ -72,6 +72,7 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
     })?;
     let mut deserializers = Deserializers::default();
     deserializers.insert("module_console", ConsoleEncoderDeserializer);
+    deserializers.insert("console", ConsoleAppenderDeserializer);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
     anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
     Config::builder()
@@ -131,6 +132,41 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use log::{Level, Log, Metadata};
+
+    #[cfg(unix)]
+    #[test]
+    fn console_color_policy_at_real_output_boundary() {
+        let output = std::process::Command::new("python3")
+            .args(["-c", include_str!("test_console_policy.py")])
+            .arg(std::env::current_exe().unwrap())
+            .arg(format!("{}::console_policy_child", module_path!().split_once("::").unwrap().1))
+            .output().unwrap();
+        assert!(output.status.success(), "{}\n{}",
+            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "subprocess fixture for console_color_policy_at_real_output_boundary"]
+    fn console_policy_child() {
+        let target = std::env::var("UNCHAINED_TEST_CONSOLE_TARGET").unwrap();
+        let config = config_from_yaml(&format!(r#"
+appenders:
+  console:
+    kind: console
+    target: {target}
+    encoder:
+      kind: module_console
+root:
+  level: trace
+  appenders: [console]
+"#), "console-policy-child").unwrap();
+        let logger = log4rs::Logger::new(config);
+        for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+            logger.log(&log::Record::builder().level(level).module_path(Some("policy_child"))
+                .args(format_args!("boundary message")).build());
+        }
+    }
 
     #[test]
     fn log_macros_preserve_messages_and_appender_source_metadata() {
@@ -256,6 +292,16 @@ root:
   level: info
   appenders: [console]
 "#, "override").unwrap();
+    }
+
+    #[test]
+    fn console_adapter_preserves_builtin_configuration_validation() {
+        for options in ["", "target: null", "target: stderr\n    tty_only: true"] {
+            config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "console-options").unwrap();
+        }
+        for options in ["target: invalid", "unknown: true", "encoder:\n      kind: module_console\n      unknown: true"] {
+            assert!(config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "invalid-console-options").is_err());
+        }
     }
 
     #[test]

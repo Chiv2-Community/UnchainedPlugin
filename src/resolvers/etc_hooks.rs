@@ -218,11 +218,11 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
     globals().set_world(std::ptr::null_mut());
     match previous_world {
         Some(world_ptr) => log::warn!(
-            "ClientTravelInternal: map travel started; invalidated globals.world ({:p}) and skipping world-dependent operations until post-load world is set",
+            "map travel started; invalidated globals.world ({:p}) and skipping world-dependent operations until post-load world is set",
             world_ptr
         ),
         None => log::debug!(
-            "ClientTravelInternal: map travel started with globals.world already None; world-dependent operations remain skipped until post-load world is set"
+            "map travel started with globals.world already None; world-dependent operations remain skipped until post-load world is set"
         ),
     }
 

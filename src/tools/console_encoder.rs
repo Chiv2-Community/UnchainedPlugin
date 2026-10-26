@@ -1,5 +1,7 @@
 use log::{Level, Record};
 use log4rs::config::{Deserialize, Deserializers};
+use log4rs::append::{console::{ConsoleAppender, Target}, Append};
+use log4rs::encode::{writer::console::ConsoleWriter, EncoderConfig};
 use log4rs::encode::{pattern::PatternEncoder, Color, Encode, Style, Write};
 
 #[cfg(windows)]
@@ -18,7 +20,7 @@ impl Default for ConsoleEncoder {
         Self {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
             body: PatternEncoder::new(" [{M}] {m}{n}"),
-            truecolor: configure_console_colors(),
+            truecolor: false,
         }
     }
 }
@@ -50,15 +52,20 @@ fn use_truecolor(vt_enabled: bool, wine: bool, windows_terminal: bool) -> bool {
     vt_enabled && (!wine || windows_terminal)
 }
 
-fn configure_console_colors() -> bool {
+fn configure_console_colors(target: Target) -> bool {
+    // Use the appender's own policy, including NO_COLOR and CLICOLOR overrides.
+    let writer = match target {
+        Target::Stdout => ConsoleWriter::stdout(),
+        Target::Stderr => ConsoleWriter::stderr(),
+    };
+    if writer.is_none() { return false; }
     #[cfg(windows)]
     {
-        windows_backend::configure()
+        windows_backend::configure(target)
     }
     #[cfg(not(windows))]
     {
-        use std::io::IsTerminal;
-        std::io::stdout().is_terminal()
+        true
     }
 }
 
@@ -98,6 +105,51 @@ impl Encode for ConsoleEncoder {
 pub struct ConsoleEncoderConfig {}
 
 pub struct ConsoleEncoderDeserializer;
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ConsoleTarget {
+    Stdout,
+    Stderr,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConsoleAppenderConfig {
+    target: Option<ConsoleTarget>,
+    encoder: Option<EncoderConfig>,
+    tty_only: Option<bool>,
+}
+
+pub struct ConsoleAppenderDeserializer;
+
+impl Deserialize for ConsoleAppenderDeserializer {
+    type Trait = dyn Append;
+    type Config = ConsoleAppenderConfig;
+
+    fn deserialize(&self, config: ConsoleAppenderConfig, deserializers: &Deserializers)
+        -> anyhow::Result<Box<dyn Append>> {
+        let target = match config.target.unwrap_or(ConsoleTarget::Stdout) {
+            ConsoleTarget::Stdout => Target::Stdout,
+            ConsoleTarget::Stderr => Target::Stderr,
+        };
+        let mut appender = ConsoleAppender::builder().target(target);
+        if let Some(tty_only) = config.tty_only { appender = appender.tty_only(tty_only); }
+        if let Some(encoder) = config.encoder {
+            let encoder = if encoder.kind == "module_console" {
+                let _: ConsoleEncoderConfig = encoder.config.deserialize_into()?;
+                Box::new(ConsoleEncoder {
+                    truecolor: configure_console_colors(target),
+                    ..ConsoleEncoder::default()
+                }) as Box<dyn Encode>
+            } else {
+                deserializers.deserialize(&encoder.kind, encoder.config)?
+            };
+            appender = appender.encoder(encoder);
+        }
+        Ok(Box::new(appender.build()))
+    }
+}
 
 impl Deserialize for ConsoleEncoderDeserializer {
     type Trait = dyn Encode;

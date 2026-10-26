@@ -7,9 +7,13 @@ use windows::Win32::System::Threading::{CreateMutexW, GetStartupInfoW, ReleaseMu
 
 use super::{fallback_palette, use_truecolor};
 
-pub(super) fn configure() -> bool {
+pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
     unsafe {
-        let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) else { return false };
+        let output = match target {
+            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
+            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
+        };
+        let Ok(handle) = GetStdHandle(output) else { return false };
         let mut mode = CONSOLE_MODE(0);
         if GetConsoleMode(handle, &mut mode).is_err() { return false; }
         let vt = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok();
@@ -27,7 +31,7 @@ pub(super) fn configure() -> bool {
                     let input_mode = GetStdHandle(STD_INPUT_HANDLE).ok()
                         .filter(|input| GetConsoleMode(*input, &mut input_mode).is_ok()).map(|_| input_mode);
                     if FreeConsole().is_ok() && AllocConsole().is_ok() {
-                        if let Ok(output) = GetStdHandle(STD_OUTPUT_HANDLE) {
+                        if let Ok(output) = GetStdHandle(output) {
                             // Wait for conhost to load its defaults before restoring the registry.
                             let _ = screen_info(output);
                             let _ = SetConsoleTextAttribute(output, CONSOLE_CHARACTER_ATTRIBUTES(attributes));
