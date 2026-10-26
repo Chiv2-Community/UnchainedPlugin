@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use censor::Censor;
 use clap::{CommandFactory, Parser};
 use serde::Serialize;
-use crate::sdebug;
 
 pub type IniMap = HashMap<String, HashMap<String, HashMap<String, String>>>;
 
@@ -260,7 +259,7 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 
 pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
-    sdebug!(f; "CLI Args raw: {:#?}", args);
+    log::debug!("CLI Args raw: {:#?}", args);
     let parsed = normalize_and_filter_args(args);
     let mut cli = CLIArgs::try_parse_from(parsed)?;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);

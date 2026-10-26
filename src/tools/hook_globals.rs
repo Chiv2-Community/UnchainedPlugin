@@ -7,7 +7,7 @@ use std::{env, os::raw::c_void, panic};
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
-use crate::{resolvers::{PLATFORM, PlatformType}, serror, sinfo, tools::cli_args::CLIArgs, ue};
+use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs, ue};
 use ue::object_array::FUObjectArray;
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -244,13 +244,13 @@ pub fn init_globals() -> Result<(), String> {
         .expect("failed to read image");
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
-    sinfo!(f;
+    log::info!(
         "Platform: {} base_addr: '0x{:x?}'",
         platform, *crate::resolvers::BASE_ADDR
     );
 
     // Load CLI ARGS
-    sinfo!(f; "Running resolvers");
+    log::info!("Running resolvers");
     // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
@@ -262,7 +262,7 @@ pub fn init_globals() -> Result<(), String> {
     let resolution = match result {
         Ok(res) => res,
         Err(_) => {
-            serror!("Global initialization failed due to a panic in resolver.");
+            log::error!("Global initialization failed due to a panic in resolver.");
             return Err("Global initialization aborted. Check logs.".into());
         }
     };
@@ -292,6 +292,6 @@ pub fn init_globals() -> Result<(), String> {
     if GLOBALS.set(globals_instance).is_err() {
         log::error!("Error: Globals already initialized!");
     }
-    crate::strace!(f; "{GLOBALS:#?}");
+    log::trace!("{GLOBALS:#?}");
     Ok(())
 }

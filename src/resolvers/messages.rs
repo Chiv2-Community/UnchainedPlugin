@@ -371,14 +371,14 @@ pub mod kismet_log {
 // CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
 //     if !msg.is_null() {
 //         let url_w = unsafe { (*msg).to_string() };
-//         crate::sinfo![f; "Triggered! {url_w}"];
+//         log::info!["Triggered! {url_w}"];
 //     }
 // });
 
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
-    crate::sinfo![f; "Triggered!"];
+    log::info!["Triggered!"];
 });
 
 // TODO: Not used?
@@ -387,7 +387,7 @@ define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48
 CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
     if !S.is_null() {
         let url_w = unsafe { (*S).to_string() };
-        crate::sinfo![f; "Triggered! {url_w}"];
+        log::info!["Triggered! {url_w}"];
     }
 });
 

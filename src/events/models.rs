@@ -1,7 +1,6 @@
 use serenity::all::{RoleId, UserId};
 use crate::features::discord::DiscordConfig;
 use crate::game::chivalry2::EChatType;
-use crate::swarn;
 use strum::{Display, IntoStaticStr};
 use itertools::Itertools;
 use std::fmt;
@@ -91,7 +90,7 @@ impl ChatType {
             EChatType::AllSay => ChatType::Global,
             EChatType::TeamSay => ChatType::Team,
             _ => {
-                swarn!("Unhandled chat type {}. Falling back to Global chat", echat_type);
+                log::warn!("Unhandled chat type {}. Falling back to Global chat", echat_type);
                 ChatType::Global // Default to global... Clean this over time.
             }
         }

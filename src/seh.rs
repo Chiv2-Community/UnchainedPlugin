@@ -166,9 +166,8 @@ unsafe extern "system" fn veh(
 
         let (func, file) = resolve_symbol(rip);
 
-        crate::serror!(
-            f;
-            "[veh] ACCESS VIOLATION\n\
+        log::error!(
+            "ACCESS VIOLATION\n\
              rip=0x{:X} rsp=0x{:X}\n\
              {} addr=0x{:X}\n\
              function={}\n\

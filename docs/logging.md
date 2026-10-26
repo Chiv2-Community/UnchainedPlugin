@@ -3,6 +3,11 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
+Code logs through `log::info!`, `log::warn!`, `log::error!`, `log::debug!`, and
+`log::trace!`; log4rs routes and formats the records. Messages must not embed
+caller function/module prefixes or source locations. Configure those fields in
+the appender pattern instead.
+
 ## Defaults
 
 The plugin uses its [embedded configuration](../src/tools/log4rs.default.yaml)

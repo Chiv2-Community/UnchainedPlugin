@@ -129,7 +129,7 @@ CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() },
                 Ok(path) => path,
                 Err(_e) => {
                     #[cfg(feature = "config_overrides_verbose_hooks")]
-                    crate::swarn!(f; "⚠️ [LoadConfig] skipping invalid override path {override_name}: {_e}");
+                    log::warn!("⚠️ Skipping invalid override path {override_name}: {_e}");
                     continue;
                 }
             };
@@ -165,7 +165,7 @@ CREATE_HOOK!(GetMapSummary, ACTIVE, NONE, *mut c_void, (
     uObject: *mut c_void, fstring: *mut FString, p3: bool
 ), {
     let url_w = unsafe { (*fstring).to_string() };
-    crate::sinfo![f; "GetMapSummary: {url_w}"];
+    log::info!["Map summary: {url_w}"];
 
     CALL_ORIGINAL!(GetMapSummary(uObject, fstring, p3))
 });
@@ -182,7 +182,7 @@ CREATE_HOOK!(GetGameInfo, ACTIVE, POST,
     *mut FString, (ret_ptr: *mut FString, uWorld: *mut c_void),
     |ret_val: *mut FString| {
         unsafe {
-            crate::sinfo!(f; "{}", (&*ret_val).to_string());
+            log::info!("{}", (&*ret_val).to_string());
         }
         ret_val
     });
@@ -205,7 +205,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
 	
 	//127.0.0.1:7777&PartyId=1231231&PartySize=1&PlayFabId=123123&UnofficialTicket=12323
 	fn parse_connection_info(raw: &str) -> Result<ConnectionInfo, Box<dyn std::error::Error>> {
-        crate::sinfo!(f; "raw: {}", raw);
+        log::info!("raw: {}", raw);
 		let query_str = raw.replace('?', "&");
 		let query_with_address = format!("Address={}", query_str);
 		let info: ConnectionInfo = serde_urlencoded::from_str(&query_with_address)?;
@@ -217,20 +217,18 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
     let previous_world = globals().world();
     globals().set_world(std::ptr::null_mut());
     match previous_world {
-        Some(world_ptr) => crate::swarn!(
-            f;
+        Some(world_ptr) => log::warn!(
             "ClientTravelInternal: map travel started; invalidated globals.world ({:p}) and skipping world-dependent operations until post-load world is set",
             world_ptr
         ),
-        None => crate::sdebug!(
-            f;
+        None => log::debug!(
             "ClientTravelInternal: map travel started with globals.world already None; world-dependent operations remain skipped until post-load world is set"
         ),
     }
 
 	match parse_connection_info(string_ref.to_string().as_str()) {
         Ok(info) => {
-			crate::sinfo!(f; "info: {:#?}", info);
+			log::info!("info: {:#?}", info);
         }
         Err(e) => log::error!("Error: {}", e),
     }
@@ -240,7 +238,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
 CREATE_HOOK!(SpawnActor, INACTIVE, *mut c_void, (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
-    crate::sinfo![f; "Triggered!"];
+    log::info!["Triggered!"];
 });
 /*
 ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
@@ -255,5 +253,5 @@ define_pattern_resolver![GetTBLGameMode, {
 
 
 CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut c_void),{
-    crate::sinfo![f; "Triggered!"];
+    log::info!["Triggered!"];
 });

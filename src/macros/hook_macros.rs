@@ -130,7 +130,7 @@ macro_rules! __create_hook_impl {
                         [<o_ $name>].initialize(target, |$( $arg ),+| {
                             unsafe { [<$name _detour_fkt>]($( $arg ),+) }
                         }).unwrap();
-                        // $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
+                        // log::info!("Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition
                         // Note: We evaluate the condition here at attachment time

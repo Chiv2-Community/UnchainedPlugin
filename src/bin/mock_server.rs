@@ -2,7 +2,6 @@ use serenity::all::UserId;
 use UnchainedPlugin::features::discord::DiscordConfig;
 use UnchainedPlugin::events::models::{CombatActor, GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
-use UnchainedPlugin::sinfo;
 use UnchainedPlugin::tools::logger::init_syslog;
 use std::io::{self, Write};
 use UnchainedPlugin::features::discord::initialize_discord_system;
@@ -23,8 +22,8 @@ fn main() {
     let config = initialize_discord_system(config);
 
     init_syslog().expect("Failed to init syslog");
-    sinfo!("Discord Mock Server Started!");
-    sinfo!("Commands: join <name>, kill <killer> <victim>, chat <msg>, exit");
+    log::info!("Discord Mock Server Started!");
+    log::info!("Commands: join <name>, kill <killer> <victim>, chat <msg>, exit");
 
     loop {
         print!("> ");

@@ -33,7 +33,6 @@ use crate::events::broadcast::BroadcastMessage;
 
 // use std::marker::PhantomData;
 use crate::commands::{Command, CommandHandler, ErasedCommand};
-use crate::sinfo;
 use crate::features::discord::{SharedDiscordConfig, send_to_channel};
 use std::sync::Arc;
 use serenity::all::Http;
@@ -193,7 +192,7 @@ impl CommandSubscriber {
                 self.broadcaster.publish(full_msg.into());
             }
             CommandSource::ServerConsole => {
-                crate::sinfo!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
+                log::info!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
             }
         }
     }
@@ -246,7 +245,7 @@ impl CommandSubscriber {
         }
 
         if !executed_from_console {
-            sinfo!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
+            log::info!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
         }
 
         command.execute(req).await;

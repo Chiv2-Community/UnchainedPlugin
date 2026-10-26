@@ -4,7 +4,6 @@ use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
 use crate::game::engine::UWorld;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-use crate::{serror, sinfo, swarn};
 use async_trait::async_trait;
 use clap::Parser;
 use itertools::Itertools;
@@ -38,12 +37,12 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                             let player_state = match unsafe { (player_raw).as_mut() } {
                                 Some(ps) => ps,
                                 None => {
-                                    swarn!(f; "PlayerState was null");
+                                    log::warn!("PlayerState was null");
                                     continue;
                                 }
                             };
                             let pname = player_state.base.player_name_private.to_string();
-                            sinfo!(f; "{}", pname);
+                            log::info!("{}", pname);
                             let mut flags = "".to_string();
                             if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
                                 flags.push_str("spectator|");
@@ -55,7 +54,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                                 flags.push_str("bot|");
                             }
 
-                            sinfo!(f; "{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}",
+                            log::info!("{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}",
                                 flags,
                                 player_state.base.player_flags,
                                 player_state.base.player_id,
@@ -69,21 +68,21 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                         }
                     },
                     (g, gs) => {
-                        if g.is_none() { serror!(f; "GameMode was null"); }
-                        if gs.is_none() { serror!(f; "GameState was null"); }
+                        if g.is_none() { log::error!("GameMode was null"); }
+                        if gs.is_none() { log::error!("GameState was null"); }
                     }
                 }
             } else {
-                crate::swarn!(f; "game-info: globals.world was None; skipping game info collection");
+                log::warn!("globals.world was None; skipping game info collection");
             }
         });
     }
 }
 
 fn log_game_info(game: &ATBLGameMode) {
-    sinfo!(f; "Name:{}", game.server_name);
+    log::info!("Name:{}", game.server_name);
     let maplist = game.maplist.as_slice().iter().join(", ");
-    sinfo!(f; "MapList:{}", maplist);
-    sinfo!(f; "Idle disconnect:{}", game.idle_kick_timer_disconnect);
-    sinfo!(f; "Idle spectate:{}", game.idle_kick_timer_spectate);
+    log::info!("MapList:{}", maplist);
+    log::info!("Idle disconnect:{}", game.idle_kick_timer_disconnect);
+    log::info!("Idle spectate:{}", game.idle_kick_timer_spectate);
 }

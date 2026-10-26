@@ -457,7 +457,7 @@ macro_rules! generate_stub {
         
         #[cfg(feature="dev")]
         CREATE_HOOK!($name, (arg0: *mut c_void), {
-            crate::sinfo![f; "Triggered!"];
+            log::info!["Triggered!"];
         });
     };
 }

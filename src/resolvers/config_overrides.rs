@@ -43,20 +43,6 @@ impl OverrideLayer {
     }
 }
 
-#[allow(unused_macros)]
-#[cfg(feature = "config_overrides_verbose_hooks")]
-macro_rules! config_debug {
-    ($($arg:tt)*) => {
-        crate::sdebug!($($arg)*);
-    };
-}
-
-#[allow(unused_macros)]
-#[cfg(not(feature = "config_overrides_verbose_hooks"))]
-macro_rules! config_debug {
-    ($($arg:tt)*) => {};
-}
-
 thread_local! {
     // Prevent recursive LoadConfig calls from re-entering the same override chain.
     // The game loads config files in nested ways, and we only want the first pass to
@@ -185,12 +171,12 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
         match settings {
             Ok(settings) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                crate::sinfo!("[config-overrides] loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
+                log::info!("Loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
                 settings
             }
             Err(_e) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                crate::swarn!("⚠️ [config-overrides] could not load {}: {}", path, _e);
+                log::warn!("⚠️ Could not load {}: {}", path, _e);
                 ServerSettings::default()
             }
         }
@@ -228,7 +214,7 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
         Some(root) => root,
         None => {
             #[cfg(feature = "config_overrides_verbose_hooks")]
-            crate::swarn!("⚠️ [config-overrides] missing unchained_profile_location, cannot resolve overrides");
+            log::warn!("⚠️ Missing unchained_profile_location, cannot resolve overrides");
             return vec![];
         }
     };
@@ -294,11 +280,11 @@ fn log_override_summary(
 
     if original_path.is_none() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        crate::swarn!("⚠️ [config-overrides] {}: no base config name (filename and GetConfigName empty)", object);
+        log::warn!("⚠️ {}: no base config name (filename and GetConfigName empty)", object);
     }
     if layers.is_empty() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        crate::swarn!("⚠️ [config-overrides] {}: no map name or rotation slot available, no overrides resolved", object);
+        log::warn!("⚠️ {}: no map name or rotation slot available, no overrides resolved", object);
         return;
     }
 
@@ -313,7 +299,7 @@ fn log_override_summary(
         let slots = layers.iter().map(|(layer, slot)| format!("{}={slot}", layer.dir())).collect::<Vec<_>>();
         
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        config_debug!("🔀 [config-overrides] {} [{}] -> {}", object, slots.join(", "), existing.join(", "));
+        log::debug!("🔀 {} [{}] -> {}", object, slots.join(", "), existing.join(", "));
     }
 }
 

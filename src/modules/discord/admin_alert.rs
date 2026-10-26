@@ -8,7 +8,6 @@ use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 
 use crate::commands::Command;
 use crate::events::models::{AdminAlert, CommandRequest, GameEvent, PermissionFlags};
-use crate::swarn;
 
 #[derive(Clone)]
 pub struct AdminAlertModule {
@@ -54,7 +53,7 @@ impl Subscriber<GameEvent> for AdminAlertModule {
                         )
                         .content(format!("<@&{}> ", role_id));
                 } else {
-                    swarn!("Attempted to alert admins, but no admin role id is set.");
+                    log::warn!("Attempted to alert admins, but no admin role id is set.");
                 }
             }
 

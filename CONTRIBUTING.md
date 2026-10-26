@@ -194,14 +194,15 @@ See the [logging guide](docs/logging.md) for configuration, defaults, and the
 namespace reference.
 
 The default console output includes each message's source module; file logs include
-its target. DEBUG headers and bodies
-are light gray; TRACE headers and bodies are dark gray. Message color codes are
-preserved. INFO headers are blue, WARN headers yellow, and ERROR headers red.
+its target. DEBUG headers and bodies are dark gray; TRACE is darker.
+Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.
 
-Use `log` macros or the `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`
-helpers for diagnostics, not `println!`. Targets default to the calling Rust
-module, including when function context flags (`f` or `func`) are used.
+Use `log::info!`, `log::warn!`, `log::error!`, `log::debug!`, and `log::trace!`
+for diagnostics through log4rs, not custom helpers or `println!`.
+Write only the message: do not prepend
+function names, module names, or source locations. Appender patterns control that
+presentation using record metadata. Targets default to the calling Rust module.
 Explicit targets must stay under `module_path!()`, for example
 `concat!(module_path!(), "::game_chat")`.
 

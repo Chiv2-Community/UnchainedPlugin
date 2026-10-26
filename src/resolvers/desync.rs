@@ -1,6 +1,6 @@
 use std::{cell::{Cell, RefCell}, collections::{HashMap, HashSet}, os::raw::c_void};
 
-use crate::{game::engine::ENetMode, swarn, tools::hook_globals::{cli_args, globals}, ue::{UFunction, UObject, UStruct}};
+use crate::{game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{UFunction, UObject, UStruct}};
 use crate::resolvers::unchained_integration::*;
 
 // Desync patch
@@ -180,7 +180,7 @@ CREATE_HOOK!(
                 let (_, func_name) =
                     process_event_names(std::ptr::null_mut(), function);
 
-                swarn!(f; "Blocked ProcessEvent: {}", func_name);
+                log::warn!("Blocked ProcessEvent: {}", func_name);
             }
 
             return;
@@ -233,7 +233,7 @@ CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NON
         let mode = unsafe { o_InternalGetNetMode.call(world) };
         if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
             #[cfg(feature="verbose_hooks")]
-            crate::sinfo!(f; "Overriding IsDedicatedServer");
+            log::info!("Overriding dedicated server status");
             return true;
         }
     }

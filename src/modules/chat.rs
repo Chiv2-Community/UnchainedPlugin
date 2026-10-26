@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use serenity::all::CreateMessage;
 use serenity::http::Http;
-use crate::sinfo;
 use crate::events::bus::Subscriber;
 use crate::events::models::{ChatSource, ChatType, GameChatMessage, GameEvent};
 use crate::features::discord::{send_to_channel, SharedDiscordConfig};
@@ -21,7 +20,7 @@ pub struct ConsoleChatSink;
 impl ChatSink for ConsoleChatSink {
     async fn send(&self, chat_source: &ChatSource, chat_type: &ChatType, sender: &String, text: &String) {
         if chat_source == &ChatSource::Console { return };
-        sinfo!("[{}] [{}] {}: {:?}", chat_source, chat_type, sender, text);
+        log::info!("[{}] [{}] {}: {:?}", chat_source, chat_type, sender, text);
     }
 }
 
