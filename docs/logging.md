@@ -88,12 +88,8 @@ plugin's path tokens.
 
 ## Format log lines
 
-Each appender has its own `encoder`. Change the encoder for the output you want
-to customize; changing the console format does not change file logs or levels.
-
-### Use a custom pattern
-
-In your copied YAML, replace the console's `encoder:` block with:
+Under `appenders.console` or `appenders.file`, set `encoder.kind` to `pattern`
+and `encoder.pattern` to the desired line format:
 
 ```yaml
 encoder:
@@ -101,80 +97,12 @@ encoder:
   pattern: "[{d(%H:%M:%S)} {l:5}] [{t}] {m}{n}"
 ```
 
-This produces lines such as:
-
-```text
-[14:22:20 INFO ] [UnchainedPlugin::features::rcon] RCON Listening on 127.0.0.1:9001
-```
-
-Keep the surrounding console settings, including its threshold filter. Do not
-add a second `encoder:` block to that appender.
-
-The default `kind: module_console` uses a fixed format and the plugin's severity
-colors. It has no pattern option. Switching to `kind: pattern` replaces that
-styling, including the light-gray DEBUG and dark-gray TRACE bodies. To restore
-it, replace the custom encoder block with `kind: module_console`.
-
-To change the main file format instead, replace the `encoder:` block under the
-`file` appender. For example, this uses UTC timestamps and includes the process ID:
-
-```yaml
-encoder:
-  kind: pattern
-  pattern: "[{d(%Y-%m-%d %H:%M:%S)(utc)} UTC {P} {l:5}] [{t}] {m}{n}"
-```
-
-Keep the appender's `kind: file` and `path` settings. These snippets replace only
-an encoder block; they are not complete logging configurations. Restart after
-editing the file.
-
-### Pattern fields
-
-| Field | Output |
-| --- | --- |
-| `{d(%H:%M:%S)}` | Local time, such as `14:22:20`. |
-| `{d(%Y-%m-%d %H:%M:%S)}` | Local date and time. |
-| `{d(%Y-%m-%d %H:%M:%S)(utc)}` | UTC date and time. |
-| `{l}` | Severity: ERROR, WARN, INFO, DEBUG, or TRACE. |
-| `{l:5}` | Severity padded to at least five characters. |
-| `{t}` | Full target namespace; use this to identify module filters. |
-| `{m}` | Message, including any function-context prefix supplied by the plugin. |
-| `{n}` | Platform-specific newline; include it to separate records. |
-| `{P}` | Process ID. |
-| `{T}` | Thread name, when available. |
-| `{f}` / `{L}` | Source file / source line, or `???` when unavailable. |
-
-Widths such as `{t:10}` add padding; they do not shorten long namespaces.
-Escape literal `{`, `}`, `(`, `)`, and `\` by doubling them. For example, `{{`
-prints `{`. YAML double-quoted strings require additional backslash escaping.
-
-For optional level-based console highlighting, use a pattern such as
-`"{h({l:5})} [{t}] {m}{n}"`. This uses log4rs's own palette, not the plugin's
-DEBUG/TRACE gray styling. Keep highlighting out of file patterns if you want
-plain file output.
-
-### Shipped formats
-
-The default console has this layout, with the colors described above:
-
-```text
-[{d(%H:%M:%S)} {l:5}] [{t}] {m}{n}
-```
-
-The default `unchained.log` pattern is:
-
-```text
-[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}
-```
-
-The defined, but unconnected, `kismet` appender uses:
-
-```text
-[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}
-```
+Replace only the encoder block and keep the appender's other settings. A custom
+console pattern replaces the default `module_console` severity colors. Restart
+after editing.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
-for additional fields, alignment, truncation, and date formatting.
+for available fields and formatting options.
 
 ## Set log levels
 
