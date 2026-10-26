@@ -190,6 +190,9 @@ Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.
 
 ### Colors and module filters
 
+See the [logging guide](docs/logging.md) for configuration, defaults, and the
+namespace reference.
+
 The default console output includes each message's target. DEBUG headers and bodies
 are light gray; TRACE headers and bodies are dark gray. Message color codes are
 preserved. INFO headers are blue, WARN headers yellow, and ERROR headers red.
