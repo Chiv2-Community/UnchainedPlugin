@@ -48,10 +48,16 @@ Your launcher may supply a different saved-directory suffix.
 | WARN | Pastel yellow | Normal console color |
 | INFO | Muted pastel blue | Normal console color |
 | DEBUG | Dark gray (`#808080`) | Dark gray |
-| TRACE | Darker gray (`#686868`) | Darker gray |
+| TRACE | Darker gray (`#5c5c5c`) | Darker gray |
 
 Message color codes are preserved and can override the body color. Pastel shades
-use RGB terminal colors; older consoles may approximate them or use basic colors.
+use RGB terminal colors when supported. Wine's graphical console and legacy
+Windows consoles instead receive a matching 16-color palette for the attached
+console only. Wine needs a dedicated console created with temporary,
+application-specific registry defaults; previous values are restored immediately
+after creation, and global console defaults are not changed. Other programs sharing
+that console see the same palette, including altered shades for embedded colors.
+If the console rejects palette changes, its existing basic colors remain in use.
 The default file appender and redirected output receive no added console colors;
 color codes already present in a message are not stripped.
 

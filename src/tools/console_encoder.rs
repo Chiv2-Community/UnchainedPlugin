@@ -2,6 +2,10 @@ use log::{Level, Record};
 use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{pattern::PatternEncoder, Color, Encode, Style, Write};
 
+#[cfg(windows)]
+#[path = "console_palette.rs"]
+mod windows_backend;
+
 #[derive(Debug)]
 struct ConsoleEncoder {
     header: PatternEncoder,
@@ -14,20 +18,42 @@ impl Default for ConsoleEncoder {
         Self {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
             body: PatternEncoder::new(" [{M}] {m}{n}"),
-            ansi_colors: supports_ansi_colors(),
+            ansi_colors: configure_console_colors(),
         }
     }
 }
 
-fn supports_ansi_colors() -> bool {
+fn severity_rgb(level: Level) -> [u8; 3] {
+    match level {
+        Level::Error => [242, 139, 130],
+        Level::Warn => [242, 204, 120],
+        Level::Info => [140, 180, 225],
+        Level::Debug => [128, 128, 128],
+        Level::Trace => [92, 92, 92],
+    }
+}
+
+#[cfg(any(windows, test))]
+fn fallback_palette(mut colors: [u32; 16], attributes: u16) -> ([u32; 16], u16) {
+    // Preserve normal message text in a separate slot before assigning DEBUG's gray.
+    colors[15] = colors[(attributes & 0x0f) as usize];
+    for (level, slot) in [(Level::Error, 12), (Level::Warn, 14), (Level::Info, 9),
+        (Level::Debug, 7), (Level::Trace, 8)] {
+        let [r, g, b] = severity_rgb(level);
+        colors[slot] = u32::from(r) | (u32::from(g) << 8) | (u32::from(b) << 16);
+    }
+    (colors, (attributes & !0x0f) | 15)
+}
+
+#[cfg(any(windows, test))]
+fn use_truecolor(vt_enabled: bool, wine: bool, windows_terminal: bool) -> bool {
+    vt_enabled && (!wine || windows_terminal)
+}
+
+fn configure_console_colors() -> bool {
     #[cfg(windows)]
-    unsafe {
-        use windows::Win32::System::Console::{GetConsoleMode, GetStdHandle, SetConsoleMode,
-            CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_OUTPUT_HANDLE};
-        let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) else { return false };
-        let mut mode = CONSOLE_MODE(0);
-        GetConsoleMode(handle, &mut mode).is_ok()
-            && SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok()
+    {
+        windows_backend::configure()
     }
     #[cfg(not(windows))]
     {
@@ -49,9 +75,8 @@ impl Encode for ConsoleEncoder {
             Level::Info => {
                 style.text(Color::Blue).intense(true);
             }
-            // Legacy consoles only provide one usable dark gray.
             Level::Debug => {
-                style.text(Color::Black).intense(true);
+                style.text(Color::White).intense(false);
             }
             Level::Trace => {
                 style.text(Color::Black).intense(true);
@@ -60,14 +85,8 @@ impl Encode for ConsoleEncoder {
         writer.set_style(&style)?;
         let result = (|| {
             if self.ansi_colors {
-                let color = match record.level() {
-                    Level::Error => "239;154;154",
-                    Level::Warn => "230;202;139",
-                    Level::Info => "154;177;204",
-                    Level::Debug => "128;128;128",
-                    Level::Trace => "104;104;104",
-                };
-                write!(writer, "\x1b[0;38;2;{color}m")?;
+                let [r, g, b] = severity_rgb(record.level());
+                write!(writer, "\x1b[0;38;2;{r};{g};{b}m")?;
             }
             self.header.encode(writer, record)?;
             if record.level() <= Level::Info {
@@ -108,7 +127,36 @@ mod tests {
     use std::io;
 
     fn encoder() -> ConsoleEncoder {
-        ConsoleEncoder { ansi_colors: false, ..ConsoleEncoder::default() }
+        ConsoleEncoder {
+            header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
+            body: PatternEncoder::new(" [{M}] {m}{n}"),
+            ansi_colors: false,
+        }
+    }
+
+    #[test]
+    fn truecolor_requires_vt_and_avoids_wine_graphical_console() {
+        assert!(use_truecolor(true, false, false));
+        assert!(use_truecolor(true, true, true));
+        assert!(!use_truecolor(true, true, false));
+        assert!(!use_truecolor(false, false, true));
+    }
+
+    #[test]
+    fn fallback_palette_preserves_normal_text_background_and_unrelated_slots() {
+        let original = std::array::from_fn(|i| i as u32 * 0x10101);
+        let (colors, attributes) = fallback_palette(original, 0x27);
+        assert_eq!(attributes, 0x2f);
+        assert_eq!(colors[15], original[7]);
+        assert_eq!(colors[7], 0x808080);
+        assert_eq!(colors[8], 0x5c5c5c);
+        assert_eq!(colors[9], 0xe1b48c);
+        assert_eq!(colors[12], 0x828bf2);
+        assert_eq!(colors[14], 0x78ccf2);
+        for index in [0, 1, 2, 3, 4, 5, 6, 10, 11, 13] {
+            assert_eq!(colors[index], original[index]);
+        }
+        assert_eq!(fallback_palette(colors, attributes), (colors, attributes));
     }
 
     #[derive(Default)]
@@ -141,7 +189,7 @@ mod tests {
             (Level::Error, Color::Red, true),
             (Level::Warn, Color::Yellow, true),
             (Level::Info, Color::Blue, true),
-            (Level::Debug, Color::Black, true),
+            (Level::Debug, Color::White, false),
             (Level::Trace, Color::Black, true),
         ] {
             let mut buffer = StyledBuffer::default();
@@ -204,7 +252,7 @@ mod tests {
             )
             .unwrap();
         let output = String::from_utf8(bytes).unwrap();
-        assert!(output.starts_with("\x1b[0;30;1m"));
+        assert!(output.starts_with("\x1b[0;37;22m"));
         assert!(output.contains("before \x1b[31mred\x1b[0m after"));
         assert!(output.ends_with("\x1b[0m"));
     }
@@ -254,11 +302,11 @@ mod tests {
     #[test]
     fn pastel_headers_and_darker_gray_bodies_use_rgb() {
         for (level, rgb) in [
-            (Level::Error, "239;154;154"),
-            (Level::Warn, "230;202;139"),
-            (Level::Info, "154;177;204"),
+            (Level::Error, "242;139;130"),
+            (Level::Warn, "242;204;120"),
+            (Level::Info, "140;180;225"),
             (Level::Debug, "128;128;128"),
-            (Level::Trace, "104;104;104"),
+            (Level::Trace, "92;92;92"),
         ] {
             let mut bytes = Vec::new();
             let mut encoder = encoder();
