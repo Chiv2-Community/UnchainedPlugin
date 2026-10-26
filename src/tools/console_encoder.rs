@@ -39,6 +39,14 @@ struct ShortModule<'a>(&'a str);
 
 impl std::fmt::Display for ShortModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut remaining = 16;
+        let mut write_char = |ch| -> std::fmt::Result {
+            if remaining > 0 {
+                write!(f, "{ch}")?;
+                remaining -= 1;
+            }
+            Ok(())
+        };
         let mut segments = self.0.split("::").peekable();
         while let Some(segment) = segments.next() {
             if segments.peek().is_some() {
@@ -51,15 +59,16 @@ impl std::fmt::Display for ShortModule<'_> {
                         // Start camel-case words and acronym-to-word transitions.
                         if first || (uppercase && (!previous_uppercase
                             || chars.peek().is_some_and(|next| next.is_lowercase()))) {
-                            write!(f, "{ch}")?;
+                            write_char(ch)?;
                         }
                         first = false;
                         previous_uppercase = uppercase;
                     }
                 }
-                f.write_str("::")?;
+                write_char(':')?;
+                write_char(':')?;
             } else {
-                f.write_str(segment)?;
+                for ch in segment.chars() { write_char(ch)?; }
             }
         }
         Ok(())
@@ -215,9 +224,11 @@ mod tests {
 
         for (module, expected) in [
             (Some("UnchainedPlugin::resolvers::messages"), "UP::r::messages"),
-            (Some("UnchainedPlugin::modules::discord::event_log"), "UP::m::d::event_log"),
+            (Some("UnchainedPlugin::modules::discord::event_log"), "UP::m::d::event_"),
             (Some("foo_bar::UnchainedPlugin::messages"), "fb::UP::messages"),
-            (Some("fooBar::HTTPServer::XMLParser::messages"), "fB::HS::XP::messages"),
+            (Some("fooBar::HTTPServer::XMLParser::messages"), "fB::HS::XP::mess"),
+            (Some("abcdefghijklmnopq"), "abcdefghijklmnop"),
+            (Some("ééééééééééééééééé"), "éééééééééééééééé"),
             (Some("_foo__bar_::HTTP::messages"), "fb::H::messages"),
             (Some("ÉquipeMonde::équipe_monde::messages"), "ÉM::ém::messages"),
             (Some("single"), "single"),
@@ -230,6 +241,7 @@ mod tests {
             let mut console = Vec::new();
             encoder().encode(&mut SimpleWriter(&mut console), &record).unwrap();
             assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected}] message")));
+            assert!(expected.chars().count() <= 16);
             let mut file = Vec::new();
             PatternEncoder::new("{M}").encode(&mut SimpleWriter(&mut file), &record).unwrap();
             assert_eq!(String::from_utf8(file).unwrap(), module.unwrap_or("???"));
