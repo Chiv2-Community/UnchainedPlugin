@@ -389,29 +389,9 @@ fn preinit_rustlib() {
         }
     }
 
-    static LOGGER_READY: AtomicBool = AtomicBool::new(false);
-    std::panic::set_hook(Box::new(|panic_info| {
-        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            (*s).to_string()
-        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            s.clone()
-        } else {
-            "Unknown panic".to_string()
-        };
-        let location = panic_info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
-        if !LOGGER_READY.load(Ordering::Acquire) {
-            // Preserve startup panic reporting before log4rs is initialized.
-            eprintln!("CRITICAL ERROR: {message}{location} - Application will exit in 10 seconds");
-        } else {
-            log::error!("CRITICAL ERROR: {message}{location} - Application will exit in 10 seconds");
-        }
-        std::thread::sleep(std::time::Duration::from_secs(10));
-    }));
-
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
     tools::logger::init_syslog().expect("Failed to init syslog");
-    LOGGER_READY.store(true, Ordering::Release);
     log::debug!("CLI Args: {:#?}", cli_args());
     if already_initialized {
         log::error!("CLI args already initialized!");
