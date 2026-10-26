@@ -10,7 +10,7 @@ the appender pattern instead.
 
 ## Defaults
 
-The plugin uses its [embedded configuration](../src/tools/log4rs.default.yaml)
+The plugin uses its [embedded configuration](../src/logging/log4rs/log4rs.default.yaml)
 unless you pass `--log4rs-yaml`.
 
 | Setting | Default | Effect |
@@ -68,7 +68,7 @@ color codes already present in a message are not stripped.
 
 ## Use a custom configuration
 
-1. Download or copy the [default YAML](../src/tools/log4rs.default.yaml) to a local
+1. Download or copy the [default YAML](../src/logging/log4rs/log4rs.default.yaml) to a local
    file, such as `C:\Unchained\logging.yaml`.
 2. Edit that copy. A custom file **replaces the entire configuration**; it does
    not merge with the defaults. Keep the dependency filters unless you want more
@@ -100,27 +100,33 @@ plugin's path tokens.
 
 ## Format log lines
 
-Under `appenders.console` or `appenders.file`, set `encoder.kind` to `pattern`
-and `encoder.pattern` to the desired line format:
+The console's `module_console` encoder accepts separate header and body patterns
+so severity colors remain independent of the line format:
 
 ```yaml
 encoder:
-  kind: pattern
-  pattern: "[{d(%H:%M:%S)} {l:5}] [{M}] {m}{n}"
+  kind: module_console
+  header_pattern: "[{d(%H:%M:%S)} {l:5}]"
+  body_pattern: " [{sm}] {m}{n}"
 ```
 
-Replace only the encoder block and keep the appender's other settings. A custom
-console pattern replaces the default `module_console` severity colors. Restart
-after editing.
+These are the defaults. Replace only the encoder block and keep the appender's
+other settings. Restart after editing.
 
-The default `module_console` encoder abbreviates parent module segments using
+The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
 The resulting label keeps its last 16 characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
-for the level. A standard `pattern` encoder with `{M}` also shows the full module;
-`{t}` is available when you want the filtering target instead.
+for the level; `{t}` shows the filtering target instead.
+
+`{sm}` works in both console patterns and any `kind: pattern` encoder configured
+by the plugin, including nested formatters and width specifications such as
+`{sm:>16}`. To omit or replace the short module, edit `body_pattern`.
+`kind: pattern` uses a single `pattern` field and does not apply the console's
+pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
+`{M}` and `{t}` retain their standard meanings.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
@@ -251,7 +257,7 @@ or the relevant action occurs.
 | `UnchainedPlugin::scan` | Signature scanning, detected game builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exception diagnostics and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Game integration initialization and TRACE dumps of its state. |
-| `UnchainedPlugin::tools::logger` | Rust panic reports and backtraces after logging starts. |
+| `UnchainedPlugin::logging::log4rs` | Rust panic reports and backtraces after logging starts. |
 | `UnchainedPlugin::tools::pdb_scan` | Function-symbol lookups; requires a build with `with_pdb`. |
 
 Older custom configurations using `function`, `RCON`, `game_chat`, or

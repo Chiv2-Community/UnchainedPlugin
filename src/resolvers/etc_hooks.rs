@@ -156,19 +156,18 @@ CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() },
 });
 
 // UTBLMapSummary * __cdecl UTBLSystemLibrary::GetMapSummary(UObject *param_1,FString *param_2,bool param_3)
-define_pattern_resolver!(GetMapSummary, [
-    // "40 55 53 41 54 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 BD 6B FB 03 48 33 C4"
-    "40 55 53 41 54 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 7D 08 FB 03"
-]);
-
-CREATE_HOOK!(GetMapSummary, ACTIVE, NONE, *mut c_void, (
-    uObject: *mut c_void, fstring: *mut FString, p3: bool
-), {
-    let url_w = unsafe { (*fstring).to_string() };
-    log::info!["Map summary: {url_w}"];
-
-    CALL_ORIGINAL!(GetMapSummary(uObject, fstring, p3))
-});
+// define_pattern_resolver!(GetMapSummary, [
+//     "40 55 53 41 54 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 7D 08 FB 03"
+// ]);
+//
+// CREATE_HOOK!(GetMapSummary, ACTIVE, NONE, *mut c_void, (
+//     uObject: *mut c_void, fstring: *mut FString, p3: bool
+// ), {
+//     let url_w = unsafe { (*fstring).to_string() };
+//     log::info!["Map summary: {url_w}"];
+//
+//     CALL_ORIGINAL!(GetMapSummary(uObject, fstring, p3))
+// });
 
 define_pattern_resolver!(GetGameInfo, {
     // "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00", // Universal

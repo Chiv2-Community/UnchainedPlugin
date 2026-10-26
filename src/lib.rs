@@ -4,6 +4,7 @@ pub mod macros;
 mod resolvers;
 pub mod scan;
 pub mod tools;
+pub mod logging;
 mod ue;
 pub mod game;
 pub mod features;
@@ -391,7 +392,7 @@ fn preinit_rustlib() {
 
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
-    tools::logger::init_syslog().expect("Failed to init syslog");
+    logging::log4rs::init().expect("Failed to initialize logging");
     log::debug!("CLI Args: {:#?}", cli_args());
     if already_initialized {
         log::error!("CLI args already initialized!");
@@ -404,7 +405,6 @@ fn preinit_rustlib() {
 // Initialize Logger and Globals
 fn init_rustlib() {
     print!("{CLI_LOGO}");
-    // tools::logger::init_syslog().expect("Failed to init syslog");
     init_globals().expect("Failed to init globals!");
 }
 

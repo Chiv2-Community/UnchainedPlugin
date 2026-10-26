@@ -208,7 +208,12 @@ presentation using record metadata. Targets default to the calling Rust module.
 Explicit targets must stay under `module_path!()`, for example
 `concat!(module_path!(), "::game_chat")`.
 
-To filter modules, copy `src/tools/log4rs.default.yaml` to a local file and pass
+Logging lives under `src/logging/`: `log4rs/` owns configuration, deserializers,
+and the `{sm}` pattern extension; `console/` owns styling and Windows/Wine setup.
+Use `logging::log4rs::register` to add the extensions to another log4rs
+deserializer registry, or `logging::log4rs::pattern::PatternEncoder` directly.
+
+To filter modules, copy `src/logging/log4rs/log4rs.default.yaml` to a local file and pass
 its path with `--log4rs-yaml <path>`. Add entries under `loggers`, preserving the
 existing dependency filters:
 

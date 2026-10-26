@@ -1,9 +1,10 @@
 use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
-use super::console_encoder::{ConsoleAppenderDeserializer, ConsoleEncoderDeserializer};
+use console::{ConsoleAppenderDeserializer, ConsoleEncoderDeserializer};
+use pattern::PatternEncoderDeserializer;
 
-#[allow(unused_imports)]
-use super::syslog::SyslogAppender;
+mod console;
+pub mod pattern;
 use std::backtrace::Backtrace;
 use std::panic;
 use log::error;
@@ -36,7 +37,7 @@ pub fn setup_panic_logger() {
     }));
 }
 
-pub fn init_syslog() -> anyhow::Result<()> {
+pub fn init() -> anyhow::Result<()> {
     let cli = cli_args();
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
@@ -71,8 +72,7 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
         )
     })?;
     let mut deserializers = Deserializers::default();
-    deserializers.insert("module_console", ConsoleEncoderDeserializer);
-    deserializers.insert("console", ConsoleAppenderDeserializer);
+    register(&mut deserializers);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
     anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
     Config::builder()
@@ -80,6 +80,13 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
         .loggers(raw_config.loggers())
         .build(raw_config.root())
         .with_context(|| format!("Invalid logger config {}", config_source_name))
+}
+
+/// Register the module-pattern extension and pastel console integration.
+pub fn register(deserializers: &mut Deserializers) {
+    deserializers.insert("module_console", ConsoleEncoderDeserializer);
+    deserializers.insert("console", ConsoleAppenderDeserializer);
+    deserializers.insert("pattern", PatternEncoderDeserializer);
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {
@@ -178,7 +185,7 @@ root:
         let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "embedded").unwrap();
         let logger = log4rs::Logger::new(config);
         assert!(logger.enabled(&Metadata::builder()
-            .target("UnchainedPlugin::tools::logger").level(Level::Debug).build()));
+            .target("UnchainedPlugin::logging::log4rs").level(Level::Debug).build()));
         assert!(!logger.enabled(&Metadata::builder()
             .target("serenity::client").level(Level::Info).build()));
     }
@@ -206,6 +213,25 @@ root:
   level: info
   appenders: [console]
 "#, "override").unwrap();
+    }
+
+    #[test]
+    fn registered_encoders_accept_short_and_full_module_fields() {
+        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        for yaml in [
+            "kind: pattern\npattern: '{sm}|{M}|{t}'",
+            "kind: module_console\nheader_pattern: '{sm}|'\nbody_pattern: '{M}|{t}'",
+        ] {
+            let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
+            let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config).unwrap();
+            let mut output = Vec::new();
+            encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
+                .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build()).unwrap();
+            assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target");
+        }
     }
 
     #[test]

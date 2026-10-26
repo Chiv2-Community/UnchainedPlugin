@@ -1,27 +1,22 @@
 use log::{Level, Record};
-use log4rs::config::{Deserialize, Deserializers};
-use log4rs::append::{console::{ConsoleAppender, Target}, Append};
-use log4rs::encode::{writer::console::ConsoleWriter, EncoderConfig};
-use log4rs::encode::{pattern::PatternEncoder, Color, Encode, Style, Write};
+use log4rs::append::console::Target;
+use log4rs::encode::{writer::console::ConsoleWriter, Color, Encode, Style, Write};
+use super::log4rs::pattern::PatternEncoder;
 
 #[cfg(windows)]
-#[path = "console_palette.rs"]
+#[path = "windows.rs"]
 mod windows_backend;
 
 #[derive(Debug)]
-struct ConsoleEncoder {
+pub(crate) struct ConsoleEncoder {
     header: PatternEncoder,
     body: PatternEncoder,
-    truecolor: bool,
+    pub(crate) truecolor: bool,
 }
 
 impl Default for ConsoleEncoder {
     fn default() -> Self {
-        Self {
-            header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
-            body: PatternEncoder::new(" {m}{n}"),
-            truecolor: false,
-        }
+        Self::with_patterns(None, None)
     }
 }
 
@@ -32,51 +27,6 @@ fn severity_rgb(level: Level) -> [u8; 3] {
         Level::Info => [140, 180, 225],
         Level::Debug => [128, 128, 128],
         Level::Trace => [92, 92, 92],
-    }
-}
-
-struct ShortModule<'a>(&'a str);
-
-impl std::fmt::Display for ShortModule<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Retain the last 16 Unicode characters without allocating a label.
-        let mut tail = ['\0'; 16];
-        let mut next = 0;
-        let mut length = 0;
-        let mut push_char = |ch| {
-            tail[next] = ch;
-            next = (next + 1) % tail.len();
-            length = (length + 1).min(tail.len());
-        };
-        let mut segments = self.0.split("::").peekable();
-        while let Some(segment) = segments.next() {
-            if segments.peek().is_some() {
-                for word in segment.split('_') {
-                    let mut chars = word.chars().peekable();
-                    let mut previous_uppercase = false;
-                    let mut first = true;
-                    while let Some(ch) = chars.next() {
-                        let uppercase = ch.is_uppercase();
-                        // Start camel-case words and acronym-to-word transitions.
-                        if first || (uppercase && (!previous_uppercase
-                            || chars.peek().is_some_and(|next| next.is_lowercase()))) {
-                            push_char(ch);
-                        }
-                        first = false;
-                        previous_uppercase = uppercase;
-                    }
-                }
-                push_char(':');
-                push_char(':');
-            } else {
-                for ch in segment.chars() { push_char(ch); }
-            }
-        }
-        let start = if length == tail.len() { next } else { 0 };
-        for offset in 0..length {
-            write!(f, "{}", tail[(start + offset) % tail.len()])?;
-        }
-        Ok(())
     }
 }
 
@@ -97,7 +47,7 @@ fn use_truecolor(vt_enabled: bool, wine: bool, windows_terminal: bool) -> bool {
     vt_enabled && (!wine || windows_terminal)
 }
 
-fn configure_console_colors(target: Target) -> bool {
+pub(crate) fn configure_console_colors(target: Target) -> bool {
     // Use the appender's own policy, including NO_COLOR and CLICOLOR overrides.
     let writer = match target {
         Target::Stdout => ConsoleWriter::stdout(),
@@ -135,7 +85,6 @@ impl Encode for ConsoleEncoder {
             if record.level() <= Level::Info {
                 writer.set_style(&Style::new())?;
             }
-            write!(writer, " [{}]", ShortModule(record.module_path().unwrap_or("???")))?;
             self.body.encode(writer, record)
         })();
         // Do not leave later output colored, including after an encoding error.
@@ -146,81 +95,22 @@ impl Encode for ConsoleEncoder {
     }
 }
 
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConsoleEncoderConfig {}
-
-pub struct ConsoleEncoderDeserializer;
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum ConsoleTarget {
-    Stdout,
-    Stderr,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConsoleAppenderConfig {
-    target: Option<ConsoleTarget>,
-    encoder: Option<EncoderConfig>,
-    tty_only: Option<bool>,
-}
-
-pub struct ConsoleAppenderDeserializer;
-
-impl Deserialize for ConsoleAppenderDeserializer {
-    type Trait = dyn Append;
-    type Config = ConsoleAppenderConfig;
-
-    fn deserialize(&self, config: ConsoleAppenderConfig, deserializers: &Deserializers)
-        -> anyhow::Result<Box<dyn Append>> {
-        let target = match config.target.unwrap_or(ConsoleTarget::Stdout) {
-            ConsoleTarget::Stdout => Target::Stdout,
-            ConsoleTarget::Stderr => Target::Stderr,
-        };
-        let mut appender = ConsoleAppender::builder().target(target);
-        if let Some(tty_only) = config.tty_only { appender = appender.tty_only(tty_only); }
-        if let Some(encoder) = config.encoder {
-            let encoder = if encoder.kind == "module_console" {
-                let _: ConsoleEncoderConfig = encoder.config.deserialize_into()?;
-                Box::new(ConsoleEncoder {
-                    truecolor: configure_console_colors(target),
-                    ..ConsoleEncoder::default()
-                }) as Box<dyn Encode>
-            } else {
-                deserializers.deserialize(&encoder.kind, encoder.config)?
-            };
-            appender = appender.encoder(encoder);
+impl ConsoleEncoder {
+    pub(crate) fn with_patterns(header: Option<&str>, body: Option<&str>) -> Self {
+        Self {
+            header: PatternEncoder::new(header.unwrap_or("[{d(%H:%M:%S)} {l:5}]")),
+            body: PatternEncoder::new(body.unwrap_or(" [{sm}] {m}{n}")),
+            truecolor: false,
         }
-        Ok(Box::new(appender.build()))
     }
 }
-
-impl Deserialize for ConsoleEncoderDeserializer {
-    type Trait = dyn Encode;
-    type Config = ConsoleEncoderConfig;
-
-    fn deserialize(
-        &self,
-        _: ConsoleEncoderConfig,
-        _: &Deserializers,
-    ) -> anyhow::Result<Box<dyn Encode>> {
-        Ok(Box::new(ConsoleEncoder::default()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io;
 
     fn encoder() -> ConsoleEncoder {
-        ConsoleEncoder {
-            header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
-            body: PatternEncoder::new(" {m}{n}"),
-            truecolor: false,
-        }
+        ConsoleEncoder::default()
     }
 
     #[test]
