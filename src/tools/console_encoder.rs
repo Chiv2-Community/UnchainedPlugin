@@ -42,7 +42,21 @@ impl std::fmt::Display for ShortModule<'_> {
         let mut segments = self.0.split("::").peekable();
         while let Some(segment) = segments.next() {
             if segments.peek().is_some() {
-                if let Some(initial) = segment.chars().next() { write!(f, "{initial}")?; }
+                for word in segment.split('_') {
+                    let mut chars = word.chars().peekable();
+                    let mut previous_uppercase = false;
+                    let mut first = true;
+                    while let Some(ch) = chars.next() {
+                        let uppercase = ch.is_uppercase();
+                        // Start camel-case words and acronym-to-word transitions.
+                        if first || (uppercase && (!previous_uppercase
+                            || chars.peek().is_some_and(|next| next.is_lowercase()))) {
+                            write!(f, "{ch}")?;
+                        }
+                        first = false;
+                        previous_uppercase = uppercase;
+                    }
+                }
                 f.write_str("::")?;
             } else {
                 f.write_str(segment)?;
@@ -200,8 +214,12 @@ mod tests {
         use log4rs::encode::writer::simple::SimpleWriter;
 
         for (module, expected) in [
-            (Some("UnchainedPlugin::resolvers::messages"), "U::r::messages"),
-            (Some("UnchainedPlugin::modules::discord::event_log"), "U::m::d::event_log"),
+            (Some("UnchainedPlugin::resolvers::messages"), "UP::r::messages"),
+            (Some("UnchainedPlugin::modules::discord::event_log"), "UP::m::d::event_log"),
+            (Some("foo_bar::UnchainedPlugin::messages"), "fb::UP::messages"),
+            (Some("fooBar::HTTPServer::XMLParser::messages"), "fB::HS::XP::messages"),
+            (Some("_foo__bar_::HTTP::messages"), "fb::H::messages"),
+            (Some("ÉquipeMonde::équipe_monde::messages"), "ÉM::ém::messages"),
             (Some("single"), "single"),
             (Some(""), ""),
             (Some("équipe::世界::消息"), "é::世::消息"),

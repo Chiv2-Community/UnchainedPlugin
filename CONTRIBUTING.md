@@ -194,7 +194,7 @@ See the [logging guide](docs/logging.md) for configuration, defaults, and the
 namespace reference.
 
 The default console output abbreviates parent source-module segments
-(`UnchainedPlugin::resolvers::messages` → `U::r::messages`); file logs include
+using word initials (`UnchainedPlugin::resolvers::messages` → `UP::r::messages`); file logs include
 the full source module. DEBUG headers and bodies are dark gray; TRACE is darker.
 Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.

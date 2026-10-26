@@ -113,8 +113,10 @@ Replace only the encoder block and keep the appender's other settings. A custom
 console pattern replaces the default `module_console` severity colors. Restart
 after editing.
 
-The default `module_console` encoder abbreviates parent module segments:
-`UnchainedPlugin::resolvers::messages` becomes `U::r::messages`.
+The default `module_console` encoder abbreviates parent module segments using
+case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
+`UP`, and `HTTPServer` becomes `HS`. The final segment stays intact:
+`UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
 for the level. A standard `pattern` encoder with `{M}` also shows the full module;
 `{t}` is available when you want the filtering target instead.
