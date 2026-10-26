@@ -116,7 +116,7 @@ after editing.
 The default `module_console` encoder abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
-The resulting label keeps its first 16 characters, dropping any remainder:
+The resulting label keeps its last 16 characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
 for the level. A standard `pattern` encoder with `{M}` also shows the full module;

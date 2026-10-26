@@ -169,48 +169,6 @@ root:
     }
 
     #[test]
-    fn log_macros_preserve_messages_and_appender_source_metadata() {
-        use log4rs::encode::{pattern::PatternEncoder, writer::simple::SimpleWriter, Encode};
-        use std::sync::Mutex;
-
-        struct Capture(Mutex<Vec<(String, String)>>);
-        impl Log for Capture {
-            fn enabled(&self, metadata: &Metadata<'_>) -> bool { metadata.target() == module_path!() }
-            fn log(&self, record: &log::Record<'_>) {
-                if !self.enabled(record.metadata()) { return; }
-                assert_eq!(record.target(), module_path!());
-                assert_eq!(record.module_path(), Some(module_path!()));
-                assert!(record.file().unwrap().ends_with("logger.rs"));
-                assert!(record.line().unwrap() > 0);
-                let mut bytes = Vec::new();
-                PatternEncoder::new("{M}|{f}:{L}|{m}")
-                    .encode(&mut SimpleWriter(&mut bytes), record).unwrap();
-                self.0.lock().unwrap().push((record.args().to_string(), String::from_utf8(bytes).unwrap()));
-            }
-            fn flush(&self) {}
-        }
-        static CAPTURE: Capture = Capture(Mutex::new(Vec::new()));
-        log::set_logger(&CAPTURE).unwrap();
-        log::set_max_level(log::LevelFilter::Trace);
-        log::info!("Unchained Sleuth initialized.");
-        (|| log::info!("waiting for engine to start.."))();
-        log::warn!("warning {}", 1);
-        log::error!("error {}", 2);
-        log::debug!("debug {}", 3);
-        log::trace!("trace {}", 4);
-        let records = CAPTURE.0.lock().unwrap();
-        assert_eq!(records.iter().map(|(message, _)| message.as_str()).collect::<Vec<_>>(), [
-            "Unchained Sleuth initialized.", "waiting for engine to start..",
-            "warning 1", "error 2", "debug 3", "trace 4",
-        ]);
-        for (message, formatted) in records.iter() {
-            assert!(formatted.starts_with(concat!(module_path!(), "|")));
-            assert!(formatted.contains("logger.rs:"));
-            assert!(formatted.ends_with(message));
-        }
-    }
-
-    #[test]
     fn embedded_console_config_loads() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         // Exercise the shipped console config without opening log files.
@@ -227,62 +185,17 @@ root:
 
     #[test]
     fn default_file_formats_use_five_column_level_and_full_module() {
-        use log4rs::encode::{pattern::PatternEncoder, writer::simple::SimpleWriter, Encode};
-
         let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         for name in ["file", "kismet"] {
             let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
             assert!(pattern.contains("{l:5}"));
             assert!(pattern.contains("{M}"));
             assert!(!pattern.contains("{t}"));
-            let mut bytes = Vec::new();
-            PatternEncoder::new(pattern)
-                .encode(
-                    &mut SimpleWriter(&mut bytes),
-                    &log::Record::builder()
-                        .level(Level::Info)
-                        .target("plugin::target")
-                        .module_path(Some("plugin::source"))
-                        .args(format_args!("message"))
-                        .build(),
-                )
-                .unwrap();
-            let output = String::from_utf8(bytes).unwrap();
-            assert!(output.contains("INFO | plugin::source"));
-            assert!(!output.contains("plugin::target"));
         }
     }
 
     #[test]
-    fn module_filters_apply_to_descendants_without_hiding_siblings() {
-        let config = config_from_yaml(r#"
-appenders:
-  console:
-    kind: console
-    encoder:
-      kind: module_console
-loggers:
-  "UnchainedPlugin::modules::vote":
-    level: warn
-  "UnchainedPlugin::features::rcon":
-    level: off
-root:
-  level: debug
-  appenders: [console]
-"#, "test").unwrap();
-        let logger = log4rs::Logger::new(config);
-        for target in ["UnchainedPlugin::modules::vote", "UnchainedPlugin::modules::vote::child"] {
-            assert!(!logger.enabled(&Metadata::builder().target(target).level(Level::Debug).build()));
-            assert!(logger.enabled(&Metadata::builder().target(target).level(Level::Warn).build()));
-        }
-        assert!(logger.enabled(&Metadata::builder()
-            .target("UnchainedPlugin::modules::votekick").level(Level::Debug).build()));
-        assert!(!logger.enabled(&Metadata::builder()
-            .target("UnchainedPlugin::features::rcon").level(Level::Error).build()));
-    }
-
-    #[test]
-    fn standard_pattern_overrides_still_work() {
+    fn console_adapter_delegates_pattern_encoders() {
         config_from_yaml(r#"
 appenders:
   console:

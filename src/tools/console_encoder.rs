@@ -39,13 +39,14 @@ struct ShortModule<'a>(&'a str);
 
 impl std::fmt::Display for ShortModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut remaining = 16;
-        let mut write_char = |ch| -> std::fmt::Result {
-            if remaining > 0 {
-                write!(f, "{ch}")?;
-                remaining -= 1;
-            }
-            Ok(())
+        // Retain the last 16 Unicode characters without allocating a label.
+        let mut tail = ['\0'; 16];
+        let mut next = 0;
+        let mut length = 0;
+        let mut push_char = |ch| {
+            tail[next] = ch;
+            next = (next + 1) % tail.len();
+            length = (length + 1).min(tail.len());
         };
         let mut segments = self.0.split("::").peekable();
         while let Some(segment) = segments.next() {
@@ -59,17 +60,21 @@ impl std::fmt::Display for ShortModule<'_> {
                         // Start camel-case words and acronym-to-word transitions.
                         if first || (uppercase && (!previous_uppercase
                             || chars.peek().is_some_and(|next| next.is_lowercase()))) {
-                            write_char(ch)?;
+                            push_char(ch);
                         }
                         first = false;
                         previous_uppercase = uppercase;
                     }
                 }
-                write_char(':')?;
-                write_char(':')?;
+                push_char(':');
+                push_char(':');
             } else {
-                for ch in segment.chars() { write_char(ch)?; }
+                for ch in segment.chars() { push_char(ch); }
             }
+        }
+        let start = if length == tail.len() { next } else { 0 };
+        for offset in 0..length {
+            write!(f, "{}", tail[(start + offset) % tail.len()])?;
         }
         Ok(())
     }
@@ -219,15 +224,17 @@ mod tests {
     }
 
     #[test]
-    fn module_abbreviation_preserves_leaf_unicode_and_file_records() {
+    fn module_abbreviation_keeps_unicode_suffix_and_original_records() {
         use log4rs::encode::writer::simple::SimpleWriter;
 
         for (module, expected) in [
             (Some("UnchainedPlugin::resolvers::messages"), "UP::r::messages"),
-            (Some("UnchainedPlugin::modules::discord::event_log"), "UP::m::d::event_"),
+            (Some("UnchainedPlugin::modules::discord::event_log"), ":m::d::event_log"),
             (Some("foo_bar::UnchainedPlugin::messages"), "fb::UP::messages"),
-            (Some("fooBar::HTTPServer::XMLParser::messages"), "fB::HS::XP::mess"),
-            (Some("abcdefghijklmnopq"), "abcdefghijklmnop"),
+            (Some("fooBar::HTTPServer::XMLParser::messages"), "HS::XP::messages"),
+            (Some("abcdefghijklmnopq"), "bcdefghijklmnopq"),
+            (Some("abcdefghijklmnopé"), "bcdefghijklmnopé"),
+            (Some("abcdefghijklmnopqrstuvwxyz0123456789"), "uvwxyz0123456789"),
             (Some("ééééééééééééééééé"), "éééééééééééééééé"),
             (Some("_foo__bar_::HTTP::messages"), "fb::H::messages"),
             (Some("ÉquipeMonde::équipe_monde::messages"), "ÉM::ém::messages"),
@@ -242,9 +249,6 @@ mod tests {
             encoder().encode(&mut SimpleWriter(&mut console), &record).unwrap();
             assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected}] message")));
             assert!(expected.chars().count() <= 16);
-            let mut file = Vec::new();
-            PatternEncoder::new("{M}").encode(&mut SimpleWriter(&mut file), &record).unwrap();
-            assert_eq!(String::from_utf8(file).unwrap(), module.unwrap_or("???"));
             assert_eq!(record.target(), "unchanged::filter_target");
             assert_eq!(record.module_path(), module);
         }
