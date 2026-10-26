@@ -148,6 +148,33 @@ mod tests {
     }
 
     #[test]
+    fn default_file_formats_use_five_column_level_and_target() {
+        use log4rs::encode::{pattern::PatternEncoder, writer::simple::SimpleWriter, Encode};
+
+        let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
+        for name in ["file", "kismet"] {
+            let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
+            assert!(pattern.contains("{l:5}"));
+            assert!(pattern.contains("{t}"));
+            let mut bytes = Vec::new();
+            PatternEncoder::new(pattern)
+                .encode(
+                    &mut SimpleWriter(&mut bytes),
+                    &log::Record::builder()
+                        .level(Level::Info)
+                        .target("plugin::target")
+                        .module_path(Some("plugin::source"))
+                        .args(format_args!("message"))
+                        .build(),
+                )
+                .unwrap();
+            let output = String::from_utf8(bytes).unwrap();
+            assert!(output.contains("INFO | plugin::target"));
+            assert!(!output.contains("plugin::source"));
+        }
+    }
+
+    #[test]
     fn module_filters_apply_to_descendants_without_hiding_siblings() {
         let config = config_from_yaml(r#"
 appenders:

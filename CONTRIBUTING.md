@@ -193,7 +193,8 @@ Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.
 See the [logging guide](docs/logging.md) for configuration, defaults, and the
 namespace reference.
 
-The default console output includes each message's target. DEBUG headers and bodies
+The default console output includes each message's source module; file logs include
+its target. DEBUG headers and bodies
 are light gray; TRACE headers and bodies are dark gray. Message color codes are
 preserved. INFO headers are blue, WARN headers yellow, and ERROR headers red.
 File logs do not use console colors. Redirected console output is also uncolored.
@@ -219,7 +220,7 @@ loggers:
 ```
 
 Levels apply to the named module and its descendants, unless a more specific
-entry overrides them. Copy targets from console output or `unchained.log`.
+entry overrides them. Copy targets from `unchained.log`.
 To show trace lines on the console, also change its threshold filter to `trace`.
 Legacy targets such as `function`, `RCON`, `game_chat`, and `system_chat` must be
 replaced with their module-scoped targets in existing custom configurations.

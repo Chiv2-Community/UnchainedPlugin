@@ -94,12 +94,15 @@ and `encoder.pattern` to the desired line format:
 ```yaml
 encoder:
   kind: pattern
-  pattern: "[{d(%H:%M:%S)} {l:5}] [{t}] {m}{n}"
+  pattern: "[{d(%H:%M:%S)} {l:5}] [{M}] {m}{n}"
 ```
 
 Replace only the encoder block and keep the appender's other settings. A custom
 console pattern replaces the default `module_console` severity colors. Restart
 after editing.
+
+Use `{M}` for the source module (console) or `{t}` for the target namespace (file).
+Both defaults use `{l:5}` for the level.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
@@ -129,7 +132,8 @@ create a second `loggers:` mapping.
 A namespace setting applies to its descendants unless a more specific setting
 overrides it. For example, `UnchainedPlugin::modules::discord` controls all Discord
 modules, while `UnchainedPlugin::modules::discord::event_log` controls just the
-event log. Names are case-sensitive; copy targets exactly from the log output.
+event log. Names are case-sensitive; copy targets exactly from `unchained.log`.
+The console shows the source module, which can differ from the target.
 
 Changing `root.level` changes the fallback for every namespace without a more
 specific override, including dependencies. To change only plugin output, set

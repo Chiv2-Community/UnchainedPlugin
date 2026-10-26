@@ -12,7 +12,7 @@ impl Default for ConsoleEncoder {
     fn default() -> Self {
         Self {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
-            body: PatternEncoder::new(" [{t}] {m}{n}"),
+            body: PatternEncoder::new(" [{M}] {m}{n}"),
         }
     }
 }
@@ -118,6 +118,7 @@ mod tests {
                     &Record::builder()
                         .level(level)
                         .target("plugin::module")
+                        .module_path(Some("plugin::module"))
                         .args(format_args!("message"))
                         .build(),
                 )
@@ -135,6 +136,25 @@ mod tests {
             }
             assert_eq!(buffer.styles.last().unwrap().1, Style::new());
         }
+    }
+
+    #[test]
+    fn console_uses_source_module_instead_of_target() {
+        let mut bytes = Vec::new();
+        ConsoleEncoder::default()
+            .encode(
+                &mut log4rs::encode::writer::simple::SimpleWriter(&mut bytes),
+                &Record::builder()
+                    .level(Level::Info)
+                    .target("plugin::module::game_chat")
+                    .module_path(Some("plugin::module"))
+                    .args(format_args!("message"))
+                    .build(),
+            )
+            .unwrap();
+        let output = String::from_utf8(bytes).unwrap();
+        assert!(output.contains("INFO ] [plugin::module] message"));
+        assert!(!output.contains("game_chat"));
     }
 
     #[test]
@@ -165,6 +185,7 @@ mod tests {
                 &Record::builder()
                     .level(Level::Trace)
                     .target("plugin::module")
+                    .module_path(Some("plugin::module"))
                     .args(format_args!("message"))
                     .build(),
             )
@@ -186,6 +207,7 @@ mod tests {
                     &Record::builder()
                         .level(level)
                         .target("plugin::module")
+                        .module_path(Some("plugin::module"))
                         .args(format_args!("message"))
                         .build(),
                 )
