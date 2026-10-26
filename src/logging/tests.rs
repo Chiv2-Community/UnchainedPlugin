@@ -64,6 +64,23 @@ fn all_plugin_diagnostics_use_shared_macros() {
             if path.is_dir() { check(&path); }
             else if path.extension().is_some_and(|extension| extension == "rs") {
                 let source = std::fs::read_to_string(&path).unwrap();
+                // Exported definitions in this tree end with an unindented brace.
+                let mut exported = false;
+                let mut start = 0;
+                let mut exported_macros = Vec::new();
+                let mut position = 0;
+                for line in source.split_inclusive('\n') {
+                    if line.trim() == "#[macro_export]" {
+                        exported = true;
+                        start = position;
+                    }
+                    position += line.len();
+                    if exported && line.trim_end() == "}" {
+                        exported_macros.push(start..position);
+                        exported = false;
+                    }
+                }
+                assert!(!exported, "{}: unterminated exported macro", path.display());
                 // Split punctuation too, so whitespace cannot bypass the check.
                 let tokens: Vec<_> = source.split(|ch: char| !ch.is_alphanumeric() && ch != '_')
                     .filter(|token| !token.is_empty()).collect();
@@ -85,8 +102,9 @@ fn all_plugin_diagnostics_use_shared_macros() {
                         let before = source[..offset].trim_end();
                         let prefix = if path.components().any(|part| part.as_os_str() == "bin") {
                             "UnchainedPlugin::"
+                        } else if exported_macros.iter().any(|range| range.contains(&offset)) {
+                            "$crate::"
                         } else {
-                            // Also accepts the hygienic $crate path in macro definitions.
                             "crate::"
                         };
                         assert!(before.ends_with(prefix),
