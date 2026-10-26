@@ -218,8 +218,8 @@ impl Registration {
             
             if DEBUG_LOGGING {
                 match res {
-                    Ok(r) if r.status().is_success() => crate::sinfo!("Successfully deregistered: {}", ident.id),
-                    _ => crate::swarn!("Failed to deregister: {}", ident.id),
+                    Ok(r) if r.status().is_success() => sinfo!("Successfully deregistered: {}", ident.id),
+                    _ => swarn!("Failed to deregister: {}", ident.id),
                 }
             }
         }
@@ -247,7 +247,7 @@ impl RegistrationInner {
                     id
                 },
                 None => {
-                    if DEBUG_LOGGING { crate::sinfo!("Registration failed. Backing off {}s", backoff_secs); }
+                    if DEBUG_LOGGING { sinfo!("Registration failed. Backing off {}s", backoff_secs); }
                     self.wait_interruptible(Duration::from_secs(backoff_secs));
                     backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                     continue;
@@ -270,7 +270,7 @@ impl RegistrationInner {
                     self.wait_interruptible(Duration::from_secs(ident.refresh_period));
                 }
                 Err(true) => { // Fatal Auth Error
-                    crate::serror!("Authorization failed. Clearing identity.");
+                    serror!("Authorization failed. Clearing identity.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
                     break;
@@ -291,12 +291,12 @@ impl RegistrationInner {
         while start.elapsed().as_secs() < MAX_DISCOVERY_TIMEOUT_SECS {
             if self.is_stopping() { return false; }
             if a2s.info(&self.server_addr).is_ok() { 
-                if DEBUG_LOGGING { crate::sinfo!("Server detected on {} after {}s", self.server_addr, start.elapsed().as_secs()); }
+                if DEBUG_LOGGING { sinfo!("Server detected on {} after {}s", self.server_addr, start.elapsed().as_secs()); }
                 return true; 
             }
             thread::sleep(Duration::from_secs(2));
         }
-        crate::swarn!("A2S Discovery timeout: Server not responding at {}", self.server_addr);
+        swarn!("A2S Discovery timeout: Server not responding at {}", self.server_addr);
         false
     }
 
@@ -308,7 +308,7 @@ impl RegistrationInner {
             if id.refresh_at > (now + HEARTBEAT_GRACE_PERIOD_SECS) { 
                 return Some(id.clone()); 
             }
-            if DEBUG_LOGGING { crate::sinfo!("Identity expiring soon (or expired), re-registering..."); }
+            if DEBUG_LOGGING { sinfo!("Identity expiring soon (or expired), re-registering..."); }
         }
 
         // Register fresh
@@ -376,7 +376,7 @@ impl RegistrationInner {
             local_ip_address: cli_args().local_ip.as_str(),
             mods,
         };
-        //crate::sinfo!("Request: {:#?}", request);
+        //sinfo!("Request: {:#?}", request);
 
         let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {
@@ -395,7 +395,7 @@ impl RegistrationInner {
             let expiry = data.refresh_before as u64;
             
             if DEBUG_LOGGING {
-                crate::sinfo!("Registered: {} | Verified: {} | Key: {}...",
+                sinfo!("Registered: {} | Verified: {} | Key: {}...",
                     data.server.unique_id, data.server.is_verified, &data.key[..8]);
             }
 
@@ -459,7 +459,7 @@ impl RegistrationInner {
                 // Parse the response to get the new refresh_before timestamp
                 if let Ok(data) = r.json::<HeartbeatResponse>() {
                     if DEBUG_LOGGING { 
-                        crate::sdebug!("HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
+                        sdebug!("HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
                             ident.id, start_time.elapsed().as_millis(), data.server.is_verified, data.refresh_before); 
                     }
                     Ok(data.refresh_before as u64)
@@ -479,7 +479,7 @@ impl RegistrationInner {
                 Ok(info) => return Ok(info),
                 Err(e) => {
                     if i == A2S_RETRIES - 1 {
-                        crate::serror!("A2S failed after {} attempts: {}", A2S_RETRIES, e);
+                        serror!("A2S failed after {} attempts: {}", A2S_RETRIES, e);
                         return Err(());
                     }
                     thread::sleep(Duration::from_millis(500));

@@ -3,9 +3,12 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Plugin diagnostics always use `crate::{sinfo,swarn,serror,sdebug,strace}!`;
+Plugin diagnostics use unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`;
 declarative macro definitions use `$crate::sinfo!` and the corresponding severities.
-External binaries use `UnchainedPlugin::sinfo!` and the corresponding severities.
+The logging module brings these macros into scope before other plugin modules.
+External binaries import the macros from `UnchainedPlugin`.
+Proc-generated diagnostics retain `crate::` paths to resolve in the consuming
+crate without depending on its lexical macro imports.
 log4rs routes and formats the records. Messages must not embed
 caller function/module prefixes or source locations. Configure those fields in
 the appender pattern instead.
@@ -149,7 +152,7 @@ targets, filtering and lazy formatting through the `log` facade. Custom `target:
 and `logger:` options and structured fields retain the facade's syntax:
 
 ```rust,ignore
-crate::sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
+sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
 ```
 
 `__unchained_function` is reserved for captured function metadata. Do not supply

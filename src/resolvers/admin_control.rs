@@ -23,7 +23,7 @@ define_pattern_resolver!(
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
 CREATE_HOOK!(ExecuteConsoleCommand, ACTIVE, NONE, c_void, (command: *mut FString), {
-    unsafe { crate::sinfo!("Executing: {}", (&*command)); }
+    unsafe { sinfo!("Executing: {}", (&*command)); }
     CALL_ORIGINAL!(ExecuteConsoleCommand(command))
 });
 

@@ -27,7 +27,7 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_
 
     let map_url = format!("Frontend{pwd_opt}{rcon_opt}{init_opt}");
     #[cfg(feature="verbose_hooks")]
-    crate::sinfo!("{}", map_url);
+    sinfo!("{}", map_url);
 
     let mut map_url_fs = FString::from(map_url.as_str());
     CALL_ORIGINAL!(LoadFrontEndMap(this_ptr, &mut map_url_fs))
@@ -62,7 +62,7 @@ pub fn run_on_game_thread<F>(f: F)
 where
     F: FnOnce() + Send + 'static,
 {
-    crate::sdebug!("Task added to job queue");
+    sdebug!("Task added to job queue");
     JOB_QUEUE.lock().unwrap().push(Box::new(f));
 }
 
@@ -83,18 +83,18 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
     });
 
     if reentered {
-        crate::serror!("Re-entrant UGameEngineTick");
+        serror!("Re-entrant UGameEngineTick");
         return;
     }
     unsafe {
         if IsBadReadPtr(Some(engine), 8).into() {
-            crate::serror!("IsBadReadPtr UGameEngineTick");
+            serror!("IsBadReadPtr UGameEngineTick");
             return;
         }
 
     }
     if !o_UGameEngineTick.is_enabled() {
-        crate::serror!("Disabled UGameEngineTick");
+        serror!("Disabled UGameEngineTick");
         return;
     }
 
@@ -120,7 +120,7 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
             );
 
             if result.is_err() {
-                crate::serror!("GameThreadJob panicked! Catching to prevent engine crash.");
+                serror!("GameThreadJob panicked! Catching to prevent engine crash.");
             }
         }
     }
@@ -144,14 +144,14 @@ define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 0
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
-    crate::sinfo!["{}", url_w];
+    sinfo!["{}", url_w];
 
     globals().set_world(std::ptr::null_mut());
-    crate::sdebug!("Reset globals.world to nullptr; world-dependent actions are skipped until post-load");
+    sdebug!("Reset globals.world to nullptr; world-dependent actions are skipped until post-load");
 
     if !ENGINE_READY.load(Ordering::SeqCst) {
         ENGINE_READY.store(true, Ordering::SeqCst);
-        crate::sinfo!("Engine signaled for initialization");
+        sinfo!("Engine signaled for initialization");
     }
 });
 
@@ -161,16 +161,16 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
-    crate::sinfo!["Triggered"];
+    sinfo!["Triggered"];
     match globals().world() {
         Some(current_world) => {
             if current_world != world {
-                crate::swarn!("World changed from {:p} to {:p} without ever being unset", current_world, world);
+                swarn!("World changed from {:p} to {:p} without ever being unset", current_world, world);
                 globals().set_world(world);
             }
         }
         None => {
-            crate::sdebug!("globals.world was None before update; setting world from post-load hook");
+            sdebug!("globals.world was None before update; setting world from post-load hook");
             globals().set_world(world);
         }
     }
@@ -184,7 +184,7 @@ CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
             new_map_name: map_name.to_string()
         }));
     } else {
-        crate::swarn!("Current map name unavailable");
+        swarn!("Current map name unavailable");
     }
 });
 
@@ -194,7 +194,7 @@ define_pattern_resolver!(SetMatchState,[
     ]);
 // void AGameMode::SetMatchState(FName NewState)
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
-    crate::sinfo!["Match state: {}", new_state];
+    sinfo!["Match state: {}", new_state];
 });
 
 // TODO: FViewport unused

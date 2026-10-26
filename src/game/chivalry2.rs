@@ -265,7 +265,7 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
             TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
         }
     } else {
-        crate::swarn!("globals.world was None; skipping chat broadcast");
+        swarn!("globals.world was None; skipping chat broadcast");
     }
 }
 
@@ -690,7 +690,7 @@ pub fn get_human_player_count() -> usize {
     let world_ptr = match crate::globals().world() {
         Some(ptr) => ptr as *mut crate::game::engine::UWorld,
         None => {
-            crate::swarn!("globals.world was None; returning 0 and skipping player count scan");
+            swarn!("globals.world was None; returning 0 and skipping player count scan");
             return 0;
         }
     };

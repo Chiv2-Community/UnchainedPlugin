@@ -180,7 +180,7 @@ CREATE_HOOK!(
                 let (_, func_name) =
                     process_event_names(std::ptr::null_mut(), function);
 
-                crate::swarn!("Blocked ProcessEvent: {}", func_name);
+                swarn!("Blocked ProcessEvent: {}", func_name);
             }
 
             return;
@@ -204,7 +204,7 @@ CREATE_HOOK!(
                 let (class_name, func_name) =
                     process_event_names(object, function);
 
-                crate::serror!(
+                serror!(
                     "Depth limit {} reached at {}::{}; dropping event",
                     PROCESS_EVENT_MAX_DEPTH,
                     class_name,
@@ -233,7 +233,7 @@ CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NON
         let mode = unsafe { o_InternalGetNetMode.call(world) };
         if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
             #[cfg(feature="verbose_hooks")]
-            crate::sinfo!("Overriding dedicated server status");
+            sinfo!("Overriding dedicated server status");
             return true;
         }
     }

@@ -120,16 +120,16 @@ define_pattern_resolver!(CreateHttpRequest, [
     {
         let mut map = STRING_TO_ROOT_FN.write().expect("STRING_TO_ROOT_FN poisoned");
         for (s, root) in strings.into_iter().zip(roots.into_iter()) {
-            // crate::sinfo!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
+            // sinfo!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
             if root >= base_addr { map.insert(s, (root - base_addr) as u64); }
         }
     }
 
     {
         let map = STRING_TO_ROOT_FN.read().unwrap();
-        crate::sinfo!("Request string → root map:");
+        sinfo!("Request string → root map:");
         for (s, fn_addr) in map.iter() {
-            crate::sinfo!("  '{}' => 0x{:x}", s, fn_addr);
+            sinfo!("  '{}' => 0x{:x}", s, fn_addr);
         }
     }
     

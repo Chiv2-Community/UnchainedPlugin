@@ -53,7 +53,7 @@ impl Subscriber<GameEvent> for AdminAlertModule {
                         )
                         .content(format!("<@&{}> ", role_id));
                 } else {
-                    crate::swarn!("Attempted to alert admins, but no admin role id is set.");
+                    swarn!("Attempted to alert admins, but no admin role id is set.");
                 }
             }
 

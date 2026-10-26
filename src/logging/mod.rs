@@ -1,7 +1,9 @@
+#[macro_use]
+mod macros;
+
 pub mod console;
 pub mod log4rs;
 
-mod macros;
 #[doc(hidden)]
 pub use log as __log;
 #[cfg(test)]

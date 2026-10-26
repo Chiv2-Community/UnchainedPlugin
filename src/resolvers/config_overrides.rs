@@ -171,12 +171,12 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
         match settings {
             Ok(settings) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                crate::sinfo!("Loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
+                sinfo!("Loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
                 settings
             }
             Err(_e) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                crate::swarn!("⚠️ Could not load {}: {}", path, _e);
+                swarn!("⚠️ Could not load {}: {}", path, _e);
                 ServerSettings::default()
             }
         }
@@ -214,7 +214,7 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
         Some(root) => root,
         None => {
             #[cfg(feature = "config_overrides_verbose_hooks")]
-            crate::swarn!("⚠️ Missing unchained_profile_location, cannot resolve overrides");
+            swarn!("⚠️ Missing unchained_profile_location, cannot resolve overrides");
             return vec![];
         }
     };
@@ -280,11 +280,11 @@ fn log_override_summary(
 
     if original_path.is_none() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        crate::swarn!("⚠️ {}: no base config name (filename and GetConfigName empty)", object);
+        swarn!("⚠️ {}: no base config name (filename and GetConfigName empty)", object);
     }
     if layers.is_empty() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        crate::swarn!("⚠️ {}: no map name or rotation slot available, no overrides resolved", object);
+        swarn!("⚠️ {}: no map name or rotation slot available, no overrides resolved", object);
         return;
     }
 
@@ -299,7 +299,7 @@ fn log_override_summary(
         let slots = layers.iter().map(|(layer, slot)| format!("{}={slot}", layer.dir())).collect::<Vec<_>>();
         
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        crate::sdebug!("🔀 {} [{}] -> {}", object, slots.join(", "), existing.join(", "));
+        sdebug!("🔀 {} [{}] -> {}", object, slots.join(", "), existing.join(", "));
     }
 }
 

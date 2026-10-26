@@ -6,13 +6,13 @@ define_pattern_resolver!(LoadGameFromSlot,["48 8B C4 55 57 48 8D A8 E8 FE FF FF 
 // USaveGame * __cdecl UGameplayStatics::LoadGameFromSlot(FString *param_1,int param_2)
 CREATE_HOOK!(LoadGameFromSlot, ACTIVE, *mut c_void, (arg0: *mut FString, arg1: i32),{
     let url_w = unsafe { (*arg0).to_string() };
-    crate::sinfo!["Triggered! {url_w}"];
+    sinfo!["Triggered! {url_w}"];
 });
 define_pattern_resolver!(SaveGameToSlot,["48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 48 8B DA 33 F6 48 8D 54 24 30 48 89 74 24 30 48 89 74 24 38 41"]);
 // bool __cdecl UGameplayStatics::SaveGameToSlot(USaveGame *param_1,FString *param_2,int param_3)
 CREATE_HOOK!(SaveGameToSlot, ACTIVE, bool, (savegame: *mut c_void, file: *mut FString, index: i32),{
     let url_w = unsafe { (*file).to_string() };
-    crate::sinfo!["Triggered! {url_w}"];
+    sinfo!["Triggered! {url_w}"];
 });
 
 
@@ -38,7 +38,7 @@ mod loose_assets {
         let u16_str = u16_wstr.to_string_lossy();
         let attr = unsafe { GetFileAttributesW(Filename) };
         if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
-            // crate::swarn!("Blocked path traversal attempt: {}", u16_str);
+            // swarn!("Blocked path traversal attempt: {}", u16_str);
             
             if !OutPakFile.is_null() {
                 unsafe { *OutPakFile = std::ptr::null_mut() };
@@ -61,7 +61,7 @@ mod loose_assets {
         let u16_str = u16_wstr.to_string_lossy();
         let attr = unsafe { GetFileAttributesW(Filename) };
         if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
-            // crate::swarn!("Blocked path traversal attempt: {}", u16_str);
+            // swarn!("Blocked path traversal attempt: {}", u16_str);
             
             if !OutPakFile.is_null() {
                 unsafe { *OutPakFile = std::ptr::null_mut() };

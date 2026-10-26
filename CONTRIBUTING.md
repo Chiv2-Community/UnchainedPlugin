@@ -200,11 +200,14 @@ the full source module. DEBUG headers and bodies are dark gray; TRACE is darker.
 Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.
 
-Use the shared `crate::{sinfo,swarn,serror,sdebug,strace}!` macros for all
+Use the shared unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` macros for all
 diagnostics, including hooks and macro definitions, not direct `log::*` calls or
 `println!`. They capture function names for the [`{fn}` pattern](docs/logging.md#format-log-lines).
 Use `$crate::sinfo!` (and the corresponding severity) inside declarative macro
-definitions; external binaries use `UnchainedPlugin::sinfo!`.
+definitions; external binaries import macros from `UnchainedPlugin`.
+The logging module is declared with `#[macro_use]` before callers; its internal
+macros are declared first too. Proc-generated diagnostics retain `crate::` paths
+so consumer resolution does not depend on lexical imports.
 Write only the message: do not prepend
 function names, module names, or source locations. Appender patterns control that
 presentation using record metadata. Targets default to the calling Rust module.

@@ -114,7 +114,7 @@ impl Subscriber<GameEvent> for DashboardSubscriber {
         let channel_id = match self.discord_config.dashboard_channel_id {
             Some(id) => id,
             None => {
-                crate::swarn!("Attempted to update dashboard, but dashboard channel is not configured.");
+                swarn!("Attempted to update dashboard, but dashboard channel is not configured.");
                 return;
             }
         };
