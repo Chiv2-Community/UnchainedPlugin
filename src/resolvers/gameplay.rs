@@ -211,7 +211,7 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     let source = damage_source_name(damage_taken);
     let kill_reason = death_event.kill_reason.as_str().to_string();
 
-    // crate::sdebug!(f; "Kill: {} -> {} [{}] via {} ({:.2} dmg)", killer.name, victim.name, kill_reason, source, damage_taken.damage);
+    crate::strace!(f; "Kill: {} -> {} [{}] via {} ({:.2} dmg)", killer.name, victim.name, kill_reason, source, damage_taken.damage);
 
     EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
         killer: killer.clone(),
@@ -260,15 +260,15 @@ CREATE_HOOK!(ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
     let source = damage_source_name(damage_taken);
     let attack_type = attack_type_from_damage_event(damage_taken);
 
-    // crate::sdebug!(
-    //     f;
-    //     "Damage: {} -> {} via {} ({:.2} dmg, type={})",
-    //     attacker.name,
-    //     victim.name,
-    //     source,
-    //     damage_taken.damage,
-    //     attack_type
-    // );
+    crate::strace!(
+        f;
+        "Damage: {} -> {} via {} ({:.2} dmg, type={})",
+        attacker.name,
+        victim.name,
+        source,
+        damage_taken.damage,
+        attack_type
+    );
 
     EVENT_SYSTEM.game_event_publisher.publish(GameEvent::DamageEvent(Damage {
         attacker: attacker.name.clone(),

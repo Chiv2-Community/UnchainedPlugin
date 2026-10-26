@@ -30,9 +30,12 @@ impl Encode for ConsoleEncoder {
             Level::Info => {
                 style.text(Color::Blue).intense(true);
             }
-            // Non-intense white is gray on ANSI and Windows consoles.
-            Level::Debug | Level::Trace => {
+            // Non-intense white is light gray; intense black is dark gray.
+            Level::Debug => {
                 style.text(Color::White).intense(false);
+            }
+            Level::Trace => {
+                style.text(Color::Black).intense(true);
             }
         }
         writer.set_style(&style)?;
@@ -100,13 +103,13 @@ mod tests {
     }
 
     #[test]
-    fn level_colors_and_debug_body_style() {
+    fn level_colors_and_debug_trace_body_style() {
         for (level, color, intense) in [
             (Level::Error, Color::Red, true),
             (Level::Warn, Color::Yellow, true),
             (Level::Info, Color::Blue, true),
             (Level::Debug, Color::White, false),
-            (Level::Trace, Color::White, false),
+            (Level::Trace, Color::Black, true),
         ] {
             let mut buffer = StyledBuffer::default();
             ConsoleEncoder::default()
@@ -126,7 +129,7 @@ mod tests {
             let (reset_at, reset_style) = &buffer.styles[1];
             assert_eq!(*reset_style, Style::new());
             if level >= Level::Debug {
-                assert_eq!(*reset_at, buffer.bytes.len(), "debug body must stay gray");
+                assert_eq!(*reset_at, buffer.bytes.len(), "debug and trace bodies must retain their gray style");
             } else {
                 assert!(*reset_at < output.find("message").unwrap());
             }
@@ -135,20 +138,61 @@ mod tests {
     }
 
     #[test]
-    fn unstyled_output_has_no_escape_sequences() {
+    fn debug_preserves_embedded_message_colors() {
         let mut bytes = Vec::new();
         ConsoleEncoder::default()
             .encode(
-                &mut log4rs::encode::writer::simple::SimpleWriter(&mut bytes),
+                &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
                 &Record::builder()
                     .level(Level::Debug)
+                    .target("plugin::module")
+                    .args(format_args!("before \x1b[31mred\x1b[0m after"))
+                    .build(),
+            )
+            .unwrap();
+        let output = String::from_utf8(bytes).unwrap();
+        assert!(output.starts_with("\x1b[0;37;22m"));
+        assert!(output.contains("before \x1b[31mred\x1b[0m after"));
+        assert!(output.ends_with("\x1b[0m"));
+    }
+
+    #[test]
+    fn trace_uses_dark_gray_until_the_end_of_the_line() {
+        let mut bytes = Vec::new();
+        ConsoleEncoder::default()
+            .encode(
+                &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
+                &Record::builder()
+                    .level(Level::Trace)
                     .target("plugin::module")
                     .args(format_args!("message"))
                     .build(),
             )
             .unwrap();
         let output = String::from_utf8(bytes).unwrap();
-        assert!(output.contains("[plugin::module] message"));
-        assert!(!output.contains('\x1b'));
+        let body = output.strip_prefix("\x1b[0;30;1m").unwrap()
+            .strip_suffix("\x1b[0m").unwrap();
+        assert!(body.contains("TRACE] [plugin::module] message"));
+        assert!(!body.contains('\x1b'), "trace must not reset before the body");
+    }
+
+    #[test]
+    fn unstyled_output_has_no_escape_sequences() {
+        for level in [Level::Debug, Level::Trace] {
+            let mut bytes = Vec::new();
+            ConsoleEncoder::default()
+                .encode(
+                    &mut log4rs::encode::writer::simple::SimpleWriter(&mut bytes),
+                    &Record::builder()
+                        .level(level)
+                        .target("plugin::module")
+                        .args(format_args!("message"))
+                        .build(),
+                )
+                .unwrap();
+            let output = String::from_utf8(bytes).unwrap();
+            assert!(output.contains("[plugin::module] message"));
+            assert!(!output.contains('\x1b'));
+        }
     }
 }

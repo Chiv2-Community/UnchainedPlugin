@@ -190,8 +190,9 @@ Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.
 
 ### Colors and module filters
 
-The default console output includes each message's target. Debug and trace lines
-are gray; INFO headers are blue, WARN headers yellow, and ERROR headers red.
+The default console output includes each message's target. DEBUG headers and bodies
+are light gray; TRACE headers and bodies are dark gray. Message color codes are
+preserved. INFO headers are blue, WARN headers yellow, and ERROR headers red.
 File logs do not use console colors. Redirected console output is also uncolored.
 
 Use `log` macros or the `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`
@@ -216,6 +217,7 @@ loggers:
 
 Levels apply to the named module and its descendants, unless a more specific
 entry overrides them. Copy targets from console output or `unchained.log`.
+To show trace lines on the console, also change its threshold filter to `trace`.
 Legacy targets such as `function`, `RCON`, `game_chat`, and `system_chat` must be
 replaced with their module-scoped targets in existing custom configurations.
 The `module_console` encoder supplies the default colors; standard `pattern`

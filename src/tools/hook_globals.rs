@@ -292,6 +292,6 @@ pub fn init_globals() -> Result<(), String> {
     if GLOBALS.set(globals_instance).is_err() {
         log::error!("Error: Globals already initialized!");
     }
-    // sdebug!(f; "{GLOBALS:#?}");
+    crate::strace!(f; "{GLOBALS:#?}");
     Ok(())
 }
