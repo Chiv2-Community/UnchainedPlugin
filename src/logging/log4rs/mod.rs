@@ -7,7 +7,6 @@ mod console;
 pub mod pattern;
 use std::backtrace::Backtrace;
 use std::panic;
-use log::error;
 use crate::tools::hook_globals::cli_args;
 use std::path::PathBuf;
 
@@ -30,7 +29,7 @@ pub fn setup_panic_logger() {
         let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
             .unwrap_or_else(|| "unknown location".to_string());
 
-        error!(
+        crate::logging::error!(
             "PANIC at {}: {}\nStack Backtrace:\n{}",
             location, msg, backtrace
         );
@@ -187,6 +186,8 @@ root:
         assert!(logger.enabled(&Metadata::builder()
             .target("UnchainedPlugin::logging::log4rs").level(Level::Debug).build()));
         assert!(!logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::logging::log4rs").level(Level::Trace).build()));
+        assert!(!logger.enabled(&Metadata::builder()
             .target("serenity::client").level(Level::Info).build()));
     }
 
@@ -222,15 +223,15 @@ root:
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
         for yaml in [
-            "kind: pattern\npattern: '{sm}|{M}|{t}'",
-            "kind: module_console\nheader_pattern: '{sm}|'\nbody_pattern: '{M}|{t}'",
+            "kind: pattern\npattern: '{sm}|{M}|{t}|{fn}'",
+            "kind: module_console\nheader_pattern: '{sm}|'\nbody_pattern: '{M}|{t}|{fn}'",
         ] {
             let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
             let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config).unwrap();
             let mut output = Vec::new();
             encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
                 .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build()).unwrap();
-            assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target");
+            assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target|???");
         }
     }
 

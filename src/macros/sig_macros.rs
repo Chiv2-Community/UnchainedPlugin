@@ -133,7 +133,7 @@ macro_rules! define_pocess {
         let result = $body.map($name);
 
         if let Err(msg) = &result {
-            log::error!("Failed to resolve {}: {:?}", stringify!($name), msg);
+            $crate::logging::error!("Failed to resolve {}: {:?}", stringify!($name), msg);
         }
 
         result
@@ -457,7 +457,7 @@ macro_rules! generate_stub {
         
         #[cfg(feature="dev")]
         CREATE_HOOK!($name, (arg0: *mut c_void), {
-            log::info!["Triggered!"];
+            $crate::logging::info!["Triggered!"];
         });
     };
 }

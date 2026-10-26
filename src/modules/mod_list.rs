@@ -23,7 +23,7 @@ impl Command<ListModsArgs> for ListModsCommand {
 
         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
             let (tx, rx) = mpsc::channel();
-            log::info!("Starting scan!");
+            crate::logging::info!("Starting scan!");
 
             run_on_game_thread(move || {
                 if let Some(mm) = mm_lock().as_ref() {
@@ -34,7 +34,7 @@ impl Command<ListModsArgs> for ListModsCommand {
             let _ = rx.recv();
         } else {
             if let Some(mm) = mm_lock().as_ref() {
-                log::info!("Getting list!");
+                crate::logging::info!("Getting list!");
                 let _ = mm.scan_active_mod_actors();
             }
         }

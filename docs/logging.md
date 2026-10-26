@@ -3,8 +3,8 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Code logs through `log::info!`, `log::warn!`, `log::error!`, `log::debug!`, and
-`log::trace!`; log4rs routes and formats the records. Messages must not embed
+Plugin diagnostics always use `crate::logging::{info,warn,error,debug,trace}!`;
+log4rs routes and formats the records. Messages must not embed
 caller function/module prefixes or source locations. Configure those fields in
 the appender pattern instead.
 
@@ -127,6 +127,28 @@ by the plugin, including nested formatters and width specifications such as
 `kind: pattern` uses a single `pattern` field and does not apply the console's
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
+
+Add `{fn}` to either encoder to display the enclosing named function's leaf,
+for example `body_pattern: " [{sm}::{fn}] {m}{n}"`. Methods show only their name,
+without the type or module. Closures and async blocks use their enclosing named
+function, not `{{closure}}`. Default patterns do not show this field.
+Records from dependencies without function metadata show `???`.
+Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
+through the built-in log4rs key/value formatter.
+
+The shared macros capture the call site using a local function's stable
+`type_name`, without backtraces or message prefixes. They preserve source metadata,
+targets, filtering and lazy formatting through the `log` facade. Custom `target:`
+and `logger:` options and structured fields retain the facade's syntax:
+
+```rust,ignore
+crate::logging::info!(target: "UnchainedPlugin::custom", request = 42; "Ready");
+```
+
+`__unchained_function` is reserved for captured function metadata. Do not supply
+that key yourself. As with `log`, disabled levels skip argument evaluation;
+target/appender filtering can still evaluate argument expressions, but does not
+format rejected messages. Use these macros in hook/macro definitions too.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.

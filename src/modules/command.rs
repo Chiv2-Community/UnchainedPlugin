@@ -192,7 +192,7 @@ impl CommandSubscriber {
                 self.broadcaster.publish(full_msg.into());
             }
             CommandSource::ServerConsole => {
-                log::info!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
+                crate::logging::info!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
             }
         }
     }
@@ -245,7 +245,7 @@ impl CommandSubscriber {
         }
 
         if !executed_from_console {
-            log::info!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
+            crate::logging::info!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
         }
 
         command.execute(req).await;

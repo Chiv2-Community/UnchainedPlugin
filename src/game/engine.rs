@@ -149,7 +149,7 @@ impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = widestring::U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		// log::info!("Constructing fname for {}", path);
+		// crate::logging::info!("Constructing fname for {}", path);
 
 		CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 			&mut name as *mut FName,
@@ -158,7 +158,7 @@ impl FName {
 		))
 		.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			// log::info!("1. Name is invalid for {}", wide_path.to_string_lossy());
+			// crate::logging::info!("1. Name is invalid for {}", wide_path.to_string_lossy());
 			CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 				&mut name as *mut FName,
 				wide_path.as_ptr(),
@@ -167,7 +167,7 @@ impl FName {
 			.expect("Failed to construct FName");
 		}
 		if name.comparison_index.value == 0 {
-			log::info!("2. Name is invalid for {}", wide_path.to_string_lossy());
+			crate::logging::info!("2. Name is invalid for {}", wide_path.to_string_lossy());
 		}
         name
     }
@@ -305,7 +305,7 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
         if asset_registry.interface.is_null() {
             // Fallback: If the interface pointer isn't set,
             // sometimes the Object itself IS the interface.
-            log::error!("interface is null");
+            crate::logging::error!("interface is null");
             asset_registry.object as *mut c_void
         } else {
             asset_registry.interface as *mut c_void

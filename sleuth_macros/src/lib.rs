@@ -246,7 +246,7 @@ pub fn custom_resolver(_args: TokenStream, input: TokenStream) -> TokenStream {
                                 
                                 let wrapped = res.map(#name);
                                 if let Err(e) = &wrapped {
-                                    ::log::error!("Sleuth: {} failed: {:?}", stringify!(#name), e);
+                                    crate::logging::error!("Sleuth: {} failed: {:?}", stringify!(#name), e);
                                 }
                                 wrapped
                             })

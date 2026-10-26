@@ -200,8 +200,9 @@ the full source module. DEBUG headers and bodies are dark gray; TRACE is darker.
 Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.
 
-Use `log::info!`, `log::warn!`, `log::error!`, `log::debug!`, and `log::trace!`
-for diagnostics through log4rs, not custom helpers or `println!`.
+Use the shared `crate::logging::{info,warn,error,debug,trace}!` macros for all
+diagnostics, including hooks and macro definitions, not direct `log::*` calls or
+`println!`. They capture function names for the [`{fn}` pattern](docs/logging.md#format-log-lines).
 Write only the message: do not prepend
 function names, module names, or source locations. Appender patterns control that
 presentation using record metadata. Targets default to the calling Rust module.
@@ -209,7 +210,7 @@ Explicit targets must stay under `module_path!()`, for example
 `concat!(module_path!(), "::game_chat")`.
 
 Logging lives under `src/logging/`: `log4rs/` owns configuration, deserializers,
-and the `{sm}` pattern extension; `console/` owns styling and Windows/Wine setup.
+and the `{sm}` and `{fn}` pattern extensions; `console/` owns styling and Windows/Wine setup.
 Use `logging::log4rs::register` to add the extensions to another log4rs
 deserializer registry, or `logging::log4rs::pattern::PatternEncoder` directly.
 

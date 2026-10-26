@@ -15,7 +15,7 @@ pub fn handle_rcon() {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .expect("[RCON] Failed to bind to port");
 
-    log::info!("RCON Listening on 127.0.0.1:{port}");
+    crate::logging::info!("RCON Listening on 127.0.0.1:{port}");
 
     for stream in listener.incoming() {
         match stream {
@@ -26,13 +26,13 @@ pub fn handle_rcon() {
                         if !line.trim().is_empty() {
                             use crate::commands::NATIVE_COMMAND_QUEUE;
 
-                            log::warn!("RCON Received: {}", line.trim());
+                            crate::logging::warn!("RCON Received: {}", line.trim());
                             NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.trim().to_string());
                         }
                     }
                 });
             }
-            Err(e) => log::error!("RCON Connection failed: {e}"),
+            Err(e) => crate::logging::error!("RCON Connection failed: {e}"),
         }
     }
 }

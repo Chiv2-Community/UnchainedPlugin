@@ -29,10 +29,10 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 macro_rules! check_main_thread {
     () => {
         if std::thread::current().id() == globals().main_thread_id {
-            log::info!("IS IN MAIN THREAD");
+            crate::logging::info!("IS IN MAIN THREAD");
         }
         else {
-            log::error!("IS NOT IN MAIN THREAD");
+            crate::logging::error!("IS NOT IN MAIN THREAD");
         }
     }
 }
@@ -47,7 +47,7 @@ macro_rules! check_main_thread {
 //     false,
 //     |args| {
 //         if args.is_empty() {
-//             log::error!("No path provided!");
+//             crate::logging::error!("No path provided!");
 //             return;
 //         }
         
@@ -63,18 +63,18 @@ macro_rules! check_main_thread {
 //                 // let obj = get_uobject_from_path(args.first().unwrap(), false);
 //                 let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
 //                 if id > mods.len() {
-//                     log::info!("{:#?}", mods);
-//                     log::error!("Invalid id {}", id);
+//                     crate::logging::info!("{:#?}", mods);
+//                     crate::logging::error!("Invalid id {}", id);
 //                     return;
 //                 }
 //                 let cur_mod = mods.get(id).expect("Not a valid mod");
-//                 log::info!("Spawning {} {}", id, cur_mod.name);
+//                 crate::logging::info!("Spawning {} {}", id, cur_mod.name);
 //                 let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
 //                 if !obj.is_null() {
 //                     let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
 //                     mm.spawn_mod_actor(obj as *mut UClass);
 //                 }
-//                 else { log::error!("Could not load from path") }
+//                 else { crate::logging::error!("Could not load from path") }
 //             }
 //             // let _ = mm.update_save_game();
 //         }
@@ -96,11 +96,11 @@ macro_rules! check_main_thread {
             
 //             run_on_game_thread(move || {
 //                 if let Some(mm) = mm_lock().as_ref() {
-//                     log::info!("Starting scan!");
+//                     crate::logging::info!("Starting scan!");
 //                     mm.scan_asset_registry();
 //                     let _ = tx.send(());
 //                 }
-//                 log::info!("Ended scan!");
+//                 crate::logging::info!("Ended scan!");
 //             }); 
             
 //             let _ = rx.recv();
@@ -199,7 +199,7 @@ impl ModManager {
             }
         }
         
-        log::info!("Found {} Mods", registry_local.len());
+        crate::logging::info!("Found {} Mods", registry_local.len());
         
         {
             let mut mods = self.registry.lock().expect("Lock poisoned");
@@ -209,7 +209,7 @@ impl ModManager {
         
         match self.scan_active_mod_actors() {
             Ok(_) => {},
-            Err(e) => {log::error!("Failed to scan active mods: {}", e);}
+            Err(e) => {crate::logging::error!("Failed to scan active mods: {}", e);}
         };
     }
 
@@ -224,7 +224,7 @@ impl ModManager {
         let world = match globals().world() {
             Some(world) => world,
             None => {
-                log::warn!("globals.world was None; skipping active mod actor scan");
+                crate::logging::warn!("globals.world was None; skipping active mod actor scan");
                 return Err("globals.world was None".to_string());
             }
         };
@@ -270,7 +270,7 @@ impl ModManager {
         let world = match globals().world() {
             Some(world) => world,
             None => {
-                log::warn!("globals.world was None; skipping actor spawn");
+                crate::logging::warn!("globals.world was None; skipping actor spawn");
                 return;
             }
         };
@@ -289,9 +289,9 @@ impl ModManager {
 
         unsafe {
             let actor_obj = new_actor as *mut UObject;
-            if actor_obj.is_null() { log::error!("Failed to spawn")}
+            if actor_obj.is_null() { crate::logging::error!("Failed to spawn")}
             else { 
-                log::info!("Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
+                crate::logging::info!("Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
                 let mut txt = FText::default();
                 
                 if let Some(world) = globals().world() {
@@ -301,7 +301,7 @@ impl ModManager {
                     let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
                     TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
                 } else {
-                    log::warn!("globals.world missing; skipping spawn confirmation chat");
+                    crate::logging::warn!("globals.world missing; skipping spawn confirmation chat");
                 }
             }
         }
@@ -326,16 +326,16 @@ impl ModManager {
         let mut settings_fstring = FString::from(settings_file);
         let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;
         if save_game_ptr.is_null() {
-            log::error!("save game is null");
+            crate::logging::error!("save game is null");
             return;
         }
         let save_game = unsafe {&mut *(save_game_ptr as *mut UModLoaderSettings_C)};
-        // log::info!("Save Game:   {:#?}", save_game);
-        log::info!("Enable Bots: {}", save_game.b_enable_bots);
-        log::info!("PlayerBots:  {}", save_game.b_use_player_bots);
-        log::info!("Bot count:   {}", save_game.num_player_bots);
+        // crate::logging::info!("Save Game:   {:#?}", save_game);
+        crate::logging::info!("Enable Bots: {}", save_game.b_enable_bots);
+        crate::logging::info!("PlayerBots:  {}", save_game.b_use_player_bots);
+        crate::logging::info!("Bot count:   {}", save_game.num_player_bots);
         for (cnt, r#mod) in enumerate(save_game.enabled_mods.as_slice()) {
-            log::info!("{:02}: Mod: {}", cnt, r#mod.soft_ptr.path.asset_path_name);
+            crate::logging::info!("{:02}: Mod: {}", cnt, r#mod.soft_ptr.path.asset_path_name);
         }
         // FIXME: apply mods from cli
         save_game.enabled_mods.clear();
@@ -343,17 +343,17 @@ impl ModManager {
             for r#mod in mod_list.iter() {  
                 if let Some(name_short) = r#mod.rsplit_once('.').map(|(_, n)| n) {                    
                     let soft_ptr = TSoftClassPtr::from_path(r#mod.as_str());
-                    log::info!("Enabling mod {}", name_short);
+                    crate::logging::info!("Enabling mod {}", name_short);
                     save_game.enabled_mods.push(soft_ptr);
                 }
             }      
         }  
         let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0));
         if res {
-            log::info!("Modloader settings saved: {res}");
+            crate::logging::info!("Modloader settings saved: {res}");
         }
         else {
-            log::error!("Failed to save Modloader settings");
+            crate::logging::error!("Failed to save Modloader settings");
 
         }
     }
@@ -362,7 +362,7 @@ impl ModManager {
         let registry = self.registry.lock().unwrap();
         let active = self.active_paths.lock().unwrap();
 
-        log::info!("--- Registered Mods ({}) ---", registry.len());
+        crate::logging::info!("--- Registered Mods ({}) ---", registry.len());
         let mut sorted_mods: Vec<&Mod> = registry.values().collect();
         sorted_mods.sort_by(|a, b| a.name.cmp(&b.name));
         for (idx, m) in sorted_mods.iter().enumerate() {
@@ -372,12 +372,12 @@ impl ModManager {
             } else {
                 "[Inactive]"
             };
-            log::info!(
+            crate::logging::info!(
                 "[{:02}] {status_tag} \"{}\" v{} by {}", 
                 idx, m.name, m.version, m.organization
             );
         }
-        log::info!("----------------------------");
+        crate::logging::info!("----------------------------");
     }
 
     pub fn serialize_registry(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> 

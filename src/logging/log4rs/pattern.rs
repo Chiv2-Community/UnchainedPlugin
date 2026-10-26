@@ -3,11 +3,12 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{pattern::PatternEncoder as BuiltinPatternEncoder, Encode, Write};
 
 const SHORT_MODULE_KEY: &str = "__unchained_short_module";
+const FUNCTION_KEY: &str = "__unchained_function";
 
 #[derive(Debug)]
 pub struct PatternEncoder {
     inner: BuiltinPatternEncoder,
-    short_module: bool,
+    extended: bool,
 }
 
 impl PatternEncoder {
@@ -15,12 +16,15 @@ impl PatternEncoder {
         // Alias only formatter names, preserving escaped literals and nested patterns.
         let mut rest = pattern;
         let mut expanded = String::new();
-        let mut short_module = false;
+        let mut extended = false;
         while !rest.is_empty() {
-            if rest.starts_with("{sm}") || rest.starts_with("{sm:") {
-                expanded.push_str(&format!("{{K({SHORT_MODULE_KEY})"));
+            let alias = [("sm", SHORT_MODULE_KEY), ("fn", FUNCTION_KEY)].into_iter()
+                .find(|(name, _)| rest.strip_prefix('{').and_then(|rest| rest.strip_prefix(name))
+                    .is_some_and(|rest| rest.starts_with('}') || rest.starts_with(':')));
+            if let Some((_, key)) = alias {
+                expanded.push_str(&format!("{{K({key})"));
                 rest = &rest[3..];
-                short_module = true;
+                extended = true;
             } else {
                 let ch = rest.chars().next().unwrap();
                 expanded.push(ch);
@@ -33,15 +37,16 @@ impl PatternEncoder {
                 }
             }
         }
-        Self { inner: BuiltinPatternEncoder::new(&expanded), short_module }
+        Self { inner: BuiltinPatternEncoder::new(&expanded), extended }
     }
 }
 
 impl Encode for PatternEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
-        if !self.short_module { return self.inner.encode(writer, record); }
+        if !self.extended { return self.inner.encode(writer, record); }
         let module = ShortModule(record.module_path().unwrap_or("???"));
-        let values = [(SHORT_MODULE_KEY, Value::from_display(&module))];
+        let function = record.key_values().get(FUNCTION_KEY.into()).unwrap_or(Value::from("???"));
+        let values = [(SHORT_MODULE_KEY, Value::from_display(&module)), (FUNCTION_KEY, function)];
         let sources: [&dyn Source; 2] = [&values, record.key_values()];
         let extended = Record::builder()
             .metadata(record.metadata().clone())

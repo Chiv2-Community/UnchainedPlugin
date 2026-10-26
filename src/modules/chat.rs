@@ -20,7 +20,7 @@ pub struct ConsoleChatSink;
 impl ChatSink for ConsoleChatSink {
     async fn send(&self, chat_source: &ChatSource, chat_type: &ChatType, sender: &String, text: &String) {
         if chat_source == &ChatSource::Console { return };
-        log::info!("[{}] [{}] {}: {:?}", chat_source, chat_type, sender, text);
+        crate::logging::info!("[{}] [{}] {}: {:?}", chat_source, chat_type, sender, text);
     }
 }
 
