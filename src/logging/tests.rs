@@ -19,13 +19,18 @@ impl Log for Capture {
         super::console::ConsoleEncoder::with_patterns(Some("{fn}|{t}|{l}|"), Some("{K(request)}|{m}"))
             .encode(&mut SimpleWriter(&mut console), record).unwrap();
         assert_eq!(console, output);
+        let mut default_console = Vec::new();
+        super::console::ConsoleEncoder::default()
+            .encode(&mut SimpleWriter(&mut default_console), record).unwrap();
+        let function = record.key_values().get("__unchained_function".into()).unwrap().to_string();
+        assert!(String::from_utf8(default_console).unwrap().contains(&format!("::{function}] ")));
         self.0.lock().unwrap().push(String::from_utf8(output).unwrap());
     }
     fn flush(&self) {}
 }
 
 fn named(logger: &Capture) {
-    crate::logging::info!(logger: logger, target: "custom", request = 42; "hello {}", 7);
+    crate::info!(logger: logger, target: "custom", request = 42; "hello {}", 7);
 }
 
 #[test]
@@ -38,11 +43,11 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
             panic!("filtered record was formatted")
         }
     }
-    crate::logging::info!(logger: &logger, target: "disabled", "{}", NeverFormat);
+    crate::info!(logger: &logger, target: "disabled", "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
     let request = 42;
-    crate::logging::info!(logger: &logger, request; "shorthand");
-    crate::logging::info!(logger: &logger, request:? = vec![1, 2]; "debug");
+    crate::info!(logger: &logger, request; "shorthand");
+    crate::info!(logger: &logger, request:? = vec![1, 2]; "debug");
     let lines = logger.0.lock().unwrap();
     assert!(lines[0].ends_with("|INFO|42|shorthand"));
     assert!(lines[1].ends_with("|INFO|[1, 2]|debug"));
@@ -78,8 +83,14 @@ fn all_plugin_diagnostics_use_shared_macros() {
                         let after = source[offset + level.len()..].trim_start();
                         if !after.starts_with('!') { continue; }
                         let before = source[..offset].trim_end();
-                        assert!(before.ends_with("crate::logging::"),
-                            "{}: diagnostic must use crate::logging::{level}!", path.display());
+                        let prefix = if path.components().any(|part| part.as_os_str() == "bin") {
+                            "UnchainedPlugin::"
+                        } else {
+                            // Also accepts the hygienic $crate path in macro definitions.
+                            "crate::"
+                        };
+                        assert!(before.ends_with(prefix),
+                            "{}: diagnostic must use {prefix}{level}!", path.display());
                     }
                     assert!(level == "log" || !tokens.windows(2).any(|pair| pair == ["log", level]),
                         "{}: do not import facade diagnostic macros", path.display());
@@ -95,12 +106,12 @@ fn all_plugin_diagnostics_use_shared_macros() {
 struct Example;
 impl Example {
     fn method<T>(&self, logger: &Capture, _: T) {
-        crate::logging::warn!(logger: logger, "method");
+        crate::warn!(logger: logger, "method");
     }
     async fn asynchronous(&self, logger: &Capture) {
-        crate::logging::error!(logger: logger, "async");
-        (|| crate::logging::trace!(logger: logger, "async closure"))();
-        async { crate::logging::info!(logger: logger, "async block"); }.await;
+        crate::error!(logger: logger, "async");
+        (|| crate::trace!(logger: logger, "async closure"))();
+        async { crate::info!(logger: logger, "async block"); }.await;
     }
 }
 
@@ -110,7 +121,7 @@ fn actual_macros_capture_named_functions_and_preserve_records() {
     let logger = Capture::default();
     named(&logger);
     Example.method(&logger, 7);
-    (|| (|| crate::logging::debug!(logger: &logger, "closure"))())();
+    (|| (|| crate::debug!(logger: &logger, "closure"))())();
     // This future has no suspension points; poll it without an executor dependency.
     let mut future = std::pin::pin!(Example.asynchronous(&logger));
     struct Noop;
@@ -154,9 +165,9 @@ fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
     log::set_max_level(log::LevelFilter::Off);
     let calls = std::cell::Cell::new(0);
     let expensive = || { calls.set(calls.get() + 1); 42 };
-    crate::logging::info!(request = expensive(); "{}", expensive());
+    crate::info!(request = expensive(); "{}", expensive());
     assert_eq!(calls.get(), 0);
     log::set_max_level(log::LevelFilter::Debug);
-    crate::logging::trace!("{}", expensive());
+    crate::trace!("{}", expensive());
     assert_eq!(calls.get(), 0);
 }

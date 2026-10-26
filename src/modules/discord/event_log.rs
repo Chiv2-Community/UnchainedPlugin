@@ -271,7 +271,7 @@ impl Subscriber<GameEvent> for EventLogSubscriber {
 
     async fn on_tick(&mut self) {
         if self.dropped_events > 0 && self.last_drop_report.elapsed() >= DROP_REPORT_INTERVAL {
-            crate::logging::warn!(
+            crate::warn!(
                 "Discord event log dropped {} events: worker queue full or closed",
                 self.dropped_events
             );

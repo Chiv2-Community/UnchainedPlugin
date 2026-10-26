@@ -29,7 +29,7 @@ pub fn setup_panic_logger() {
         let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
             .unwrap_or_else(|| "unknown location".to_string());
 
-        crate::logging::error!(
+        crate::error!(
             "PANIC at {}: {}\nStack Backtrace:\n{}",
             location, msg, backtrace
         );

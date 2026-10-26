@@ -90,7 +90,7 @@ impl ChatType {
             EChatType::AllSay => ChatType::Global,
             EChatType::TeamSay => ChatType::Team,
             _ => {
-                crate::logging::warn!("Unhandled chat type {}. Falling back to Global chat", echat_type);
+                crate::warn!("Unhandled chat type {}. Falling back to Global chat", echat_type);
                 ChatType::Global // Default to global... Clean this over time.
             }
         }

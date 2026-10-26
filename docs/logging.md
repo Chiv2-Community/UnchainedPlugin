@@ -3,7 +3,9 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Plugin diagnostics always use `crate::logging::{info,warn,error,debug,trace}!`;
+Plugin diagnostics always use `crate::{info,warn,error,debug,trace}!`;
+declarative macro definitions use `$crate::info!` and the corresponding severities.
+External binaries use `UnchainedPlugin::info!` and the corresponding severities.
 log4rs routes and formats the records. Messages must not embed
 caller function/module prefixes or source locations. Configure those fields in
 the appender pattern instead.
@@ -107,7 +109,7 @@ so severity colors remain independent of the line format:
 encoder:
   kind: module_console
   header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm}] {m}{n}"
+  body_pattern: " [{sm}::{fn}] {m}{n}"
 ```
 
 These are the defaults. Replace only the encoder block and keep the appender's
@@ -128,10 +130,10 @@ by the plugin, including nested formatters and width specifications such as
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-Add `{fn}` to either encoder to display the enclosing named function's leaf,
-for example `body_pattern: " [{sm}::{fn}] {m}{n}"`. Methods show only their name,
+The console default includes `{fn}` to display the enclosing named function's leaf;
+file patterns omit it by default. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
-function, not `{{closure}}`. Default patterns do not show this field.
+function, not `{{closure}}`.
 Records from dependencies without function metadata show `???`.
 Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
 through the built-in log4rs key/value formatter.
@@ -142,7 +144,7 @@ targets, filtering and lazy formatting through the `log` facade. Custom `target:
 and `logger:` options and structured fields retain the facade's syntax:
 
 ```rust,ignore
-crate::logging::info!(target: "UnchainedPlugin::custom", request = 42; "Ready");
+crate::info!(target: "UnchainedPlugin::custom", request = 42; "Ready");
 ```
 
 `__unchained_function` is reserved for captured function metadata. Do not supply

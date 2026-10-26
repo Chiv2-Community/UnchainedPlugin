@@ -29,28 +29,23 @@ macro_rules! __unchained_log {
     }};
 }
 
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __unchained_info {
+macro_rules! info {
     ($($args:tt)+) => { $crate::__unchained_log!(Info, $($args)+) };
 }
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __unchained_warn {
+macro_rules! warn {
     ($($args:tt)+) => { $crate::__unchained_log!(Warn, $($args)+) };
 }
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __unchained_error {
+macro_rules! error {
     ($($args:tt)+) => { $crate::__unchained_log!(Error, $($args)+) };
 }
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __unchained_debug {
+macro_rules! debug {
     ($($args:tt)+) => { $crate::__unchained_log!(Debug, $($args)+) };
 }
-#[doc(hidden)]
 #[macro_export]
-macro_rules! __unchained_trace {
+macro_rules! trace {
     ($($args:tt)+) => { $crate::__unchained_log!(Trace, $($args)+) };
 }

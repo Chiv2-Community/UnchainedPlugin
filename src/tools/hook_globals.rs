@@ -244,13 +244,13 @@ pub fn init_globals() -> Result<(), String> {
         .expect("failed to read image");
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
-    crate::logging::info!(
+    crate::info!(
         "Platform: {} base_addr: '0x{:x?}'",
         platform, *crate::resolvers::BASE_ADDR
     );
 
     // Load CLI ARGS
-    crate::logging::info!("Running resolvers");
+    crate::info!("Running resolvers");
     // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
@@ -262,7 +262,7 @@ pub fn init_globals() -> Result<(), String> {
     let resolution = match result {
         Ok(res) => res,
         Err(_) => {
-            crate::logging::error!("Global initialization failed due to a panic in resolver.");
+            crate::error!("Global initialization failed due to a panic in resolver.");
             return Err("Global initialization aborted. Check logs.".into());
         }
     };
@@ -290,8 +290,8 @@ pub fn init_globals() -> Result<(), String> {
     };
 
     if GLOBALS.set(globals_instance).is_err() {
-        crate::logging::error!("Error: Globals already initialized!");
+        crate::error!("Error: Globals already initialized!");
     }
-    crate::logging::trace!("{GLOBALS:#?}");
+    crate::trace!("{GLOBALS:#?}");
     Ok(())
 }

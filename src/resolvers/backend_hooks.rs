@@ -54,19 +54,19 @@ fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
     suffix.push_str(addr);
     let url = backend_url!(suffix);
-    crate::logging::info!("Checking Unchained ban status for player");
+    crate::info!("Checking Unchained ban status for player");
     let response = ureq::get(&url.to_string()).call();
 
     match response {
         Ok(res) => match res.into_body().read_to_string() {
             Ok(body_str) => body_str.contains("true"),
             Err(error) => {
-                crate::logging::warn!("Failed to read ban-check response for player: {:?}", error);
+                crate::warn!("Failed to read ban-check response for player: {:?}", error);
                 false
             }
         },
         Err(e) => {
-            crate::logging::info!("Ban check failed: {:?}", e);
+            crate::info!("Ban check failed: {:?}", e);
             false
         }
     }
@@ -135,13 +135,13 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         }
 
         let display_name = resolve_player_display_name(&options_string);
-        crate::logging::info!("Player '{}' joined (backend banlist disabled)", display_name);
+        crate::info!("Player '{}' joined (backend banlist disabled)", display_name);
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: display_name }));
         return result;
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    crate::logging::info!("User joining with options '{}'", options_string);
+    crate::info!("User joining with options '{}'", options_string);
 
     let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
@@ -158,18 +158,18 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
 
         unsafe {
             if error_message.is_null() {
-            crate::logging::warn!("Ban check returned banned for {}, but error_message was null", addr_string);
+            crate::warn!("Ban check returned banned for {}, but error_message was null", addr_string);
                 return original_result;
             }
 
             o_FString_AppendChars.call(error_message, wide_msg.as_ptr(), wide_msg.len() as u32);
         }
         #[cfg(feature="verbose_hooks")]
-        crate::logging::warn!("User banned!");
+        crate::warn!("User banned!");
     }
     else {
         let display_name = resolve_player_display_name(&options_string);
-        crate::logging::info!("Player '{}' joined", display_name);
+        crate::info!("Player '{}' joined", display_name);
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: display_name }));
     }
 
@@ -181,31 +181,31 @@ define_pattern_resolver!(
     ["48 8B C4 55 56 41 54 41 57 48 8B EC"]
 );
 CREATE_HOOK!(ATBLGameMode__Logout, ACTIVE, NONE, (), (this_ptr: *mut ATBLGameMode, exiting_player: *mut AController), {
-    crate::logging::trace!("Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
+    crate::trace!("Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
 
     if globals().world() == None {
-        crate::logging::warn!("globals.world is None; skipping leave event");
+        crate::warn!("globals.world is None; skipping leave event");
         return CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
     }
 
     let leave_name = match resolve_leave_name_from_controller(exiting_player) {
         Ok(None) => {
-            crate::logging::warn!("Player is a bot; skipping leave event");
+            crate::warn!("Player is a bot; skipping leave event");
             return CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
         },
         Ok(Some(name)) => {
-            crate::logging::debug!("Resolved logout player name '{}'", name);
+            crate::debug!("Resolved logout player name '{}'", name);
             name
         },
         Err(error) => {
-            crate::logging::warn!("{}. Publishing placeholder LeaveEvent.", error.as_str());
+            crate::warn!("{}. Publishing placeholder LeaveEvent.", error.as_str());
             "Unknown (logout name unavailable)".to_string()
         }
     };
 
     CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
 
-    crate::logging::info!("Player '{}' left", leave_name);
+    crate::info!("Player '{}' left", leave_name);
     EVENT_SYSTEM
        .game_event_publisher
        .publish(GameEvent::LeaveEvent(Leave { name: leave_name }));
@@ -234,7 +234,7 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut c_void, (
     let original_ptr = u_ptr;
     let url_w = unsafe { (*u_ptr).to_string() };
     // #[cfg(feature="verbose_hooks")]
-    // crate::logging::info!["{}", url_w];
+    // crate::info!["{}", url_w];
 
     let (target_url, mut target_auth) = if url_w == "https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version" {
         (Some(FString::from(backend_url!("/api/playfab/Client/Matchmake"))), Some(FString::from("")))
@@ -269,7 +269,7 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut c_void, (
 // CREATE_HOOK!(IncStat, ACTIVE, NONE, (),
 //     (this_ptr: *mut c_void, p1: i32, p2: i32),
 // {
-//     // crate::logging::info!("Stat: {:?}", p1);
+//     // crate::info!("Stat: {:?}", p1);
 //     // CALL_ORIGINAL!(IncStat(this_ptr, p1, p2));
 // });
 
@@ -286,6 +286,6 @@ define_pattern_resolver!(
 CREATE_HOOK!(SetStatInner, ACTIVE, NONE, (),
     (this_ptr: *mut c_void, p1: i32, p2: i32),
 {
-    // crate::logging::info!("Stat: {:?} {:?}", p1, p2);
+    // crate::info!("Stat: {:?} {:?}", p1, p2);
     // CALL_ORIGINAL!(SetStatInner(this_ptr, p1, p2));
 });

@@ -6,8 +6,6 @@ mod macros;
 pub use log as __log;
 #[cfg(test)]
 mod tests;
-pub use crate::{__unchained_debug as debug, __unchained_error as error,
-    __unchained_info as info, __unchained_trace as trace, __unchained_warn as warn};
 
 #[doc(hidden)]
 pub fn function_name<T>(_: T) -> &'static str {

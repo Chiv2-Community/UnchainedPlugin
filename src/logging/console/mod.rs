@@ -99,7 +99,7 @@ impl ConsoleEncoder {
     pub(crate) fn with_patterns(header: Option<&str>, body: Option<&str>) -> Self {
         Self {
             header: PatternEncoder::new(header.unwrap_or("[{d(%H:%M:%S)} {l:5}]")),
-            body: PatternEncoder::new(body.unwrap_or(" [{sm}] {m}{n}")),
+            body: PatternEncoder::new(body.unwrap_or(" [{sm}::{fn}] {m}{n}")),
             truecolor: false,
         }
     }
@@ -137,7 +137,7 @@ mod tests {
                 .target("unchanged::filter_target").args(format_args!("message")).build();
             let mut console = Vec::new();
             encoder().encode(&mut SimpleWriter(&mut console), &record).unwrap();
-            assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected}] message")));
+            assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected}::???] message")));
             assert!(expected.chars().count() <= 16);
             assert_eq!(record.target(), "unchanged::filter_target");
             assert_eq!(record.module_path(), module);
@@ -245,7 +245,7 @@ mod tests {
                 )
                 .unwrap();
             let output = String::from_utf8(buffer.bytes.clone()).unwrap();
-            assert!(output.contains(&format!("{level:5}] [p::module] message")));
+            assert!(output.contains(&format!("{level:5}] [p::module::???] message")));
             assert_eq!(buffer.styles[0].1.text, Some(color));
             assert_eq!(buffer.styles[0].1.intense, Some(intense));
             let (reset_at, reset_style) = &buffer.styles[1];
@@ -274,7 +274,7 @@ mod tests {
             )
             .unwrap();
         let output = String::from_utf8(bytes).unwrap();
-        assert!(output.contains("INFO ] [p::module] message"));
+        assert!(output.contains("INFO ] [p::module::???] message"));
         assert!(!output.contains("game_chat"));
     }
 
@@ -314,7 +314,7 @@ mod tests {
         let output = String::from_utf8(bytes).unwrap();
         let body = output.strip_prefix("\x1b[0;30;1m").unwrap()
             .strip_suffix("\x1b[0m").unwrap();
-        assert!(body.contains("TRACE] [p::module] message"));
+        assert!(body.contains("TRACE] [p::module::???] message"));
         assert!(!body.contains('\x1b'), "trace must not reset before the body");
     }
 
@@ -334,7 +334,7 @@ mod tests {
                 )
                 .unwrap();
             let output = String::from_utf8(bytes).unwrap();
-            assert!(output.contains("[p::module] message"));
+            assert!(output.contains("[p::module::???] message"));
             assert!(!output.contains('\x1b'));
         }
     }
@@ -358,7 +358,7 @@ mod tests {
             ).unwrap();
             let output = String::from_utf8(bytes).unwrap();
             let header = output.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
-            let body = output.find(" [p::module]").unwrap();
+            let body = output.find(" [p::module::???]").unwrap();
             assert!(header < body);
             assert_eq!(output[header..body].contains("\x1b[0m"), level <= Level::Info);
             assert!(output.contains("before \x1b[31mred\x1b[0m after"));

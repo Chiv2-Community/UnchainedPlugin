@@ -33,8 +33,8 @@ macro_rules! CREATE_REQUEST_HOOK {
             ), {
                 let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
                     (Some(t), Some(r)) => (t, r),
-                    (None, _) => { crate::logging::error!("GCGObj was null"); return std::ptr::null_mut(); }
-                    (_, None) => { crate::logging::error!("Request was null"); return std::ptr::null_mut(); }
+                    (None, _) => { $crate::error!("GCGObj was null"); return std::ptr::null_mut(); }
+                    (_, None) => { $crate::error!("Request was null"); return std::ptr::null_mut(); }
                 };
                 let old_url = unsafe { std::ptr::read(&this.url_base) };
                 let old_token = unsafe { std::ptr::read(&req.token) };
@@ -49,7 +49,7 @@ macro_rules! CREATE_REQUEST_HOOK {
                     Err(e) => { unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); } std::panic::resume_unwind(e) }
                 };
                 unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); }
-                // crate::logging::info!("{} Hooked: url_base={} token={}, result={:?}", stringify!($name), this.url_base, req.token, result);
+                // $crate::info!("{} Hooked: url_base={} token={}, result={:?}", stringify!($name), this.url_base, req.token, result);
                 result
             }
         );
@@ -66,11 +66,11 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
                 request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
                 a4: *mut std::os::raw::c_void), {
                 if this_ptr.is_null() || request.is_null() {
-                    crate::logging::error!("Dummy request had null pointers");
+                    $crate::error!("Dummy request had null pointers");
                     return std::ptr::null_mut();
                 }
-                // crate::logging::info!("{} Dummy: url_base={}", stringify!($name), this.url_base);
-                crate::logging::info!("Handling dummy request");
+                // $crate::info!("{} Dummy: url_base={}", stringify!($name), this.url_base);
+                $crate::info!("Handling dummy request");
                 $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
             }
         );
@@ -120,16 +120,16 @@ define_pattern_resolver!(CreateHttpRequest, [
     {
         let mut map = STRING_TO_ROOT_FN.write().expect("STRING_TO_ROOT_FN poisoned");
         for (s, root) in strings.into_iter().zip(roots.into_iter()) {
-            // crate::logging::info!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
+            // crate::info!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
             if root >= base_addr { map.insert(s, (root - base_addr) as u64); }
         }
     }
 
     {
         let map = STRING_TO_ROOT_FN.read().unwrap();
-        crate::logging::info!("Request string → root map:");
+        crate::info!("Request string → root map:");
         for (s, fn_addr) in map.iter() {
-            crate::logging::info!("  '{}' => 0x{:x}", s, fn_addr);
+            crate::info!("  '{}' => 0x{:x}", s, fn_addr);
         }
     }
     

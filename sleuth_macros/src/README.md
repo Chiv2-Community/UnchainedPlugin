@@ -102,7 +102,7 @@ pub fn GetUObjectArrayCustom() -> anyhow::Result<usize> {
         return Err(anyhow::anyhow!("Invalid object array header"));
     }
 
-    ::log::info!("Resolved Custom UObjectArray at 0x{:X}", result);
+    crate::info!("Resolved Custom UObjectArray at 0x{:X}", result);
     Ok(result)
 }
 

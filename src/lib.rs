@@ -105,8 +105,8 @@ impl BuildInfo {
         match load_result {
             Ok(bi) => bi,
             Err(e) => {
-                crate::logging::warn!("Failed to load build info: {}", e);
-                crate::logging::warn!("Initializing new build info.");
+                crate::warn!("Failed to load build info: {}", e);
+                crate::warn!("Initializing new build info.");
                 BuildInfo {
                     plugin_version: env!("CARGO_PKG_VERSION").to_string(),
                     build: 0,
@@ -124,7 +124,7 @@ impl BuildInfo {
     pub fn save(&self) -> Result<Self> {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
-        crate::logging::info!("Saving build info to {}", path.to_string_lossy());
+        crate::info!("Saving build info to {}", path.to_string_lossy());
 
         let self_with_path = self.with_path(path.to_string_lossy().into_owned());
 
@@ -245,7 +245,7 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
         rust_main();
     });
     if let Err(e) = result {
-        crate::logging::error!("Rust main thread panicked: {:?}", e);
+        crate::error!("Rust main thread panicked: {:?}", e);
     }
     0
 }
@@ -257,16 +257,16 @@ fn rust_main() {
     };
 
     if need_rescan {
-        crate::logging::info!("Missing signatures detected, scanning...");
+        crate::info!("Missing signatures detected, scanning...");
         // Rescan and update build info
         let _ = load_current_build_info(true);
 
         // Save the updated build info
         if let Some(bi) = CURRENT_BUILD_INFO.lock().unwrap().as_ref() {
             if let Err(e) = bi.save() {
-                crate::logging::error!("Failed to save build info: {}", e);
+                crate::error!("Failed to save build info: {}", e);
             } else {
-                crate::logging::info!("Build info saved. Please restart the application.");
+                crate::info!("Build info saved. Please restart the application.");
             }
         }
 
@@ -276,7 +276,7 @@ fn rust_main() {
 
     init_rustlib();
     postinit_rustlib();
-    crate::logging::info!("Unchained Sleuth initialized.");
+    crate::info!("Unchained Sleuth initialized.");
 }
 
 fn get_current_platform() -> PlatformType {
@@ -290,7 +290,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
-    crate::logging::debug!("Loading current build info, scan_missing={}", scan_missing);
+    crate::debug!("Loading current build info, scan_missing={}", scan_missing);
 
     if current.is_none() {
         let file_path = env::current_exe()
@@ -305,10 +305,10 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 
 
     if let (true, Some(bi)) = (scan_missing, current.as_ref()) {
-        crate::logging::info!("Scanning for missing signatures");
+        crate::info!("Scanning for missing signatures");
         match bi.with_scan(resolvers().collect()) {
             Ok(bi_with_scan_results) => *current = Some(bi_with_scan_results),
-            Err(e) => crate::logging::error!("Failed to scan for missing signatures: {}", e)
+            Err(e) => crate::error!("Failed to scan for missing signatures: {}", e)
         }
     }
 
@@ -318,11 +318,11 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     // Only apply when not scanning (i.e., during preinit)
     if !scan_missing && !APPLIED.load(Ordering::Relaxed) {
         match current.as_ref() {
-            None => crate::logging::debug!("No current BuildInfo"),
+            None => crate::debug!("No current BuildInfo"),
             Some(bi) => {
                 // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
                 if !bi.get_unresolved(resolvers().collect()).is_empty() {
-                    crate::logging::info!("Missing signatures; deferring initialization until scan and restart");
+                    crate::info!("Missing signatures; deferring initialization until scan and restart");
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
@@ -331,26 +331,26 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                 }
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
-                    crate::logging::error!("Failed to attach hooks: {}", e);
+                    crate::error!("Failed to attach hooks: {}", e);
                     std::process::exit(-67);
                 }
                 APPLIED.store(true, Ordering::Relaxed);
-                crate::logging::info!("Applied patches and hooks in preinit");
+                crate::info!("Applied patches and hooks in preinit");
             },
         }
     }
     else if scan_missing {
-        crate::logging::warn!("Skipping patch application during scan");
+        crate::warn!("Skipping patch application during scan");
     }
     else {
-        crate::logging::warn!("Patches already applied");
+        crate::warn!("Patches already applied");
     }
 
     #[cfg(feature="with_pdb")]
     {
         // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";
         // tools::pdb_scan::list_functions_with_addresses(pdb_file, exe.base_address).expect("Failed to list functions");
-        // crate::logging::warn!("{:#?}", globals());
+        // crate::warn!("{:#?}", globals());
     }
 
     current
@@ -393,9 +393,9 @@ fn preinit_rustlib() {
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
     logging::log4rs::init().expect("Failed to initialize logging");
-    crate::logging::debug!("CLI Args: {:#?}", cli_args());
+    crate::debug!("CLI Args: {:#?}", cli_args());
     if already_initialized {
-        crate::logging::error!("CLI args already initialized!");
+        crate::error!("CLI args already initialized!");
     }
 
     // Load build info without scanning
@@ -431,7 +431,7 @@ fn postinit_rustlib() {
     //         let mut global_reg = globals().registration.lock().unwrap();
     //         *global_reg = Some(Arc::clone(&reg));
             
-    //         crate::logging::info!("Started server registration manager");
+    //         crate::info!("Started server registration manager");
     //         reg.start();
     //     }
     // }
@@ -451,7 +451,7 @@ fn postinit_rustlib() {
     {
         if cli_args().is_server() {
             thread::spawn(move || {
-                crate::logging::info!("waiting for engine to start..");
+                crate::info!("waiting for engine to start..");
                 
                 while !ENGINE_READY.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(500));
@@ -463,7 +463,7 @@ fn postinit_rustlib() {
                 }
             });
         } else {
-            crate::logging::info!("Not a server, skipping server cli initialization");
+            crate::info!("Not a server, skipping server cli initialization");
         }
     }
 }
@@ -475,7 +475,7 @@ pub fn world_init() {
     });
 
     let args = &cli_args();
-    crate::logging::info!("Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
+    crate::info!("Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
 
     #[cfg(feature="server_registration")]
     {
@@ -486,7 +486,7 @@ pub fn world_init() {
             let mut global_reg = globals().registration.lock().unwrap();
             *global_reg = Some(Arc::clone(&reg));
             
-            crate::logging::info!("Started server registration manager");
+            crate::info!("Started server registration manager");
             reg.start();
         }
     }
@@ -497,10 +497,10 @@ pub fn world_init() {
     }
 
     if let Some(motd) = cli_args().motd.clone() {
-        crate::logging::info!("Starting MOTD broadcast loop");
+        crate::info!("Starting MOTD broadcast loop");
         thread::spawn(move || {
             loop {
-                crate::logging::info!("Broadcasting MOTD: {}", motd);
+                crate::info!("Broadcasting MOTD: {}", motd);
                 game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
                 thread::sleep(Duration::from_secs(30 * 60));
             }
@@ -549,10 +549,10 @@ pub fn world_init() {
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
 
-        crate::logging::info!("Mod scans in progress");
+        crate::info!("Mod scans in progress");
         mm.scan_asset_registry();
         mm.update_save_game();
-        crate::logging::info!("Started mod manager");
+        crate::info!("Started mod manager");
     }
 }
 
@@ -560,21 +560,21 @@ pub fn world_init() {
 pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    crate::logging::debug!("Attaching hooks via auto-discovery:");
+    crate::debug!("Attaching hooks via auto-discovery:");
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
         let cond = (hook.condition)();
         if !cond {
-            // crate::logging::warn!("inactive hook: {}", hook.name);
+            // crate::warn!("inactive hook: {}", hook.name);
             // Inactive hooks initialize but don't enable the detour
             // continue;
         }
 
         match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
-            Ok(_) => crate::logging::info!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
+            Ok(_) => crate::info!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
-                crate::logging::error!("☐ {}: {}", hook.name.to_uppercase(), e);
+                crate::error!("☐ {}: {}", hook.name.to_uppercase(), e);
                 if cond {
                     return Err(e);
                 }
@@ -591,11 +591,11 @@ pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
         // Run the condition check
         if (p.enabled_fn)() {
             match unsafe { (p.patch_fn)(offsets.clone()) } {
-                Ok(_) => crate::logging::info!("[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => crate::logging::error!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
+                Ok(_) => crate::info!("[+] Patch Applied: {} ({})", p.name, p.tag),
+                Err(e) => crate::error!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
         } else {
-            crate::logging::debug!("[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+            crate::debug!("[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
         }
     }
 }
