@@ -131,9 +131,11 @@ The resulting label keeps its last 16 characters, dropping any excess on the lef
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
 for the level; `{t}` shows the filtering target instead.
 
-`{sm}` works in both console patterns and any `kind: pattern` encoder configured
-by the plugin, including nested formatters and width specifications such as
-`{sm:>16}`. To omit or replace the short module, edit `body_pattern`.
+Console and file patterns support the same fields, including `{sm}`, `{fn}`,
+`{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
+and `rolling_file` appenders, with explicit or omitted `kind: pattern`.
+Nested formatters, escaping, and width specifications such as `{sm:>16}` work
+in both. To omit or replace the console's short module, edit `body_pattern`.
 `kind: pattern` uses a single `pattern` field and does not apply the console's
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
@@ -145,6 +147,15 @@ function, not `{{closure}}`.
 Records from dependencies without function metadata show `???`.
 Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
 through the built-in log4rs key/value formatter.
+
+For example, replace a file appender's encoder block to include the console's
+short module and function fields without severity colors:
+
+```yaml
+encoder:
+  kind: pattern
+  pattern: "[{d(%H:%M:%S)} {l:5}] [{sm}::{fn}] {m}{n}"
+```
 
 The shared macros capture the call site using a local function's stable
 `type_name`, without backtraces or message prefixes. They preserve source metadata,

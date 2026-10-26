@@ -236,6 +236,79 @@ root:
     }
 
     #[test]
+    fn file_appenders_share_console_patterns() {
+        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+        use std::sync::Mutex;
+
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-file-pattern-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+
+        struct CompareLogger {
+            file: log4rs::Logger,
+            console: Box<dyn Encode>,
+            expected: Mutex<Vec<u8>>,
+        }
+        impl Log for CompareLogger {
+            fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.file.enabled(metadata) }
+            fn log(&self, record: &log::Record<'_>) {
+                self.console.encode(&mut SimpleWriter(&mut *self.expected.lock().unwrap()), record).unwrap();
+                self.file.log(record);
+            }
+            fn flush(&self) { self.file.flush(); }
+        }
+
+        let header = "{l:5}|{sm:>16}|{({fn}):>40}|";
+        let body = "{M}|{t}|{f}:{L}|{K(request)}|{{sm}}|{{fn}}|{m}{n}";
+        log::set_max_level(log::LevelFilter::Trace);
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        for appender_kind in ["file", "rolling_file"] {
+            for encoder_kind in ["", "kind: pattern"] {
+                let path = dir.0.join("output.log");
+                let policy = if appender_kind == "rolling_file" {
+                    "policy: {kind: compound, trigger: {kind: size, limit: 1048576}, roller: {kind: delete}}"
+                } else { "" };
+                let config = config_from_yaml(&format!(r#"
+appenders:
+  file:
+    kind: {appender_kind}
+    path: "{}"
+    append: false
+    {policy}
+    encoder:
+      {encoder_kind}
+      pattern: '{header}{body}'
+root:
+  level: info
+  appenders: [file]
+"#, yaml_escape_double_quoted(&path.to_string_lossy())), "file-pattern-test").unwrap();
+                let console_config: EncoderConfig = serde_yaml::from_str(&format!(
+                    "kind: module_console\nheader_pattern: '{header}'\nbody_pattern: '{body}'")).unwrap();
+                let logger = CompareLogger {
+                    file: log4rs::Logger::new(config),
+                    console: deserializers.deserialize(&console_config.kind, console_config.config).unwrap(),
+                    expected: Mutex::new(Vec::new()),
+                };
+                let source_line = line!() + 1;
+                sinfo!(logger: &logger, target: "file::filter", request = 42; "literal {{fn}} message");
+                logger.flush();
+                let expected = logger.expected.lock().unwrap();
+                let text = std::str::from_utf8(&expected).unwrap();
+                assert!(text.contains("file_appenders_share_console_patterns"), "{text}");
+                assert!(text.contains(&format!("|{}|file::filter|{}:{source_line}|42|{{sm}}|{{fn}}|literal {{fn}} message",
+                    module_path!(), file!())), "{text}");
+                assert_eq!(std::fs::read(&path).unwrap(), *expected, "{appender_kind}, {encoder_kind}");
+            }
+        }
+    }
+
+    #[test]
     fn console_adapter_preserves_builtin_configuration_validation() {
         for options in ["", "target: null", "target: stderr\n    tty_only: true"] {
             config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "console-options").unwrap();
