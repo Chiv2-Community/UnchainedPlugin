@@ -393,6 +393,7 @@ fn preinit_rustlib() {
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
     logging::log4rs::init().expect("Failed to initialize logging");
+    crate::sdebug!("CLI args: {:?}", cli_args());
     if already_initialized {
         crate::serror!("CLI args already initialized!");
     }

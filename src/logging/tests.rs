@@ -144,21 +144,45 @@ fn source_check_catches_interpolated_facade_paths() {
 
 #[test]
 #[cfg(unix)]
-fn startup_does_not_dump_cli_arguments() {
+fn startup_only_dumps_redacted_cli_after_logging_init() {
     let root = std::path::Path::new(file!()).parent().unwrap().parent().unwrap();
     let startup = std::fs::read_to_string(root.join("lib.rs")).unwrap();
     let startup = startup.split_once("let args = tools::cli_args::load_cli()").unwrap().1
         .split_once("// Load build info").unwrap().0;
-    let loader = std::fs::read_to_string(root.join("tools/cli_args.rs")).unwrap();
-    let loader = loader.split_once("pub fn load_cli()").unwrap().1
+    let cli = std::fs::read_to_string(root.join("tools/cli_args.rs")).unwrap();
+    let declaration = cli.split_once("pub struct CLIArgs").unwrap().0;
+    let derive = declaration.rsplit_once("#[derive(").unwrap().1.split_once(")]").unwrap().0;
+    assert!(!derive.contains("Debug"), "CLIArgs must use redacting Debug, not derive");
+    assert!(cli.contains("impl std::fmt::Debug for CLIArgs"));
+    let loader = cli.split_once("pub fn load_cli()").unwrap().1
         .split_once("#[cfg(test)]").unwrap().0;
-    // These boundaries only need failure diagnostics, never argument dumps.
-    for source in [startup, loader] {
-        for severity in ["debug", "trace", "info", "warn", "log"] {
-            let compact: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
-            assert!(!compact.contains(&format!("{severity}!")), "CLI initialization must not dump arguments");
+    assert!(safe_cli_logging(startup, loader), "Only the post-init redacted Debug dump is allowed");
+    let facade = "log::";
+    for raw in ["crate::sdebug!(\"{:?}\", std::env::args());".to_string(),
+        [facade, "debug", "!(\"{parsed:?}\");"].concat(),
+        "crate::strace!(\"{args:?}\");".to_string(), "crate::sinfo!(\"{raw:?}\");".to_string(),
+        "crate::serror!(\"{raw:?}\");".to_string()] {
+        assert!(!safe_cli_logging(&format!("{startup}\n{raw}"), loader));
+        assert!(!safe_cli_logging(startup, &format!("{loader}\n{raw}")));
+    }
+    assert!(!safe_cli_logging("crate::sdebug!(\"CLI args: {:?}\", cli_args());", loader));
+}
+
+#[cfg(unix)]
+fn safe_cli_logging(startup: &str, loader: &str) -> bool {
+    let compact = |source: &str| source.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
+    let startup = compact(startup);
+    let dump = "crate::sdebug!(\"CLIargs:{:?}\",cli_args());";
+    let Some((before, after)) = startup.split_once(dump) else { return false; };
+    if !before.contains("logging::log4rs::init().expect(") { return false; }
+    // Allow the existing initialization error, but no other argument diagnostics.
+    let remaining = format!("{before}{after}").replace("crate::serror!(\"CLIargsalreadyinitialized!\");", "");
+    for source in [remaining, compact(loader)] {
+        for severity in ["debug", "trace", "info", "warn", "error", "log"] {
+            if source.contains(&format!("{severity}!")) { return false; }
         }
     }
+    true
 }
 struct Example;
 impl Example {

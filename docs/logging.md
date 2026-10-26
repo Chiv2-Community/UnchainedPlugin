@@ -30,6 +30,11 @@ unless you pass `--log4rs-yaml`.
 
 Plugin namespaces inherit `debug`; none has a separate default override.
 
+Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
+Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
+Raw command lines are not logged. Other structured fields remain visible;
+do not put credentials in profile names, paths, MOTDs, or other public settings.
+
 ### Log location
 
 The default main file is:
