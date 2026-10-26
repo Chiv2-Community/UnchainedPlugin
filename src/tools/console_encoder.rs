@@ -6,6 +6,7 @@ use log4rs::encode::{pattern::PatternEncoder, Color, Encode, Style, Write};
 struct ConsoleEncoder {
     header: PatternEncoder,
     body: PatternEncoder,
+    ansi_colors: bool,
 }
 
 impl Default for ConsoleEncoder {
@@ -13,7 +14,25 @@ impl Default for ConsoleEncoder {
         Self {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
             body: PatternEncoder::new(" [{M}] {m}{n}"),
+            ansi_colors: supports_ansi_colors(),
         }
+    }
+}
+
+fn supports_ansi_colors() -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Console::{GetConsoleMode, GetStdHandle, SetConsoleMode,
+            CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_OUTPUT_HANDLE};
+        let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) else { return false };
+        let mut mode = CONSOLE_MODE(0);
+        GetConsoleMode(handle, &mut mode).is_ok()
+            && SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok()
+    }
+    #[cfg(not(windows))]
+    {
+        use std::io::IsTerminal;
+        std::io::stdout().is_terminal()
     }
 }
 
@@ -30,9 +49,9 @@ impl Encode for ConsoleEncoder {
             Level::Info => {
                 style.text(Color::Blue).intense(true);
             }
-            // Non-intense white is light gray; intense black is dark gray.
+            // Legacy consoles only provide one usable dark gray.
             Level::Debug => {
-                style.text(Color::White).intense(false);
+                style.text(Color::Black).intense(true);
             }
             Level::Trace => {
                 style.text(Color::Black).intense(true);
@@ -40,6 +59,16 @@ impl Encode for ConsoleEncoder {
         }
         writer.set_style(&style)?;
         let result = (|| {
+            if self.ansi_colors {
+                let color = match record.level() {
+                    Level::Error => "239;154;154",
+                    Level::Warn => "230;202;139",
+                    Level::Info => "154;177;204",
+                    Level::Debug => "128;128;128",
+                    Level::Trace => "104;104;104",
+                };
+                write!(writer, "\x1b[0;38;2;{color}m")?;
+            }
             self.header.encode(writer, record)?;
             if record.level() <= Level::Info {
                 writer.set_style(&Style::new())?;
@@ -78,6 +107,10 @@ mod tests {
     use super::*;
     use std::io;
 
+    fn encoder() -> ConsoleEncoder {
+        ConsoleEncoder { ansi_colors: false, ..ConsoleEncoder::default() }
+    }
+
     #[derive(Default)]
     struct StyledBuffer {
         bytes: Vec<u8>,
@@ -108,11 +141,11 @@ mod tests {
             (Level::Error, Color::Red, true),
             (Level::Warn, Color::Yellow, true),
             (Level::Info, Color::Blue, true),
-            (Level::Debug, Color::White, false),
+            (Level::Debug, Color::Black, true),
             (Level::Trace, Color::Black, true),
         ] {
             let mut buffer = StyledBuffer::default();
-            ConsoleEncoder::default()
+            encoder()
                 .encode(
                     &mut buffer,
                     &Record::builder()
@@ -141,7 +174,7 @@ mod tests {
     #[test]
     fn console_uses_source_module_instead_of_target() {
         let mut bytes = Vec::new();
-        ConsoleEncoder::default()
+        encoder()
             .encode(
                 &mut log4rs::encode::writer::simple::SimpleWriter(&mut bytes),
                 &Record::builder()
@@ -160,7 +193,7 @@ mod tests {
     #[test]
     fn debug_preserves_embedded_message_colors() {
         let mut bytes = Vec::new();
-        ConsoleEncoder::default()
+        encoder()
             .encode(
                 &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
                 &Record::builder()
@@ -171,7 +204,7 @@ mod tests {
             )
             .unwrap();
         let output = String::from_utf8(bytes).unwrap();
-        assert!(output.starts_with("\x1b[0;37;22m"));
+        assert!(output.starts_with("\x1b[0;30;1m"));
         assert!(output.contains("before \x1b[31mred\x1b[0m after"));
         assert!(output.ends_with("\x1b[0m"));
     }
@@ -179,7 +212,7 @@ mod tests {
     #[test]
     fn trace_uses_dark_gray_until_the_end_of_the_line() {
         let mut bytes = Vec::new();
-        ConsoleEncoder::default()
+        encoder()
             .encode(
                 &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
                 &Record::builder()
@@ -201,7 +234,7 @@ mod tests {
     fn unstyled_output_has_no_escape_sequences() {
         for level in [Level::Debug, Level::Trace] {
             let mut bytes = Vec::new();
-            ConsoleEncoder::default()
+            encoder()
                 .encode(
                     &mut log4rs::encode::writer::simple::SimpleWriter(&mut bytes),
                     &Record::builder()
@@ -215,6 +248,33 @@ mod tests {
             let output = String::from_utf8(bytes).unwrap();
             assert!(output.contains("[plugin::module] message"));
             assert!(!output.contains('\x1b'));
+        }
+    }
+
+    #[test]
+    fn pastel_headers_and_darker_gray_bodies_use_rgb() {
+        for (level, rgb) in [
+            (Level::Error, "239;154;154"),
+            (Level::Warn, "230;202;139"),
+            (Level::Info, "154;177;204"),
+            (Level::Debug, "128;128;128"),
+            (Level::Trace, "104;104;104"),
+        ] {
+            let mut bytes = Vec::new();
+            let mut encoder = encoder();
+            encoder.ansi_colors = true;
+            encoder.encode(
+                &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
+                &Record::builder().level(level).module_path(Some("plugin::module"))
+                    .args(format_args!("before \x1b[31mred\x1b[0m after")).build(),
+            ).unwrap();
+            let output = String::from_utf8(bytes).unwrap();
+            let header = output.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
+            let body = output.find(" [plugin::module]").unwrap();
+            assert!(header < body);
+            assert_eq!(output[header..body].contains("\x1b[0m"), level <= Level::Info);
+            assert!(output.contains("before \x1b[31mred\x1b[0m after"));
+            assert!(output.ends_with("\x1b[0m"));
         }
     }
 }
