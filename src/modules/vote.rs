@@ -469,7 +469,7 @@ impl Command<CancelVoteArgs> for CancelVoteCommand {
         let mut state = self.state.lock().await;
         if state.active_vote.is_some() {
             state.active_vote = None;
-            crate::info!("Vote cancelled by {}", command.actor.display_name);
+            crate::sinfo!("Vote cancelled by {}", command.actor.display_name);
         }
     }
 }

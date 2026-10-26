@@ -30,7 +30,7 @@ impl Log for Capture {
 }
 
 fn named(logger: &Capture) {
-    crate::info!(logger: logger, target: "custom", request = 42; "hello {}", 7);
+    crate::sinfo!(logger: logger, target: "custom", request = 42; "hello {}", 7);
 }
 
 #[test]
@@ -43,11 +43,11 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
             panic!("filtered record was formatted")
         }
     }
-    crate::info!(logger: &logger, target: "disabled", "{}", NeverFormat);
+    crate::sinfo!(logger: &logger, target: "disabled", "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
     let request = 42;
-    crate::info!(logger: &logger, request; "shorthand");
-    crate::info!(logger: &logger, request:? = vec![1, 2]; "debug");
+    crate::sinfo!(logger: &logger, request; "shorthand");
+    crate::sinfo!(logger: &logger, request:? = vec![1, 2]; "debug");
     let lines = logger.0.lock().unwrap();
     assert!(lines[0].ends_with("|INFO|42|shorthand"));
     assert!(lines[1].ends_with("|INFO|[1, 2]|debug"));
@@ -64,6 +64,8 @@ fn all_plugin_diagnostics_use_shared_macros() {
             if path.is_dir() { check(&path); }
             else if path.extension().is_some_and(|extension| extension == "rs") {
                 let source = std::fs::read_to_string(&path).unwrap();
+                assert!(!interpolates_facade_path(&source),
+                    "{}: generated diagnostics must use shared macros", path.display());
                 // Exported definitions in this tree end with an unindented brace.
                 let mut exported = false;
                 let mut start = 0;
@@ -94,12 +96,15 @@ fn all_plugin_diagnostics_use_shared_macros() {
                             "{}: do not import facade diagnostic macros", path.display());
                     }
                 }
-                for level in ["info", "warn", "error", "debug", "trace", "log"] {
+                for level in ["info", "warn", "error", "debug", "trace", "log", "sinfo", "swarn", "serror", "sdebug", "strace"] {
                     if level == "log" && path.file_name().unwrap() == "macros.rs" { continue; }
                     for (offset, _) in source.match_indices(level) {
                         let after = source[offset + level.len()..].trim_start();
                         if !after.starts_with('!') { continue; }
                         let before = source[..offset].trim_end();
+                        if before.ends_with(|ch: char| ch.is_alphanumeric() || ch == '_') { continue; }
+                        assert!(level.starts_with('s'),
+                            "{}: diagnostic must use the shared s-prefixed macro", path.display());
                         let prefix = if path.components().any(|part| part.as_os_str() == "bin") {
                             "UnchainedPlugin::"
                         } else if exported_macros.iter().any(|range| range.contains(&offset)) {
@@ -110,7 +115,7 @@ fn all_plugin_diagnostics_use_shared_macros() {
                         assert!(before.ends_with(prefix),
                             "{}: diagnostic must use {prefix}{level}!", path.display());
                     }
-                    assert!(level == "log" || !tokens.windows(2).any(|pair| pair == ["log", level]),
+                    assert!(level == "log" || level.starts_with('s') || !tokens.windows(2).any(|pair| pair == ["log", level]),
                         "{}: do not import facade diagnostic macros", path.display());
                 }
             }
@@ -121,15 +126,49 @@ fn all_plugin_diagnostics_use_shared_macros() {
     check(source.parent().unwrap().parent().unwrap());
     check(&source.parent().unwrap().parent().unwrap().parent().unwrap().join("sleuth_macros/src"));
 }
+
+#[cfg(unix)]
+fn interpolates_facade_path(source: &str) -> bool {
+    let compact: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
+    compact.contains(&["log::", "#"].concat())
+}
+
+#[test]
+#[cfg(unix)]
+fn source_check_catches_interpolated_facade_paths() {
+    for prefix in ["::log::", "log :: "] {
+        assert!(interpolates_facade_path(&[prefix, "# severity ! (\"failure\")"].concat()));
+    }
+    assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
+}
+
+#[test]
+#[cfg(unix)]
+fn startup_does_not_dump_cli_arguments() {
+    let root = std::path::Path::new(file!()).parent().unwrap().parent().unwrap();
+    let startup = std::fs::read_to_string(root.join("lib.rs")).unwrap();
+    let startup = startup.split_once("let args = tools::cli_args::load_cli()").unwrap().1
+        .split_once("// Load build info").unwrap().0;
+    let loader = std::fs::read_to_string(root.join("tools/cli_args.rs")).unwrap();
+    let loader = loader.split_once("pub fn load_cli()").unwrap().1
+        .split_once("#[cfg(test)]").unwrap().0;
+    // These boundaries only need failure diagnostics, never argument dumps.
+    for source in [startup, loader] {
+        for severity in ["debug", "trace", "info", "warn", "log"] {
+            let compact: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
+            assert!(!compact.contains(&format!("{severity}!")), "CLI initialization must not dump arguments");
+        }
+    }
+}
 struct Example;
 impl Example {
     fn method<T>(&self, logger: &Capture, _: T) {
-        crate::warn!(logger: logger, "method");
+        crate::swarn!(logger: logger, "method");
     }
     async fn asynchronous(&self, logger: &Capture) {
-        crate::error!(logger: logger, "async");
-        (|| crate::trace!(logger: logger, "async closure"))();
-        async { crate::info!(logger: logger, "async block"); }.await;
+        crate::serror!(logger: logger, "async");
+        (|| crate::strace!(logger: logger, "async closure"))();
+        async { crate::sinfo!(logger: logger, "async block"); }.await;
     }
 }
 
@@ -139,7 +178,7 @@ fn actual_macros_capture_named_functions_and_preserve_records() {
     let logger = Capture::default();
     named(&logger);
     Example.method(&logger, 7);
-    (|| (|| crate::debug!(logger: &logger, "closure"))())();
+    (|| (|| crate::sdebug!(logger: &logger, "closure"))())();
     // This future has no suspension points; poll it without an executor dependency.
     let mut future = std::pin::pin!(Example.asynchronous(&logger));
     struct Noop;
@@ -183,9 +222,9 @@ fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
     log::set_max_level(log::LevelFilter::Off);
     let calls = std::cell::Cell::new(0);
     let expensive = || { calls.set(calls.get() + 1); 42 };
-    crate::info!(request = expensive(); "{}", expensive());
+    crate::sinfo!(request = expensive(); "{}", expensive());
     assert_eq!(calls.get(), 0);
     log::set_max_level(log::LevelFilter::Debug);
-    crate::trace!("{}", expensive());
+    crate::strace!("{}", expensive());
     assert_eq!(calls.get(), 0);
 }

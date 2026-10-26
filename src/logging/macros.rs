@@ -30,22 +30,22 @@ macro_rules! __unchained_log {
 }
 
 #[macro_export]
-macro_rules! info {
+macro_rules! sinfo {
     ($($args:tt)+) => { $crate::__unchained_log!(Info, $($args)+) };
 }
 #[macro_export]
-macro_rules! warn {
+macro_rules! swarn {
     ($($args:tt)+) => { $crate::__unchained_log!(Warn, $($args)+) };
 }
 #[macro_export]
-macro_rules! error {
+macro_rules! serror {
     ($($args:tt)+) => { $crate::__unchained_log!(Error, $($args)+) };
 }
 #[macro_export]
-macro_rules! debug {
+macro_rules! sdebug {
     ($($args:tt)+) => { $crate::__unchained_log!(Debug, $($args)+) };
 }
 #[macro_export]
-macro_rules! trace {
+macro_rules! strace {
     ($($args:tt)+) => { $crate::__unchained_log!(Trace, $($args)+) };
 }

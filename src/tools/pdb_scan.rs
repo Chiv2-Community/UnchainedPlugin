@@ -23,7 +23,7 @@ pub fn list_functions_with_addresses(pdb_path: &str, module_base: usize) -> pdb:
             if data.function {
                 let rva = data.offset.to_rva(&address_map).unwrap_or_default();
                 let va = rva_to_va(rva.into(), module_base);
-                crate::debug!("Function: {} at RVA {:#X}, VA {:#X}", data.name, rva.0, va);
+                crate::sdebug!("Function: {} at RVA {:#X}, VA {:#X}", data.name, rva.0, va);
             }
         }
     }
@@ -68,7 +68,7 @@ pub fn process_pdb() -> pdb::Result<()> {
 
     // Example: current module base (replace DLL name if needed)
     let module_base = get_current_module_base("mydll.dll");
-    crate::debug!("Module base: {:#X}", module_base);
+    crate::sdebug!("Module base: {:#X}", module_base);
 
     // List all functions
     list_functions_with_addresses(pdb_file, module_base)?;
@@ -76,9 +76,9 @@ pub fn process_pdb() -> pdb::Result<()> {
     // Example: get function name for a specific RVA
     let target_rva = 0x1234;
     if let Some(name) = get_function_name_from_rva(pdb_file, target_rva)? {
-        crate::debug!("Function at RVA {:#X} is {}", target_rva, name);
+        crate::sdebug!("Function at RVA {:#X} is {}", target_rva, name);
     } else {
-        crate::debug!("No function found at RVA {:#X}", target_rva);
+        crate::sdebug!("No function found at RVA {:#X}", target_rva);
     }
 
     Ok(())

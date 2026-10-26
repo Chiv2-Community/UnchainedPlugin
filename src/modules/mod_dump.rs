@@ -24,6 +24,6 @@ impl Command<DumpModsArgs> for DumpModsCommand {
         if let Some(mm) = mm_lock().as_ref() {
             let _ = mm.serialize_registry(target);
         }
-        crate::info!("Registry saved to \'{}\'", target);
+        crate::sinfo!("Registry saved to \'{}\'", target);
     }
 }

@@ -22,8 +22,8 @@ fn main() {
     let config = initialize_discord_system(config);
 
     init().expect("Failed to initialize logging");
-    UnchainedPlugin::info!("Discord Mock Server Started!");
-    UnchainedPlugin::info!("Commands: join <name>, kill <killer> <victim>, chat <msg>, exit");
+    UnchainedPlugin::sinfo!("Discord Mock Server Started!");
+    UnchainedPlugin::sinfo!("Commands: join <name>, kill <killer> <victim>, chat <msg>, exit");
 
     loop {
         print!("> ");

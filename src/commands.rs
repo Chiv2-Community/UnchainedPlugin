@@ -223,7 +223,7 @@ where
                 self.command.execute(parsed, command).await;
             }
             Err(e) => {
-                crate::warn!("Failed to parse command arguments for {}: {}", command.name, e);
+                crate::swarn!("Failed to parse command arguments for {}: {}", command.name, e);
             }
         }
     }
