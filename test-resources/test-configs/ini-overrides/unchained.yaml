@@ -1,0 +1,3 @@
+# Rotation index -> ini-overrides/map-profiles/<name>/ (only used with the map_profiles feature)
+map_profiles:
+  1: quarry_profile

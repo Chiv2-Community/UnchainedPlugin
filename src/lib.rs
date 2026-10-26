@@ -244,7 +244,7 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
         rust_main();
     });
     if let Err(e) = result {
-        eprintln!("Rust main thread panicked: {:?}", e);
+        crate::serror!(f; "Rust main thread panicked: {:?}", e);
     }
     0
 }
@@ -307,7 +307,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         sinfo!("Scanning for missing signatures");
         match bi.with_scan(resolvers().collect()) {
             Ok(bi_with_scan_results) => *current = Some(bi_with_scan_results),
-            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e)
+            Err(e) => crate::serror!(f; "Failed to scan for missing signatures: {}", e)
         }
     }
 
@@ -398,14 +398,14 @@ fn preinit_rustlib() {
             "Unknown panic".to_string()
         };
         let location = panic_info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
-        eprintln!("CRITICAL ERROR: {}{} - Application will exit in 10 seconds", message, location);
+        crate::serror!(f; "CRITICAL ERROR: {}{} - Application will exit in 10 seconds", message, location);
         std::thread::sleep(std::time::Duration::from_secs(10));
     }));
 
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     sdebug!(f; "CLI Args: {:#?}", args);
     if CLI_ARGS.set(args).is_err() {
-        eprintln!("Error: Cli args already initialized!");
+        crate::serror!(f; "Error: Cli args already initialized!");
     }
     tools::logger::init_syslog().expect("Failed to init syslog");
 
