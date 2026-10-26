@@ -130,7 +130,7 @@ macro_rules! __create_hook_impl {
                         [<o_ $name>].initialize(target, |$( $arg ),+| {
                             unsafe { [<$name _detour_fkt>]($( $arg ),+) }
                         }).unwrap();
-                        // $crate::sinfo!(f; "Set up {}", stringify!([<$name _detour_fkt>]));
+                        // $crate::sinfo!("Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition
                         // Note: We evaluate the condition here at attachment time
@@ -204,7 +204,7 @@ macro_rules! TRY_CALL_ORIGINAL {
             #[allow(unused_unsafe)]
             let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
             if !is_init {
-                $crate::swarn!(f; "⚠️ Detour {} is not initialized. Skipping.", stringify!($name));
+                $crate::swarn!("Detour {} is not initialized. Skipping.", stringify!($name));
                 return; // The "TRY" part: exit the caller
             }
             
@@ -235,7 +235,7 @@ macro_rules! TRY_OR_RETURN {
         match $call {
             Ok(val) => val,
             Err(e) => {
-                $crate::serror!(f; "Error: {}", e);
+                $crate::serror!("Error: {}", e);
                 return;
             }
         }

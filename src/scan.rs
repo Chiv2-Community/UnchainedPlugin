@@ -4,7 +4,7 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use crate::{resolvers::{self, PLATFORM, PlatformType, current_platform}, sdebug, sinfo};
+use crate::resolvers::{self, PLATFORM, PlatformType, current_platform};
 
 pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
@@ -16,12 +16,12 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
     }
 
     if resolvers_to_scan.is_empty() {
-        println!("All signatures already found");
+        sinfo!("All signatures already found");
         return Ok(HashMap::new());
     }
 
-    sinfo!(f; "Scanning for {} missing signatures", resolvers_to_scan.len());
-    resolvers_to_scan.iter().for_each(|res| sinfo!(f; "  {}", res.name));
+    sinfo!("Scanning for {} missing signatures", resolvers_to_scan.len());
+    resolvers_to_scan.iter().for_each(|res| sinfo!("  {}", res.name));
 
     let dyn_resolvers = resolvers_to_scan.iter()
         .map(|res| res.getter)
@@ -36,7 +36,7 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
         .map(|name| format!("{} (PID={})", name, pid))
         .unwrap_or_else(|| format!("PID={}", pid));
 
-    sdebug!(f;"GAME '{:?}' '{:x?}'", game_name, exe.base_address);
+    sdebug!("GAME '{:?}' '{:x?}'", game_name, exe.base_address);
 
     let resolution = tracing::info_span!("scan", game = game_name)
         .in_scope(|| exe.resolve_many(&dyn_resolvers));
@@ -56,7 +56,7 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
                 let val = u64::from_str_radix(hex.trim_start_matches("0x"), 16)
                     .context("Failed to parse hex offset")?;
                 let base = exe.base_address as u64;
-                sinfo!(f; "{} {} {} {:x?}", resolver.name, hex, val, (val-base) & 0xFFFFFFF);
+                sinfo!("{} {} {} {:x?}", resolver.name, hex, val, (val-base) & 0xFFFFFFF);
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
@@ -64,9 +64,9 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
 
     for p in inventory::iter::<resolvers::OffsetRegisty> {
         let map: HashMap<String, u64> = (p.map)();
-        sinfo!(f; "Offset Registry '{}': {} entries", p.name, map.len());
+        sinfo!("Offset Registry '{}': {} entries", p.name, map.len());
         for (k, v) in map.iter() {
-            sinfo!(f; "  '{}' => 0x{:x}", k, v);
+            sinfo!("  '{}' => 0x{:x}", k, v);
         }
         offsets.extend(map.into_iter());
     }

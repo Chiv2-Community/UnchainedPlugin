@@ -133,7 +133,7 @@ unsafe fn print_stack(ctx: *mut CONTEXT) -> Vec<String> {
                 std::ffi::CStr::from_ptr((*sym).Name.as_ptr() as *const i8)
                     .to_string_lossy();
             let trace_entry = format!("  frame {}: {}", i, func_name);
-            log::error!("{trace_entry}");
+            serror!("{trace_entry}");
             trace.push(trace_entry.clone());
         }
     }
@@ -166,9 +166,8 @@ unsafe extern "system" fn veh(
 
         let (func, file) = resolve_symbol(rip);
 
-        crate::serror!(
-            f;
-            "[veh] ACCESS VIOLATION\n\
+        serror!(
+            "ACCESS VIOLATION\n\
              rip=0x{:X} rsp=0x{:X}\n\
              {} addr=0x{:X}\n\
              function={}\n\

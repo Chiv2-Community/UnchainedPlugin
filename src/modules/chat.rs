@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use serenity::all::CreateMessage;
 use serenity::http::Http;
-use crate::sinfo;
 use crate::events::bus::Subscriber;
 use crate::events::models::{ChatSource, ChatType, GameChatMessage, GameEvent};
 use crate::features::discord::{send_to_channel, SharedDiscordConfig};

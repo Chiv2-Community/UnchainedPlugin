@@ -12,7 +12,6 @@ use crate::modules::discord::event_log::EventLogSubscriber;
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::tools::command_parser::parse_command;
-use crate::{sinfo, swarn};
 
 pub struct DiscordConfig {
     pub bot_token: String,
@@ -51,11 +50,11 @@ pub async fn send_to_channel(
     match channel_id {
         Some(id) => {
             if let Err(e) = id.send_message(http, message).await {
-                swarn!(f; "Failed to send to channel {}: {}", id, e);
+                swarn!("Failed to send to channel {}: {}", id, e);
             }
         }
         None => {
-            swarn!(f; "Attempted to send to a channel that is not configured.");
+            swarn!("Attempted to send to a channel that is not configured.");
         }
     }
 }
@@ -87,7 +86,7 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
         {
             Ok(c) => c,
             Err(e) => {
-                swarn!(f; "Failed to create Discord client: {}", e);
+                swarn!("Failed to create Discord client: {}", e);
                 return;
             }
         };
@@ -99,7 +98,7 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
         }
 
         if let Err(e) = client.start().await {
-            swarn!(f; "Discord bot error: {}", e);
+            swarn!("Discord bot error: {}", e);
         }
     });
 
@@ -113,7 +112,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Htt
         let discord_subscriber = DiscordBroadcastSubscriber::new(http.clone(), config);
         let _ = broadcast_message_bus.subscribe(Box::new(discord_subscriber)).await;
     } else {
-        swarn!(f; "Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
+        swarn!("Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
     }
 
     // Admin Alert Module
@@ -127,7 +126,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Htt
 
         EVENT_SYSTEM.command_subscriber.lock().await.register(admin_alert_module);
     } else {
-        swarn!(f; "Discord admin alert subscriber not registered because admin notification channel is not configured.");
+        swarn!("Discord admin alert subscriber not registered because admin notification channel is not configured.");
     }
 
     // Dashboard Subscriber
@@ -135,14 +134,14 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, http: Arc<Htt
         let dashboard_subscriber = DashboardSubscriber::new(http.clone(), config);
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(dashboard_subscriber)).await;
     } else {
-        swarn!(f; "Discord dashboard subscriber not registered because dashboard channel is not configured.");
+        swarn!("Discord dashboard subscriber not registered because dashboard channel is not configured.");
     }
 
     if config.event_log_channel_id.is_some() {
         let event_log_subscriber = EventLogSubscriber::new(http.clone(), config);
         let _ = EVENT_SYSTEM.game_event_bus.subscribe(Box::new(event_log_subscriber)).await;
     } else {
-        swarn!(f; "Discord event log subscriber not registered because event log channel is not configured.");
+        swarn!("Discord event log subscriber not registered because event log channel is not configured.");
     }
 
     // Register Discord Connection with Command Subscriber
@@ -158,7 +157,7 @@ async fn add_discord_chat_sink(discord_config: SharedDiscordConfig, discord_http
 #[async_trait::async_trait]
 impl DiscordHandler for Discord {
     async fn ready(&self, _: Context, ready: serenity::model::gateway::Ready) {
-        sinfo!(f; "Discord bot user '{}' is connected!", ready.user.name);
+        sinfo!("Discord bot user '{}' is connected!", ready.user.name);
     }
 
     async fn message(&self, _ctx: Context, msg: Message) {

@@ -5,7 +5,6 @@ use serenity::all::{ChannelId, Http, CreateMessage, MessageId, EditMessage};
 use crate::events::bus::Subscriber;
 use crate::events::models::{GameEvent, ServerStatus};
 use crate::features::discord::SharedDiscordConfig;
-use crate::swarn;
 
 pub struct DashboardSubscriber {
     // Current State
@@ -115,7 +114,7 @@ impl Subscriber<GameEvent> for DashboardSubscriber {
         let channel_id = match self.discord_config.dashboard_channel_id {
             Some(id) => id,
             None => {
-                swarn!(f; "Attempted to update dashboard, but dashboard channel is not configured.");
+                swarn!("Attempted to update dashboard, but dashboard channel is not configured.");
                 return;
             }
         };

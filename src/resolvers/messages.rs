@@ -6,7 +6,6 @@ use crate::{game::{chivalry2::{ATBLGameMode, EChatType}, engine::FText}, ue::FSt
 // Chat messages
 // #[cfg(feature="client_message")]
 mod client_message {
-    use log::{info, warn};
     use regex::Regex;
     use std::os::raw::c_void;
     use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
@@ -24,7 +23,7 @@ mod client_message {
         let message = string_ref.to_string();
         match parse_client_message(message.as_str()) {
             Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
-                info!(target: "game_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m[ {sender} ]\x1b[38;5;255m: \x1b[38;5;251m{message}\x1b[38;5;255m");
+                sinfo!(target: concat!(module_path!(), "::game_chat"), "[ {chat_type:10?} ] [ {sender} ]: {message}");
                 if chat_type == EChatType::AllSay {
                     if let Some(content) = message.strip_prefix('!') {
                         if let Some((name, args, raw_args)) = parse_command(content) {
@@ -57,13 +56,13 @@ mod client_message {
                 }
             }
             Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
-                info!(target: "system_chat", "\x1b[38;5;214m[ {chat_type:10?} ] \x1b[38;5;251m{message}\x1b[38;5;255m");
+                sinfo!(target: concat!(module_path!(), "::system_chat"), "[ {chat_type:10?} ] {message}");
             }
             Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
-                info!(target: "system_chat", "{message}");
+                sinfo!(target: concat!(module_path!(), "::system_chat"), "{message}");
             }
             Err(error) => {
-                warn!(target: "system_chat", "Failed to parse chat message. error={error}");
+                swarn!(target: concat!(module_path!(), "::system_chat"), "Failed to parse chat message. error={error}");
             }
         }
     });
@@ -345,7 +344,7 @@ pub mod kismet_log {
                 
                 match LIST_OF_SHAME.iter().any(|x| message.contains(x)) {
                     true => {}
-                    false => log::debug!(target: "kismet", "{message}"),
+                    false => sdebug!("{message}"),
                 }
             }
         }
@@ -371,14 +370,14 @@ pub mod kismet_log {
 // CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
 //     if !msg.is_null() {
 //         let url_w = unsafe { (*msg).to_string() };
-//         crate::sinfo![f; "Triggered! {url_w}"];
+//         sinfo!["Triggered! {url_w}"];
 //     }
 // });
 
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
-    crate::sinfo![f; "Triggered!"];
+    sinfo!["Triggered!"];
 });
 
 // TODO: Not used?
@@ -387,7 +386,7 @@ define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48
 CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
     if !S.is_null() {
         let url_w = unsafe { (*S).to_string() };
-        crate::sinfo![f; "Triggered! {url_w}"];
+        sinfo!["Triggered! {url_w}"];
     }
 });
 
@@ -401,7 +400,7 @@ CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16
             let u16_cstr = widestring::U16CStr::from_ptr_str(arg1);
             let str = u16_cstr.to_string_lossy();
             if !str.starts_with("Command not recognized: RCON_INTERCEPT") {
-                log::info![target: "Console", "{}" , u16_cstr.display()];
+                sinfo!["{}" , u16_cstr.display()];
             }
         }
     }
