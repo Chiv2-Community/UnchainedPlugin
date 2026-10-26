@@ -10,7 +10,7 @@ mod windows_backend;
 struct ConsoleEncoder {
     header: PatternEncoder,
     body: PatternEncoder,
-    ansi_colors: bool,
+    truecolor: bool,
 }
 
 impl Default for ConsoleEncoder {
@@ -18,7 +18,7 @@ impl Default for ConsoleEncoder {
         Self {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
             body: PatternEncoder::new(" [{M}] {m}{n}"),
-            ansi_colors: configure_console_colors(),
+            truecolor: configure_console_colors(),
         }
     }
 }
@@ -64,27 +64,18 @@ fn configure_console_colors() -> bool {
 
 impl Encode for ConsoleEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
+        let (color, intense) = match record.level() {
+            Level::Error => (Color::Red, true),
+            Level::Warn => (Color::Yellow, true),
+            Level::Info => (Color::Blue, true),
+            Level::Debug => (Color::White, false),
+            Level::Trace => (Color::Black, true),
+        };
         let mut style = Style::new();
-        match record.level() {
-            Level::Error => {
-                style.text(Color::Red).intense(true);
-            }
-            Level::Warn => {
-                style.text(Color::Yellow).intense(true);
-            }
-            Level::Info => {
-                style.text(Color::Blue).intense(true);
-            }
-            Level::Debug => {
-                style.text(Color::White).intense(false);
-            }
-            Level::Trace => {
-                style.text(Color::Black).intense(true);
-            }
-        }
+        style.text(color).intense(intense);
         writer.set_style(&style)?;
         let result = (|| {
-            if self.ansi_colors {
+            if self.truecolor {
                 let [r, g, b] = severity_rgb(record.level());
                 write!(writer, "\x1b[0;38;2;{r};{g};{b}m")?;
             }
@@ -130,7 +121,7 @@ mod tests {
         ConsoleEncoder {
             header: PatternEncoder::new("[{d(%H:%M:%S)} {l:5}]"),
             body: PatternEncoder::new(" [{M}] {m}{n}"),
-            ansi_colors: false,
+            truecolor: false,
         }
     }
 
@@ -163,10 +154,20 @@ mod tests {
     struct StyledBuffer {
         bytes: Vec<u8>,
         styles: Vec<(usize, Style)>,
+        fail_after: Option<usize>,
     }
 
     impl io::Write for StyledBuffer {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if let Some(limit) = self.fail_after {
+                let remaining = limit.saturating_sub(self.bytes.len());
+                if remaining == 0 {
+                    return Err(io::Error::other("injected output failure"));
+                }
+                let count = remaining.min(bytes.len());
+                self.bytes.extend_from_slice(&bytes[..count]);
+                return Ok(count);
+            }
             self.bytes.extend_from_slice(bytes);
             Ok(bytes.len())
         }
@@ -180,6 +181,26 @@ mod tests {
         fn set_style(&mut self, style: &Style) -> io::Result<()> {
             self.styles.push((self.bytes.len(), style.clone()));
             Ok(())
+        }
+    }
+
+    #[test]
+    fn encoding_errors_reset_style_and_preserve_the_original_error() {
+        for level in [Level::Info, Level::Debug, Level::Trace] {
+            for truecolor in [false, true] {
+                for fail_after in [0, 25] {
+                    let mut buffer = StyledBuffer { fail_after: Some(fail_after), ..Default::default() };
+                    let mut encoder = encoder();
+                    encoder.truecolor = truecolor;
+                    let error = encoder.encode(
+                        &mut buffer,
+                        &Record::builder().level(level).module_path(Some("plugin::module"))
+                            .args(format_args!("message")).build(),
+                    ).unwrap_err();
+                    assert!(error.to_string().contains("injected output failure"));
+                    assert_eq!(buffer.styles.last().unwrap().1, Style::new());
+                }
+            }
         }
     }
 
@@ -310,7 +331,7 @@ mod tests {
         ] {
             let mut bytes = Vec::new();
             let mut encoder = encoder();
-            encoder.ansi_colors = true;
+            encoder.truecolor = true;
             encoder.encode(
                 &mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
                 &Record::builder().level(level).module_path(Some("plugin::module"))
