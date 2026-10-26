@@ -226,14 +226,15 @@ root:
     }
 
     #[test]
-    fn default_file_formats_use_five_column_level_and_target() {
+    fn default_file_formats_use_five_column_level_and_full_module() {
         use log4rs::encode::{pattern::PatternEncoder, writer::simple::SimpleWriter, Encode};
 
         let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         for name in ["file", "kismet"] {
             let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
             assert!(pattern.contains("{l:5}"));
-            assert!(pattern.contains("{t}"));
+            assert!(pattern.contains("{M}"));
+            assert!(!pattern.contains("{t}"));
             let mut bytes = Vec::new();
             PatternEncoder::new(pattern)
                 .encode(
@@ -247,8 +248,8 @@ root:
                 )
                 .unwrap();
             let output = String::from_utf8(bytes).unwrap();
-            assert!(output.contains("INFO | plugin::target"));
-            assert!(!output.contains("plugin::source"));
+            assert!(output.contains("INFO | plugin::source"));
+            assert!(!output.contains("plugin::target"));
         }
     }
 

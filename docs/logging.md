@@ -113,8 +113,11 @@ Replace only the encoder block and keep the appender's other settings. A custom
 console pattern replaces the default `module_console` severity colors. Restart
 after editing.
 
-Use `{M}` for the source module (console) or `{t}` for the target namespace (file).
-Both defaults use `{l:5}` for the level.
+The default `module_console` encoder abbreviates parent module segments:
+`UnchainedPlugin::resolvers::messages` becomes `U::r::messages`.
+File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
+for the level. A standard `pattern` encoder with `{M}` also shows the full module;
+`{t}` is available when you want the filtering target instead.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
@@ -144,8 +147,9 @@ create a second `loggers:` mapping.
 A namespace setting applies to its descendants unless a more specific setting
 overrides it. For example, `UnchainedPlugin::modules::discord` controls all Discord
 modules, while `UnchainedPlugin::modules::discord::event_log` controls just the
-event log. Names are case-sensitive; copy targets exactly from `unchained.log`.
-The console shows the source module, which can differ from the target.
+event log. Names are case-sensitive; use full target namespaces, not the shortened
+console names. Both console and file output show source modules by default;
+explicit targets can differ. Add `{t}` to a file pattern to inspect those targets.
 
 Changing `root.level` changes the fallback for every namespace without a more
 specific override, including dependencies. To change only plugin output, set
