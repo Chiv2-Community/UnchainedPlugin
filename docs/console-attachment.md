@@ -21,7 +21,7 @@ in either mode.
   the receiver's responsibility.
 - Wine's palette fallback must not detach or allocate a console in this mode.
 - Explicit `--attach-std` takes precedence over the console-forwarding environment
-  variables. It does not start the plugin's TCP transport or emit duplicate records.
+  variable. It does not use the dedicated structured pipe or emit duplicate records.
 
 The flag does not launch a terminal application or provide interactive command
 forwarding. The plugin does not replace stdin; its command reader stops at EOF.

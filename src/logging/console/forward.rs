@@ -1,6 +1,6 @@
 //! Opt-in console transport. Game threads only encode and try a bounded queue.
-use std::{io::{self, Write}, net::{SocketAddr, TcpStream},
-    sync::{atomic::{AtomicU64, Ordering}, mpsc::{self, SyncSender, TrySendError}, OnceLock}, time::Duration};
+use std::{io::{self, Write},
+    sync::{atomic::{AtomicU64, Ordering}, mpsc::{self, SyncSender, TrySendError}, OnceLock}};
 
 use serde::Serialize;
 
@@ -22,32 +22,38 @@ struct Event {
     dropped: u64,
 }
 
-fn settings(endpoint: &str, token: &str) -> Option<(SocketAddr, String)> {
-    let address: SocketAddr = endpoint.parse().ok()?;
-    if !address.ip().is_loopback() || address.port() == 0 || token.len() != 64
-        || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) { return None; }
-    Some((address, token.to_owned()))
+fn handle_value(value: &str) -> Option<usize> {
+    let handle = value.parse::<usize>().ok()?;
+    (handle != 0 && handle != usize::MAX).then_some(handle)
+}
+
+#[cfg(windows)]
+fn inherited_pipe(value: &str) -> Option<std::fs::File> {
+    use std::os::windows::io::FromRawHandle;
+    use windows::Win32::{Foundation::{HANDLE, HANDLE_FLAG_INHERIT, HANDLE_FLAGS, SetHandleInformation},
+        Storage::FileSystem::{GetFileType, FILE_TYPE_PIPE}};
+    let raw = handle_value(value)?;
+    let handle = HANDLE(raw as isize);
+    unsafe {
+        if GetFileType(handle) != FILE_TYPE_PIPE { return None; }
+        // This launch owns the handle; descendants must not keep the pipe alive.
+        SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)).ok()?;
+        Some(std::fs::File::from_raw_handle(raw as *mut _))
+    }
+}
+
+#[cfg(not(windows))]
+fn inherited_pipe(_value: &str) -> Option<std::fs::File> {
+    None // The plugin runs inside the Windows game, including on Proton.
 }
 
 fn forwarder() -> Option<&'static Forwarder> {
     FORWARDER.get_or_init(|| {
-        let (address, token) = settings(&std::env::var("UNCHAINED_CONSOLE_ENDPOINT").ok()?,
-            &std::env::var("UNCHAINED_CONSOLE_TOKEN").ok()?)?;
+        let mut stream = inherited_pipe(&std::env::var("UNCHAINED_CONSOLE_HANDLE").ok()?)?;
         let (sender, receiver) = mpsc::sync_channel(CAPACITY);
         std::thread::Builder::new().name("console-forward".into()).spawn(move || {
             // A failed or slow receiver cannot stall game threads. File logging remains active.
             let _ = (|| -> io::Result<()> {
-                let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
-                stream.set_write_timeout(Some(Duration::from_secs(2)))?;
-                stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-                serde_json::to_writer(&mut stream, &serde_json::json!({
-                    "version": 1, "kind": "hello", "token": token
-                }))?;
-                stream.write_all(b"\n")?;
-                // Wait for the receiver to accept the token and protocol before sending output.
-                let mut ack = [0; 3];
-                std::io::Read::read_exact(&mut stream, &mut ack)?;
-                if ack != *b"OK\n" { return Err(io::Error::other("console handshake rejected")); }
                 for event in receiver {
                     serde_json::to_writer(&mut stream, &event)?;
                     stream.write_all(b"\n")?;
@@ -62,6 +68,7 @@ fn forwarder() -> Option<&'static Forwarder> {
 pub(crate) fn enabled() -> bool { !super::attach_std_enabled() && forwarder().is_some() }
 
 pub(crate) fn send(kind: &'static str, level: Option<log::Level>, text: String) {
+    if super::attach_std_enabled() { return; }
     if let Some(forwarder) = forwarder() {
         forwarder.send(Event { version: 1, kind, level: level.map(|level| level.to_string()),
             text, dropped: 0 });
@@ -113,16 +120,24 @@ impl TextBuffer {
 mod tests {
     use super::*;
     use std::io::{BufRead, BufReader};
+    use std::time::Duration;
 
     #[test]
-    fn endpoint_is_loopback_and_token_is_fixed_length_hex() {
-        let token = "a".repeat(64);
-        assert!(settings("127.0.0.1:1234", &token).is_some());
-        assert!(settings("[::1]:1234", &token).is_some());
-        for endpoint in ["0.0.0.0:1234", "192.0.2.1:1234", "localhost:1234", "127.0.0.1:0"] {
-            assert!(settings(endpoint, &token).is_none());
+    fn handle_must_be_nonzero_unsigned_decimal() {
+        assert_eq!(handle_value("1234"), Some(1234));
+        for value in ["0", "-1", "pipe", "123\n", "", &usize::MAX.to_string()] {
+            assert!(handle_value(value).is_none());
         }
-        assert!(settings("127.0.0.1:1234", "secret\n").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn non_pipe_handles_are_rejected_without_taking_ownership() {
+        use std::os::windows::io::AsRawHandle;
+        let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+        assert!(inherited_pipe(&(file.as_raw_handle() as usize).to_string()).is_none());
+        assert!(file.metadata().unwrap().len() != 0);
+        assert!(inherited_pipe("123456789").is_none());
     }
 
     #[test]
@@ -149,44 +164,24 @@ mod tests {
         assert_eq!(serde_json::from_str::<String>(&encoded).unwrap(), text);
     }
 
+    #[cfg(windows)]
     #[test]
-    fn actual_appender_and_banner_use_authenticated_transport() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
+    fn actual_appender_and_banner_use_inherited_pipe() {
         let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let marker = std::env::temp_dir().join(format!("forward-test-{}-{unique}", std::process::id()));
         let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--ignored", "--exact", &format!("{}::forward_child", module_path!().split_once("::").unwrap().1)])
-            .env("UNCHAINED_CONSOLE_ENDPOINT", listener.local_addr().unwrap().to_string())
-            .env("UNCHAINED_CONSOLE_TOKEN", "b".repeat(64))
+            .args(["--ignored", "--exact", "--quiet", &format!("{}::forward_child", module_path!().split_once("::").unwrap().1)])
             .env("UNCHAINED_FORWARD_TEST_MARKER", &marker)
-            .stdout(std::process::Stdio::null()).spawn().unwrap();
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        let (stream, _) = loop {
-            match listener.accept() {
-                Ok(connection) => break connection,
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    assert!(std::time::Instant::now() < deadline, "forwarder did not connect");
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-                Err(error) => panic!("{error}"),
-            }
-        };
-        stream.set_nonblocking(false).unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        let mut reader = BufReader::new(stream);
+            .stdout(std::process::Stdio::piped()).spawn().unwrap();
+        let mut reader = BufReader::new(child.stdout.take().unwrap());
         let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(hello["token"], "b".repeat(64));
-        assert_eq!(hello["version"], 1);
-        reader.get_mut().write_all(b"OK\n").unwrap();
         let mut frames = Vec::new();
-        for _ in 0..3 {
+        // The Rust test harness also writes to stdout; only collect structured frames.
+        while frames.len() < 3 {
             line.clear();
-            reader.read_line(&mut line).unwrap();
+            assert_ne!(reader.read_line(&mut line).unwrap(), 0, "child ended before all frames");
             assert!(line.len() < 128 * 1024);
-            frames.push(serde_json::from_str::<serde_json::Value>(&line).unwrap());
+            if let Ok(frame) = serde_json::from_str::<serde_json::Value>(&line) { frames.push(frame); }
         }
         std::fs::write(&marker, "done").unwrap();
         assert!(child.wait().unwrap().success());
@@ -202,8 +197,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "subprocess fixture for actual_appender_and_banner_use_authenticated_transport"]
+    #[ignore = "subprocess fixture for actual_appender_and_banner_use_inherited_pipe"]
     fn forward_child() {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            std::env::set_var("UNCHAINED_CONSOLE_HANDLE", (std::io::stdout().as_raw_handle() as usize).to_string());
+        }
+        if std::env::var_os("UNCHAINED_FORWARD_TEST_FLOOD").is_some() {
+            assert!(enabled());
+            for _ in 0..10000 { send("log", Some(log::Level::Info), "x".repeat(MAX_TEXT)); }
+            assert!(forwarder().unwrap().dropped.load(Ordering::Relaxed) != 0);
+            // Bypass the harness's final stdout write: that is deliberately backpressured.
+            std::process::exit(0);
+        }
         emit_console_records();
         let marker = std::env::var("UNCHAINED_FORWARD_TEST_MARKER").unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -213,14 +220,37 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn full_or_broken_pipe_never_blocks_the_logging_thread() {
+        for close_reader in [false, true] {
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--ignored", "--exact", "--quiet", &format!("{}::forward_child", module_path!().split_once("::").unwrap().1)])
+                .env("UNCHAINED_FORWARD_TEST_FLOOD", "1")
+                .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn().unwrap();
+            if close_reader {
+                let mut reader = BufReader::new(child.stdout.take().unwrap());
+                reader.read_line(&mut String::new()).unwrap(); // Let the harness start before disconnecting.
+                drop(reader);
+            }
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(status) = child.try_wait().unwrap() { assert!(status.success()); break; }
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("logging waited for the pipe reader");
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
     #[test]
     fn attach_std_preserves_pipes_and_overrides_ipc_without_allocating_a_console() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
         let mut command = std::process::Command::new(std::env::current_exe().unwrap());
         command.args(["--ignored", "--exact", "--nocapture", &format!("{}::attach_std_child", module_path!().split_once("::").unwrap().1)])
-            .env("UNCHAINED_CONSOLE_ENDPOINT", listener.local_addr().unwrap().to_string())
-            .env("UNCHAINED_CONSOLE_TOKEN", "b".repeat(64));
+            .env("UNCHAINED_CONSOLE_HANDLE", "1234");
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -232,12 +262,16 @@ mod tests {
         assert!(stdout.contains("hello 世界\nsecond line"), "{stdout}");
         assert!(stdout.contains("▄████████"));
         assert!(!stdout.contains('\x1b'));
-        assert!(matches!(listener.accept(), Err(error) if error.kind() == io::ErrorKind::WouldBlock));
     }
 
     #[test]
     #[ignore = "subprocess fixture for attach_std_preserves_pipes_and_overrides_ipc_without_allocating_a_console"]
     fn attach_std_child() {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            std::env::set_var("UNCHAINED_CONSOLE_HANDLE", (std::io::stdout().as_raw_handle() as usize).to_string());
+        }
         #[cfg(windows)]
         let before = unsafe { windows::Win32::System::Console::GetConsoleWindow() };
         super::super::attach_std();
