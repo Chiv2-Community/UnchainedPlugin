@@ -41,6 +41,9 @@ handle-inheritance whitelist. The child receives EOF on stdin, not the TUI's
 keyboard input. On Linux, Proton's `runinprefix` verb preserves the helper's
 inherited streams; the helper captures the suspended Windows game's output and
 relays it to the native CLI. Steam must still be running for the Steam game.
+This is UnchainedLauncher's bundled helper, not a Proton component. Alternate
+launchers can use the [Windows ownership recipe and Linux invocation](console-forwarding.md#alternate-linux-launchers),
+but relay ordinary stdout/stderr instead of reserving stdout for JSON in attach mode.
 
 The CLI flag is a server option. Direct plugin launches can use the plugin flag
 independently. GUI launchers must supply valid capture handles; merely attaching

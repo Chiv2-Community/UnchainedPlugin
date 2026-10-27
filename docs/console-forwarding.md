@@ -6,16 +6,35 @@ It is output-only; it does not accept commands.
 
 ## Enable
 
-Before starting the game, the launcher must:
+Minimal Windows integration recipe:
 
-1. Create a private anonymous pipe with a parent read end and an inheritable child
-   write end, separate from stdout/stderr.
-2. Set `UNCHAINED_CONSOLE_HANDLE` in the child's environment to the unsigned
-   decimal Windows handle value of the write end.
-3. Pass only the intended handles through `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`
-   during suspended process creation. Close the parent's copy of the child end
-   after startup, including on failure.
-4. Continuously drain frames until the game exits; close the read end on disposal.
+1. Use `CreatePipe` with inheritable security attributes. Clear `HANDLE_FLAG_INHERIT`
+   on the parent read end with `SetHandleInformation`; keep the child write end
+   inheritable. This dedicated pipe is separate from stdout/stderr.
+2. Build a private child Unicode environment block. Set `UNCHAINED_CONSOLE_HANDLE`
+   to the write handle's **unsigned decimal Windows HANDLE value**, not a Linux FD.
+   Do not modify the launcher's environment.
+3. Initialize a `STARTUPINFOEXW` and its attribute list; set `StartupInfo.cb` to
+   `sizeof(STARTUPINFOEXW)`. Prepare a whitelist containing the write handle and
+   only other intended child handles.
+4. **If redirecting stdio**, set `STARTF_USESTDHANDLES`, supply valid
+   `hStdInput`, `hStdOutput`, and `hStdError`, and include those inheritable child
+   handles in the whitelist. Keep parent pipe ends noninheritable. The dedicated
+   console pipe alone does not require three stdio pipes or that startup flag.
+5. Set `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` to the completed whitelist, then call
+   `CreateProcessW` with `bInheritHandles=TRUE`,
+   `EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT`, and that startup
+   structure/environment. For suspended DLL injection, also use `CREATE_SUSPENDED`;
+   suspension controls injection ordering, not pipe inheritance.
+6. After successful process creation the child owns inherited copies, so close
+   the parent's child-end copies immediately. Release the attribute list after
+   creation. Start the background reader **before DLL injection**: plugin
+   initialization can emit records before the game's main thread resumes.
+   Close all parent-owned handles on every failure path;
+   terminate/clean up an owned suspended child if injection fails. Never close a
+   child-owned handle from the parent.
+7. Drain frames continuously through EOF. At shutdown allow a bounded final drain,
+   then close the read end: descendants can retain a write handle indefinitely.
 
 There is no listening socket, named endpoint, token, or authentication handshake.
 Possession of the inherited handle selects the receiver. Legacy TCP environment
@@ -76,7 +95,7 @@ Custom file-only configurations do not gain a console appender automatically.
 ## Launcher integration
 
 The Windows CLI creates the pipe before the game and passes its handle in a
-private Unicode environment block. On Linux, Proton's Windows helper creates
+private Unicode environment block. On Linux, **UnchainedLauncher's bundled Windows helper** creates
 the game pipe and relays only its records through its reserved stdout pipe to
 the native CLI. Game stdout/stderr are drained separately and discarded in
 structured mode; they cannot mix with JSON records. `runinprefix` preserves the
@@ -89,3 +108,37 @@ latest output. No-TUI mode prints received lines without terminal controls.
 
 This requires a plugin build containing the transport; older plugins retain
 their own console. Client launches remain detached and do not start a TUI receiver.
+
+### Alternate Linux launchers
+
+Proton does not supply this helper. Implement your own Windows helper using the
+recipe above, then launch it under the selected Proton tool. The helper creates
+the real Windows pipe inside Wine, injects the DLL, and resumes the game. Reserve
+helper stdout for structured records only; send diagnostics to stderr. Capture
+game stdout/stderr separately and drain both (discard them in structured mode).
+The native parent must concurrently drain helper stdout **and** stderr.
+
+Example invocation for an **integrator-owned** helper (paths are examples):
+
+```bash
+steam="$HOME/.local/share/Steam"
+compat="/path/to/steamapps/compatdata/1824220" # contains initialized pfx/system.reg
+proton="/path/to/selected/Proton/proton"
+helper="/absolute/path/to/YourConsoleHelper.exe"
+test -f "$compat/pfx/system.reg" || exit 1
+env STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam" STEAM_COMPAT_DATA_PATH="$compat" \
+    WINEPREFIX="$compat/pfx" STEAM_COMPAT_APP_ID=1824220 \
+    SteamAppId=1824220 SteamGameId=1824220 WINEDEBUG=-all \
+    "$proton" runinprefix "$helper" >console.jsonl 2>helper.stderr
+```
+
+Initialize the game prefix through Steam first; keep Steam running for Steam
+authentication. Use the same selected Proton tool/prefix as the game. Pass any
+helper-specific arguments according to your own protocol; convert game/DLL paths
+with that prefix's `winepath`, and resolve Windows known folders rather than
+assuming a username. The files above stand in for concurrent native stream readers.
+
+The bundled `UnchainedLauncher.ProtonHelper.exe` request-file, readiness, and
+heartbeat protocol is **private and version-coupled to its CLI**. It is not a
+standalone integrator API. Use the matching published CLI bundle, or own your
+helper and its lifecycle protocol.
