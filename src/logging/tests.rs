@@ -22,8 +22,10 @@ impl Log for Capture {
         let mut default_console = Vec::new();
         super::console::ConsoleEncoder::default()
             .encode(&mut SimpleWriter(&mut default_console), record).unwrap();
-        let function = record.key_values().get("__unchained_function".into()).unwrap().to_string();
-        assert!(String::from_utf8(default_console).unwrap().contains(&format!("::{function}] ")));
+        let mut expected_body = Vec::new();
+        PatternEncoder::new(" [{sm}] {m}{n}")
+            .encode(&mut SimpleWriter(&mut expected_body), record).unwrap();
+        assert!(default_console.ends_with(&expected_body));
         self.0.lock().unwrap().push(String::from_utf8(output).unwrap());
     }
     fn flush(&self) {}

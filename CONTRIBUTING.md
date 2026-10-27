@@ -196,7 +196,8 @@ namespace reference.
 The default console output abbreviates parent source-module segments
 using word initials (`UnchainedPlugin::resolvers::messages` → `UP::r::messages`)
 and keeps the rightmost 16 characters of the label; file logs include
-the full source module. DEBUG headers and bodies are dark gray; TRACE is darker.
+the full source module. Neither default includes function names; add `{fn}` to
+the pattern or use the per-call `fn;` flag. DEBUG headers and bodies are dark gray; TRACE is darker.
 Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.
 

@@ -116,7 +116,7 @@ so severity colors remain independent of the line format:
 encoder:
   kind: module_console
   header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm}::{fn}] {m}{n}"
+  body_pattern: " [{sm}] {m}{n}"
 ```
 
 These are the defaults. Replace only the encoder block and keep the appender's
@@ -139,16 +139,16 @@ in both. To omit or replace the console's short module, edit `body_pattern`.
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-The console default includes `{fn}` to display the enclosing named function's leaf;
-file patterns omit it by default. Methods show only their name,
+Console and file defaults omit function names. Add `{fn}` to display the enclosing
+named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.
 Records from dependencies without function metadata show `???`.
 Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
 through the built-in log4rs key/value formatter.
 
-For example, replace a file appender's encoder block to include the console's
-short module and function fields without severity colors:
+For example, replace a file appender's encoder block to include the short module
+and opt-in function field without severity colors:
 
 ```yaml
 encoder:
