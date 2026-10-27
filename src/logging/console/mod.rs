@@ -5,6 +5,26 @@ use super::log4rs::pattern::PatternEncoder;
 
 mod banner;
 pub(crate) use banner::print_banner;
+pub(crate) mod forward;
+
+static ATTACH_STD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static NO_STD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn attach_std_enabled() -> bool {
+    ATTACH_STD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn attach_std() {
+    ATTACH_STD.store(true, std::sync::atomic::Ordering::Relaxed);
+    #[cfg(windows)]
+    NO_STD_OUTPUT.store(!windows_backend::attach_parent_output(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn report_attachment_failure() {
+    if NO_STD_OUTPUT.load(std::sync::atomic::Ordering::Relaxed) {
+        swarn!(fn; "No usable inherited output or parent console; keeping configured file logging without a console window.");
+    }
+}
 
 #[cfg(windows)]
 #[path = "windows.rs"]

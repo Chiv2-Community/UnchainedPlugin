@@ -3,6 +3,21 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{Encode, EncoderConfig};
 
 use crate::logging::console::{configure_console_colors, ConsoleEncoder};
+use crate::logging::console::forward;
+use log4rs::encode::writer::simple::SimpleWriter;
+
+#[derive(Debug)]
+struct ForwardingConsole { encoder: Box<dyn Encode> }
+
+impl Append for ForwardingConsole {
+    fn append(&self, record: &log::Record) -> anyhow::Result<()> {
+        let mut buffer = forward::TextBuffer::default();
+        self.encoder.encode(&mut SimpleWriter(&mut buffer), record)?;
+        forward::send("log", Some(record.level()), buffer.finish());
+        Ok(())
+    }
+    fn flush(&self) {}
+}
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +59,13 @@ impl Deserialize for ConsoleAppenderDeserializer {
             ConsoleTarget::Stdout => Target::Stdout,
             ConsoleTarget::Stderr => Target::Stderr,
         };
+        if forward::enabled() {
+            let encoder = match config.encoder {
+                Some(encoder) => deserializers.deserialize(&encoder.kind, encoder.config)?,
+                None => Box::new(log4rs::encode::pattern::PatternEncoder::default()) as Box<dyn Encode>,
+            };
+            return Ok(Box::new(ForwardingConsole { encoder }));
+        }
         let mut appender = ConsoleAppender::builder().target(target);
         if let Some(tty_only) = config.tty_only { appender = appender.tty_only(tty_only); }
         if let Some(encoder) = config.encoder {

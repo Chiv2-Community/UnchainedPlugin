@@ -1,11 +1,29 @@
 use windows::core::{s, w, HRESULT, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, ERROR_FILE_NOT_FOUND, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{CloseHandle, GetHandleInformation, ERROR_FILE_NOT_FOUND, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::System::Console::*;
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Registry::*;
 use windows::Win32::System::Threading::{CreateMutexW, GetStartupInfoW, ReleaseMutex, WaitForSingleObject, STARTUPINFOW};
 
 use super::{fallback_palette, use_truecolor};
+
+pub(super) fn attach_parent_output() -> bool {
+    unsafe {
+        let valid = |kind| GetStdHandle(kind).ok().filter(|handle| {
+            let mut flags = 0;
+            GetHandleInformation(*handle, &mut flags).is_ok()
+        });
+        let stdout = valid(STD_OUTPUT_HANDLE);
+        let stderr = valid(STD_ERROR_HANDLE);
+        if stdout.is_some() && stderr.is_some() { return true; }
+        // Attachment may replace standard handles. Preserve each redirected destination,
+        // including mixed redirection. Never detach or allocate on failure.
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        if let Some(handle) = stdout { let _ = SetStdHandle(STD_OUTPUT_HANDLE, handle); }
+        if let Some(handle) = stderr { let _ = SetStdHandle(STD_ERROR_HANDLE, handle); }
+        valid(STD_OUTPUT_HANDLE).is_some() || valid(STD_ERROR_HANDLE).is_some()
+    }
+}
 
 pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
     unsafe {
@@ -16,9 +34,14 @@ pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
         let Ok(handle) = GetStdHandle(output) else { return false };
         let mut mode = CONSOLE_MODE(0);
         if GetConsoleMode(handle, &mut mode).is_err() { return false; }
-        let vt = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok();
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
+        if super::attach_std_enabled() {
+            // Shared terminals own their palette, modes and lifetime.
+            return use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
+                std::env::var_os("WT_SESSION").is_some());
+        }
+        let vt = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok();
         if use_truecolor(vt, wine, std::env::var_os("WT_SESSION").is_some()) { return true; }
         let Some(mut info) = screen_info(handle) else { return false };
         let (colors, attributes) = fallback_palette(info.ColorTable.map(|color| color.0), info.wAttributes.0);

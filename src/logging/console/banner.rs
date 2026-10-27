@@ -26,6 +26,10 @@ const SUBTITLE: &str = "███    █▄  ███▄▄▄▄    ▄██�
 ";
 
 pub(crate) fn print_banner() -> io::Result<()> {
+    if super::forward::enabled() {
+        super::forward::send("banner", None, format!("{TITLE}{SUBTITLE}"));
+        return Ok(());
+    }
     if let Some(console) = ConsoleWriter::stdout() {
         write_banner(&mut console.lock())
     } else {

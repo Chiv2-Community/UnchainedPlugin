@@ -43,6 +43,7 @@ pub fn init() -> anyhow::Result<()> {
     let resolved_yaml = apply_logger_placeholders(&yaml);
     init_logger_from_yaml(&resolved_yaml, config_source_name)?;
     setup_panic_logger();
+    crate::logging::console::report_attachment_failure();
 
     Ok(())
 }

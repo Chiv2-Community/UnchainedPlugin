@@ -79,6 +79,11 @@ The startup banner uses the same console writer and color policy, outside log
 records. Wine uses native yellow/red palette attributes, not 256-color ANSI
 escapes. Redirected output and `NO_COLOR` receive plain banner text.
 
+Launchers can opt into [console forwarding](console-forwarding.md) to receive
+console records and the banner directly. Default file logging is unchanged.
+Alternatively, [`--attach-std`](console-attachment.md) preserves inherited output
+without creating a console window and takes precedence over IPC forwarding.
+
 ## Use a custom configuration
 
 1. Download or copy the [default YAML](../src/logging/log4rs/log4rs.default.yaml) to a local

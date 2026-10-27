@@ -366,8 +366,14 @@ use crate::features::discord::DiscordConfig;
 use crate::features::events::EVENT_SYSTEM;
 
 fn preinit_rustlib() {
+    // Select output before any console allocation, color configuration, or banner.
+    let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
+    let already_initialized = CLI_ARGS.set(args).is_err();
+    if cli_args().attach_std {
+        logging::console::attach_std();
+    }
     unsafe {
-        if GetConsoleWindow().0 == 0 {
+        if !cli_args().attach_std && !logging::console::forward::enabled() && GetConsoleWindow().0 == 0 {
             let _ = AllocConsole();
 
             // Enable ANSI escape codes for colored output
@@ -389,8 +395,6 @@ fn preinit_rustlib() {
         }
     }
 
-    let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
-    let already_initialized = CLI_ARGS.set(args).is_err();
     logging::log4rs::init().expect("Failed to initialize logging");
     sdebug!(fn; "CLI args: {:?}", cli_args());
     if already_initialized {
