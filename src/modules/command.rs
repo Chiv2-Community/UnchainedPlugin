@@ -23,26 +23,26 @@
 //! 3. It identifies the target command by name.
 //! 4. It verifies permissions and execution source.
 //! 5. It executes the command and publishes results to the [`BroadcastMessage`] bus.
-use std::collections::HashMap;
-use async_trait::async_trait;
-use clap::{Parser, CommandFactory};
-use crate::events::bus::{Subscriber, EventPublisher};
-use crate::events::models::{CommandExecuted, CommandRejected, CommandRequest, GameEvent, CommandSource};
 use crate::events::broadcast::BroadcastMessage;
+use crate::events::bus::{EventPublisher, Subscriber};
+use crate::events::models::{
+    CommandExecuted, CommandRejected, CommandRequest, CommandSource, GameEvent,
+};
+use async_trait::async_trait;
+use clap::{CommandFactory, Parser};
+use std::collections::HashMap;
 // use crate::features::events::EVENT_SYSTEM;
 
 // use std::marker::PhantomData;
 use crate::commands::{Command, CommandHandler, ErasedCommand};
-use crate::features::discord::{SharedDiscordConfig, send_to_channel};
-use std::sync::Arc;
-use serenity::all::Http;
+use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 
 pub struct CommandSubscriber {
     commands: HashMap<String, Box<dyn ErasedCommand>>,
     broadcaster: &'static EventPublisher<BroadcastMessage>,
     game_event_publisher: &'static EventPublisher<GameEvent>,
     discord_config: Option<SharedDiscordConfig>,
-    discord_http: Option<Arc<Http>>,
+    discord_outbox: Option<DiscordOutbox>,
 }
 
 enum CommandOutcome {
@@ -60,13 +60,13 @@ impl CommandSubscriber {
             broadcaster,
             game_event_publisher,
             discord_config: None,
-            discord_http: None,
+            discord_outbox: None,
         }
     }
 
-    pub fn set_discord_connection(&mut self, config: SharedDiscordConfig, http: Arc<Http>) {
+    pub fn set_discord_connection(&mut self, config: SharedDiscordConfig, outbox: DiscordOutbox) {
         self.discord_config = Some(config);
-        self.discord_http = Some(http);
+        self.discord_outbox = Some(outbox);
     }
 
     pub fn get_registered_commands(&self) -> Vec<&dyn ErasedCommand> {
@@ -85,12 +85,16 @@ impl CommandSubscriber {
 
     async fn send_help(&self, source: CommandSource, show_all: bool) {
         let show_emojis = source == CommandSource::Discord;
-        
-        let title = if show_emojis { "🛠️ Sleuth System Help" } else { "Sleuth System Help" };
-        let content = if show_all { 
-            "All available commands:".to_string() 
-        } else { 
-            format!("Available commands for {}:", source) 
+
+        let title = if show_emojis {
+            "🛠️ Sleuth System Help"
+        } else {
+            "Sleuth System Help"
+        };
+        let content = if show_all {
+            "All available commands:".to_string()
+        } else {
+            format!("Available commands for {}:", source)
         };
 
         let mut commands_by_group: HashMap<String, Vec<&dyn ErasedCommand>> = HashMap::new();
@@ -98,7 +102,7 @@ impl CommandSubscriber {
 
         for command in self.commands.values() {
             let req_source = command.required_source();
-            
+
             if !show_all {
                 if let Some(ref rs) = req_source {
                     if *rs != source {
@@ -107,8 +111,11 @@ impl CommandSubscriber {
                 }
             }
 
-            commands_by_group.entry(command.group()).or_default().push(command.as_ref());
-            
+            commands_by_group
+                .entry(command.group())
+                .or_default()
+                .push(command.as_ref());
+
             if let Some(rs) = req_source {
                 seen_sources.insert(Some(rs));
             } else {
@@ -126,7 +133,8 @@ impl CommandSubscriber {
             let mut commands = commands_by_group.remove(&group_name).unwrap();
             commands.sort_by_key(|c| c.name());
 
-            let group_text = commands.iter()
+            let group_text = commands
+                .iter()
                 .map(|c| c.help(show_emojis, show_all))
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -144,21 +152,41 @@ impl CommandSubscriber {
 
         if show_all {
             if seen_sources.contains(&Some(CommandSource::Discord)) {
-                footer_parts.push(if show_emojis { "💬-Discord Only" } else { "[Discord]-Discord Only" });
+                footer_parts.push(if show_emojis {
+                    "💬-Discord Only"
+                } else {
+                    "[Discord]-Discord Only"
+                });
             }
             if seen_sources.contains(&Some(CommandSource::GameChat)) {
-                footer_parts.push(if show_emojis { "🎮-Game Only" } else { "[Game]-Game Only" });
+                footer_parts.push(if show_emojis {
+                    "🎮-Game Only"
+                } else {
+                    "[Game]-Game Only"
+                });
             }
             if seen_sources.contains(&Some(CommandSource::ServerConsole)) {
-                footer_parts.push(if show_emojis { "🖳-Server Console Only" } else { "[Console]-Server Console Only" });
+                footer_parts.push(if show_emojis {
+                    "🖳-Server Console Only"
+                } else {
+                    "[Console]-Server Console Only"
+                });
             }
             if seen_sources.contains(&None) {
-                footer_parts.push(if show_emojis { "🌐-Executable from anywhere" } else { "[Global]-Executable from anywhere" });
+                footer_parts.push(if show_emojis {
+                    "🌐-Executable from anywhere"
+                } else {
+                    "[Global]-Executable from anywhere"
+                });
             }
 
-            footer_parts.push(if show_emojis { "🔒-Admin only" } else { "[Admin]-Admin only" });
+            footer_parts.push(if show_emojis {
+                "🔒-Admin only"
+            } else {
+                "[Admin]-Admin only"
+            });
         }
-        
+
         footer.push_str(&footer_parts.join(" | "));
 
         if fields.is_empty() {
@@ -167,21 +195,21 @@ impl CommandSubscriber {
 
         match source {
             CommandSource::Discord => {
-                if let (Some(config), Some(http)) = (&self.discord_config, &self.discord_http) {
+                if let (Some(config), Some(outbox)) = (&self.discord_config, &self.discord_outbox) {
                     let mut embed = serenity::all::CreateEmbed::new()
                         .title(title)
                         .description(content)
                         .footer(serenity::all::CreateEmbedFooter::new(footer))
                         .color(0x3498db);
-                    
+
                     for (name, text) in fields {
                         embed = embed.field(name, text, false);
                     }
 
                     let help_msg = serenity::all::CreateMessage::new().embed(embed);
-                    
+
                     let channel_id = config.general_chat_channel_id;
-                    send_to_channel(http, channel_id, help_msg).await;
+                    outbox.send(channel_id, help_msg);
                 }
             }
             CommandSource::GameChat => {
@@ -197,7 +225,11 @@ impl CommandSubscriber {
         }
     }
 
-    async fn handle_command(&self, command: &dyn ErasedCommand, req: &CommandRequest) -> CommandOutcome {
+    async fn handle_command(
+        &self,
+        command: &dyn ErasedCommand,
+        req: &CommandRequest,
+    ) -> CommandOutcome {
         let executed_from_console = req.source == CommandSource::ServerConsole;
 
         if let Some(required_source) = command.required_source() {
@@ -223,16 +255,25 @@ impl CommandSubscriber {
             }
         }
 
-        if !req.actor.permissions.flags.contains(command.required_permissions()) {
+        if !req
+            .actor
+            .permissions
+            .flags
+            .contains(command.required_permissions())
+        {
             let rejection_reason = format!(
                 "User '{}' is missing required permissions to execute '{}'",
                 req.actor.display_name, req.name
             );
 
             if !executed_from_console {
-                self
-                    .broadcaster
-                    .publish(format!("Error: User '{}' is not allowed to execute command '{}'.", req.actor.display_name, req.name).into());
+                self.broadcaster.publish(
+                    format!(
+                        "Error: User '{}' is not allowed to execute command '{}'.",
+                        req.actor.display_name, req.name
+                    )
+                    .into(),
+                );
             }
             return CommandOutcome::Rejected(CommandRejected {
                 name: req.name.clone(),
@@ -245,7 +286,12 @@ impl CommandSubscriber {
         }
 
         if !executed_from_console {
-            sinfo!("User '{}' executed command '{} {}'", req.actor.display_name, req.name, req.raw_args);
+            sinfo!(
+                "User '{}' executed command '{} {}'",
+                req.actor.display_name,
+                req.name,
+                req.raw_args
+            );
         }
 
         command.execute(req).await;
@@ -277,7 +323,13 @@ impl Subscriber<GameEvent> for CommandSubscriber {
 
             if maybe_command.is_none() {
                 let rejection_reason = format!("Command '{}' does not exist", req.name);
-                self.broadcaster.publish(format!("User '{}' attempted to execute non-existent command '{}'.", req.actor.display_name, req.name).into());
+                self.broadcaster.publish(
+                    format!(
+                        "User '{}' attempted to execute non-existent command '{}'.",
+                        req.actor.display_name, req.name
+                    )
+                    .into(),
+                );
                 let rejected = CommandRejected {
                     name: req.name.clone(),
                     args: req.args.clone(),
@@ -286,11 +338,15 @@ impl Subscriber<GameEvent> for CommandSubscriber {
                     source: req.source.clone(),
                     rejection_reason,
                 };
-                self.game_event_publisher.publish(GameEvent::CommandRejectedEvent(rejected));
+                self.game_event_publisher
+                    .publish(GameEvent::CommandRejectedEvent(rejected));
                 return;
             }
 
-            match self.handle_command(maybe_command.unwrap().as_ref(), req).await {
+            match self
+                .handle_command(maybe_command.unwrap().as_ref(), req)
+                .await
+            {
                 CommandOutcome::Executed => {
                     let cmd = CommandExecuted {
                         name: req.name.clone(),
@@ -299,10 +355,12 @@ impl Subscriber<GameEvent> for CommandSubscriber {
                         actor: req.actor.clone(),
                         source: req.source.clone(),
                     };
-                    self.game_event_publisher.publish(GameEvent::CommandExecutedEvent(cmd));
+                    self.game_event_publisher
+                        .publish(GameEvent::CommandExecutedEvent(cmd));
                 }
                 CommandOutcome::Rejected(rejected) => {
-                    self.game_event_publisher.publish(GameEvent::CommandRejectedEvent(rejected));
+                    self.game_event_publisher
+                        .publish(GameEvent::CommandRejectedEvent(rejected));
                 }
             }
         }
@@ -318,9 +376,12 @@ impl Subscriber<GameEvent> for CommandSubscriber {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::events::models::PermissionFlags;
-    use crate::test_utils::{mock_actor, mock_actor_elevated, mock_broadcaster, mock_game_event_publisher, TestArgs, TestCommand, mock_command_request};
+    use crate::test_utils::{
+        mock_actor, mock_actor_elevated, mock_broadcaster, mock_command_request,
+        mock_game_event_publisher, TestArgs, TestCommand,
+    };
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_command_subscriber_unknown_command() {
@@ -328,11 +389,11 @@ mod tests {
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
         subscriber.register::<TestCommand, TestArgs>(TestCommand);
-        
+
         let actor = mock_actor("TestUser");
         let req = mock_command_request(actor, "unknown", vec!["what".to_string()]);
         let event = GameEvent::CommandRequestEvent(req);
-        
+
         // This should not panic and should not execute TestCommand
         subscriber.on_event(&event).await;
     }
@@ -341,7 +402,7 @@ mod tests {
     async fn test_command_handler_parsing_failure() {
         let cmd = TestCommand;
         let handler = CommandHandler::<TestCommand, TestArgs>::new(cmd);
-        
+
         let actor = mock_actor("TestUser");
         let req = mock_command_request(actor, "test", vec!["hello".to_string()]);
 
@@ -364,7 +425,8 @@ mod tests {
         }
 
         async fn execute(&self, _args: SetBoolArgs, _command: &CommandRequest) {
-            self.executed.store(true, std::sync::atomic::Ordering::SeqCst);
+            self.executed
+                .store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -374,17 +436,17 @@ mod tests {
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
         let setbool_executed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        
+
         subscriber.register::<TestCommand, TestArgs>(TestCommand);
         subscriber.register::<SetBoolCommand, SetBoolArgs>(SetBoolCommand {
-            executed: setbool_executed.clone()
+            executed: setbool_executed.clone(),
         });
-        
+
         let actor = mock_actor("TestUser");
         let req = mock_command_request(actor, "setbool", vec![]);
         let event = GameEvent::CommandRequestEvent(req);
         subscriber.on_event(&event).await;
-        
+
         assert!(setbool_executed.load(std::sync::atomic::Ordering::SeqCst));
     }
 
@@ -413,7 +475,9 @@ mod tests {
         let (broadcaster, _messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
-        subscriber.register::<TickCommand, TickArgs>(TickCommand { ticked: ticked.clone() });
+        subscriber.register::<TickCommand, TickArgs>(TickCommand {
+            ticked: ticked.clone(),
+        });
 
         subscriber.on_tick().await;
         assert!(ticked.load(std::sync::atomic::Ordering::SeqCst));
@@ -435,7 +499,8 @@ mod tests {
                 PermissionFlags::ADMIN
             }
             async fn execute(&self, _args: AdminOnlyArgs, _command: &CommandRequest) {
-                self.executed.store(true, std::sync::atomic::Ordering::SeqCst);
+                self.executed
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
             }
         }
 
@@ -447,12 +512,15 @@ mod tests {
             executed: executed.clone(),
         });
 
-        let actor = mock_actor_elevated("NormalUser", false); 
+        let actor = mock_actor_elevated("NormalUser", false);
         let req = mock_command_request(actor, "admin_only", vec![]);
         let event = GameEvent::CommandRequestEvent(req);
         subscriber.on_event(&event).await;
 
-        assert!(!executed.load(std::sync::atomic::Ordering::SeqCst), "Command should not execute for user without ADMIN permission");
+        assert!(
+            !executed.load(std::sync::atomic::Ordering::SeqCst),
+            "Command should not execute for user without ADMIN permission"
+        );
     }
 
     #[tokio::test]
@@ -471,7 +539,8 @@ mod tests {
                 PermissionFlags::USER
             }
             async fn execute(&self, _args: UserCommandArgs, _command: &CommandRequest) {
-                self.executed.store(true, std::sync::atomic::Ordering::SeqCst);
+                self.executed
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
             }
         }
 
@@ -483,12 +552,15 @@ mod tests {
             executed: executed.clone(),
         });
 
-        let actor = mock_actor_elevated("AdminUser", true); 
+        let actor = mock_actor_elevated("AdminUser", true);
         let req = mock_command_request(actor, "user_command", vec![]);
         let event = GameEvent::CommandRequestEvent(req);
         subscriber.on_event(&event).await;
 
-        assert!(executed.load(std::sync::atomic::Ordering::SeqCst), "Admin should be allowed to execute USER command");
+        assert!(
+            executed.load(std::sync::atomic::Ordering::SeqCst),
+            "Admin should be allowed to execute USER command"
+        );
     }
 
     #[tokio::test]
@@ -496,9 +568,9 @@ mod tests {
         let (broadcaster, messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
-        
+
         subscriber.register::<TestCommand, TestArgs>(TestCommand);
-        
+
         #[derive(Parser, Debug)]
         #[command(name = "discord_only", about = "Discord only command")]
         struct DiscordOnlyArgs {}
@@ -514,14 +586,14 @@ mod tests {
             async fn execute(&self, _args: DiscordOnlyArgs, _command: &CommandRequest) {}
         }
         subscriber.register::<DiscordOnlyCommand, DiscordOnlyArgs>(DiscordOnlyCommand);
-        
+
         let actor = mock_actor("TestUser");
         let mut req = mock_command_request(actor, "help", vec![]);
         req.source = crate::events::models::CommandSource::GameChat;
-        
+
         let event = GameEvent::CommandRequestEvent(req);
         subscriber.on_event(&event).await;
-        
+
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         {
             let msgs = messages.lock().await;
@@ -540,19 +612,21 @@ mod tests {
         let (broadcaster, messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
-        
+
         subscriber.register::<TestCommand, TestArgs>(TestCommand);
-        
+
         let actor = mock_actor("TestUser");
         let mut req_discord = mock_command_request(actor, "help", vec![]);
         req_discord.source = crate::events::models::CommandSource::Discord;
-        subscriber.on_event(&GameEvent::CommandRequestEvent(req_discord)).await;
-        
+        subscriber
+            .on_event(&GameEvent::CommandRequestEvent(req_discord))
+            .await;
+
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         {
             let msgs = messages.lock().await;
             // No message sent to broadcaster since source was Discord and no discord connection set
-            assert_eq!(msgs.len(), 0); 
+            assert_eq!(msgs.len(), 0);
         }
     }
 
@@ -561,9 +635,9 @@ mod tests {
         let (broadcaster, messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
-        
+
         subscriber.register::<TestCommand, TestArgs>(TestCommand);
-        
+
         #[derive(Parser, Debug)]
         #[command(name = "discord_only", about = "Discord only command")]
         struct DiscordOnlyArgs {}
@@ -579,12 +653,14 @@ mod tests {
             async fn execute(&self, _args: DiscordOnlyArgs, _command: &CommandRequest) {}
         }
         subscriber.register::<DiscordOnlyCommand, DiscordOnlyArgs>(DiscordOnlyCommand);
-        
+
         let actor = mock_actor("TestUser");
         let mut req_all = mock_command_request(actor, "help", vec!["--all".to_string()]);
         req_all.source = crate::events::models::CommandSource::GameChat;
-        subscriber.on_event(&GameEvent::CommandRequestEvent(req_all)).await;
-        
+        subscriber
+            .on_event(&GameEvent::CommandRequestEvent(req_all))
+            .await;
+
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         {
             let msgs = messages.lock().await;

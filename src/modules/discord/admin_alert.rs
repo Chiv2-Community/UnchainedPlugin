@@ -1,29 +1,28 @@
-use std::sync::Arc;
+use crate::events::bus::{EventPublisher, Subscriber};
+use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 use async_trait::async_trait;
 use clap::Parser;
-use serenity::all::{CreateAllowedMentions, CreateMessage, Http, RoleId};
+use serenity::all::{CreateAllowedMentions, CreateMessage, RoleId};
 use serenity::builder::CreateEmbed;
-use crate::events::bus::{EventPublisher, Subscriber};
-use crate::features::discord::{send_to_channel, SharedDiscordConfig};
 
 use crate::commands::Command;
 use crate::events::models::{AdminAlert, CommandRequest, GameEvent, PermissionFlags};
 
 #[derive(Clone)]
 pub struct AdminAlertModule {
-    http: Arc<Http>,
+    outbox: DiscordOutbox,
     discord_config: SharedDiscordConfig,
     game_event_publisher: &'static EventPublisher<GameEvent>,
 }
 
 impl AdminAlertModule {
     pub fn new(
-        http: Arc<Http>,
+        outbox: DiscordOutbox,
         discord_config: SharedDiscordConfig,
         game_event_publisher: &'static EventPublisher<GameEvent>,
     ) -> Self {
         Self {
-            http,
+            outbox,
             discord_config,
             game_event_publisher,
         }
@@ -42,27 +41,23 @@ impl Subscriber<GameEvent> for AdminAlertModule {
             let mut msg = CreateMessage::new().embed(
                 CreateEmbed::new()
                     .title("🚨 Admin Alert".to_string())
-                    .description(format!("`{}` reports: *\"{}\"*", alert.reporter, alert.reason)),
+                    .description(format!(
+                        "`{}` reports: *\"{}\"*",
+                        alert.reporter, alert.reason
+                    )),
             );
 
             if config.mention_on_admin {
                 if let Some(role_id) = config.admin_role_id.map(RoleId::new) {
                     msg = msg
-                        .allowed_mentions(
-                            CreateAllowedMentions::default().roles(vec![role_id]),
-                        )
+                        .allowed_mentions(CreateAllowedMentions::default().roles(vec![role_id]))
                         .content(format!("<@&{}> ", role_id));
                 } else {
                     swarn!("Attempted to alert admins, but no admin role id is set.");
                 }
             }
 
-            send_to_channel(
-                &self.http,
-                config.admin_notification_channel_id,
-                msg,
-            )
-            .await;
+            self.outbox.send(config.admin_notification_channel_id, msg);
         }
     }
 }

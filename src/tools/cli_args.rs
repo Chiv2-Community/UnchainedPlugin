@@ -124,7 +124,8 @@ pub struct CLIArgs {
     #[arg(long = "discord-bot-token")]
     pub discord_bot_token: Option<String>,
 
-    #[arg(long = "discord-mention-admins", default_value = "true")]
+    #[arg(long = "discord-mention-admins", action = clap::ArgAction::Set,
+          num_args = 0..=1, default_value = "true", default_missing_value = "true")]
     pub discord_mention_admins: bool,
 
     //TODO: Reimplement
@@ -391,6 +392,21 @@ mod tests {
         let result = CLIArgs::try_parse_from(args);
         assert!(result.is_ok(), "Should parse valid arguments");
         assert_eq!(result.unwrap().rcon_port, Some(9001));
+    }
+
+    #[test]
+    fn discord_mention_value_does_not_swallow_later_flags() {
+        for mention in ["false", "true"] {
+            let args = ["app", "--discord-mention-admins", mention, "--desync-patch", "-nullrhi"];
+            let normalized = normalize_and_filter_args(args.into_iter().map(str::to_owned));
+            let parsed = CLIArgs::try_parse_from(normalized).unwrap();
+            assert_eq!(parsed.discord_mention_admins, mention == "true");
+            assert!(parsed.apply_desync_patch);
+            assert!(parsed.is_headless);
+        }
+        let parsed = CLIArgs::try_parse_from(["app", "--discord-mention-admins", "--desync-patch"]).unwrap();
+        assert!(parsed.discord_mention_admins);
+        assert!(parsed.apply_desync_patch);
     }
 
     #[test]

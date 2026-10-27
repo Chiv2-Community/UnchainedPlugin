@@ -1,21 +1,20 @@
-use std::sync::Arc;
-use async_trait::async_trait;
-use serenity::all::{Http, RoleId};
-use serenity::builder::{CreateAllowedMentions, CreateMessage};
 use crate::events::broadcast::{BroadcastMessage, Notify};
 use crate::events::bus::Subscriber;
-use crate::features::discord::{send_to_channel, SharedDiscordConfig};
+use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
+use async_trait::async_trait;
+use serenity::all::RoleId;
+use serenity::builder::{CreateAllowedMentions, CreateMessage};
 
 pub struct DiscordBroadcastSubscriber {
     discord_config: SharedDiscordConfig,
-    discord_http: Arc<Http>,
+    outbox: DiscordOutbox,
 }
 
 impl DiscordBroadcastSubscriber {
-    pub fn new(discord_http: Arc<Http>, discord_config: SharedDiscordConfig) -> Self {
+    pub fn new(outbox: DiscordOutbox, discord_config: SharedDiscordConfig) -> Self {
         Self {
             discord_config,
-            discord_http,
+            outbox,
         }
     }
 }
@@ -32,7 +31,7 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
 
         let mut discord_message: CreateMessage = event.clone().into();
 
-        if !event.notify_roles().is_empty() {
+        if config.mention_on_admin && !event.notify_roles().is_empty() {
             let mut content = event.content_ref().map(str::to_owned).unwrap_or_default();
 
             for notify_role in event.notify_roles().iter() {
@@ -49,9 +48,14 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
             discord_message = discord_message.content(content);
         }
 
-        let allowed_mention = CreateAllowedMentions::new().roles(admin_role_id.into_iter());
+        let allowed_mention = CreateAllowedMentions::new().roles(
+            admin_role_id
+                .filter(|_| config.mention_on_admin)
+                .into_iter(),
+        );
         discord_message = discord_message.allowed_mentions(allowed_mention);
 
-        send_to_channel(&self.discord_http, config.general_chat_channel_id, discord_message).await;
+        self.outbox
+            .send(config.general_chat_channel_id, discord_message);
     }
 }
