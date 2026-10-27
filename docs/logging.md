@@ -75,6 +75,10 @@ If the console rejects palette changes, its existing basic colors remain in use.
 The default file appender and redirected output receive no added console colors;
 color codes already present in a message are not stripped.
 
+The startup banner uses the same console writer and color policy, outside log
+records. Wine uses native yellow/red palette attributes, not 256-color ANSI
+escapes. Redirected output and `NO_COLOR` receive plain banner text.
+
 ## Use a custom configuration
 
 1. Download or copy the [default YAML](../src/logging/log4rs/log4rs.default.yaml) to a local
