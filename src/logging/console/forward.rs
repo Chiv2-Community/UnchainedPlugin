@@ -17,7 +17,7 @@ struct Forwarder {
 struct Event {
     version: u8,
     kind: &'static str,
-    level: Option<String>,
+    level: Option<&'static str>,
     text: String,
     dropped: u64,
 }
@@ -70,7 +70,7 @@ pub(crate) fn enabled() -> bool { !super::attach_stdio_enabled() && forwarder().
 pub(crate) fn send(kind: &'static str, level: Option<log::Level>, text: String) {
     if super::attach_stdio_enabled() { return; }
     if let Some(forwarder) = forwarder() {
-        forwarder.send(Event { version: 1, kind, level: level.map(|level| level.to_string()),
+        forwarder.send(Event { version: 1, kind, level: level.map(|level| level.as_str()),
             text, dropped: 0 });
     }
 }
@@ -104,7 +104,8 @@ impl Write for TextBuffer {
 
 impl TextBuffer {
     pub(crate) fn finish(self) -> String {
-        let mut text = String::from_utf8_lossy(&self.bytes).into_owned();
+        let mut text = String::from_utf8(self.bytes)
+            .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned());
         if self.truncated {
             const MARKER: &str = " [truncated]";
             let mut end = MAX_TEXT - MARKER.len();
@@ -151,6 +152,56 @@ mod tests {
         assert_eq!(receiver.recv().unwrap().dropped, 0);
         forwarder.send(event());
         assert_eq!(receiver.recv().unwrap().dropped, 2);
+    }
+
+    #[test]
+    fn valid_text_reuses_owned_buffer() {
+        for input in ["ordinary log record", "hello 世界 😀"] {
+            let mut buffer = TextBuffer::default();
+            buffer.write_all(input.as_bytes()).unwrap();
+            let pointer = buffer.bytes.as_ptr();
+            let text = buffer.finish();
+            assert_eq!(text, input);
+            assert_eq!(text.as_ptr(), pointer);
+        }
+    }
+
+    #[test]
+    fn invalid_text_is_repaired() {
+        for (input, expected) in [
+            (&b"a\xffb"[..], "a�b"),
+            (&b"\xe2\x82"[..], "�"),
+            (&b"\xf0\x28\x8c\x28"[..], "�(�("),
+        ] {
+            let mut buffer = TextBuffer::default();
+            buffer.write_all(input).unwrap();
+            assert_eq!(buffer.finish(), expected);
+        }
+    }
+
+    #[test]
+    fn split_codepoints_and_multibyte_truncation_preserve_text_policy() {
+        let mut buffer = TextBuffer::default();
+        for byte in "世界😀".as_bytes() { buffer.write_all(&[*byte]).unwrap(); }
+        assert_eq!(buffer.finish(), "世界😀");
+
+        let mut buffer = TextBuffer::default();
+        buffer.write_all("界".repeat(MAX_TEXT).as_bytes()).unwrap();
+        assert_eq!(buffer.finish(), format!("{} [truncated]", "界".repeat((MAX_TEXT - " [truncated]".len()) / 3)));
+    }
+
+    #[test]
+    fn level_labels_preserve_json_across_worker_handoff() {
+        for level in [Some(log::Level::Error), Some(log::Level::Warn), Some(log::Level::Info),
+            Some(log::Level::Debug), Some(log::Level::Trace), None] {
+            let kind = if level.is_some() { "log" } else { "banner" };
+            let event = Event { version: 1, kind, level: level.map(|level| level.as_str()),
+                text: "hello 世界".into(), dropped: 0 };
+            let expected = serde_json::json!({ "version": 1, "kind": kind,
+                "level": level.map(|level| level.to_string()), "text": "hello 世界", "dropped": 0 });
+            let encoded = std::thread::spawn(move || serde_json::to_value(&event).unwrap()).join().unwrap();
+            assert_eq!(encoded, expected);
+        }
     }
 
     #[test]
