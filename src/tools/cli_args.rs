@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use censor::Censor;
 use clap::{CommandFactory, Parser};
 use serde::Serialize;
-use crate::sdebug;
 
 pub type IniMap = HashMap<String, HashMap<String, HashMap<String, String>>>;
 
@@ -26,7 +25,7 @@ impl Into<Censor> for CensorArg {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "Chivalry 2 Unchained", author = "Unchained Team", version, about, long_about = None)]
 // FIXME: possible to skip unhandled args?
 pub struct CLIArgs {
@@ -66,6 +65,9 @@ pub struct CLIArgs {
     //
     #[arg(long = "launched-profile")]
     pub launched_profile: Option<String>,
+    //
+    #[arg(long = "unchained-profile-location")]
+    pub unchained_profile_location: Option<String>,
     //
     #[arg(long = "playable-listen")]
     pub playable_listen: bool,
@@ -157,6 +159,63 @@ pub struct CLIArgs {
     // UNHANDLED END
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
+}
+
+// Keep redaction on the type so every Debug caller gets the same protection.
+impl std::fmt::Debug for CLIArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // No `..`: new fields must receive an explicit logging decision.
+        let Self {
+            server_mods, ini_overrides, is_unchained, rcon_port, apply_desync_patch,
+            #[cfg(feature = "move-autonomous-desync")]
+            tick_actor_patch,
+            use_backend_banlist, is_headless, next_map, launched_profile,
+            unchained_profile_location, playable_listen, register, server_browser_backend,
+            local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml,
+            game_server_ping_port, game_server_query_port, game_port,
+            discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
+            discord_event_log_channel_id, discord_admin_role_id, discord_bot_token,
+            discord_mention_admins, censor_mode, motd, extra_args,
+        } = self;
+        let mut debug = f.debug_struct("CLIArgs");
+        debug
+            .field("server_mods", server_mods)
+            .field("ini_overrides", &format_args!("[REDACTED; {} files]", ini_overrides.len()))
+            .field("is_unchained", is_unchained)
+            .field("rcon_port", rcon_port)
+            .field("apply_desync_patch", apply_desync_patch);
+        #[cfg(feature = "move-autonomous-desync")]
+        debug.field("tick_actor_patch", tick_actor_patch);
+        debug
+            .field("use_backend_banlist", use_backend_banlist)
+            .field("is_headless", is_headless)
+            .field("next_map", next_map)
+            .field("launched_profile", launched_profile)
+            .field("unchained_profile_location", unchained_profile_location)
+            .field("playable_listen", playable_listen)
+            .field("register", register)
+            // URLs may contain credentials in userinfo, query strings or paths.
+            .field("server_browser_backend", &server_browser_backend.as_ref().map(|_| "[REDACTED]"))
+            .field("local_ip", local_ip)
+            .field("server_password", &server_password.as_ref().map(|_| "[REDACTED]"))
+            .field("platform", platform)
+            .field("saved_dir_suffix", saved_dir_suffix)
+            .field("log4rs_yaml", log4rs_yaml)
+            .field("game_server_ping_port", game_server_ping_port)
+            .field("game_server_query_port", game_server_query_port)
+            .field("game_port", game_port)
+            .field("discord_admin_channel_id", discord_admin_channel_id)
+            .field("discord_general_channel_id", discord_general_channel_id)
+            .field("discord_dashboard_channel_id", discord_dashboard_channel_id)
+            .field("discord_event_log_channel_id", discord_event_log_channel_id)
+            .field("discord_admin_role_id", discord_admin_role_id)
+            .field("discord_bot_token", &discord_bot_token.as_ref().map(|_| "[REDACTED]"))
+            .field("discord_mention_admins", discord_mention_admins)
+            .field("censor_mode", censor_mode)
+            .field("motd", motd)
+            .field("extra_args", &format_args!("[REDACTED; {} arguments]", extra_args.len()))
+            .finish()
+    }
 }
 
 impl CLIArgs {
@@ -258,7 +317,6 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 
 pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
-    sdebug!(f; "CLI Args raw: {:#?}", args);
     let parsed = normalize_and_filter_args(args);
     let mut cli = CLIArgs::try_parse_from(parsed)?;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
@@ -268,6 +326,58 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_redacts_credentials_and_opaque_fields_without_changing_values() {
+        let mut cli = CLIArgs::try_parse_from([
+            "app", "--server-password", "PASSWORD_SENTINEL", "--discord-bot-token",
+            "TOKEN_SENTINEL", "--Port", "8123", "--launched-profile", "test-profile",
+            "--server-browser-backend", "https://user:BACKEND_SENTINEL@example.test/private",
+            "--", "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
+            "-AUTH_PASSWORD=PASSTHROUGH_SENTINEL",
+        ]).unwrap();
+        cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
+        for rendered in [format!("{cli:?}"), format!("{cli:#?}")] {
+            for secret in ["PASSWORD_SENTINEL", "TOKEN_SENTINEL", "BACKEND_SENTINEL",
+                "FILE_SENTINEL", "SECTION_SENTINEL", "KEY_SENTINEL", "INI_SENTINEL",
+                "PASSTHROUGH_SENTINEL", "AUTH_PASSWORD"] {
+                assert!(!rendered.contains(secret), "Debug exposed {secret}");
+            }
+            assert!(rendered.contains("8123"));
+            assert!(rendered.contains("test-profile"));
+            assert!(rendered.contains("[REDACTED; 1 files]"));
+            assert!(rendered.contains("[REDACTED; 2 arguments]"));
+        }
+        let rendered = format!("{cli:?}");
+        for field in ["server_password", "discord_bot_token", "server_browser_backend"] {
+            assert!(rendered.contains(&format!("{field}: Some(\"[REDACTED]\")")));
+        }
+        assert_eq!(cli.server_password.as_deref(), Some("PASSWORD_SENTINEL"));
+        assert_eq!(cli.discord_bot_token.as_deref(), Some("TOKEN_SENTINEL"));
+        assert_eq!(cli.server_browser_backend.as_deref(), Some("https://user:BACKEND_SENTINEL@example.test/private"));
+        assert_eq!(cli.find_ini_value(&[("FILE_SENTINEL", "SECTION_SENTINEL", "KEY_SENTINEL")]), Some("INI_SENTINEL"));
+        assert_eq!(cli.extra_args, [
+            "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
+            "-AUTH_PASSWORD=PASSTHROUGH_SENTINEL",
+        ]);
+        assert_eq!(cli.game_port, Some(8123));
+        assert_eq!(cli.launched_profile.as_deref(), Some("test-profile"));
+    }
+
+    #[test]
+    fn debug_distinguishes_missing_and_empty_credentials() {
+        let mut cli = CLIArgs::default();
+        let rendered = format!("{cli:?}");
+        assert!(rendered.contains("server_password: None"));
+        assert!(rendered.contains("discord_bot_token: None"));
+        cli.server_password = Some(String::new());
+        cli.discord_bot_token = Some(String::new());
+        let rendered = format!("{cli:?}");
+        assert!(rendered.contains("server_password: Some(\"[REDACTED]\")"));
+        assert!(rendered.contains("discord_bot_token: Some(\"[REDACTED]\")"));
+        assert_eq!(cli.server_password.as_deref(), Some(""));
+        assert_eq!(cli.discord_bot_token.as_deref(), Some(""));
+    }
 
     #[test]
     fn test_parse_invalid_int() {
@@ -364,6 +474,7 @@ mod tests {
                 is_headless: false,
                 next_map: None,
                 launched_profile: None,
+                unchained_profile_location: None,
                 playable_listen: false,
                 register: false,
                 server_browser_backend: None,

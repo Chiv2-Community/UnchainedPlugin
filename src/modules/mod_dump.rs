@@ -2,7 +2,6 @@
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::tools::hook_globals::globals;
-use crate::sinfo;
 use async_trait::async_trait;
 use clap::Parser;
 
@@ -25,6 +24,6 @@ impl Command<DumpModsArgs> for DumpModsCommand {
         if let Some(mm) = mm_lock().as_ref() {
             let _ = mm.serialize_registry(target);
         }
-        sinfo!(f; "Registry saved to \'{}\'", target);
+        sinfo!(fn; "Registry saved to \'{}\'", target);
     }
 }

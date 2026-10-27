@@ -8,7 +8,6 @@ use widestring::U16CString;
 
 use crate::game::chivalry2::ATBLGameState;
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface, o_FNameCtorWchar};
-use crate::sinfo;
 use crate::ue::{EFindName, EObjectFlags, FName, FString, TArray, UObject};
 use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
@@ -150,7 +149,7 @@ impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = widestring::U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		// sinfo!(f; "Constructing fname for {}", path);
+		// sinfo!(fn; "Constructing fname for {}", path);
 
 		CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 			&mut name as *mut FName,
@@ -159,7 +158,7 @@ impl FName {
 		))
 		.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			// sinfo!(f; "1. Name is invalid for {}", wide_path.to_string_lossy());
+			// sinfo!(fn; "1. Name is invalid for {}", wide_path.to_string_lossy());
 			CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 				&mut name as *mut FName,
 				wide_path.as_ptr(),
@@ -168,7 +167,7 @@ impl FName {
 			.expect("Failed to construct FName");
 		}
 		if name.comparison_index.value == 0 {
-			sinfo!(f; "2. Name is invalid for {}", wide_path.to_string_lossy());
+			sinfo!(fn; "2. Name is invalid for {}", wide_path.to_string_lossy());
 		}
         name
     }
@@ -306,7 +305,7 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
         if asset_registry.interface.is_null() {
             // Fallback: If the interface pointer isn't set,
             // sometimes the Object itself IS the interface.
-            crate::serror!("interface is null");
+            serror!("interface is null");
             asset_registry.object as *mut c_void
         } else {
             asset_registry.interface as *mut c_void

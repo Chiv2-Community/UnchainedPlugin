@@ -36,7 +36,6 @@ use std::collections::HashMap;
 // use std::marker::PhantomData;
 use crate::commands::{Command, CommandHandler, ErasedCommand};
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
-use crate::sinfo;
 
 pub struct CommandSubscriber {
     commands: HashMap<String, Box<dyn ErasedCommand>>,
@@ -221,7 +220,7 @@ impl CommandSubscriber {
                 self.broadcaster.publish(full_msg.into());
             }
             CommandSource::ServerConsole => {
-                crate::sinfo!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
+                sinfo!("{}: {}\n{}\n{}", title, content, full_text_game, footer);
             }
         }
     }

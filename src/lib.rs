@@ -1,4 +1,5 @@
-
+#[macro_use]
+pub mod logging;
 #[macro_use]
 pub mod macros;
 mod resolvers;
@@ -104,8 +105,8 @@ impl BuildInfo {
         match load_result {
             Ok(bi) => bi,
             Err(e) => {
-                swarn!(f; "Failed to load build info: {}", e);
-                swarn!(f; "Initializing new build info.");
+                swarn!(fn; "Failed to load build info: {}", e);
+                swarn!(fn; "Initializing new build info.");
                 BuildInfo {
                     plugin_version: env!("CARGO_PKG_VERSION").to_string(),
                     build: 0,
@@ -123,7 +124,7 @@ impl BuildInfo {
     pub fn save(&self) -> Result<Self> {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
-        sinfo!(f; "Saving build info to {}", path.to_string_lossy());
+        sinfo!(fn; "Saving build info to {}", path.to_string_lossy());
 
         let self_with_path = self.with_path(path.to_string_lossy().into_owned());
 
@@ -244,7 +245,7 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
         rust_main();
     });
     if let Err(e) = result {
-        eprintln!("Rust main thread panicked: {:?}", e);
+        serror!(fn; "Rust main thread panicked: {:?}", e);
     }
     0
 }
@@ -256,16 +257,16 @@ fn rust_main() {
     };
 
     if need_rescan {
-        sinfo!(f; "Missing signatures detected, scanning...");
+        sinfo!(fn; "Missing signatures detected, scanning...");
         // Rescan and update build info
         let _ = load_current_build_info(true);
 
         // Save the updated build info
         if let Some(bi) = CURRENT_BUILD_INFO.lock().unwrap().as_ref() {
             if let Err(e) = bi.save() {
-                serror!(f; "Failed to save build info: {}", e);
+                serror!(fn; "Failed to save build info: {}", e);
             } else {
-                sinfo!(f; "Build info saved. Please restart the application.");
+                sinfo!(fn; "Build info saved. Please restart the application.");
             }
         }
 
@@ -275,7 +276,7 @@ fn rust_main() {
 
     init_rustlib();
     postinit_rustlib();
-    sinfo!(f; "Unchained Sleuth initialized.");
+    sinfo!(fn; "Unchained Sleuth initialized.");
 }
 
 fn get_current_platform() -> PlatformType {
@@ -289,7 +290,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
 
-    sdebug!(f; "Loading current build info, scan_missing={}", scan_missing);
+    sdebug!(fn; "Loading current build info, scan_missing={}", scan_missing);
 
     if current.is_none() {
         let file_path = env::current_exe()
@@ -307,7 +308,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         sinfo!("Scanning for missing signatures");
         match bi.with_scan(resolvers().collect()) {
             Ok(bi_with_scan_results) => *current = Some(bi_with_scan_results),
-            Err(e) => eprintln!("Failed to scan for missing signatures: {}", e)
+            Err(e) => serror!(fn; "Failed to scan for missing signatures: {}", e)
         }
     }
 
@@ -317,11 +318,11 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
     // Only apply when not scanning (i.e., during preinit)
     if !scan_missing && !APPLIED.load(Ordering::Relaxed) {
         match current.as_ref() {
-            None => sdebug!(f; "No current BuildInfo"),
+            None => sdebug!(fn; "No current BuildInfo"),
             Some(bi) => {
                 // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
                 if !bi.get_unresolved(resolvers().collect()).is_empty() {
-                    sinfo!(f; "Missing signatures; deferring initialization until scan and restart");
+                    sinfo!(fn; "Missing signatures; deferring initialization until scan and restart");
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
@@ -330,26 +331,26 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                 }
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {
-                    serror!(f; "Failed to attach hooks: {}", e);
+                    serror!(fn; "Failed to attach hooks: {}", e);
                     std::process::exit(-67);
                 }
                 APPLIED.store(true, Ordering::Relaxed);
-                sinfo!(f; "Applied patches and hooks in preinit");
+                sinfo!(fn; "Applied patches and hooks in preinit");
             },
         }
     }
     else if scan_missing {
-        swarn!(f; "Skipping patch application during scan");
+        swarn!(fn; "Skipping patch application during scan");
     }
     else {
-        swarn!(f; "Patches already applied");
+        swarn!(fn; "Patches already applied");
     }
 
     #[cfg(feature="with_pdb")]
     {
         // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";
         // tools::pdb_scan::list_functions_with_addresses(pdb_file, exe.base_address).expect("Failed to list functions");
-        // swarn!(f; "{:#?}", globals());
+        // swarn!(fn; "{:#?}", globals());
     }
 
     current
@@ -389,25 +390,13 @@ fn preinit_rustlib() {
         }
     }
 
-    std::panic::set_hook(Box::new(|panic_info| {
-        let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            (*s).to_string()
-        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            s.clone()
-        } else {
-            "Unknown panic".to_string()
-        };
-        let location = panic_info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
-        eprintln!("CRITICAL ERROR: {}{} - Application will exit in 10 seconds", message, location);
-        std::thread::sleep(std::time::Duration::from_secs(10));
-    }));
-
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
-    sdebug!(f; "CLI Args: {:#?}", args);
-    if CLI_ARGS.set(args).is_err() {
-        eprintln!("Error: Cli args already initialized!");
+    let already_initialized = CLI_ARGS.set(args).is_err();
+    logging::log4rs::init().expect("Failed to initialize logging");
+    sdebug!(fn; "CLI args: {:?}", cli_args());
+    if already_initialized {
+        serror!(fn; "CLI args already initialized!");
     }
-    tools::logger::init_syslog().expect("Failed to init syslog");
 
     // Load build info without scanning
     let _ = load_current_build_info(false);
@@ -416,7 +405,6 @@ fn preinit_rustlib() {
 // Initialize Logger and Globals
 fn init_rustlib() {
     print!("{CLI_LOGO}");
-    // tools::logger::init_syslog().expect("Failed to init syslog");
     init_globals().expect("Failed to init globals!");
 }
 
@@ -443,7 +431,7 @@ fn postinit_rustlib() {
     //         let mut global_reg = globals().registration.lock().unwrap();
     //         *global_reg = Some(Arc::clone(&reg));
             
-    //         sinfo!(f; "Started server registration manager");
+    //         sinfo!(fn; "Started server registration manager");
     //         reg.start();
     //     }
     // }
@@ -463,7 +451,7 @@ fn postinit_rustlib() {
     {
         if cli_args().is_server() {
             thread::spawn(move || {
-                crate::sinfo!("waiting for engine to start..");
+                sinfo!("waiting for engine to start..");
                 
                 while !ENGINE_READY.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(500));
@@ -475,7 +463,7 @@ fn postinit_rustlib() {
                 }
             });
         } else {
-            sinfo!(f; "Not a server, skipping server cli initialization");
+            sinfo!(fn; "Not a server, skipping server cli initialization");
         }
     }
 }
@@ -487,7 +475,7 @@ pub fn world_init() {
     });
 
     let args = &cli_args();
-    sinfo!(f; "Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
+    sinfo!(fn; "Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
 
     #[cfg(feature="server_registration")]
     {
@@ -498,7 +486,7 @@ pub fn world_init() {
             let mut global_reg = globals().registration.lock().unwrap();
             *global_reg = Some(Arc::clone(&reg));
             
-            sinfo!(f; "Started server registration manager");
+            sinfo!(fn; "Started server registration manager");
             reg.start();
         }
     }
@@ -509,10 +497,10 @@ pub fn world_init() {
     }
 
     if let Some(motd) = cli_args().motd.clone() {
-        sinfo!(f; "Starting MOTD broadcast loop");
+        sinfo!(fn; "Starting MOTD broadcast loop");
         thread::spawn(move || {
             loop {
-                sinfo!(f; "Broadcasting MOTD: {}", motd);
+                sinfo!(fn; "Broadcasting MOTD: {}", motd);
                 game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
                 thread::sleep(Duration::from_secs(30 * 60));
             }
@@ -561,10 +549,10 @@ pub fn world_init() {
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
 
-        sinfo!(f; "Mod scans in progress");
+        sinfo!(fn; "Mod scans in progress");
         mm.scan_asset_registry();
         mm.update_save_game();
-        sinfo!(f; "Started mod manager");
+        sinfo!(fn; "Started mod manager");
     }
 }
 
@@ -572,21 +560,21 @@ pub fn world_init() {
 pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    sdebug!(f; "Attaching hooks via auto-discovery:");
+    sdebug!(fn; "Attaching hooks via auto-discovery:");
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
         let cond = (hook.condition)();
         if !cond {
-            // swarn!(f; "inactive hook: {}", hook.name);
+            // swarn!(fn; "inactive hook: {}", hook.name);
             // Inactive hooks initialize but don't enable the detour
             // continue;
         }
 
         match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
-            Ok(_) => sinfo!(f; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
+            Ok(_) => sinfo!(fn; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
-                serror!(f; "☐ {}: {}", hook.name.to_uppercase(), e);
+                serror!(fn; "☐ {}: {}", hook.name.to_uppercase(), e);
                 if cond {
                     return Err(e);
                 }
@@ -603,11 +591,11 @@ pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
         // Run the condition check
         if (p.enabled_fn)() {
             match unsafe { (p.patch_fn)(offsets.clone()) } {
-                Ok(_) => sinfo!(f; "[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => serror!(f; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
+                Ok(_) => sinfo!(fn; "[+] Patch Applied: {} ({})", p.name, p.tag),
+                Err(e) => serror!(fn; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
         } else {
-            sdebug!(f; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+            sdebug!(fn; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
         }
     }
 }

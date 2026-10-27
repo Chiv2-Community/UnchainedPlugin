@@ -20,7 +20,7 @@ impl VoteType<KickVoteArgs> for KickVote {
     fn min_yes_vote_ratio(&self) -> f32 { 0.6 }
     fn min_votes_required_ratio(&self) -> f32 { 0.1 }
     fn on_success(&self, args: KickVoteArgs) {
-        println!("Kicking player: {}", args.player_name);
+        sinfo!("Kicking player: {}", args.player_name);
         // Real implementation would call game API to kick
     }
     fn clone_box(&self) -> Box<dyn ErasedVoteType> {

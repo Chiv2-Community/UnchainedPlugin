@@ -99,7 +99,7 @@ impl DiscordOutbox {
         {
             channels.entry(id).or_insert_with(|| {
                 let (sender, receiver) = channel();
-                log::debug!(
+                sdebug!(
                     "Discord worker configured: worker={} channel={}",
                     receiver.worker,
                     id
@@ -150,7 +150,7 @@ impl ChannelSender {
         let mut drops = self.drops.lock().unwrap();
         drops.0 = drops.0.saturating_add(1);
         if drops.1.elapsed() >= Duration::from_secs(5) {
-            crate::swarn!(
+            swarn!(
                 "Discord outbound queue dropped {} publications (latest: {}): full or closed",
                 drops.0,
                 kind
@@ -175,7 +175,7 @@ async fn deliver(http: &Http, id: ChannelId, delivery: Delivery) -> Result<Messa
         },
         _ => Route::ChannelMessages { channel_id: id },
     };
-    log::debug!(
+    sdebug!(
         "Discord send starting: send={} channel={} kind={}",
         send,
         id,
@@ -200,14 +200,14 @@ async fn deliver(http: &Http, id: ChannelId, delivery: Delivery) -> Result<Messa
         tokio::select! {
             result = &mut request => result,
             _ = tokio::time::sleep(SLOW_SEND) => {
-                crate::swarn!("Discord {} to channel {} still pending after {}s: send={} (not proof of rate limiting)", kind, id, SLOW_SEND.as_secs(), send);
+                swarn!("Discord {} to channel {} still pending after {}s: send={} (not proof of rate limiting)", kind, id, SLOW_SEND.as_secs(), send);
                 diagnostics::log_bucket(http, route, send, "pending");
                 request.await
             }
         }
     }).await;
     diagnostics::log_bucket(http, route, send, "after_request");
-    log::debug!(
+    sdebug!(
         "Discord {} to channel {} completed in {:?}: send={}",
         kind,
         id,
@@ -218,7 +218,7 @@ async fn deliver(http: &Http, id: ChannelId, delivery: Delivery) -> Result<Messa
         Ok(message) => Ok(message.id),
         Err(error) => {
             diagnostics::log_error(send, &error);
-            crate::swarn!(
+            swarn!(
                 "Discord {} to channel {} failed: send={} {}",
                 kind,
                 id,
@@ -246,7 +246,7 @@ where
     let mut message_burst = 0;
     let worker = rx.worker;
     let mut first_event = None;
-    log::debug!("Discord worker started: worker={}", worker);
+    sdebug!("Discord worker started: worker={}", worker);
     loop {
         if rx.messages.is_closed()
             && rx.messages.is_empty()
@@ -269,10 +269,10 @@ where
             // Only shutdown drains requests; normal collection never awaits HTTP.
             while let Some(result) = requests.join_next().await {
                 if let Err(error) = result {
-                    crate::swarn!("Discord request task failed during shutdown: {}", error);
+                    swarn!("Discord request task failed during shutdown: {}", error);
                 }
             }
-            log::debug!("Discord worker stopped: worker={}", worker);
+            sdebug!("Discord worker stopped: worker={}", worker);
             return;
         }
         tokio::select! {
@@ -285,7 +285,7 @@ where
                     }
                     Ok((false, _)) => {}
                     Err(error) => {
-                        crate::swarn!("Discord request task failed: worker={} {}; dashboard state may be unavailable", worker, error);
+                        swarn!("Discord request task failed: worker={} {}; dashboard state may be unavailable", worker, error);
                     }
                 }
             }
@@ -294,7 +294,7 @@ where
                 message_burst = 0;
             }
             changed = rx.dashboard.changed(), if dashboard_open => {
-                log::debug!("Discord dashboard state received: worker={} coalesced={} closed={}", worker, dashboard_pending, changed.is_err());
+                sdebug!("Discord dashboard state received: worker={} coalesced={} closed={}", worker, dashboard_pending, changed.is_err());
                 dashboard_open = changed.is_ok();
                 if dashboard_open { dashboard_pending = true; }
             }
@@ -310,7 +310,7 @@ where
                 next_dashboard = Instant::now() + DASHBOARD_INTERVAL;
             }
             Some(message) = rx.messages.recv(), if message_burst < MESSAGE_BURST || rx.events.is_empty() => {
-                log::debug!("Discord interactive dequeue: worker={} queue_age={:?} interactive_pending={} events_pending={}", worker, message.published.elapsed(), rx.messages.len(), rx.events.len());
+                sdebug!("Discord interactive dequeue: worker={} queue_age={:?} interactive_pending={} events_pending={}", worker, message.published.elapsed(), rx.messages.len(), rx.events.len());
                 dispatch(&mut send, &mut requests, Delivery::Message(message.value), worker);
                 message_burst += 1;
             }
@@ -323,7 +323,7 @@ where
                 }
                 if batch.is_empty() {
                     first_event = Some(event.published);
-                    log::debug!("Discord batch opened: worker={} first_event_queue_age={:?} events_pending={} flush_in={:?}", worker, event.published.elapsed(), rx.events.len(), deadline.saturating_duration_since(Instant::now()));
+                    sdebug!("Discord batch opened: worker={} first_event_queue_age={:?} events_pending={} flush_in={:?}", worker, event.published.elapsed(), rx.events.len(), deadline.saturating_duration_since(Instant::now()));
                 }
                 batch.push(entry);
                 if batch.is_full() {
@@ -347,7 +347,7 @@ fn send_batch<F, Fut>(
     F: FnMut(Delivery) -> Fut,
     Fut: Future<Output = Result<MessageId, ()>> + Send + 'static,
 {
-    log::debug!("Discord batch flush: worker={} reason={} embeds={} utf16_units={} oldest_event_age={:?} events_pending={} interactive_pending={}", worker, reason, batch.len(), batch.characters(), first.map(|time| time.elapsed()), queued.0, queued.1);
+    sdebug!("Discord batch flush: worker={} reason={} embeds={} utf16_units={} oldest_event_age={:?} events_pending={} interactive_pending={}", worker, reason, batch.len(), batch.characters(), first.map(|time| time.elapsed()), queued.0, queued.1);
     dispatch(
         send,
         requests,
@@ -367,7 +367,7 @@ where
     Fut: Future<Output = Result<MessageId, ()>> + Send + 'static,
 {
     if requests.len() >= MAX_OUTSTANDING {
-        crate::swarn!(
+        swarn!(
             "Discord dispatch dropped: worker={} outstanding request limit={}",
             worker,
             MAX_OUTSTANDING
@@ -379,7 +379,7 @@ where
     requests.spawn(async move {
         let result = std::panic::AssertUnwindSafe(request).catch_unwind().await;
         let result = result.unwrap_or_else(|_| {
-            crate::swarn!(
+            swarn!(
                 "Discord request task panicked: worker={} dashboard={}",
                 worker,
                 dashboard
@@ -388,7 +388,7 @@ where
         });
         (dashboard, result)
     });
-    log::debug!(
+    sdebug!(
         "Discord request dispatched: worker={} outstanding={}",
         worker,
         requests.len()

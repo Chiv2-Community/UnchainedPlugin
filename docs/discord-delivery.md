@@ -28,6 +28,9 @@ HTTP requests have a 10-second connect timeout and a 30-second total timeout.
 These do not cancel Serenity's required rate-limit waits. A request pending for
 10 seconds emits a warning; rate-limit callbacks report the requested wait.
 Debug logs report queue age and delivery duration without message contents or tokens.
+Diagnostics use the shared `sdebug!` and `swarn!` macros, including function metadata
+for custom `{fn}` patterns. The default DEBUG level includes these timings;
+TRACE remains disabled. See [logging configuration](logging.md).
 
 ## Diagnostic stages
 

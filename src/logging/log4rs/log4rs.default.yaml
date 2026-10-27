@@ -5,17 +5,19 @@ appenders:
       - kind: threshold
         level: debug
     encoder:
-      pattern: "{h([{d(%H:%M:%S)} {l:5}])} {m}{n}"
+      kind: module_console
+      header_pattern: "[{d(%H:%M:%S)} {l:5}]"
+      body_pattern: " [{sm:<-24.24}] {m}{n}"
   file:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t:10}] {m}{n}"
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:5}| {M}] {m}{n}"
   kismet:
     kind: file
     path: "__KISMET_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:6}| {t} ] {m}{n}"
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:5}| {M} ] {m}{n}"
 
 loggers:
   serenity:

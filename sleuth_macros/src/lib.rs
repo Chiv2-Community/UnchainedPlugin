@@ -132,7 +132,7 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
         quote! { (async move #block).await }
     };
 
-    let log_level = if is_optional { quote!(debug) } else { quote!(error) };
+    let log_level = if is_optional { quote!(sdebug) } else { quote!(serror) };
 
     // 5. Final Expansion
     let expanded = quote! {
@@ -149,7 +149,7 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
 
                 let wrapped = res.map(#name);
                 if let Err(e) = &wrapped {
-                    ::log::#log_level!(
+                    crate::#log_level!(
                         "Sleuth: {} failed to resolve: {:?}",
                         stringify!(#name),
                         e
@@ -246,7 +246,7 @@ pub fn custom_resolver(_args: TokenStream, input: TokenStream) -> TokenStream {
                                 
                                 let wrapped = res.map(#name);
                                 if let Err(e) = &wrapped {
-                                    ::log::error!("Sleuth: {} failed: {:?}", stringify!(#name), e);
+                                    crate::serror!("Sleuth: {} failed: {:?}", stringify!(#name), e);
                                 }
                                 wrapped
                             })

@@ -2,7 +2,6 @@
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::tools::hook_globals::globals;
-use crate::sinfo;
 use async_trait::async_trait;
 use clap::Parser;
 use std::sync::mpsc;
@@ -24,7 +23,7 @@ impl Command<ListModsArgs> for ListModsCommand {
 
         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
             let (tx, rx) = mpsc::channel();
-            sinfo!(f; "Starting scan!");
+            sinfo!(fn; "Starting scan!");
 
             run_on_game_thread(move || {
                 if let Some(mm) = mm_lock().as_ref() {
@@ -35,7 +34,7 @@ impl Command<ListModsArgs> for ListModsCommand {
             let _ = rx.recv();
         } else {
             if let Some(mm) = mm_lock().as_ref() {
-                sinfo!(f; "Getting list!");
+                sinfo!(fn; "Getting list!");
                 let _ = mm.scan_active_mod_actors();
             }
         }

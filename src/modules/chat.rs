@@ -3,7 +3,6 @@ use crate::events::models::{ChatSource, ChatType, GameChatMessage, GameEvent};
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 use crate::game;
 use crate::game::chivalry2::EChatType;
-use crate::sinfo;
 use async_trait::async_trait;
 use futures::future::join_all;
 use serenity::all::CreateMessage;

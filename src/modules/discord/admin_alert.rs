@@ -7,7 +7,6 @@ use serenity::builder::CreateEmbed;
 
 use crate::commands::Command;
 use crate::events::models::{AdminAlert, CommandRequest, GameEvent, PermissionFlags};
-use crate::swarn;
 
 #[derive(Clone)]
 pub struct AdminAlertModule {

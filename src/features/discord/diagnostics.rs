@@ -61,9 +61,9 @@ pub(crate) fn log_http(observation: HttpObservation) {
         .try_with(|&(id, start)| (Some(id), Some(start.elapsed())))
         .unwrap_or((None, None));
     if observation.status == Some(429) {
-        crate::swarn!("Discord HTTP 429: rate limited; send={:?} method={} elapsed={:?}; Serenity will apply backoff", send, observation.method, elapsed);
+        swarn!("Discord HTTP 429: rate limited; send={:?} method={} elapsed={:?}; Serenity will apply backoff", send, observation.method, elapsed);
     } else if let Some(status) = observation.status {
-        log::debug!(
+        sdebug!(
             "Discord HTTP response headers received: send={:?} method={} status={} elapsed={:?}",
             send,
             observation.method,
@@ -71,13 +71,13 @@ pub(crate) fn log_http(observation: HttpObservation) {
             elapsed
         );
     } else {
-        crate::swarn!("Discord HTTP transport failure: send={:?} method={} elapsed={:?} timeout={} connect_error={} body_error={} (not an HTTP 429)", send, observation.method, elapsed, observation.timeout, observation.connect_error, observation.body_error);
+        swarn!("Discord HTTP transport failure: send={:?} method={} elapsed={:?} timeout={} connect_error={} body_error={} (not an HTTP 429)", send, observation.method, elapsed, observation.timeout, observation.connect_error, observation.body_error);
     }
 }
 
 pub(crate) fn log_error(send: u64, error: &serenity::Error) {
     if let serenity::Error::Http(serenity::http::HttpError::Request(error)) = error {
-        crate::swarn!("Discord request failure details: send={} timeout={} connect_error={} body_error={} decode_error={} (no HTTP 429 established by this error)", send, error.is_timeout(), error.is_connect(), error.is_body(), error.is_decode());
+        swarn!("Discord request failure details: send={} timeout={} connect_error={} body_error={} decode_error={} (no HTTP 429 established by this error)", send, error.is_timeout(), error.is_connect(), error.is_body(), error.is_decode());
     }
 }
 
@@ -94,7 +94,7 @@ pub(crate) fn log_bucket(http: &Http, route: Route<'_>, send: u64, phase: &str) 
     };
     let routes = limiter.routes();
     let Ok(routes) = routes.try_read() else {
-        log::debug!(
+        sdebug!(
             "Discord rate-limit snapshot: send={} phase={} route_table_busy=true",
             send,
             phase
@@ -102,7 +102,7 @@ pub(crate) fn log_bucket(http: &Http, route: Route<'_>, send: u64, phase: &str) 
         return;
     };
     let Some(bucket) = routes.get(&route.ratelimiting_bucket()).cloned() else {
-        log::debug!(
+        sdebug!(
             "Discord rate-limit snapshot: send={} phase={} headers_not_seen=true",
             send,
             phase
@@ -111,8 +111,8 @@ pub(crate) fn log_bucket(http: &Http, route: Route<'_>, send: u64, phase: &str) 
     };
     drop(routes);
     match bucket.try_lock() {
-        Ok(bucket) => log::debug!("Discord rate-limit snapshot (Serenity parsed/cached state): send={} phase={} {}", send, phase, parsed_headers(&bucket)),
-        Err(_) => log::debug!("Discord rate-limit snapshot: send={} phase={} bucket_busy=true (possibly applying backoff)", send, phase),
+        Ok(bucket) => sdebug!("Discord rate-limit snapshot (Serenity parsed/cached state): send={} phase={} {}", send, phase, parsed_headers(&bucket)),
+        Err(_) => sdebug!("Discord rate-limit snapshot: send={} phase={} bucket_busy=true (possibly applying backoff)", send, phase),
     };
 }
 
