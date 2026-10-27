@@ -34,6 +34,56 @@ fn named(logger: &Capture) {
 }
 
 #[test]
+fn function_flag_always_prefixes_the_message() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    sinfo!(logger: &logger, target: "custom", fn; "hello {}", 7);
+    swarn!(logger: &logger, fn; "warn");
+    serror!(logger: &logger, fn; "error");
+    sdebug!(logger: &logger, fn; "debug");
+    strace!(logger: &logger, fn; "trace");
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 5);
+    for (line, (level, message)) in lines.iter().zip([
+        ("INFO", "hello 7"), ("WARN", "warn"), ("ERROR", "error"),
+        ("DEBUG", "debug"), ("TRACE", "trace"),
+    ]) {
+        // The pattern's {fn} and the explicit message prefix are independent.
+        assert!(line.starts_with("function_flag_always_prefixes_the_message|"));
+        assert!(line.contains(&format!("|{level}|")));
+        assert!(line.ends_with(&format!("[function_flag_always_prefixes_the_message] {message}")));
+    }
+    assert!(lines[0].contains("|custom|"));
+}
+
+#[test]
+fn function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary() {
+    #[derive(Default)]
+    struct Messages(Mutex<Vec<(String, Option<String>)>>);
+    impl Log for Messages {
+        fn enabled(&self, _: &Metadata<'_>) -> bool { true }
+        fn log(&self, record: &Record<'_>) {
+            let mut output = Vec::new();
+            PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut output), record).unwrap();
+            self.0.lock().unwrap().push((String::from_utf8(output).unwrap(),
+                record.key_values().get("f".into()).map(|value| value.to_string())));
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Messages::default();
+    (|| sinfo!(logger: &logger, fn; "message only"))();
+    let f = 42;
+    sinfo!(logger: &logger, f; "shorthand");
+    sinfo!(logger: &logger, f = 7; "explicit");
+    assert_eq!(*logger.0.lock().unwrap(), [
+        ("[function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary] message only".into(), None),
+        ("shorthand".into(), Some("42".into())),
+        ("explicit".into(), Some("7".into())),
+    ]);
+}
+
+#[test]
 fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
@@ -44,6 +94,7 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
         }
     }
     sinfo!(logger: &logger, target: "disabled", "{}", NeverFormat);
+    sinfo!(logger: &logger, target: "disabled", fn; "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
     let request = 42;
     sinfo!(logger: &logger, request; "shorthand");
@@ -181,18 +232,18 @@ fn startup_only_dumps_redacted_cli_after_logging_init() {
         assert!(!safe_cli_logging(&format!("{startup}\n{raw}"), loader));
         assert!(!safe_cli_logging(startup, &format!("{loader}\n{raw}")));
     }
-    assert!(!safe_cli_logging("sdebug!(\"CLI args: {:?}\", cli_args());", loader));
+    assert!(!safe_cli_logging("sdebug!(fn; \"CLI args: {:?}\", cli_args());", loader));
 }
 
 #[cfg(unix)]
 fn safe_cli_logging(startup: &str, loader: &str) -> bool {
     let compact = |source: &str| source.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
     let startup = compact(startup);
-    let dump = "sdebug!(\"CLIargs:{:?}\",cli_args());";
+    let dump = "sdebug!(fn;\"CLIargs:{:?}\",cli_args());";
     let Some((before, after)) = startup.split_once(dump) else { return false; };
     if !before.contains("logging::log4rs::init().expect(") { return false; }
     // Allow the existing initialization error, but no other argument diagnostics.
-    let remaining = format!("{before}{after}").replace("serror!(\"CLIargsalreadyinitialized!\");", "");
+    let remaining = format!("{before}{after}").replace("serror!(fn;\"CLIargsalreadyinitialized!\");", "");
     for source in [remaining, compact(loader)] {
         for severity in ["debug", "trace", "info", "warn", "error", "log"] {
             if source.contains(&format!("{severity}!")) { return false; }
@@ -263,8 +314,10 @@ fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
     let calls = std::cell::Cell::new(0);
     let expensive = || { calls.set(calls.get() + 1); 42 };
     sinfo!(request = expensive(); "{}", expensive());
+    sinfo!(fn; "{}", expensive());
     assert_eq!(calls.get(), 0);
     log::set_max_level(log::LevelFilter::Debug);
     strace!("{}", expensive());
+    strace!(fn; "{}", expensive());
     assert_eq!(calls.get(), 0);
 }

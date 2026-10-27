@@ -14,6 +14,12 @@ macro_rules! __unchained_log {
     ($level:ident, $($args:tt)+) => {
         $crate::__unchained_log!(@emit $level, $crate::logging::__log::logger(), module_path!(), $($args)+)
     };
+    (@emit $level:ident, $logger:expr, $target:expr, fn; $($args:tt)+) => {{
+        fn __unchained_function_marker() {}
+        $crate::__unchained_log!(@emit $level, $logger, $target,
+            "[{}] {}", $crate::logging::function_name(__unchained_function_marker),
+            format_args!($($args)+))
+    }};
     (@emit $level:ident, $logger:expr, $target:expr,
         $($key:tt $(:$capture:tt)? $(= $value:expr)?),+; $($args:tt)+) => {{
         fn __unchained_function_marker() {}
@@ -29,6 +35,12 @@ macro_rules! __unchained_log {
     }};
 }
 
+/// `fn;` prefixes the message. `f;` is only a structured-field shorthand,
+/// so it requires a value named `f`, not a legacy function flag:
+/// ```compile_fail,E0425
+/// use UnchainedPlugin::sinfo;
+/// sinfo!(f; "no legacy alias");
+/// ```
 #[macro_export]
 macro_rules! sinfo {
     ($($args:tt)+) => { $crate::__unchained_log!(Info, $($args)+) };

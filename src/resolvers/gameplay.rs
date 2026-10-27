@@ -84,7 +84,7 @@ fn fallback_combat_actor(ptr: *mut c_void) -> Option<CombatActor> {
 fn combat_actor_from_player_state(player_state: *mut APlayerState, via: &str) -> Option<CombatActor> {
     if player_state.is_null() { return None; }
     if !is_live_object(player_state.cast()) {
-        swarn!("ignoring PlayerState {:p} from {}: not a live object", player_state, via);
+        swarn!(fn; "ignoring PlayerState {:p} from {}: not a live object", player_state, via);
         return None;
     }
     let ps = unsafe { player_state.as_ref() }?;
@@ -97,7 +97,7 @@ fn combat_actor_from_player_state(player_state: *mut APlayerState, via: &str) ->
 fn combat_actor_from_actor(ptr: *mut c_void) -> Option<CombatActor> {
     if ptr.is_null() { return None; }
     if !is_live_object(ptr) {
-        swarn!("ignoring combat actor {:p}: not a live object", ptr);
+        swarn!(fn; "ignoring combat actor {:p}: not a live object", ptr);
         return None;
     }
 
@@ -172,7 +172,7 @@ fn damage_source_name(damage_event: &FDamageTakenEvent) -> String {
         }
         if let Some(name) = object_display_name(ptr) {
             if kind != "damage_source" {
-                strace!("Kill source resolved via {}='{}'", kind, name);
+                strace!(fn; "Kill source resolved via {}='{}'", kind, name);
             }
             return name;
         }
@@ -211,7 +211,7 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     let source = damage_source_name(damage_taken);
     let kill_reason = death_event.kill_reason.as_str().to_string();
 
-    strace!("Kill: {} -> {} [{}] via {} ({:.2} dmg)", killer.name, victim.name, kill_reason, source, damage_taken.damage);
+    strace!(fn; "Kill: {} -> {} [{}] via {} ({:.2} dmg)", killer.name, victim.name, kill_reason, source, damage_taken.damage);
 
     EVENT_SYSTEM.game_event_publisher.publish(GameEvent::KillEvent(Kill {
         killer: killer.clone(),
@@ -261,7 +261,7 @@ CREATE_HOOK!(ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
     let attack_type = attack_type_from_damage_event(damage_taken);
 
     strace!(
-        "Damage: {} -> {} via {} ({:.2} dmg, type={})",
+        fn; "Damage: {} -> {} via {} ({:.2} dmg, type={})",
         attacker.name,
         victim.name,
         source,

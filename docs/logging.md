@@ -9,9 +9,8 @@ The logging module brings these macros into scope before other plugin modules.
 External binaries import the macros from `UnchainedPlugin`.
 Proc-generated diagnostics retain `crate::` paths to resolve in the consuming
 crate without depending on its lexical macro imports.
-log4rs routes and formats the records. Messages must not embed
-caller function/module prefixes or source locations. Configure those fields in
-the appender pattern instead.
+log4rs routes and formats the records. Prefer appender patterns for caller
+information; the `fn;` flag explicitly prefixes an individual message.
 
 ## Defaults
 
@@ -165,6 +164,17 @@ and `logger:` options and structured fields retain the facade's syntax:
 ```rust,ignore
 sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
 ```
+
+For a per-call function prefix, use `fn;` with any severity:
+
+```rust
+sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
+```
+
+The prefix is unconditional, even when the encoder also includes `{fn}`.
+The `fn;` flag changes the message; the `{fn}` pattern formats record metadata.
+Legacy flags, including `f;` as a function flag, are not supported. Structured
+fields named `f` retain the facade's syntax, including `f;` shorthand.
 
 `__unchained_function` is reserved for captured function metadata. Do not supply
 that key yourself. As with `log`, disabled levels skip argument evaluation;
