@@ -3,6 +3,9 @@ use log4rs::append::console::Target;
 use log4rs::encode::{writer::console::ConsoleWriter, Color, Encode, Style, Write};
 use super::log4rs::pattern::PatternEncoder;
 
+mod banner;
+pub(crate) use banner::print_banner;
+
 #[cfg(windows)]
 #[path = "windows.rs"]
 mod windows_backend;

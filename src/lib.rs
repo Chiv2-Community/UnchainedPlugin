@@ -37,7 +37,6 @@ use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
-use crate::tools::misc::CLI_LOGO;
 use self::resolvers::PlatformType;
 
 
@@ -404,7 +403,9 @@ fn preinit_rustlib() {
 
 // Initialize Logger and Globals
 fn init_rustlib() {
-    print!("{CLI_LOGO}");
+    if let Err(error) = logging::console::print_banner() {
+        swarn!("Failed to print startup banner: {}", error);
+    }
     init_globals().expect("Failed to init globals!");
 }
 
