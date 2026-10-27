@@ -42,9 +42,9 @@ fn inherited_pipe(value: &str) -> Option<std::fs::File> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), any(test, logging_test_harness)))]
 fn inherited_pipe(_value: &str) -> Option<std::fs::File> {
-    None // The plugin runs inside the Windows game, including on Proton.
+    None // Native logging tests only; Proton uses the Windows implementation.
 }
 
 fn forwarder() -> Option<&'static Forwarder> {
