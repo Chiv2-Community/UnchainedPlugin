@@ -37,12 +37,12 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                             let player_state = match unsafe { (player_raw).as_mut() } {
                                 Some(ps) => ps,
                                 None => {
-                                    swarn!("PlayerState was null");
+                                    swarn!(fn; "PlayerState was null");
                                     continue;
                                 }
                             };
                             let pname = player_state.base.player_name_private.to_string();
-                            sinfo!("{}", pname);
+                            sinfo!(fn; "{}", pname);
                             let mut flags = "".to_string();
                             if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
                                 flags.push_str("spectator|");
@@ -54,7 +54,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                                 flags.push_str("bot|");
                             }
 
-                            sinfo!("{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}",
+                            sinfo!(fn; "{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}",
                                 flags,
                                 player_state.base.player_flags,
                                 player_state.base.player_id,
@@ -68,21 +68,21 @@ impl Command<GameInfoArgs> for GameInfoCommand {
                         }
                     },
                     (g, gs) => {
-                        if g.is_none() { serror!("GameMode was null"); }
-                        if gs.is_none() { serror!("GameState was null"); }
+                        if g.is_none() { serror!(fn; "GameMode was null"); }
+                        if gs.is_none() { serror!(fn; "GameState was null"); }
                     }
                 }
             } else {
-                swarn!("globals.world was None; skipping game info collection");
+                swarn!(fn; "globals.world was None; skipping game info collection");
             }
         });
     }
 }
 
 fn log_game_info(game: &ATBLGameMode) {
-    sinfo!("Name:{}", game.server_name);
+    sinfo!(fn; "Name:{}", game.server_name);
     let maplist = game.maplist.as_slice().iter().join(", ");
-    sinfo!("MapList:{}", maplist);
-    sinfo!("Idle disconnect:{}", game.idle_kick_timer_disconnect);
-    sinfo!("Idle spectate:{}", game.idle_kick_timer_spectate);
+    sinfo!(fn; "MapList:{}", maplist);
+    sinfo!(fn; "Idle disconnect:{}", game.idle_kick_timer_disconnect);
+    sinfo!(fn; "Idle spectate:{}", game.idle_kick_timer_spectate);
 }

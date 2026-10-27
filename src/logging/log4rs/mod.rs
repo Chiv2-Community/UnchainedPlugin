@@ -177,6 +177,7 @@ root:
     #[test]
     fn embedded_console_config_loads() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
+        assert_eq!(yaml["appenders"]["console"]["encoder"]["body_pattern"], " [{sm:<-24.24}] {m}{n}");
         // Exercise the shipped console config without opening log files.
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));

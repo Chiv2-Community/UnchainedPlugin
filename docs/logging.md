@@ -9,9 +9,8 @@ The logging module brings these macros into scope before other plugin modules.
 External binaries import the macros from `UnchainedPlugin`.
 Proc-generated diagnostics retain `crate::` paths to resolve in the consuming
 crate without depending on its lexical macro imports.
-log4rs routes and formats the records. Messages must not embed
-caller function/module prefixes or source locations. Configure those fields in
-the appender pattern instead.
+log4rs routes and formats the records. Prefer appender patterns for caller
+information; the `fn;` flag explicitly prefixes an individual message.
 
 ## Defaults
 
@@ -117,7 +116,7 @@ so severity colors remain independent of the line format:
 encoder:
   kind: module_console
   header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm}::{fn}] {m}{n}"
+  body_pattern: " [{sm:<-24.24}] {m}{n}"
 ```
 
 These are the defaults. Replace only the encoder block and keep the appender's
@@ -126,8 +125,12 @@ other settings. Restart after editing.
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
-The resulting label keeps its last 16 characters, dropping any excess on the left:
+The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
+The default console pattern `{sm:<-24.24}` uses exactly 24 Unicode characters
+inside the brackets: shorter labels are padded on the right; longer labels retain
+their last 24 characters. Custom `{sm}` keeps the 32-character cap and adds no
+padding unless a width is specified.
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
 for the level; `{t}` shows the filtering target instead.
 
@@ -140,16 +143,16 @@ in both. To omit or replace the console's short module, edit `body_pattern`.
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-The console default includes `{fn}` to display the enclosing named function's leaf;
-file patterns omit it by default. Methods show only their name,
+Console and file defaults omit function names. Add `{fn}` to display the enclosing
+named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.
 Records from dependencies without function metadata show `???`.
 Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
 through the built-in log4rs key/value formatter.
 
-For example, replace a file appender's encoder block to include the console's
-short module and function fields without severity colors:
+For example, replace a file appender's encoder block to include the short module
+and opt-in function field without severity colors:
 
 ```yaml
 encoder:
@@ -165,6 +168,17 @@ and `logger:` options and structured fields retain the facade's syntax:
 ```rust,ignore
 sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
 ```
+
+For a per-call function prefix, use `fn;` with any severity:
+
+```rust
+sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
+```
+
+The prefix is unconditional, even when the encoder also includes `{fn}`.
+The `fn;` flag changes the message; the `{fn}` pattern formats record metadata.
+Legacy flags, including `f;` as a function flag, are not supported. Structured
+fields named `f` retain the facade's syntax, including `f;` shorthand.
 
 `__unchained_function` is reserved for captured function metadata. Do not supply
 that key yourself. As with `log`, disabled levels skip argument evaluation;

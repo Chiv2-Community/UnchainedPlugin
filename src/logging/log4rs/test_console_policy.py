@@ -36,7 +36,7 @@ def check(target, terminal, overrides, colored):
         output = bytes(transcript) if terminal else {"stdout": stdout, "stderr": stderr}[target]
         case = (target, terminal, overrides)
         assert child.returncode == 0, (case, stdout, stderr, transcript)
-        assert output.count(b"[policy_child::???] boundary message") == 5, (case, output)
+        assert output.count(b"[policy_child            ] boundary message") == 5, (case, output)
         if colored:
             for rgb in (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92"):
                 assert b"\x1b[0;38;2;" + rgb + b"m" in output, (case, output)

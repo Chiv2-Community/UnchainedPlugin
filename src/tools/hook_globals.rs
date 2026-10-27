@@ -245,12 +245,12 @@ pub fn init_globals() -> Result<(), String> {
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
     sinfo!(
-        "Platform: {} base_addr: '0x{:x?}'",
+        fn; "Platform: {} base_addr: '0x{:x?}'",
         platform, *crate::resolvers::BASE_ADDR
     );
 
     // Load CLI ARGS
-    sinfo!("Running resolvers");
+    sinfo!(fn; "Running resolvers");
     // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
@@ -290,8 +290,8 @@ pub fn init_globals() -> Result<(), String> {
     };
 
     if GLOBALS.set(globals_instance).is_err() {
-        serror!("Error: Globals already initialized!");
+        serror!(fn; "Error: Globals already initialized!");
     }
-    strace!("{GLOBALS:#?}");
+    strace!(fn; "{GLOBALS:#?}");
     Ok(())
 }

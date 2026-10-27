@@ -149,7 +149,7 @@ impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = widestring::U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		// sinfo!("Constructing fname for {}", path);
+		// sinfo!(fn; "Constructing fname for {}", path);
 
 		CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 			&mut name as *mut FName,
@@ -158,7 +158,7 @@ impl FName {
 		))
 		.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			// sinfo!("1. Name is invalid for {}", wide_path.to_string_lossy());
+			// sinfo!(fn; "1. Name is invalid for {}", wide_path.to_string_lossy());
 			CALL_ORIGINAL_SAFE!(FNameCtorWchar(
 				&mut name as *mut FName,
 				wide_path.as_ptr(),
@@ -167,7 +167,7 @@ impl FName {
 			.expect("Failed to construct FName");
 		}
 		if name.comparison_index.value == 0 {
-			sinfo!("2. Name is invalid for {}", wide_path.to_string_lossy());
+			sinfo!(fn; "2. Name is invalid for {}", wide_path.to_string_lossy());
 		}
         name
     }

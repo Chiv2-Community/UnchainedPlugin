@@ -195,8 +195,11 @@ namespace reference.
 
 The default console output abbreviates parent source-module segments
 using word initials (`UnchainedPlugin::resolvers::messages` → `UP::r::messages`)
-and keeps the rightmost 16 characters of the label; file logs include
-the full source module. DEBUG headers and bodies are dark gray; TRACE is darker.
+and uses exactly 24 Unicode characters inside the brackets. The console pattern
+`{sm:<-24.24}` pads shorter labels on the right and retains the last 24 characters
+of longer labels; custom `{sm}` keeps the rightmost 32 characters without padding. File logs include
+the full source module. Neither default includes function names; add `{fn}` to
+the pattern or use the per-call `fn;` flag. DEBUG headers and bodies are dark gray; TRACE is darker.
 Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
 File logs do not use console colors. Redirected console output is also uncolored.
 
@@ -208,9 +211,9 @@ definitions; external binaries import macros from `UnchainedPlugin`.
 The logging module is declared with `#[macro_use]` before callers; its internal
 macros are declared first too. Proc-generated diagnostics retain `crate::` paths
 so consumer resolution does not depend on lexical imports.
-Write only the message: do not prepend
-function names, module names, or source locations. Appender patterns control that
-presentation using record metadata. Targets default to the calling Rust module.
+Prefer appender patterns for caller information. Use `sinfo!(fn; "message")`
+(or another severity) for an unconditional per-call function prefix; do not
+construct caller prefixes manually. Targets default to the calling Rust module.
 Explicit targets must stay under `module_path!()`, for example
 `concat!(module_path!(), "::game_chat")`.
 
