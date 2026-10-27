@@ -81,7 +81,7 @@ escapes. Redirected output and `NO_COLOR` receive plain banner text.
 
 Launchers can opt into [console forwarding](console-forwarding.md) to receive
 console records and the banner directly. Default file logging is unchanged.
-Alternatively, [`--attach-std`](console-attachment.md) preserves inherited output
+Alternatively, [`--attach-stdio`](console-attachment.md) preserves inherited output
 without creating a console window and takes precedence over IPC forwarding.
 
 ## Use a custom configuration

@@ -1,7 +1,7 @@
 # Attach to standard output
 
-Pass `--attach-std` to the plugin to use inherited stdout/stderr or the parent
-console instead of opening a console window. `-attach-std` is also accepted by
+Pass `--attach-stdio` to the plugin to use inherited stdout/stderr or the parent
+console instead of opening a console window. `-attach-stdio` is also accepted by
 the game's argument normalization.
 
 Without the flag, existing console behavior is unchanged. Configured file
@@ -20,7 +20,7 @@ in either mode.
   Pipes/files receive plain encoder output; message-embedded controls remain
   the receiver's responsibility.
 - Wine's palette fallback must not detach or allocate a console in this mode.
-- Explicit `--attach-std` takes precedence over the console-forwarding environment
+- Explicit `--attach-stdio` takes precedence over the console-forwarding environment
   variable. It does not use the dedicated structured pipe or emit duplicate records.
 
 The flag does not launch a terminal application or provide interactive command
@@ -29,9 +29,22 @@ Ordinary standard-stream writes can experience OS pipe backpressure. Use the
 bounded [IPC transport](console-forwarding.md) when a nonblocking plugin queue is
 required.
 
+## Suppress console creation without attachment
+
+Pass `--no-spawn-console` (`-no-spawn-console` also works in game arguments)
+to prevent console allocation, including Wine's palette fallback. It does not
+attach to the parent console, redirect streams, or disable structured forwarding.
+Existing output handles and configured file logging remain unchanged; without
+usable handles or forwarding, console output may be unavailable.
+
+Both flags may be combined: `--attach-stdio` still selects inherited output or
+parent-console attachment; neither flag allows a new console window.
+The server CLI accepts `--no-spawn-console` or `server.no-spawn-console: true`
+in YAML without changing its default structured capture.
+
 ## Launcher CLI
 
-The server CLI accepts `--attach-std` directly, or `server.attach-std: true` in YAML.
+The server CLI accepts `--attach-stdio` directly, or `server.attach-stdio: true` in YAML.
 It captures both streams into the existing TUI/plain-output handler rather than
 letting game output overwrite the dashboard. `L` selects the console pane;
 `End` follows output. Captured lines/history are bounded and controls sanitized.

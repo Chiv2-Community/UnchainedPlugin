@@ -46,7 +46,7 @@ startup banner instead of allocating/writing its own console. File appenders,
 log levels, filters, custom encoder patterns, function prefixes, and namespaces
 are unchanged. No logging YAML override or UE logging flags are needed.
 Without valid settings, existing console behavior is unchanged.
-Explicit [`--attach-std`](console-attachment.md) overrides these settings and uses
+Explicit [`--attach-stdio`](console-attachment.md) overrides these settings and uses
 standard output instead; the structured pipe is not used.
 
 Environment values are read once during startup. The plugin validates that the

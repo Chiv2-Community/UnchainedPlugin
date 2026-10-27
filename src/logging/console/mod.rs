@@ -7,17 +7,27 @@ mod banner;
 pub(crate) use banner::print_banner;
 pub(crate) mod forward;
 
-static ATTACH_STD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static ATTACH_STDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static NO_SPAWN_CONSOLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_STD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-pub(crate) fn attach_std_enabled() -> bool {
-    ATTACH_STD.load(std::sync::atomic::Ordering::Relaxed)
+pub(crate) fn attach_stdio_enabled() -> bool {
+    ATTACH_STDIO.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-pub(crate) fn attach_std() {
-    ATTACH_STD.store(true, std::sync::atomic::Ordering::Relaxed);
+pub(crate) fn attach_stdio() {
+    disable_console_spawning();
+    ATTACH_STDIO.store(true, std::sync::atomic::Ordering::Relaxed);
     #[cfg(windows)]
     NO_STD_OUTPUT.store(!windows_backend::attach_parent_output(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn disable_console_spawning() {
+    NO_SPAWN_CONSOLE.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn console_spawning_disabled() -> bool {
+    NO_SPAWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 pub(crate) fn report_attachment_failure() {

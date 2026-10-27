@@ -36,8 +36,8 @@ pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
         if GetConsoleMode(handle, &mut mode).is_err() { return false; }
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
-        if super::attach_std_enabled() {
-            // Shared terminals own their palette, modes and lifetime.
+        if super::console_spawning_disabled() {
+            // Do not recreate a suppressed console or mutate a shared terminal.
             return use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
                 std::env::var_os("WT_SESSION").is_some());
         }

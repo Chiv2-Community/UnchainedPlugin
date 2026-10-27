@@ -369,11 +369,14 @@ fn preinit_rustlib() {
     // Select output before any console allocation, color configuration, or banner.
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
-    if cli_args().attach_std {
-        logging::console::attach_std();
+    if cli_args().no_spawn_console {
+        logging::console::disable_console_spawning();
+    }
+    if cli_args().attach_stdio {
+        logging::console::attach_stdio();
     }
     unsafe {
-        if !cli_args().attach_std && !logging::console::forward::enabled() && GetConsoleWindow().0 == 0 {
+        if !logging::console::console_spawning_disabled() && !logging::console::forward::enabled() && GetConsoleWindow().0 == 0 {
             let _ = AllocConsole();
 
             // Enable ANSI escape codes for colored output

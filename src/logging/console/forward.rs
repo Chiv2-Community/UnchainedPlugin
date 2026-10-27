@@ -65,10 +65,10 @@ fn forwarder() -> Option<&'static Forwarder> {
     }).as_ref()
 }
 
-pub(crate) fn enabled() -> bool { !super::attach_std_enabled() && forwarder().is_some() }
+pub(crate) fn enabled() -> bool { !super::attach_stdio_enabled() && forwarder().is_some() }
 
 pub(crate) fn send(kind: &'static str, level: Option<log::Level>, text: String) {
-    if super::attach_std_enabled() { return; }
+    if super::attach_stdio_enabled() { return; }
     if let Some(forwarder) = forwarder() {
         forwarder.send(Event { version: 1, kind, level: level.map(|level| level.to_string()),
             text, dropped: 0 });
@@ -167,11 +167,23 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn actual_appender_and_banner_use_inherited_pipe() {
+        check_inherited_pipe(false);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn suppressing_console_creation_preserves_structured_forwarding() {
+        check_inherited_pipe(true);
+    }
+
+    #[cfg(windows)]
+    fn check_inherited_pipe(suppress_console: bool) {
         let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let marker = std::env::temp_dir().join(format!("forward-test-{}-{unique}", std::process::id()));
         let mut child = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--ignored", "--exact", "--quiet", &format!("{}::forward_child", module_path!().split_once("::").unwrap().1)])
             .env("UNCHAINED_FORWARD_TEST_MARKER", &marker)
+            .env("UNCHAINED_FORWARD_TEST_NO_CONSOLE", suppress_console.to_string())
             .stdout(std::process::Stdio::piped()).spawn().unwrap();
         let mut reader = BufReader::new(child.stdout.take().unwrap());
         let mut line = String::new();
@@ -199,6 +211,10 @@ mod tests {
     #[test]
     #[ignore = "subprocess fixture for actual_appender_and_banner_use_inherited_pipe"]
     fn forward_child() {
+        if std::env::var("UNCHAINED_FORWARD_TEST_NO_CONSOLE").as_deref() == Ok("true") {
+            super::super::disable_console_spawning();
+            assert!(!super::super::attach_stdio_enabled());
+        }
         #[cfg(windows)]
         {
             use std::os::windows::io::AsRawHandle;
@@ -247,9 +263,9 @@ mod tests {
     }
 
     #[test]
-    fn attach_std_preserves_pipes_and_overrides_ipc_without_allocating_a_console() {
+    fn attach_stdio_preserves_pipes_and_overrides_ipc_without_allocating_a_console() {
         let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-        command.args(["--ignored", "--exact", "--nocapture", &format!("{}::attach_std_child", module_path!().split_once("::").unwrap().1)])
+        command.args(["--ignored", "--exact", "--nocapture", &format!("{}::attach_stdio_child", module_path!().split_once("::").unwrap().1)])
             .env("UNCHAINED_CONSOLE_HANDLE", "1234");
         #[cfg(windows)]
         {
@@ -265,8 +281,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "subprocess fixture for attach_std_preserves_pipes_and_overrides_ipc_without_allocating_a_console"]
-    fn attach_std_child() {
+    #[ignore = "subprocess fixture for attach_stdio_preserves_pipes_and_overrides_ipc_without_allocating_a_console"]
+    fn attach_stdio_child() {
         #[cfg(windows)]
         {
             use std::os::windows::io::AsRawHandle;
@@ -274,8 +290,40 @@ mod tests {
         }
         #[cfg(windows)]
         let before = unsafe { windows::Win32::System::Console::GetConsoleWindow() };
-        super::super::attach_std();
+        super::super::attach_stdio();
         assert!(!enabled());
+        emit_console_records();
+        #[cfg(windows)]
+        assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });
+    }
+
+    #[test]
+    fn suppressing_console_creation_preserves_standard_output_without_attachment() {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command.args(["--ignored", "--exact", "--nocapture", &format!("{}::no_spawn_console_child", module_path!().split_once("::").unwrap().1)])
+            .env_remove("UNCHAINED_CONSOLE_HANDLE");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("hello 世界\nsecond line"), "{stdout}");
+        assert!(stdout.contains("▄████████"));
+        assert!(!stdout.contains('\x1b'));
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for console suppression without attachment"]
+    fn no_spawn_console_child() {
+        super::super::disable_console_spawning();
+        assert!(super::super::console_spawning_disabled());
+        assert!(!super::super::attach_stdio_enabled());
+        assert!(!enabled());
+        #[cfg(windows)]
+        let before = unsafe { windows::Win32::System::Console::GetConsoleWindow() };
         emit_console_records();
         #[cfg(windows)]
         assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });
