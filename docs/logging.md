@@ -116,7 +116,7 @@ so severity colors remain independent of the line format:
 encoder:
   kind: module_console
   header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm}] {m}{n}"
+  body_pattern: " [{sm:<-24.24}] {m}{n}"
 ```
 
 These are the defaults. Replace only the encoder block and keep the appender's
@@ -125,8 +125,12 @@ other settings. Restart after editing.
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
-The resulting label keeps its last 16 characters, dropping any excess on the left:
+The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
+The default console pattern `{sm:<-24.24}` uses exactly 24 Unicode characters
+inside the brackets: shorter labels are padded on the right; longer labels retain
+their last 24 characters. Custom `{sm}` keeps the 32-character cap and adds no
+padding unless a width is specified.
 File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
 for the level; `{t}` shows the filtering target instead.
 

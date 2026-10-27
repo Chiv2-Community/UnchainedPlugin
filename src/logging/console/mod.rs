@@ -99,7 +99,7 @@ impl ConsoleEncoder {
     pub(crate) fn with_patterns(header: Option<&str>, body: Option<&str>) -> Self {
         Self {
             header: PatternEncoder::new(header.unwrap_or("[{d(%H:%M:%S)} {l:5}]")),
-            body: PatternEncoder::new(body.unwrap_or(" [{sm}] {m}{n}")),
+            body: PatternEncoder::new(body.unwrap_or(" [{sm:<-24.24}] {m}{n}")),
             truecolor: false,
         }
     }
@@ -119,13 +119,13 @@ mod tests {
 
         for (module, expected) in [
             (Some("UnchainedPlugin::resolvers::messages"), "UP::r::messages"),
-            (Some("UnchainedPlugin::modules::discord::event_log"), ":m::d::event_log"),
+            (Some("UnchainedPlugin::modules::discord::event_log"), "UP::m::d::event_log"),
             (Some("foo_bar::UnchainedPlugin::messages"), "fb::UP::messages"),
-            (Some("fooBar::HTTPServer::XMLParser::messages"), "HS::XP::messages"),
-            (Some("abcdefghijklmnopq"), "bcdefghijklmnopq"),
-            (Some("abcdefghijklmnopé"), "bcdefghijklmnopé"),
-            (Some("abcdefghijklmnopqrstuvwxyz0123456789"), "uvwxyz0123456789"),
-            (Some("ééééééééééééééééé"), "éééééééééééééééé"),
+            (Some("fooBar::HTTPServer::XMLParser::messages"), "fB::HS::XP::messages"),
+            (Some("abcdefghijklmnopq"), "abcdefghijklmnopq"),
+            (Some("abcdefghijklmnopé"), "abcdefghijklmnopé"),
+            (Some("abcdefghijklmnopqrstuvwxyz0123456789"), "mnopqrstuvwxyz0123456789"),
+            (Some("ééééééééééééééééé"), "ééééééééééééééééé"),
             (Some("_foo__bar_::HTTP::messages"), "fb::H::messages"),
             (Some("ÉquipeMonde::équipe_monde::messages"), "ÉM::ém::messages"),
             (Some("single"), "single"),
@@ -137,8 +137,8 @@ mod tests {
                 .target("unchanged::filter_target").args(format_args!("message")).build();
             let mut console = Vec::new();
             encoder().encode(&mut SimpleWriter(&mut console), &record).unwrap();
-            assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected}] message")));
-            assert!(expected.chars().count() <= 16);
+            assert!(String::from_utf8(console).unwrap().contains(&format!("[{expected:<24}] message")));
+            assert!(expected.chars().count() <= 24);
             assert_eq!(record.target(), "unchanged::filter_target");
             assert_eq!(record.module_path(), module);
         }
@@ -245,7 +245,7 @@ mod tests {
                 )
                 .unwrap();
             let output = String::from_utf8(buffer.bytes.clone()).unwrap();
-            assert!(output.contains(&format!("{level:5}] [p::module] message")));
+            assert!(output.contains(&format!("{level:5}] [{:<24}] message", "p::module")));
             assert_eq!(buffer.styles[0].1.text, Some(color));
             assert_eq!(buffer.styles[0].1.intense, Some(intense));
             let (reset_at, reset_style) = &buffer.styles[1];
@@ -274,7 +274,7 @@ mod tests {
             )
             .unwrap();
         let output = String::from_utf8(bytes).unwrap();
-        assert!(output.contains("INFO ] [p::module] message"));
+        assert!(output.contains(&format!("INFO ] [{:<24}] message", "p::module")));
         assert!(!output.contains("game_chat"));
     }
 
@@ -314,7 +314,7 @@ mod tests {
         let output = String::from_utf8(bytes).unwrap();
         let body = output.strip_prefix("\x1b[0;30;1m").unwrap()
             .strip_suffix("\x1b[0m").unwrap();
-        assert!(body.contains("TRACE] [p::module] message"));
+        assert!(body.contains(&format!("TRACE] [{:<24}] message", "p::module")));
         assert!(!body.contains('\x1b'), "trace must not reset before the body");
     }
 
@@ -334,7 +334,7 @@ mod tests {
                 )
                 .unwrap();
             let output = String::from_utf8(bytes).unwrap();
-            assert!(output.contains("[p::module] message"));
+            assert!(output.contains(&format!("[{:<24}] message", "p::module")));
             assert!(!output.contains('\x1b'));
         }
     }
@@ -358,7 +358,7 @@ mod tests {
             ).unwrap();
             let output = String::from_utf8(bytes).unwrap();
             let header = output.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
-            let body = output.find(" [p::module]").unwrap();
+            let body = output.find(&format!(" [{:<24}]", "p::module")).unwrap();
             assert!(header < body);
             assert_eq!(output[header..body].contains("\x1b[0m"), level <= Level::Info);
             assert!(output.contains("before \x1b[31mred\x1b[0m after"));

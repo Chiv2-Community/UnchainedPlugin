@@ -23,7 +23,7 @@ impl Log for Capture {
         super::console::ConsoleEncoder::default()
             .encode(&mut SimpleWriter(&mut default_console), record).unwrap();
         let mut expected_body = Vec::new();
-        PatternEncoder::new(" [{sm}] {m}{n}")
+        PatternEncoder::new(" [{sm:<-24.24}] {m}{n}")
             .encode(&mut SimpleWriter(&mut expected_body), record).unwrap();
         assert!(default_console.ends_with(&expected_body));
         self.0.lock().unwrap().push(String::from_utf8(output).unwrap());

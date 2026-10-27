@@ -7,7 +7,7 @@ appenders:
     encoder:
       kind: module_console
       header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-      body_pattern: " [{sm}] {m}{n}"
+      body_pattern: " [{sm:<-24.24}] {m}{n}"
   file:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"
