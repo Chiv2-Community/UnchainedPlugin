@@ -3,14 +3,11 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Plugin diagnostics use unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`;
-declarative macro definitions use `$crate::sinfo!` and the corresponding severities.
-The logging module brings these macros into scope before other plugin modules.
-External binaries import the macros from `UnchainedPlugin`.
-Proc-generated diagnostics retain `crate::` paths to resolve in the consuming
-crate without depending on its lexical macro imports.
-log4rs routes and formats the records. Prefer appender patterns for caller
-information; the `fn;` flag explicitly prefixes an individual message.
+Operators: start with the defaults below, or [choose console output and window
+behavior](console-attachment.md) without changing logging configuration.
+Launcher authors: see the [capture integration contract](console-forwarding.md).
+Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics)
+and the [implementation map](#implementation-map).
 
 ## Defaults
 
@@ -83,6 +80,8 @@ Launchers can opt into [console forwarding](console-forwarding.md) to receive
 console records and the banner directly. Default file logging is unchanged.
 Alternatively, [`--attach-stdio`](console-attachment.md) preserves inherited output
 without creating a console window and takes precedence over IPC forwarding.
+[`--no-spawn-console`](console-attachment.md#what-the-flags-change) only suppresses
+console creation; it does not select attachment or change capture routing.
 
 ## Use a custom configuration
 
@@ -168,31 +167,6 @@ encoder:
   kind: pattern
   pattern: "[{d(%H:%M:%S)} {l:5}] [{sm}::{fn}] {m}{n}"
 ```
-
-The shared macros capture the call site using a local function's stable
-`type_name`, without backtraces or message prefixes. They preserve source metadata,
-targets, filtering and lazy formatting through the `log` facade. Custom `target:`
-and `logger:` options and structured fields retain the facade's syntax:
-
-```rust,ignore
-sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
-```
-
-For a per-call function prefix, use `fn;` with any severity:
-
-```rust
-sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
-```
-
-The prefix is unconditional, even when the encoder also includes `{fn}`.
-The `fn;` flag changes the message; the `{fn}` pattern formats record metadata.
-Legacy flags, including `f;` as a function flag, are not supported. Structured
-fields named `f` retain the facade's syntax, including `f;` shorthand.
-
-`__unchained_function` is reserved for captured function metadata. Do not supply
-that key yourself. As with `log`, disabled levels skip argument evaluation;
-target/appender filtering can still evaluate argument expressions, but does not
-format rejected messages. Use these macros in hook/macro definitions too.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
@@ -348,6 +322,64 @@ namespace settings.
 Logs can include player names, network addresses, command arguments, and
 credentials in diagnostic output. Review and redact logs before sharing them;
 enable detailed logging only where needed.
+
+## Contributor guide: emitting diagnostics
+
+Use unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` for plugin
+diagnostics, including hooks. The logging module brings them into scope before
+other plugin modules. Inside declarative macro definitions use `$crate::sinfo!`
+and the corresponding severities; external binaries import from `UnchainedPlugin`.
+Proc-generated diagnostics retain `crate::` paths for consumer resolution without
+depending on lexical macro imports.
+
+The macros capture the call site using a local function's stable `type_name`,
+without backtraces or message prefixes. They preserve source metadata, targets,
+filtering and lazy formatting through `log`. Explicit targets must stay under
+the calling module. Custom `target:`, `logger:` and structured fields retain the
+facade's syntax. Rust call-site example:
+
+```rust,ignore
+sinfo!(target: concat!(module_path!(), "::custom"), request = 42; "Ready");
+```
+
+Prefer appender patterns for caller information. For an unconditional per-call
+function prefix, use `fn;` with any severity:
+
+```rust
+sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
+```
+
+The prefix remains even if the encoder also includes `{fn}`: `fn;` changes the
+message, while [`{fn}`](#format-log-lines) formats record metadata. Legacy flags,
+including `f;` as a function flag, are unsupported. Structured fields named `f`
+retain the facade's syntax, including `f;` shorthand.
+
+`__unchained_function` is reserved for captured function metadata. Do not supply
+it yourself. Disabled levels skip argument evaluation; target/appender filtering
+can still evaluate argument expressions, but does not format rejected messages.
+
+### Implementation map
+
+Shared macros submit metadata and records through `log`; log4rs applies target
+levels and appender filters. Console encoding runs on the calling thread. In
+structured mode, the console appender encodes bounded text and tries a nonblocking
+queue send. One worker owns the pipe and serializes JSON frames. File appenders
+retain their configured behavior. This avoids receiver backpressure on producer
+threads; it does not move formatting, arbitrary encoder work, or file writes to
+the worker.
+
+| Change | Start here |
+| --- | --- |
+| Macro metadata or call syntax | [`macros.rs`](../src/logging/macros.rs) and [`tests.rs`](../src/logging/tests.rs) |
+| Configuration, deserializers, or pattern fields | [`log4rs/`](../src/logging/log4rs/), especially [`pattern.rs`](../src/logging/log4rs/pattern.rs) and its tests |
+| Structured producer encoding | [`log4rs/console.rs`](../src/logging/log4rs/console.rs) |
+| Queue bounds, loss, handle ownership, worker failure | [`console/forward.rs`](../src/logging/console/forward.rs) and its appender/banner, saturation, disconnect, and routing tests |
+| Native styling or attachment | [`console/windows.rs`](../src/logging/console/windows.rs) |
+
+Follow the [contributor build/test instructions](../CONTRIBUTING.md). Production
+Wine/Proton runs the Windows implementation. Native logging tests cover portable
+logic; their inherited-pipe stub does not validate Windows handle inheritance
+or live Proton integration.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).

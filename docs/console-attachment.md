@@ -1,63 +1,82 @@
-# Attach to standard output
+# Console output options
 
-Pass `--attach-stdio` to the plugin to use inherited stdout/stderr or the parent
-console instead of opening a console window. `-attach-stdio` is also accepted by
-the game's argument normalization.
+For game and server operators choosing where plugin output appears. No custom
+logging YAML is needed; these options leave configured file logging, filtering,
+function prefixes, and namespace formatting unchanged.
 
-Without the flag, existing console behavior is unchanged. Configured file
-appenders, filtering, function prefixes, and namespace formatting are unchanged
-in either mode.
+## Choose a mode
 
-## Routing
+With a matching UnchainedLauncher CLI/plugin build, add options to your existing
+`server` command, keeping its other arguments. These CLI options apply to
+`server`, not `client`. For a direct launch with the plugin loaded, add the flags
+to the game process's launch arguments instead.
 
-- The flag is parsed before console initialization and the startup banner.
-- Valid inherited stdout/stderr are preserved individually, including pipes,
-  files, and mixed redirection. If either is missing, parent-console attachment
-  is attempted without replacing a valid inherited destination.
-- Attachment failure never falls back to console allocation. With no usable
-  output destination, configured file logging remains available.
-- Existing console colors are used without changing shared modes/palettes.
-  Pipes/files receive plain encoder output; message-embedded controls remain
-  the receiver's responsibility.
-- Wine's palette fallback must not detach or allocate a console in this mode.
-- Explicit `--attach-stdio` takes precedence over the console-forwarding environment
-  variable. It does not use the dedicated structured pipe or emit duplicate records.
+| Goal | Choose |
+| --- | --- |
+| See plugin logs in the server CLI | Neither flag. Structured capture is automatic; no separate plugin console opens. |
+| Capture stdout/stderr instead of structured records | `--attach-stdio`. It also prevents a new plugin console window. |
+| Prevent a new plugin console without changing output routing | `--no-spawn-console`. It does not make output visible by itself. |
 
-The flag does not launch a terminal application or provide interactive command
-forwarding. The plugin does not replace stdin; its command reader stops at EOF.
-Ordinary standard-stream writes can experience OS pipe backpressure. Use the
-bounded [IPC transport](console-forwarding.md) when a nonblocking plugin queue is
-required.
+Without either flag, direct plugin launches retain their usual console behavior.
+Both flags can be combined, but `--attach-stdio` already prevents console creation.
+Older plugins without capture support may still open their own console.
 
-## Suppress console creation without attachment
+### View server CLI output
 
-Pass `--no-spawn-console` (`-no-spawn-console` also works in game arguments)
-to prevent console allocation, including Wine's palette fallback. It does not
-attach to the parent console, redirect streams, or disable structured forwarding.
-Existing output handles and configured file logging remain unchanged; without
-usable handles or forwarding, console output may be unavailable.
+Press `L` to switch between the dashboard and console pane, Page Up/Page Down to
+scroll, and `End` to follow new output. No-TUI mode prints received lines.
+Captured history is bounded and terminal controls are sanitized.
 
-Both flags may be combined: `--attach-stdio` still selects inherited output or
-parent-console attachment; neither flag allows a new console window.
-The server CLI accepts `--no-spawn-console` or `server.no-spawn-console: true`
-in YAML without changing its default structured capture.
+By default, only structured plugin records are displayed; game stdout/stderr are
+drained and discarded. With `--attach-stdio`, stdout/stderr are displayed instead.
 
-## Launcher CLI
+### Optional launcher YAML
 
-The server CLI accepts `--attach-stdio` directly, or `server.attach-stdio: true` in YAML.
-It captures both streams into the existing TUI/plain-output handler rather than
-letting game output overwrite the dashboard. `L` selects the console pane;
-`End` follows output. Captured lines/history are bounded and controls sanitized.
+Instead of the command-line flag, add the setting under your existing `server:`
+section in the **launcher configuration**, not the log4rs logging file:
 
-On Windows, suspended startup uses private stdout/stderr pipes and an explicit
-handle-inheritance whitelist. The child receives EOF on stdin, not the TUI's
-keyboard input. On Linux, Proton's `runinprefix` verb preserves the helper's
-inherited streams; the helper captures the suspended Windows game's output and
-relays it to the native CLI. Steam must still be running for the Steam game.
-This is UnchainedLauncher's bundled helper, not a Proton component. Alternate
-launchers can use the [Windows ownership recipe and Linux invocation](console-forwarding.md#alternate-linux-launchers),
-but relay ordinary stdout/stderr instead of reserving stdout for JSON in attach mode.
+```yaml
+server:
+  attach-stdio: true
+```
 
-The CLI flag is a server option. Direct plugin launches can use the plugin flag
-independently. GUI launchers must supply valid capture handles; merely attaching
-to a GUI parent does not establish output capture.
+Use `no-spawn-console: true` instead to suppress console creation without selecting
+attachment. Both keys may be enabled together. Keep your other settings and do not
+add a second `server:` section.
+
+## What the flags change
+
+`--attach-stdio` preserves valid inherited stdout/stderr, including files, pipes,
+and mixed redirection. If a destination is missing, it tries the parent console
+without replacing a valid inherited destination. It overrides structured
+forwarding, selects output before logging and the banner, and never falls back
+to creating a console. Shared console modes/palettes are not changed.
+
+`--no-spawn-console` prevents plugin console allocation, including Wine's palette
+fallback. It does not attach to a parent console, redirect streams, or disable
+structured forwarding. Existing output handles remain usable; a direct launch
+without usable handles or forwarding may have no visible console output.
+
+Game argument normalization also accepts `-attach-stdio` and `-no-spawn-console`.
+The old name `--attach-std` is not an alias.
+
+## Limits and troubleshooting
+
+- If attachment has no usable destination, no replacement window opens. Check
+  the [configured log file](logging.md#log-location).
+- These flags do not provide command forwarding. The plugin leaves stdin
+  unchanged and stops reading at EOF. The server CLI supplies EOF to the game;
+  its keyboard controls do not become game stdin.
+- Ordinary stdout/stderr writes can block on a slow reader. The default
+  structured transport uses a bounded queue to avoid receiver backpressure on
+  game threads.
+- Steam must remain running when hosting the Steam game through Proton.
+
+## Launcher authors
+
+For structured capture, follow the [Windows handle setup](console-forwarding.md#windows-handle-setup)
+and, on Linux, the [Proton helper recipe](console-forwarding.md#alternate-linux-launchers).
+For attachment, supply valid stdout/stderr capture handles instead and drain both
+streams; merely attaching to a GUI parent does not establish capture. Do not mix
+raw game output into a structured JSON stream. Redirected output adds no console
+styling, but message-embedded controls still need receiver sanitization.

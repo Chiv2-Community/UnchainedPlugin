@@ -188,60 +188,27 @@ If you need to debug or check the plugin's output, you can find the logs in the 
 
 Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.g., `Steam` or `Epic`).
 
-### Colors and module filters
+### Emitting diagnostics
 
-See the [logging guide](docs/logging.md) for configuration, defaults, and the
-namespace reference.
+Use the shared logging macros rather than direct `log::*` calls or `println!`.
+See [emitting diagnostics](docs/logging.md#contributor-guide-emitting-diagnostics)
+for macro imports, targets, function metadata, `fn;`, and structured fields.
+The [implementation map](docs/logging.md#implementation-map) identifies the
+encoders, transport, platform backend, and relevant tests.
 
-The default console output abbreviates parent source-module segments
-using word initials (`UnchainedPlugin::resolvers::messages` → `UP::r::messages`)
-and uses exactly 24 Unicode characters inside the brackets. The console pattern
-`{sm:<-24.24}` pads shorter labels on the right and retains the last 24 characters
-of longer labels; custom `{sm}` keeps the rightmost 32 characters without padding. File logs include
-the full source module. Neither default includes function names; add `{fn}` to
-the pattern or use the per-call `fn;` flag. DEBUG headers and bodies are dark gray; TRACE is darker.
-Message color codes are preserved. INFO, WARN, and ERROR headers use pastel colors.
-File logs do not use console colors. Redirected console output is also uncolored.
-
-Use the shared unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` macros for all
-diagnostics, including hooks and macro definitions, not direct `log::*` calls or
-`println!`. They capture function names for the [`{fn}` pattern](docs/logging.md#format-log-lines).
-Use `$crate::sinfo!` (and the corresponding severity) inside declarative macro
-definitions; external binaries import macros from `UnchainedPlugin`.
+Use `logging::log4rs::register` when adding pattern extensions to another log4rs
+deserializer registry, or use `logging::log4rs::pattern::PatternEncoder` directly.
 The logging module is declared with `#[macro_use]` before callers; its internal
-macros are declared first too. Proc-generated diagnostics retain `crate::` paths
-so consumer resolution does not depend on lexical imports.
-Prefer appender patterns for caller information. Use `sinfo!(fn; "message")`
-(or another severity) for an unconditional per-call function prefix; do not
-construct caller prefixes manually. Targets default to the calling Rust module.
-Explicit targets must stay under `module_path!()`, for example
-`concat!(module_path!(), "::game_chat")`.
+macros are declared first too.
 
-Logging lives under `src/logging/`: `log4rs/` owns configuration, deserializers,
-and the `{sm}` and `{fn}` pattern extensions; `console/` owns styling and Windows/Wine setup.
-Use `logging::log4rs::register` to add the extensions to another log4rs
-deserializer registry, or `logging::log4rs::pattern::PatternEncoder` directly.
+### Configuring output
 
-To filter modules, copy `src/logging/log4rs/log4rs.default.yaml` to a local file and pass
-its path with `--log4rs-yaml <path>`. Add entries under `loggers`, preserving the
-existing dependency filters:
+See the logging guide for [defaults and colors](docs/logging.md#defaults),
+[custom YAML](docs/logging.md#use-a-custom-configuration),
+[patterns and function fields](docs/logging.md#format-log-lines), and
+[module filters](docs/logging.md#set-log-levels). The guide also covers TRACE
+thresholds and legacy target names; keep configuration examples there.
 
-```yaml
-loggers:
-  "UnchainedPlugin::modules::vote":
-    level: warn
-  "UnchainedPlugin::features::rcon":
-    level: off
-  "UnchainedPlugin::resolvers::messages::client_message::game_chat":
-    level: off
-```
-
-Levels apply to the named module and its descendants, unless a more specific
-entry overrides them. Copy targets from `unchained.log`.
-To show trace lines on the console, also change its threshold filter to `trace`.
-Legacy targets such as `function`, `RCON`, `game_chat`, and `system_chat` must be
-replaced with their module-scoped targets in existing custom configurations.
-The `module_console` encoder supplies the default colors; standard `pattern`
-encoders remain supported in custom configurations.
-
-Startup failures before the logger is initialized still write directly to stderr.
+To select console capture or suppress an extra window, use the separate
+[console output options](docs/console-attachment.md). Startup failures before
+logger initialization still write directly to stderr.

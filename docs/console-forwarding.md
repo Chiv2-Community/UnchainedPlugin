@@ -1,10 +1,14 @@
 # Console forwarding
 
-Launchers can receive plugin console output directly, without reading log files
-or scraping a Wine console. The transport works on Windows and under Wine/Proton.
-It is output-only; it does not accept commands.
+For launcher authors implementing structured plugin output capture, without
+reading log files or scraping a Wine console. The Windows plugin uses the same
+transport on Windows and under Wine/Proton. It is output-only; it accepts no commands.
 
-## Enable
+UnchainedLauncher's server CLI enables this capture automatically. Operators do
+not need the Win32 setup below; see [console output options](console-attachment.md)
+to choose defaults, stdout/stderr capture, or console suppression.
+
+## Windows handle setup
 
 Minimal Windows integration recipe:
 
@@ -92,9 +96,10 @@ formatted text to recover severity. Banner text is separate from log records.
 `tty_only` console settings do not disable an explicitly requested transport.
 Custom file-only configurations do not gain a console appender automatically.
 
-## Launcher integration
+## UnchainedLauncher integration
 
-The Windows CLI creates the pipe before the game and passes its handle in a
+Server launches use structured capture by default; client launches remain detached
+and do not start a TUI receiver. The Windows CLI creates the pipe before the game and passes its handle in a
 private Unicode environment block. On Linux, **UnchainedLauncher's bundled Windows helper** creates
 the game pipe and relays only its records through its reserved stdout pipe to
 the native CLI. Game stdout/stderr are drained separately and discarded in
@@ -107,7 +112,8 @@ the dashboard and full console, Page Up/Page Down scroll, and `End` follows the
 latest output. No-TUI mode prints received lines without terminal controls.
 
 This requires a plugin build containing the transport; older plugins retain
-their own console. Client launches remain detached and do not start a TUI receiver.
+their own console. [`--attach-stdio`](console-attachment.md) selects raw capture
+instead. `--no-spawn-console` leaves the selected capture route unchanged.
 
 ### Alternate Linux launchers
 
