@@ -43,7 +43,7 @@ pub(super) fn attach_parent_output() -> bool {
     }
 }
 
-pub(super) fn spawn_console() {
+pub(crate) fn spawn_console() {
     unsafe {
         if super::console_spawning_disabled() || GetConsoleWindow().0 != 0 { return; }
         let handles = standard_handles();

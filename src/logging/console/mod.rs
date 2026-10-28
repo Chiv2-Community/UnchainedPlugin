@@ -20,11 +20,6 @@ pub(crate) fn stdio_attached() -> bool {
     ATTACH_STDIO.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-#[cfg(windows)]
-pub(crate) fn spawn_console() {
-    windows_backend::spawn_console();
-}
-
 pub(crate) fn disable_console_spawning() {
     NO_SPAWN_CONSOLE.store(true, std::sync::atomic::Ordering::Relaxed);
 }
@@ -44,7 +39,7 @@ pub(crate) fn report_attachment_failure() {
 mod windows_backend;
 
 #[cfg(windows)]
-pub(crate) use windows_backend::preserve_console_handles;
+pub(crate) use windows_backend::{preserve_console_handles, spawn_console};
 
 const PALETTE_SLOTS: [u8; 15] = [12, 14, 9, 7, 8, 1, 2, 3, 4, 5, 6, 10, 11, 13, 0];
 const BASIC_COLORS: [u32; 16] = [

@@ -277,19 +277,6 @@ fn actual_macros_capture_named_functions_and_preserve_records() {
 }
 
 #[test]
-fn function_alias_uses_builtin_escaping_nesting_width_and_missing_fallback() {
-    for (pattern, expected) in [
-        ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
-        ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
-        ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
-    ] {
-        let mut output = Vec::new();
-        PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &Record::builder().build()).unwrap();
-        assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
-    }
-}
-
-#[test]
 fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
     // Isolate the global max-level change from the other macro test.
     const CHILD: &str = "UNCHAINED_LOG_LAZY_TEST";

@@ -64,7 +64,7 @@ impl PaletteEncoderConfig {
                 .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(Rgb))).collect()
         });
         let mut entries = BTreeMap::new();
-        let mut colors: Vec<Entry> = Vec::new();
+        let mut colors = Vec::new();
         let mut palette: Vec<_> = palette.into_iter()
             .map(|(name, rgb)| (name.to_ascii_lowercase(), rgb)).collect();
         // Keep the default legacy slots stable for embedded message color codes.
@@ -74,11 +74,8 @@ impl PaletteEncoderConfig {
             anyhow::ensure!(!name.is_empty(), "Palette names must not be empty");
             anyhow::ensure!(!entries.contains_key(&name), "Duplicate palette name: {name}");
             let index = rgb.map(|Rgb(rgb)| {
-                if let Some(index) = colors.iter().position(|entry| entry.rgb == rgb) { return index; }
-                let mut style = Style::new();
-                style.text(Color::White).intense(false);
-                let [r, g, b] = rgb;
-                colors.push(Entry { rgb, ansi: format!("\x1b[0;38;2;{r};{g};{b}m"), style });
+                if let Some(index) = colors.iter().position(|color| *color == rgb) { return index; }
+                colors.push(rgb);
                 colors.len() - 1
             });
             entries.insert(name, index);
@@ -92,11 +89,12 @@ impl PaletteEncoderConfig {
         }
         let mut remap = vec![0; colors.len()];
         let mut next = 0;
-        colors = colors.into_iter().enumerate().filter_map(|(index, entry)| {
+        let colors = colors.into_iter().enumerate().filter_map(|(index, rgb)| {
             if !used[index] { return None; }
             remap[index] = next;
             next += 1;
-            Some(entry)
+            let [r, g, b] = rgb;
+            Some(Entry { rgb, ansi: format!("\x1b[0;38;2;{r};{g};{b}m"), style: Style::new() })
         }).collect();
         for chunk in &mut chunks {
             if let Chunk::Color(indexes) = chunk {

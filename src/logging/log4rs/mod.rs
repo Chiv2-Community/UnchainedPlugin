@@ -43,7 +43,8 @@ pub fn init() -> anyhow::Result<()> {
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
-    init_logger_from_yaml(&resolved_yaml, config_source_name)?;
+    log4rs::init_config(config_from_yaml(&resolved_yaml, config_source_name)?)
+        .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
     crate::logging::console::report_attachment_failure();
 
@@ -56,14 +57,6 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
             .with_context(|| format!("Failed to read logger config file: {}", path)),
         None => Ok(EMBEDDED_LOG4RS_YAML.to_string()),
     }
-}
-
-fn init_logger_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<()> {
-    let config = config_from_yaml(yaml, config_source_name)?;
-    log4rs::init_config(config).with_context(|| {
-        format!("Failed to initialize logger from config {}", config_source_name)
-    })?;
-    Ok(())
 }
 
 fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
@@ -98,7 +91,8 @@ fn apply_logger_placeholders(yaml: &str) -> String {
         .map(|value| format!("_{}", value))
         .unwrap_or_default();
 
-    let log_dir = expand_env_path(&format!(r"%LOCALAPPDATA%\Chivalry 2\Saved{}", suffix))
+    let log_dir = std::env::var("LOCALAPPDATA").ok()
+        .map(|base| PathBuf::from(base).join(format!(r"Chivalry 2\Saved{suffix}")))
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Logs");
 
@@ -126,15 +120,6 @@ fn yaml_escape_double_quoted(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
-}
-
-fn expand_env_path(path: &str) -> Option<PathBuf> {
-    if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
-        if let Ok(base) = std::env::var("LOCALAPPDATA") {
-            return Some(PathBuf::from(base).join(stripped.trim_start_matches(['\\', '/'])));
-        }
-    }
-    None
 }
 
 #[cfg(test)]

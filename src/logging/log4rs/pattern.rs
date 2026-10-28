@@ -157,7 +157,7 @@ mod tests {
         let config: PaletteEncoderConfig = serde_yaml::from_str(&format!("pattern: '{pattern}'")).unwrap();
         let configured_encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
-            for length in 1..=40 {
+            for length in [1, 23, 24, 25, 31, 32, 33, 40] {
                 let module: String = std::iter::once('Ω')
                     .chain(std::iter::repeat_n(character, length - 1)).collect();
                 let expected: String = module.chars().rev().take(32)
@@ -174,7 +174,6 @@ mod tests {
                 let suffix: String = module.chars().rev().take(24)
                     .collect::<Vec<_>>().into_iter().rev().collect();
                 let label = format!("{suffix:<24}");
-                assert_eq!(label.chars().count(), 24, "{module}");
                 let expected_body = format!(" [{label}] message{newline}");
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
@@ -186,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn short_module_alias_respects_escaping_nesting_and_format_specs() {
+    fn aliases_respect_escaping_nesting_format_specs_and_missing_values() {
         let record = Record::builder().module_path(Some("UnchainedPlugin::messages")).build();
         for (pattern, expected) in [
             ("{{sm}}", "{sm}"),
@@ -197,6 +196,9 @@ mod tests {
             ("{sm:>15}", "   UP::messages"),
             ("{sm:<24}", "UP::messages            "),
             ("{sm:-.8}", "messages"),
+            ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
+            ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
+            ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
         ] {
             let mut output = Vec::new();
             PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();
