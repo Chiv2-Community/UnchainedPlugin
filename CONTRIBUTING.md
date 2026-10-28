@@ -192,9 +192,7 @@ Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.
 
 Use the shared logging macros rather than direct `log::*` calls or `println!`.
 See [emitting diagnostics](docs/logging.md#contributor-guide-emitting-diagnostics)
-for macro imports, targets, function metadata, `fn;`, and structured fields.
-The [implementation map](docs/logging.md#implementation-map) identifies the
-encoders, transport, platform backend, and relevant tests.
+for macro imports and function metadata.
 
 Use `logging::log4rs::register` when adding pattern extensions to another log4rs
 deserializer registry, or use `logging::log4rs::pattern::PatternEncoder` directly.

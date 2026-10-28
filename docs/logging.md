@@ -4,8 +4,7 @@ Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
 For machine-readable output, see [structured logging](#structured-logging).
-Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics)
-and the [implementation map](#implementation-map).
+Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics).
 
 ## Defaults
 
@@ -104,9 +103,7 @@ encoder:
 Each configured sink emits one JSON payload per line. Standard log4rs fields
 include `time`, `level`, `message`, source locations, and thread metadata, all at
 the root. Plugin macros add the enclosing function name as
-`attributes.enclosing_function` when available; other structured key/value
-fields also appear in `attributes`.
-The plugin's `{sm}` and `{fn}` extensions apply to text patterns, not JSON fields.
+`attributes.enclosing_function`.
 
 `--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
 it does not create redirection. The calling program supplies pipes or files when
@@ -325,41 +322,15 @@ enable detailed logging only where needed.
 
 ## Contributor guide: emitting diagnostics
 
-Use unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` for plugin
+Use `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` for plugin
 diagnostics, including hooks. The logging module brings them into scope before
 other plugin modules. Inside declarative macro definitions use `$crate::sinfo!`
 and the corresponding severities; external binaries import from `UnchainedPlugin`.
 Proc-generated diagnostics retain `crate::` paths for consumer resolution without
 depending on lexical macro imports.
 
-The macros capture the call site using a local function's stable `type_name`,
-without backtraces or message prefixes. They preserve source metadata, targets,
-filtering and lazy formatting through `log`. Explicit targets must stay under
-the calling module. Custom `target:`, `logger:` and structured fields retain the
-facade's syntax. Rust call-site example:
-
-```rust,ignore
-sinfo!(target: concat!(module_path!(), "::custom"), request = 42; "Ready");
-```
-
-### Implementation map
-
-Shared macros submit metadata and records through `log`; log4rs applies target
-levels and appender filters. Each appender uses its configured encoder and sink
-on the calling thread. The console adapter adds native color setup only for
-`module_console`; JSON and other encoders use log4rs directly. Slow sinks can
-block logging threads. There is no plugin forwarding queue or worker.
-
-| Change | Start here |
-| --- | --- |
-| Macro metadata or call syntax | [`macros.rs`](../src/logging/macros.rs) and [`tests.rs`](../src/logging/tests.rs) |
-| Configuration, deserializers, or pattern fields | [`log4rs/`](../src/logging/log4rs/), especially [`pattern.rs`](../src/logging/log4rs/pattern.rs) and its tests |
-| Console appender configuration | [`log4rs/console.rs`](../src/logging/log4rs/console.rs) |
-| Native styling or attachment | [`console/windows.rs`](../src/logging/console/windows.rs) |
-
-Follow the [contributor build/test instructions](../CONTRIBUTING.md). Production
-Wine/Proton runs the Windows implementation. Native logging tests cover portable
-logic; they do not validate Windows stdio attachment or live Proton integration.
+The macros capture `enclosing_function` in the attributes for structured logging
+and the `{fn}` log format string.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).
