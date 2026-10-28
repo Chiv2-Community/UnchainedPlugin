@@ -16,11 +16,12 @@ impl Log for Capture {
         PatternEncoder::new("{fn}|{t}|{l}|{K(request)}|{m}")
             .encode(&mut SimpleWriter(&mut output), record).unwrap();
         let mut console = Vec::new();
-        super::console::ConsoleEncoder::with_patterns(Some("{fn}|{t}|{l}|"), Some("{K(request)}|{m}"))
-            .encode(&mut SimpleWriter(&mut console), record).unwrap();
+        let config = serde_yaml::from_str::<super::log4rs::palette::PaletteEncoderConfig>(
+            "pattern: '{fn}|{t}|{l}|{K(request)}|{m}'").unwrap();
+        config.build().unwrap().encode(&mut SimpleWriter(&mut console), record).unwrap();
         assert_eq!(console, output);
         let mut default_console = Vec::new();
-        super::console::ConsoleEncoder::default()
+        serde_yaml::from_str::<super::log4rs::palette::PaletteEncoderConfig>("{}").unwrap().build().unwrap()
             .encode(&mut SimpleWriter(&mut default_console), record).unwrap();
         let mut expected_body = Vec::new();
         PatternEncoder::new(" [{sm:<-24.24}] {m}{n}")

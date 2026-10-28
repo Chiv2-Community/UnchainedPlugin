@@ -45,12 +45,13 @@ The game's launch arguments may specify a different saved-directory suffix.
 
 Message color codes are preserved and can override the body color. Pastel shades
 use RGB terminal colors when supported. Wine's graphical console and legacy
-Windows consoles instead receive a matching 16-color palette for the attached
-console only. Wine needs a dedicated console created with temporary,
+Windows consoles instead receive a matching 16-color palette when the plugin
+owns the console. Wine needs a dedicated console created with temporary,
 application-specific registry defaults; previous values are restored immediately
 after creation, and global console defaults are not changed. Other programs sharing
 that console see the same palette, including altered shades for embedded colors.
-If the console rejects palette changes, its existing basic colors remain in use.
+Shared consoles, additional palettes, and rejected palette changes use the
+nearest available console colors without changing the palette.
 The default file appender and redirected output receive no added console colors;
 color codes already present in a message are not stripped.
 
@@ -114,18 +115,36 @@ dependency output, so consumers may encounter non-JSON lines alongside JSON logs
 
 ## Format log lines
 
-The console's `module_console` encoder accepts separate header and body patterns
-so severity colors remain independent of the line format:
+The `palette` encoder combines log4rs patterns with a named color table:
 
 ```yaml
 encoder:
-  kind: module_console
-  header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm:<-24.24}] {m}{n}"
+  kind: palette
+  pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
+  palette:
+    error: "#f28b82"
+    warn: "#f2cc78"
+    info: "#8cb4e1"
+    debug: "#808080"
+    trace: "#5c5c5c"
+    error_body: null
+    warn_body: null
+    info_body: null
+    debug_body: "#808080"
+    trace_body: "#5c5c5c"
 ```
 
-These are the defaults. Replace only the encoder block and keep the appender's
-other settings. Restart after editing.
+These are the defaults. Add any named colors using quoted `#RRGGBB` values;
+`null` uses the console's normal text color. `{palette(name)}` switches colors
+until the next directive or end of the record; `{palette()}` restores normal text.
+Names are ASCII case-insensitive. `{l}` or `{level}` in a name selects a color by
+severity, so `{palette({l}_body)}` selects `error_body`, `warn_body`, etc.
+References are resolved at startup; unknown names reject the configuration.
+Directives must be outside other formatters. An explicit `palette` replaces the
+default table; omit it to use the defaults. Legacy consoles approximate colors
+beyond their available slots.
+Console coloring respects `NO_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` through
+log4rs. File output has no added colors. Restart after editing.
 
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
@@ -143,7 +162,7 @@ Console and file patterns support the same fields, including `{sm}`, `{fn}`,
 `{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
 and `rolling_file` appenders, with explicit or omitted `kind: pattern`.
 Nested formatters, escaping, and width specifications such as `{sm:>16}` work
-in both. To omit or replace the console's short module, edit `body_pattern`.
+in both. To omit or replace the console's short module, edit `pattern`.
 `kind: pattern` uses a single `pattern` field and does not apply the console's
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
@@ -221,7 +240,7 @@ appenders:
       - kind: threshold
         level: trace
     encoder:
-      kind: module_console
+      kind: palette
 ```
 
 Keep the other appenders and root settings in your copied file. Both changes are

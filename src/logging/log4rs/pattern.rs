@@ -147,11 +147,13 @@ mod tests {
 
     #[test]
     fn short_module_boundaries_and_fixed_default_width_leave_custom_widths_independent() {
-        use crate::logging::console::ConsoleEncoder;
+        use super::super::palette::PaletteEncoderConfig;
 
         let newline = if cfg!(windows) { "\r\n" } else { "\n" };
         let yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
-        let body = yaml["appenders"]["console"]["encoder"]["body_pattern"].as_str().unwrap();
+        let pattern = yaml["appenders"]["console"]["encoder"]["pattern"].as_str().unwrap();
+        let config: PaletteEncoderConfig = serde_yaml::from_str("{}").unwrap();
+        let encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
             for length in 1..=40 {
                 let module: String = std::iter::once('Ω')
@@ -166,7 +168,7 @@ mod tests {
                 assert_eq!(String::from_utf8(custom).unwrap(),
                     format!("[{expected}]|[{expected:<24}]"), "{module}");
                 let mut console = Vec::new();
-                ConsoleEncoder::default().encode(&mut SimpleWriter(&mut console), &record).unwrap();
+                encoder.encode(&mut SimpleWriter(&mut console), &record).unwrap();
                 let suffix: String = module.chars().rev().take(24)
                     .collect::<Vec<_>>().into_iter().rev().collect();
                 let label = format!("{suffix:<24}");
@@ -175,8 +177,9 @@ mod tests {
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
                 let mut configured = Vec::new();
-                PatternEncoder::new(body).encode(&mut SimpleWriter(&mut configured), &record).unwrap();
-                assert_eq!(String::from_utf8(configured).unwrap(), expected_body, "{module}");
+                let config: PaletteEncoderConfig = serde_yaml::from_str(&format!("pattern: '{pattern}'")).unwrap();
+                config.build().unwrap().encode(&mut SimpleWriter(&mut configured), &record).unwrap();
+                assert!(String::from_utf8(configured).unwrap().ends_with(&expected_body), "{module}");
             }
         }
     }

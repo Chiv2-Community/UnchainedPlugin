@@ -6,10 +6,13 @@ import subprocess
 import sys
 
 
-def check(target, terminal, overrides, colored):
+def check(target, terminal, overrides, colored, custom=False):
     env = {k: v for k, v in os.environ.items()
            if k not in ("NO_COLOR", "CLICOLOR", "CLICOLOR_FORCE")}
     env.update(overrides, UNCHAINED_TEST_CONSOLE_TARGET=target)
+    env.pop("UNCHAINED_TEST_CUSTOM_PALETTE", None)
+    if custom:
+        env["UNCHAINED_TEST_CUSTOM_PALETTE"] = "1"
     master, slave = pty.openpty()
     try:
         # Keep the other stream terminal-backed, including redirected stderr.
@@ -38,7 +41,9 @@ def check(target, terminal, overrides, colored):
         assert child.returncode == 0, (case, stdout, stderr, transcript)
         assert output.count(b"[policy_child            ] boundary message") == 5, (case, output)
         if colored:
-            for rgb in (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92"):
+            colors = ((b"17;34;51", b"34;51;68", b"51;68;85", b"68;85;102", b"85;102;119")
+                      if custom else (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92"))
+            for rgb in colors:
                 assert b"\x1b[0;38;2;" + rgb + b"m" in output, (case, output)
             assert output.count(b"\x1b[0m") >= 5, (case, output)
         else:
@@ -60,3 +65,6 @@ for target in ("stdout", "stderr"):
         (False, {"CLICOLOR_FORCE": "1"}, True),
     ):
         check(target, terminal, overrides, colored)
+    check(target, True, {}, True, custom=True)
+    check(target, False, {}, False, custom=True)
+    check(target, True, {"NO_COLOR": "1"}, False, custom=True)

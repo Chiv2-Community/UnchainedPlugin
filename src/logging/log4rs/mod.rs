@@ -1,9 +1,11 @@
 use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
-use console::{ConsoleAppenderDeserializer, ConsoleEncoderDeserializer};
+use console::ConsoleAppenderDeserializer;
+use palette::PaletteEncoderDeserializer;
 use pattern::PatternEncoderDeserializer;
 
 mod console;
+pub(crate) mod palette;
 pub mod pattern;
 use std::backtrace::Backtrace;
 use std::panic;
@@ -82,9 +84,9 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
         .with_context(|| format!("Invalid logger config {}", config_source_name))
 }
 
-/// Register the module-pattern extension and pastel console integration.
+/// Register pattern extensions and the palette encoder.
 pub fn register(deserializers: &mut Deserializers) {
-    deserializers.insert("module_console", ConsoleEncoderDeserializer);
+    deserializers.insert("palette", PaletteEncoderDeserializer);
     deserializers.insert("console", ConsoleAppenderDeserializer);
     deserializers.insert("pattern", PatternEncoderDeserializer);
 }
@@ -260,13 +262,17 @@ root:
     #[ignore = "subprocess fixture for console_color_policy_at_real_output_boundary"]
     fn console_policy_child() {
         let target = std::env::var("UNCHAINED_TEST_CONSOLE_TARGET").unwrap();
+        let custom = if std::env::var_os("UNCHAINED_TEST_CUSTOM_PALETTE").is_some() {
+            "palette: {error: '#112233', warn: '#223344', info: '#334455', debug: '#445566', trace: '#556677', error_body: null, warn_body: null, info_body: null, debug_body: '#445566', trace_body: '#556677'}"
+        } else { "" };
         let config = config_from_yaml(&format!(r#"
 appenders:
   console:
     kind: console
     target: {target}
     encoder:
-      kind: module_console
+      kind: palette
+      {custom}
 root:
   level: trace
   appenders: [console]
@@ -281,7 +287,7 @@ root:
     #[test]
     fn embedded_console_config_loads() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
-        assert_eq!(yaml["appenders"]["console"]["encoder"]["body_pattern"], " [{sm:<-24.24}] {m}{n}");
+        assert_eq!(yaml["appenders"]["console"]["encoder"]["pattern"], palette::DEFAULT_PATTERN);
         // Exercise the shipped console config without opening log files.
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));
@@ -329,7 +335,7 @@ root:
         register(&mut deserializers);
         for yaml in [
             "kind: pattern\npattern: '{sm}|{M}|{t}|{fn}'",
-            "kind: module_console\nheader_pattern: '{sm}|'\nbody_pattern: '{M}|{t}|{fn}'",
+            "kind: palette\npattern: '{sm}|{M}|{t}|{fn}'",
         ] {
             let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
             let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config).unwrap();
@@ -394,7 +400,7 @@ root:
   appenders: [file]
 "#, yaml_escape_double_quoted(&path.to_string_lossy())), "file-pattern-test").unwrap();
                 let console_config: EncoderConfig = serde_yaml::from_str(&format!(
-                    "kind: module_console\nheader_pattern: '{header}'\nbody_pattern: '{body}'")).unwrap();
+                    "kind: palette\npattern: '{header}{body}'")).unwrap();
                 let logger = CompareLogger {
                     file: log4rs::Logger::new(config),
                     console: deserializers.deserialize(&console_config.kind, console_config.config).unwrap(),
@@ -418,7 +424,7 @@ root:
         for options in ["", "target: null", "target: stderr\n    tty_only: true"] {
             config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "console-options").unwrap();
         }
-        for options in ["target: invalid", "unknown: true", "encoder:\n      kind: module_console\n      unknown: true"] {
+        for options in ["target: invalid", "unknown: true", "encoder:\n      kind: palette\n      unknown: true"] {
             assert!(config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "invalid-console-options").is_err());
         }
     }
