@@ -7,12 +7,22 @@ mod banner;
 pub(crate) use banner::print_banner;
 
 static NO_SPAWN_CONSOLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static ATTACH_STDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_STD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub(crate) fn attach_stdio() {
-    disable_console_spawning();
+    ATTACH_STDIO.store(true, std::sync::atomic::Ordering::Relaxed);
     #[cfg(windows)]
     NO_STD_OUTPUT.store(!windows_backend::attach_parent_output(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn stdio_attached() -> bool {
+    ATTACH_STDIO.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(windows)]
+pub(crate) fn spawn_console() {
+    windows_backend::spawn_console();
 }
 
 pub(crate) fn disable_console_spawning() {
@@ -25,7 +35,7 @@ pub(crate) fn console_spawning_disabled() -> bool {
 
 pub(crate) fn report_attachment_failure() {
     if NO_STD_OUTPUT.load(std::sync::atomic::Ordering::Relaxed) {
-        swarn!(fn; "No usable inherited output or parent console; keeping configured file logging without a console window.");
+        swarn!(fn; "Could not attach inherited output or the parent console.");
     }
 }
 

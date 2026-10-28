@@ -7,21 +7,55 @@ use windows::Win32::System::Threading::{CreateMutexW, GetStartupInfoW, ReleaseMu
 
 use super::{fallback_palette, use_truecolor};
 
-pub(super) fn attach_parent_output() -> bool {
-    unsafe {
-        let valid = |kind| GetStdHandle(kind).ok().filter(|handle| {
+unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
+    [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
+        let handle = GetStdHandle(kind).ok().filter(|handle| {
             let mut flags = 0;
             GetHandleInformation(*handle, &mut flags).is_ok()
         });
-        let stdout = valid(STD_OUTPUT_HANDLE);
-        let stderr = valid(STD_ERROR_HANDLE);
-        if stdout.is_some() && stderr.is_some() { return true; }
+        (kind, handle)
+    })
+}
+
+unsafe fn restore_standard_handles(handles: [(STD_HANDLE, Option<HANDLE>); 3]) {
+    for (kind, handle) in handles {
+        if let Some(handle) = handle { let _ = SetStdHandle(kind, handle); }
+    }
+}
+
+pub(super) fn attach_parent_output() -> bool {
+    unsafe {
+        let handles = standard_handles();
+        if handles[1].1.is_some() && handles[2].1.is_some() { return true; }
         // Attachment may replace standard handles. Preserve each redirected destination,
         // including mixed redirection. Never detach or allocate on failure.
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
-        if let Some(handle) = stdout { let _ = SetStdHandle(STD_OUTPUT_HANDLE, handle); }
-        if let Some(handle) = stderr { let _ = SetStdHandle(STD_ERROR_HANDLE, handle); }
-        valid(STD_OUTPUT_HANDLE).is_some() || valid(STD_ERROR_HANDLE).is_some()
+        restore_standard_handles(handles);
+        standard_handles()[1..].iter().any(|(_, handle)| handle.is_some())
+    }
+}
+
+pub(super) fn spawn_console() {
+    unsafe {
+        if super::console_spawning_disabled() || GetConsoleWindow().0 != 0 { return; }
+        let handles = standard_handles();
+        if AllocConsole().is_err() { return; }
+        if super::stdio_attached() {
+            restore_standard_handles(handles);
+            return;
+        }
+        if let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) {
+            let mut mode = CONSOLE_MODE(0);
+            if GetConsoleMode(handle, &mut mode).is_ok() {
+                let _ = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            }
+        }
+        if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
+            let mut mode = CONSOLE_MODE(0);
+            if GetConsoleMode(handle, &mut mode).is_ok() {
+                let _ = SetConsoleMode(handle, (mode & !ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS);
+            }
+        }
     }
 }
 
@@ -36,7 +70,7 @@ pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
         if GetConsoleMode(handle, &mut mode).is_err() { return false; }
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
-        if super::console_spawning_disabled() {
+        if super::console_spawning_disabled() || super::stdio_attached() {
             // Do not recreate a suppressed console or mutate a shared terminal.
             return use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
                 std::env::var_os("WT_SESSION").is_some());
@@ -170,6 +204,59 @@ impl TemporaryDefaults {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attachment_and_console_spawning_are_independent() {
+        for attach in [false, true] {
+            for no_spawn in [false, true] {
+                use std::os::windows::process::CommandExt;
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--ignored", "--exact", "--nocapture",
+                        &format!("{}::console_flags_child", module_path!().split_once("::").unwrap().1)])
+                    .env("UNCHAINED_TEST_ATTACH", attach.to_string())
+                    .env("UNCHAINED_TEST_NO_SPAWN", no_spawn.to_string())
+                    .creation_flags(0x08000000).output().unwrap();
+                assert!(output.status.success(), "attach={attach}, no_spawn={no_spawn}: {}",
+                    String::from_utf8_lossy(&output.stderr));
+                if attach {
+                    assert!(String::from_utf8_lossy(&output.stdout).contains("inherited stdout preserved"));
+                    assert!(String::from_utf8_lossy(&output.stderr).contains("inherited stderr preserved"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for independent console flags"]
+    fn console_flags_child() {
+        use std::io::Write;
+        use std::os::windows::io::BorrowedHandle;
+        unsafe {
+            let handles = standard_handles();
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+            assert_eq!(GetConsoleWindow().0, 0);
+            let attach = std::env::var("UNCHAINED_TEST_ATTACH").unwrap() == "true";
+            let no_spawn = std::env::var("UNCHAINED_TEST_NO_SPAWN").unwrap() == "true";
+            if no_spawn { super::super::disable_console_spawning(); }
+            if attach { super::super::attach_stdio(); }
+            assert_eq!(super::super::console_spawning_disabled(), no_spawn);
+            super::super::spawn_console();
+            assert_eq!(GetConsoleWindow().0 != 0, !no_spawn);
+            if attach {
+                assert_eq!(standard_handles(), handles);
+                configure(log4rs::append::console::Target::Stdout);
+                configure(log4rs::append::console::Target::Stderr);
+                assert_eq!(standard_handles(), handles);
+                for (kind, text) in [(STD_OUTPUT_HANDLE, "inherited stdout preserved\n"),
+                    (STD_ERROR_HANDLE, "inherited stderr preserved\n")] {
+                    let handle = GetStdHandle(kind).unwrap();
+                    let owned = BorrowedHandle::borrow_raw(handle.0 as *mut _).try_clone_to_owned().unwrap();
+                    std::fs::File::from(owned).write_all(text.as_bytes()).unwrap();
+                }
+            }
+        }
+    }
 
     #[test]
     fn temporary_defaults_remove_new_key_and_restore_existing_values() {

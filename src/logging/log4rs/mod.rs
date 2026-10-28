@@ -207,7 +207,11 @@ mod tests {
         #[cfg(windows)]
         let before = unsafe { windows::Win32::System::Console::GetConsoleWindow() };
         if target == "stderr" { crate::logging::console::disable_console_spawning(); }
-        else { crate::logging::console::attach_stdio(); }
+        else {
+            crate::logging::console::attach_stdio();
+            assert!(!crate::logging::console::console_spawning_disabled());
+            crate::logging::console::disable_console_spawning();
+        }
         let file = std::env::var("UNCHAINED_TEST_JSON_FILE").unwrap();
         let kind = std::env::var("UNCHAINED_TEST_JSON_FILE_KIND").unwrap();
         let policy = if kind == "rolling_file" {

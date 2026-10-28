@@ -96,7 +96,7 @@ pub struct CLIArgs {
     #[arg(long = "log4rs-yaml")]
     pub log4rs_yaml: Option<String>,
 
-    /// Reuse inherited stdout/stderr or the parent console; never open a console window.
+    /// Reuse inherited stdout/stderr or attach to the parent console; console spawning is independent.
     #[arg(long = "attach-stdio")]
     pub attach_stdio: bool,
 
@@ -344,6 +344,7 @@ mod tests {
             let raw = ["app", "TBL", flag, "--rcon", "9001", "-nullrhi"];
             let cli = CLIArgs::try_parse_from(normalize_and_filter_args(raw.into_iter().map(str::to_owned))).unwrap();
             assert!(cli.attach_stdio);
+            assert!(!cli.no_spawn_console);
             assert_eq!(cli.rcon_port, Some(9001));
             assert!(cli.is_headless);
             assert!(format!("{cli:?}").contains("attach_stdio: true"));

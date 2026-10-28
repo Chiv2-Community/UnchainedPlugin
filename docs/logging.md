@@ -12,21 +12,6 @@ and the [implementation map](#implementation-map).
 The plugin uses its [embedded configuration](../src/logging/log4rs/log4rs.default.yaml)
 unless you pass `--log4rs-yaml`.
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| Root level | `debug` | Enables ERROR, WARN, INFO, and DEBUG records unless a namespace overrides it. |
-| Console threshold | `debug` | Hides TRACE records from the console, even if a namespace enables them. |
-| Main file | `unchained.log` | Receives enabled records without an additional level filter. |
-| Kismet file | `kismet.log` | Appender is defined but not connected to a logger; it receives no records by default. |
-| `serenity` | `warn` | Discord library warnings and errors only. |
-| `tracing` | `warn` | Dependency tracing warnings and errors only. |
-| `patternsleuth` | `warn` | Signature-scanning library warnings and errors only. |
-| `h2::codec` | `warn` | HTTP/2 protocol warnings and errors only. |
-| `hyper_util::client` | `warn` | HTTP client warnings and errors only. |
-| `reqwest::connect` | `warn` | HTTP connection warnings and errors only. |
-
-Plugin namespaces inherit `debug`; none has a separate default override.
-
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
 Raw command lines are not logged. Other structured fields remain visible;
@@ -37,10 +22,10 @@ do not put credentials in profile names, paths, MOTDs, or other public settings.
 The default main file is:
 
 ```text
-%LOCALAPPDATA%\Chivalry 2\Saved\Logs\unchained.log
+%LOCALAPPDATA%\Chivalry 2\Saved_<saveddirsuffix>\Logs\unchained.log
 ```
 
-With `--saveddirsuffix Steam`, it becomes:
+For example, `--saveddirsuffix Steam` gives:
 
 ```text
 %LOCALAPPDATA%\Chivalry 2\Saved_Steam\Logs\unchained.log
@@ -116,20 +101,19 @@ encoder:
   kind: json
 ```
 
-Read one JSON object per line from the configured sink. Standard log4rs fields
+Each configured sink emits one JSON payload per line. Standard log4rs fields
 include `time`, `level`, `message`, source locations, and thread metadata, all at
 the root. Plugin macros add the enclosing function name as
 `attributes.__unchained_function` when available; other structured key/value
 fields also appear in `attributes`. Explicit `fn;` prefixes remain in `message`.
 The plugin's `{sm}` and `{fn}` extensions apply to text patterns, not JSON fields.
 
-For stdio integration, redirect the game's stdout/stderr and pass `--attach-stdio`.
-Drain both streams concurrently. **Some initialization output is not in the
-configured format**, including diagnostics written before log4rs initializes.
-Game and dependency output may also be mixed in. Stdio consumers must accept
-non-JSON lines as plain diagnostics and continue processing subsequent JSON
-records, rather than assuming the entire stream is JSON. Use a JSON file appender
-when you need plugin records separate from other stdio output.
+`--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
+it does not create redirection. The calling program supplies pipes or files when
+capture is needed. `--no-spawn-console` independently suppresses console allocation.
+**Some initialization output is not in the configured format**, including
+diagnostics written before log4rs initializes. Stdio may also contain game and
+dependency output, so consumers may encounter non-JSON lines alongside JSON logs.
 
 ## Format log lines
 
