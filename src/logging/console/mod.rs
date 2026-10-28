@@ -43,6 +43,9 @@ pub(crate) fn report_attachment_failure() {
 #[path = "windows.rs"]
 mod windows_backend;
 
+#[cfg(windows)]
+pub(crate) use windows_backend::preserve_console_handles;
+
 const PALETTE_SLOTS: [u8; 15] = [12, 14, 9, 7, 8, 1, 2, 3, 4, 5, 6, 10, 11, 13, 0];
 const BASIC_COLORS: [u32; 16] = [
     0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,

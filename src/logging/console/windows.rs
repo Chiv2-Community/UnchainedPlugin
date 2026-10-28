@@ -9,6 +9,12 @@ use super::{fallback_palette, nearest_slots, use_truecolor, BASIC_COLORS};
 
 static LEGACY_PALETTE: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 
+pub(crate) fn preserve_console_handles() {
+    // Native appenders cache handles even without palette directives. Once built,
+    // keep the current palette instead of recreating their console on Wine.
+    *LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner()) = true;
+}
+
 unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
     [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
         let handle = GetStdHandle(kind).ok().filter(|handle| {
@@ -221,6 +227,130 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
+    fn registered_console_writers_survive_later_palette_setup() {
+        use std::os::windows::process::CommandExt;
+        let mut failures = Vec::new();
+        for first in ["null", "pattern", "json", "plain_palette", "default", "plain_pattern"] {
+            for target in ["stdout", "stderr"] {
+                for later in ["stdout", "stderr"] {
+                    let output = std::process::Command::new(std::env::current_exe().unwrap())
+                        .args(["--ignored", "--exact", "--nocapture",
+                            &format!("{}::writer_order_child", module_path!().split_once("::").unwrap().1)])
+                        .env("UNCHAINED_TEST_FIRST_ENCODER", first)
+                        .env("UNCHAINED_TEST_FIRST_TARGET", target)
+                        .env("UNCHAINED_TEST_LATER_TARGET", later)
+                        .env_remove("UNCHAINED_TEST_CONSOLE_CONTEXT")
+                        .env_remove("WT_SESSION").env_remove("NO_COLOR")
+                        .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
+                        .creation_flags(0x08000000).output().unwrap();
+                    if !output.status.success() {
+                        failures.push(format!("{first}/{target}/{later}: {}", String::from_utf8_lossy(&output.stderr)));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
+    fn registered_console_setup_preserves_plain_output_contracts() {
+        use std::os::windows::process::CommandExt;
+        for context in ["shared", "attached", "suppressed", "redirected", "no_color"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--ignored", "--exact", "--nocapture",
+                    &format!("{}::writer_order_child", module_path!().split_once("::").unwrap().1)])
+                .env("UNCHAINED_TEST_CONSOLE_CONTEXT", context)
+                .env("UNCHAINED_TEST_FIRST_ENCODER", "plain_palette")
+                .env("UNCHAINED_TEST_FIRST_TARGET", "stdout")
+                .env("UNCHAINED_TEST_LATER_TARGET", if context == "redirected" { "stdout" } else { "stderr" })
+                .env_remove("WT_SESSION").env_remove("NO_COLOR")
+                .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
+                .creation_flags(0x08000000).output().unwrap();
+            assert!(output.status.success(), "{context}: {}", String::from_utf8_lossy(&output.stderr));
+            if context == "redirected" {
+                assert!(String::from_utf8_lossy(&output.stdout).contains("writer order regression"));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for registered console writer order"]
+    fn writer_order_child() {
+        use std::io::Write;
+        use std::os::windows::io::{AsRawHandle, BorrowedHandle};
+        unsafe {
+            let handles = standard_handles();
+            let report = BorrowedHandle::borrow_raw(handles[2].1.unwrap().0 as *mut _)
+                .try_clone_to_owned().unwrap();
+            let report = std::sync::Mutex::new(std::fs::File::from(report));
+            std::panic::set_hook(Box::new(move |info| { let _ = writeln!(report.lock().unwrap(), "{info}"); }));
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+            let context = std::env::var("UNCHAINED_TEST_CONSOLE_CONTEXT").unwrap_or_else(|_| "owned".into());
+            if context == "suppressed" {
+                super::super::disable_console_spawning();
+                spawn_console();
+                assert_eq!(GetConsoleWindow().0, 0);
+            }
+            if matches!(context.as_str(), "shared" | "suppressed") { AllocConsole().unwrap(); }
+            else { spawn_console(); }
+            if context == "attached" { super::super::attach_stdio(); }
+            if context == "no_color" { std::env::set_var("NO_COLOR", "1"); }
+            let output = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$").unwrap();
+            if context == "redirected" { restore_standard_handles(handles); }
+            else {
+                SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(output.as_raw_handle() as isize)).unwrap();
+                SetStdHandle(STD_ERROR_HANDLE, HANDLE(output.as_raw_handle() as isize)).unwrap();
+            }
+            let console_handle = HANDLE(output.as_raw_handle() as isize);
+            let before = screen_info(console_handle).unwrap();
+            let mut before_mode = CONSOLE_MODE(0);
+            GetConsoleMode(console_handle, &mut before_mode).unwrap();
+            let mut registry = log4rs::config::Deserializers::default();
+            crate::logging::log4rs::register(&mut registry);
+            let build = |target: &str, encoder: &str| -> Box<dyn log4rs::append::Append> {
+                let config: log4rs::append::AppenderConfig = serde_yaml::from_str(
+                    &format!("kind: console\ntarget: {target}\n{encoder}")).unwrap();
+                registry.deserialize(&config.kind, config.config).unwrap()
+            };
+            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
+            let encoder = match first.as_str() {
+                "null" => "encoder:\n  kind: palette\n  pattern: '{palette(normal)}{m}'\n  palette: {normal: null}\n",
+                "pattern" => "encoder:\n  kind: pattern\n  pattern: '{h({m})}'\n",
+                "json" => "encoder:\n  kind: json\n",
+                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n",
+                "default" => "",
+                "plain_pattern" => "encoder:\n  kind: pattern\n  pattern: '{m}'\n",
+                _ => unreachable!(),
+            };
+            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), encoder);
+            let first_handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
+            let first_info = screen_info(console_handle).unwrap();
+            assert_eq!(first_info.ColorTable.map(|c| c.0), before.ColorTable.map(|c| c.0));
+            assert_eq!(first_info.wAttributes, before.wAttributes);
+            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "encoder:\n  kind: palette\n");
+            let record = log::Record::builder().args(format_args!("writer order regression")).build();
+            first_appender.append(&record).expect("earlier native writer must remain valid");
+            assert_eq!(GetStdHandle(STD_OUTPUT_HANDLE).unwrap(), first_handle);
+            let after = screen_info(console_handle).expect("earlier console handle must remain valid");
+            assert_eq!(after.ColorTable.map(|c| c.0), first_info.ColorTable.map(|c| c.0));
+            if context != "owned" {
+                assert_eq!(after.wAttributes, before.wAttributes);
+                let mut after_mode = CONSOLE_MODE(0);
+                GetConsoleMode(console_handle, &mut after_mode).unwrap();
+                assert_eq!(after_mode, before_mode);
+            }
+            later.append(&record).unwrap();
+            if context == "redirected" { assert_eq!(standard_handles(), handles); }
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+        }
+    }
+
+    #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
     fn custom_palettes_on_owned_and_shared_consoles() {
         use std::os::windows::process::CommandExt;
         for owned in [false, true] {
@@ -290,6 +420,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
     fn attachment_and_console_spawning_are_independent() {
         for attach in [false, true] {
             for no_spawn in [false, true] {

@@ -41,6 +41,8 @@ impl Deserialize for ConsoleAppenderDeserializer {
             };
             appender = appender.encoder(encoder);
         }
+        #[cfg(windows)]
+        crate::logging::console::preserve_console_handles();
         Ok(Box::new(appender.build()))
     }
 }
