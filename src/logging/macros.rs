@@ -14,7 +14,6 @@ macro_rules! __unchained_log {
     ($level:ident, $($args:tt)+) => {
         $crate::__unchained_log!(@emit $level, $crate::logging::__log::logger(), module_path!(), $($args)+)
     };
-    /* fn; prepends the enclosing function name to the message. */
     (@emit $level:ident, $logger:expr, $target:expr, fn; $($args:tt)+) => {{
         fn __unchained_function_marker() {}
         $crate::__unchained_log!(@emit $level, $logger, $target,

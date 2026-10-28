@@ -50,7 +50,6 @@ fn function_flag_always_prefixes_the_message() {
         ("INFO", "hello 7"), ("WARN", "warn"), ("ERROR", "error"),
         ("DEBUG", "debug"), ("TRACE", "trace"),
     ]) {
-        // The pattern's {fn} and the explicit message prefix are independent.
         assert!(line.starts_with("function_flag_always_prefixes_the_message|"));
         assert!(line.contains(&format!("|{level}|")));
         assert!(line.ends_with(&format!("[function_flag_always_prefixes_the_message] {message}")));
