@@ -118,6 +118,25 @@ fn escaped(bytes: &[u8], i: usize) -> bool {
         && bytes.get(i + 1) == Some(&bytes[i]))
 }
 
+fn format_fill(pattern: &str, i: usize) -> usize {
+    if pattern.as_bytes().get(i) != Some(&b':') { return i; }
+    let mut chars = pattern[i + 1..].chars();
+    match (chars.next(), chars.next()) {
+        (Some(fill), Some('<' | '>')) => i + 1 + fill.len_utf8() + 1,
+        _ => i + 1,
+    }
+}
+
+fn formatter_head(pattern: &str, i: usize) -> usize {
+    let mut end = i + 1;
+    for ch in pattern[end..].chars() {
+        if !(if end == i + 1 { ch.is_alphabetic() } else { ch.is_alphanumeric() }) { break; }
+        end += ch.len_utf8();
+    }
+    // Native format-spec fills are raw characters, not brace/backslash escapes.
+    format_fill(pattern, end)
+}
+
 fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Result<[Option<usize>; 5]> {
     if name.is_empty() { return Ok([None; 5]); }
     let bytes = name.as_bytes();
@@ -125,8 +144,9 @@ fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Res
     while i < bytes.len() {
         if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
         if bytes[i] == b'{' {
-            let end = bytes[i..].iter().position(|byte| *byte == b'}')
-                .ok_or_else(|| anyhow::anyhow!("Unclosed palette name formatter"))? + i;
+            let head = formatter_head(name, i);
+            let end = bytes[head..].iter().position(|byte| *byte == b'}')
+                .ok_or_else(|| anyhow::anyhow!("Unclosed palette name formatter"))? + head;
             let formatter = name[i + 1..end].split(':').next().unwrap();
             anyhow::ensure!(matches!(formatter, "l" | "level"),
                 "Palette names support only {{l}} and {{level}} interpolation");
@@ -173,8 +193,9 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
                 }
                 if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
                 match bytes[i] {
-                    b'{' => braces += 1,
+                    b'{' => { braces += 1; i = formatter_head(pattern, i); continue; }
                     b'}' => { braces -= 1; if braces == 0 { break; } }
+                    b')' => { i = format_fill(pattern, i + 1); continue; }
                     _ => {}
                 }
                 i += 1;
@@ -188,8 +209,9 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
             continue;
         }
         match bytes[i] {
-            b'{' => depth += 1,
+            b'{' => { depth += 1; i = formatter_head(pattern, i); continue; }
             b'}' => depth = depth.saturating_sub(1),
+            b')' if depth > 0 => { i = format_fill(pattern, i + 1); continue; }
             _ => {}
         }
         i += 1;
