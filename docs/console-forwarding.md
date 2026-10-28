@@ -124,7 +124,7 @@ helper stdout for structured records only; send diagnostics to stderr. Capture
 game stdout/stderr separately and drain both (discard them in structured mode).
 The native parent must concurrently drain helper stdout **and** stderr.
 
-Example invocation for an **integrator-owned** helper (paths are examples):
+Steam example for an **integrator-owned** helper (paths are examples):
 
 ```bash
 steam="$HOME/.local/share/Steam"
@@ -148,3 +148,13 @@ The bundled `UnchainedLauncher.ProtonHelper.exe` request-file, readiness, and
 heartbeat protocol is **private and version-coupled to its CLI**. It is not a
 standalone integrator API. Use the matching published CLI bundle, or own your
 helper and its lifecycle protocol.
+
+For Epic/Heroic, initialize the prefix through Heroic using a Proton runner, not
+Steam. Do not reuse the Steam app IDs in the example above: UnchainedLauncher's
+EGS backend sets `STEAM_COMPAT_APP_ID=0` and removes `SteamAppId`, `SteamGameId`,
+and `SteamOverlayGameId`. Steam installation/login is not required for that store;
+fresh Epic launch/authentication arguments are still required. The CLI accepts
+`--platform EGS` and discovers the matching native/Flatpak Heroic Proton settings;
+explicit `--proton-path` and `--compat-data-path` override discovery. See the
+[CLI Epic/Heroic setup](https://github.com/Chiv2-Community/UnchainedLauncher/blob/feature/cli-proton-launch/UnchainedLauncher.CLI/README.md#epic-games-store-and-heroic-on-linux)
+for authentication forwarding and runner limitations.
