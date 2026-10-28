@@ -342,15 +342,6 @@ facade's syntax. Rust call-site example:
 sinfo!(target: concat!(module_path!(), "::custom"), request = 42; "Ready");
 ```
 
-Prefer appender patterns for caller information. For an unconditional per-call
-function prefix, use `fn;` with any severity:
-
-```rust
-sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
-```
-
-`fn;` only prepends the function name to the message; it does not change metadata.
-
 `enclosing_function` is a reserved metadata key. Do not supply it yourself.
 Disabled levels skip argument evaluation; target/appender filtering
 can still evaluate argument expressions, but does not format rejected messages.
