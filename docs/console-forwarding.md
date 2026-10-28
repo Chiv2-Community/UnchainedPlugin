@@ -1,12 +1,11 @@
 # Console forwarding
 
-For launcher authors implementing structured plugin output capture, without
+For integrators implementing structured plugin output capture, without
 reading log files or scraping a Wine console. The Windows plugin uses the same
 transport on Windows and under Wine/Proton. It is output-only; it accepts no commands.
 
-UnchainedLauncher's server CLI enables this capture automatically. Operators do
-not need the Win32 setup below; see [console output options](console-attachment.md)
-to choose defaults, stdout/stderr capture, or console suppression.
+For plugin flags controlling attachment and console suppression, see
+[console output options](console-attachment.md).
 
 ## Windows handle setup
 
@@ -17,7 +16,7 @@ Minimal Windows integration recipe:
    inheritable. This dedicated pipe is separate from stdout/stderr.
 2. Build a private child Unicode environment block. Set `UNCHAINED_CONSOLE_HANDLE`
    to the write handle's **unsigned decimal Windows HANDLE value**, not a Linux FD.
-   Do not modify the launcher's environment.
+   Do not modify the parent process's environment.
 3. Initialize a `STARTUPINFOEXW` and its attribute list; set `StartupInfo.cb` to
    `sizeof(STARTUPINFOEXW)`. Prepare a whitelist containing the write handle and
    only other intended child handles.
@@ -96,65 +95,14 @@ formatted text to recover severity. Banner text is separate from log records.
 `tty_only` console settings do not disable an explicitly requested transport.
 Custom file-only configurations do not gain a console appender automatically.
 
-## UnchainedLauncher integration
+## Wine/Proton integration
 
-Server launches use structured capture by default; client launches remain detached
-and do not start a TUI receiver. The Windows CLI creates the pipe before the game and passes its handle in a
-private Unicode environment block. On Linux, **UnchainedLauncher's bundled Windows helper** creates
-the game pipe and relays only its records through its reserved stdout pipe to
-the native CLI. Game stdout/stderr are drained separately and discarded in
-structured mode; they cannot mix with JSON records. `runinprefix` preserves the
-helper's inherited streams, unlike the `run`/Steam.exe wrapper.
-Neither backend changes the launcher's environment.
-The receiver validates frames,
-sanitizes controls, and keeps bounded per-server history. `L` switches between
-the dashboard and full console, Page Up/Page Down scroll, and `End` follows the
-latest output. No-TUI mode prints received lines without terminal controls.
+The plugin requires a Windows pipe handle inside Wine, not a native Linux file
+descriptor. A native parent needs a Windows-side process to perform the handle
+setup above and pass the handle to the game. How that process is started and
+supervised is outside the plugin's interface.
 
-This requires a plugin build containing the transport; older plugins retain
-their own console. [`--attach-stdio`](console-attachment.md) selects raw capture
-instead. `--no-spawn-console` leaves the selected capture route unchanged.
-
-### Alternate Linux launchers
-
-Proton does not supply this helper. Implement your own Windows helper using the
-recipe above, then launch it under the selected Proton tool. The helper creates
-the real Windows pipe inside Wine, injects the DLL, and resumes the game. Reserve
-helper stdout for structured records only; send diagnostics to stderr. Capture
-game stdout/stderr separately and drain both (discard them in structured mode).
-The native parent must concurrently drain helper stdout **and** stderr.
-
-Steam example for an **integrator-owned** helper (paths are examples):
-
-```bash
-steam="$HOME/.local/share/Steam"
-compat="/path/to/steamapps/compatdata/1824220" # contains initialized pfx/system.reg
-proton="/path/to/selected/Proton/proton"
-helper="/absolute/path/to/YourConsoleHelper.exe"
-test -f "$compat/pfx/system.reg" || exit 1
-env STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam" STEAM_COMPAT_DATA_PATH="$compat" \
-    WINEPREFIX="$compat/pfx" STEAM_COMPAT_APP_ID=1824220 \
-    SteamAppId=1824220 SteamGameId=1824220 WINEDEBUG=-all \
-    "$proton" runinprefix "$helper" >console.jsonl 2>helper.stderr
-```
-
-Initialize the game prefix through Steam first; keep Steam running for Steam
-authentication. Use the same selected Proton tool/prefix as the game. Pass any
-helper-specific arguments according to your own protocol; convert game/DLL paths
-with that prefix's `winepath`, and resolve Windows known folders rather than
-assuming a username. The files above stand in for concurrent native stream readers.
-
-The bundled `UnchainedLauncher.ProtonHelper.exe` request-file, readiness, and
-heartbeat protocol is **private and version-coupled to its CLI**. It is not a
-standalone integrator API. Use the matching published CLI bundle, or own your
-helper and its lifecycle protocol.
-
-For Epic/Heroic, initialize the prefix through Heroic using a Proton runner, not
-Steam. Do not reuse the Steam app IDs in the example above: UnchainedLauncher's
-EGS backend sets `STEAM_COMPAT_APP_ID=0` and removes `SteamAppId`, `SteamGameId`,
-and `SteamOverlayGameId`. Steam installation/login is not required for that store;
-fresh Epic launch/authentication arguments are still required. The CLI accepts
-`--platform EGS` and discovers the matching native/Flatpak Heroic Proton settings;
-explicit `--proton-path` and `--compat-data-path` override discovery. See the
-[CLI Epic/Heroic setup](https://github.com/Chiv2-Community/UnchainedLauncher/blob/feature/cli-proton-launch/UnchainedLauncher.CLI/README.md#epic-games-store-and-heroic-on-linux)
-for authentication forwarding and runner limitations.
+If relaying records through that process's stdout, reserve it for structured
+frames only. Keep game stdout/stderr separate, drain all captured streams
+concurrently, and sanitize records before terminal display. Do not mix raw game
+output or helper diagnostics into the JSON stream.

@@ -5,7 +5,7 @@ console and log files. No configuration file is required for the defaults.
 
 Operators: start with the defaults below, or [choose console output and window
 behavior](console-attachment.md) without changing logging configuration.
-Launcher authors: see the [capture integration contract](console-forwarding.md).
+Integrators: see the [capture integration contract](console-forwarding.md).
 Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics)
 and the [implementation map](#implementation-map).
 
@@ -49,7 +49,7 @@ With `--saveddirsuffix Steam`, it becomes:
 ```
 
 Use the Windows account running the game or server when locating `%LOCALAPPDATA%`.
-Your launcher may supply a different saved-directory suffix.
+The game's launch arguments may specify a different saved-directory suffix.
 
 ### Console colors
 
@@ -76,7 +76,7 @@ The startup banner uses the same console writer and color policy, outside log
 records. Wine uses native yellow/red palette attributes, not 256-color ANSI
 escapes. Redirected output and `NO_COLOR` receive plain banner text.
 
-Launchers can opt into [console forwarding](console-forwarding.md) to receive
+Parent processes can opt into [console forwarding](console-forwarding.md) to receive
 console records and the banner directly. Default file logging is unchanged.
 Alternatively, [`--attach-stdio`](console-attachment.md) preserves inherited output
 without creating a console window and takes precedence over IPC forwarding.
