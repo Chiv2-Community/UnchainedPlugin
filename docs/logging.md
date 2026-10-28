@@ -342,10 +342,6 @@ facade's syntax. Rust call-site example:
 sinfo!(target: concat!(module_path!(), "::custom"), request = 42; "Ready");
 ```
 
-`enclosing_function` is a reserved metadata key. Do not supply it yourself.
-Disabled levels skip argument evaluation; target/appender filtering
-can still evaluate argument expressions, but does not format rejected messages.
-
 ### Implementation map
 
 Shared macros submit metadata and records through `log`; log4rs applies target
