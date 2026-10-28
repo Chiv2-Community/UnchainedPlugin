@@ -24,13 +24,13 @@ macro_rules! __unchained_log {
         $($key:tt $(:$capture:tt)? $(= $value:expr)?),+; $($args:tt)+) => {{
         fn __unchained_function_marker() {}
         $crate::logging::__log::log!(logger: $logger, target: $target, $crate::logging::__log::Level::$level,
-            __unchained_function = $crate::logging::function_name(__unchained_function_marker),
+            enclosing_function = $crate::logging::function_name(__unchained_function_marker),
             $($key $(:$capture)? $(= $value)?),+; $($args)+)
     }};
     (@emit $level:ident, $logger:expr, $target:expr, $($args:tt)+) => {{
         fn __unchained_function_marker() {}
         $crate::logging::__log::log!(logger: $logger, target: $target, $crate::logging::__log::Level::$level,
-            __unchained_function = $crate::logging::function_name(__unchained_function_marker);
+            enclosing_function = $crate::logging::function_name(__unchained_function_marker);
             $($args)+)
     }};
 }

@@ -170,7 +170,7 @@ mod tests {
             assert_eq!(file.len(), 3);
             assert_eq!(file[0]["message"], "[json_sink_child] hello 世界\nsecond line");
             assert_eq!(file[1]["attributes"]["request"], "42");
-            assert_eq!(file[0]["attributes"]["__unchained_function"], "json_sink_child");
+            assert_eq!(file[0]["attributes"]["enclosing_function"], "json_sink_child");
             assert_eq!(file[0]["module_path"], module_path!());
             assert!(file[0]["line"].as_u64().unwrap() > 0);
             assert!(file[0]["thread_id"].as_u64().unwrap() > 0);

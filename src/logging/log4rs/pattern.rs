@@ -3,7 +3,7 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{pattern::PatternEncoder as BuiltinPatternEncoder, Encode, Write};
 
 const SHORT_MODULE_KEY: &str = "__unchained_short_module";
-const FUNCTION_KEY: &str = "__unchained_function";
+const FUNCTION_KEY: &str = "enclosing_function";
 
 #[derive(Debug)]
 pub struct PatternEncoder {

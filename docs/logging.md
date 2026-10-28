@@ -104,8 +104,8 @@ encoder:
 Each configured sink emits one JSON payload per line. Standard log4rs fields
 include `time`, `level`, `message`, source locations, and thread metadata, all at
 the root. Plugin macros add the enclosing function name as
-`attributes.__unchained_function` when available; other structured key/value
-fields also appear in `attributes`. Explicit `fn;` prefixes remain in `message`.
+`attributes.enclosing_function` when available; other structured key/value
+fields also appear in `attributes`.
 The plugin's `{sm}` and `{fn}` extensions apply to text patterns, not JSON fields.
 
 `--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
@@ -349,13 +349,9 @@ function prefix, use `fn;` with any severity:
 sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
 ```
 
-The prefix remains in console/file output even if the encoder also includes `{fn}`.
-Structured output preserves that prefix; captured function metadata also appears
-in `attributes.__unchained_function`. Legacy flags,
-including `f;` as a function flag, are unsupported. Structured fields named `f`
-retain the facade's syntax, including `f;` shorthand.
+`fn;` only prepends the function name to the message; it does not change metadata.
 
-`__unchained_function` is a reserved metadata key. Do not supply it yourself.
+`enclosing_function` is a reserved metadata key. Do not supply it yourself.
 Disabled levels skip argument evaluation; target/appender filtering
 can still evaluate argument expressions, but does not format rejected messages.
 
