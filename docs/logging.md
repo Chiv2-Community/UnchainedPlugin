@@ -3,9 +3,7 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Operators: start with the defaults below, or [choose console output and window
-behavior](console-attachment.md) without changing logging configuration.
-To capture plugin output in your program, see [console attachment and forwarding](console-attachment.md).
+For machine-readable output, see [structured logging](#structured-logging).
 Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics)
 and the [implementation map](#implementation-map).
 
@@ -75,14 +73,6 @@ color codes already present in a message are not stripped.
 The startup banner is an ordinary `INFO` log record. It follows configured
 appenders, encoders, and filters instead of writing directly to stdout.
 
-Select `encoder: { kind: json }` on any appender for
-[structured logs](console-attachment.md#capture-structured-logs), with standard
-log4rs fields at the JSON root. No plugin transport or envelope is involved.
-[`--attach-stdio`](console-attachment.md) preserves inherited output without
-creating a console window.
-[`--no-spawn-console`](console-attachment.md#what-the-flags-change) only suppresses
-console creation; it does not select attachment or change capture routing.
-
 ## Use a custom configuration
 
 1. Download or copy the [default YAML](../src/logging/log4rs/log4rs.default.yaml) to a local
@@ -114,6 +104,32 @@ path: "C:/Unchained/Logs/unchained.log"
 
 Do not substitute `%LOCALAPPDATA%` into the YAML and expect it to expand like the
 plugin's path tokens.
+
+## Structured logging
+
+In your [custom configuration](#use-a-custom-configuration), select the standard
+[log4rs JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html)
+on each console or file appender that should emit JSON:
+
+```yaml
+encoder:
+  kind: json
+```
+
+Read one JSON object per line from the configured sink. Standard log4rs fields
+include `time`, `level`, `message`, source locations, and thread metadata, all at
+the root. Plugin macros add the enclosing function name as
+`attributes.__unchained_function` when available; other structured key/value
+fields also appear in `attributes`. Explicit `fn;` prefixes remain in `message`.
+The plugin's `{sm}` and `{fn}` extensions apply to text patterns, not JSON fields.
+
+For stdio integration, redirect the game's stdout/stderr and pass `--attach-stdio`.
+Drain both streams concurrently. **Some initialization output is not in the
+configured format**, including diagnostics written before log4rs initializes.
+Game and dependency output may also be mixed in. Stdio consumers must accept
+non-JSON lines as plain diagnostics and continue processing subsequent JSON
+records, rather than assuming the entire stream is JSON. Use a JSON file appender
+when you need plugin records separate from other stdio output.
 
 ## Format log lines
 
