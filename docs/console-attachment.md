@@ -3,8 +3,8 @@
 - Pass plugin flags and environment settings to the Chivalry 2 process before
   loading UnchainedPlugin. The plugin is a DLL, not a separate executable.
 - Use the same interfaces on Windows and under Wine/Proton.
-- Keep existing logging configuration. These options do not change file logging,
-  levels, or message formatting.
+- Keep existing logging configuration. File logging, filtering, and console/file
+  display patterns remain unchanged.
 
 ## Choose a mode
 
@@ -81,26 +81,36 @@ also follow the [Wine/Proton requirements](#wineproton-requirements).
 - Do not treat handle inheritance as protection from processes allowed to inspect
   or manipulate the game.
 
-### Protocol v1
+### Protocol v2
 
 UTF-8 JSON objects, one per LF-delimited frame. Embedded newlines are JSON-escaped.
 The write-only stream starts directly with records of this shape:
 
 ```json
-{"version":1,"kind":"log","level":"INFO","text":"[12:34:56 INFO ] [UP::module              ] message\r\n","dropped":0}
+{"version":2,"kind":"log","level":"INFO","timestamp":"2026-10-28T12:34:56.789Z","module":"UnchainedPlugin::example","function":"start","line":42,"thread_id":1234,"text":"message","dropped":0}
 ```
 
+- `version`: `2`. Version 1 used display-formatted `text` without the new metadata.
 - `kind`: `log` or `banner`.
 - `level`: uppercase log level, or `null` for the banner.
-- `text`: console-encoder output, with native console styling removed. The
-  default encoder emits no ANSI escapes. Message text/custom patterns can still
-  contain controls: receivers must sanitize before displaying in a terminal.
-- `dropped`: number of records lost to queue pressure since the previous
+- `timestamp`: UTC RFC 3339 string with millisecond precision, captured before queuing.
+- `module`: full Rust module path; `null` when unavailable.
+- `function`: captured function name; `null` for records without function metadata.
+- `line`: source line number (unsigned 32-bit integer); `null` when unavailable.
+- `thread_id`: Windows thread ID (unsigned 32-bit integer) of the emitting thread,
+  not the pipe worker.
+- `text`: message only. No encoder-added timestamp, level, module, function prefix,
+  styling, or newline. Literal message content, including newlines, remains intact.
+- `dropped`: unsigned 64-bit count of records lost to queue pressure since the previous
   successfully queued frame. A trailing disconnect can prevent a final loss report.
 
 - Validate the protocol version and frame limits.
 - Read severity from `level`, not formatted text.
-- Handle `banner` separately from `log` records.
+- Handle `banner` separately: its `text` contains the banner; `level`, `module`,
+  `function`, and `line` are `null`. Timestamp and thread ID remain populated.
+- Sanitize message content and metadata before terminal display.
+- Do not use console encoder patterns to format structured output. Format the
+  metadata in the receiving program; console/file display patterns are unchanged.
 
 ### Bounds and failure behavior
 
@@ -108,6 +118,7 @@ The write-only stream starts directly with records of this shape:
   never perform pipe I/O or wait for the receiver.
 - Each record contains at most 16 KiB of UTF-8 text. Oversized records end in
   ` [truncated]`; a partial UTF-8 character is replaced safely.
+- Module and function strings are each capped at 1 KiB on a UTF-8 boundary.
 - JSON escaping can expand text. Receivers should limit frames to 128 KiB and
   bound retained history independently of the pipe buffer.
 - Only the background worker writes to the pipe. A slow reader can block that

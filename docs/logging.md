@@ -77,7 +77,8 @@ records. Wine uses native yellow/red palette attributes, not 256-color ANSI
 escapes. Redirected output and `NO_COLOR` receive plain banner text.
 
 Your program can [capture structured logs](console-attachment.md#capture-structured-logs) to receive
-console records and the banner directly. Default file logging is unchanged.
+messages, source metadata, and the banner directly. Structured output does not use
+console encoder patterns. Default console/file formatting is unchanged.
 Alternatively, [`--attach-stdio`](console-attachment.md) preserves inherited output
 without creating a console window and takes precedence over IPC forwarding.
 [`--no-spawn-console`](console-attachment.md#what-the-flags-change) only suppresses
@@ -349,24 +350,24 @@ function prefix, use `fn;` with any severity:
 sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
 ```
 
-The prefix remains even if the encoder also includes `{fn}`: `fn;` changes the
-message, while [`{fn}`](#format-log-lines) formats record metadata. Legacy flags,
+The prefix remains in console/file output even if the encoder also includes `{fn}`.
+Structured output omits that prefix and supplies `function` separately. Legacy flags,
 including `f;` as a function flag, are unsupported. Structured fields named `f`
 retain the facade's syntax, including `f;` shorthand.
 
-`__unchained_function` is reserved for captured function metadata. Do not supply
-it yourself. Disabled levels skip argument evaluation; target/appender filtering
+`__unchained_function` and `__unchained_function_prefix` are reserved metadata keys.
+Do not supply them yourself. Disabled levels skip argument evaluation; target/appender filtering
 can still evaluate argument expressions, but does not format rejected messages.
 
 ### Implementation map
 
 Shared macros submit metadata and records through `log`; log4rs applies target
 levels and appender filters. Console encoding runs on the calling thread. In
-structured mode, the console appender encodes bounded text and tries a nonblocking
-queue send. One worker owns the pipe and serializes JSON frames. File appenders
+structured mode, the console appender captures bounded message text and metadata,
+then tries a nonblocking queue send. Display encoders are not used. One worker owns
+the pipe and serializes JSON frames. File appenders
 retain their configured behavior. This avoids receiver backpressure on producer
-threads; it does not move formatting, arbitrary encoder work, or file writes to
-the worker.
+threads; message formatting and file writes remain on the calling thread.
 
 | Change | Start here |
 | --- | --- |

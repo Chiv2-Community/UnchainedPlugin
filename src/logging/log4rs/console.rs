@@ -4,16 +4,13 @@ use log4rs::encode::{Encode, EncoderConfig};
 
 use crate::logging::console::{configure_console_colors, ConsoleEncoder};
 use crate::logging::console::forward;
-use log4rs::encode::writer::simple::SimpleWriter;
 
 #[derive(Debug)]
-struct ForwardingConsole { encoder: Box<dyn Encode> }
+struct ForwardingConsole;
 
 impl Append for ForwardingConsole {
     fn append(&self, record: &log::Record) -> anyhow::Result<()> {
-        let mut buffer = forward::TextBuffer::default();
-        self.encoder.encode(&mut SimpleWriter(&mut buffer), record)?;
-        forward::send("log", Some(record.level()), buffer.finish());
+        forward::send_record(record)?;
         Ok(())
     }
     fn flush(&self) {}
@@ -60,11 +57,11 @@ impl Deserialize for ConsoleAppenderDeserializer {
             ConsoleTarget::Stderr => Target::Stderr,
         };
         if forward::enabled() {
-            let encoder = match config.encoder {
-                Some(encoder) => deserializers.deserialize(&encoder.kind, encoder.config)?,
-                None => Box::new(log4rs::encode::pattern::PatternEncoder::default()) as Box<dyn Encode>,
-            };
-            return Ok(Box::new(ForwardingConsole { encoder }));
+            // Validate the config, but structured records do not use display patterns.
+            if let Some(encoder) = config.encoder {
+                let _: Box<dyn Encode> = deserializers.deserialize(&encoder.kind, encoder.config)?;
+            }
+            return Ok(Box::new(ForwardingConsole));
         }
         let mut appender = ConsoleAppender::builder().target(target);
         if let Some(tty_only) = config.tty_only { appender = appender.tty_only(tty_only); }

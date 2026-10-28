@@ -12,6 +12,7 @@ dependencies = [
  "backtrace",
  "bitflags 2.11.0",
  "censor",
+ "chrono",
  "clap",
  "crc32c",
  "crossbeam-channel",
