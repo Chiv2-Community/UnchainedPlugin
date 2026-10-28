@@ -1,12 +1,10 @@
 # Console attachment and forwarding
 
-Use this guide when your program starts Chivalry 2 and loads UnchainedPlugin.
-The plugin is a DLL inside the game process, not a separate executable. Pass its
-flags and environment settings to the game process before loading the plugin.
-
-Choose how your program receives plugin output, or let the plugin display it in a
-console. These options work on Windows and under Wine/Proton. They do not require
-custom logging YAML or change configured file logging, levels, or message formatting.
+- Pass plugin flags and environment settings to the Chivalry 2 process before
+  loading UnchainedPlugin. The plugin is a DLL, not a separate executable.
+- Use the same interfaces on Windows and under Wine/Proton.
+- Keep existing logging configuration. These options do not change file logging,
+  levels, or message formatting.
 
 ## Choose a mode
 
@@ -34,20 +32,16 @@ The old name `--attach-std` is not an alias.
 
 ## Capture structured logs
 
-Your program creates a dedicated pipe for plugin records, passes its write handle
-to the game, and reads JSON records from the read end. This stream contains the
-plugin's configured `console` records and startup banner, not the game's raw
-stdout/stderr. Each log record includes a severity field, so your program does not
-need to parse severity from formatted text.
-
-Do not pass `--attach-stdio` in this mode. A valid forwarding handle already prevents
-the plugin from allocating a separate console. You do not need `--no-spawn-console`
-unless you also want to prevent allocation if the handle is invalid.
+- Create a dedicated pipe and pass its write handle to the game as described below.
+- Read JSON records from the read end: plugin console logs and banner, not game stdio.
+- Do not pass `--attach-stdio`; it overrides structured capture.
+- Add `--no-spawn-console` only to suppress console creation if handle setup fails.
+  A valid forwarding handle already prevents plugin console creation.
 
 ### Windows handle setup
 
-Set up the pipe before loading the plugin. These steps use Windows APIs; for a
-native Linux calling program, also follow the [Wine/Proton requirements](#wineproton-requirements).
+Use these Windows APIs before loading the plugin. For native Linux integration,
+also follow the [Wine/Proton requirements](#wineproton-requirements).
 
 1. Use `CreatePipe` with inheritable security attributes. Clear `HANDLE_FLAG_INHERIT`
    on the parent read end with `SetHandleInformation`; keep the child write end
@@ -78,15 +72,14 @@ native Linux calling program, also follow the [Wine/Proton requirements](#winepr
 7. Drain frames continuously through EOF. At shutdown allow a bounded final drain,
    then close the read end: descendants can retain a write handle indefinitely.
 
-The plugin reads the environment value once during startup, validates that the
-handle refers to a pipe, takes ownership, and disables further handle inheritance.
-Use one pipe per game. If the handle is invalid, normal console behavior applies
-unless you also pass `--no-spawn-console`.
-
-There is no listening socket, named endpoint, token, or authentication handshake.
-Possession of the inherited handle selects the receiver. Legacy TCP environment
-variables are ignored. This is launch-local isolation, not a security boundary
-against another process with permission to inspect or manipulate the game.
+- Use one pipe per game. The plugin validates and takes ownership of the inherited
+  handle at startup, then disables further inheritance.
+- Expect normal console behavior if the handle is invalid, unless
+  `--no-spawn-console` is set.
+- Do not send a handshake. There is no socket, endpoint, or token; legacy TCP
+  variables are ignored.
+- Do not treat handle inheritance as protection from processes allowed to inspect
+  or manipulate the game.
 
 ### Protocol v1
 
@@ -105,9 +98,9 @@ The write-only stream starts directly with records of this shape:
 - `dropped`: number of records lost to queue pressure since the previous
   successfully queued frame. A trailing disconnect can prevent a final loss report.
 
-Validate the protocol version and frame limits in your reader. Use the level
-metadata for presentation rather than parsing severity from formatted text.
-Display banner records separately from log records.
+- Validate the protocol version and frame limits.
+- Read severity from `level`, not formatted text.
+- Handle `banner` separately from `log` records.
 
 ### Bounds and failure behavior
 
@@ -130,76 +123,52 @@ Custom file-only configurations do not gain a console appender automatically.
 
 ### Wine/Proton requirements
 
-If your program runs natively on Linux, use a Windows-side process inside Wine
-to create the pipe and pass its Windows handle to the game. You cannot pass a
-Linux file descriptor to the plugin. How your program starts and supervises that
-Windows-side process is outside the plugin's interface.
-
-If your Windows-side process relays records over its stdout, reserve that stream
-for structured frames. Keep game stdout/stderr and diagnostics separate. Read all
-captured streams concurrently and sanitize records before terminal display.
+- Create the pipe inside Wine using a Windows-side process. Pass a Windows handle,
+  not a Linux file descriptor.
+- If relaying records over that process's stdout, reserve it for JSON frames.
+  Keep game stdio and diagnostics separate.
+- Read captured streams concurrently. Sanitize records before terminal display.
 
 ## Capture stdio
 
-Your program redirects the game's stdout/stderr and passes `--attach-stdio` in the
-game's arguments. The plugin preserves valid inherited destinations, including
-pipes, files, and mixed redirection. It does not create capture pipes or a reader
-for your program.
+1. Add `--attach-stdio` to the game's arguments before creating the process.
+2. Create stdout/stderr pipes. Make child write handles inheritable and parent read
+   handles noninheritable. Supply valid stdin too; use an EOF pipe if no input is needed.
+3. Pass the standard handles with `STARTF_USESTDHANDLES`. Include child handles in
+   the inheritance list; see [Windows handle setup](#windows-handle-setup).
+4. After process creation, close parent copies of child pipe ends. Start concurrent
+   stdout/stderr readers **before DLL injection** or waiting for initialization.
+5. Read both streams through EOF. Slow or unread pipes can block the game.
 
-1. Add `--attach-stdio` to the game's existing arguments before creating the game
-   process.
-2. Create stdout/stderr pipes with inheritable child write ends and noninheritable
-   read ends for your program. Supply a valid stdin handle too, such as an EOF pipe
-   if you do not intend to send input.
-3. When creating the game on Windows, use `STARTF_USESTDHANDLES` to supply those
-   standard handles. Include the child handles in the explicit inheritance list,
-   as in [Windows handle setup](#windows-handle-setup).
-4. Close your copies of the child pipe ends after process creation and start
-   concurrent stdout/stderr readers before injecting the DLL or waiting for plugin
-   initialization. Slow or unread pipes can block the game.
-
-Your program receives plain text, including the banner and enabled console records.
-This is process-wide stdio, so game output and output from other loaded DLLs can
-appear in the same streams. It has no JSON framing or separate severity field.
-Configured log files remain separate.
-
-If a destination is missing, the plugin tries to attach to your program's console
-without replacing valid inherited destinations. It never creates a replacement
-console. A GUI calling program without a console must supply capture handles;
-passing the flag alone is not enough.
-
-On Linux, ensure your Wine/Proton invocation preserves the standard streams all
-the way to the game. If you use a Windows-side helper, redirecting only its own
-stdout/stderr is not enough unless it also connects or relays the game's streams.
-No particular wrapper or helper protocol is required by the plugin.
-
-Redirected output adds no console styling. Sanitize message-embedded controls
-before displaying text in a terminal. Attachment does not provide a command
-protocol; the plugin leaves stdin unchanged and stops reading at EOF.
+- Expect plain text: banner and enabled console records, potentially mixed with
+  game output and other DLL output. There is no JSON framing or severity field.
+- Redirect to files instead of pipes if no live reader is needed. The plugin
+  preserves valid inherited destinations, including mixed redirection.
+- Supply capture handles even for a GUI caller. The flag does not create pipes.
+  Missing destinations trigger an attempt to attach to the caller's console,
+  never creation of a new console.
+- Under Wine/Proton, preserve the streams through to the game. If using a helper,
+  connect or relay the game's stdio; redirecting only the helper is insufficient.
+- Sanitize embedded controls before terminal display. Redirected output adds no
+  console styling.
+- Do not send commands expecting a protocol. The plugin leaves stdin unchanged
+  and stops reading at EOF.
 
 ## Use a separate console
 
-To let UnchainedPlugin display its output instead of capturing it in your program:
-
 - Do not pass `--attach-stdio` or `--no-spawn-console`.
 - Remove `UNCHAINED_CONSOLE_HANDLE` from the game's environment.
-
-The plugin attempts to allocate a console during initialization and writes its
-banner and enabled console records there. If the game already has a console,
-Windows can reject a second allocation; this is not a guarantee of a new window.
-Console availability and window presentation also depend on Windows or Wine.
+- Expect an attempt to allocate a console for the banner and enabled console logs.
+  A new window is not guaranteed: the game may already have a console, or allocation
+  may fail. Presentation depends on Windows or Wine.
 
 ## Don't spawn a separate console
 
-Pass `--no-spawn-console` to prevent the plugin from allocating or recreating a
-console. Your program does not need to capture anything to use this flag.
-
-This flag does not choose an output destination, attach to your program's console,
-or close an existing console. Structured capture and usable existing output handles
-continue to work. Without either, there may be no visible console output; consult
-the [configured log file](logging.md#log-location).
-
-To capture output without a separate console, follow either capture section above.
-Structured capture with a valid handle and `--attach-stdio` each already prevent
-plugin console creation. This flag does not suppress windows created by the game,
-the calling program, or other software.
+- Pass `--no-spawn-console`. No capture setup is required.
+- Choose an output destination separately. The flag does not redirect streams,
+  attach to the caller's console, or close an existing console.
+- Use structured capture or stdio capture for live output. Both already prevent
+  plugin console creation when configured correctly.
+- Check the [configured log file](logging.md#log-location) if no usable output
+  destination exists.
+- Do not expect this flag to suppress windows created by the game or other software.
