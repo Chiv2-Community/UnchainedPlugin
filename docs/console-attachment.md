@@ -81,33 +81,39 @@ also follow the [Wine/Proton requirements](#wineproton-requirements).
 - Do not treat handle inheritance as protection from processes allowed to inspect
   or manipulate the game.
 
-### Protocol v2
+### Protocol v1
 
 UTF-8 JSON objects, one per LF-delimited frame. Embedded newlines are JSON-escaped.
 The write-only stream starts directly with records of this shape:
 
 ```json
-{"version":2,"kind":"log","level":"INFO","timestamp":"2026-10-28T12:34:56.789Z","module":"UnchainedPlugin::example","function":"start","line":42,"thread_id":1234,"text":"message","dropped":0}
+{"version":1,"kind":"log","record":{"time":"2026-10-28T12:34:56.789123456+00:00","level":"INFO","message":"message","module_path":"UnchainedPlugin::example","file":"src/example.rs","line":42,"target":"UnchainedPlugin::example","thread":"main","thread_id":1234,"mdc":{},"attributes":{"__unchained_function":"start"}},"dropped":0}
 ```
 
-- `version`: `2`. Version 1 used display-formatted `text` without the new metadata.
+- `version`: `1`.
 - `kind`: `log` or `banner`.
-- `level`: uppercase log level, or `null` for the banner.
-- `timestamp`: UTC RFC 3339 string with millisecond precision, captured before queuing.
-- `module`: full Rust module path; `null` when unavailable.
-- `function`: captured function name; `null` for records without function metadata.
-- `line`: source line number (unsigned 32-bit integer); `null` when unavailable.
-- `thread_id`: Windows thread ID (unsigned 32-bit integer) of the emitting thread,
-  not the pipe worker.
-- `text`: message only. No encoder-added timestamp, level, module, function prefix,
-  styling, or newline. Literal message content, including newlines, remains intact.
-- `dropped`: unsigned 64-bit count of records lost to queue pressure since the previous
-  successfully queued frame. A trailing disconnect can prevent a final loss report.
+- `record`: output from [log4rs' JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html),
+  captured on the emitting thread before queuing:
+  - `time`: RFC 3339 local timestamp with UTC offset and variable fractional precision.
+  - `level`: uppercase log level.
+  - `message`: message without display-pattern headers or styling. Explicit `fn;`
+    prefixes, literal content, and embedded newlines remain intact.
+  - `module_path`, `file`, `line`: source metadata; omitted when unavailable.
+    `line` is an unsigned 32-bit integer.
+  - `target`: log target, which can differ from the module path.
+  - `thread`, `thread_id`: emitting thread name (`null` when unnamed) and numeric
+    native thread ID, not the pipe worker's. Read the ID as an unsigned 64-bit integer.
+  - `mdc`: log4rs mapped diagnostic context.
+  - `attributes`: structured log fields as strings. Captured function names use
+    `__unchained_function`; that key is absent when unavailable.
+- `dropped`: unsigned 64-bit count of records dropped since the previous successfully
+  queued frame, including queue pressure and formatting/encoding failures.
+  A trailing disconnect can prevent a final loss report.
 
 - Validate the protocol version and frame limits.
-- Read severity from `level`, not formatted text.
-- Handle `banner` separately: its `text` contains the banner; `level`, `module`,
-  `function`, and `line` are `null`. Timestamp and thread ID remain populated.
+- Read severity from `record.level`, not formatted text.
+- Handle `banner` separately: `record.message` contains the banner, encoded as a
+  synthetic `INFO` record without source metadata.
 - Sanitize message content and metadata before terminal display.
 - Do not use console encoder patterns to format structured output. Format the
   metadata in the receiving program; console/file display patterns are unchanged.
@@ -116,9 +122,10 @@ The write-only stream starts directly with records of this shape:
 
 - Game threads encode into a bounded buffer and try a 256-record queue; they
   never perform pipe I/O or wait for the receiver.
-- Each record contains at most 16 KiB of UTF-8 text. Oversized records end in
+- Each message contains at most 16 KiB of UTF-8 text. Oversized messages end in
   ` [truncated]`; a partial UTF-8 character is replaced safely.
-- Module and function strings are each capped at 1 KiB on a UTF-8 boundary.
+- Encoded log4rs records exceeding 120 KiB are dropped, not partially emitted.
+  Encoding failures also count toward `dropped`.
 - JSON escaping can expand text. Receivers should limit frames to 128 KiB and
   bound retained history independently of the pipe buffer.
 - Only the background worker writes to the pipe. A slow reader can block that

@@ -77,7 +77,7 @@ move-autonomous-desync = []
 patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
 anyhow = "1.0.79"
 serde = { version = "1.0.195", features = ["derive"] }
-serde_json = "1.0.111"
+serde_json = { version = "1.0.111", features = ["raw_value"] }
 serde_yaml = "0.9"
 serde_urlencoded = "0.7"
 tracing = "0.1.40"
@@ -88,8 +88,7 @@ memmap2 = "0.9.4"
 widestring = "1.0.2"
 bitflags = "2.4.1"
 log = { version = "0.4", features = ["kv"] }
-log4rs = { version = "1.4.0", features = ["log_kv"] }
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+log4rs = { version = "1.4.0", features = ["log_kv", "json_encoder"] }
 simple-log = "1.6.0"
 parking_lot = "0.12.1"
 inventory = "0.3.14"

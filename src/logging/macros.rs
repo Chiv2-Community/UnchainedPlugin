@@ -17,7 +17,6 @@ macro_rules! __unchained_log {
     (@emit $level:ident, $logger:expr, $target:expr, fn; $($args:tt)+) => {{
         fn __unchained_function_marker() {}
         $crate::__unchained_log!(@emit $level, $logger, $target,
-            __unchained_function_prefix = true;
             "[{}] {}", $crate::logging::function_name(__unchained_function_marker),
             format_args!($($args)+))
     }};

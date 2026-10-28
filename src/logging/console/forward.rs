@@ -3,10 +3,11 @@ use std::{io::{self, Write},
     sync::{atomic::{AtomicU64, Ordering}, mpsc::{self, SyncSender, TrySendError}, OnceLock}};
 
 use serde::Serialize;
+use log4rs::encode::{Encode, json::JsonEncoder, writer::simple::SimpleWriter};
 
 const CAPACITY: usize = 256;
 const MAX_TEXT: usize = 16 * 1024;
-const MAX_METADATA: usize = 1024;
+const MAX_RECORD: usize = 120 * 1024;
 static FORWARDER: OnceLock<Option<Forwarder>> = OnceLock::new();
 
 struct Forwarder {
@@ -18,54 +19,44 @@ struct Forwarder {
 struct Event {
     version: u8,
     kind: &'static str,
-    level: Option<&'static str>,
-    timestamp: String,
-    module: Option<String>,
-    function: Option<String>,
-    line: Option<u32>,
-    thread_id: u32,
-    text: String,
+    record: Box<serde_json::value::RawValue>,
     dropped: u64,
 }
 
 impl Event {
-    fn new(kind: &'static str, level: Option<log::Level>, text: String) -> Self {
-        Self { version: 2, kind, level: level.map(|level| level.as_str()),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            module: None, function: None, line: None, thread_id: thread_id(), text, dropped: 0 }
-    }
+    #[cfg(test)]
+    fn json(&self) -> serde_json::Value { serde_json::from_str(self.record.get()).unwrap() }
 
-    fn from_record(record: &log::Record<'_>) -> io::Result<Self> {
-        let mut event = Self::new("log", Some(record.level()), String::new());
-        let function = record.key_values().get("__unchained_function".into())
-            .and_then(|value| value.to_borrowed_str());
-        let prefixed = record.key_values().get("__unchained_function_prefix".into())
-            .and_then(|value| value.to_bool()).unwrap_or(false);
-        let mut buffer = TextBuffer { skip: if prefixed { function.map_or(0, |name| name.len() + 3) } else { 0 },
-            ..TextBuffer::default() };
-        std::fmt::write(&mut buffer, *record.args())
-            .map_err(|_| io::Error::other("Log message formatting failed"))?;
-        event.text = buffer.finish();
-        event.module = record.module_path().map(metadata_text);
-        event.function = function.map(metadata_text);
-        event.line = record.line();
+    fn new(kind: &'static str, level: Option<log::Level>, text: String) -> anyhow::Result<Self> {
+        let mut event = Self::from_record(&log::Record::builder()
+            .level(level.unwrap_or(log::Level::Info)).args(format_args!("{text}")).build())?;
+        event.kind = kind;
         Ok(event)
     }
+
+    fn from_record(record: &log::Record<'_>) -> anyhow::Result<Self> {
+        let mut buffer = TextBuffer::default();
+        std::fmt::write(&mut buffer, *record.args())
+            .map_err(|_| io::Error::other("Log message formatting failed"))?;
+        let text = buffer.finish();
+        let mut encoded = RecordBuffer(Vec::new());
+        JsonEncoder::new().encode(&mut SimpleWriter(&mut encoded),
+            &record.to_builder().args(format_args!("{text}")).build())?;
+        Ok(Self { version: 1, kind: "log", record: serde_json::from_slice(&encoded.0)?, dropped: 0 })
+    }
 }
 
-fn metadata_text(value: &str) -> String {
-    let mut end = value.len().min(MAX_METADATA);
-    while !value.is_char_boundary(end) { end -= 1; }
-    value[..end].to_owned()
+struct RecordBuffer(Vec<u8>);
+impl Write for RecordBuffer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() > MAX_RECORD.saturating_sub(self.0.len()) {
+            return Err(io::Error::other("Structured log record exceeds limit"));
+        }
+        self.0.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
-
-#[cfg(windows)]
-fn thread_id() -> u32 {
-    unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
-}
-
-#[cfg(all(not(windows), any(test, logging_test_harness)))]
-fn thread_id() -> u32 { 0 } // Native test harness only; production uses the Windows thread ID.
 
 fn handle_value(value: &str) -> Option<usize> {
     let handle = value.parse::<usize>().ok()?;
@@ -115,19 +106,30 @@ pub(crate) fn enabled() -> bool { !super::attach_stdio_enabled() && forwarder().
 pub(crate) fn send(kind: &'static str, level: Option<log::Level>, text: String) {
     if super::attach_stdio_enabled() { return; }
     if let Some(forwarder) = forwarder() {
-        forwarder.send(Event::new(kind, level, text));
+        let _ = forwarder.send_encoded(Event::new(kind, level, text));
     }
 }
 
-pub(crate) fn send_record(record: &log::Record<'_>) -> io::Result<()> {
+pub(crate) fn send_record(record: &log::Record<'_>) -> anyhow::Result<()> {
     if super::attach_stdio_enabled() { return Ok(()); }
     if let Some(forwarder) = forwarder() {
-        forwarder.send(Event::from_record(record)?);
+        forwarder.send_encoded(Event::from_record(record))?;
     }
     Ok(())
 }
 
 impl Forwarder {
+    fn send_encoded(&self, event: anyhow::Result<Event>) -> anyhow::Result<()> {
+        match event {
+            Ok(event) => self.send(event),
+            Err(error) => {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
     fn send(&self, mut event: Event) {
         event.dropped = self.dropped.swap(0, Ordering::Relaxed);
         if let Err(TrySendError::Full(event) | TrySendError::Disconnected(event)) = self.sender.try_send(event) {
@@ -138,20 +140,16 @@ impl Forwarder {
 
 // Bound encoding too: one pathological log message must not allocate an unbounded frame.
 #[derive(Default)]
-pub(crate) struct TextBuffer {
+struct TextBuffer {
     bytes: Vec<u8>,
     truncated: bool,
-    skip: usize,
 }
 
 impl Write for TextBuffer {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        let skipped = bytes.len().min(self.skip);
-        self.skip -= skipped;
-        let remaining = &bytes[skipped..];
-        let count = remaining.len().min(MAX_TEXT.saturating_sub(self.bytes.len()));
-        self.bytes.extend_from_slice(&remaining[..count]);
-        self.truncated |= count < remaining.len();
+        let count = bytes.len().min(MAX_TEXT.saturating_sub(self.bytes.len()));
+        self.bytes.extend_from_slice(&bytes[..count]);
+        self.truncated |= count < bytes.len();
         // Consume excess bytes without blocking or growing the buffer.
         Ok(bytes.len())
     }
@@ -165,7 +163,7 @@ impl std::fmt::Write for TextBuffer {
 }
 
 impl TextBuffer {
-    pub(crate) fn finish(self) -> String {
+    fn finish(self) -> String {
         let mut text = String::from_utf8(self.bytes)
             .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned());
         if self.truncated {
@@ -207,13 +205,16 @@ mod tests {
     fn saturated_queue_reports_loss_without_waiting() {
         let (sender, receiver) = mpsc::sync_channel(1);
         let forwarder = Forwarder { sender, dropped: AtomicU64::new(0) };
-        let event = || Event::new("log", None, "message".into());
+        let event = || Event::new("log", None, "message".into()).unwrap();
         forwarder.send(event());
         forwarder.send(event());
         forwarder.send(event());
         assert_eq!(receiver.recv().unwrap().dropped, 0);
         forwarder.send(event());
         assert_eq!(receiver.recv().unwrap().dropped, 2);
+        assert!(forwarder.send_encoded(Err(anyhow::anyhow!("encoding failed"))).is_err());
+        forwarder.send(event());
+        assert_eq!(receiver.recv().unwrap().dropped, 1);
     }
 
     #[test]
@@ -253,16 +254,16 @@ mod tests {
     }
 
     #[test]
-    fn level_labels_preserve_json_across_worker_handoff() {
+    fn log4rs_records_preserve_json_across_worker_handoff() {
         for level in [Some(log::Level::Error), Some(log::Level::Warn), Some(log::Level::Info),
             Some(log::Level::Debug), Some(log::Level::Trace), None] {
             let kind = if level.is_some() { "log" } else { "banner" };
-            let event = Event::new(kind, level, "hello 世界".into());
-            assert_eq!(event.thread_id, thread_id());
-            let expected = serde_json::json!({ "version": 2, "kind": kind,
-                "level": level.map(|level| level.to_string()), "timestamp": event.timestamp,
-                "module": null, "function": null, "line": null, "thread_id": event.thread_id,
-                "text": "hello 世界", "dropped": 0 });
+            let event = Event::new(kind, level, "hello 世界".into()).unwrap();
+            let expected = serde_json::json!({ "version": 1, "kind": kind,
+                "record": event.record, "dropped": 0 });
+            assert_eq!(expected["record"]["level"], level.unwrap_or(log::Level::Info).as_str());
+            assert_eq!(expected["record"]["message"], "hello 世界");
+            assert!(expected["record"]["thread_id"].as_u64().unwrap() > 0);
             let encoded = std::thread::spawn(move || serde_json::to_value(&event).unwrap()).join().unwrap();
             assert_eq!(encoded, expected);
         }
@@ -288,44 +289,68 @@ mod tests {
         sinfo!(logger: &logger, fn; "{}", "x".repeat(MAX_TEXT));
         let events = logger.0.lock().unwrap();
         let event = &events[0];
-        assert_eq!(event.version, 2);
-        assert_eq!(event.text, "hello 世界\nsecond line");
-        assert_eq!(event.module.as_deref(), Some(module_path!()));
-        assert_eq!(event.function.as_deref(), Some("structured_records_separate_message_and_callsite_metadata"));
-        assert_eq!(event.line, Some(expected_line));
-        assert_eq!(event.thread_id, thread_id());
-        assert!(event.timestamp.ends_with('Z'));
-        let timestamp = chrono::DateTime::parse_from_rfc3339(&event.timestamp).unwrap();
-        assert!((chrono::Utc::now() - timestamp.with_timezone(&chrono::Utc)).num_seconds().abs() < 5);
-        assert_eq!(events[1].text, "[literal prefix] stays");
-        assert_eq!(events[2].text.len(), MAX_TEXT);
-        assert!(!events[2].text.ends_with(" [truncated]"));
+        assert_eq!(event.version, 1);
+        let record = event.json();
+        assert_eq!(record["message"], "[structured_records_separate_message_and_callsite_metadata] hello 世界\nsecond line");
+        assert_eq!(record["module_path"], module_path!());
+        assert_eq!(record["attributes"]["__unchained_function"], "structured_records_separate_message_and_callsite_metadata");
+        assert_eq!(record["line"], expected_line);
+        assert!(record["thread_id"].as_u64().unwrap() > 0);
+        assert!(record["time"].as_str().unwrap().contains('T'));
+        assert_eq!(events[1].json()["message"], "[literal prefix] stays");
+        let record = events[2].json();
+        let text = record["message"].as_str().unwrap();
+        assert_eq!(text.len(), MAX_TEXT);
+        assert!(text.ends_with(" [truncated]"));
     }
 
     #[test]
-    fn unavailable_source_metadata_is_null_and_message_is_not_parsed() {
+    fn unavailable_source_metadata_is_omitted_and_message_is_not_parsed() {
         let event = Event::from_record(&log::Record::builder().level(log::Level::Warn)
             .args(format_args!("[INFO] [module] literal content")).build()).unwrap();
-        assert_eq!(event.module, None);
-        assert_eq!(event.function, None);
-        assert_eq!(event.line, None);
-        assert_eq!(event.text, "[INFO] [module] literal content");
-        let json = serde_json::to_value(event).unwrap();
-        assert!(json["module"].is_null());
-        assert!(json["function"].is_null());
-        assert!(json["line"].is_null());
+        let record = event.json();
+        assert!(record.get("module_path").is_none());
+        assert!(record.get("line").is_none());
+        assert_eq!(record["message"], "[INFO] [module] literal content");
+    }
+
+    #[test]
+    fn log4rs_captures_attributes_targets_and_thread_before_handoff() {
+        let event = std::thread::Builder::new().name("emitting-thread".into()).spawn(|| {
+            let values = [("request", 42u64)];
+            let event = Event::from_record(&log::Record::builder()
+                .target("custom-target").module_path(Some("source-module"))
+                .file(Some("source.rs")).line(Some(123)).key_values(&values)
+                .args(format_args!("message")).build()).unwrap();
+            #[cfg(windows)]
+            assert_eq!(event.json()["thread_id"], unsafe {
+                windows::Win32::System::Threading::GetCurrentThreadId()
+            });
+            event
+        }).unwrap().join().unwrap();
+        let record = event.json();
+        assert_eq!(record["thread"], "emitting-thread");
+        assert_eq!(record["target"], "custom-target");
+        assert_eq!(record["module_path"], "source-module");
+        assert_eq!(record["file"], "source.rs");
+        assert_eq!(record["line"], 123);
+        assert_eq!(record["attributes"]["request"], "42");
+        assert!(record["mdc"].is_object());
     }
 
     #[test]
     fn metadata_and_escaped_frames_remain_bounded() {
-        let long = "界".repeat(MAX_METADATA);
+        let long = "界".repeat(1024);
         let values = [("__unchained_function", long.as_str())];
         let event = Event::from_record(&log::Record::builder().module_path(Some(&long))
             .key_values(&values).args(format_args!("{}", "\0".repeat(MAX_TEXT + 1))).build()).unwrap();
-        assert!(event.module.as_ref().unwrap().len() <= MAX_METADATA);
-        assert!(event.function.as_ref().unwrap().len() <= MAX_METADATA);
-        assert!(event.text.ends_with(" [truncated]"));
+        let record = event.json();
+        assert_eq!(record["module_path"], long);
+        assert_eq!(record["attributes"]["__unchained_function"], long);
+        assert!(record["message"].as_str().unwrap().ends_with(" [truncated]"));
         assert!(serde_json::to_vec(&event).unwrap().len() < 128 * 1024);
+        let oversized = "x".repeat(MAX_RECORD);
+        assert!(Event::from_record(&log::Record::builder().module_path(Some(&oversized)).build()).is_err());
     }
 
     #[test]
@@ -384,16 +409,16 @@ mod tests {
         assert!(child.wait().unwrap().success());
         std::fs::remove_file(marker).unwrap();
         assert_eq!(frames[0]["kind"], "log");
-        assert_eq!(frames[0]["level"], "INFO");
-        let text = frames[0]["text"].as_str().unwrap();
-        assert_eq!(frames[0]["version"], 2);
+        assert_eq!(frames[0]["record"]["level"], "INFO");
+        let text = frames[0]["record"]["message"].as_str().unwrap();
+        assert_eq!(frames[0]["version"], 1);
         assert_eq!(text, "hello 世界\nsecond line");
-        assert_eq!(frames[0]["module"], "UnchainedPlugin::test");
-        assert!(frames[0]["thread_id"].as_u64().unwrap() > 0);
+        assert_eq!(frames[0]["record"]["module_path"], "UnchainedPlugin::test");
+        assert!(frames[0]["record"]["thread_id"].as_u64().unwrap() > 0);
         assert!(!text.contains('\x1b'));
-        assert_eq!(frames[1]["level"], "DEBUG");
+        assert_eq!(frames[1]["record"]["level"], "DEBUG");
         assert_eq!(frames[2]["kind"], "banner");
-        assert!(!frames[2]["text"].as_str().unwrap().contains('\x1b'));
+        assert!(!frames[2]["record"]["message"].as_str().unwrap().contains('\x1b'));
     }
 
     #[test]
