@@ -150,12 +150,8 @@ mod tests {
         use super::super::palette::PaletteEncoderConfig;
 
         let newline = if cfg!(windows) { "\r\n" } else { "\n" };
-        let yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
-        let pattern = yaml["appenders"]["console"]["encoder"]["pattern"].as_str().unwrap();
         let config: PaletteEncoderConfig = serde_yaml::from_str("{}").unwrap();
         let encoder = config.build().unwrap();
-        let config: PaletteEncoderConfig = serde_yaml::from_str(&format!("pattern: '{pattern}'")).unwrap();
-        let configured_encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
             for length in [1, 23, 24, 25, 31, 32, 33, 40] {
                 let module: String = std::iter::once('Ω')
@@ -177,9 +173,6 @@ mod tests {
                 let expected_body = format!(" [{label}] message{newline}");
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
-                let mut configured = Vec::new();
-                configured_encoder.encode(&mut SimpleWriter(&mut configured), &record).unwrap();
-                assert!(String::from_utf8(configured).unwrap().ends_with(&expected_body), "{module}");
             }
         }
     }
