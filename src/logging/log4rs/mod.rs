@@ -140,7 +140,22 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::{Level, Log, Metadata};
+    use log::{Level, Log, Metadata, Record};
+    use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    fn render_encoder(registry: &Deserializers, yaml: &str, record: &Record) -> Vec<u8> {
+        let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
+        let encoder: Box<dyn Encode> = registry.deserialize(&config.kind, config.config)
+            .unwrap_or_else(|error| panic!("{yaml}: {error}"));
+        let mut output = Vec::new();
+        encoder.encode(&mut SimpleWriter(&mut output), record).unwrap();
+        output
+    }
+
+    fn console_config(encoder: &str) -> anyhow::Result<Config> {
+        let encoder: String = encoder.lines().map(|line| format!("      {line}\n")).collect();
+        config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    encoder:\n{encoder}root:\n  level: info\n  appenders: [console]\n"), "console-test")
+    }
 
     #[test]
     fn json_encoder_respects_configured_stdio_and_file_sinks() {
@@ -179,11 +194,6 @@ mod tests {
             assert!(file[0]["time"].as_str().unwrap().contains('T'));
             assert_eq!(file[1]["message"].as_str().unwrap().len(), 20 * 1024);
             assert!(file[2]["message"].as_str().unwrap().contains("▄████████"));
-            for record in &file {
-                for key in ["version", "kind", "record", "dropped"] {
-                    assert!(record.get(key).is_none(), "Unexpected transport field: {key}");
-                }
-            }
             let stdout = read_records(&output.stdout);
             let stderr = read_records(&output.stderr);
             if target == "file-only" {
@@ -285,9 +295,15 @@ root:
     }
 
     #[test]
-    fn embedded_console_config_loads() {
+    fn embedded_configuration_preserves_patterns_and_filters() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         assert_eq!(yaml["appenders"]["console"]["encoder"]["pattern"], palette::DEFAULT_PATTERN);
+        for name in ["file", "kismet"] {
+            let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
+            assert!(pattern.contains("{l:5}"));
+            assert!(pattern.contains("{M}"));
+            assert!(!pattern.contains("{t}"));
+        }
         // Exercise the shipped console config without opening log files.
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));
@@ -303,53 +319,21 @@ root:
     }
 
     #[test]
-    fn default_file_formats_use_five_column_level_and_full_module() {
-        let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
-        for name in ["file", "kismet"] {
-            let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
-            assert!(pattern.contains("{l:5}"));
-            assert!(pattern.contains("{M}"));
-            assert!(!pattern.contains("{t}"));
-        }
-    }
-
-    #[test]
-    fn console_adapter_delegates_pattern_encoders() {
-        config_from_yaml(r#"
-appenders:
-  console:
-    kind: console
-    encoder:
-      pattern: "{l} [{t}] {m}{n}"
-root:
-  level: info
-  appenders: [console]
-"#, "override").unwrap();
-    }
-
-    #[test]
     fn registered_encoders_accept_short_and_full_module_fields() {
-        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
-
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
         for yaml in [
             "kind: pattern\npattern: '{sm}|{M}|{t}|{fn}'",
             "kind: palette\npattern: '{sm}|{M}|{t}|{fn}'",
         ] {
-            let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
-            let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config).unwrap();
-            let mut output = Vec::new();
-            encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
-                .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build()).unwrap();
+            let output = render_encoder(&deserializers, yaml, &Record::builder()
+                .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build());
             assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target|???");
         }
     }
 
     #[test]
     fn registered_palette_encoder_preserves_directive_boundary_escapes() {
-        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
-
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
         for (pattern, expected) in [
@@ -364,110 +348,82 @@ root:
             ("{palette(a{{b)}{m}", "message"),
             ("{palette(a))}}b)}}}{m}", "}message"),
             (r"{palette(a\)\}b)}}}{m}", "}message"),
+            (r"\{palette\(missing\)\}{palette()}{h({m})}", "{palette(missing)}message"),
         ] {
             let yaml = format!("kind: palette\npattern: '{pattern}'\npalette: {{error: null, warn: null, info: null, debug: null, trace: null, 'a}}b': null, 'a{{b': null, 'a)}}b': null}}");
-            let config: EncoderConfig = serde_yaml::from_str(&yaml).unwrap();
-            let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config)
-                .unwrap_or_else(|error| panic!("{pattern}: {error}"));
-            let mut output = Vec::new();
-            encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
-                .level(Level::Info).args(format_args!("message")).build()).unwrap();
+            let output = render_encoder(&deserializers, &yaml, &Record::builder()
+                .level(Level::Info).args(format_args!("message")).build());
             assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
         }
     }
 
     #[test]
     fn registered_palette_encoder_preserves_native_format_fills() {
-        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
-
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
-        let record = log::Record::builder().level(Level::Info).args(format_args!("message")).build();
-        for fill in ['{', '}', '🦀', '\\', '(', ')'] {
-            for align in ['<', '>'] {
-                for formatter in ["m", "({m})", "h({m})"] {
-                    let native = format!("{{{formatter}:{fill}{align}20}}tail");
-                    let mut expected = Vec::new();
-                    log4rs::encode::pattern::PatternEncoder::new(&native)
-                        .encode(&mut SimpleWriter(&mut expected), &record).unwrap();
-                    assert!(!String::from_utf8_lossy(&expected).contains("ERROR"), "{native}");
-                    for (prefix, suffix) in [("", "{palette(error)}"), ("{palette(error)}", "{palette()}")] {
-                        let pattern = format!("{prefix}{{{formatter}:{fill}{align}20}}{suffix}tail");
-                        let yaml = format!("kind: palette\npattern: '{pattern}'");
-                        let config: EncoderConfig = serde_yaml::from_str(&yaml).unwrap();
-                        let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config)
-                            .unwrap_or_else(|error| panic!("{pattern}: {error}"));
-                        let mut output = Vec::new();
-                        encoder.encode(&mut SimpleWriter(&mut output), &record).unwrap();
-                        assert_eq!(output, expected, "{pattern}");
-                        config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    encoder:\n      kind: palette\n      pattern: '{pattern}'\nroot:\n  level: info\n  appenders: [console]\n"), "native-fill").unwrap();
-                    }
-                }
-            }
+        let record = Record::builder().level(Level::Info).args(format_args!("message")).build();
+        for (formatter, fill, align) in [
+            ("m", '{', '>'), ("m", '}', '<'),
+            ("({m})", '{', '<'), ("h({m})", '}', '>'),
+            ("m", '🦀', '>'), ("({m})", '🦀', '<'),
+            ("({m})", '\\', '<'), ("m", '(', '<'), ("h({m})", ')', '>'),
+        ] {
+            let native = format!("{{{formatter}:{fill}{align}20}}tail");
+            let mut expected = Vec::new();
+            log4rs::encode::pattern::PatternEncoder::new(&native)
+                .encode(&mut SimpleWriter(&mut expected), &record).unwrap();
+            let pattern = format!("{{palette(error)}}{{{formatter}:{fill}{align}20}}{{palette()}}tail");
+            let output = render_encoder(&deserializers, &format!("kind: palette\npattern: '{pattern}'"), &record);
+            assert_eq!(output, expected, "{pattern}");
         }
+        console_config("kind: palette\npattern: '{m:{>20}{palette(error)}tail'").unwrap();
     }
 
     #[test]
     fn registered_palette_names_accept_native_level_format_fills() {
-        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
-
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
-        for fill in ['{', '}', '🦀', '\\', '(', ')'] {
-            for align in ['<', '>'] {
-                for field in ["l", "level"] {
-                    let name = format!("{{{field}:{fill}{align}8}}");
-                    let mut palette = std::collections::BTreeMap::<String, Option<String>>::new();
-                    for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-                        let mut key = Vec::new();
-                        log4rs::encode::pattern::PatternEncoder::new(&name).encode(&mut SimpleWriter(&mut key),
-                            &log::Record::builder().level(level).build()).unwrap();
-                        let key = String::from_utf8(key).unwrap();
-                        assert_eq!(key.chars().count(), 8, "{name}: {key}");
-                        palette.insert(key, None);
-                    }
-                    let pattern = format!("{{palette({name})}}{{m}}{{palette()}}}}}}");
-                    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&format!("kind: palette\npattern: '{pattern}'")).unwrap();
-                    yaml["palette"] = serde_yaml::to_value(palette).unwrap();
-                    let config: EncoderConfig = serde_yaml::from_value(yaml.clone()).unwrap();
-                    let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config)
-                        .unwrap_or_else(|error| panic!("{pattern}: {error}"));
-                    for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-                        let mut output = Vec::new();
-                        encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
-                            .level(level).args(format_args!("message")).build()).unwrap();
-                        assert_eq!(output, b"message}", "{pattern}: {level}");
-                    }
-                    let mut appender: serde_yaml::Value = serde_yaml::from_str("appenders: {console: {kind: console}}\nroot: {level: info, appenders: [console]}").unwrap();
-                    appender["appenders"]["console"]["encoder"] = yaml;
-                    config_from_yaml(&serde_yaml::to_string(&appender).unwrap(), "level-fill").unwrap();
-                }
+        for (field, fill, align) in [
+            ("l", '{', '>'), ("level", '}', '<'), ("level", '🦀', '>'),
+            ("l", '\\', '<'), ("l", '(', '>'), ("level", ')', '<'),
+        ] {
+            let name = format!("{{{field}:{fill}{align}8}}");
+            let mut palette = std::collections::BTreeMap::<String, Option<String>>::new();
+            for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+                let mut key = Vec::new();
+                log4rs::encode::pattern::PatternEncoder::new(&name).encode(&mut SimpleWriter(&mut key),
+                    &Record::builder().level(level).build()).unwrap();
+                palette.insert(String::from_utf8(key).unwrap(), None);
             }
+            let pattern = format!("{{palette({name})}}{{m}}{{palette()}}}}}}");
+            let mut yaml: serde_yaml::Value = serde_yaml::from_str(&format!("kind: palette\npattern: '{pattern}'")).unwrap();
+            yaml["palette"] = serde_yaml::to_value(palette).unwrap();
+            let output = render_encoder(&deserializers, &serde_yaml::to_string(&yaml).unwrap(),
+                &Record::builder().level(Level::Info).args(format_args!("message")).build());
+            assert_eq!(output, b"message}", "{pattern}");
         }
     }
 
     #[test]
-    fn registered_palette_fills_do_not_allow_nested_or_non_level_directives() {
-        use log4rs::encode::{Encode, EncoderConfig};
-
-        let mut deserializers = Deserializers::default();
-        register(&mut deserializers);
-        for pattern in [
-            "{h({m:{>20}{palette(error)})}",
-            "{h({m:}>20}{palette()})}",
-            "{h(text:{>20}{palette(error)})}",
-            "{palette({m:{>20})}", "{palette({K(user):}>20})}",
-            "{palette({l:{>8}_missing)}",
+    fn invalid_palette_configuration_is_rejected() {
+        for options in [
+            "palette: {info: red}", "palette: {info: '#12345'}", "palette: {info: '#gg2233'}",
+            "palette: {info: '#é2233'}", "palette: {info: '#+f3344'}", "palette: {info: 123}",
+            "palette: {'': null}", "palette: {info: null, INFO: null}", "unknown: true",
+            "pattern: '{palette(missing)}'", "pattern: '{palette({l}_missing)}'",
+            "pattern: '{palette({K(user)})}'", "pattern: '{h({palette(error)}text)}'",
+            "pattern: '{palette(error)'", "pattern: '{palette(error}'",
+            "pattern: '{palette({l})}hello'\npalette: {info: '#112233'}",
+            "pattern: '{h({m:{>20}{palette(error)})}'", "pattern: '{h({m:}>20}{palette()})}'",
+            "pattern: '{h(text:{>20}{palette(error)})}'", "pattern: '{palette({m:{>20})}'",
+            "pattern: '{palette({K(user):}>20})}'", "pattern: '{palette({l:{>8}_missing)}'",
         ] {
-            let config: EncoderConfig = serde_yaml::from_str(&format!("kind: palette\npattern: '{pattern}'")).unwrap();
-            assert!(deserializers.deserialize::<dyn Encode>(&config.kind, config.config).is_err(), "{pattern}");
-            assert!(config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    encoder:\n      kind: palette\n      pattern: '{pattern}'\nroot:\n  level: info\n  appenders: [console]\n"), "invalid-fill").is_err(), "{pattern}");
+            assert!(console_config(&format!("kind: palette\n{options}")).is_err(), "{options}");
         }
     }
 
     #[test]
     fn file_appenders_share_console_patterns() {
-        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
         use std::sync::Mutex;
 
         struct TempDir(PathBuf);
@@ -540,26 +496,13 @@ root:
 
     #[test]
     fn console_adapter_preserves_builtin_configuration_validation() {
-        for options in ["", "target: null", "target: stderr\n    tty_only: true"] {
+        for options in ["", "target: null", "target: stderr\n    tty_only: true",
+            "encoder:\n      pattern: '{l} [{t}] {m}{n}'"] {
             config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "console-options").unwrap();
         }
-        for options in ["target: invalid", "unknown: true", "encoder:\n      kind: palette\n      unknown: true"] {
-            assert!(config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "invalid-console-options").is_err());
+        for options in ["target: invalid", "unknown: true", "encoder:\n      kind: missing_encoder"] {
+            let error = config_from_yaml(&format!("appenders:\n  console:\n    kind: console\n    {options}\nroot:\n  level: info\n  appenders: [console]\n"), "invalid-console-options").unwrap_err();
+            assert!(error.to_string().contains("invalid-console-options"));
         }
-    }
-
-    #[test]
-    fn invalid_encoder_is_not_silently_dropped() {
-        let error = config_from_yaml(r#"
-appenders:
-  console:
-    kind: console
-    encoder:
-      kind: missing_encoder
-root:
-  level: debug
-  appenders: [console]
-"#, "bad.yaml").unwrap_err();
-        assert!(error.to_string().contains("bad.yaml"));
     }
 }

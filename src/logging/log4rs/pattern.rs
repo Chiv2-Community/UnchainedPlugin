@@ -154,6 +154,8 @@ mod tests {
         let pattern = yaml["appenders"]["console"]["encoder"]["pattern"].as_str().unwrap();
         let config: PaletteEncoderConfig = serde_yaml::from_str("{}").unwrap();
         let encoder = config.build().unwrap();
+        let config: PaletteEncoderConfig = serde_yaml::from_str(&format!("pattern: '{pattern}'")).unwrap();
+        let configured_encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
             for length in 1..=40 {
                 let module: String = std::iter::once('Ω')
@@ -177,8 +179,7 @@ mod tests {
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
                 let mut configured = Vec::new();
-                let config: PaletteEncoderConfig = serde_yaml::from_str(&format!("pattern: '{pattern}'")).unwrap();
-                config.build().unwrap().encode(&mut SimpleWriter(&mut configured), &record).unwrap();
+                configured_encoder.encode(&mut SimpleWriter(&mut configured), &record).unwrap();
                 assert!(String::from_utf8(configured).unwrap().ends_with(&expected_body), "{module}");
             }
         }

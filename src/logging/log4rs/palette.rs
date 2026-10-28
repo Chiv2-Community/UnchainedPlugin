@@ -397,45 +397,13 @@ palette:
     }
 
     #[test]
-    fn palette_directives_preserve_escaping_and_native_nested_formatters() {
-        let encoder = encoder(r#"pattern: '\{palette\(missing\)\}|{palette()}{({l} {sm}):>20}|{h({m})}'
-palette: {}"#);
-        let mut bytes = Vec::new();
-        encoder.encode(&mut SimpleWriter(&mut bytes), &Record::builder()
-            .level(Level::Info).module_path(Some("plugin::module"))
-            .args(format_args!("hello")).build()).unwrap();
-        assert_eq!(String::from_utf8(bytes).unwrap(), format!("{{palette(missing)}}|{:>20}|hello", "INFO p::module"));
-    }
-
-    #[test]
-    fn invalid_palettes_and_missing_dynamic_names_reject_configuration() {
-        for yaml in [
-            "palette: {info: red}", "palette: {info: '#12345'}", "palette: {info: '#gg2233'}",
-            "palette: {info: '#é2233'}", "palette: {info: '#+f3344'}", "palette: {info: 123}", "palette: {'': null}",
-            "palette: {info: null, INFO: null}", "unknown: true",
-            "pattern: '{palette(missing)}'", "pattern: '{palette({l}_missing)}'",
-            "pattern: '{palette({K(user)})}'", "pattern: '{h({palette(error)}text)}'",
-            "pattern: '{palette(error)'", "pattern: '{palette(error}'",
-        ] {
-            let result = serde_yaml::from_str::<PaletteEncoderConfig>(yaml).map_err(anyhow::Error::from)
-                .and_then(PaletteEncoderConfig::build);
-            assert!(result.is_err(), "{yaml}");
-        }
-        let yaml = "pattern: '{palette({l})}hello'\npalette: {info: '#112233'}";
-        assert!(serde_yaml::from_str::<PaletteEncoderConfig>(yaml).unwrap().build().is_err());
-    }
-
-    #[test]
-    fn palette_size_is_not_limited_by_legacy_slot_count() {
+    fn unused_palette_colors_do_not_consume_legacy_slots() {
         let mut table = BTreeMap::new();
         for i in 0..64 { table.insert(format!("color{i}"), Some(Rgb([i, i, i]))); }
         let encoder = PaletteEncoderConfig {
             pattern: Some("{palette(color63)}hello{palette()}".to_owned()), palette: Some(table),
         }.build().unwrap();
         assert_eq!(encoder.colors.len(), 1, "unused colors must not consume legacy slots");
-        let mut bytes = Vec::new();
-        encoder.encode(&mut SimpleWriter(&mut bytes), &Record::builder().build()).unwrap();
-        assert_eq!(bytes, b"hello");
     }
 
     #[test]

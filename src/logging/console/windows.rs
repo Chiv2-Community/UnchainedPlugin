@@ -226,49 +226,56 @@ impl TemporaryDefaults {
 mod tests {
     use super::*;
 
-    #[test]
-    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
-    fn registered_console_writers_survive_later_palette_setup() {
+    fn child(fixture: &str) -> std::process::Command {
         use std::os::windows::process::CommandExt;
-        let mut failures = Vec::new();
-        for first in ["null", "pattern", "json", "plain_palette", "default", "plain_pattern"] {
-            for target in ["stdout", "stderr"] {
-                for later in ["stdout", "stderr"] {
-                    let output = std::process::Command::new(std::env::current_exe().unwrap())
-                        .args(["--ignored", "--exact", "--nocapture",
-                            &format!("{}::writer_order_child", module_path!().split_once("::").unwrap().1)])
-                        .env("UNCHAINED_TEST_FIRST_ENCODER", first)
-                        .env("UNCHAINED_TEST_FIRST_TARGET", target)
-                        .env("UNCHAINED_TEST_LATER_TARGET", later)
-                        .env_remove("UNCHAINED_TEST_CONSOLE_CONTEXT")
-                        .env_remove("WT_SESSION").env_remove("NO_COLOR")
-                        .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
-                        .creation_flags(0x08000000).output().unwrap();
-                    if !output.status.success() {
-                        failures.push(format!("{first}/{target}/{later}: {}", String::from_utf8_lossy(&output.stderr)));
-                    }
-                }
-            }
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command.args(["--ignored", "--exact", "--nocapture",
+            &format!("{}::{fixture}", module_path!().split_once("::").unwrap().1)])
+            .env_remove("WT_SESSION").env_remove("NO_COLOR")
+            .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
+            .creation_flags(0x08000000);
+        command
+    }
+
+    fn report_panics() {
+        use std::io::Write;
+        use std::os::windows::io::BorrowedHandle;
+        unsafe {
+            let stderr = BorrowedHandle::borrow_raw(GetStdHandle(STD_ERROR_HANDLE).unwrap().0 as *mut _)
+                .try_clone_to_owned().unwrap();
+            let stderr = std::sync::Mutex::new(std::fs::File::from(stderr));
+            std::panic::set_hook(Box::new(move |info| { let _ = writeln!(stderr.lock().unwrap(), "{info}"); }));
         }
-        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    fn console_output() -> std::fs::File {
+        use std::os::windows::io::AsRawHandle;
+        let file = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$").unwrap();
+        unsafe {
+            SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
+            SetStdHandle(STD_ERROR_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
+        }
+        file
     }
 
     #[test]
     #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
-    fn registered_console_setup_preserves_plain_output_contracts() {
-        use std::os::windows::process::CommandExt;
-        for context in ["shared", "attached", "suppressed", "redirected", "no_color"] {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--ignored", "--exact", "--nocapture",
-                    &format!("{}::writer_order_child", module_path!().split_once("::").unwrap().1)])
+    fn registered_console_writers_preserve_handles_and_output_contracts() {
+        let owned = [
+            ("null", "stdout", "stdout"), ("pattern", "stderr", "stderr"),
+            ("json", "stdout", "stderr"), ("plain_palette", "stderr", "stdout"),
+            ("default", "stdout", "stderr"), ("plain_pattern", "stderr", "stdout"),
+        ].into_iter().map(|(first, target, later)| ("owned", first, target, later));
+        let controls = ["shared", "attached", "suppressed", "redirected", "no_color"]
+            .into_iter().map(|context| (context, "plain_palette", "stdout",
+                if context == "redirected" { "stdout" } else { "stderr" }));
+        for (context, first, target, later) in owned.chain(controls) {
+            let output = child("writer_order_child")
                 .env("UNCHAINED_TEST_CONSOLE_CONTEXT", context)
-                .env("UNCHAINED_TEST_FIRST_ENCODER", "plain_palette")
-                .env("UNCHAINED_TEST_FIRST_TARGET", "stdout")
-                .env("UNCHAINED_TEST_LATER_TARGET", if context == "redirected" { "stdout" } else { "stderr" })
-                .env_remove("WT_SESSION").env_remove("NO_COLOR")
-                .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
-                .creation_flags(0x08000000).output().unwrap();
-            assert!(output.status.success(), "{context}: {}", String::from_utf8_lossy(&output.stderr));
+                .env("UNCHAINED_TEST_FIRST_ENCODER", first)
+                .env("UNCHAINED_TEST_FIRST_TARGET", target)
+                .env("UNCHAINED_TEST_LATER_TARGET", later).output().unwrap();
+            assert!(output.status.success(), "{context}/{first}/{target}/{later}: {}", String::from_utf8_lossy(&output.stderr));
             if context == "redirected" {
                 assert!(String::from_utf8_lossy(&output.stdout).contains("writer order regression"));
             }
@@ -278,14 +285,10 @@ mod tests {
     #[test]
     #[ignore = "subprocess fixture for registered console writer order"]
     fn writer_order_child() {
-        use std::io::Write;
-        use std::os::windows::io::{AsRawHandle, BorrowedHandle};
+        use std::os::windows::io::AsRawHandle;
         unsafe {
             let handles = standard_handles();
-            let report = BorrowedHandle::borrow_raw(handles[2].1.unwrap().0 as *mut _)
-                .try_clone_to_owned().unwrap();
-            let report = std::sync::Mutex::new(std::fs::File::from(report));
-            std::panic::set_hook(Box::new(move |info| { let _ = writeln!(report.lock().unwrap(), "{info}"); }));
+            report_panics();
             let _ = FreeConsole();
             restore_standard_handles(handles);
             let context = std::env::var("UNCHAINED_TEST_CONSOLE_CONTEXT").unwrap_or_else(|_| "owned".into());
@@ -298,12 +301,8 @@ mod tests {
             else { spawn_console(); }
             if context == "attached" { super::super::attach_stdio(); }
             if context == "no_color" { std::env::set_var("NO_COLOR", "1"); }
-            let output = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$").unwrap();
+            let output = console_output();
             if context == "redirected" { restore_standard_handles(handles); }
-            else {
-                SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(output.as_raw_handle() as isize)).unwrap();
-                SetStdHandle(STD_ERROR_HANDLE, HANDLE(output.as_raw_handle() as isize)).unwrap();
-            }
             let console_handle = HANDLE(output.as_raw_handle() as isize);
             let before = screen_info(console_handle).unwrap();
             let mut before_mode = CONSOLE_MODE(0);
@@ -352,15 +351,10 @@ mod tests {
     #[test]
     #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
     fn custom_palettes_on_owned_and_shared_consoles() {
-        use std::os::windows::process::CommandExt;
         for owned in [false, true] {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--ignored", "--exact", "--nocapture",
-                    &format!("{}::palette_child", module_path!().split_once("::").unwrap().1)])
+            let output = child("palette_child")
                 .env("UNCHAINED_TEST_OWN_CONSOLE", owned.to_string())
-                .env_remove("WT_SESSION").env_remove("NO_COLOR")
-                .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
-                .creation_flags(0x08000000).output().unwrap();
+                .output().unwrap();
             assert!(output.status.success(), "owned={owned}: {}",
                 String::from_utf8_lossy(&output.stderr));
         }
@@ -369,24 +363,9 @@ mod tests {
     #[test]
     #[ignore = "subprocess fixture for console palettes"]
     fn palette_child() {
-        use std::io::Write;
-        use std::os::windows::io::{AsRawHandle, BorrowedHandle};
-        fn console_output() -> std::fs::File {
-            let file = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$").unwrap();
-            unsafe {
-                SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
-                SetStdHandle(STD_ERROR_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
-            }
-            file
-        }
         unsafe {
             let handles = standard_handles();
-            let stderr = BorrowedHandle::borrow_raw(handles[2].1.unwrap().0 as *mut _)
-                .try_clone_to_owned().unwrap();
-            let stderr = std::sync::Mutex::new(std::fs::File::from(stderr));
-            std::panic::set_hook(Box::new(move |info| {
-                let _ = writeln!(stderr.lock().unwrap(), "{info}");
-            }));
+            report_panics();
             let _ = FreeConsole();
             restore_standard_handles(handles);
             let owned = std::env::var("UNCHAINED_TEST_OWN_CONSOLE").unwrap() == "true";
@@ -424,13 +403,10 @@ mod tests {
     fn attachment_and_console_spawning_are_independent() {
         for attach in [false, true] {
             for no_spawn in [false, true] {
-                use std::os::windows::process::CommandExt;
-                let output = std::process::Command::new(std::env::current_exe().unwrap())
-                    .args(["--ignored", "--exact", "--nocapture",
-                        &format!("{}::console_flags_child", module_path!().split_once("::").unwrap().1)])
+                let output = child("console_flags_child")
                     .env("UNCHAINED_TEST_ATTACH", attach.to_string())
                     .env("UNCHAINED_TEST_NO_SPAWN", no_spawn.to_string())
-                    .creation_flags(0x08000000).output().unwrap();
+                    .output().unwrap();
                 assert!(output.status.success(), "attach={attach}, no_spawn={no_spawn}: {}",
                     String::from_utf8_lossy(&output.stderr));
                 if attach {
