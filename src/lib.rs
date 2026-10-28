@@ -376,7 +376,7 @@ fn preinit_rustlib() {
         logging::console::attach_stdio();
     }
     unsafe {
-        if !logging::console::console_spawning_disabled() && !logging::console::forward::enabled() && GetConsoleWindow().0 == 0 {
+        if !logging::console::console_spawning_disabled() && GetConsoleWindow().0 == 0 {
             let _ = AllocConsole();
 
             // Enable ANSI escape codes for colored output
@@ -410,9 +410,7 @@ fn preinit_rustlib() {
 
 // Initialize Logger and Globals
 fn init_rustlib() {
-    if let Err(error) = logging::console::print_banner() {
-        swarn!("Failed to print startup banner: {}", error);
-    }
+    logging::console::print_banner();
     init_globals().expect("Failed to init globals!");
 }
 

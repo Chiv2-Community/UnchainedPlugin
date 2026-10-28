@@ -140,6 +140,105 @@ mod tests {
     use super::*;
     use log::{Level, Log, Metadata};
 
+    #[test]
+    fn json_encoder_respects_configured_stdio_and_file_sinks() {
+        let directory = std::env::temp_dir().join(format!("unchained-json-sinks-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&directory).unwrap();
+        for (target, kind) in [("stdout", "file"), ("stderr", "rolling_file"), ("file-only", "file")] {
+            let path = directory.join(format!("{target}.jsonl"));
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::json_sink_child", module_path!().split_once("::").unwrap().1)])
+                .env("UNCHAINED_TEST_JSON_TARGET", target)
+                .env("UNCHAINED_TEST_JSON_FILE", &path)
+                .env("UNCHAINED_TEST_JSON_FILE_KIND", kind);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x08000000); // No console; inherit redirected stdio.
+            }
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            let read_records = |bytes: &[u8]| -> Vec<serde_json::Value> {
+                String::from_utf8_lossy(bytes).lines()
+                    .filter(|line| line.starts_with('{'))
+                    .map(|line| serde_json::from_str(line).unwrap()).collect()
+            };
+            let file = read_records(&std::fs::read(&path).unwrap());
+            assert_eq!(file.len(), 3);
+            assert_eq!(file[0]["message"], "[json_sink_child] hello 世界\nsecond line");
+            assert_eq!(file[1]["attributes"]["request"], "42");
+            assert_eq!(file[0]["attributes"]["__unchained_function"], "json_sink_child");
+            assert_eq!(file[0]["module_path"], module_path!());
+            assert!(file[0]["line"].as_u64().unwrap() > 0);
+            assert!(file[0]["thread_id"].as_u64().unwrap() > 0);
+            assert!(file[0]["time"].as_str().unwrap().contains('T'));
+            assert_eq!(file[1]["message"].as_str().unwrap().len(), 20 * 1024);
+            assert!(file[2]["message"].as_str().unwrap().contains("▄████████"));
+            for record in &file {
+                for key in ["version", "kind", "record", "dropped"] {
+                    assert!(record.get(key).is_none(), "Unexpected transport field: {key}");
+                }
+            }
+            let stdout = read_records(&output.stdout);
+            let stderr = read_records(&output.stderr);
+            if target == "file-only" {
+                assert!(stdout.is_empty() && stderr.is_empty());
+                assert!(!String::from_utf8_lossy(&output.stdout).contains("▄████████"));
+            } else {
+                let (selected, other) = if target == "stdout" { (stdout, stderr) } else { (stderr, stdout) };
+                assert!(other.is_empty());
+                assert_eq!(selected.len(), file.len());
+                for (console, file) in selected.iter().zip(&file) {
+                    assert_eq!(console["message"], file["message"]);
+                    assert_eq!(console["attributes"], file["attributes"]);
+                }
+            }
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for configured JSON sinks"]
+    fn json_sink_child() {
+        let target = std::env::var("UNCHAINED_TEST_JSON_TARGET").unwrap();
+        #[cfg(windows)]
+        let before = unsafe { windows::Win32::System::Console::GetConsoleWindow() };
+        if target == "stderr" { crate::logging::console::disable_console_spawning(); }
+        else { crate::logging::console::attach_stdio(); }
+        let file = std::env::var("UNCHAINED_TEST_JSON_FILE").unwrap();
+        let kind = std::env::var("UNCHAINED_TEST_JSON_FILE_KIND").unwrap();
+        let policy = if kind == "rolling_file" {
+            "policy: {kind: compound, trigger: {kind: size, limit: 1048576}, roller: {kind: delete}}"
+        } else { "" };
+        let appenders = if target == "file-only" { "[file]" } else { "[console, file]" };
+        let console_target = if target == "file-only" { "stdout" } else { &target };
+        let config = config_from_yaml(&format!(r#"
+appenders:
+  console:
+    kind: console
+    target: {console_target}
+    encoder: {{kind: json}}
+  file:
+    kind: {kind}
+    path: "{}"
+    {policy}
+    encoder: {{kind: json}}
+root:
+  level: info
+  appenders: {appenders}
+"#, yaml_escape_double_quoted(&file)), "json-sink-test").unwrap();
+        let _handle = log4rs::init_config(config).unwrap();
+        sinfo!(fn; "hello 世界\nsecond line");
+        sinfo!(request = 42; "{}", "x".repeat(20 * 1024));
+        crate::logging::console::print_banner();
+        log::logger().flush();
+        #[cfg(windows)]
+        assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });
+    }
+
     #[cfg(unix)]
     #[test]
     fn console_color_policy_at_real_output_boundary() {

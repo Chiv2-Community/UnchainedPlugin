@@ -5,19 +5,12 @@ use super::log4rs::pattern::PatternEncoder;
 
 mod banner;
 pub(crate) use banner::print_banner;
-pub(crate) mod forward;
 
-static ATTACH_STDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_SPAWN_CONSOLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_STD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-pub(crate) fn attach_stdio_enabled() -> bool {
-    ATTACH_STDIO.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 pub(crate) fn attach_stdio() {
     disable_console_spawning();
-    ATTACH_STDIO.store(true, std::sync::atomic::Ordering::Relaxed);
     #[cfg(windows)]
     NO_STD_OUTPUT.store(!windows_backend::attach_parent_output(), std::sync::atomic::Ordering::Relaxed);
 }

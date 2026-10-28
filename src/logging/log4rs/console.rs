@@ -3,18 +3,6 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{Encode, EncoderConfig};
 
 use crate::logging::console::{configure_console_colors, ConsoleEncoder};
-use crate::logging::console::forward;
-
-#[derive(Debug)]
-struct ForwardingConsole;
-
-impl Append for ForwardingConsole {
-    fn append(&self, record: &log::Record) -> anyhow::Result<()> {
-        forward::send_record(record)?;
-        Ok(())
-    }
-    fn flush(&self) {}
-}
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -56,13 +44,6 @@ impl Deserialize for ConsoleAppenderDeserializer {
             ConsoleTarget::Stdout => Target::Stdout,
             ConsoleTarget::Stderr => Target::Stderr,
         };
-        if forward::enabled() {
-            // Validate the config, but structured records do not use display patterns.
-            if let Some(encoder) = config.encoder {
-                let _: Box<dyn Encode> = deserializers.deserialize(&encoder.kind, encoder.config)?;
-            }
-            return Ok(Box::new(ForwardingConsole));
-        }
         let mut appender = ConsoleAppender::builder().target(target);
         if let Some(tty_only) = config.tty_only { appender = appender.tty_only(tty_only); }
         if let Some(encoder) = config.encoder {

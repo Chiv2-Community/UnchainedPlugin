@@ -72,15 +72,14 @@ If the console rejects palette changes, its existing basic colors remain in use.
 The default file appender and redirected output receive no added console colors;
 color codes already present in a message are not stripped.
 
-The startup banner uses the same console writer and color policy, outside log
-records. Wine uses native yellow/red palette attributes, not 256-color ANSI
-escapes. Redirected output and `NO_COLOR` receive plain banner text.
+The startup banner is an ordinary `INFO` log record. It follows configured
+appenders, encoders, and filters instead of writing directly to stdout.
 
-Your program can [capture structured logs](console-attachment.md#capture-structured-logs) to receive
-messages, source metadata, and the banner directly. Structured output does not use
-console encoder patterns. Default console/file formatting is unchanged.
-Alternatively, [`--attach-stdio`](console-attachment.md) preserves inherited output
-without creating a console window and takes precedence over IPC forwarding.
+Select `encoder: { kind: json }` on any appender for
+[structured logs](console-attachment.md#capture-structured-logs), with standard
+log4rs fields at the JSON root. No plugin transport or envelope is involved.
+[`--attach-stdio`](console-attachment.md) preserves inherited output without
+creating a console window.
 [`--no-spawn-console`](console-attachment.md#what-the-flags-change) only suppresses
 console creation; it does not select attachment or change capture routing.
 
@@ -352,7 +351,7 @@ sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
 
 The prefix remains in console/file output even if the encoder also includes `{fn}`.
 Structured output preserves that prefix; captured function metadata also appears
-in `record.attributes.__unchained_function`. Legacy flags,
+in `attributes.__unchained_function`. Legacy flags,
 including `f;` as a function flag, are unsupported. Structured fields named `f`
 retain the facade's syntax, including `f;` shorthand.
 
@@ -363,26 +362,21 @@ can still evaluate argument expressions, but does not format rejected messages.
 ### Implementation map
 
 Shared macros submit metadata and records through `log`; log4rs applies target
-levels and appender filters. Console encoding runs on the calling thread. In
-structured mode, the console appender captures bounded message text and metadata,
-then encodes with log4rs' JSON encoder and tries a nonblocking queue send. Display
-encoders are not used. One worker owns the pipe and writes protocol envelopes
-containing the encoded records. File appenders
-retain their configured behavior. This avoids receiver backpressure on producer
-threads; message formatting and file writes remain on the calling thread.
+levels and appender filters. Each appender uses its configured encoder and sink
+on the calling thread. The console adapter adds native color setup only for
+`module_console`; JSON and other encoders use log4rs directly. Slow sinks can
+block logging threads. There is no plugin forwarding queue or worker.
 
 | Change | Start here |
 | --- | --- |
 | Macro metadata or call syntax | [`macros.rs`](../src/logging/macros.rs) and [`tests.rs`](../src/logging/tests.rs) |
 | Configuration, deserializers, or pattern fields | [`log4rs/`](../src/logging/log4rs/), especially [`pattern.rs`](../src/logging/log4rs/pattern.rs) and its tests |
-| Structured producer encoding | [`log4rs/console.rs`](../src/logging/log4rs/console.rs) |
-| Queue bounds, loss, handle ownership, worker failure | [`console/forward.rs`](../src/logging/console/forward.rs) and its appender/banner, saturation, disconnect, and routing tests |
+| Console appender configuration | [`log4rs/console.rs`](../src/logging/log4rs/console.rs) |
 | Native styling or attachment | [`console/windows.rs`](../src/logging/console/windows.rs) |
 
 Follow the [contributor build/test instructions](../CONTRIBUTING.md). Production
 Wine/Proton runs the Windows implementation. Native logging tests cover portable
-logic; their inherited-pipe stub does not validate Windows handle inheritance
-or live Proton integration.
+logic; they do not validate Windows stdio attachment or live Proton integration.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).
