@@ -42,7 +42,7 @@ def check(target, terminal, overrides, colored, custom=False):
         assert output.count(b"[policy_child            ] boundary message") == 5, (case, output)
         if colored:
             colors = ((b"17;34;51", b"34;51;68", b"51;68;85", b"68;85;102", b"85;102;119")
-                      if custom else (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92"))
+                      if custom else (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92", b"238;238;238"))
             for rgb in colors:
                 assert b"\x1b[0;38;2;" + rgb + b"m" in output, (case, output)
             assert output.count(b"\x1b[0m") >= 5, (case, output)

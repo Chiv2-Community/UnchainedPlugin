@@ -37,9 +37,9 @@ The game's launch arguments may specify a different saved-directory suffix.
 
 | Level | Header | Message body |
 | --- | --- | --- |
-| ERROR | Pastel red | Normal console color |
-| WARN | Pastel yellow | Normal console color |
-| INFO | Muted pastel blue | Normal console color |
+| ERROR | Pastel red | Light gray (`#eeeeee`) |
+| WARN | Pastel yellow | Light gray (`#eeeeee`) |
+| INFO | Muted pastel blue | Light gray (`#eeeeee`) |
 | DEBUG | Dark gray (`#808080`) | Dark gray |
 | TRACE | Darker gray (`#5c5c5c`) | Darker gray |
 
@@ -127,9 +127,9 @@ encoder:
     info: "#8cb4e1"
     debug: "#808080"
     trace: "#5c5c5c"
-    error_body: null
-    warn_body: null
-    info_body: null
+    error_body: "#eeeeee"
+    warn_body: "#eeeeee"
+    info_body: "#eeeeee"
     debug_body: "#808080"
     trace_body: "#5c5c5c"
 ```

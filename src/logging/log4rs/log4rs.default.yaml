@@ -13,9 +13,9 @@ appenders:
         info: "#8cb4e1"
         debug: "#808080"
         trace: "#5c5c5c"
-        error_body: null
-        warn_body: null
-        info_body: null
+        error_body: "#eeeeee"
+        warn_body: "#eeeeee"
+        info_body: "#eeeeee"
         debug_body: "#808080"
         trace_body: "#5c5c5c"
   file:

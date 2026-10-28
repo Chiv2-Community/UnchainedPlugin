@@ -58,8 +58,8 @@ impl PaletteEncoderConfig {
         let palette = self.palette.unwrap_or_else(|| {
             [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
                 ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
-                ("trace", Some([92, 92, 92])), ("error_body", None), ("warn_body", None),
-                ("info_body", None), ("debug_body", Some([128, 128, 128])),
+                ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
+                ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
                 ("trace_body", Some([92, 92, 92]))]
                 .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(Rgb))).collect()
         });
@@ -339,7 +339,8 @@ palette:
             let text = String::from_utf8(bytes).unwrap();
             let color = text.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
             let body = text.find(" [p::module               ]").unwrap();
-            assert_eq!(text[color..body].contains("\x1b[0m"), level <= Level::Info);
+            let body_rgb = if level <= Level::Info { "238;238;238" } else { rgb };
+            assert!(text[color + 1..body].contains(&format!("\x1b[0;38;2;{body_rgb}m")));
             assert!(text.contains("before \x1b[31mred\x1b[0m after"));
             assert!(text.ends_with("\x1b[0m"));
         }
@@ -426,7 +427,7 @@ palette: {}"#);
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
-        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92]];
+        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
         for encoder in [shipped, encoder("{}")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.rgb).collect::<Vec<_>>(), expected);
         }
