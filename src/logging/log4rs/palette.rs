@@ -166,6 +166,11 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
             i = name_start;
             let mut braces = 1;
             while i < bytes.len() {
+                // Leave following literal-brace escapes to the text encoder.
+                if braces == 1 && bytes[i..].starts_with(b")}") {
+                    i += 1;
+                    break;
+                }
                 if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
                 match bytes[i] {
                     b'{' => braces += 1,

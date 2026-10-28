@@ -347,6 +347,36 @@ root:
     }
 
     #[test]
+    fn registered_palette_encoder_preserves_directive_boundary_escapes() {
+        use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        for (pattern, expected) in [
+            ("{palette(error)}}}{m}", "}message"),
+            ("{{{palette(error)}{l}{palette()}}}", "{INFO}"),
+            ("{palette(error)}}}}}{m}", "}}message"),
+            (r"{palette(error)}\}{m}", "}message"),
+            ("{palette(error)}{{{m}}}", "{message}"),
+            ("{palette(error)}{palette()}}}{m}", "}message"),
+            ("{palette({l})}}}{m}", "}message"),
+            ("{palette(a}}b)}{m}", "message"),
+            ("{palette(a{{b)}{m}", "message"),
+            ("{palette(a))}}b)}}}{m}", "}message"),
+            (r"{palette(a\)\}b)}}}{m}", "}message"),
+        ] {
+            let yaml = format!("kind: palette\npattern: '{pattern}'\npalette: {{error: null, warn: null, info: null, debug: null, trace: null, 'a}}b': null, 'a{{b': null, 'a)}}b': null}}");
+            let config: EncoderConfig = serde_yaml::from_str(&yaml).unwrap();
+            let encoder: Box<dyn Encode> = deserializers.deserialize(&config.kind, config.config)
+                .unwrap_or_else(|error| panic!("{pattern}: {error}"));
+            let mut output = Vec::new();
+            encoder.encode(&mut SimpleWriter(&mut output), &log::Record::builder()
+                .level(Level::Info).args(format_args!("message")).build()).unwrap();
+            assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
+        }
+    }
+
+    #[test]
     fn file_appenders_share_console_patterns() {
         use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
         use std::sync::Mutex;
