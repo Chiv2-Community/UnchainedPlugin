@@ -20,15 +20,7 @@ define_pattern_resolver!(OnGetCurrentGames_, [
     "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 60 FE FF FF"
 ]);
 
-// define_pattern_resolver!(OnGetCurrentGames, [
-//     "4C 89 44 24 18 48 89 54 24 10 48 89 4C 24 08 \
-//      55 53 57 41 54 41 55 41 56 \
-//      48 8D AC 24 08 FF FF FF \
-//      48 81 EC F8 01 00 00 \
-//      83 79 08 00 45 0F B6 E1 4D 8B E8 48 8B DA"
-// ]);
-
-CREATE_HOOK!(OnGetCurrentGames_, ACTIVE, NONE, (), (
+CREATE_HOOK!(OnGetCurrentGames_, { || !cli_args().is_server() }, NONE, (), (
     this_ptr: *mut c_void,
     response: *mut c_void,
     param_2: i32
@@ -51,7 +43,7 @@ define_pattern_resolver!(PingSomeServers, [
     "4C 8B DC 49 89 4B 08 55 56 41 55 49 8D AB 38 FE FF FF 48 81 EC B0 02 00 00 4C 8D A9 40 03 00 00 48 8B F1"
 ]);
 
-CREATE_HOOK!(PingSomeServers, ACTIVE, NONE, (), (
+CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
     this_ptr: *mut c_void,
     max_servers: i32
 ), {
@@ -78,7 +70,7 @@ define_pattern_resolver!(FStringFind, [
     "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 50 45 8B E1 48 8B FA 4C 8B F1"
 ]);
 
-CREATE_HOOK!(FStringFind, INACTIVE, NONE, i32, (
+CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
     needle: *const u16,
     search_case: i32,
@@ -145,7 +137,7 @@ fn bracket_ipv6_udp_endpoint(endpoint: &str) -> Option<String> {
     Some(format!("[{host}]:{port}"))
 }
 
-CREATE_HOOK!(UDPEcho, ACTIVE, NONE, (), (
+CREATE_HOOK!(UDPEcho, { || !cli_args().is_server() }, NONE, (), (
     endpoint: *mut FString,
     timeout_seconds: f32,
     callback: *mut c_void
@@ -173,7 +165,7 @@ define_pattern_resolver!(FStringParseIntoArray, [
     "44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"
 ]);
 
-CREATE_HOOK!(FStringParseIntoArray, ACTIVE, NONE, i32, (
+CREATE_HOOK!(FStringParseIntoArray, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
     output: *mut TArray<FString>,
     delimiter: *const u16,
