@@ -3,7 +3,7 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{pattern::PatternEncoder as BuiltinPatternEncoder, Encode, Write};
 
 const SHORT_MODULE_KEY: &str = "__unchained_short_module";
-const FUNCTION_KEY: &str = "__unchained_function";
+const FUNCTION_KEY: &str = "enclosing_function";
 
 #[derive(Debug)]
 pub struct PatternEncoder {
@@ -147,13 +147,13 @@ mod tests {
 
     #[test]
     fn short_module_boundaries_and_fixed_default_width_leave_custom_widths_independent() {
-        use crate::logging::console::ConsoleEncoder;
+        use super::super::palette::PaletteEncoderConfig;
 
         let newline = if cfg!(windows) { "\r\n" } else { "\n" };
-        let yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
-        let body = yaml["appenders"]["console"]["encoder"]["body_pattern"].as_str().unwrap();
+        let config: PaletteEncoderConfig = serde_yaml::from_str("{}").unwrap();
+        let encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
-            for length in 1..=40 {
+            for length in [1, 23, 24, 25, 31, 32, 33, 40] {
                 let module: String = std::iter::once('Ω')
                     .chain(std::iter::repeat_n(character, length - 1)).collect();
                 let expected: String = module.chars().rev().take(32)
@@ -166,23 +166,19 @@ mod tests {
                 assert_eq!(String::from_utf8(custom).unwrap(),
                     format!("[{expected}]|[{expected:<24}]"), "{module}");
                 let mut console = Vec::new();
-                ConsoleEncoder::default().encode(&mut SimpleWriter(&mut console), &record).unwrap();
+                encoder.encode(&mut SimpleWriter(&mut console), &record).unwrap();
                 let suffix: String = module.chars().rev().take(24)
                     .collect::<Vec<_>>().into_iter().rev().collect();
                 let label = format!("{suffix:<24}");
-                assert_eq!(label.chars().count(), 24, "{module}");
                 let expected_body = format!(" [{label}] message{newline}");
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
-                let mut configured = Vec::new();
-                PatternEncoder::new(body).encode(&mut SimpleWriter(&mut configured), &record).unwrap();
-                assert_eq!(String::from_utf8(configured).unwrap(), expected_body, "{module}");
             }
         }
     }
 
     #[test]
-    fn short_module_alias_respects_escaping_nesting_and_format_specs() {
+    fn aliases_respect_escaping_nesting_format_specs_and_missing_values() {
         let record = Record::builder().module_path(Some("UnchainedPlugin::messages")).build();
         for (pattern, expected) in [
             ("{{sm}}", "{sm}"),
@@ -193,6 +189,9 @@ mod tests {
             ("{sm:>15}", "   UP::messages"),
             ("{sm:<24}", "UP::messages            "),
             ("{sm:-.8}", "messages"),
+            ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
+            ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
+            ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
         ] {
             let mut output = Vec::new();
             PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();

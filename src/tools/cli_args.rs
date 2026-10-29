@@ -96,6 +96,14 @@ pub struct CLIArgs {
     #[arg(long = "log4rs-yaml")]
     pub log4rs_yaml: Option<String>,
 
+    /// Reuse inherited stdout/stderr or attach to the parent console; console spawning is independent.
+    #[arg(long = "attach-stdio")]
+    pub attach_stdio: bool,
+
+    /// Never create a console window; do not attach to the parent console.
+    #[arg(long = "no-spawn-console")]
+    pub no_spawn_console: bool,
+
     #[arg(long = "GameServerPingPort", default_value = "3075")]
     pub game_server_ping_port: Option<u16>,
 
@@ -171,7 +179,7 @@ impl std::fmt::Debug for CLIArgs {
             tick_actor_patch,
             use_backend_banlist, is_headless, next_map, launched_profile,
             unchained_profile_location, playable_listen, register, server_browser_backend,
-            local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml,
+            local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
             game_server_ping_port, game_server_query_port, game_port,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
             discord_event_log_channel_id, discord_admin_role_id, discord_bot_token,
@@ -201,6 +209,8 @@ impl std::fmt::Debug for CLIArgs {
             .field("platform", platform)
             .field("saved_dir_suffix", saved_dir_suffix)
             .field("log4rs_yaml", log4rs_yaml)
+            .field("attach_stdio", attach_stdio)
+            .field("no_spawn_console", no_spawn_console)
             .field("game_server_ping_port", game_server_ping_port)
             .field("game_server_query_port", game_server_query_port)
             .field("game_port", game_port)
@@ -326,6 +336,38 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attach_stdio_is_opt_in_and_survives_game_argument_normalization() {
+        assert!(!CLIArgs::try_parse_from(["app"]).unwrap().attach_stdio);
+        for flag in ["--attach-stdio", "-attach-stdio"] {
+            let raw = ["app", "TBL", flag, "--rcon", "9001", "-nullrhi"];
+            let cli = CLIArgs::try_parse_from(normalize_and_filter_args(raw.into_iter().map(str::to_owned))).unwrap();
+            assert!(cli.attach_stdio);
+            assert!(!cli.no_spawn_console);
+            assert_eq!(cli.rcon_port, Some(9001));
+            assert!(cli.is_headless);
+            assert!(format!("{cli:?}").contains("attach_stdio: true"));
+        }
+        assert!(CLIArgs::command().render_long_help().to_string().contains("--attach-stdio"));
+    }
+
+    #[test]
+    fn no_spawn_console_is_independent_of_attachment_and_normalizes_game_flags() {
+        assert!(!CLIArgs::try_parse_from(["app"]).unwrap().no_spawn_console);
+        for flag in ["--no-spawn-console", "-no-spawn-console"] {
+            let raw = ["app", "TBL", flag, "--rcon", "9001", "-nullrhi"];
+            let cli = CLIArgs::try_parse_from(normalize_and_filter_args(raw.into_iter().map(str::to_owned))).unwrap();
+            assert!(cli.no_spawn_console);
+            assert!(!cli.attach_stdio);
+            assert_eq!(cli.rcon_port, Some(9001));
+            assert!(cli.is_headless);
+            assert!(format!("{cli:?}").contains("no_spawn_console: true"));
+        }
+        let combined = CLIArgs::try_parse_from(["app", "--no-spawn-console", "--attach-stdio"]).unwrap();
+        assert!(combined.no_spawn_console && combined.attach_stdio);
+        assert!(CLIArgs::command().render_long_help().to_string().contains("--no-spawn-console"));
+    }
 
     #[test]
     fn debug_redacts_credentials_and_opaque_fields_without_changing_values() {
@@ -483,6 +525,8 @@ mod tests {
                 platform: None,
                 saved_dir_suffix: None,
                 log4rs_yaml: None,
+                attach_stdio: false,
+                no_spawn_console: false,
                 game_server_ping_port: None,
                 game_server_query_port: None,
                 game_port: None,

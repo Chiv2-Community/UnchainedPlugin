@@ -5,9 +5,19 @@ appenders:
       - kind: threshold
         level: debug
     encoder:
-      kind: module_console
-      header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-      body_pattern: " [{sm:<-24.24}] {m}{n}"
+      kind: palette
+      pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
+      palette:
+        error: "#f28b82"
+        warn: "#f2cc78"
+        info: "#8cb4e1"
+        debug: "#808080"
+        trace: "#5c5c5c"
+        error_body: "#eeeeee"
+        warn_body: "#eeeeee"
+        info_body: "#eeeeee"
+        debug_body: "#808080"
+        trace_body: "#5c5c5c"
   file:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"

@@ -15,17 +15,6 @@ impl Log for Capture {
         let mut output = Vec::new();
         PatternEncoder::new("{fn}|{t}|{l}|{K(request)}|{m}")
             .encode(&mut SimpleWriter(&mut output), record).unwrap();
-        let mut console = Vec::new();
-        super::console::ConsoleEncoder::with_patterns(Some("{fn}|{t}|{l}|"), Some("{K(request)}|{m}"))
-            .encode(&mut SimpleWriter(&mut console), record).unwrap();
-        assert_eq!(console, output);
-        let mut default_console = Vec::new();
-        super::console::ConsoleEncoder::default()
-            .encode(&mut SimpleWriter(&mut default_console), record).unwrap();
-        let mut expected_body = Vec::new();
-        PatternEncoder::new(" [{sm:<-24.24}] {m}{n}")
-            .encode(&mut SimpleWriter(&mut expected_body), record).unwrap();
-        assert!(default_console.ends_with(&expected_body));
         self.0.lock().unwrap().push(String::from_utf8(output).unwrap());
     }
     fn flush(&self) {}
@@ -50,7 +39,6 @@ fn function_flag_always_prefixes_the_message() {
         ("INFO", "hello 7"), ("WARN", "warn"), ("ERROR", "error"),
         ("DEBUG", "debug"), ("TRACE", "trace"),
     ]) {
-        // The pattern's {fn} and the explicit message prefix are independent.
         assert!(line.starts_with("function_flag_always_prefixes_the_message|"));
         assert!(line.contains(&format!("|{level}|")));
         assert!(line.ends_with(&format!("[function_flag_always_prefixes_the_message] {message}")));
@@ -286,19 +274,6 @@ fn actual_macros_capture_named_functions_and_preserve_records() {
     assert!(lines[4].starts_with("asynchronous|"));
     assert!(lines[5].starts_with("asynchronous|"));
     assert_eq!(lines.len(), 6);
-}
-
-#[test]
-fn function_alias_uses_builtin_escaping_nesting_width_and_missing_fallback() {
-    for (pattern, expected) in [
-        ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
-        ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
-        ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
-    ] {
-        let mut output = Vec::new();
-        PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &Record::builder().build()).unwrap();
-        assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
-    }
 }
 
 #[test]

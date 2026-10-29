@@ -358,7 +358,6 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
         .unwrap_or(std::ptr::null())
 }
 
-use windows::Win32::System::Console::{AllocConsole, GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_EXTENDED_FLAGS, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
 use crate::events::models::{ChatSource, ChatType, GameChatMessage};
 use crate::events::models::GameEvent::GameChatMessageEvent;
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
@@ -366,31 +365,17 @@ use crate::features::discord::DiscordConfig;
 use crate::features::events::EVENT_SYSTEM;
 
 fn preinit_rustlib() {
-    unsafe {
-        if GetConsoleWindow().0 == 0 {
-            let _ = AllocConsole();
-
-            // Enable ANSI escape codes for colored output
-            if let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) {
-                let mut mode = CONSOLE_MODE(0);
-                if GetConsoleMode(handle, &mut mode).is_ok() {
-                    let _ = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-                }
-            }
-
-            // Disable QuickEdit mode to prevent application freezing when console is clicked
-            if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
-                let mut mode = CONSOLE_MODE(0);
-                if GetConsoleMode(handle, &mut mode).is_ok() {
-                    // We must clear ENABLE_QUICK_EDIT_MODE and also include ENABLE_EXTENDED_FLAGS to make it effective.
-                    let _ = SetConsoleMode(handle, (mode & !ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS);
-                }
-            }
-        }
-    }
-
+    // Select output before any console allocation, color configuration, or banner.
     let args = tools::cli_args::load_cli().expect("Failed to load CLI ARGS");
     let already_initialized = CLI_ARGS.set(args).is_err();
+    if cli_args().no_spawn_console {
+        logging::console::disable_console_spawning();
+    }
+    if cli_args().attach_stdio {
+        logging::console::attach_stdio();
+    }
+    logging::console::spawn_console();
+
     logging::log4rs::init().expect("Failed to initialize logging");
     sdebug!(fn; "CLI args: {:?}", cli_args());
     if already_initialized {
@@ -403,9 +388,7 @@ fn preinit_rustlib() {
 
 // Initialize Logger and Globals
 fn init_rustlib() {
-    if let Err(error) = logging::console::print_banner() {
-        swarn!("Failed to print startup banner: {}", error);
-    }
+    logging::console::print_banner();
     init_globals().expect("Failed to init globals!");
 }
 

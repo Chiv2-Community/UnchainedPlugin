@@ -42,7 +42,7 @@ pub fn spawn_cli_handler() {
         let input_source = std::io::stdin();
         let mut buffer = String::new();
         
-        while input_source.read_line(&mut buffer).is_ok() {
+        while input_source.read_line(&mut buffer).is_ok_and(|count| count != 0) {
             let maybe_command_parts = shlex::split(buffer.trim());
             if let Some(command_parts) = maybe_command_parts {
                 if !command_parts.is_empty() {

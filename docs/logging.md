@@ -3,34 +3,13 @@
 Use a custom log4rs YAML file to control which plugin messages appear in the
 console and log files. No configuration file is required for the defaults.
 
-Plugin diagnostics use unqualified `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`;
-declarative macro definitions use `$crate::sinfo!` and the corresponding severities.
-The logging module brings these macros into scope before other plugin modules.
-External binaries import the macros from `UnchainedPlugin`.
-Proc-generated diagnostics retain `crate::` paths to resolve in the consuming
-crate without depending on its lexical macro imports.
-log4rs routes and formats the records. Prefer appender patterns for caller
-information; the `fn;` flag explicitly prefixes an individual message.
+For machine-readable output, see [structured logging](#structured-logging).
+Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics).
 
 ## Defaults
 
 The plugin uses its [embedded configuration](../src/logging/log4rs/log4rs.default.yaml)
 unless you pass `--log4rs-yaml`.
-
-| Setting | Default | Effect |
-| --- | --- | --- |
-| Root level | `debug` | Enables ERROR, WARN, INFO, and DEBUG records unless a namespace overrides it. |
-| Console threshold | `debug` | Hides TRACE records from the console, even if a namespace enables them. |
-| Main file | `unchained.log` | Receives enabled records without an additional level filter. |
-| Kismet file | `kismet.log` | Appender is defined but not connected to a logger; it receives no records by default. |
-| `serenity` | `warn` | Discord library warnings and errors only. |
-| `tracing` | `warn` | Dependency tracing warnings and errors only. |
-| `patternsleuth` | `warn` | Signature-scanning library warnings and errors only. |
-| `h2::codec` | `warn` | HTTP/2 protocol warnings and errors only. |
-| `hyper_util::client` | `warn` | HTTP client warnings and errors only. |
-| `reqwest::connect` | `warn` | HTTP connection warnings and errors only. |
-
-Plugin namespaces inherit `debug`; none has a separate default override.
 
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
@@ -42,42 +21,42 @@ do not put credentials in profile names, paths, MOTDs, or other public settings.
 The default main file is:
 
 ```text
-%LOCALAPPDATA%\Chivalry 2\Saved\Logs\unchained.log
+%LOCALAPPDATA%\Chivalry 2\Saved_<saveddirsuffix>\Logs\unchained.log
 ```
 
-With `--saveddirsuffix Steam`, it becomes:
+For example, `--saveddirsuffix Steam` gives:
 
 ```text
 %LOCALAPPDATA%\Chivalry 2\Saved_Steam\Logs\unchained.log
 ```
 
 Use the Windows account running the game or server when locating `%LOCALAPPDATA%`.
-Your launcher may supply a different saved-directory suffix.
+The game's launch arguments may specify a different saved-directory suffix.
 
 ### Console colors
 
 | Level | Header | Message body |
 | --- | --- | --- |
-| ERROR | Pastel red | Normal console color |
-| WARN | Pastel yellow | Normal console color |
-| INFO | Muted pastel blue | Normal console color |
+| ERROR | Pastel red | Light gray (`#eeeeee`) |
+| WARN | Pastel yellow | Light gray (`#eeeeee`) |
+| INFO | Muted pastel blue | Light gray (`#eeeeee`) |
 | DEBUG | Dark gray (`#808080`) | Dark gray |
 | TRACE | Darker gray (`#5c5c5c`) | Darker gray |
 
 Message color codes are preserved and can override the body color. Pastel shades
 use RGB terminal colors when supported. Wine's graphical console and legacy
-Windows consoles instead receive a matching 16-color palette for the attached
-console only. Wine needs a dedicated console created with temporary,
+Windows consoles instead receive a matching 16-color palette when the plugin
+owns the console. Wine needs a dedicated console created with temporary,
 application-specific registry defaults; previous values are restored immediately
 after creation, and global console defaults are not changed. Other programs sharing
 that console see the same palette, including altered shades for embedded colors.
-If the console rejects palette changes, its existing basic colors remain in use.
+Shared consoles, additional palettes, and rejected palette changes use the
+nearest available console colors without changing the palette.
 The default file appender and redirected output receive no added console colors;
 color codes already present in a message are not stripped.
 
-The startup banner uses the same console writer and color policy, outside log
-records. Wine uses native yellow/red palette attributes, not 256-color ANSI
-escapes. Redirected output and `NO_COLOR` receive plain banner text.
+The startup banner is an ordinary `INFO` log record. It follows configured
+appenders, encoders, and filters instead of writing directly to stdout.
 
 ## Use a custom configuration
 
@@ -111,20 +90,61 @@ path: "C:/Unchained/Logs/unchained.log"
 Do not substitute `%LOCALAPPDATA%` into the YAML and expect it to expand like the
 plugin's path tokens.
 
-## Format log lines
+## Structured logging
 
-The console's `module_console` encoder accepts separate header and body patterns
-so severity colors remain independent of the line format:
+In your [custom configuration](#use-a-custom-configuration), select the standard
+[log4rs JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html)
+on each console or file appender that should emit JSON:
 
 ```yaml
 encoder:
-  kind: module_console
-  header_pattern: "[{d(%H:%M:%S)} {l:5}]"
-  body_pattern: " [{sm:<-24.24}] {m}{n}"
+  kind: json
 ```
 
-These are the defaults. Replace only the encoder block and keep the appender's
-other settings. Restart after editing.
+Each configured sink emits one JSON payload per line. Standard log4rs fields
+include `time`, `level`, `message`, source locations, and thread metadata, all at
+the root. Plugin macros add the enclosing function name as
+`attributes.enclosing_function`.
+
+`--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
+it does not create redirection. The calling program supplies pipes or files when
+capture is needed. `--no-spawn-console` independently suppresses console allocation.
+**Some initialization output is not in the configured format**, including
+diagnostics written before log4rs initializes. Stdio may also contain game and
+dependency output, so consumers may encounter non-JSON lines alongside JSON logs.
+
+## Format log lines
+
+The `palette` encoder combines log4rs patterns with a named color table:
+
+```yaml
+encoder:
+  kind: palette
+  pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
+  palette:
+    error: "#f28b82"
+    warn: "#f2cc78"
+    info: "#8cb4e1"
+    debug: "#808080"
+    trace: "#5c5c5c"
+    error_body: "#eeeeee"
+    warn_body: "#eeeeee"
+    info_body: "#eeeeee"
+    debug_body: "#808080"
+    trace_body: "#5c5c5c"
+```
+
+These are the defaults. Add any named colors using quoted `#RRGGBB` values;
+`null` uses the console's normal text color. `{palette(name)}` switches colors
+until the next directive or end of the record; `{palette()}` restores normal text.
+Names are ASCII case-insensitive. `{l}` or `{level}` in a name selects a color by
+severity, so `{palette({l}_body)}` selects `error_body`, `warn_body`, etc.
+References are resolved at startup; unknown names reject the configuration.
+Directives must be outside other formatters. An explicit `palette` replaces the
+default table; omit it to use the defaults. Legacy consoles approximate colors
+beyond their available slots.
+Console coloring respects `NO_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` through
+log4rs. File output has no added colors. Restart after editing.
 
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
@@ -142,7 +162,7 @@ Console and file patterns support the same fields, including `{sm}`, `{fn}`,
 `{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
 and `rolling_file` appenders, with explicit or omitted `kind: pattern`.
 Nested formatters, escaping, and width specifications such as `{sm:>16}` work
-in both. To omit or replace the console's short module, edit `body_pattern`.
+in both. To omit or replace the console's short module, edit `pattern`.
 `kind: pattern` uses a single `pattern` field and does not apply the console's
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
@@ -163,31 +183,6 @@ encoder:
   kind: pattern
   pattern: "[{d(%H:%M:%S)} {l:5}] [{sm}::{fn}] {m}{n}"
 ```
-
-The shared macros capture the call site using a local function's stable
-`type_name`, without backtraces or message prefixes. They preserve source metadata,
-targets, filtering and lazy formatting through the `log` facade. Custom `target:`
-and `logger:` options and structured fields retain the facade's syntax:
-
-```rust,ignore
-sinfo!(target: "UnchainedPlugin::custom", request = 42; "Ready");
-```
-
-For a per-call function prefix, use `fn;` with any severity:
-
-```rust
-sinfo!(fn; "Ready {}", 42); // Message: [enclosing_function] Ready 42
-```
-
-The prefix is unconditional, even when the encoder also includes `{fn}`.
-The `fn;` flag changes the message; the `{fn}` pattern formats record metadata.
-Legacy flags, including `f;` as a function flag, are not supported. Structured
-fields named `f` retain the facade's syntax, including `f;` shorthand.
-
-`__unchained_function` is reserved for captured function metadata. Do not supply
-that key yourself. As with `log`, disabled levels skip argument evaluation;
-target/appender filtering can still evaluate argument expressions, but does not
-format rejected messages. Use these macros in hook/macro definitions too.
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
@@ -245,7 +240,7 @@ appenders:
       - kind: threshold
         level: trace
     encoder:
-      kind: module_console
+      kind: palette
 ```
 
 Keep the other appenders and root settings in your copied file. Both changes are
@@ -343,6 +338,18 @@ namespace settings.
 Logs can include player names, network addresses, command arguments, and
 credentials in diagnostic output. Review and redact logs before sharing them;
 enable detailed logging only where needed.
+
+## Contributor guide: emitting diagnostics
+
+Use `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` for plugin
+diagnostics, including hooks. The logging module brings them into scope before
+other plugin modules. Inside declarative macro definitions use `$crate::sinfo!`
+and the corresponding severities; external binaries import from `UnchainedPlugin`.
+Proc-generated diagnostics retain `crate::` paths for consumer resolution without
+depending on lexical macro imports.
+
+The macros capture `enclosing_function` in the attributes for structured logging
+and the `{fn}` log format string.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).

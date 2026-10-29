@@ -1,27 +1,102 @@
 use windows::core::{s, w, HRESULT, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, ERROR_FILE_NOT_FOUND, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{CloseHandle, GetHandleInformation, ERROR_FILE_NOT_FOUND, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::System::Console::*;
 use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Registry::*;
 use windows::Win32::System::Threading::{CreateMutexW, GetStartupInfoW, ReleaseMutex, WaitForSingleObject, STARTUPINFOW};
 
-use super::{fallback_palette, use_truecolor};
+use super::{fallback_palette, nearest_slots, use_truecolor, BASIC_COLORS};
 
-pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
+static LEGACY_PALETTE: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+
+pub(crate) fn preserve_console_handles() {
+    // Native appenders cache handles even without palette directives. Once built,
+    // keep the current palette instead of recreating their console on Wine.
+    *LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner()) = true;
+}
+
+unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
+    [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
+        let handle = GetStdHandle(kind).ok().filter(|handle| {
+            let mut flags = 0;
+            GetHandleInformation(*handle, &mut flags).is_ok()
+        });
+        (kind, handle)
+    })
+}
+
+unsafe fn restore_standard_handles(handles: [(STD_HANDLE, Option<HANDLE>); 3]) {
+    for (kind, handle) in handles {
+        if let Some(handle) = handle { let _ = SetStdHandle(kind, handle); }
+    }
+}
+
+pub(super) fn attach_parent_output() -> bool {
+    unsafe {
+        let handles = standard_handles();
+        if handles[1].1.is_some() && handles[2].1.is_some() { return true; }
+        // Attachment may replace standard handles. Preserve each redirected destination,
+        // including mixed redirection. Never detach or allocate on failure.
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        restore_standard_handles(handles);
+        standard_handles()[1..].iter().any(|(_, handle)| handle.is_some())
+    }
+}
+
+pub(crate) fn spawn_console() {
+    unsafe {
+        if super::console_spawning_disabled() || GetConsoleWindow().0 != 0 { return; }
+        let handles = standard_handles();
+        if AllocConsole().is_err() { return; }
+        super::OWN_CONSOLE.store(true, std::sync::atomic::Ordering::Relaxed);
+        if super::stdio_attached() {
+            restore_standard_handles(handles);
+            return;
+        }
+        if let Ok(handle) = GetStdHandle(STD_OUTPUT_HANDLE) {
+            let mut mode = CONSOLE_MODE(0);
+            if GetConsoleMode(handle, &mut mode).is_ok() {
+                let _ = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            }
+        }
+        if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
+            let mut mode = CONSOLE_MODE(0);
+            if GetConsoleMode(handle, &mut mode).is_ok() {
+                let _ = SetConsoleMode(handle, (mode & !ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS);
+            }
+        }
+    }
+}
+
+pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> (bool, Vec<u8>) {
     unsafe {
         let output = match target {
             log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
             log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
         };
-        let Ok(handle) = GetStdHandle(output) else { return false };
+        let Ok(handle) = GetStdHandle(output) else { return (false, nearest_slots(BASIC_COLORS, palette)) };
         let mut mode = CONSOLE_MODE(0);
-        if GetConsoleMode(handle, &mut mode).is_err() { return false; }
-        let vt = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok();
+        if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
-        if use_truecolor(vt, wine, std::env::var_os("WT_SESSION").is_some()) { return true; }
-        let Some(mut info) = screen_info(handle) else { return false };
-        let (colors, attributes) = fallback_palette(info.ColorTable.map(|color| color.0), info.wAttributes.0);
+        if !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
+            // Do not recreate a suppressed console or mutate a shared terminal.
+            return (use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
+                std::env::var_os("WT_SESSION").is_some()),
+                nearest_slots(screen_info(handle).map_or(BASIC_COLORS, |info| info.ColorTable.map(|c| c.0)), palette));
+        }
+        let vt = SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING).is_ok();
+        if use_truecolor(vt, wine, std::env::var_os("WT_SESSION").is_some()) {
+            return (true, nearest_slots(BASIC_COLORS, palette));
+        }
+        // A console has one palette. Later encoders must not invalidate earlier mappings.
+        let mut configured = LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(mut info) = screen_info(handle) else { return (false, nearest_slots(BASIC_COLORS, palette)) };
+        if *configured {
+            return (false, nearest_slots(info.ColorTable.map(|color| color.0), palette));
+        }
+        *configured = true;
+        let (colors, attributes) = fallback_palette(info.ColorTable.map(|color| color.0), info.wAttributes.0, palette);
         if wine {
             // Wine ignores ColorTable in SetConsoleScreenBufferInfoEx; load temporary
             // app-specific defaults while allocating a dedicated console instead.
@@ -52,7 +127,10 @@ pub(super) fn configure(target: log4rs::append::console::Target) -> bool {
                 let _ = SetConsoleWindowInfo(handle, true, &window);
             }
         }
-        false
+        let colors = GetStdHandle(output).ok().and_then(|handle| screen_info(handle))
+            .map_or(BASIC_COLORS, |info| info.ColorTable.map(|c| c.0));
+        let slots = nearest_slots(colors, palette);
+        (false, slots)
     }
 }
 
@@ -147,6 +225,229 @@ impl TemporaryDefaults {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn child(fixture: &str) -> std::process::Command {
+        use std::os::windows::process::CommandExt;
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command.args(["--ignored", "--exact", "--nocapture",
+            &format!("{}::{fixture}", module_path!().split_once("::").unwrap().1)])
+            .env_remove("WT_SESSION").env_remove("NO_COLOR")
+            .env_remove("CLICOLOR").env_remove("CLICOLOR_FORCE")
+            .creation_flags(0x08000000);
+        command
+    }
+
+    fn report_panics() {
+        use std::io::Write;
+        use std::os::windows::io::BorrowedHandle;
+        unsafe {
+            let stderr = BorrowedHandle::borrow_raw(GetStdHandle(STD_ERROR_HANDLE).unwrap().0 as *mut _)
+                .try_clone_to_owned().unwrap();
+            let stderr = std::sync::Mutex::new(std::fs::File::from(stderr));
+            std::panic::set_hook(Box::new(move |info| { let _ = writeln!(stderr.lock().unwrap(), "{info}"); }));
+        }
+    }
+
+    fn console_output() -> std::fs::File {
+        use std::os::windows::io::AsRawHandle;
+        let file = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$").unwrap();
+        unsafe {
+            SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
+            SetStdHandle(STD_ERROR_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap();
+        }
+        file
+    }
+
+    #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
+    fn registered_console_writers_preserve_handles_and_output_contracts() {
+        let owned = [
+            ("null", "stdout", "stdout"), ("pattern", "stderr", "stderr"),
+            ("json", "stdout", "stderr"), ("plain_palette", "stderr", "stdout"),
+            ("default", "stdout", "stderr"), ("plain_pattern", "stderr", "stdout"),
+        ].into_iter().map(|(first, target, later)| ("owned", first, target, later));
+        let controls = ["shared", "attached", "suppressed", "redirected", "no_color"]
+            .into_iter().map(|context| (context, "plain_palette", "stdout",
+                if context == "redirected" { "stdout" } else { "stderr" }));
+        for (context, first, target, later) in owned.chain(controls) {
+            let output = child("writer_order_child")
+                .env("UNCHAINED_TEST_CONSOLE_CONTEXT", context)
+                .env("UNCHAINED_TEST_FIRST_ENCODER", first)
+                .env("UNCHAINED_TEST_FIRST_TARGET", target)
+                .env("UNCHAINED_TEST_LATER_TARGET", later).output().unwrap();
+            assert!(output.status.success(), "{context}/{first}/{target}/{later}: {}", String::from_utf8_lossy(&output.stderr));
+            if context == "redirected" {
+                assert!(String::from_utf8_lossy(&output.stdout).contains("writer order regression"));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for registered console writer order"]
+    fn writer_order_child() {
+        use std::os::windows::io::AsRawHandle;
+        unsafe {
+            let handles = standard_handles();
+            report_panics();
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+            let context = std::env::var("UNCHAINED_TEST_CONSOLE_CONTEXT").unwrap_or_else(|_| "owned".into());
+            if context == "suppressed" {
+                super::super::disable_console_spawning();
+                spawn_console();
+                assert_eq!(GetConsoleWindow().0, 0);
+            }
+            if matches!(context.as_str(), "shared" | "suppressed") { AllocConsole().unwrap(); }
+            else { spawn_console(); }
+            if context == "attached" { super::super::attach_stdio(); }
+            if context == "no_color" { std::env::set_var("NO_COLOR", "1"); }
+            let output = console_output();
+            if context == "redirected" { restore_standard_handles(handles); }
+            let console_handle = HANDLE(output.as_raw_handle() as isize);
+            let before = screen_info(console_handle).unwrap();
+            let mut before_mode = CONSOLE_MODE(0);
+            GetConsoleMode(console_handle, &mut before_mode).unwrap();
+            let mut registry = log4rs::config::Deserializers::default();
+            crate::logging::log4rs::register(&mut registry);
+            let build = |target: &str, encoder: &str| -> Box<dyn log4rs::append::Append> {
+                let config: log4rs::append::AppenderConfig = serde_yaml::from_str(
+                    &format!("kind: console\ntarget: {target}\n{encoder}")).unwrap();
+                registry.deserialize(&config.kind, config.config).unwrap()
+            };
+            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
+            let encoder = match first.as_str() {
+                "null" => "encoder:\n  kind: palette\n  pattern: '{palette(normal)}{m}'\n  palette: {normal: null}\n",
+                "pattern" => "encoder:\n  kind: pattern\n  pattern: '{h({m})}'\n",
+                "json" => "encoder:\n  kind: json\n",
+                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n",
+                "default" => "",
+                "plain_pattern" => "encoder:\n  kind: pattern\n  pattern: '{m}'\n",
+                _ => unreachable!(),
+            };
+            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), encoder);
+            let first_handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
+            let first_info = screen_info(console_handle).unwrap();
+            assert_eq!(first_info.ColorTable.map(|c| c.0), before.ColorTable.map(|c| c.0));
+            assert_eq!(first_info.wAttributes, before.wAttributes);
+            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "encoder:\n  kind: palette\n");
+            let record = log::Record::builder().args(format_args!("writer order regression")).build();
+            first_appender.append(&record).expect("earlier native writer must remain valid");
+            assert_eq!(GetStdHandle(STD_OUTPUT_HANDLE).unwrap(), first_handle);
+            let after = screen_info(console_handle).expect("earlier console handle must remain valid");
+            assert_eq!(after.ColorTable.map(|c| c.0), first_info.ColorTable.map(|c| c.0));
+            if context != "owned" {
+                assert_eq!(after.wAttributes, before.wAttributes);
+                let mut after_mode = CONSOLE_MODE(0);
+                GetConsoleMode(console_handle, &mut after_mode).unwrap();
+                assert_eq!(after_mode, before_mode);
+            }
+            later.append(&record).unwrap();
+            if context == "redirected" { assert_eq!(standard_handles(), handles); }
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+        }
+    }
+
+    #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
+    fn custom_palettes_on_owned_and_shared_consoles() {
+        for owned in [false, true] {
+            let output = child("palette_child")
+                .env("UNCHAINED_TEST_OWN_CONSOLE", owned.to_string())
+                .output().unwrap();
+            assert!(output.status.success(), "owned={owned}: {}",
+                String::from_utf8_lossy(&output.stderr));
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for console palettes"]
+    fn palette_child() {
+        unsafe {
+            let handles = standard_handles();
+            report_panics();
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+            let owned = std::env::var("UNCHAINED_TEST_OWN_CONSOLE").unwrap() == "true";
+            if owned { spawn_console(); }
+            else { AllocConsole().unwrap(); }
+            // CREATE_NO_WINDOW children retain their test-runner pipes across allocation.
+            let _output = console_output();
+            let before = screen_info(GetStdHandle(STD_OUTPUT_HANDLE).unwrap()).unwrap();
+            let palette = [[11, 22, 33], [44, 55, 66], [77, 88, 99], [111, 122, 133], [144, 155, 166]];
+            let (rgb, slots) = configure(log4rs::append::console::Target::Stdout, &palette);
+            let _configured_output = console_output();
+            let after = screen_info(GetStdHandle(STD_OUTPUT_HANDLE).unwrap()).unwrap();
+            if !owned {
+                assert_eq!(before.ColorTable.map(|c| c.0), after.ColorTable.map(|c| c.0));
+                assert_eq!(before.wAttributes, after.wAttributes);
+                assert_eq!(slots, nearest_slots(after.ColorTable.map(|c| c.0), &palette));
+            } else if !rgb {
+                // Reallocation can restore the test runner's startup pipes. Rebind
+                // the console writer and verify fallback against its actual palette.
+                let (_, slots) = configure(log4rs::append::console::Target::Stdout, &palette);
+                assert_eq!(slots, nearest_slots(after.ColorTable.map(|c| c.0), &palette));
+                let other = [[10, 30, 50]; 5];
+                let (_, slots) = configure(log4rs::append::console::Target::Stderr, &other);
+                let current = screen_info(GetStdHandle(STD_ERROR_HANDLE).unwrap()).unwrap();
+                assert_eq!(current.ColorTable.map(|c| c.0), after.ColorTable.map(|c| c.0));
+                assert_eq!(slots, nearest_slots(current.ColorTable.map(|c| c.0), &other));
+            }
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+        }
+    }
+
+    #[test]
+    #[ignore = "opens native console windows; run explicitly on an interactive desktop"]
+    fn attachment_and_console_spawning_are_independent() {
+        for attach in [false, true] {
+            for no_spawn in [false, true] {
+                let output = child("console_flags_child")
+                    .env("UNCHAINED_TEST_ATTACH", attach.to_string())
+                    .env("UNCHAINED_TEST_NO_SPAWN", no_spawn.to_string())
+                    .output().unwrap();
+                assert!(output.status.success(), "attach={attach}, no_spawn={no_spawn}: {}",
+                    String::from_utf8_lossy(&output.stderr));
+                if attach {
+                    assert!(String::from_utf8_lossy(&output.stdout).contains("inherited stdout preserved"));
+                    assert!(String::from_utf8_lossy(&output.stderr).contains("inherited stderr preserved"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for independent console flags"]
+    fn console_flags_child() {
+        use std::io::Write;
+        use std::os::windows::io::BorrowedHandle;
+        unsafe {
+            let handles = standard_handles();
+            let _ = FreeConsole();
+            restore_standard_handles(handles);
+            assert_eq!(GetConsoleWindow().0, 0);
+            let attach = std::env::var("UNCHAINED_TEST_ATTACH").unwrap() == "true";
+            let no_spawn = std::env::var("UNCHAINED_TEST_NO_SPAWN").unwrap() == "true";
+            if no_spawn { super::super::disable_console_spawning(); }
+            if attach { super::super::attach_stdio(); }
+            assert_eq!(super::super::console_spawning_disabled(), no_spawn);
+            super::super::spawn_console();
+            assert_eq!(GetConsoleWindow().0 != 0, !no_spawn);
+            if attach {
+                assert_eq!(standard_handles(), handles);
+                configure(log4rs::append::console::Target::Stdout, &[[242, 139, 130]]);
+                configure(log4rs::append::console::Target::Stderr, &[[242, 139, 130]]);
+                assert_eq!(standard_handles(), handles);
+                for (kind, text) in [(STD_OUTPUT_HANDLE, "inherited stdout preserved\n"),
+                    (STD_ERROR_HANDLE, "inherited stderr preserved\n")] {
+                    let handle = GetStdHandle(kind).unwrap();
+                    let owned = BorrowedHandle::borrow_raw(handle.0 as *mut _).try_clone_to_owned().unwrap();
+                    std::fs::File::from(owned).write_all(text.as_bytes()).unwrap();
+                }
+            }
+        }
+    }
 
     #[test]
     fn temporary_defaults_remove_new_key_and_restore_existing_values() {

@@ -27,9 +27,7 @@ impl Command<TestArgs> for TestCommand {
         PermissionFlags::USER | PermissionFlags::START_VOTE
     }
 
-    async fn execute(&self, args: TestArgs, _command: &CommandRequest) {
-        println!("Test command executed with message: {} and flag: {}", args.message, args.flag);
-    }
+    async fn execute(&self, _args: TestArgs, _command: &CommandRequest) {}
 }
 
 pub fn mock_actor(name: &str) -> CommandActor {
