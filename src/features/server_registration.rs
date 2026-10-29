@@ -1,7 +1,7 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use reqwest::blocking::Client;
+use reqwest::{blocking::Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
 use a2s::info::Info;
@@ -24,6 +24,10 @@ const A2S_RETRIES: u8 = 3;
 const API_BASE_PATH: &str = "/api/v1/servers";
 const AUTH_HEADER: &str = "X-CHIV2-SERVER-BROWSER-KEY";
 const DEBUG_LOGGING: bool = true;
+
+fn invalidates_registration(status: StatusCode) -> bool {
+    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND)
+}
 
 // --- Data Structures ---
 
@@ -269,11 +273,10 @@ impl RegistrationInner {
 
                     self.wait_interruptible(Duration::from_secs(ident.refresh_period));
                 }
-                Err(true) => { // Fatal Auth Error
-                    serror!(fn; "Authorization failed. Clearing identity.");
+                Err(true) => { // Rejected or missing registration
+                    swarn!(fn; "Registration rejected. Clearing identity and re-registering.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
-                    break;
                 }
                 Err(false) => { // Transient Network/Backend Error
                     self.wait_interruptible(Duration::from_secs(backoff_secs));
@@ -445,8 +448,7 @@ impl RegistrationInner {
             .json(&payload).send();
 
         if let Ok(r) = upd_res {
-            let s = r.status().as_u16();
-            if s == 401 || s == 403 { return Err(true); }
+            if invalidates_registration(r.status()) { return Err(true); }
         }
 
         // 2. Heartbeat Pulse (POST)
@@ -468,7 +470,7 @@ impl RegistrationInner {
                     Ok(ident.refresh_at)
                 }
             }
-            Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => Err(true),
+            Ok(r) if invalidates_registration(r.status()) => Err(true),
             _ => Err(false),
         }
     }
@@ -496,5 +498,27 @@ impl RegistrationInner {
 
     fn is_stopping(&self) -> bool {
         *self.state.lock().unwrap() == WorkerState::StopRequested
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejected_or_missing_registrations_require_fresh_identity() {
+        for status in [StatusCode::UNAUTHORIZED, StatusCode::FORBIDDEN, StatusCode::NOT_FOUND] {
+            assert!(invalidates_registration(status));
+        }
+    }
+
+    #[test]
+    fn other_responses_do_not_invalidate_registration() {
+        for code in 100..=599 {
+            if [401, 403, 404].contains(&code) {
+                continue;
+            }
+            assert!(!invalidates_registration(StatusCode::from_u16(code).unwrap()));
+        }
     }
 }
