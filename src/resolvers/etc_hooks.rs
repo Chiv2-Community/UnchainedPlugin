@@ -1,8 +1,198 @@
-use std::os::raw::c_void;
+use std::{cell::Cell, os::raw::c_void};
 
 use crate::{
-    game::engine::{FActorSpawnParameters, FRotator}, resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config}, tools::hook_globals::{cli_args, globals, globals_initialized}, ue::{FString, FVector, UClass, UObject},
+    game::engine::{FActorSpawnParameters, FRotator}, resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config}, tools::hook_globals::{cli_args, globals, globals_initialized}, ue::{FString, FVector, TArray, UClass, UObject},
 };
+
+// PingSomeServers splits the PlayFab endpoint at the first ':' before it
+// reaches FUDPPing::UDPEcho. Scope the Find override to that function and
+// return the final ':' for IPv6 endpoints, leaving all other FString::Find
+// callers untouched.
+thread_local! {
+    static IN_PING_SOME_SERVERS: Cell<bool> = const { Cell::new(false) };
+    static IN_ON_GET_CURRENT_GAMES: Cell<bool> = const { Cell::new(false) };
+}
+
+// Browser path: FindSessions -> OnGetCurrentGames. The endpoint is already
+// assembled here, before PingSomeServers starts its own parsing.
+define_pattern_resolver!(OnGetCurrentGames_, [
+    // "48 89 4C 24 08 55 53 57 41 54 41 55 41 56 48 8D AC 24 58 FE FF FF 48 81 EC A8 02 00 00" // 2.7 PDB
+    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 60 FE FF FF"
+]);
+
+CREATE_HOOK!(OnGetCurrentGames_, { || !cli_args().is_server() }, NONE, (), (
+    this_ptr: *mut c_void,
+    response: *mut c_void,
+    param_2: i32
+), {
+    let already_in_endpoint_path = IN_ON_GET_CURRENT_GAMES.with(|state| state.replace(true));
+    let find_enabled = unsafe { o_FStringFind.enable().is_ok() };
+    let result = CALL_ORIGINAL!(OnGetCurrentGames_(this_ptr, response, param_2));
+    if find_enabled {
+        unsafe {
+            let _ = o_FStringFind.disable();
+        }
+    }
+    if !already_in_endpoint_path {
+        IN_ON_GET_CURRENT_GAMES.with(|state| state.set(false));
+    }
+    result
+});
+
+define_pattern_resolver!(PingSomeServers, [
+    "4C 8B DC 49 89 4B 08 55 56 41 55 49 8D AB 38 FE FF FF 48 81 EC B0 02 00 00 4C 8D A9 40 03 00 00 48 8B F1"
+]);
+
+CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
+    this_ptr: *mut c_void,
+    max_servers: i32
+), {
+    let already_in_ping = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
+    // crate::sinfo!(fn; "PingSomeServers called");
+    let find_enabled = if already_in_ping {
+        false
+    } else {
+        unsafe { o_FStringFind.enable().is_ok() }
+    };
+    let result = CALL_ORIGINAL!(PingSomeServers(this_ptr, max_servers));
+    if find_enabled {
+        unsafe {
+            let _ = o_FStringFind.disable();
+        }
+    }
+    if !already_in_ping {
+        IN_PING_SOME_SERVERS.with(|state| state.set(false));
+    }
+    result
+});
+
+define_pattern_resolver!(FStringFind, [
+    "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 50 45 8B E1 48 8B FA 4C 8B F1"
+]);
+
+CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
+    haystack: *const FString,
+    needle: *const u16,
+    search_case: i32,
+    search_direction: i32,
+    start_position: i32
+), {
+    let in_browser = IN_ON_GET_CURRENT_GAMES.with(|state| state.get());
+    let in_ping = IN_PING_SOME_SERVERS.with(|state| state.get());
+    let should_fix = (in_browser || in_ping) && !haystack.is_null() && !needle.is_null();
+
+    if !haystack.is_null() && !needle.is_null() {
+        let needle_ = unsafe { widestring::U16CStr::from_ptr_str(needle).to_string_lossy() };
+        let endpoint_ = unsafe { (*haystack).to_string() };
+        // crate::sinfo!(fn; "FStringFind called {endpoint_} : {needle_}");
+    }
+
+    if should_fix {
+        let needle_text = unsafe { widestring::U16CStr::from_ptr_str(needle) }
+            .to_string_lossy();
+        if needle_text == ":" {
+            let endpoint = unsafe { (*haystack).to_string() };
+            if endpoint.matches(':').count() >= 2 {
+                if in_browser {
+                    // crate::sinfo!(fn; "FString::Find: bare IPv6 endpoint {endpoint}, returning -1");
+                    return -1;
+                }
+                if let Some(last_colon) = endpoint.rfind(':') {
+                    let utf16_index = endpoint[..last_colon].encode_utf16().count() as i32;
+                    // crate::sinfo!(fn; "FString::Find: IPv6 endpoint {endpoint}, using final colon at {utf16_index}");
+                    return utf16_index;
+                }
+            }
+        }
+    }
+
+    CALL_ORIGINAL!(FStringFind(
+        haystack,
+        needle,
+        search_case,
+        search_direction,
+        start_position
+    ))
+});
+
+// Keep this diagnostic hook so runtime logs show the endpoint that reaches
+// the UDP layer. The actual IPv6 correction occurs earlier in OnGetCurrentGames
+// and PingSomeServers, not here.
+define_pattern_resolver!(UDPEcho, [
+    "48 89 5C 24 20 55 56 57 48 81 EC 90 00 00 00 49 8B D8 0F 29 B4 24 80 00 00 00 48 8B E9"
+]);
+
+fn bracket_ipv6_udp_endpoint(endpoint: &str) -> Option<String> {
+    if endpoint.starts_with('[') || endpoint.matches(':').count() < 2 {
+        return None;
+    }
+
+    let separator = endpoint.rfind(':')?;
+    let host = &endpoint[..separator];
+    let port = &endpoint[separator + 1..];
+    if host.is_empty() || port.is_empty() || port.parse::<u16>().is_err() {
+        return None;
+    }
+
+    Some(format!("[{host}]:{port}"))
+}
+
+CREATE_HOOK!(UDPEcho, { || !cli_args().is_server() }, NONE, (), (
+    endpoint: *mut FString,
+    timeout_seconds: f32,
+    callback: *mut c_void
+), {
+    if !endpoint.is_null() {
+        let endpoint_text = unsafe { (*endpoint).to_string() };
+        // crate::sinfo!(fn; "UDPEcho: received endpoint {endpoint_text}");
+        if let Some(normalized) = bracket_ipv6_udp_endpoint(&endpoint_text) {
+            // crate::sinfo!(fn; "UDPEcho: normalizing IPv6 endpoint to {normalized}");
+            let original = unsafe { std::ptr::read(endpoint) };
+            unsafe { std::ptr::write(endpoint, FString::from(normalized.as_str())) };
+            let result = CALL_ORIGINAL!(UDPEcho(endpoint, timeout_seconds, callback));
+            unsafe { std::ptr::write(endpoint, original) };
+            return result;
+        }
+    }
+    CALL_ORIGINAL!(UDPEcho(endpoint, timeout_seconds, callback))
+});
+
+// UDPEchoImpl splits its target on every ':' and requires exactly two parts.
+// Bracketed IPv6 endpoints need a bracket-aware replacement so the ICMP path
+// receives [host, port] instead of one element per IPv6 hextet.
+// TODO: Nihi: activate this conditionally like above
+define_pattern_resolver!(FStringParseIntoArray, [
+    "44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"
+]);
+
+CREATE_HOOK!(FStringParseIntoArray, { || !cli_args().is_server() }, NONE, i32, (
+    haystack: *const FString,
+    output: *mut TArray<FString>,
+    delimiter: *const u16,
+    cull_empty: bool
+), {
+    if !haystack.is_null() && !output.is_null() && !delimiter.is_null() {
+        let endpoint = unsafe { (*haystack).to_string() };
+        let delimiter_text = unsafe { widestring::U16CStr::from_ptr_str(delimiter) }
+            .to_string_lossy();
+        if delimiter_text == ":" && endpoint.starts_with('[') {
+            if let Some(close) = endpoint.find("]:" ) {
+                let host = &endpoint[1..close];
+                let port = &endpoint[close + 2..];
+                if !host.is_empty() && !port.is_empty() && port.parse::<u16>().is_ok() {
+                    let mut parts = TArray::<FString>::new();
+                    parts.push(FString::from(host));
+                    parts.push(FString::from(port));
+                    unsafe { *output = parts };
+                    // crate::sinfo!(fn; "ParseIntoArray: IPv6 endpoint split into host and port");
+                    return 2;
+                }
+            }
+        }
+    }
+
+    CALL_ORIGINAL!(FStringParseIntoArray(haystack, output, delimiter, cull_empty))
+});
 
 // FString * __thiscall UClass::GetConfigName(UClass *this,FString *__return_storage_ptr__)
 // Pass-through hook: the LoadConfig hook calls the original to resolve the base config filename.
