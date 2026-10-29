@@ -1,4 +1,4 @@
-use std::{os::raw::c_void, sync::atomic::{AtomicBool, Ordering}};
+use std::{os::raw::c_void, sync::{Once, atomic::{AtomicBool, Ordering}}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
 use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
@@ -66,6 +66,8 @@ where
     JOB_QUEUE.lock().unwrap().push(Box::new(f));
 }
 
+static ENABLE_IPV6: Once = Once::new();
+
 // static IS_TICKING: AtomicBool = AtomicBool::new(false);
 thread_local! {
     static IN_TICK: std::cell::Cell<bool> = std::cell::Cell::new(false);
@@ -75,7 +77,15 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
 
     // FIXME: Just a bunch of bullshit
 
-    CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));
+    CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));;
+
+    ENABLE_IPV6.call_once(|| {
+        NATIVE_COMMAND_QUEUE
+            .lock()
+            .unwrap()
+            .push("net.DisableIPv6 0".to_string());
+    });
+
     let reentered = IN_TICK.with(|f| {
         let was = f.get();
         f.set(true);
