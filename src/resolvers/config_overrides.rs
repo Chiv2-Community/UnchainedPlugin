@@ -142,9 +142,28 @@ pub fn current_map_rotation_index() -> Option<String> {
 #[cfg(feature = "map_profiles")]
 #[derive(Debug, Default, serde::Deserialize)]
 pub struct ServerSettings {
-    /// Rotation index -> map-profiles subfolder name.
-    #[serde(default)]
-    pub map_profiles: std::collections::HashMap<i32, String>,
+    /// Entries are in map-list order; profile selects a map-profiles subfolder.
+    #[serde(default, rename = "map-rotation")]
+    pub map_rotation: Vec<MapRotationEntry>,
+}
+
+#[cfg(feature = "map_profiles")]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MapRotationEntry {
+    #[serde(deserialize_with = "rotation_string")]
+    pub profile: String,
+    /// Display label retained for future consumers; never used as a path.
+    #[serde(deserialize_with = "rotation_string")]
+    pub name: String,
+}
+
+#[cfg(feature = "map_profiles")]
+fn rotation_string<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    match <serde_yaml::Value as serde::Deserialize>::deserialize(deserializer)? {
+        serde_yaml::Value::String(value) if !value.trim().is_empty() => Ok(value),
+        _ => Err(serde::de::Error::custom("profile and name must be nonblank YAML strings")),
+    }
 }
 
 #[cfg(feature = "map_profiles")]
@@ -171,7 +190,7 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
         match settings {
             Ok(settings) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                sinfo!("Loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
+                sinfo!("Loaded {} map rotation entries from {}", settings.map_rotation.len(), path);
                 settings
             }
             Err(_e) => {
@@ -185,10 +204,11 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
 
 #[cfg(feature = "map_profiles")]
 pub fn current_map_profile_name(profile_root: &str) -> Option<String> {
-    // Replaces the map-indices layer: the rotation index is looked up in unchained.yaml and the
-    // resulting name selects the map-profiles/<name>/ folder. Unmapped indices get no profile layer.
+    // Replaces the map-indices layer: the rotation index selects an entry in unchained.yaml.
+    // Its profile selects the folder; its display name does not affect config lookup.
     let index = current_map_list_index()?;
-    let profile = server_settings(profile_root).map_profiles.get(&index)?;
+    let entry = server_settings(profile_root).map_rotation.get(usize::try_from(index).ok()?)?;
+    let profile = &entry.profile;
     let cleaned = profile.trim().trim_matches(['/', '\\']);
     (!cleaned.is_empty()).then(|| cleaned.to_string())
 }
@@ -360,11 +380,13 @@ mod tests {
 
     #[cfg(feature = "map_profiles")]
     #[test]
-    fn parses_server_settings_map_profiles() {
-        let settings = super::parse_server_settings("map_profiles:\n  0: night_tdm\n  3: duel_rules\n").unwrap();
-        assert_eq!(settings.map_profiles.get(&0).map(String::as_str), Some("night_tdm"));
-        assert_eq!(settings.map_profiles.get(&3).map(String::as_str), Some("duel_rules"));
-        assert!(!settings.map_profiles.contains_key(&1));
+    fn parses_ordered_rotation_profiles_and_display_names() {
+        let settings = super::parse_server_settings("map-rotation:\n  - profile: night_tdm\n    name: Night TDM\n  - profile: duel_rules\n    name: Evening duels\n").unwrap();
+        assert_eq!(settings.map_rotation[0].profile, "night_tdm");
+        assert_eq!(settings.map_rotation[0].name, "Night TDM");
+        assert_eq!(settings.map_rotation[1].profile, "duel_rules");
+        assert_eq!(settings.map_rotation[1].name, "Evening duels");
+        assert!(settings.map_rotation.get(2).is_none());
     }
 
     #[cfg(feature = "map_profiles")]
@@ -374,8 +396,8 @@ mod tests {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/test-resources/test-configs");
         let yaml = std::fs::read_to_string(format!("{root}/ini-overrides/unchained.yaml")).unwrap();
         let settings = super::parse_server_settings(&yaml).unwrap();
-        let profile = settings.map_profiles.get(&1).expect("fixture maps index 1");
-        let paths = build_override_paths(root, &["Engine.ini".to_string()], &[(OverrideLayer::MapProfile, profile.clone())]);
+        let entry = settings.map_rotation.first().expect("fixture maps index 0");
+        let paths = build_override_paths(root, &["Engine.ini".to_string()], &[(OverrideLayer::MapProfile, entry.profile.clone())]);
         assert_eq!(paths.len(), 1);
         assert!(std::path::Path::new(&paths[0]).is_file(), "missing {}", paths[0]);
     }
@@ -383,8 +405,27 @@ mod tests {
     #[cfg(feature = "map_profiles")]
     #[test]
     fn parses_empty_or_unrelated_server_settings() {
-        assert!(super::parse_server_settings("").unwrap().map_profiles.is_empty());
-        assert!(super::parse_server_settings("other_setting: 5\n").unwrap().map_profiles.is_empty());
+        assert!(super::parse_server_settings("").unwrap().map_rotation.is_empty());
+        assert!(super::parse_server_settings("other_setting: 5\n").unwrap().map_rotation.is_empty());
+        assert!(super::parse_server_settings("map-rotation: []\n").unwrap().map_rotation.is_empty());
+    }
+
+    #[cfg(feature = "map_profiles")]
+    #[test]
+    fn rotation_entries_require_profile_and_name_strings() {
+        for yaml in [
+            "map-rotation: {0: night_tdm}",
+            "map-rotation: [night_tdm]",
+            "map-rotation: [{profile: night_tdm}]",
+            "map-rotation: [{name: Night}]",
+            "map-rotation: [{profile: null, name: Night}]",
+            "map-rotation: [{profile: night_tdm, name: null}]",
+            "map-rotation: [{profile: 7, name: Night}]",
+            "map-rotation: [{profile: night_tdm, name: ''}]",
+            "map-rotation: [{profile: night_tdm, name: Night, typo: true}]",
+        ] {
+            assert!(super::parse_server_settings(yaml).is_err(), "accepted {yaml}");
+        }
     }
 
     #[test]

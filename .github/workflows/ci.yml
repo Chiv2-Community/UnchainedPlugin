@@ -51,6 +51,15 @@ jobs:
             cargo test
           fi
 
+      - name: Test named map rotation configuration
+        shell: bash
+        run: |
+          if [ "${{ matrix.build_type }}" == "release" ]; then
+            cargo test --release --lib --features map_profiles resolvers::config_overrides::tests
+          else
+            cargo test --lib --features map_profiles resolvers::config_overrides::tests
+          fi
+
       # Build the project
       - name: Build
         shell: bash

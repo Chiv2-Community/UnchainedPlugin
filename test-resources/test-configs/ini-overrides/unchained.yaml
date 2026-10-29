@@ -1,3 +1,5 @@
-# Rotation index -> ini-overrides/map-profiles/<name>/ (only used with the map_profiles feature)
-map_profiles:
-  1: quarry_profile
+# List order matches MapListIndex (requires the map_profiles feature).
+# profile selects ini-overrides/map-profiles/<profile>/; name is a display label.
+map-rotation:
+  - profile: quarry_profile
+    name: Quarry profile
