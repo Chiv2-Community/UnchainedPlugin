@@ -465,7 +465,17 @@ pub fn world_init() {
     {
         if args.is_server() || args.register {
             let query_port = args.game_server_query_port.unwrap_or(7071);
-            let reg = Arc::new(Registration::new("127.0.0.1", query_port));
+            let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
+                None
+            } else {
+                Some(args.local_ip.as_str())
+            };
+            let reg = Arc::new(Registration::new(
+                "127.0.0.1",
+                query_port,
+                advertised_local_ip,
+                args.use_ipv6,
+            ));
             
             let mut global_reg = globals().registration.lock().unwrap();
             *global_reg = Some(Arc::clone(&reg));

@@ -1,6 +1,8 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::net::IpAddr;
+use get_if_addrs::{get_if_addrs, IfAddr};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use a2s::A2SClient;
@@ -25,6 +27,19 @@ const API_BASE_PATH: &str = "/api/v1/servers";
 const AUTH_HEADER: &str = "X-CHIV2-SERVER-BROWSER-KEY";
 const DEBUG_LOGGING: bool = true;
 
+/// Format a socket endpoint for APIs that expect `host:port`.
+///
+/// The registration JSON carries `local_ip_address` separately from its port,
+/// so that field must remain a raw IPv6 address without brackets. Brackets are
+/// required only when the address and port are combined for A2S or a URL.
+fn format_host_port(host: &str, port: u16) -> String {
+    if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
 // --- Data Structures ---
 
 
@@ -37,7 +52,8 @@ struct RegisterRequest<'a> {
     current_map: &'a str,
     player_count: i32,
     max_players: i32,
-    local_ip_address: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    local_ip_address: Option<&'a str>,
     mods: Vec<Mod>,
 }
 
@@ -130,6 +146,7 @@ pub struct Registration {
 #[derive(Debug)]
 struct RegistrationInner {
     server_addr: String,
+    local_ip_address: Option<String>,
     state: Mutex<WorkerState>,
     identity: Mutex<Option<Identity>>,
     mods: Mutex<Vec<Mod>>,
@@ -137,18 +154,76 @@ struct RegistrationInner {
     http: Client,
 }
 
+fn discover_global_ipv6() -> Option<String> {
+    // The game may run inside a container/Wine namespace where interface
+    // enumeration does not expose the host's global address. The launcher
+    // therefore supplies SERVER_ADVERTISE_IP as the preferred stable source;
+    // this discovery path is the fallback for native IPv6 environments.
+    get_if_addrs().ok()?.into_iter().find_map(|interface| {
+        let IfAddr::V6(address) = interface.addr else { return None; };
+        let ip = address.ip;
+        if !ip.is_loopback() && !ip.is_unspecified() && !ip.is_unicast_link_local() {
+            Some(ip.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 impl Registration {
     /// Initializes the registration manager.
-    pub fn new(ip: &str, query_port: u16) -> Self {
-        let http = Client::builder()
+    pub fn new(ip: &str, query_port: u16, local_ip: Option<&str>, use_ipv6: bool) -> Self {
+        let advertised_local_ip = local_ip
+            .filter(|address| !address.is_empty())
+            .map(str::to_string);
+        let selected_source_ip = if use_ipv6 {
+            match local_ip {
+                Some(address) => address.to_string(),
+                None => std::env::var("SERVER_ADVERTISE_IP")
+                    .ok()
+                    .and_then(|configured| match configured.parse::<IpAddr>() {
+                        Ok(IpAddr::V6(_)) => Some(configured),
+                        _ => None,
+                    })
+                    .or_else(discover_global_ipv6)
+                    .unwrap_or_else(|| {
+                        swarn!(fn; "--use-ipv6 could not discover or obtain SERVER_ADVERTISE_IP; using 127.0.0.1");
+                        "127.0.0.1".to_string()
+                    }),
+            }
+        } else {
+            local_ip.map(str::to_string).unwrap_or_default()
+        };
+
+        if let Some(address) = advertised_local_ip.as_deref() {
+            sinfo!(fn; "Advertising server-browser registration with local address {}", address);
+        } else if use_ipv6 {
+            sinfo!(fn; "Using discovered IPv6 source {} without advertising local_ip_address", selected_source_ip);
+        }
+
+        let bind_address = if use_ipv6 {
+            match selected_source_ip.parse::<IpAddr>() {
+                Ok(IpAddr::V6(address)) => Some(IpAddr::V6(address)),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        let mut http_builder = Client::builder()
             .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(5))
-            .build()
+            .connect_timeout(Duration::from_secs(5));
+        if let Some(address) = bind_address {
+            sinfo!(fn; "Binding server-browser registration HTTP to IPv6 source {}", address);
+            http_builder = http_builder.local_address(Some(address));
+        }
+        let http = http_builder.build()
             .unwrap_or_default();
 
         Self {
             inner: Arc::new(RegistrationInner {
-                server_addr: format!("{ip}:{query_port}"),
+                server_addr: format_host_port(ip, query_port),
+                local_ip_address: advertised_local_ip,
                 state: Mutex::new(WorkerState::Idle),
                 identity: Mutex::new(None),
                 mods: Mutex::new(Vec::new()),
@@ -223,6 +298,32 @@ impl Registration {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_host_port;
+
+    #[test]
+    fn formats_ipv4_endpoint_without_brackets() {
+        assert_eq!(format_host_port("127.0.0.1", 7071), "127.0.0.1:7071");
+    }
+
+    #[test]
+    fn formats_ipv6_endpoint_with_brackets() {
+        assert_eq!(
+            format_host_port("2a0c:d242:903b:ba00::ff99", 7071),
+            "[2a0c:d242:903b:ba00::ff99]:7071"
+        );
+    }
+
+    #[test]
+    fn preserves_already_bracketed_ipv6_endpoint() {
+        assert_eq!(
+            format_host_port("[2a0c:d242:903b:ba00::ff99]", 7071),
+            "[2a0c:d242:903b:ba00::ff99]:7071"
+        );
     }
 }
 
@@ -373,7 +474,7 @@ impl RegistrationInner {
             current_map: &info.map,
             player_count: player_count as i32,
             max_players: max_players as i32,
-            local_ip_address: cli_args().local_ip.as_str(),
+            local_ip_address: self.local_ip_address.as_deref(),
             mods,
         };
         //sinfo!(fn; "Request: {:#?}", request);

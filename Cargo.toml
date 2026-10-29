@@ -66,7 +66,7 @@ config_overrides_verbose_hooks = [] # print (config_override) hook triggers to c
 map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
-server_registration = ["a2s", "reqwest"] # register server with backend
+server_registration = ["a2s", "reqwest", "get_if_addrs"] # register server with backend
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
 move-autonomous-desync = []
@@ -99,6 +99,7 @@ sleuth_macros = { path = "./sleuth_macros" }
 # server registration
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", optional = true }
 reqwest = { version = "0.12.19", optional = true, features = ["blocking", "json"]  }
+get_if_addrs = { version = "0.5", optional = true }
 # discord<
 async-trait = "0.1"
 backtrace = "0.3.76"
@@ -143,3 +144,9 @@ unicode-segmentation = "1.12"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["test-util"] }
+[patch.crates-io]
+# Local diagnostic fork: logs the exact trampoline allocation base before
+# retour relocates each target prologue. Remove after the Box64/Wine issue is
+# understood and the upstream allocator fix is selected.
+# retour = { path = "vendor/retour" }
+retour = { git = "https://github.com/Chiv2-Community/retour-rs", branch = "chiv-v0.3.1" }
