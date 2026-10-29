@@ -77,7 +77,7 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, 
 
     // FIXME: Just a bunch of bullshit
 
-    CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));;
+    CALL_ORIGINAL!(UGameEngineTick(engine, delta, state));
 
     ENABLE_IPV6.call_once(|| {
         NATIVE_COMMAND_QUEUE
