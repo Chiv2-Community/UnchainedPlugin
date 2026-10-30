@@ -290,25 +290,23 @@ impl PaletteEncoder {
 
     fn encode_chunks(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
         let colors = record.key_values().get(COLORS_KEY.into());
-        let changes = colors.and_then(|value| value.to_borrowed_str())
-            .and_then(|json| serde_json::from_str::<Vec<ColorChange<'_>>>(json).ok());
-        let message = changes.as_ref().map(|_| record.args().to_string());
-        let changes = changes.as_deref().filter(|changes| {
-            let text = message.as_deref().unwrap();
-            let mut previous = 0;
-            changes.iter().all(|change| {
-                let valid = change.offset >= previous && text.is_char_boundary(change.offset);
-                previous = change.offset;
-                valid
-            })
-        });
+        let inline = colors.and_then(|value| value.to_borrowed_str())
+            .and_then(|json| serde_json::from_str::<Vec<ColorChange<'_>>>(json).ok())
+            .and_then(|changes| {
+                let message = record.args().to_string();
+                let mut previous = 0;
+                changes.iter().all(|change| {
+                    let valid = change.offset >= previous && message.is_char_boundary(change.offset);
+                    previous = change.offset;
+                    valid
+                }).then_some((message, changes))
+            });
         let level = record.level() as usize - 1;
         for chunk in &self.chunks {
             match chunk {
                 Chunk::Text(pattern) => pattern.encode(writer, record)?,
                 Chunk::Message => {
-                    if let Some(changes) = changes {
-                        let message = message.as_deref().unwrap();
+                    if let Some((message, changes)) = &inline {
                         let mut start = 0;
                         for change in changes {
                             writer.write_all(message[start..change.offset].as_bytes())?;
@@ -641,6 +639,54 @@ palette:
                     .args(format_args!("{}", message.text)).build()).unwrap_err();
                 assert!(error.to_string().contains("injected output failure"));
                 assert_eq!(output.styles.last().unwrap().1, Style::new());
+            }
+        }
+    }
+
+    #[test]
+    fn inline_validation_preserves_lookup_and_formatting_counts() {
+        use std::{cell::Cell, fmt};
+        struct Message(Cell<usize>);
+        impl fmt::Display for Message {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.0.set(self.0.get() + 1);
+                f.write_str("界x")
+            }
+        }
+        struct Metadata<'a> { colors: Option<&'a str>, lookups: Cell<usize> }
+        impl log::kv::Source for Metadata<'_> {
+            fn visit<'kvs>(&'kvs self, _: &mut dyn log::kv::VisitSource<'kvs>) -> Result<(), log::kv::Error> {
+                panic!("encoder enumerated metadata")
+            }
+            fn get(&self, key: log::kv::Key<'_>) -> Option<log::kv::Value<'_>> {
+                assert_eq!(key.as_str(), COLORS_KEY);
+                self.lookups.set(self.lookups.get() + 1);
+                self.colors.map(log::kv::Value::from)
+            }
+        }
+        for (colors, parsed, valid, switches) in [
+            (None, false, false, 0),
+            (Some("not json"), false, false, 0),
+            (Some("null"), false, false, 0),
+            (Some("[]"), true, true, 0),
+            (Some(r#"[{"utf8_offset":1,"palette":null}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":5,"palette":null}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":3,"palette":null},{"utf8_offset":0,"palette":null}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":0,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":4,"palette":null}]"#), true, true, 4),
+        ] {
+            for (pattern, chunks, expected) in [("{m}|{message}", 2, "界x|界x"), ("prefix", 0, "prefix")] {
+                let mut encoder = encoder(&format!("pattern: '{pattern}'"));
+                encoder.enabled = true;
+                let message = Message(Cell::new(0));
+                let metadata = Metadata { colors, lookups: Cell::new(0) };
+                let mut output = StyledBuffer::default();
+                encoder.encode(&mut output, &Record::builder().key_values(&metadata)
+                    .args(format_args!("{message}")).build()).unwrap();
+                assert_eq!(output.bytes, expected.as_bytes(), "{colors:?}, {pattern}");
+                assert_eq!(metadata.lookups.get(), 1);
+                assert_eq!(message.0.get(), usize::from(parsed) + if valid { 0 } else { chunks }, "{colors:?}, {pattern}");
+                assert_eq!(output.styles.len(), switches * chunks + 1, "{colors:?}, {pattern}");
+                assert!(output.styles.iter().all(|(_, style)| *style == Style::new()));
             }
         }
     }
