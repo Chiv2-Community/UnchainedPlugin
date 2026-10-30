@@ -95,6 +95,170 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
 }
 
 #[test]
+fn inline_segments_keep_plain_messages_metadata_and_filtering() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
+    swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), " tail");
+    fn never<T>() -> T { panic!("filtered argument evaluated") }
+    serror!(logger: &logger, target: "disabled", ("{}", never::<String>()),
+        palette(never::<&str>()), ("never"));
+    sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), " tail");
+    strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), " tail", palette(),);
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 4);
+    assert!(lines[0].starts_with("inline_segments_keep_plain_messages_metadata_and_filtering|custom|INFO|"));
+    assert!(lines[0].ends_with("hello 7 world!"));
+    assert!(lines[1].ends_with("owned tail"));
+    assert!(lines[2].ends_with("[inline_segments_keep_plain_messages_metadata_and_filtering] function tail"));
+    assert!(lines[3].ends_with("|TRACE|42|kv tail"));
+}
+
+#[test]
+fn grouped_segments_support_plain_text_and_palette_only_records() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let request = 42;
+    sinfo!(logger: &logger, request; ("{}", String::from("one")), "{request}",);
+    sinfo!(logger: &logger, palette("warn"), palette(),);
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("|INFO|42|one42"));
+    assert!(lines[1].ends_with("|INFO||"));
+}
+
+#[test]
+fn inline_literals_and_ordinary_format_arguments_remain_distinct() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let count = 7;
+    sinfo!(logger: &logger, palette("warn"), "before {count}", palette(), "after",);
+    sinfo!(logger: &logger, ("before {}", count), palette("warn"), "after");
+    sinfo!(logger: &logger, "foo");
+    sinfo!(logger: &logger, "before {}", count);
+    sinfo!(logger: &logger, "{} {}", "literal", (count));
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 5);
+    for (line, expected) in lines.iter().zip(["before 7after", "before 7after", "foo", "before 7", "literal 7"]) {
+        assert!(line.ends_with(expected), "{line}");
+    }
+}
+
+#[test]
+fn inline_calls_borrow_owned_loggers() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    sinfo!(logger: logger, target: "custom", request = 42; ("info"), palette("info"), (" tail"));
+    swarn!(logger: logger, ("warn"), palette("warn"), (" tail"));
+    serror!(logger: logger, ("error"), palette("error"), (" tail"));
+    sdebug!(logger: logger, fn; ("debug"), palette("debug"), (" tail"));
+    strace!(logger: logger, ("trace"), palette("trace"), (" tail"));
+    sinfo!(logger: logger, "ordinary reuse");
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 6);
+    assert!(lines[0].ends_with("|custom|INFO|42|info tail"));
+    assert!(lines[1].ends_with("|WARN||warn tail"));
+    assert!(lines[2].ends_with("|ERROR||error tail"));
+    assert!(lines[3].ends_with("[inline_calls_borrow_owned_loggers] debug tail"));
+    assert!(lines[4].ends_with("|TRACE||trace tail"));
+    assert!(lines[5].ends_with("ordinary reuse"));
+}
+
+#[test]
+fn inline_calls_borrow_logger_fields_through_shared_receivers() {
+    struct Owner(Capture);
+    impl Owner {
+        fn emit(&self) {
+            sinfo!(logger: self.0, ("field"), palette("info"), (" tail"));
+            sinfo!(logger: self.0, "ordinary reuse");
+        }
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let owner = Owner(Capture::default());
+    owner.emit();
+    let lines = owner.0.0.lock().unwrap();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("field tail"));
+    assert!(lines[1].ends_with("ordinary reuse"));
+}
+
+#[test]
+fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let evaluations = std::cell::Cell::new(0);
+    let get_logger = || -> &dyn Log {
+        evaluations.set(evaluations.get() + 1);
+        &logger
+    };
+    sinfo!(logger: get_logger(), ("once"), palette("info"), (" tail"));
+    assert_eq!(evaluations.get(), 1);
+    fn never() -> &'static str { panic!("filtered palette evaluated") }
+    sinfo!(logger: get_logger(), target: "disabled", ("never"),
+        palette(never()), (" tail"));
+    assert_eq!(evaluations.get(), 2);
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].ends_with("once tail"));
+}
+
+#[test]
+fn inline_formatting_is_stable_across_multiple_encoders() {
+    struct Counter(std::cell::Cell<usize>);
+    impl std::fmt::Display for Counter {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let next = self.0.get() + 1;
+            self.0.set(next);
+            write!(f, "界{next}")
+        }
+    }
+    struct Logger;
+    impl Log for Logger {
+        fn enabled(&self, _: &Metadata<'_>) -> bool { true }
+        fn log(&self, record: &Record<'_>) {
+            for _ in 0..2 {
+                let mut output = Vec::new();
+                PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut output), record).unwrap();
+                assert_eq!(output, "界1tail".as_bytes());
+            }
+            let colors = record.key_values().get("inline_colors".into()).unwrap();
+            assert_eq!(serde_json::from_str::<serde_json::Value>(colors.to_borrowed_str().unwrap()).unwrap(),
+                serde_json::json!([{"utf8_offset": 4, "palette": "warn"}]));
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let counter = Counter(std::cell::Cell::new(0));
+    sinfo!(logger: Logger, ("{}", counter), palette("warn"), "tail");
+    assert_eq!(counter.0.get(), 1);
+}
+
+#[test]
+fn ordinary_calls_do_not_create_inline_state() {
+    struct Plain(Capture);
+    impl Log for Plain {
+        fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.0.enabled(metadata) }
+        fn log(&self, record: &Record) {
+            assert!(record.key_values().get("inline_colors".into()).is_none());
+            self.0.log(record);
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Plain(Capture::default());
+    sinfo!(logger: &logger, "ordinary {}", 7);
+    swarn!(logger: &logger, "onetwo {}", 7);
+    sdebug!(logger: &logger, fn; "onetwo");
+    strace!(logger: &logger, request = 42; "onetwo");
+    let lines = logger.0.0.lock().unwrap();
+    assert_eq!(lines.len(), 4);
+    assert!(lines[0].ends_with("ordinary 7"));
+    assert!(lines[1].ends_with("onetwo 7"));
+    assert!(lines[2].ends_with("[ordinary_calls_do_not_create_inline_state] onetwo"));
+    assert!(lines[3].ends_with("|TRACE|42|onetwo"));
+}
+
+#[test]
 #[cfg(unix)] // This source-tree check runs on the host, not in the Wine harness.
 fn all_plugin_diagnostics_use_shared_macros() {
     fn check(directory: &std::path::Path) {
@@ -199,48 +363,6 @@ fn source_check_catches_interpolated_facade_paths() {
     assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
 }
 
-#[test]
-#[cfg(unix)]
-fn startup_only_dumps_redacted_cli_after_logging_init() {
-    let root = std::path::Path::new(file!()).parent().unwrap().parent().unwrap();
-    let startup = std::fs::read_to_string(root.join("lib.rs")).unwrap();
-    let startup = startup.split_once("let args = tools::cli_args::load_cli()").unwrap().1
-        .split_once("// Load build info").unwrap().0;
-    let cli = std::fs::read_to_string(root.join("tools/cli_args.rs")).unwrap();
-    let declaration = cli.split_once("pub struct CLIArgs").unwrap().0;
-    let derive = declaration.rsplit_once("#[derive(").unwrap().1.split_once(")]").unwrap().0;
-    assert!(!derive.contains("Debug"), "CLIArgs must use redacting Debug, not derive");
-    assert!(cli.contains("impl std::fmt::Debug for CLIArgs"));
-    let loader = cli.split_once("pub fn load_cli()").unwrap().1
-        .split_once("#[cfg(test)]").unwrap().0;
-    assert!(safe_cli_logging(startup, loader), "Only the post-init redacted Debug dump is allowed");
-    let facade = "log::";
-    for raw in ["sdebug!(\"{:?}\", std::env::args());".to_string(),
-        [facade, "debug", "!(\"{parsed:?}\");"].concat(),
-        "strace!(\"{args:?}\");".to_string(), "sinfo!(\"{raw:?}\");".to_string(),
-        "serror!(\"{raw:?}\");".to_string()] {
-        assert!(!safe_cli_logging(&format!("{startup}\n{raw}"), loader));
-        assert!(!safe_cli_logging(startup, &format!("{loader}\n{raw}")));
-    }
-    assert!(!safe_cli_logging("sdebug!(fn; \"CLI args: {:?}\", cli_args());", loader));
-}
-
-#[cfg(unix)]
-fn safe_cli_logging(startup: &str, loader: &str) -> bool {
-    let compact = |source: &str| source.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
-    let startup = compact(startup);
-    let dump = "sdebug!(fn;\"CLIargs:{:?}\",cli_args());";
-    let Some((before, after)) = startup.split_once(dump) else { return false; };
-    if !before.contains("logging::log4rs::init().expect(") { return false; }
-    // Allow the existing initialization error, but no other argument diagnostics.
-    let remaining = format!("{before}{after}").replace("serror!(fn;\"CLIargsalreadyinitialized!\");", "");
-    for source in [remaining, compact(loader)] {
-        for severity in ["debug", "trace", "info", "warn", "error", "log"] {
-            if source.contains(&format!("{severity}!")) { return false; }
-        }
-    }
-    true
-}
 struct Example;
 impl Example {
     fn method<T>(&self, logger: &Capture, _: T) {

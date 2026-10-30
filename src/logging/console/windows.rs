@@ -319,7 +319,7 @@ mod tests {
                 "null" => "encoder:\n  kind: palette\n  pattern: '{palette(normal)}{m}'\n  palette: {normal: null}\n",
                 "pattern" => "encoder:\n  kind: pattern\n  pattern: '{h({m})}'\n",
                 "json" => "encoder:\n  kind: json\n",
-                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n",
+                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n  palette: {}\n",
                 "default" => "",
                 "plain_pattern" => "encoder:\n  kind: pattern\n  pattern: '{m}'\n",
                 _ => unreachable!(),

@@ -2,6 +2,7 @@ use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
 use console::ConsoleAppenderDeserializer;
 use palette::PaletteEncoderDeserializer;
+pub use palette::PaletteWarnings;
 use pattern::PatternEncoderDeserializer;
 
 mod console;
@@ -43,9 +44,11 @@ pub fn init() -> anyhow::Result<()> {
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
-    log4rs::init_config(config_from_yaml(&resolved_yaml, config_source_name)?)
+    let (config, warnings) = config_with_warnings(&resolved_yaml, config_source_name)?;
+    log4rs::init_config(config)
         .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
+    warnings.report();
     crate::logging::console::report_attachment_failure();
 
     Ok(())
@@ -59,7 +62,7 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
     }
 }
 
-fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
+fn config_with_warnings(yaml: &str, config_source_name: &str) -> anyhow::Result<(Config, PaletteWarnings)> {
     let raw_config: RawConfig = serde_yaml::from_str(yaml).with_context(|| {
         format!(
             "Failed to parse logger config {}",
@@ -67,21 +70,29 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
         )
     })?;
     let mut deserializers = Deserializers::default();
-    register(&mut deserializers);
+    let warnings = register(&mut deserializers);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
     anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
-    Config::builder()
+    let config = Config::builder()
         .appenders(appenders)
         .loggers(raw_config.loggers())
         .build(raw_config.root())
-        .with_context(|| format!("Invalid logger config {}", config_source_name))
+        .with_context(|| format!("Invalid logger config {}", config_source_name))?;
+    Ok((config, warnings))
 }
 
-/// Register pattern extensions and the palette encoder.
-pub fn register(deserializers: &mut Deserializers) {
-    deserializers.insert("palette", PaletteEncoderDeserializer);
-    deserializers.insert("console", ConsoleAppenderDeserializer);
+#[cfg(test)]
+fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
+    config_with_warnings(yaml, config_source_name).map(|(config, _)| config)
+}
+
+/// Register encoders. Report returned warnings after installing the logger.
+pub fn register(deserializers: &mut Deserializers) -> PaletteWarnings {
+    let warnings = PaletteWarnings::default();
+    deserializers.insert("palette", PaletteEncoderDeserializer(warnings.clone()));
+    deserializers.insert("console", ConsoleAppenderDeserializer(warnings.clone()));
     deserializers.insert("pattern", PatternEncoderDeserializer);
+    warnings
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {
@@ -127,6 +138,68 @@ mod tests {
     use super::*;
     use log::{Level, Log, Metadata, Record};
     use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    #[test]
+    fn inline_palette_switches_color_console_and_preserve_plain_file_messages() {
+        let path = std::env::temp_dir().join(format!("inline-palette-route-{}.jsonl", std::process::id()));
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::inline_palette_child", module_path!().split_once("::").unwrap().1)])
+            .env("UNCHAINED_TEST_INLINE_FILE", &path)
+            .env("CLICOLOR_FORCE", "1").env_remove("NO_COLOR").output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("ordinary"));
+        #[cfg(unix)]
+        {
+            assert!(text.contains("\x1b[0;38;2;18;52;86mafter"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;171;205;239mfirst line\r\n"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;254;220;186msecond 7\r\n"), "{text:?}");
+        }
+        let file = std::fs::read_to_string(&path).unwrap();
+        let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(records.len(), 4);
+        assert_eq!(records[0]["message"], "ordinary");
+        assert!(records[0]["attributes"].get("inline_colors").is_none());
+        assert_eq!(records[1]["message"], "beforeafterend");
+        let colors: serde_json::Value = serde_json::from_str(records[1]["attributes"]["inline_colors"].as_str().unwrap()).unwrap();
+        assert_eq!(colors, serde_json::json!([
+            {"utf8_offset": 6, "palette": "accent"}, {"utf8_offset": 11, "palette": null}
+        ]));
+        assert_eq!(records[2]["message"], "onetwo");
+        assert!(records[2]["attributes"].get("inline_colors").is_none());
+        assert_eq!(records[3]["message"], "first line\r\nsecond 7\r\n");
+        assert!(!file.contains("\\u001b"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for inline palette messages"]
+    fn inline_palette_child() {
+        let path = std::env::var("UNCHAINED_TEST_INLINE_FILE").unwrap();
+        let yaml = format!(r##"
+appenders:
+  console:
+    kind: console
+    encoder:
+      kind: palette
+      pattern: '{{m}}{{n}}'
+      palette: {{accent: '#123456', first: '#abcdef', second: '#fedcba'}}
+  file:
+    kind: file
+    path: {}
+    encoder: {{kind: json}}
+root:
+  level: info
+  appenders: [console, file]
+"##, serde_json::to_string(&path).unwrap());
+        log4rs::init_config(config_from_yaml(&yaml, "inline-palette").unwrap()).unwrap();
+        sinfo!("ordinary");
+        sinfo!(("before"), palette("accent"), "after", palette(), "end");
+        sinfo!("onetwo");
+        sinfo!(palette("first"), "first line\r\n", palette("second"), ("second {}", 7), "\r\n");
+        log::logger().flush();
+    }
 
     fn render_encoder(registry: &Deserializers, yaml: &str, record: &Record) -> Vec<u8> {
         let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
@@ -178,12 +251,11 @@ mod tests {
             assert!(file[0]["thread_id"].as_u64().unwrap() > 0);
             assert!(file[0]["time"].as_str().unwrap().contains('T'));
             assert_eq!(file[1]["message"].as_str().unwrap().len(), 20 * 1024);
-            assert!(file[2]["message"].as_str().unwrap().contains("▄████████"));
+            assert_eq!(file[2]["message"], "fixture line one\nfixture line two");
             let stdout = read_records(&output.stdout);
             let stderr = read_records(&output.stderr);
             if target == "file-only" {
                 assert!(stdout.is_empty() && stderr.is_empty());
-                assert!(!String::from_utf8_lossy(&output.stdout).contains("▄████████"));
             } else {
                 let (selected, other) = if target == "stdout" { (stdout, stderr) } else { (stderr, stdout) };
                 assert!(other.is_empty());
@@ -234,7 +306,7 @@ root:
         let _handle = log4rs::init_config(config).unwrap();
         sinfo!(fn; "hello 世界\nsecond line");
         sinfo!(request = 42; "{}", "x".repeat(20 * 1024));
-        crate::logging::console::print_banner();
+        sinfo!("fixture line one\nfixture line two");
         log::logger().flush();
         #[cfg(windows)]
         assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });

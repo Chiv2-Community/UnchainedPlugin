@@ -353,3 +353,15 @@ and the `{fn}` log format string.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).
+
+### Inline color changes
+
+`palette("name")` selects a configured color; `palette()` restores normal text color.
+Unknown names also restore normal text color.
+Start with `palette(...)` or a grouped segment. Group format strings with their arguments.
+
+```rust
+sinfo!(palette("warn"), "Warning", palette(), " normal text");
+sinfo!(("Loaded {} mods", count), palette("info"), " from {directory}");
+sinfo!(palette("error"), ("Failed: {}", error), palette(), " retrying");
+```

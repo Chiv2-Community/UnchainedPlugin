@@ -1,11 +1,15 @@
 #[macro_use]
 mod macros;
+#[doc(hidden)]
+pub mod inline;
 
 pub mod console;
 pub mod log4rs;
 
 #[doc(hidden)]
 pub use log as __log;
+#[doc(hidden)]
+pub use inventory as __inventory;
 #[cfg(test)]
 mod tests;
 
