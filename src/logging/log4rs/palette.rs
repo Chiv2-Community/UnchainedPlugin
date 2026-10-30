@@ -521,8 +521,8 @@ palette:
             encoder.colors[0].style.text(Color::Magenta);
             let logger = Logger { encoder, output: Mutex::new(StyledBuffer::default()) };
             let reference = String::from("AcCeNt");
-            sinfo!(logger: &logger, "before {}", 7; palette(&reference); "after {}", "世界";
-                palette("normal"); "normal"; palette("unknown"); "end"; palette());
+            sinfo!(logger: &logger, ("before {}", 7), palette(&reference), ("after {}", "世界"),
+                palette("normal"), ("normal"), palette("unknown"), ("end"), palette());
             let output = logger.output.lock().unwrap();
             let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
                 else { "before 7after 世界normalend" };
@@ -571,7 +571,7 @@ palette:
         struct Nested<'a>(&'a Logger);
         impl fmt::Display for Nested<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                sinfo!(logger: self.0, "inner"; palette("warn"); "yellow");
+                sinfo!(logger: self.0, ("inner"), palette("warn"), ("yellow"));
                 f.write_str("outer")
             }
         }
@@ -582,7 +582,7 @@ palette:
         let logger = Logger { encoder, output: Mutex::new(Vec::new()) };
         std::thread::scope(|scope| {
             for _ in 0..4 {
-                scope.spawn(|| sinfo!(logger: &logger, "{}", Nested(&logger); palette("info"); "blue"));
+                scope.spawn(|| sinfo!(logger: &logger, ("{}", Nested(&logger)), palette("info"), ("blue")));
             }
         });
         let output = logger.output.lock().unwrap();
@@ -612,7 +612,7 @@ palette:
             for i in 0..iterations {
                 let count = std::hint::black_box(i);
                 if inline {
-                    sinfo!(logger: &logger, "before {}", count; palette("warn"); "after"; palette(); "end");
+                    sinfo!(logger: &logger, ("before {}", count), palette("warn"), ("after"), palette(), ("end"));
                 } else {
                     sinfo!(logger: &logger, "before {}afterend", count);
                 }

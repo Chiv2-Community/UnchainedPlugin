@@ -355,11 +355,15 @@ depending on lexical macro imports.
 The macros capture `enclosing_function` in the attributes for structured logging
 and the `{fn}` log format string.
 
-Separate message segments with semicolons to switch palette colors inline:
+Separate inline segments with commas; group each format string and its arguments:
 
 ```rust
-sinfo!("some log segment"; palette("warn"); "next segment {}", count; palette(); "normal text");
+sinfo!(("some log segment"), palette("warn"), ("next segment {}", count), palette(), ("normal text"));
 ```
+
+Ordinary calls such as `sinfo!("count {}", count)` are unchanged. Use grouped
+segments only for inline formatting; grouped calls use the inline record path
+even without palette switches. Existing `fn;` and structured-field prefixes remain.
 
 `palette(reference)` accepts a `&str` naming a configured color, ignoring ASCII
 case. `palette()` restores normal console text, not the previous body color.

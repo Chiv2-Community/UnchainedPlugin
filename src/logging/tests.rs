@@ -98,13 +98,13 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
 fn inline_segments_keep_plain_messages_metadata_and_filtering() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
-    sinfo!(logger: &logger, target: "custom", "hello {count}", count = 7; palette("WARN"); " world"; palette(); "!");
-    swarn!(logger: &logger, "{}", String::from("owned"); palette("info"); " tail");
+    sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), (" world"), palette(), ("!"));
+    swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), (" tail"));
     fn never<T>() -> T { panic!("filtered argument evaluated") }
-    serror!(logger: &logger, target: "disabled", "{}", never::<String>();
-        palette(never::<&str>()); "never");
-    sdebug!(logger: &logger, fn; "{name}", name = "function"; palette("warn"); " tail");
-    strace!(logger: &logger, "request" = 42; "{name}", name = "kv",; palette("warn"); " tail"; palette(););
+    serror!(logger: &logger, target: "disabled", ("{}", never::<String>()),
+        palette(never::<&str>()), ("never"));
+    sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), (" tail"));
+    strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), (" tail"), palette(),);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("inline_segments_keep_plain_messages_metadata_and_filtering|custom|INFO|"));
@@ -115,14 +115,27 @@ fn inline_segments_keep_plain_messages_metadata_and_filtering() {
 }
 
 #[test]
+fn grouped_segments_support_plain_text_and_palette_only_records() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let request = 42;
+    sinfo!(logger: &logger, request; ("{}", String::from("one")), ("{request}"),);
+    sinfo!(logger: &logger, palette("warn"), palette(),);
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("|INFO|42|one42"));
+    assert!(lines[1].ends_with("|INFO||"));
+}
+
+#[test]
 fn inline_calls_borrow_owned_loggers() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
-    sinfo!(logger: logger, target: "custom", request = 42; "info"; palette("info"); " tail");
-    swarn!(logger: logger, "warn"; palette("warn"); " tail");
-    serror!(logger: logger, "error"; palette("error"); " tail");
-    sdebug!(logger: logger, fn; "debug"; palette("debug"); " tail");
-    strace!(logger: logger, "trace"; palette("trace"); " tail");
+    sinfo!(logger: logger, target: "custom", request = 42; ("info"), palette("info"), (" tail"));
+    swarn!(logger: logger, ("warn"), palette("warn"), (" tail"));
+    serror!(logger: logger, ("error"), palette("error"), (" tail"));
+    sdebug!(logger: logger, fn; ("debug"), palette("debug"), (" tail"));
+    strace!(logger: logger, ("trace"), palette("trace"), (" tail"));
     sinfo!(logger: logger, "ordinary reuse");
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 6);
@@ -139,7 +152,7 @@ fn inline_calls_borrow_logger_fields_through_shared_receivers() {
     struct Owner(Capture);
     impl Owner {
         fn emit(&self) {
-            sinfo!(logger: self.0, "field"; palette("info"); " tail");
+            sinfo!(logger: self.0, ("field"), palette("info"), (" tail"));
             sinfo!(logger: self.0, "ordinary reuse");
         }
     }
@@ -161,11 +174,11 @@ fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
         evaluations.set(evaluations.get() + 1);
         &logger
     };
-    sinfo!(logger: get_logger(), "once"; palette("info"); " tail");
+    sinfo!(logger: get_logger(), ("once"), palette("info"), (" tail"));
     assert_eq!(evaluations.get(), 1);
     fn never() -> &'static str { panic!("filtered palette evaluated") }
-    sinfo!(logger: get_logger(), target: "disabled", "never";
-        palette(never()); " tail");
+    sinfo!(logger: get_logger(), target: "disabled", ("never"),
+        palette(never()), (" tail"));
     assert_eq!(evaluations.get(), 2);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 1);
@@ -173,7 +186,7 @@ fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
 }
 
 #[test]
-fn calls_without_swaps_do_not_create_inline_state() {
+fn ordinary_calls_do_not_create_inline_state() {
     struct Plain(Capture);
     impl Log for Plain {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.0.enabled(metadata) }
@@ -187,15 +200,15 @@ fn calls_without_swaps_do_not_create_inline_state() {
     let logger = Plain(Capture::default());
     let before = super::inline::next_id();
     sinfo!(logger: &logger, "ordinary {}", 7);
-    swarn!(logger: &logger, "one"; "two {}", 7);
-    sdebug!(logger: &logger, fn; "one"; "two");
-    strace!(logger: &logger, request = 42; "one"; "two");
+    swarn!(logger: &logger, "onetwo {}", 7);
+    sdebug!(logger: &logger, fn; "onetwo");
+    strace!(logger: &logger, request = 42; "onetwo");
     assert_eq!(super::inline::next_id(), before.wrapping_add(1));
     let lines = logger.0.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
     assert!(lines[0].ends_with("ordinary 7"));
     assert!(lines[1].ends_with("onetwo 7"));
-    assert!(lines[2].ends_with("[calls_without_swaps_do_not_create_inline_state] onetwo"));
+    assert!(lines[2].ends_with("[ordinary_calls_do_not_create_inline_state] onetwo"));
     assert!(lines[3].ends_with("|TRACE|42|onetwo"));
 }
 
