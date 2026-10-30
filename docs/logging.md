@@ -357,6 +357,7 @@ For other appenders, routing, and format options, see the
 ### Inline color changes
 
 `palette("name")` selects a configured color; `palette()` restores normal text color.
+Unknown names also restore normal text color.
 Start with `palette(...)` or a grouped segment. Group format strings with their arguments.
 
 ```rust

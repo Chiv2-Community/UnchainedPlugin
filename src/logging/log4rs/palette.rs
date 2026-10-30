@@ -12,11 +12,9 @@ pub(crate) fn inline_color(id: u64, name: &str) {
     INLINE.with(|(encoder, output, current)| {
         if id != current { return; }
         let index = if name.is_empty() { None } else {
-            let Ok(position) = encoder.names.binary_search_by(|(key, _)|
-                key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase()))) else {
-                return;
-            };
-            encoder.names[position].1
+            encoder.names.binary_search_by(|(key, _)|
+                key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
+                .ok().and_then(|position| encoder.names[position].1)
         };
         output.set_color(encoder, index);
     })
@@ -522,7 +520,7 @@ palette:
             let logger = Logger { encoder, output: Mutex::new(StyledBuffer::default()) };
             let reference = String::from("AcCeNt");
             sinfo!(logger: &logger, ("before {}", 7), palette(&reference), ("after {}", "世界"),
-                palette("normal"), "normal", palette("unknown"), "end", palette());
+                palette("unknown"), "normal", palette("normal"), "end", palette());
             let output = logger.output.lock().unwrap();
             let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
                 else { "before 7after 世界normalend" };
@@ -530,6 +528,7 @@ palette:
             assert_eq!(output.styles[0].0, 8);
             assert_eq!(output.styles[0].1.text, Some(Color::Magenta));
             assert_eq!(output.styles[1].1, Style::new());
+            assert_eq!(output.styles[1].0, message.find("normal").unwrap());
             assert_eq!(output.styles.last().unwrap().1, Style::new());
         }
     }
