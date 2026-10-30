@@ -98,13 +98,13 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
 fn inline_segments_keep_plain_messages_metadata_and_filtering() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
-    sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), (" world"), palette(), ("!"));
-    swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), (" tail"));
+    sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
+    swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), " tail");
     fn never<T>() -> T { panic!("filtered argument evaluated") }
     serror!(logger: &logger, target: "disabled", ("{}", never::<String>()),
         palette(never::<&str>()), ("never"));
-    sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), (" tail"));
-    strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), (" tail"), palette(),);
+    sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), " tail");
+    strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), " tail", palette(),);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("inline_segments_keep_plain_messages_metadata_and_filtering|custom|INFO|"));
@@ -119,12 +119,29 @@ fn grouped_segments_support_plain_text_and_palette_only_records() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     let request = 42;
-    sinfo!(logger: &logger, request; ("{}", String::from("one")), ("{request}"),);
+    sinfo!(logger: &logger, request; ("{}", String::from("one")), "{request}",);
     sinfo!(logger: &logger, palette("warn"), palette(),);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 2);
     assert!(lines[0].ends_with("|INFO|42|one42"));
     assert!(lines[1].ends_with("|INFO||"));
+}
+
+#[test]
+fn inline_literals_and_ordinary_format_arguments_remain_distinct() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let count = 7;
+    sinfo!(logger: &logger, palette("warn"), "before {count}", palette(), "after",);
+    sinfo!(logger: &logger, ("before {}", count), palette("warn"), "after");
+    sinfo!(logger: &logger, "foo");
+    sinfo!(logger: &logger, "before {}", count);
+    sinfo!(logger: &logger, "{} {}", "literal", (count));
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 5);
+    for (line, expected) in lines.iter().zip(["before 7after", "before 7after", "foo", "before 7", "literal 7"]) {
+        assert!(line.ends_with(expected), "{line}");
+    }
 }
 
 #[test]

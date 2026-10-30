@@ -185,7 +185,7 @@ root:
 "##, serde_json::to_string(&path).unwrap());
         log4rs::init_config(config_from_yaml(&yaml, "inline-palette").unwrap()).unwrap();
         sinfo!("ordinary");
-        sinfo!(("before"), palette("accent"), ("after"), palette(), ("end"));
+        sinfo!(("before"), palette("accent"), "after", palette(), "end");
         sinfo!("onetwo");
         crate::logging::console::print_banner();
         log::logger().flush();

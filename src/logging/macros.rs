@@ -41,29 +41,35 @@ macro_rules! __unchained_log {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __unchained_inline {
-    // Group format arguments so repetition can parse segments without a token scanner.
-    (@detect $context:tt fn; $($($kind:ident)? ($($args:tt)*)),+ $(,)?) => {{
+    // An explicit first segment distinguishes inline calls from ordinary format arguments.
+    (@detect $context:tt fn; $($kind:ident)? ($($args:tt)*)
+        $(, $segment:tt $(($($tail:tt)*))?)* $(,)?) => {{
         fn __unchained_function_marker() {}
         $crate::__unchained_inline!(@finish $context []
             [$crate::logging::inline::Segment::Text(format_args!("[{}] ",
                 $crate::logging::function_name(__unchained_function_marker))),
-             $($crate::__unchained_inline!(@segment $($kind)? ($($args)*))),+])
+             $crate::__unchained_inline!(@segment $($kind)? ($($args)*))
+             $(, $crate::__unchained_inline!(@segment $segment $(($($tail)*))?))*])
     }};
     (@detect $context:tt $($key:tt $(:$capture:tt)? $(= $value:expr)?),+;
-        $($($kind:ident)? ($($args:tt)*)),+ $(,)?) => {
+        $($kind:ident)? ($($args:tt)*) $(, $segment:tt $(($($tail:tt)*))?)* $(,)?) => {
         $crate::__unchained_inline!(@finish $context
             [$($key $(:$capture)? $(= $value)?,)+]
-            [$($crate::__unchained_inline!(@segment $($kind)? ($($args)*))),+])
+            [$crate::__unchained_inline!(@segment $($kind)? ($($args)*))
+             $(, $crate::__unchained_inline!(@segment $segment $(($($tail)*))?))*])
     };
-    (@detect $context:tt $($($kind:ident)? ($($args:tt)*)),+ $(,)?) => {
+    (@detect $context:tt $($kind:ident)? ($($args:tt)*)
+        $(, $segment:tt $(($($tail:tt)*))?)* $(,)?) => {
         $crate::__unchained_inline!(@finish $context []
-            [$($crate::__unchained_inline!(@segment $($kind)? ($($args)*))),+])
+            [$crate::__unchained_inline!(@segment $($kind)? ($($args)*))
+             $(, $crate::__unchained_inline!(@segment $segment $(($($tail)*))?))*])
     };
     (@detect [$level:ident, $logger:expr, $target:expr] $($args:tt)+) => {
         $crate::__unchained_log!(@emit $level, $logger, $target, $($args)+)
     };
     (@segment palette($name:expr)) => { $crate::logging::inline::Segment::Palette($name) };
     (@segment palette()) => { $crate::logging::inline::Segment::Palette("") };
+    (@segment $text:literal) => { $crate::logging::inline::Segment::Text(format_args!($text)) };
     (@segment ($($args:tt)+)) => { $crate::logging::inline::Segment::Text(format_args!($($args)+)) };
     (@finish [$level:ident, $logger:expr, $target:expr] [$($kv:tt)*] [$($segment:expr),+]) => {{
         let level = $crate::logging::__log::Level::$level;

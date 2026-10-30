@@ -522,7 +522,7 @@ palette:
             let logger = Logger { encoder, output: Mutex::new(StyledBuffer::default()) };
             let reference = String::from("AcCeNt");
             sinfo!(logger: &logger, ("before {}", 7), palette(&reference), ("after {}", "世界"),
-                palette("normal"), ("normal"), palette("unknown"), ("end"), palette());
+                palette("normal"), "normal", palette("unknown"), "end", palette());
             let output = logger.output.lock().unwrap();
             let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
                 else { "before 7after 世界normalend" };
