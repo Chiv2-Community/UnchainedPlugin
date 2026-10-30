@@ -535,6 +535,22 @@ palette:
     }
 
     #[test]
+    fn empty_palette_with_plain_message_skips_console_configuration() {
+        let mut encoder = encoder("pattern: '{m}'\npalette: {}");
+        assert!(encoder.colors.is_empty());
+        for target in [log4rs::append::console::Target::Stdout, log4rs::append::console::Target::Stderr] {
+            encoder.configure(target);
+            assert!(!encoder.enabled);
+            assert!(!encoder.truecolor);
+            let mut buffer = StyledBuffer::default();
+            encoder.encode(&mut buffer, &Record::builder()
+                .args(format_args!("sample 世界")).build()).unwrap();
+            assert_eq!(buffer.bytes, "sample 世界".as_bytes());
+            assert!(buffer.styles.is_empty());
+        }
+    }
+
+    #[test]
     fn plain_output_skips_all_color_switches() {
         let encoder = encoder("pattern: '{palette(error)}{l}|{m}{palette()}'");
         let mut buffer = StyledBuffer::default();
