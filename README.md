@@ -1,6 +1,8 @@
 # Unchained Plugin
 The Unchained Plugin patches the Chivalry 2 binary to allow connection to unofficial servers via an unofficial server browser. It also enables loading of non-vanilla pak files (mods).
 
+See [map-specific INI layers](docs/config-overrides.md) for per-map server configuration.
+
 ## Development with VS Code and RustRover
 
 ### Prerequisites

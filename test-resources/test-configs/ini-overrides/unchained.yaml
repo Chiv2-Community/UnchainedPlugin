@@ -1,3 +1,12 @@
-# Rotation index -> ini-overrides/map-profiles/<name>/ (only used with the map_profiles feature)
-map_profiles:
-  1: quarry_profile
+# Zero-based array position selects the profile; indices/<index>/ takes precedence.
+match-rotation:
+  - name: "Opening match"
+    description: "First rotation entry"
+    profile: opening_profile
+    map: TDM_QuarryKP
+    mod-actors: []
+  - name: "Quarry match"
+    description: "Second rotation entry"
+    profile: quarry_profile
+    map: TDM_QuarryKP
+    mod-actors: []
