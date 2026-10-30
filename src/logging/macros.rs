@@ -130,7 +130,7 @@ macro_rules! __unchained_inline {
         let level = $crate::logging::__log::Level::$level;
         if level <= $crate::logging::__log::STATIC_MAX_LEVEL
             && level <= $crate::logging::__log::max_level() {
-            let logger = $logger;
+            let logger = &$logger;
             let target = $target;
             if $crate::logging::__log::Log::enabled(&logger,
                 &$crate::logging::__log::Metadata::builder().level(level).target(target).build()) {

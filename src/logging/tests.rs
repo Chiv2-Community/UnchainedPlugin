@@ -115,6 +115,64 @@ fn inline_segments_keep_plain_messages_metadata_and_filtering() {
 }
 
 #[test]
+fn inline_calls_borrow_owned_loggers() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    sinfo!(logger: logger, target: "custom", request = 42; "info"; palette("info"); " tail");
+    swarn!(logger: logger, "warn"; palette("warn"); " tail");
+    serror!(logger: logger, "error"; palette("error"); " tail");
+    sdebug!(logger: logger, fn; "debug"; palette("debug"); " tail");
+    strace!(logger: logger, "trace"; palette("trace"); " tail");
+    sinfo!(logger: logger, "ordinary reuse");
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 6);
+    assert!(lines[0].ends_with("|custom|INFO|42|info tail"));
+    assert!(lines[1].ends_with("|WARN||warn tail"));
+    assert!(lines[2].ends_with("|ERROR||error tail"));
+    assert!(lines[3].ends_with("[inline_calls_borrow_owned_loggers] debug tail"));
+    assert!(lines[4].ends_with("|TRACE||trace tail"));
+    assert!(lines[5].ends_with("ordinary reuse"));
+}
+
+#[test]
+fn inline_calls_borrow_logger_fields_through_shared_receivers() {
+    struct Owner(Capture);
+    impl Owner {
+        fn emit(&self) {
+            sinfo!(logger: self.0, "field"; palette("info"); " tail");
+            sinfo!(logger: self.0, "ordinary reuse");
+        }
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let owner = Owner(Capture::default());
+    owner.emit();
+    let lines = owner.0.0.lock().unwrap();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("field tail"));
+    assert!(lines[1].ends_with("ordinary reuse"));
+}
+
+#[test]
+fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    let evaluations = std::cell::Cell::new(0);
+    let get_logger = || -> &dyn Log {
+        evaluations.set(evaluations.get() + 1);
+        &logger
+    };
+    sinfo!(logger: get_logger(), "once"; palette("info"); " tail");
+    assert_eq!(evaluations.get(), 1);
+    fn never() -> &'static str { panic!("filtered palette evaluated") }
+    sinfo!(logger: get_logger(), target: "disabled", "never";
+        palette(never()); " tail");
+    assert_eq!(evaluations.get(), 2);
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].ends_with("once tail"));
+}
+
+#[test]
 fn calls_without_swaps_do_not_create_inline_state() {
     struct Plain(Capture);
     impl Log for Plain {
