@@ -67,6 +67,10 @@ macro_rules! __unchained_inline {
     (@detect [$level:ident, $logger:expr, $target:expr] $($args:tt)+) => {
         $crate::__unchained_log!(@emit $level, $logger, $target, $($args)+)
     };
+    (@segment palette($name:literal)) => {{
+        $crate::logging::__inventory::submit! { $crate::logging::inline::PaletteReference($name) }
+        $crate::logging::inline::Segment::Palette($name)
+    }};
     (@segment palette($name:expr)) => { $crate::logging::inline::Segment::Palette($name) };
     (@segment palette()) => { $crate::logging::inline::Segment::Palette("") };
     (@segment $text:literal) => { $crate::logging::inline::Segment::Text(format_args!($text)) };

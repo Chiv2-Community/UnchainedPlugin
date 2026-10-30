@@ -3,6 +3,11 @@ use std::{borrow::Cow, fmt::{self, Write}};
 pub(crate) const COLORS_KEY: &str = "inline_colors";
 
 #[doc(hidden)]
+pub struct PaletteReference(pub &'static str);
+
+inventory::collect!(PaletteReference);
+
+#[doc(hidden)]
 pub enum Segment<'a> {
     Text(fmt::Arguments<'a>),
     Palette(&'a str),

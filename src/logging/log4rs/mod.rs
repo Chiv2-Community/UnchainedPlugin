@@ -2,6 +2,7 @@ use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
 use console::ConsoleAppenderDeserializer;
 use palette::PaletteEncoderDeserializer;
+pub use palette::PaletteWarnings;
 use pattern::PatternEncoderDeserializer;
 
 mod console;
@@ -43,9 +44,11 @@ pub fn init() -> anyhow::Result<()> {
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
-    log4rs::init_config(config_from_yaml(&resolved_yaml, config_source_name)?)
+    let (config, warnings) = config_with_warnings(&resolved_yaml, config_source_name)?;
+    log4rs::init_config(config)
         .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
+    warnings.report();
     crate::logging::console::report_attachment_failure();
 
     Ok(())
@@ -59,7 +62,7 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
     }
 }
 
-fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
+fn config_with_warnings(yaml: &str, config_source_name: &str) -> anyhow::Result<(Config, PaletteWarnings)> {
     let raw_config: RawConfig = serde_yaml::from_str(yaml).with_context(|| {
         format!(
             "Failed to parse logger config {}",
@@ -67,21 +70,29 @@ fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Conf
         )
     })?;
     let mut deserializers = Deserializers::default();
-    register(&mut deserializers);
+    let warnings = register(&mut deserializers);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
     anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
-    Config::builder()
+    let config = Config::builder()
         .appenders(appenders)
         .loggers(raw_config.loggers())
         .build(raw_config.root())
-        .with_context(|| format!("Invalid logger config {}", config_source_name))
+        .with_context(|| format!("Invalid logger config {}", config_source_name))?;
+    Ok((config, warnings))
 }
 
-/// Register pattern extensions and the palette encoder.
-pub fn register(deserializers: &mut Deserializers) {
-    deserializers.insert("palette", PaletteEncoderDeserializer);
-    deserializers.insert("console", ConsoleAppenderDeserializer);
+#[cfg(test)]
+fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
+    config_with_warnings(yaml, config_source_name).map(|(config, _)| config)
+}
+
+/// Register encoders. Report returned warnings after installing the logger.
+pub fn register(deserializers: &mut Deserializers) -> PaletteWarnings {
+    let warnings = PaletteWarnings::default();
+    deserializers.insert("palette", PaletteEncoderDeserializer(warnings.clone()));
+    deserializers.insert("console", ConsoleAppenderDeserializer(warnings.clone()));
     deserializers.insert("pattern", PatternEncoderDeserializer);
+    warnings
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {

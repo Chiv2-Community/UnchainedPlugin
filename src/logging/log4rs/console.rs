@@ -2,7 +2,7 @@ use log4rs::append::{console::{ConsoleAppender, Target}, Append};
 use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{Encode, EncoderConfig};
 
-use super::palette::PaletteEncoderConfig;
+use super::palette::{PaletteEncoderConfig, PaletteWarnings};
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -16,7 +16,7 @@ pub struct ConsoleAppenderConfig {
     tty_only: Option<bool>,
 }
 
-pub struct ConsoleAppenderDeserializer;
+pub struct ConsoleAppenderDeserializer(pub(super) PaletteWarnings);
 
 impl Deserialize for ConsoleAppenderDeserializer {
     type Trait = dyn Append;
@@ -34,6 +34,7 @@ impl Deserialize for ConsoleAppenderDeserializer {
             let encoder = if encoder.kind == "palette" {
                 let config: PaletteEncoderConfig = encoder.config.deserialize_into()?;
                 let mut encoder = config.build()?;
+                self.0.check(&encoder);
                 encoder.configure(target);
                 Box::new(encoder) as Box<dyn Encode>
             } else {

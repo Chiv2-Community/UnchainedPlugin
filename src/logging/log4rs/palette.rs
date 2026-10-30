@@ -1,10 +1,33 @@
-use std::collections::BTreeMap;
+use std::{collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
 use log::{Level, Record};
 use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
+
+#[derive(Clone, Default)]
+pub struct PaletteWarnings(Arc<Mutex<BTreeSet<String>>>);
+
+impl PaletteWarnings {
+    pub(super) fn check(&self, encoder: &PaletteEncoder) {
+        let mut missing = self.0.lock().unwrap();
+        for reference in inventory::iter::<crate::logging::inline::PaletteReference> {
+            let name = reference.0.to_ascii_lowercase();
+            if !name.is_empty() && encoder.names.binary_search_by(|(key, _)| key.cmp(&name)).is_err() {
+                missing.insert(name);
+            }
+        }
+    }
+
+    pub fn report(&self) {
+        let missing = std::mem::take(&mut *self.0.lock().unwrap());
+        for name in missing {
+            swarn!(undefined_palette = name.as_str();
+                "Undefined inline palette reference in a configured palette encoder: {}", name);
+        }
+    }
+}
 
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
@@ -308,7 +331,7 @@ impl PaletteEncoder {
     }
 }
 
-pub struct PaletteEncoderDeserializer;
+pub struct PaletteEncoderDeserializer(pub(super) PaletteWarnings);
 
 impl Deserialize for PaletteEncoderDeserializer {
     type Trait = dyn Encode;
@@ -316,7 +339,9 @@ impl Deserialize for PaletteEncoderDeserializer {
 
     fn deserialize(&self, config: PaletteEncoderConfig, _: &Deserializers)
         -> anyhow::Result<Box<dyn Encode>> {
-        Ok(Box::new(config.build()?))
+        let encoder = config.build()?;
+        self.0.check(&encoder);
+        Ok(Box::new(encoder))
     }
 }
 
@@ -327,6 +352,72 @@ mod tests {
 
     fn encoder(yaml: &str) -> PaletteEncoder {
         serde_yaml::from_str::<PaletteEncoderConfig>(yaml).unwrap().build().unwrap()
+    }
+
+    // Never invoked: registration must not depend on a log call being enabled or executed.
+    #[allow(dead_code)]
+    fn indexed_test_references() {
+        sinfo!(palette("__TEST_PALETTE_PRESENT"), "fixture");
+        swarn!(fn; palette("__test_palette_missing"), "fixture");
+        serror!(request = 42; palette("__TEST_PALETTE_MISSING"), "fixture");
+        sdebug!(palette(r#"__test_palette_raw"#), "fixture");
+        strace!(palette(""), "fixture", palette());
+        let dynamic = String::from("__test_palette_dynamic");
+        sinfo!(palette(&dynamic), "fixture");
+    }
+
+    #[test]
+    fn literal_palette_index_is_available_before_calls_execute() {
+        let names: std::collections::BTreeSet<_> = inventory::iter::<crate::logging::inline::PaletteReference>
+            .into_iter().map(|reference| reference.0).collect();
+        assert!(names.contains("__TEST_PALETTE_PRESENT"));
+        assert!(names.contains("__test_palette_missing"));
+        assert!(names.contains("__TEST_PALETTE_MISSING"));
+        assert!(names.contains("__test_palette_raw"));
+        assert!(!names.contains("__test_palette_dynamic"));
+    }
+
+    #[test]
+    fn palette_loading_collects_missing_names_for_console_and_file_encoders() {
+        let path = std::env::temp_dir().join(format!("palette-index-{}.log", std::process::id()));
+        for (kind, options) in [("console", String::new()),
+            ("file", format!("path: {}", serde_json::to_string(&path).unwrap()))] {
+            let yaml = format!(r##"
+appenders:
+  test:
+    kind: {kind}
+    {options}
+    encoder:
+      kind: palette
+      pattern: '{{m}}'
+      palette: {{__test_palette_present: null}}
+root:
+  level: off
+  appenders: [test]
+"##);
+            let (config, warnings) = super::super::config_with_warnings(&yaml, "palette-index-test").unwrap();
+            let missing = warnings.0.lock().unwrap();
+            let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
+            assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
+            assert!(!missing.contains(""));
+            drop(config);
+        }
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn missing_reference_warnings_are_deduplicated_and_skip_non_palette_encoders() {
+        let warnings = PaletteWarnings::default();
+        let encoder = encoder("pattern: '{m}'\npalette: {}");
+        warnings.check(&encoder);
+        let once = warnings.0.lock().unwrap().clone();
+        warnings.check(&encoder);
+        assert_eq!(*warnings.0.lock().unwrap(), once);
+        for kind in ["pattern", "json"] {
+            let yaml = format!("appenders:\n  test:\n    kind: console\n    encoder: {{kind: {kind}}}\nroot:\n  level: off\n  appenders: [test]\n");
+            let (_, warnings) = super::super::config_with_warnings(&yaml, "non-palette-test").unwrap();
+            assert!(warnings.0.lock().unwrap().is_empty());
+        }
     }
 
     #[derive(Default)]
