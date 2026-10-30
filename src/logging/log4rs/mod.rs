@@ -128,6 +128,69 @@ mod tests {
     use log::{Level, Log, Metadata, Record};
     use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
 
+    #[test]
+    fn inline_palette_switches_color_console_and_preserve_plain_file_messages() {
+        let path = std::env::temp_dir().join(format!("inline-palette-route-{}.jsonl", std::process::id()));
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::inline_palette_child", module_path!().split_once("::").unwrap().1)])
+            .env("UNCHAINED_TEST_INLINE_FILE", &path)
+            .env("CLICOLOR_FORCE", "1").env_remove("NO_COLOR").output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("ordinary"));
+        #[cfg(unix)]
+        {
+            assert!(text.contains("\x1b[0;38;2;18;52;86mafter"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;255;255;0m▄████████"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;255;0;0m███    █▄  ███▄▄▄▄"), "{text:?}");
+        }
+        let file = std::fs::read_to_string(&path).unwrap();
+        let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(records.len(), 4);
+        assert_eq!(records[0]["message"], "ordinary");
+        assert!(records[0]["attributes"].get("__unchained_inline").is_none());
+        assert_eq!(records[1]["message"], "beforeafterend");
+        assert!(records[1]["attributes"]["__unchained_inline"].as_str().unwrap().parse::<u64>().is_ok());
+        assert_eq!(records[2]["message"], "onetwo");
+        assert!(records[2]["attributes"].get("__unchained_inline").is_none());
+        let banner = records[3]["message"].as_str().unwrap();
+        assert!(banner.starts_with("▄████████"));
+        assert!(banner.contains("███    █▄  ███▄▄▄▄"));
+        assert_eq!(banner.lines().count(), 17);
+        assert!(banner.ends_with("\r\n"));
+        assert!(!file.contains("\\u001b"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for inline palette messages"]
+    fn inline_palette_child() {
+        let path = std::env::var("UNCHAINED_TEST_INLINE_FILE").unwrap();
+        let yaml = format!(r##"
+appenders:
+  console:
+    kind: console
+    encoder:
+      kind: palette
+      pattern: '{{m}}{{n}}'
+      palette: {{accent: '#123456', title: '#ffff00', subtitle: '#ff0000'}}
+  file:
+    kind: file
+    path: {}
+    encoder: {{kind: json}}
+root:
+  level: info
+  appenders: [console, file]
+"##, serde_json::to_string(&path).unwrap());
+        log4rs::init_config(config_from_yaml(&yaml, "inline-palette").unwrap()).unwrap();
+        sinfo!("ordinary");
+        sinfo!("before"; palette("accent"); "after"; palette(); "end");
+        sinfo!("one"; "two");
+        crate::logging::console::print_banner();
+        log::logger().flush();
+    }
+
     fn render_encoder(registry: &Deserializers, yaml: &str, record: &Record) -> Vec<u8> {
         let config: EncoderConfig = serde_yaml::from_str(yaml).unwrap();
         let encoder: Box<dyn Encode> = registry.deserialize(&config.kind, config.config)

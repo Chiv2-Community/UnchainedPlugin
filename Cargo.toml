@@ -88,6 +88,7 @@ memmap2 = "0.9.4"
 widestring = "1.0.2"
 bitflags = "2.4.1"
 log = { version = "0.4", features = ["kv"] }
+scoped-tls-hkt = "0.1.5"
 log4rs = { version = "1.4.0", features = ["log_kv", "json_encoder"] }
 simple-log = "1.6.0"
 parking_lot = "0.12.1"

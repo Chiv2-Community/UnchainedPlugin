@@ -95,6 +95,53 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
 }
 
 #[test]
+fn inline_segments_keep_plain_messages_metadata_and_filtering() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    sinfo!(logger: &logger, target: "custom", "hello {count}", count = 7; palette("WARN"); " world"; palette(); "!");
+    swarn!(logger: &logger, "{}", String::from("owned"); palette("info"); " tail");
+    fn never<T>() -> T { panic!("filtered argument evaluated") }
+    serror!(logger: &logger, target: "disabled", "{}", never::<String>();
+        palette(never::<&str>()); "never");
+    sdebug!(logger: &logger, fn; "{name}", name = "function"; palette("warn"); " tail");
+    strace!(logger: &logger, "request" = 42; "{name}", name = "kv",; palette("warn"); " tail"; palette(););
+    let lines = logger.0.lock().unwrap();
+    assert_eq!(lines.len(), 4);
+    assert!(lines[0].starts_with("inline_segments_keep_plain_messages_metadata_and_filtering|custom|INFO|"));
+    assert!(lines[0].ends_with("hello 7 world!"));
+    assert!(lines[1].ends_with("owned tail"));
+    assert!(lines[2].ends_with("[inline_segments_keep_plain_messages_metadata_and_filtering] function tail"));
+    assert!(lines[3].ends_with("|TRACE|42|kv tail"));
+}
+
+#[test]
+fn calls_without_swaps_do_not_create_inline_state() {
+    struct Plain(Capture);
+    impl Log for Plain {
+        fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.0.enabled(metadata) }
+        fn log(&self, record: &Record) {
+            assert!(record.key_values().get("__unchained_inline".into()).is_none());
+            self.0.log(record);
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Plain(Capture::default());
+    let before = super::inline::next_id();
+    sinfo!(logger: &logger, "ordinary {}", 7);
+    swarn!(logger: &logger, "one"; "two {}", 7);
+    sdebug!(logger: &logger, fn; "one"; "two");
+    strace!(logger: &logger, request = 42; "one"; "two");
+    assert_eq!(super::inline::next_id(), before.wrapping_add(1));
+    let lines = logger.0.0.lock().unwrap();
+    assert_eq!(lines.len(), 4);
+    assert!(lines[0].ends_with("ordinary 7"));
+    assert!(lines[1].ends_with("onetwo 7"));
+    assert!(lines[2].ends_with("[calls_without_swaps_do_not_create_inline_state] onetwo"));
+    assert!(lines[3].ends_with("|TRACE|42|onetwo"));
+}
+
+#[test]
 #[cfg(unix)] // This source-tree check runs on the host, not in the Wine harness.
 fn all_plugin_diagnostics_use_shared_macros() {
     fn check(directory: &std::path::Path) {

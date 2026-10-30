@@ -5,6 +5,23 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 
 use super::pattern::PatternEncoder;
 
+scoped_tls_hkt::scoped_thread_local!(static INLINE: for<'a> (&'a PaletteEncoder, &'a dyn InlineSink, u64));
+
+pub(crate) fn inline_color(id: u64, name: &str) {
+    if !INLINE.is_set() { return; }
+    INLINE.with(|(encoder, output, current)| {
+        if id != current { return; }
+        let index = if name.is_empty() { None } else {
+            let Ok(position) = encoder.names.binary_search_by(|(key, _)|
+                key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase()))) else {
+                return;
+            };
+            encoder.names[position].1
+        };
+        output.set_color(encoder, index);
+    })
+}
+
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +66,7 @@ pub(crate) struct PaletteEncoder {
     plain: PatternEncoder,
     chunks: Vec<Chunk>,
     colors: Vec<Entry>,
+    names: Vec<(String, Option<usize>)>,
     truecolor: bool,
     enabled: bool,
 }
@@ -60,7 +78,8 @@ impl PaletteEncoderConfig {
                 ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
                 ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
                 ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-                ("trace_body", Some([92, 92, 92]))]
+                ("trace_body", Some([92, 92, 92])), ("title", Some([255, 255, 0])),
+                ("subtitle", Some([255, 0, 0]))]
                 .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(Rgb))).collect()
         });
         let mut entries = BTreeMap::new();
@@ -80,31 +99,17 @@ impl PaletteEncoderConfig {
             });
             entries.insert(name, index);
         }
-        let (mut chunks, plain) = parse(self.pattern.as_deref().unwrap_or(DEFAULT_PATTERN), &entries)?;
-        let mut used = vec![false; colors.len()];
-        for chunk in &chunks {
-            if let Chunk::Color(indexes) = chunk {
-                for index in indexes.iter().flatten() { used[*index] = true; }
-            }
-        }
-        let mut remap = vec![0; colors.len()];
-        let mut next = 0;
-        let colors = colors.into_iter().enumerate().filter_map(|(index, rgb)| {
-            if !used[index] { return None; }
-            remap[index] = next;
-            next += 1;
+        let (chunks, plain) = parse(self.pattern.as_deref().unwrap_or(DEFAULT_PATTERN), &entries)?;
+        // Inline messages can reference any configured entry, not just pattern colors.
+        let colors = colors.into_iter().map(|rgb| {
             let [r, g, b] = rgb;
-            Some(Entry { rgb, ansi: format!("\x1b[0;38;2;{r};{g};{b}m"), style: Style::new() })
+            Entry { rgb, ansi: format!("\x1b[0;38;2;{r};{g};{b}m"), style: Style::new() }
         }).collect();
-        for chunk in &mut chunks {
-            if let Chunk::Color(indexes) = chunk {
-                for index in indexes.iter_mut().flatten() { *index = remap[*index]; }
-            }
-        }
         Ok(PaletteEncoder {
             plain: PatternEncoder::new(&plain),
             chunks,
             colors,
+            names: entries.into_iter().collect(),
             truecolor: false,
             enabled: false,
         })
@@ -223,7 +228,7 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
 
 impl PaletteEncoder {
     pub(super) fn configure(&mut self, target: log4rs::append::console::Target) {
-        if !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_))) { return; }
+        if self.colors.is_empty() && !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_))) { return; }
         let colors: Vec<_> = self.colors.iter().map(|entry| entry.rgb).collect();
         let Some((truecolor, slots)) = crate::logging::console::configure_palette(target, &colors) else { return };
         self.enabled = true;
@@ -242,28 +247,79 @@ impl Encode for PaletteEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
         // Redirected and file output use the ordinary pattern encoder directly.
         if !self.enabled { return self.plain.encode(writer, record); }
-        let result: anyhow::Result<()> = (|| {
-            let level = record.level() as usize - 1;
-            for chunk in &self.chunks {
-                match chunk {
-                    Chunk::Text(pattern) => pattern.encode(writer, record)?,
-                    Chunk::Color(indexes) => {
-                        if let Some(index) = indexes[level] {
-                            let entry = &self.colors[index];
-                            writer.set_style(&entry.style)?;
-                            if self.truecolor { writer.write_all(entry.ansi.as_bytes())?; }
-                        } else {
-                            writer.set_style(&Style::new())?;
-                        }
-                    }
-                }
-            }
-            Ok(())
-        })();
+        let inline = record.key_values().get("__unchained_inline".into()).and_then(|value| value.to_u64());
+        let result = if let Some(id) = inline {
+            let output = InlineOutput { writer: std::cell::RefCell::new(writer), error: std::cell::RefCell::new(None) };
+            let result = INLINE.set((self, &output, id), || self.encode_chunks(&mut &output, record));
+            let error = output.error.borrow_mut().take();
+            result.and_then(|()| error.map_or(Ok(()), |error| Err(error.into())))
+        } else {
+            self.encode_chunks(writer, record)
+        };
         let reset = writer.set_style(&Style::new());
         result?;
         reset?;
         Ok(())
+    }
+}
+
+impl PaletteEncoder {
+    fn set_color(&self, writer: &mut dyn Write, index: Option<usize>) -> std::io::Result<()> {
+        if let Some(index) = index {
+            let entry = &self.colors[index];
+            writer.set_style(&entry.style)?;
+            if self.truecolor { writer.write_all(entry.ansi.as_bytes())?; }
+        } else {
+            writer.set_style(&Style::new())?;
+        }
+        Ok(())
+    }
+
+    fn encode_chunks(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
+        let level = record.level() as usize - 1;
+        for chunk in &self.chunks {
+            match chunk {
+                Chunk::Text(pattern) => pattern.encode(writer, record)?,
+                Chunk::Color(indexes) => self.set_color(writer, indexes[level])?,
+            }
+        }
+        Ok(())
+    }
+}
+
+// Formatting writes through this shared proxy so zero-width switches can change
+// the writer's native style without embedding control codes in the message.
+struct InlineOutput<'a> {
+    writer: std::cell::RefCell<&'a mut dyn Write>,
+    error: std::cell::RefCell<Option<std::io::Error>>,
+}
+
+trait InlineSink {
+    fn set_color(&self, encoder: &PaletteEncoder, index: Option<usize>);
+}
+
+impl InlineSink for InlineOutput<'_> {
+    fn set_color(&self, encoder: &PaletteEncoder, index: Option<usize>) {
+        if self.error.borrow().is_none() {
+            if let Err(error) = encoder.set_color(&mut **self.writer.borrow_mut(), index) {
+                *self.error.borrow_mut() = Some(error);
+            }
+        }
+    }
+}
+
+impl std::io::Write for &InlineOutput<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if let Some(error) = self.error.borrow_mut().take() { return Err(error); }
+        self.writer.borrow_mut().write(bytes)
+    }
+    fn flush(&mut self) -> std::io::Result<()> { self.writer.borrow_mut().flush() }
+}
+
+impl Write for &InlineOutput<'_> {
+    fn set_style(&mut self, style: &Style) -> std::io::Result<()> {
+        if let Some(error) = self.error.borrow_mut().take() { return Err(error); }
+        self.writer.borrow_mut().set_style(style)
     }
 }
 
@@ -395,13 +451,13 @@ palette:
     }
 
     #[test]
-    fn unused_palette_colors_do_not_consume_legacy_slots() {
+    fn pattern_unused_colors_remain_available_to_inline_messages() {
         let mut table = BTreeMap::new();
         for i in 0..64 { table.insert(format!("color{i}"), Some(Rgb([i, i, i]))); }
         let encoder = PaletteEncoderConfig {
             pattern: Some("{palette(color63)}hello{palette()}".to_owned()), palette: Some(table),
         }.build().unwrap();
-        assert_eq!(encoder.colors.len(), 1, "unused colors must not consume legacy slots");
+        assert_eq!(encoder.colors.len(), 64);
     }
 
     #[test]
@@ -415,12 +471,164 @@ palette:
     }
 
     #[test]
+    fn ordinary_records_check_inline_metadata_without_entering_inline_scope() {
+        struct Lookups(std::cell::Cell<usize>);
+        impl log::kv::Source for Lookups {
+            fn visit<'kvs>(&'kvs self, _: &mut dyn log::kv::VisitSource<'kvs>) -> Result<(), log::kv::Error> {
+                panic!("ordinary encoder enumerated metadata")
+            }
+            fn get(&self, key: log::kv::Key<'_>) -> Option<log::kv::Value<'_>> {
+                assert_eq!(key.as_str(), "__unchained_inline");
+                self.0.set(self.0.get() + 1);
+                None
+            }
+        }
+        let lookups = Lookups(std::cell::Cell::new(0));
+        let mut encoder = encoder("pattern: '{palette(info)}{m}'");
+        encoder.enabled = true;
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().key_values(&lookups)
+            .args(format_args!("ordinary {}", 7)).build()).unwrap();
+        assert_eq!(output.bytes, b"ordinary 7");
+        assert_eq!(lookups.0.get(), 1);
+        assert!(!INLINE.is_set());
+    }
+
+    #[test]
+    fn inline_switches_stream_styles_without_changing_plain_or_json_messages() {
+        use std::sync::Mutex;
+        struct Logger { encoder: PaletteEncoder, output: Mutex<StyledBuffer> }
+        impl log::Log for Logger {
+            fn enabled(&self, _: &log::Metadata) -> bool { true }
+            fn log(&self, record: &Record) {
+                self.encoder.encode(&mut *self.output.lock().unwrap(), record).unwrap();
+                assert_eq!(record.args().to_string(), "before 7after 世界normalend");
+                let mut plain = Vec::new();
+                PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut plain), record).unwrap();
+                assert_eq!(plain, b"before 7after \xe4\xb8\x96\xe7\x95\x8cnormalend");
+                let mut json = Vec::new();
+                log4rs::encode::json::JsonEncoder::new().encode(&mut SimpleWriter(&mut json), record).unwrap();
+                let json: serde_json::Value = serde_json::from_slice(&json).unwrap();
+                assert_eq!(json["message"], "before 7after 世界normalend");
+            }
+            fn flush(&self) {}
+        }
+        log::set_max_level(log::LevelFilter::Trace);
+        for truecolor in [false, true] {
+            let mut encoder = encoder("pattern: '{m}|{m}'\npalette: {accent: '#123456', normal: null}");
+            encoder.enabled = true;
+            encoder.truecolor = truecolor;
+            encoder.colors[0].style.text(Color::Magenta);
+            let logger = Logger { encoder, output: Mutex::new(StyledBuffer::default()) };
+            let reference = String::from("AcCeNt");
+            sinfo!(logger: &logger, "before {}", 7; palette(&reference); "after {}", "世界";
+                palette("normal"); "normal"; palette("unknown"); "end"; palette());
+            let output = logger.output.lock().unwrap();
+            let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
+                else { "before 7after 世界normalend" };
+            assert_eq!(output.bytes, format!("{message}|{message}").as_bytes());
+            assert_eq!(output.styles[0].0, 8);
+            assert_eq!(output.styles[0].1.text, Some(Color::Magenta));
+            assert_eq!(output.styles[1].1, Style::new());
+            assert_eq!(output.styles.last().unwrap().1, Style::new());
+        }
+    }
+
+    #[test]
+    fn inline_output_errors_reset_style_and_release_scope() {
+        use crate::logging::inline::{Message, Segment};
+        let segments = [Segment::Text(format_args!("before")), Segment::Palette("warn"),
+            Segment::Text(format_args!("after")), Segment::Palette("")];
+        let values = [("__unchained_inline", 1u64)];
+        let mut encoder = encoder("pattern: '{m}'");
+        encoder.enabled = true;
+        for truecolor in [false, true] {
+            encoder.truecolor = truecolor;
+            for limit in [0, 3, 7] {
+                let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
+                let error = encoder.encode(&mut output, &Record::builder().key_values(&values)
+                    .args(format_args!("{}", Message(&segments, 1))).build()).unwrap_err();
+                assert!(error.to_string().contains("injected output failure"));
+                assert_eq!(output.styles.last().unwrap().1, Style::new());
+                assert!(!INLINE.is_set());
+            }
+        }
+    }
+
+    #[test]
+    fn nested_and_concurrent_inline_records_keep_separate_writers() {
+        use std::{fmt, sync::Mutex};
+        struct Logger { encoder: PaletteEncoder, output: Mutex<Vec<Vec<u8>>> }
+        impl log::Log for Logger {
+            fn enabled(&self, _: &log::Metadata) -> bool { true }
+            fn log(&self, record: &Record) {
+                let mut output = StyledBuffer::default();
+                self.encoder.encode(&mut output, record).unwrap();
+                self.output.lock().unwrap().push(output.bytes);
+            }
+            fn flush(&self) {}
+        }
+        struct Nested<'a>(&'a Logger);
+        impl fmt::Display for Nested<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                sinfo!(logger: self.0, "inner"; palette("warn"); "yellow");
+                f.write_str("outer")
+            }
+        }
+        log::set_max_level(log::LevelFilter::Trace);
+        let mut encoder = encoder("pattern: '{m}'");
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        let logger = Logger { encoder, output: Mutex::new(Vec::new()) };
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| sinfo!(logger: &logger, "{}", Nested(&logger); palette("info"); "blue"));
+            }
+        });
+        let output = logger.output.lock().unwrap();
+        assert_eq!(output.iter().filter(|line| *line == b"inner\x1b[0;38;2;242;204;120myellow").count(), 4);
+        assert_eq!(output.iter().filter(|line| *line == b"outer\x1b[0;38;2;140;180;225mblue").count(), 4);
+        assert!(!INLINE.is_set());
+    }
+
+    #[test]
+    #[ignore = "manual microbenchmark; run in release mode with --nocapture"]
+    fn inline_palette_overhead() {
+        struct Logger(PaletteEncoder);
+        impl log::Log for Logger {
+            fn enabled(&self, _: &log::Metadata) -> bool { true }
+            fn log(&self, record: &Record) {
+                self.0.encode(&mut SimpleWriter(std::io::sink()), record).unwrap();
+            }
+            fn flush(&self) {}
+        }
+        log::set_max_level(log::LevelFilter::Trace);
+        let mut encoder = encoder("pattern: '{m}'");
+        encoder.enabled = true;
+        let logger = Logger(encoder);
+        let iterations = 500_000;
+        for inline in [false, true] {
+            let start = std::time::Instant::now();
+            for i in 0..iterations {
+                let count = std::hint::black_box(i);
+                if inline {
+                    sinfo!(logger: &logger, "before {}", count; palette("warn"); "after"; palette(); "end");
+                } else {
+                    sinfo!(logger: &logger, "before {}afterend", count);
+                }
+            }
+            eprintln!("inline={inline}: {:.0} ns/record", start.elapsed().as_nanos() as f64 / iterations as f64);
+        }
+    }
+
+    #[test]
     fn default_palette_matches_shipped_yaml_and_legacy_slot_order() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
-        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
+        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238],
+            [255, 0, 0], [255, 255, 0]];
         for encoder in [shipped, encoder("{}")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.rgb).collect::<Vec<_>>(), expected);
         }

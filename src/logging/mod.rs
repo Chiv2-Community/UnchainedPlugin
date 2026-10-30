@@ -1,5 +1,7 @@
 #[macro_use]
 mod macros;
+#[doc(hidden)]
+pub mod inline;
 
 pub mod console;
 pub mod log4rs;

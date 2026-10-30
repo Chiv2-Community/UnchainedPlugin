@@ -57,6 +57,8 @@ color codes already present in a message are not stripped.
 
 The startup banner is an ordinary `INFO` log record. It follows configured
 appenders, encoders, and filters instead of writing directly to stdout.
+Its `title` palette entry defaults to bright yellow (`#ffff00`), and `subtitle`
+defaults to bright red (`#ff0000`). Override those entries to change banner colors.
 
 ## Use a custom configuration
 
@@ -132,6 +134,8 @@ encoder:
     info_body: "#eeeeee"
     debug_body: "#808080"
     trace_body: "#5c5c5c"
+    title: "#ffff00"
+    subtitle: "#ff0000"
 ```
 
 These are the defaults. Add any named colors using quoted `#RRGGBB` values;
@@ -350,6 +354,31 @@ depending on lexical macro imports.
 
 The macros capture `enclosing_function` in the attributes for structured logging
 and the `{fn}` log format string.
+
+Separate message segments with semicolons to switch palette colors inline:
+
+```rust
+sinfo!("some log segment"; palette("warn"); "next segment {}", count; palette(); "normal text");
+```
+
+`palette(reference)` accepts a `&str` naming a configured color, ignoring ASCII
+case. `palette()` restores normal console text, not the previous body color.
+Unknown names leave the current color unchanged. Switches last until the next
+switch or end of the record. Use an unpadded, untruncated `{m}` in the palette
+encoder's pattern; buffering formatters such as `{h({m})}` are not supported for
+inline colors. File, JSON, and redirected output concatenate the text segments
+without adding color codes. JSON attributes include an internal
+`__unchained_inline` record identifier.
+
+Segments use stack-backed formatting arguments. Disabled records evaluate no
+segment arguments; enabled records do not allocate or parse message text for
+palette switches. Colors are prepared at startup, including colors referenced
+only by inline messages.
+
+The color-enabled palette encoder checks each record for `__unchained_inline`,
+including records without switches. Ordinary records incur that metadata lookup
+but do not enter the inline writer's scoped context. File and redirected output
+return through the plain encoder before this check. No modified log4rs is required.
 
 For other appenders, routing, and format options, see the
 [log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).
