@@ -203,24 +203,53 @@ fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
 }
 
 #[test]
+fn inline_formatting_is_stable_across_multiple_encoders() {
+    struct Counter(std::cell::Cell<usize>);
+    impl std::fmt::Display for Counter {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let next = self.0.get() + 1;
+            self.0.set(next);
+            write!(f, "界{next}")
+        }
+    }
+    struct Logger;
+    impl Log for Logger {
+        fn enabled(&self, _: &Metadata<'_>) -> bool { true }
+        fn log(&self, record: &Record<'_>) {
+            for _ in 0..2 {
+                let mut output = Vec::new();
+                PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut output), record).unwrap();
+                assert_eq!(output, "界1tail".as_bytes());
+            }
+            let colors = record.key_values().get("inline_colors".into()).unwrap();
+            assert_eq!(serde_json::from_str::<serde_json::Value>(colors.to_borrowed_str().unwrap()).unwrap(),
+                serde_json::json!([{"utf8_offset": 4, "palette": "warn"}]));
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let counter = Counter(std::cell::Cell::new(0));
+    sinfo!(logger: Logger, ("{}", counter), palette("warn"), "tail");
+    assert_eq!(counter.0.get(), 1);
+}
+
+#[test]
 fn ordinary_calls_do_not_create_inline_state() {
     struct Plain(Capture);
     impl Log for Plain {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.0.enabled(metadata) }
         fn log(&self, record: &Record) {
-            assert!(record.key_values().get("__unchained_inline".into()).is_none());
+            assert!(record.key_values().get("inline_colors".into()).is_none());
             self.0.log(record);
         }
         fn flush(&self) {}
     }
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Plain(Capture::default());
-    let before = super::inline::next_id();
     sinfo!(logger: &logger, "ordinary {}", 7);
     swarn!(logger: &logger, "onetwo {}", 7);
     sdebug!(logger: &logger, fn; "onetwo");
     strace!(logger: &logger, request = 42; "onetwo");
-    assert_eq!(super::inline::next_id(), before.wrapping_add(1));
     let lines = logger.0.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
     assert!(lines[0].ends_with("ordinary 7"));

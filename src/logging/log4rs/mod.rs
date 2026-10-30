@@ -149,11 +149,14 @@ mod tests {
         let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
         assert_eq!(records.len(), 4);
         assert_eq!(records[0]["message"], "ordinary");
-        assert!(records[0]["attributes"].get("__unchained_inline").is_none());
+        assert!(records[0]["attributes"].get("inline_colors").is_none());
         assert_eq!(records[1]["message"], "beforeafterend");
-        assert!(records[1]["attributes"]["__unchained_inline"].as_str().unwrap().parse::<u64>().is_ok());
+        let colors: serde_json::Value = serde_json::from_str(records[1]["attributes"]["inline_colors"].as_str().unwrap()).unwrap();
+        assert_eq!(colors, serde_json::json!([
+            {"utf8_offset": 6, "palette": "accent"}, {"utf8_offset": 11, "palette": null}
+        ]));
         assert_eq!(records[2]["message"], "onetwo");
-        assert!(records[2]["attributes"].get("__unchained_inline").is_none());
+        assert!(records[2]["attributes"].get("inline_colors").is_none());
         assert_eq!(records[3]["message"], "first line\r\nsecond 7\r\n");
         assert!(!file.contains("\\u001b"));
         std::fs::remove_file(path).unwrap();

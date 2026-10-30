@@ -82,12 +82,12 @@ macro_rules! __unchained_inline {
                 match &[$($segment),+] {
                     segments => {
                         fn __unchained_function_marker() {}
-                        let id = $crate::logging::inline::next_id();
+                        let message = $crate::logging::inline::Message::new(segments);
                         $crate::logging::__log::log!(logger: logger, target: target, level,
                             $($kv)*
                             enclosing_function = $crate::logging::function_name(__unchained_function_marker),
-                            __unchained_inline = id;
-                            "{}", $crate::logging::inline::Message(segments, id));
+                            inline_colors = message.colors.as_str();
+                            "{}", message.text);
                     }
                 }
             }

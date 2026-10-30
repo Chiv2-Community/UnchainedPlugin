@@ -4,21 +4,7 @@ use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 
 use super::pattern::PatternEncoder;
-
-scoped_tls_hkt::scoped_thread_local!(static INLINE: for<'a> (&'a PaletteEncoder, &'a dyn InlineSink, u64));
-
-pub(crate) fn inline_color(id: u64, name: &str) {
-    if !INLINE.is_set() { return; }
-    INLINE.with(|(encoder, output, current)| {
-        if id != current { return; }
-        let index = if name.is_empty() { None } else {
-            encoder.names.binary_search_by(|(key, _)|
-                key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
-                .ok().and_then(|position| encoder.names[position].1)
-        };
-        output.set_color(encoder, index);
-    })
-}
+use crate::logging::inline::{ColorChange, COLORS_KEY};
 
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
@@ -49,6 +35,7 @@ pub struct PaletteEncoderConfig {
 #[derive(Debug)]
 enum Chunk {
     Text(PatternEncoder),
+    Message,
     Color([Option<usize>; 5]),
 }
 
@@ -177,6 +164,19 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
     let mut depth: usize = 0;
     while i < bytes.len() {
         if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
+        if depth == 0 {
+            if let Some(token) = ["{m}", "{message}"].into_iter().find(|token| bytes[i..].starts_with(token.as_bytes())) {
+                if start < i {
+                    plain.push_str(&pattern[start..i]);
+                    chunks.push(Chunk::Text(PatternEncoder::new(&pattern[start..i])));
+                }
+                plain.push_str(token);
+                chunks.push(Chunk::Message);
+                i += token.len();
+                start = i;
+                continue;
+            }
+        }
         if bytes[i..].starts_with(b"{palette(") {
             anyhow::ensure!(depth == 0, "Palette directives must be outside other formatters");
             if start < i {
@@ -245,15 +245,7 @@ impl Encode for PaletteEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
         // Redirected and file output use the ordinary pattern encoder directly.
         if !self.enabled { return self.plain.encode(writer, record); }
-        let inline = record.key_values().get("__unchained_inline".into()).and_then(|value| value.to_u64());
-        let result = if let Some(id) = inline {
-            let output = InlineOutput { writer: std::cell::RefCell::new(writer), error: std::cell::RefCell::new(None) };
-            let result = INLINE.set((self, &output, id), || self.encode_chunks(&mut &output, record));
-            let error = output.error.borrow_mut().take();
-            result.and_then(|()| error.map_or(Ok(()), |error| Err(error.into())))
-        } else {
-            self.encode_chunks(writer, record)
-        };
+        let result = self.encode_chunks(writer, record);
         let reset = writer.set_style(&Style::new());
         result?;
         reset?;
@@ -274,50 +266,45 @@ impl PaletteEncoder {
     }
 
     fn encode_chunks(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
+        let colors = record.key_values().get(COLORS_KEY.into());
+        let changes = colors.and_then(|value| value.to_borrowed_str())
+            .and_then(|json| serde_json::from_str::<Vec<ColorChange<'_>>>(json).ok());
+        let message = changes.as_ref().map(|_| record.args().to_string());
+        let changes = changes.as_deref().filter(|changes| {
+            let text = message.as_deref().unwrap();
+            let mut previous = 0;
+            changes.iter().all(|change| {
+                let valid = change.offset >= previous && text.is_char_boundary(change.offset);
+                previous = change.offset;
+                valid
+            })
+        });
         let level = record.level() as usize - 1;
         for chunk in &self.chunks {
             match chunk {
                 Chunk::Text(pattern) => pattern.encode(writer, record)?,
+                Chunk::Message => {
+                    if let Some(changes) = changes {
+                        let message = message.as_deref().unwrap();
+                        let mut start = 0;
+                        for change in changes {
+                            writer.write_all(message[start..change.offset].as_bytes())?;
+                            let index = change.palette.as_deref().and_then(|name|
+                                self.names.binary_search_by(|(key, _)|
+                                    key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
+                                    .ok().and_then(|position| self.names[position].1));
+                            self.set_color(writer, index)?;
+                            start = change.offset;
+                        }
+                        writer.write_all(message[start..].as_bytes())?;
+                    } else {
+                        write!(writer, "{}", record.args())?;
+                    }
+                }
                 Chunk::Color(indexes) => self.set_color(writer, indexes[level])?,
             }
         }
         Ok(())
-    }
-}
-
-// Formatting writes through this shared proxy so zero-width switches can change
-// the writer's native style without embedding control codes in the message.
-struct InlineOutput<'a> {
-    writer: std::cell::RefCell<&'a mut dyn Write>,
-    error: std::cell::RefCell<Option<std::io::Error>>,
-}
-
-trait InlineSink {
-    fn set_color(&self, encoder: &PaletteEncoder, index: Option<usize>);
-}
-
-impl InlineSink for InlineOutput<'_> {
-    fn set_color(&self, encoder: &PaletteEncoder, index: Option<usize>) {
-        if self.error.borrow().is_none() {
-            if let Err(error) = encoder.set_color(&mut **self.writer.borrow_mut(), index) {
-                *self.error.borrow_mut() = Some(error);
-            }
-        }
-    }
-}
-
-impl std::io::Write for &InlineOutput<'_> {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if let Some(error) = self.error.borrow_mut().take() { return Err(error); }
-        self.writer.borrow_mut().write(bytes)
-    }
-    fn flush(&mut self) -> std::io::Result<()> { self.writer.borrow_mut().flush() }
-}
-
-impl Write for &InlineOutput<'_> {
-    fn set_style(&mut self, style: &Style) -> std::io::Result<()> {
-        if let Some(error) = self.error.borrow_mut().take() { return Err(error); }
-        self.writer.borrow_mut().set_style(style)
     }
 }
 
@@ -469,14 +456,14 @@ palette:
     }
 
     #[test]
-    fn ordinary_records_check_inline_metadata_without_entering_inline_scope() {
+    fn ordinary_records_check_color_attributes_once() {
         struct Lookups(std::cell::Cell<usize>);
         impl log::kv::Source for Lookups {
             fn visit<'kvs>(&'kvs self, _: &mut dyn log::kv::VisitSource<'kvs>) -> Result<(), log::kv::Error> {
                 panic!("ordinary encoder enumerated metadata")
             }
             fn get(&self, key: log::kv::Key<'_>) -> Option<log::kv::Value<'_>> {
-                assert_eq!(key.as_str(), "__unchained_inline");
+                assert_eq!(key.as_str(), COLORS_KEY);
                 self.0.set(self.0.get() + 1);
                 None
             }
@@ -489,7 +476,6 @@ palette:
             .args(format_args!("ordinary {}", 7)).build()).unwrap();
         assert_eq!(output.bytes, b"ordinary 7");
         assert_eq!(lookups.0.get(), 1);
-        assert!(!INLINE.is_set());
     }
 
     #[test]
@@ -508,6 +494,20 @@ palette:
                 log4rs::encode::json::JsonEncoder::new().encode(&mut SimpleWriter(&mut json), record).unwrap();
                 let json: serde_json::Value = serde_json::from_slice(&json).unwrap();
                 assert_eq!(json["message"], "before 7after 世界normalend");
+                let colors = json["attributes"][COLORS_KEY].as_str().unwrap();
+                assert_eq!(serde_json::from_str::<serde_json::Value>(colors).unwrap(), serde_json::json!([
+                    {"utf8_offset": 8, "palette": "AcCeNt"},
+                    {"utf8_offset": 20, "palette": "unknown"},
+                    {"utf8_offset": 26, "palette": "normal"},
+                    {"utf8_offset": 29, "palette": null}
+                ]));
+                let values = [(COLORS_KEY, colors)];
+                let mut replay = StyledBuffer::default();
+                self.encoder.encode(&mut replay, &Record::builder().key_values(&values)
+                    .args(format_args!("{}", json["message"].as_str().unwrap())).build()).unwrap();
+                let output = self.output.lock().unwrap();
+                assert_eq!(replay.bytes, output.bytes);
+                assert_eq!(replay.styles, output.styles);
             }
             fn flush(&self) {}
         }
@@ -534,11 +534,12 @@ palette:
     }
 
     #[test]
-    fn inline_output_errors_reset_style_and_release_scope() {
+    fn inline_output_errors_reset_style() {
         use crate::logging::inline::{Message, Segment};
         let segments = [Segment::Text(format_args!("before")), Segment::Palette("warn"),
             Segment::Text(format_args!("after")), Segment::Palette("")];
-        let values = [("__unchained_inline", 1u64)];
+        let message = Message::new(&segments);
+        let values = [(COLORS_KEY, message.colors.as_str())];
         let mut encoder = encoder("pattern: '{m}'");
         encoder.enabled = true;
         for truecolor in [false, true] {
@@ -546,12 +547,54 @@ palette:
             for limit in [0, 3, 7] {
                 let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
                 let error = encoder.encode(&mut output, &Record::builder().key_values(&values)
-                    .args(format_args!("{}", Message(&segments, 1))).build()).unwrap_err();
+                    .args(format_args!("{}", message.text)).build()).unwrap_err();
                 assert!(error.to_string().contains("injected output failure"));
                 assert_eq!(output.styles.last().unwrap().1, Style::new());
-                assert!(!INLINE.is_set());
             }
         }
+    }
+
+    #[test]
+    fn malformed_color_attributes_leave_messages_plain() {
+        let mut encoder = encoder("pattern: '界{message}|{m}'");
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        for colors in [
+            "not json", "null", r#"[{"utf8_offset":1,"palette":"warn"}]"#,
+            r#"[{"utf8_offset":99,"palette":"warn"}]"#,
+            r#"[{"utf8_offset":3,"palette":"warn"},{"utf8_offset":0,"palette":null}]"#,
+            r#"[{"utf8_offset":-1,"palette":"warn"}]"#,
+        ] {
+            let values = [(COLORS_KEY, colors)];
+            let mut output = StyledBuffer::default();
+            encoder.encode(&mut output, &Record::builder().key_values(&values)
+                .args(format_args!("界x")).build()).unwrap();
+            assert_eq!(output.bytes, "界界x|界x".as_bytes(), "{colors}");
+            assert_eq!(output.styles, [("界界x|界x".len(), Style::new())]);
+        }
+    }
+
+    #[test]
+    fn escaped_palette_names_and_terminal_changes_replay_from_attributes() {
+        let name = "a\"b\\c\n";
+        let table = serde_json::json!({name: "#123456"});
+        let mut encoder = encoder(&format!("pattern: '{{m}}'\npalette: {table}"));
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        let colors = serde_json::json!([
+            {"utf8_offset": 0, "palette": name},
+            {"utf8_offset": 3, "palette": "missing"},
+            {"utf8_offset": 3, "palette": name},
+            {"utf8_offset": 3, "palette": null}
+        ]).to_string();
+        let values = [(COLORS_KEY, colors.as_str())];
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().key_values(&values)
+            .args(format_args!("界")).build()).unwrap();
+        assert_eq!(output.bytes, "\x1b[0;38;2;18;52;86m界\x1b[0;38;2;18;52;86m".as_bytes());
+        assert_eq!(output.styles.len(), 5);
+        assert_eq!(output.styles[1].1, Style::new());
+        assert_eq!(output.styles[3].1, Style::new());
     }
 
     #[test]
@@ -587,7 +630,6 @@ palette:
         let output = logger.output.lock().unwrap();
         assert_eq!(output.iter().filter(|line| *line == b"inner\x1b[0;38;2;242;204;120myellow").count(), 4);
         assert_eq!(output.iter().filter(|line| *line == b"outer\x1b[0;38;2;140;180;225mblue").count(), 4);
-        assert!(!INLINE.is_set());
     }
 
     #[test]
