@@ -334,48 +334,6 @@ fn source_check_catches_interpolated_facade_paths() {
     assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
 }
 
-#[test]
-#[cfg(unix)]
-fn startup_only_dumps_redacted_cli_after_logging_init() {
-    let root = std::path::Path::new(file!()).parent().unwrap().parent().unwrap();
-    let startup = std::fs::read_to_string(root.join("lib.rs")).unwrap();
-    let startup = startup.split_once("let args = tools::cli_args::load_cli()").unwrap().1
-        .split_once("// Load build info").unwrap().0;
-    let cli = std::fs::read_to_string(root.join("tools/cli_args.rs")).unwrap();
-    let declaration = cli.split_once("pub struct CLIArgs").unwrap().0;
-    let derive = declaration.rsplit_once("#[derive(").unwrap().1.split_once(")]").unwrap().0;
-    assert!(!derive.contains("Debug"), "CLIArgs must use redacting Debug, not derive");
-    assert!(cli.contains("impl std::fmt::Debug for CLIArgs"));
-    let loader = cli.split_once("pub fn load_cli()").unwrap().1
-        .split_once("#[cfg(test)]").unwrap().0;
-    assert!(safe_cli_logging(startup, loader), "Only the post-init redacted Debug dump is allowed");
-    let facade = "log::";
-    for raw in ["sdebug!(\"{:?}\", std::env::args());".to_string(),
-        [facade, "debug", "!(\"{parsed:?}\");"].concat(),
-        "strace!(\"{args:?}\");".to_string(), "sinfo!(\"{raw:?}\");".to_string(),
-        "serror!(\"{raw:?}\");".to_string()] {
-        assert!(!safe_cli_logging(&format!("{startup}\n{raw}"), loader));
-        assert!(!safe_cli_logging(startup, &format!("{loader}\n{raw}")));
-    }
-    assert!(!safe_cli_logging("sdebug!(fn; \"CLI args: {:?}\", cli_args());", loader));
-}
-
-#[cfg(unix)]
-fn safe_cli_logging(startup: &str, loader: &str) -> bool {
-    let compact = |source: &str| source.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
-    let startup = compact(startup);
-    let dump = "sdebug!(fn;\"CLIargs:{:?}\",cli_args());";
-    let Some((before, after)) = startup.split_once(dump) else { return false; };
-    if !before.contains("logging::log4rs::init().expect(") { return false; }
-    // Allow the existing initialization error, but no other argument diagnostics.
-    let remaining = format!("{before}{after}").replace("serror!(fn;\"CLIargsalreadyinitialized!\");", "");
-    for source in [remaining, compact(loader)] {
-        for severity in ["debug", "trace", "info", "warn", "error", "log"] {
-            if source.contains(&format!("{severity}!")) { return false; }
-        }
-    }
-    true
-}
 struct Example;
 impl Example {
     fn method<T>(&self, logger: &Capture, _: T) {

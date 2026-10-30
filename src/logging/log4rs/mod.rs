@@ -142,8 +142,8 @@ mod tests {
         #[cfg(unix)]
         {
             assert!(text.contains("\x1b[0;38;2;18;52;86mafter"), "{text:?}");
-            assert!(text.contains("\x1b[0;38;2;255;255;0m▄████████"), "{text:?}");
-            assert!(text.contains("\x1b[0;38;2;255;0;0m███    █▄  ███▄▄▄▄"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;171;205;239mfirst line\r\n"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;254;220;186msecond 7\r\n"), "{text:?}");
         }
         let file = std::fs::read_to_string(&path).unwrap();
         let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
@@ -154,11 +154,7 @@ mod tests {
         assert!(records[1]["attributes"]["__unchained_inline"].as_str().unwrap().parse::<u64>().is_ok());
         assert_eq!(records[2]["message"], "onetwo");
         assert!(records[2]["attributes"].get("__unchained_inline").is_none());
-        let banner = records[3]["message"].as_str().unwrap();
-        assert!(banner.starts_with("▄████████"));
-        assert!(banner.contains("███    █▄  ███▄▄▄▄"));
-        assert_eq!(banner.lines().count(), 17);
-        assert!(banner.ends_with("\r\n"));
+        assert_eq!(records[3]["message"], "first line\r\nsecond 7\r\n");
         assert!(!file.contains("\\u001b"));
         std::fs::remove_file(path).unwrap();
     }
@@ -174,7 +170,7 @@ appenders:
     encoder:
       kind: palette
       pattern: '{{m}}{{n}}'
-      palette: {{accent: '#123456', title: '#ffff00', subtitle: '#ff0000'}}
+      palette: {{accent: '#123456', first: '#abcdef', second: '#fedcba'}}
   file:
     kind: file
     path: {}
@@ -187,7 +183,7 @@ root:
         sinfo!("ordinary");
         sinfo!(("before"), palette("accent"), "after", palette(), "end");
         sinfo!("onetwo");
-        crate::logging::console::print_banner();
+        sinfo!(palette("first"), "first line\r\n", palette("second"), ("second {}", 7), "\r\n");
         log::logger().flush();
     }
 
@@ -241,12 +237,11 @@ root:
             assert!(file[0]["thread_id"].as_u64().unwrap() > 0);
             assert!(file[0]["time"].as_str().unwrap().contains('T'));
             assert_eq!(file[1]["message"].as_str().unwrap().len(), 20 * 1024);
-            assert!(file[2]["message"].as_str().unwrap().contains("▄████████"));
+            assert_eq!(file[2]["message"], "fixture line one\nfixture line two");
             let stdout = read_records(&output.stdout);
             let stderr = read_records(&output.stderr);
             if target == "file-only" {
                 assert!(stdout.is_empty() && stderr.is_empty());
-                assert!(!String::from_utf8_lossy(&output.stdout).contains("▄████████"));
             } else {
                 let (selected, other) = if target == "stdout" { (stdout, stderr) } else { (stderr, stdout) };
                 assert!(other.is_empty());
@@ -297,7 +292,7 @@ root:
         let _handle = log4rs::init_config(config).unwrap();
         sinfo!(fn; "hello 世界\nsecond line");
         sinfo!(request = 42; "{}", "x".repeat(20 * 1024));
-        crate::logging::console::print_banner();
+        sinfo!("fixture line one\nfixture line two");
         log::logger().flush();
         #[cfg(windows)]
         assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });
