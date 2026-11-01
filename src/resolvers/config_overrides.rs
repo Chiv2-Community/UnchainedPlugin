@@ -2,6 +2,7 @@
 pub(crate) mod native;
 mod selection;
 mod settings;
+mod travel;
 
 pub use settings::{parse_server_settings, ServerSettings};
 
@@ -10,18 +11,13 @@ use std::{collections::HashSet, sync::Mutex};
 
 pub use selection::{build_override_paths, build_profile_override_path, OverrideLayer};
 use selection::{config_filename, expand_layers, select_layers, MapContext};
-
-#[derive(Clone, Default)]
-struct Context {
-    generation: u64,
-    selection: MapContext,
-    world: Option<usize>,
-}
+use travel::{enter_context, Context, StartupSelection};
 
 #[derive(Default)]
 struct State {
     context: Context,
     pending_rotation: Option<MapContext>,
+    startup: StartupSelection,
     // Categories touched by the preceding map must also be refreshed on removal.
     categories: HashSet<String>,
 }
@@ -83,40 +79,8 @@ fn categories_for(context: &MapContext) -> HashSet<String> {
 /// Called with the destination URL, never the outgoing world's map or rotation index.
 fn enter_map(map: &str, world: Option<usize>) -> Option<(Context, HashSet<String>)> {
     profile_root()?;
-    let requested = MapContext::new(map, None);
     let (previous, context) = with_state(|state| {
-        let previous = state.context.clone();
-        let mut selection = requested;
-        let same_map = state
-            .context
-            .selection
-            .map
-            .as_ref()
-            .zip(selection.map.as_ref())
-            .is_some_and(|(old, new)| old.eq_ignore_ascii_case(new));
-        let continuing_load = world.is_some()
-            && same_map
-            && (state.context.world.is_none() || state.context.world == world);
-        if selection.map.is_some()
-            && state.pending_rotation.as_ref().is_some_and(|p| {
-                p.map
-                    .as_ref()
-                    .zip(selection.map.as_ref())
-                    .is_some_and(|(old, new)| old.eq_ignore_ascii_case(new))
-            })
-        {
-            selection.index = state.pending_rotation.take().and_then(|p| p.index);
-        } else if continuing_load {
-            selection.index = state.context.selection.index;
-        }
-        // LoadMap begins a new load, even when reloading the same map. SetGameMode completes it,
-        // or starts a seamless-travel destination without relying on the unreliable preload event.
-        let same_load = continuing_load && state.context.selection.index == selection.index;
-        if !same_load {
-            state.context.generation = state.context.generation.wrapping_add(1);
-        }
-        state.context.selection = selection;
-        state.context.world = world;
+        let previous = enter_context(&mut state.context, &mut state.pending_rotation, map, world);
         (previous, state.context.clone())
     });
     let new_categories = categories_for(&context.selection);
