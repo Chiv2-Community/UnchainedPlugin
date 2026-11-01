@@ -78,6 +78,7 @@ pub mod asset_loading;
 pub mod backend_hooks;
 pub mod config_overrides;
 pub mod etc_hooks;
+mod ipv6;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;

@@ -26,6 +26,10 @@ servers can appear in the browser. In IPv6 auto mode, the discovered IPv6 is
 used internally for source binding but is not published unless `--local-ip`
 was explicitly supplied.
 
+Client IPv6 parsing uses four browser/ping call-site patches, not global FString
+hooks. The backend still supplies bracketed IPv6 hosts in `ServerIPV4Address`.
+See [IPv6 patch details and tests](docs/ipv6-callsites.md).
+
 1.  **Define `CHIVALRY2_DIR`**: 
     Copy the `.env.example` file to a new file named `.env` in the project root. Then, update the `CHIVALRY2_DIR` path to your Chivalry 2 installation directory.
     ```env
