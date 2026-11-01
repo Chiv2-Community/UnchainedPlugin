@@ -64,11 +64,11 @@ jobs:
 
       # Run tests
       - name: Test
-        run: cargo test --release
+        run: cargo test --locked --release
 
       # Build the project
       - name: Build
-        run: cargo build --release
+        run: cargo build --locked --release
 
       # Create GitHub Release
       - name: Create Release
