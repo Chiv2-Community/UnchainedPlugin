@@ -44,7 +44,13 @@ pub fn init() -> anyhow::Result<()> {
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
-    let (config, warnings) = config_with_warnings(&resolved_yaml, config_source_name)?;
+    let raw_config: RawConfig = serde_yaml::from_str(&resolved_yaml).with_context(|| {
+        format!(
+            "Failed to parse logger config {}",
+            config_source_name
+        )
+    })?;
+    let (config, warnings) = config_with_warnings(raw_config, config_source_name)?;
     log4rs::init_config(config)
         .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
@@ -62,13 +68,7 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
     }
 }
 
-fn config_with_warnings(yaml: &str, config_source_name: &str) -> anyhow::Result<(Config, PaletteWarnings)> {
-    let raw_config: RawConfig = serde_yaml::from_str(yaml).with_context(|| {
-        format!(
-            "Failed to parse logger config {}",
-            config_source_name
-        )
-    })?;
+fn config_with_warnings(raw_config: RawConfig, config_source_name: &str) -> anyhow::Result<(Config, PaletteWarnings)> {
     let mut deserializers = Deserializers::default();
     let warnings = register(&mut deserializers);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
@@ -82,8 +82,10 @@ fn config_with_warnings(yaml: &str, config_source_name: &str) -> anyhow::Result<
 }
 
 #[cfg(test)]
-fn config_from_yaml(yaml: &str, config_source_name: &str) -> anyhow::Result<Config> {
-    config_with_warnings(yaml, config_source_name).map(|(config, _)| config)
+fn config_from_value(yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<Config> {
+    let raw_config = serde_yaml::from_value(yaml)
+        .with_context(|| format!("Failed to parse logger config {}", config_source_name))?;
+    config_with_warnings(raw_config, config_source_name).map(|(config, _)| config)
 }
 
 /// Register encoders. Report returned warnings after installing the logger.
@@ -180,8 +182,7 @@ mod tests {
         let path = std::env::var("UNCHAINED_TEST_INLINE_FILE").unwrap();
         let mut yaml = fixtures::config("inline-palette");
         yaml["appenders"]["file"]["path"] = path.into();
-        let yaml = serde_yaml::to_string(&yaml).unwrap();
-        log4rs::init_config(config_from_yaml(&yaml, "inline-palette").unwrap()).unwrap();
+        log4rs::init_config(config_from_value(yaml, "inline-palette").unwrap()).unwrap();
         sinfo!("ordinary");
         sinfo!(("before"), palette("accent"), "after", palette(), "end");
         sinfo!("onetwo");
@@ -201,7 +202,7 @@ mod tests {
     fn console_config(encoder: serde_yaml::Value) -> anyhow::Result<Config> {
         let mut yaml = fixtures::config("console");
         yaml["appenders"]["console"]["encoder"] = encoder;
-        config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "console-test")
+        config_from_value(yaml, "console-test")
     }
 
     #[test]
@@ -281,7 +282,7 @@ mod tests {
             yaml["appenders"]["file"]["policy"] = fixtures::config("rolling-policy");
         }
         if target == "file-only" { yaml["root"]["appenders"] = vec!["file"].into(); }
-        let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "json-sink-test").unwrap();
+        let config = config_from_value(yaml, "json-sink-test").unwrap();
         let _handle = log4rs::init_config(config).unwrap();
         sinfo!(fn; "hello 世界\nsecond line");
         sinfo!(request = 42; "{}", "x".repeat(20 * 1024));
@@ -313,7 +314,7 @@ mod tests {
         if std::env::var_os("UNCHAINED_TEST_CUSTOM_PALETTE").is_some() {
             yaml["appenders"]["console"]["encoder"]["palette"] = fixtures::config("custom-console-palette");
         }
-        let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "console-policy-child").unwrap();
+        let config = config_from_value(yaml, "console-policy-child").unwrap();
         let logger = log4rs::Logger::new(config);
         for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
             logger.log(&log::Record::builder().level(level).module_path(Some("policy_child"))
@@ -335,7 +336,7 @@ mod tests {
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));
         yaml["root"]["appenders"] = vec!["console"].into();
-        let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "embedded").unwrap();
+        let config = config_from_value(yaml, "embedded").unwrap();
         let logger = log4rs::Logger::new(config);
         assert!(logger.enabled(&Metadata::builder()
             .target("UnchainedPlugin::logging::log4rs").level(Level::Debug).build()));
@@ -442,6 +443,27 @@ mod tests {
     }
 
     #[test]
+    fn configuration_errors_preserve_source_and_validation_boundaries() {
+        let mut yaml = fixtures::config("console");
+        yaml["root"]["level"] = "invalid-level".into();
+        let error = config_from_value(yaml, "invalid-level-fixture").unwrap_err();
+        assert_eq!(error.to_string(), "Failed to parse logger config invalid-level-fixture");
+        assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("invalid-level")));
+
+        let mut yaml = fixtures::config("console");
+        yaml["appenders"]["console"]["kind"] = "missing-appender-kind".into();
+        let error = config_from_value(yaml, "invalid-appender-fixture").unwrap_err();
+        assert!(error.to_string().starts_with("Invalid logger config invalid-appender-fixture:"));
+        assert!(error.to_string().contains("missing-appender-kind"));
+
+        let mut yaml = fixtures::config("console");
+        yaml["root"]["appenders"] = vec!["missing-appender"].into();
+        let error = config_from_value(yaml, "invalid-root-fixture").unwrap_err();
+        assert_eq!(error.to_string(), "Invalid logger config invalid-root-fixture");
+        assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("missing-appender")));
+    }
+
+    #[test]
     fn file_appenders_share_console_patterns() {
         use std::sync::Mutex;
 
@@ -483,7 +505,7 @@ mod tests {
                 file["encoder"]["pattern"] = format!("{header}{body}").into();
                 if let Some(kind) = encoder_kind { file["encoder"]["kind"] = kind.into(); }
                 if appender_kind == "rolling_file" { file["policy"] = fixtures::config("rolling-policy"); }
-                let config = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "file-pattern-test").unwrap();
+                let config = config_from_value(yaml, "file-pattern-test").unwrap();
                 let mut encoder = fixtures::encoder("module-palette");
                 encoder["pattern"] = format!("{header}{body}").into();
                 let console_config: EncoderConfig = serde_yaml::from_value(encoder).unwrap();
@@ -510,12 +532,12 @@ mod tests {
         for options in fixtures::appender("valid").as_sequence().unwrap() {
             let mut yaml = fixtures::config("console");
             yaml["appenders"]["console"] = options.clone();
-            config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "console-options").unwrap();
+            config_from_value(yaml, "console-options").unwrap();
         }
         for options in fixtures::appender("invalid").as_sequence().unwrap() {
             let mut yaml = fixtures::config("console");
             yaml["appenders"]["console"] = options.clone();
-            let error = config_from_yaml(&serde_yaml::to_string(&yaml).unwrap(), "invalid-console-options").unwrap_err();
+            let error = config_from_value(yaml, "invalid-console-options").unwrap_err();
             assert!(error.to_string().contains("invalid-console-options"));
         }
     }

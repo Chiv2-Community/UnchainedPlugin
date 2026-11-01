@@ -383,8 +383,8 @@ mod tests {
             let mut yaml = fixtures::config("palette-index");
             yaml["appenders"]["test"]["kind"] = kind.into();
             if kind == "file" { yaml["appenders"]["test"]["path"] = path.to_string_lossy().as_ref().into(); }
-            let yaml = serde_yaml::to_string(&yaml).unwrap();
-            let (config, warnings) = super::super::config_with_warnings(&yaml, "palette-index-test").unwrap();
+            let raw_config = serde_yaml::from_value(yaml).unwrap();
+            let (config, warnings) = super::super::config_with_warnings(raw_config, "palette-index-test").unwrap();
             let missing = warnings.0.lock().unwrap();
             let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
             assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
@@ -405,8 +405,8 @@ mod tests {
         for kind in ["pattern", "json"] {
             let mut yaml = fixtures::config("non-palette-index");
             yaml["appenders"]["test"]["encoder"]["kind"] = kind.into();
-            let yaml = serde_yaml::to_string(&yaml).unwrap();
-            let (_, warnings) = super::super::config_with_warnings(&yaml, "non-palette-test").unwrap();
+            let raw_config = serde_yaml::from_value(yaml).unwrap();
+            let (_, warnings) = super::super::config_with_warnings(raw_config, "non-palette-test").unwrap();
             assert!(warnings.0.lock().unwrap().is_empty());
         }
     }
