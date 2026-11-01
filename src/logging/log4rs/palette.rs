@@ -346,10 +346,11 @@ impl Deserialize for PaletteEncoderDeserializer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logging::test_resources as fixtures;
     use std::io;
 
-    fn encoder(yaml: &str) -> PaletteEncoder {
-        serde_yaml::from_str::<PaletteEncoderConfig>(yaml).unwrap().build().unwrap()
+    fn encoder(name: &str) -> PaletteEncoder {
+        serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
     }
 
     // Never invoked: registration must not depend on a log call being enabled or executed.
@@ -378,21 +379,11 @@ mod tests {
     #[test]
     fn palette_loading_collects_missing_names_for_console_and_file_encoders() {
         let path = std::env::temp_dir().join(format!("palette-index-{}.log", std::process::id()));
-        for (kind, options) in [("console", String::new()),
-            ("file", format!("path: {}", serde_json::to_string(&path).unwrap()))] {
-            let yaml = format!(r##"
-appenders:
-  test:
-    kind: {kind}
-    {options}
-    encoder:
-      kind: palette
-      pattern: '{{m}}'
-      palette: {{__test_palette_present: null}}
-root:
-  level: off
-  appenders: [test]
-"##);
+        for kind in ["console", "file"] {
+            let mut yaml = fixtures::config("palette-index");
+            yaml["appenders"]["test"]["kind"] = kind.into();
+            if kind == "file" { yaml["appenders"]["test"]["path"] = path.to_string_lossy().as_ref().into(); }
+            let yaml = serde_yaml::to_string(&yaml).unwrap();
             let (config, warnings) = super::super::config_with_warnings(&yaml, "palette-index-test").unwrap();
             let missing = warnings.0.lock().unwrap();
             let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
@@ -406,13 +397,15 @@ root:
     #[test]
     fn missing_reference_warnings_are_deduplicated_and_skip_non_palette_encoders() {
         let warnings = PaletteWarnings::default();
-        let encoder = encoder("pattern: '{m}'\npalette: {}");
+        let encoder = encoder("empty");
         warnings.check(&encoder);
         let once = warnings.0.lock().unwrap().clone();
         warnings.check(&encoder);
         assert_eq!(*warnings.0.lock().unwrap(), once);
         for kind in ["pattern", "json"] {
-            let yaml = format!("appenders:\n  test:\n    kind: console\n    encoder: {{kind: {kind}}}\nroot:\n  level: off\n  appenders: [test]\n");
+            let mut yaml = fixtures::config("non-palette-index");
+            yaml["appenders"]["test"]["encoder"]["kind"] = kind.into();
+            let yaml = serde_yaml::to_string(&yaml).unwrap();
             let (_, warnings) = super::super::config_with_warnings(&yaml, "non-palette-test").unwrap();
             assert!(warnings.0.lock().unwrap().is_empty());
         }
@@ -444,21 +437,7 @@ root:
 
     #[test]
     fn names_are_resolved_at_startup_for_all_levels_and_repeated_switches() {
-        let mut encoder = encoder(r##"
-pattern: "{palette(text)}[{palette({l})}{l:5}{palette({level}_body)}] [{sm}] {fn}|{K(request)}|{m}{palette()}"
-palette:
-  text: "#eeeeee"
-  error: "#f28b82"
-  warn: "#f2cc78"
-  info: "#8cb4e1"
-  debug: "#808080"
-  trace: "#5c5c5c"
-  error_body: null
-  warn_body: null
-  info_body: null
-  debug_body: "#808080"
-  trace_body: "#5c5c5c"
-"##);
+        let mut encoder = encoder("severity");
         assert_eq!(encoder.colors.len(), 6, "duplicate RGB values share an entry");
         for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
             let values = [("enclosing_function", "named"), ("request", "42")];
@@ -482,7 +461,7 @@ palette:
 
     #[test]
     fn defaults_preserve_header_and_body_colors_and_embedded_message_codes() {
-        let mut encoder = encoder("{}");
+        let mut encoder = encoder("defaults");
         encoder.enabled = true;
         encoder.truecolor = true;
         for (level, rgb) in [(Level::Error, "242;139;130"), (Level::Warn, "242;204;120"),
@@ -503,7 +482,7 @@ palette:
 
     #[test]
     fn arbitrary_names_switch_legacy_styles_and_reset_after_encoding_errors() {
-        let mut encoder = encoder("pattern: '{palette(accent)}{m}{palette(normal)}end'\npalette: {ACCENT: '#123456', normal: null}");
+        let mut encoder = encoder("accent");
         encoder.enabled = true;
         encoder.colors[0].style.text(Color::Magenta).intense(true);
         let record = Record::builder().args(format_args!("hello")).build();
@@ -536,7 +515,7 @@ palette:
 
     #[test]
     fn empty_palette_with_plain_message_skips_console_configuration() {
-        let mut encoder = encoder("pattern: '{m}'\npalette: {}");
+        let mut encoder = encoder("empty");
         assert!(encoder.colors.is_empty());
         for target in [log4rs::append::console::Target::Stdout, log4rs::append::console::Target::Stderr] {
             encoder.configure(target);
@@ -552,7 +531,7 @@ palette:
 
     #[test]
     fn plain_output_skips_all_color_switches() {
-        let encoder = encoder("pattern: '{palette(error)}{l}|{m}{palette()}'");
+        let encoder = encoder("level-message");
         let mut buffer = StyledBuffer::default();
         encoder.encode(&mut buffer, &Record::builder().level(Level::Info)
             .args(format_args!("message")).build()).unwrap();
@@ -574,7 +553,7 @@ palette:
             }
         }
         let lookups = Lookups(std::cell::Cell::new(0));
-        let mut encoder = encoder("pattern: '{palette(info)}{m}'");
+        let mut encoder = encoder("info-message");
         encoder.enabled = true;
         let mut output = StyledBuffer::default();
         encoder.encode(&mut output, &Record::builder().key_values(&lookups)
@@ -618,7 +597,7 @@ palette:
         }
         log::set_max_level(log::LevelFilter::Trace);
         for truecolor in [false, true] {
-            let mut encoder = encoder("pattern: '{m}|{m}'\npalette: {accent: '#123456', normal: null}");
+            let mut encoder = encoder("repeated-message");
             encoder.enabled = true;
             encoder.truecolor = truecolor;
             encoder.colors[0].style.text(Color::Magenta);
@@ -645,7 +624,7 @@ palette:
             Segment::Text(format_args!("after")), Segment::Palette("")];
         let message = Message::new(&segments);
         let values = [(COLORS_KEY, message.colors.as_str())];
-        let mut encoder = encoder("pattern: '{m}'");
+        let mut encoder = encoder("plain");
         encoder.enabled = true;
         for truecolor in [false, true] {
             encoder.truecolor = truecolor;
@@ -691,7 +670,9 @@ palette:
             (Some(r#"[{"utf8_offset":0,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":4,"palette":null}]"#), true, true, 4),
         ] {
             for (pattern, chunks, expected) in [("{m}|{message}", 2, "界x|界x"), ("prefix", 0, "prefix")] {
-                let mut encoder = encoder(&format!("pattern: '{pattern}'"));
+                let mut config = fixtures::encoder("plain");
+                config["pattern"] = pattern.into();
+                let mut encoder = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
                 encoder.enabled = true;
                 let message = Message(Cell::new(0));
                 let metadata = Metadata { colors, lookups: Cell::new(0) };
@@ -709,7 +690,7 @@ palette:
 
     #[test]
     fn malformed_color_attributes_leave_messages_plain() {
-        let mut encoder = encoder("pattern: '界{message}|{m}'");
+        let mut encoder = encoder("unicode-message");
         encoder.enabled = true;
         encoder.truecolor = true;
         for colors in [
@@ -730,8 +711,7 @@ palette:
     #[test]
     fn escaped_palette_names_and_terminal_changes_replay_from_attributes() {
         let name = "a\"b\\c\n";
-        let table = serde_json::json!({name: "#123456"});
-        let mut encoder = encoder(&format!("pattern: '{{m}}'\npalette: {table}"));
+        let mut encoder = encoder("escaped-name");
         encoder.enabled = true;
         encoder.truecolor = true;
         let colors = serde_json::json!([
@@ -771,7 +751,7 @@ palette:
             }
         }
         log::set_max_level(log::LevelFilter::Trace);
-        let mut encoder = encoder("pattern: '{m}'");
+        let mut encoder = encoder("plain");
         encoder.enabled = true;
         encoder.truecolor = true;
         let logger = Logger { encoder, output: Mutex::new(Vec::new()) };
@@ -797,7 +777,7 @@ palette:
             fn flush(&self) {}
         }
         log::set_max_level(log::LevelFilter::Trace);
-        let mut encoder = encoder("pattern: '{m}'");
+        let mut encoder = encoder("plain");
         encoder.enabled = true;
         let logger = Logger(encoder);
         let iterations = 500_000;
@@ -823,7 +803,7 @@ palette:
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
         let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238],
             [255, 0, 0], [255, 255, 0]];
-        for encoder in [shipped, encoder("{}")] {
+        for encoder in [shipped, encoder("defaults")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.rgb).collect::<Vec<_>>(), expected);
         }
     }

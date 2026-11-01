@@ -309,27 +309,19 @@ mod tests {
             GetConsoleMode(console_handle, &mut before_mode).unwrap();
             let mut registry = log4rs::config::Deserializers::default();
             crate::logging::log4rs::register(&mut registry);
-            let build = |target: &str, encoder: &str| -> Box<dyn log4rs::append::Append> {
-                let config: log4rs::append::AppenderConfig = serde_yaml::from_str(
-                    &format!("kind: console\ntarget: {target}\n{encoder}")).unwrap();
+            let build = |target: &str, name: &str| -> Box<dyn log4rs::append::Append> {
+                let mut yaml = crate::logging::test_resources::appender(name);
+                yaml["target"] = target.into();
+                let config: log4rs::append::AppenderConfig = serde_yaml::from_value(yaml).unwrap();
                 registry.deserialize(&config.kind, config.config).unwrap()
             };
             let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
-            let encoder = match first.as_str() {
-                "null" => "encoder:\n  kind: palette\n  pattern: '{palette(normal)}{m}'\n  palette: {normal: null}\n",
-                "pattern" => "encoder:\n  kind: pattern\n  pattern: '{h({m})}'\n",
-                "json" => "encoder:\n  kind: json\n",
-                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n  palette: {}\n",
-                "default" => "",
-                "plain_pattern" => "encoder:\n  kind: pattern\n  pattern: '{m}'\n",
-                _ => unreachable!(),
-            };
-            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), encoder);
+            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), &first);
             let first_handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
             let first_info = screen_info(console_handle).unwrap();
             assert_eq!(first_info.ColorTable.map(|c| c.0), before.ColorTable.map(|c| c.0));
             assert_eq!(first_info.wAttributes, before.wAttributes);
-            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "encoder:\n  kind: palette\n");
+            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "palette");
             let record = log::Record::builder().args(format_args!("writer order regression")).build();
             first_appender.append(&record).expect("earlier native writer must remain valid");
             assert_eq!(GetStdHandle(STD_OUTPUT_HANDLE).unwrap(), first_handle);

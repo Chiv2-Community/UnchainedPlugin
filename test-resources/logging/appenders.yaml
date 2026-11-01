@@ -1,0 +1,46 @@
+default:
+  kind: console
+  target: stdout
+'null':
+  kind: console
+  target: stdout
+  encoder:
+    kind: palette
+    pattern: '{palette(normal)}{m}'
+    palette: {normal: null}
+pattern:
+  kind: console
+  target: stdout
+  encoder: {kind: pattern, pattern: '{h({m})}'}
+json:
+  kind: console
+  target: stdout
+  encoder: {kind: json}
+plain_palette:
+  kind: console
+  target: stdout
+  encoder: {kind: palette, pattern: '{m}', palette: {}}
+plain_pattern:
+  kind: console
+  target: stdout
+  encoder: {kind: pattern, pattern: '{m}'}
+palette:
+  kind: console
+  target: stdout
+  encoder: {kind: palette}
+valid:
+  - kind: console
+  - kind: console
+    target: null
+  - kind: console
+    target: stderr
+    tty_only: true
+  - kind: console
+    encoder: {pattern: '{l} [{t}] {m}{n}'}
+invalid:
+  - kind: console
+    target: invalid
+  - kind: console
+    unknown: true
+  - kind: console
+    encoder: {kind: missing_encoder}

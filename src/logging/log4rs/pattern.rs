@@ -150,7 +150,7 @@ mod tests {
         use super::super::palette::PaletteEncoderConfig;
 
         let newline = if cfg!(windows) { "\r\n" } else { "\n" };
-        let config: PaletteEncoderConfig = serde_yaml::from_str("{}").unwrap();
+        let config: PaletteEncoderConfig = serde_yaml::from_value(crate::logging::test_resources::encoder("defaults")).unwrap();
         let encoder = config.build().unwrap();
         for character in ['a', 'é', '界'] {
             for length in [1, 23, 24, 25, 31, 32, 33, 40] {

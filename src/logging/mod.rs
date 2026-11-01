@@ -12,6 +12,8 @@ pub use log as __log;
 pub use inventory as __inventory;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod test_resources;
 
 #[doc(hidden)]
 pub fn function_name<T>(_: T) -> &'static str {
