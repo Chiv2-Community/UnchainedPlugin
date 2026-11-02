@@ -26,13 +26,7 @@ CREATE_HOOK!(OnGetCurrentGames_, { || !cli_args().is_server() }, NONE, (), (
     param_2: i32
 ), {
     let already_in_endpoint_path = IN_ON_GET_CURRENT_GAMES.with(|state| state.replace(true));
-    let find_enabled = unsafe { o_FStringFind.enable().is_ok() };
     let result = CALL_ORIGINAL!(OnGetCurrentGames_(this_ptr, response, param_2));
-    if find_enabled {
-        unsafe {
-            let _ = o_FStringFind.disable();
-        }
-    }
     if !already_in_endpoint_path {
         IN_ON_GET_CURRENT_GAMES.with(|state| state.set(false));
     }
@@ -49,17 +43,7 @@ CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
 ), {
     let already_in_ping = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
     // crate::sinfo!(fn; "PingSomeServers called");
-    let find_enabled = if already_in_ping {
-        false
-    } else {
-        unsafe { o_FStringFind.enable().is_ok() }
-    };
     let result = CALL_ORIGINAL!(PingSomeServers(this_ptr, max_servers));
-    if find_enabled {
-        unsafe {
-            let _ = o_FStringFind.disable();
-        }
-    }
     if !already_in_ping {
         IN_PING_SOME_SERVERS.with(|state| state.set(false));
     }
@@ -147,11 +131,12 @@ CREATE_HOOK!(UDPEcho, { || !cli_args().is_server() }, NONE, (), (
         // crate::sinfo!(fn; "UDPEcho: received endpoint {endpoint_text}");
         if let Some(normalized) = bracket_ipv6_udp_endpoint(&endpoint_text) {
             // crate::sinfo!(fn; "UDPEcho: normalizing IPv6 endpoint to {normalized}");
-            let original = unsafe { std::ptr::read(endpoint) };
-            unsafe { std::ptr::write(endpoint, FString::from(normalized.as_str())) };
-            let result = CALL_ORIGINAL!(UDPEcho(endpoint, timeout_seconds, callback));
-            unsafe { std::ptr::write(endpoint, original) };
-            return result;
+            let mut normalized_endpoint = FString::from(normalized.as_str());
+            return CALL_ORIGINAL!(UDPEcho(
+                &mut normalized_endpoint,
+                timeout_seconds,
+                callback
+            ));
         }
     }
     CALL_ORIGINAL!(UDPEcho(endpoint, timeout_seconds, callback))
