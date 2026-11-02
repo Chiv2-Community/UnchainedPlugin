@@ -103,23 +103,19 @@ fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
     let references: BTreeSet<_> = inventory::iter::<crate::logging::inline::PaletteReference>
         .into_iter().map(|reference| reference.0.to_ascii_lowercase())
         .filter(|name| !name.is_empty()).collect();
-    let mut missing = BTreeSet::new();
-    if let Some(appenders) = yaml["appenders"].as_mapping() {
-        for appender in appenders.values() {
-            let encoder = &appender["encoder"];
-            if encoder["kind"].as_str() != Some("palette")
-                && !(encoder.is_null() && appender["kind"].as_str() == Some("console")) {
-                continue;
-            }
-            let names = match encoder["palette"].as_mapping() {
-                Some(palette) => palette.keys().filter_map(|key| key.as_str())
-                    .map(str::to_ascii_lowercase).collect(),
-                None => palette::PaletteEncoderConfig::default_names().collect::<BTreeSet<_>>(),
-            };
-            missing.extend(references.difference(&names).cloned());
-        }
-    }
-    missing
+    let encoders = yaml["appenders"].as_mapping().into_iter()
+        .flat_map(|appenders| appenders.values())
+        .filter(|appender| appender["encoder"]["kind"].as_str() == Some("palette")
+            || (appender["encoder"].is_null() && appender["kind"].as_str() == Some("console")))
+        .map(|appender| &appender["encoder"]);
+    encoders.flat_map(|encoder| {
+        let names = match encoder["palette"].as_mapping() {
+            Some(palette) => palette.keys().filter_map(|key| key.as_str())
+                .map(str::to_ascii_lowercase).collect(),
+            None => palette::PaletteEncoderConfig::default_names().collect::<BTreeSet<_>>(),
+        };
+        references.iter().filter(move |name| !names.contains(*name)).cloned()
+    }).collect()
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {
