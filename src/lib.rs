@@ -1,3 +1,5 @@
+#![feature(ip)]
+
 #[macro_use]
 pub mod logging;
 #[macro_use]
@@ -20,7 +22,7 @@ use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::{env, thread};
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -124,6 +126,10 @@ impl BuildInfo {
         let path = get_build_path(self.file_hash, self.platform)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
         sinfo!(fn; "Saving build info to {}", path.to_string_lossy());
+
+        if let Some(parent) = path.parent() {
+            create_dir_all(parent).context("Failed to create build info directory")?;
+        }
 
         let self_with_path = self.with_path(path.to_string_lossy().into_owned());
 
