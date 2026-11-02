@@ -113,7 +113,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
     // We strip the full asset path down to the map's leaf name so that the override directory can be
     // keyed by a readable map identifier like TDM_QuarryKP.
     if let Some(world) = globals().world() {
-        let map_name = crate::resolvers::unchained_integration::get_current_map_name(world)?;
+        let map_name = crate::resolvers::unchained_integration::get_current_map_name(world.cast())?;
         let last = map_name.rsplit('/').next().unwrap_or(&map_name);
         let cleaned = last.trim_matches(['/', '\\']);
         if !cleaned.is_empty() {

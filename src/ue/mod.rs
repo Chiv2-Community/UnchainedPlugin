@@ -8,6 +8,7 @@ mod name;
 mod object;
 pub mod object_array;
 mod string;
+pub mod stubs;
 pub mod sync;
 
 pub use array::*;
@@ -17,6 +18,7 @@ pub use memory::*;
 pub use name::*;
 pub use object::*;
 pub use string::*;
+pub use stubs::*;
 
 use std::ffi::c_void;
 
