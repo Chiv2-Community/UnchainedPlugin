@@ -31,7 +31,7 @@ impl PaletteWarnings {
 
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Rgb([u8; 3]);
 
 impl<'de> serde::Deserialize<'de> for Rgb {
@@ -48,11 +48,38 @@ impl<'de> serde::Deserialize<'de> for Rgb {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Channels {
+    foreground: Option<Rgb>,
+    background: Option<Rgb>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum PaletteColor {
+    Foreground(Rgb),
+    Channels(Channels),
+}
+
+impl PaletteColor {
+    fn channels(self) -> anyhow::Result<Channels> {
+        match self {
+            Self::Foreground(rgb) => Ok(Channels { foreground: Some(rgb), background: None }),
+            Self::Channels(channels) => {
+                anyhow::ensure!(channels.foreground.is_some() || channels.background.is_some(),
+                    "Palette objects require a foreground or background color");
+                Ok(channels)
+            }
+        }
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PaletteEncoderConfig {
     pattern: Option<String>,
-    palette: Option<BTreeMap<String, Option<Rgb>>>,
+    palette: Option<BTreeMap<String, Option<PaletteColor>>>,
 }
 
 #[derive(Debug)]
@@ -64,7 +91,7 @@ enum Chunk {
 
 #[derive(Debug)]
 struct Entry {
-    rgb: [u8; 3],
+    channels: Channels,
     ansi: String,
     style: Style,
 }
@@ -88,7 +115,7 @@ impl PaletteEncoderConfig {
                 ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
                 ("trace_body", Some([92, 92, 92])), ("title", Some([242, 204, 120])),
                 ("subtitle", Some([242, 139, 130]))]
-                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(Rgb))).collect()
+                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Rgb(rgb))))).collect()
         });
         let mut entries = BTreeMap::new();
         let mut colors = Vec::new();
@@ -100,7 +127,7 @@ impl PaletteEncoderConfig {
         for (name, rgb) in palette {
             anyhow::ensure!(!name.is_empty(), "Palette names must not be empty");
             anyhow::ensure!(!entries.contains_key(&name), "Duplicate palette name: {name}");
-            let index = rgb.map(|Rgb(rgb)| {
+            let index = rgb.map(PaletteColor::channels).transpose()?.map(|rgb| {
                 if let Some(index) = colors.iter().position(|color| *color == rgb) { return index; }
                 colors.push(rgb);
                 colors.len() - 1
@@ -110,8 +137,15 @@ impl PaletteEncoderConfig {
         let (chunks, plain) = parse(self.pattern.as_deref().unwrap_or(DEFAULT_PATTERN), &entries)?;
         // Inline messages can reference any configured entry, not just pattern colors.
         let colors = colors.into_iter().map(|rgb| {
-            let [r, g, b] = rgb;
-            Entry { rgb, ansi: format!("\x1b[0;38;2;{r};{g};{b}m"), style: Style::new() }
+            let mut ansi = String::from("\x1b[0");
+            for (channel, color) in [(38, rgb.foreground), (48, rgb.background)] {
+                if let Some(Rgb([r, g, b])) = color {
+                    use std::fmt::Write;
+                    write!(ansi, ";{channel};2;{r};{g};{b}").unwrap();
+                }
+            }
+            ansi.push('m');
+            Entry { channels: rgb, ansi, style: Style::new() }
         }).collect();
         Ok(PaletteEncoder {
             plain: PatternEncoder::new(&plain),
@@ -250,16 +284,29 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
 impl PaletteEncoder {
     pub(super) fn configure(&mut self, target: log4rs::append::console::Target) {
         if self.colors.is_empty() && !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_))) { return; }
-        let colors: Vec<_> = self.colors.iter().map(|entry| entry.rgb).collect();
+        let mut colors = Vec::new();
+        for entry in &self.colors {
+            for Rgb(rgb) in [entry.channels.foreground, entry.channels.background].into_iter().flatten() {
+                if !colors.contains(&rgb) { colors.push(rgb); }
+            }
+        }
         let Some((truecolor, slots)) = crate::logging::console::configure_palette(target, &colors) else { return };
         self.enabled = true;
         self.truecolor = truecolor;
-        for (entry, slot) in self.colors.iter_mut().zip(slots) {
-            let color = match slot & 7 {
+        let backgrounds = crate::logging::console::background_slots(target, &colors);
+        let color = |slot: u8| match slot & 7 {
                 0 => Color::Black, 1 => Color::Blue, 2 => Color::Green, 3 => Color::Cyan,
                 4 => Color::Red, 5 => Color::Magenta, 6 => Color::Yellow, _ => Color::White,
-            };
-            entry.style.text(color).intense(slot & 8 != 0);
+        };
+        for entry in &mut self.colors {
+            if let Some(Rgb(rgb)) = entry.channels.foreground {
+                let slot = slots[colors.iter().position(|color| *color == rgb).unwrap()];
+                entry.style.text(color(slot)).intense(slot & 8 != 0);
+            }
+            if let Some(Rgb(rgb)) = entry.channels.background {
+                let slot = backgrounds[colors.iter().position(|color| *color == rgb).unwrap()];
+                entry.style.background(color(slot));
+            }
         }
     }
 }
@@ -351,6 +398,45 @@ mod tests {
 
     fn encoder(name: &str) -> PaletteEncoder {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
+    }
+
+    #[test]
+    fn foreground_and_background_entries_reset_omitted_channels() {
+        use crate::logging::inline::{Message, Segment::{Palette, Text}};
+        let mut encoder = encoder("channels");
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        assert_eq!(encoder.colors.len(), 3, "string and foreground object share a style");
+        let message = Message::new(&[
+            Palette("both"), Text(format_args!("A")),
+            Palette("background"), Text(format_args!("B")),
+            Palette("foreground"), Text(format_args!("C")),
+            Palette("object-foreground"), Text(format_args!("D")),
+            Palette("normal"), Text(format_args!("E")),
+        ]);
+        let values = [(COLORS_KEY, message.colors.as_str())];
+        let mut buffer = StyledBuffer::default();
+        encoder.encode(&mut buffer, &Record::builder()
+            .args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
+        assert_eq!(buffer.bytes, b"\x1b[0;38;2;18;52;86;48;2;171;205;239mA\x1b[0;48;2;171;205;239mB\x1b[0;38;2;18;52;86mC\x1b[0;38;2;18;52;86mDE");
+        assert_eq!(buffer.styles.last().unwrap().1, Style::new());
+
+        let mut config = fixtures::encoder("channels");
+        config["pattern"] = "{palette(both)}A{palette(background)}B{palette(foreground)}C{palette(object-foreground)}D{palette(normal)}E".into();
+        let mut direct = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
+        direct.enabled = true;
+        direct.truecolor = true;
+        let mut output = StyledBuffer::default();
+        direct.encode(&mut output, &Record::builder().build()).unwrap();
+        assert_eq!(output.bytes, buffer.bytes);
+        assert_eq!(output.styles, buffer.styles);
+
+        encoder.enabled = false;
+        let mut plain = StyledBuffer::default();
+        encoder.encode(&mut plain, &Record::builder()
+            .args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
+        assert_eq!(plain.bytes, b"ABCDE");
+        assert!(plain.styles.is_empty());
     }
 
     // Never invoked: registration must not depend on a log call being enabled or executed.
@@ -506,7 +592,7 @@ mod tests {
     #[test]
     fn pattern_unused_colors_remain_available_to_inline_messages() {
         let mut table = BTreeMap::new();
-        for i in 0..64 { table.insert(format!("color{i}"), Some(Rgb([i, i, i]))); }
+        for i in 0..64 { table.insert(format!("color{i}"), Some(PaletteColor::Foreground(Rgb([i, i, i])))); }
         let encoder = PaletteEncoderConfig {
             pattern: Some("{palette(color63)}hello{palette()}".to_owned()), palette: Some(table),
         }.build().unwrap();
@@ -803,7 +889,7 @@ mod tests {
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
         let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
         for encoder in [shipped, encoder("defaults")] {
-            assert_eq!(encoder.colors.iter().map(|entry| entry.rgb).collect::<Vec<_>>(), expected);
+            assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap().0).collect::<Vec<_>>(), expected);
         }
     }
 }

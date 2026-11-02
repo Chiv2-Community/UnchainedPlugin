@@ -134,8 +134,21 @@ encoder:
     trace_body: "#5c5c5c"
 ```
 
-These are the defaults. Add any named colors using quoted `#RRGGBB` values;
-`null` uses the console's normal text color. `{palette(name)}` switches colors
+Add named colors as foreground strings or foreground/background objects:
+
+```yaml
+palette:
+  accent: "#f2cc78"
+  highlighted: {foreground: "#f2cc78", background: "#202020"}
+  background_only: {background: "#202020"}
+  normal: null
+```
+
+Objects require at least one color. Omitted channels use terminal defaults, not
+the previous entry's colors. Strings set foreground and reset background;
+`null` resets both. RGB terminals use exact colors; legacy console backgrounds
+use the nearest of the eight colors supported by log4rs.
+`{palette(name)}` switches colors
 until the next directive or end of the record; `{palette()}` restores normal text.
 Names are ASCII case-insensitive. `{l}` or `{level}` in a name selects a color by
 severity, so `{palette({l}_body)}` selects `error_body`, `warn_body`, etc.

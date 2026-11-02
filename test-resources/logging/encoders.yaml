@@ -1,4 +1,12 @@
 defaults: {}
+channels:
+  pattern: '{m}'
+  palette:
+    foreground: '#123456'
+    background: {background: '#abcdef'}
+    both: {foreground: '#123456', background: '#abcdef'}
+    object-foreground: {foreground: '#123456'}
+    normal: null
 plain:
   pattern: '{m}'
 empty:
@@ -56,6 +64,18 @@ native-fill:
   kind: palette
   pattern: '{m:{>20}{palette(error)}tail'
 invalid:
+  - pattern: '{m}'
+    palette: {empty: {}}
+  - pattern: '{m}'
+    palette: {empty: {foreground: null, background: null}}
+  - pattern: '{m}'
+    palette: {bad: {foreground: red}}
+  - pattern: '{m}'
+    palette: {bad: {background: '#12345'}}
+  - pattern: '{m}'
+    palette: {bad: {background: 123}}
+  - pattern: '{m}'
+    palette: {bad: {foreground: '#123456', unknown: '#abcdef'}}
   - palette: {info: red}
   - palette: {info: '#12345'}
   - palette: {info: '#gg2233'}

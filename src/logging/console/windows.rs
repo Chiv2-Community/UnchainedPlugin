@@ -68,6 +68,20 @@ pub(crate) fn spawn_console() {
     }
 }
 
+pub(super) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
+    unsafe {
+        let output = match target {
+            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
+            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
+        };
+        let info = GetStdHandle(output).ok().and_then(|handle| screen_info(handle));
+        let bank = info.as_ref().map_or(0, |info| usize::from(info.wAttributes.0 & 0x80 != 0) * 8);
+        let colors = info.map_or(BASIC_COLORS, |info| info.ColorTable.map(|color| color.0));
+        // log4rs preserves the terminal's background-intensity bit.
+        nearest_slots::<8>(colors[bank..bank + 8].try_into().unwrap(), palette)
+    }
+}
+
 pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> (bool, Vec<u8>) {
     unsafe {
         let output = match target {
