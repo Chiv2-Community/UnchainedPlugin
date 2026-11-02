@@ -3,19 +3,16 @@
 #[macro_export]
 macro_rules! __unchained_log {
     ($level:ident, logger: $logger:expr, target: $target:expr, $($args:tt)+) => {
-        $crate::__unchained_log!(@dispatch $level, $logger, $target, $($args)+)
+        $crate::__unchained_inline!(@detect [$level, $logger, $target] $($args)+)
     };
     ($level:ident, logger: $logger:expr, $($args:tt)+) => {
-        $crate::__unchained_log!(@dispatch $level, $logger, module_path!(), $($args)+)
+        $crate::__unchained_inline!(@detect [$level, $logger, module_path!()] $($args)+)
     };
     ($level:ident, target: $target:expr, $($args:tt)+) => {
-        $crate::__unchained_log!(@dispatch $level, $crate::logging::__log::logger(), $target, $($args)+)
+        $crate::__unchained_inline!(@detect [$level, $crate::logging::__log::logger(), $target] $($args)+)
     };
     ($level:ident, $($args:tt)+) => {
-        $crate::__unchained_log!(@dispatch $level, $crate::logging::__log::logger(), module_path!(), $($args)+)
-    };
-    (@dispatch $level:ident, $logger:expr, $target:expr, $($args:tt)+) => {
-        $crate::__unchained_inline!(@detect [$level, $logger, $target] $($args)+)
+        $crate::__unchained_inline!(@detect [$level, $crate::logging::__log::logger(), module_path!()] $($args)+)
     };
     (@emit $level:ident, $logger:expr, $target:expr, fn; $($args:tt)+) => {{
         fn __unchained_function_marker() {}

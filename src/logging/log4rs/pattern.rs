@@ -22,7 +22,9 @@ impl PatternEncoder {
                 .find(|(name, _)| rest.strip_prefix('{').and_then(|rest| rest.strip_prefix(name))
                     .is_some_and(|rest| rest.starts_with('}') || rest.starts_with(':')));
             if let Some((_, key)) = alias {
-                expanded.push_str(&format!("{{K({key})"));
+                expanded.push_str("{K(");
+                expanded.push_str(key);
+                expanded.push(')');
                 rest = &rest[3..];
                 extended = true;
             } else {
@@ -48,14 +50,7 @@ impl Encode for PatternEncoder {
         let function = record.key_values().get(FUNCTION_KEY.into()).unwrap_or(Value::from("???"));
         let values = [(SHORT_MODULE_KEY, Value::from_display(&module)), (FUNCTION_KEY, function)];
         let sources: [&dyn Source; 2] = [&values, record.key_values()];
-        let extended = Record::builder()
-            .metadata(record.metadata().clone())
-            .args(*record.args())
-            .module_path(record.module_path())
-            .file(record.file())
-            .line(record.line())
-            .key_values(&sources)
-            .build();
+        let extended = record.to_builder().key_values(&sources).build();
         self.inner.encode(writer, &extended)
     }
 }
