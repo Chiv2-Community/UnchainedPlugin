@@ -405,7 +405,7 @@ mod tests {
                     path,
                     &format!(
                         "{}/ini-overrides/{}/{slot}/{config}",
-                        root.display(),
+                        root.display().to_string().replace('\\', "/"),
                         layer.dir()
                     )
                 );
