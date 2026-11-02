@@ -145,8 +145,6 @@ unicode-segmentation = "1.12"
 [dev-dependencies]
 tokio = { version = "1.0", features = ["test-util"] }
 [patch.crates-io]
-# Local diagnostic fork: logs the exact trampoline allocation base before
-# retour relocates each target prologue. Remove after the Box64/Wine issue is
-# understood and the upstream allocator fix is selected.
+# Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.
 # retour = { path = "vendor/retour" }
-retour = { git = "https://github.com/Chiv2-Community/retour-rs", branch = "chiv-v0.3.1" }
+retour = { git = "https://github.com/Chiv2-Community/retour-rs", rev = "35a9b3c28a756a44a10b4b9ebc1a10e47ff8fb81" }
