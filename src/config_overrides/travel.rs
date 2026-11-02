@@ -1,7 +1,7 @@
 use super::selection::{map_folder, MapContext};
 
 #[derive(Clone, Default)]
-pub(super) struct Context {
+pub(crate) struct Context {
     pub generation: u64,
     pub selection: MapContext,
     pub world: Option<usize>,

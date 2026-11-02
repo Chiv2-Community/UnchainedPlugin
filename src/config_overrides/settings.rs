@@ -61,7 +61,7 @@ mod tests {
     macro_rules! fixture {
         ($name:literal) => {
             include_str!(concat!(
-                "../../../test-resources/match-rotation/",
+                "../../test-resources/match-rotation/",
                 $name,
                 ".yaml"
             ))
