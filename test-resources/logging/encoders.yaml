@@ -40,15 +40,9 @@ severity:
 accent:
   pattern: '{palette(accent)}{m}{palette(normal)}end'
   palette: {ACCENT: '#123456', normal: null}
-level-message:
-  pattern: '{palette(error)}{l}|{m}{palette()}'
-info-message:
-  pattern: '{palette(info)}{m}'
 repeated-message:
   pattern: '{m}|{m}'
   palette: {accent: '#123456', normal: null}
-unicode-message:
-  pattern: '界{message}|{m}'
 escaped-name:
   pattern: '{m}'
   palette:

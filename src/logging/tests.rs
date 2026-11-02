@@ -74,7 +74,7 @@ fn function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary() {
 }
 
 #[test]
-fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
+fn custom_logger_filtering_preserves_laziness_evaluation_counts_and_kv() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     struct NeverFormat;
@@ -86,60 +86,59 @@ fn custom_target_filtering_keeps_formatting_lazy_and_user_kv_syntax() {
     sinfo!(logger: &logger, target: "disabled", "{}", NeverFormat);
     sinfo!(logger: &logger, target: "disabled", fn; "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
+    let evaluations = std::cell::Cell::new(0);
+    let get_logger = || -> &dyn Log {
+        evaluations.set(evaluations.get() + 1);
+        &logger
+    };
+    sinfo!(logger: get_logger(), ("once"), palette("info"), (" tail"));
+    assert_eq!(evaluations.get(), 1);
+    fn never<T>() -> T { panic!("filtered argument evaluated") }
+    serror!(logger: get_logger(), target: "disabled", ("{}", never::<String>()),
+        palette(never::<&str>()), ("never"));
+    assert_eq!(evaluations.get(), 2);
     let request = 42;
     sinfo!(logger: &logger, request; "shorthand");
     sinfo!(logger: &logger, request:? = vec![1, 2]; "debug");
     let lines = logger.0.lock().unwrap();
-    assert!(lines[0].ends_with("|INFO|42|shorthand"));
-    assert!(lines[1].ends_with("|INFO|[1, 2]|debug"));
+    assert_eq!(lines.len(), 3);
+    assert!(lines[0].ends_with("once tail"));
+    assert!(lines[1].ends_with("|INFO|42|shorthand"));
+    assert!(lines[2].ends_with("|INFO|[1, 2]|debug"));
 }
 
 #[test]
-fn inline_segments_keep_plain_messages_metadata_and_filtering() {
+fn inline_segments_keep_plain_messages_and_metadata() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
     swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), " tail");
-    fn never<T>() -> T { panic!("filtered argument evaluated") }
-    serror!(logger: &logger, target: "disabled", ("{}", never::<String>()),
-        palette(never::<&str>()), ("never"));
     sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), " tail");
     strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), " tail", palette(),);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
-    assert!(lines[0].starts_with("inline_segments_keep_plain_messages_metadata_and_filtering|custom|INFO|"));
+    assert!(lines[0].starts_with("inline_segments_keep_plain_messages_and_metadata|custom|INFO|"));
     assert!(lines[0].ends_with("hello 7 world!"));
     assert!(lines[1].ends_with("owned tail"));
-    assert!(lines[2].ends_with("[inline_segments_keep_plain_messages_metadata_and_filtering] function tail"));
+    assert!(lines[2].ends_with("[inline_segments_keep_plain_messages_and_metadata] function tail"));
     assert!(lines[3].ends_with("|TRACE|42|kv tail"));
 }
 
 #[test]
-fn grouped_segments_support_plain_text_and_palette_only_records() {
+fn inline_syntax_preserves_grouped_formats_literals_and_palette_only_records() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     let request = 42;
     sinfo!(logger: &logger, request; ("{}", String::from("one")), "{request}",);
     sinfo!(logger: &logger, palette("warn"), palette(),);
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 2);
-    assert!(lines[0].ends_with("|INFO|42|one42"));
-    assert!(lines[1].ends_with("|INFO||"));
-}
-
-#[test]
-fn inline_literals_and_ordinary_format_arguments_remain_distinct() {
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Capture::default();
     let count = 7;
     sinfo!(logger: &logger, palette("warn"), "before {count}", palette(), "after",);
     sinfo!(logger: &logger, ("before {}", count), palette("warn"), "after");
-    sinfo!(logger: &logger, "foo");
-    sinfo!(logger: &logger, "before {}", count);
-    sinfo!(logger: &logger, "{} {}", "literal", (count));
     let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 5);
-    for (line, expected) in lines.iter().zip(["before 7after", "before 7after", "foo", "before 7", "literal 7"]) {
+    assert_eq!(lines.len(), 4);
+    for (line, expected) in lines.iter().zip([
+        "|INFO|42|one42", "|INFO||", "before 7after", "before 7after",
+    ]) {
         assert!(line.ends_with(expected), "{line}");
     }
 }
@@ -180,26 +179,6 @@ fn inline_calls_borrow_logger_fields_through_shared_receivers() {
     assert_eq!(lines.len(), 2);
     assert!(lines[0].ends_with("field tail"));
     assert!(lines[1].ends_with("ordinary reuse"));
-}
-
-#[test]
-fn inline_logger_expressions_are_evaluated_once_even_when_filtered() {
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Capture::default();
-    let evaluations = std::cell::Cell::new(0);
-    let get_logger = || -> &dyn Log {
-        evaluations.set(evaluations.get() + 1);
-        &logger
-    };
-    sinfo!(logger: get_logger(), ("once"), palette("info"), (" tail"));
-    assert_eq!(evaluations.get(), 1);
-    fn never() -> &'static str { panic!("filtered palette evaluated") }
-    sinfo!(logger: get_logger(), target: "disabled", ("never"),
-        palette(never()), (" tail"));
-    assert_eq!(evaluations.get(), 2);
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 1);
-    assert!(lines[0].ends_with("once tail"));
 }
 
 #[test]
@@ -250,12 +229,15 @@ fn ordinary_calls_do_not_create_inline_state() {
     swarn!(logger: &logger, "onetwo {}", 7);
     sdebug!(logger: &logger, fn; "onetwo");
     strace!(logger: &logger, request = 42; "onetwo");
+    let count = 7;
+    sinfo!(logger: &logger, "{} {}", "literal", (count));
     let lines = logger.0.0.lock().unwrap();
-    assert_eq!(lines.len(), 4);
+    assert_eq!(lines.len(), 5);
     assert!(lines[0].ends_with("ordinary 7"));
     assert!(lines[1].ends_with("onetwo 7"));
     assert!(lines[2].ends_with("[ordinary_calls_do_not_create_inline_state] onetwo"));
     assert!(lines[3].ends_with("|TRACE|42|onetwo"));
+    assert!(lines[4].ends_with("literal 7"));
 }
 
 #[test]
@@ -336,7 +318,7 @@ fn shared_macro_scope(before: &str, in_macro: bool, generated: bool) -> bool {
 
 #[test]
 #[cfg(unix)]
-fn source_check_enforces_unqualified_calls_and_exported_hygiene() {
+fn source_check_enforces_shared_macro_hygiene() {
     assert!(shared_macro_scope("", false, false));
     for prefix in ["crate::", "UnchainedPlugin::", "$crate::", "log::"] {
         assert!(!shared_macro_scope(prefix, false, false));
@@ -346,21 +328,16 @@ fn source_check_enforces_unqualified_calls_and_exported_hygiene() {
     assert!(!shared_macro_scope("", true, false));
     assert!(shared_macro_scope("crate::", false, true));
     assert!(!shared_macro_scope("", false, true));
+    for prefix in ["::log::", "log :: "] {
+        assert!(interpolates_facade_path(&[prefix, "# severity ! (\"failure\")"].concat()));
+    }
+    assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
 }
 
 #[cfg(unix)]
 fn interpolates_facade_path(source: &str) -> bool {
     let compact: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
     compact.contains(&["log::", "#"].concat())
-}
-
-#[test]
-#[cfg(unix)]
-fn source_check_catches_interpolated_facade_paths() {
-    for prefix in ["::log::", "log :: "] {
-        assert!(interpolates_facade_path(&[prefix, "# severity ! (\"failure\")"].concat()));
-    }
-    assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
 }
 
 struct Example;

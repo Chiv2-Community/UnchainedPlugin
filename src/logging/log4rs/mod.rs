@@ -181,7 +181,7 @@ mod tests {
         }
         let file = std::fs::read_to_string(&path).unwrap();
         let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
-        assert_eq!(records.len(), 4);
+        assert_eq!(records.len(), 3);
         assert_eq!(records[0]["message"], "ordinary");
         assert!(records[0]["attributes"].get("inline_colors").is_none());
         assert_eq!(records[1]["message"], "beforeafterend");
@@ -189,9 +189,7 @@ mod tests {
         assert_eq!(colors, serde_json::json!([
             {"utf8_offset": 6, "palette": "accent"}, {"utf8_offset": 11, "palette": null}
         ]));
-        assert_eq!(records[2]["message"], "onetwo");
-        assert!(records[2]["attributes"].get("inline_colors").is_none());
-        assert_eq!(records[3]["message"], "first line\r\nsecond 7\r\n");
+        assert_eq!(records[2]["message"], "first line\r\nsecond 7\r\n");
         assert!(!file.contains("\\u001b"));
         std::fs::remove_file(path).unwrap();
     }
@@ -205,7 +203,6 @@ mod tests {
         log4rs::init_config(config_from_value(yaml, "inline-palette").unwrap()).unwrap();
         sinfo!("ordinary");
         sinfo!(("before"), palette("accent"), "after", palette(), "end");
-        sinfo!("onetwo");
         sinfo!(palette("first"), "first line\r\n", palette("second"), ("second {}", 7), "\r\n");
         log::logger().flush();
     }

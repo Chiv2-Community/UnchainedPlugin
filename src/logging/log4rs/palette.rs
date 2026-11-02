@@ -565,12 +565,13 @@ mod tests {
     }
 
     #[test]
-    fn palette_loading_collects_missing_names_for_console_and_file_encoders() {
+    fn palette_loading_deduplicates_missing_names_for_console_and_file_encoders() {
         let path = std::env::temp_dir().join(format!("palette-index-{}.log", std::process::id()));
         for kind in ["console", "file"] {
             let mut yaml = fixtures::config("palette-index");
             yaml["appenders"]["test"]["kind"] = kind.into();
             if kind == "file" { yaml["appenders"]["test"]["path"] = path.to_string_lossy().as_ref().into(); }
+            yaml["appenders"]["duplicate"] = yaml["appenders"]["test"].clone();
             let (config, missing) = super::super::config_with_warnings(yaml, "palette-index-test").unwrap();
             let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
             assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
@@ -581,28 +582,19 @@ mod tests {
     }
 
     #[test]
-    fn missing_reference_warnings_are_deduplicated_and_skip_non_palette_encoders() {
-        let mut yaml = fixtures::config("palette-index");
-        let once = super::super::missing_palette_references(&yaml);
-        yaml["appenders"]["duplicate"] = yaml["appenders"]["test"].clone();
-        assert_eq!(super::super::missing_palette_references(&yaml), once);
-        for kind in ["pattern", "json"] {
+    fn palette_warnings_respect_encoder_kinds_defaults_and_per_encoder_names() {
+        for kind in [None, Some("null"), Some("pattern"), Some("json")] {
             let mut yaml = fixtures::config("non-palette-index");
-            yaml["appenders"]["test"]["encoder"]["kind"] = kind.into();
+            let appender = &mut yaml["appenders"]["test"];
+            match kind {
+                None => { appender.as_mapping_mut().unwrap().remove("encoder"); },
+                Some("null") => appender["encoder"] = serde_yaml::Value::Null,
+                Some(kind) => appender["encoder"]["kind"] = kind.into(),
+            }
             let (_, warnings) = super::super::config_with_warnings(yaml, "non-palette-test").unwrap();
-            assert!(warnings.is_empty());
+            assert!(warnings.is_empty(), "{kind:?}");
         }
-    }
-
-    #[test]
-    fn centralized_warnings_preserve_default_and_per_encoder_names() {
         let mut yaml = fixtures::config("palette-index");
-        yaml["appenders"]["test"].as_mapping_mut().unwrap().remove("encoder");
-        let (_, implicit) = super::super::config_with_warnings(yaml.clone(), "implicit-defaults").unwrap();
-        assert!(implicit.is_empty(), "console appenders default to a pattern encoder");
-        yaml["appenders"]["test"]["encoder"] = serde_yaml::Value::Null;
-        let (_, null_encoder) = super::super::config_with_warnings(yaml.clone(), "null-encoder").unwrap();
-        assert!(null_encoder.is_empty());
         yaml["appenders"]["test"]["encoder"] = fixtures::encoder("defaults");
         yaml["appenders"]["test"]["encoder"]["kind"] = "palette".into();
         let (_, explicit) = super::super::config_with_warnings(yaml.clone(), "explicit-defaults").unwrap();
@@ -651,9 +643,10 @@ mod tests {
             let values = [("enclosing_function", "named"), ("request", "42")];
             let record = Record::builder().level(level).module_path(Some("UnchainedPlugin::messages"))
                 .key_values(&values).args(format_args!("hello 世界 {{palette(text)}}")).build();
-            let mut bytes = Vec::new();
-            encoder.encode(&mut SimpleWriter(&mut bytes), &record).unwrap();
-            assert_eq!(String::from_utf8(bytes).unwrap(),
+            let mut output = StyledBuffer::default();
+            encoder.encode(&mut output, &record).unwrap();
+            assert!(output.styles.is_empty(), "disabled colors must not change native styles");
+            assert_eq!(String::from_utf8(output.bytes).unwrap(),
                 format!("[{level:5}] [UP::messages] named|42|hello 世界 {{palette(text)}}"));
             encoder.enabled = true;
             encoder.truecolor = true;
@@ -668,28 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_preserve_header_and_body_colors_and_embedded_message_codes() {
-        let mut encoder = encoder("defaults");
-        encoder.enabled = true;
-        encoder.truecolor = true;
-        for (level, rgb) in [(Level::Error, "242;139;130"), (Level::Warn, "242;204;120"),
-            (Level::Info, "140;180;225"), (Level::Debug, "128;128;128"), (Level::Trace, "92;92;92")] {
-            let record = Record::builder().level(level).module_path(Some("plugin::module"))
-                .args(format_args!("before \x1b[31mred\x1b[0m after")).build();
-            let mut bytes = Vec::new();
-            encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes), &record).unwrap();
-            let text = String::from_utf8(bytes).unwrap();
-            let color = text.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
-            let body = text.find(" [p::module               ]").unwrap();
-            let body_rgb = if level <= Level::Info { "238;238;238" } else { rgb };
-            assert!(text[color + 1..body].contains(&format!("\x1b[0;38;2;{body_rgb}m")));
-            assert!(text.contains("before \x1b[31mred\x1b[0m after"));
-            assert!(text.ends_with("\x1b[0m"));
-        }
-    }
-
-    #[test]
-    fn arbitrary_names_switch_legacy_styles_and_reset_after_encoding_errors() {
+    fn arbitrary_names_switch_legacy_styles() {
         let mut encoder = encoder("accent");
         encoder.enabled = true;
         encoder.colors[0].style.text(Color::Magenta).intense(true);
@@ -700,15 +672,6 @@ mod tests {
         assert_eq!(buffer.styles[0].1.text, Some(Color::Magenta));
         assert_eq!(buffer.styles[0].1.intense, Some(true));
         assert_eq!(buffer.styles[1], (5, Style::new()));
-        for rgb in [false, true] {
-            encoder.truecolor = rgb;
-            for limit in [0, 3, 6] {
-                let mut buffer = StyledBuffer { fail_after: Some(limit), ..Default::default() };
-                let error = encoder.encode(&mut buffer, &record).unwrap_err();
-                assert!(error.to_string().contains("injected output failure"));
-                assert_eq!(buffer.styles.last().unwrap().1, Style::new());
-            }
-        }
     }
 
     #[test]
@@ -735,39 +698,6 @@ mod tests {
             assert_eq!(buffer.bytes, "sample 世界".as_bytes());
             assert!(buffer.styles.is_empty());
         }
-    }
-
-    #[test]
-    fn plain_output_skips_all_color_switches() {
-        let encoder = encoder("level-message");
-        let mut buffer = StyledBuffer::default();
-        encoder.encode(&mut buffer, &Record::builder().level(Level::Info)
-            .args(format_args!("message")).build()).unwrap();
-        assert_eq!(buffer.bytes, b"INFO|message");
-        assert!(buffer.styles.is_empty());
-    }
-
-    #[test]
-    fn ordinary_records_check_color_attributes_once() {
-        struct Lookups(std::cell::Cell<usize>);
-        impl log::kv::Source for Lookups {
-            fn visit<'kvs>(&'kvs self, _: &mut dyn log::kv::VisitSource<'kvs>) -> Result<(), log::kv::Error> {
-                panic!("ordinary encoder enumerated metadata")
-            }
-            fn get(&self, key: log::kv::Key<'_>) -> Option<log::kv::Value<'_>> {
-                assert_eq!(key.as_str(), COLORS_KEY);
-                self.0.set(self.0.get() + 1);
-                None
-            }
-        }
-        let lookups = Lookups(std::cell::Cell::new(0));
-        let mut encoder = encoder("info-message");
-        encoder.enabled = true;
-        let mut output = StyledBuffer::default();
-        encoder.encode(&mut output, &Record::builder().key_values(&lookups)
-            .args(format_args!("ordinary {}", 7)).build()).unwrap();
-        assert_eq!(output.bytes, b"ordinary 7");
-        assert_eq!(lookups.0.get(), 1);
     }
 
     #[test]
@@ -826,22 +756,24 @@ mod tests {
     }
 
     #[test]
-    fn inline_output_errors_reset_style() {
+    fn pattern_and_inline_output_errors_reset_style() {
         use crate::logging::inline::{Message, Segment};
         let segments = [Segment::Text(format_args!("before")), Segment::Palette("warn"),
             Segment::Text(format_args!("after")), Segment::Palette("")];
         let message = Message::new(&segments);
         let values = [(COLORS_KEY, message.colors.as_str())];
-        let mut encoder = encoder("plain");
-        encoder.enabled = true;
-        for truecolor in [false, true] {
-            encoder.truecolor = truecolor;
-            for limit in [0, 3, 7] {
-                let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
-                let error = encoder.encode(&mut output, &Record::builder().key_values(&values)
-                    .args(format_args!("{}", message.text)).build()).unwrap_err();
-                assert!(error.to_string().contains("injected output failure"));
-                assert_eq!(output.styles.last().unwrap().1, Style::new());
+        for (fixture, text, metadata) in [("accent", "hello", &[][..]), ("plain", message.text.as_str(), &values[..])] {
+            let mut encoder = encoder(fixture);
+            encoder.enabled = true;
+            for truecolor in [false, true] {
+                encoder.truecolor = truecolor;
+                for limit in [0, 3, 6, 7] {
+                    let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
+                    let error = encoder.encode(&mut output, &Record::builder().key_values(&metadata)
+                        .args(format_args!("{text}")).build()).unwrap_err();
+                    assert!(error.to_string().contains("injected output failure"), "{fixture}, {truecolor}, {limit}");
+                    assert_eq!(output.styles.last().unwrap().1, Style::new(), "{fixture}, {truecolor}, {limit}");
+                }
             }
         }
     }
@@ -872,47 +804,34 @@ mod tests {
             (Some("not json"), false, false, 0),
             (Some("null"), false, false, 0),
             (Some("[]"), true, true, 0),
-            (Some(r#"[{"utf8_offset":1,"palette":null}]"#), true, false, 0),
-            (Some(r#"[{"utf8_offset":5,"palette":null}]"#), true, false, 0),
-            (Some(r#"[{"utf8_offset":3,"palette":null},{"utf8_offset":0,"palette":null}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":-1,"palette":"warn"}]"#), false, false, 0),
+            (Some(r#"[{"utf8_offset":1,"palette":"warn"}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":5,"palette":"warn"}]"#), true, false, 0),
+            (Some(r#"[{"utf8_offset":3,"palette":"warn"},{"utf8_offset":0,"palette":null}]"#), true, false, 0),
             (Some(r#"[{"utf8_offset":0,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":4,"palette":null}]"#), true, true, 4),
         ] {
-            for (pattern, chunks, expected) in [("{m}|{message}", 2, "界x|界x"), ("prefix", 0, "prefix")] {
+            for (pattern, chunks, expected) in [
+                ("{m}|{message}", 2, "界x|界x"), ("界{message}|{m}", 2, "界界x|界x"), ("prefix", 0, "prefix"),
+            ] {
                 let mut config = fixtures::encoder("plain");
                 config["pattern"] = pattern.into();
                 let mut encoder = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
                 encoder.enabled = true;
-                let message = Message(Cell::new(0));
-                let metadata = Metadata { colors, lookups: Cell::new(0) };
-                let mut output = StyledBuffer::default();
-                encoder.encode(&mut output, &Record::builder().key_values(&metadata)
-                    .args(format_args!("{message}")).build()).unwrap();
-                assert_eq!(output.bytes, expected.as_bytes(), "{colors:?}, {pattern}");
-                assert_eq!(metadata.lookups.get(), 1);
-                assert_eq!(message.0.get(), usize::from(parsed) + if valid { 0 } else { chunks }, "{colors:?}, {pattern}");
-                assert_eq!(output.styles.len(), switches * chunks + 1, "{colors:?}, {pattern}");
-                assert!(output.styles.iter().all(|(_, style)| *style == Style::new()));
+                for truecolor in [false, true] {
+                    encoder.truecolor = truecolor;
+                    let message = Message(Cell::new(0));
+                    let metadata = Metadata { colors, lookups: Cell::new(0) };
+                    let mut output = StyledBuffer::default();
+                    encoder.encode(&mut output, &Record::builder().key_values(&metadata)
+                        .args(format_args!("{message}")).build()).unwrap();
+                    assert_eq!(output.bytes, expected.as_bytes(), "{colors:?}, {pattern}, truecolor={truecolor}");
+                    assert_eq!(metadata.lookups.get(), 1);
+                    assert_eq!(message.0.get(), usize::from(parsed) + if valid { 0 } else { chunks }, "{colors:?}, {pattern}");
+                    assert_eq!(output.styles.len(), switches * chunks + 1, "{colors:?}, {pattern}");
+                    assert!(output.styles.iter().all(|(_, style)| *style == Style::new()));
+                    assert_eq!(output.styles.last().unwrap().0, expected.len());
+                }
             }
-        }
-    }
-
-    #[test]
-    fn malformed_color_attributes_leave_messages_plain() {
-        let mut encoder = encoder("unicode-message");
-        encoder.enabled = true;
-        encoder.truecolor = true;
-        for colors in [
-            "not json", "null", r#"[{"utf8_offset":1,"palette":"warn"}]"#,
-            r#"[{"utf8_offset":99,"palette":"warn"}]"#,
-            r#"[{"utf8_offset":3,"palette":"warn"},{"utf8_offset":0,"palette":null}]"#,
-            r#"[{"utf8_offset":-1,"palette":"warn"}]"#,
-        ] {
-            let values = [(COLORS_KEY, colors)];
-            let mut output = StyledBuffer::default();
-            encoder.encode(&mut output, &Record::builder().key_values(&values)
-                .args(format_args!("界x")).build()).unwrap();
-            assert_eq!(output.bytes, "界界x|界x".as_bytes(), "{colors}");
-            assert_eq!(output.styles, [("界界x|界x".len(), Style::new())]);
         }
     }
 
@@ -1004,18 +923,34 @@ mod tests {
     }
 
     #[test]
-    fn default_palette_matches_shipped_yaml_and_legacy_slot_order() {
+    fn shipped_and_builtin_defaults_preserve_colors_slots_and_message_codes() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
         let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238], [208, 145, 40]];
-        for encoder in [shipped, encoder("defaults")] {
+        for mut encoder in [shipped, encoder("defaults")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap()).collect::<Vec<_>>(), expected.map(Channel::Rgb));
             assert!(encoder.colors[..6].iter().all(|entry| entry.channels.background.is_none()));
             assert_eq!(encoder.colors[6].channels.background, Some(Channel::Rgb([47, 47, 47])));
             for name in ["title", "subtitle"] {
                 assert_eq!(encoder.names.iter().find(|(key, _)| key == name).unwrap().1, Some(6));
+            }
+            encoder.enabled = true;
+            encoder.truecolor = true;
+            for (level, rgb) in [(Level::Error, "242;139;130"), (Level::Warn, "242;204;120"),
+                (Level::Info, "140;180;225"), (Level::Debug, "128;128;128"), (Level::Trace, "92;92;92")] {
+                let record = Record::builder().level(level).module_path(Some("plugin::module"))
+                    .args(format_args!("before \x1b[31mred\x1b[0m after")).build();
+                let mut bytes = Vec::new();
+                encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes), &record).unwrap();
+                let text = String::from_utf8(bytes).unwrap();
+                let color = text.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
+                let body = text.find(" [p::module               ]").unwrap();
+                let body_rgb = if level <= Level::Info { "238;238;238" } else { rgb };
+                assert!(text[color + 1..body].contains(&format!("\x1b[0;38;2;{body_rgb}m")));
+                assert!(text.contains("before \x1b[31mred\x1b[0m after"));
+                assert!(text.ends_with("\x1b[0m"));
             }
         }
     }
