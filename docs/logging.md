@@ -117,40 +117,48 @@ dependency output, so consumers may encounter non-JSON lines alongside JSON logs
 
 The `palette` encoder combines log4rs patterns with a named color table:
 
-```yaml
-encoder:
-  kind: palette
-  pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
-  palette:
-    error: "#f28b82"
-    warn: "#f2cc78"
-    info: "#8cb4e1"
-    debug: "#808080"
-    trace: "#5c5c5c"
-    error_body: "#eeeeee"
-    warn_body: "#eeeeee"
-    info_body: "#eeeeee"
-    debug_body: "#808080"
-    trace_body: "#5c5c5c"
-```
+- When a string is used for a palette entry, it sets the foreground color while
+  the background color remains the terminal default.
 
-Add named colors as foreground strings or foreground/background objects:
-
-```yaml
-palette:
+  ```yaml
   accent: "#f2cc78"
+  ```
+
+- Object entries specify `foreground`, `background`, or both. At least one must
+  be a color or `inherit`.
+
+  ```yaml
   highlighted: {foreground: "#f2cc78", background: "#202020"}
+  ```
+
+- When foreground or background is omitted from the object or set to `null`,
+  the terminal default is used.
+
+  ```yaml
   background_only: {background: "#202020"}
+  default_background: {foreground: "#f2cc78", background: null}
+  ```
+
+- `inherit` keeps that channel's current color.
+
+  ```yaml
   keep_background: {foreground: "#f2cc78", background: inherit}
   keep_foreground: {foreground: inherit, background: "#202020"}
-  normal: null
-```
+  ```
 
-Objects require at least one channel. `inherit` keeps that channel's current color.
-Omitted channels use terminal defaults, not the previous entry's colors.
-Strings set foreground and reset background;
-`null` resets both. RGB terminals use exact colors; legacy console backgrounds
-use the nearest of the eight colors supported by log4rs.
+- A null palette entry uses the terminal's default colors.
+
+  ```yaml
+  normal: null
+  ```
+
+- RGB terminals use exact colors. On legacy consoles, the background will use
+  the nearest log4rs background color.
+
+  ```yaml
+  panel: {background: "#2F2F2F"}
+  ```
+
 `{palette(name)}` switches colors
 until the next directive or end of the record; `{palette()}` restores normal text.
 Names are ASCII case-insensitive. `{l}` or `{level}` in a name selects a color by
@@ -202,6 +210,36 @@ encoder:
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
 for available fields and formatting options.
+
+### Comprehensive example
+
+This encoder uses the default severity pattern and adds named palette entries:
+
+```yaml
+encoder:
+  kind: palette
+  pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
+  palette:
+    error: "#f28b82"
+    warn: "#f2cc78"
+    info: "#8cb4e1"
+    debug: "#808080"
+    trace: "#5c5c5c"
+    error_body: "#eeeeee"
+    warn_body: "#eeeeee"
+    info_body: "#eeeeee"
+    debug_body: "#808080"
+    trace_body: "#5c5c5c"
+    title: {foreground: "#D09128", background: "#2F2F2F"}
+    subtitle: {foreground: "#D09128", background: "#2F2F2F"}
+    accent: "#f2cc78"
+    highlighted: {foreground: "#f2cc78", background: "#202020"}
+    background_only: {background: "#202020"}
+    default_background: {foreground: "#f2cc78", background: null}
+    keep_background: {foreground: "#f2cc78", background: inherit}
+    keep_foreground: {foreground: inherit, background: "#202020"}
+    normal: null
+```
 
 ## Set log levels
 
