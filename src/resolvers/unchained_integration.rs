@@ -186,14 +186,14 @@ CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UW
     sinfo![fn; "Triggered"];
     match globals().world() {
         Some(current_world) => {
-            if current_world != world.cast() {
+            if current_world != world {
                 swarn!(fn; "World changed from {:p} to {:p} without ever being unset", current_world, world);
-                globals().set_world(world.cast());
+                globals().set_world(world);
             }
         }
         None => {
             sdebug!(fn; "globals.world was None before update; setting world from post-load hook");
-            globals().set_world(world.cast());
+            globals().set_world(world);
         }
     }
 

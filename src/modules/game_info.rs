@@ -2,7 +2,6 @@
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
-use crate::game::engine::UWorld;
 use crate::resolvers::etc_hooks::o_GetTBLGameMode;
 use async_trait::async_trait;
 use clap::Parser;
@@ -24,14 +23,13 @@ impl Command<GameInfoArgs> for GameInfoCommand {
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
                 let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world.cast()));
-                let uworld_ptr = world as *mut UWorld;
 
                 let game = unsafe { game_ptr.as_mut() };
                 if let Some(g) = &game {
                     log_game_info(g);
                 }
 
-                match unsafe { (game, uworld_ptr.as_mut().and_then(|w| w.game_state.as_mut())) } {
+                match unsafe { (game, world.as_mut().and_then(|w| w.game_state.as_mut())) } {
                     (Some(_), Some(game_state)) => {
                         for player_raw in game_state.player_array.as_mut_slice() {
                             let player_state = match unsafe { (player_raw).as_mut() } {

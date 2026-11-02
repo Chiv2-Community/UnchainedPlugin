@@ -269,7 +269,7 @@ impl ModManager {
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
         let new_actor = CALL_ORIGINAL!(SpawnActor(
-            world.cast(),
+            world,
             mod_class,
             &mut loc,
             &mut rot,

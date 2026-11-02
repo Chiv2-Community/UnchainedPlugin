@@ -238,7 +238,7 @@ define_pattern_resolver!(UGameplay_IsDedicatedServer, [
 ]);
 CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NONE, bool, (param_1: u64),{
     if let Some(world) = globals().world() {
-        let mode = unsafe { o_InternalGetNetMode.call(world.cast()) };
+        let mode = unsafe { o_InternalGetNetMode.call(world) };
         if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
             #[cfg(feature="verbose_hooks")]
             sinfo!(fn; "Overriding dedicated server status");

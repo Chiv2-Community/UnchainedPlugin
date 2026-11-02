@@ -1,10 +1,7 @@
 use std::cell::Cell;
 
 use crate::{
-    game::{
-        chivalry2::ATBLGameMode,
-        engine::UWorld,
-    },
+    game::chivalry2::ATBLGameMode,
     tools::hook_globals::globals,
 };
 
@@ -113,7 +110,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
     // We strip the full asset path down to the map's leaf name so that the override directory can be
     // keyed by a readable map identifier like TDM_QuarryKP.
     if let Some(world) = globals().world() {
-        let map_name = crate::resolvers::unchained_integration::get_current_map_name(world.cast())?;
+        let map_name = crate::resolvers::unchained_integration::get_current_map_name(world)?;
         let last = map_name.rsplit('/').next().unwrap_or(&map_name);
         let cleaned = last.trim_matches(['/', '\\']);
         if !cleaned.is_empty() {
@@ -126,7 +123,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
 fn current_map_list_index() -> Option<i32> {
     // This index is the rotation slot currently active in the match.
     let world = globals().world()?;
-    let world_ref = unsafe { &*(world as *mut UWorld) };
+    let world_ref = unsafe { &*world };
     let game_mode = unsafe { (world_ref.authority_game_mode as *mut ATBLGameMode).as_ref() }?;
     let index = game_mode.map_list_index;
     (index >= 0).then_some(index)
