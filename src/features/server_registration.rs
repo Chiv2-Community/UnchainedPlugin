@@ -162,7 +162,11 @@ fn discover_global_ipv6() -> Option<String> {
     get_if_addrs().ok()?.into_iter().find_map(|interface| {
         let IfAddr::V6(address) = interface.addr else { return None; };
         let ip = address.ip;
-        if !ip.is_loopback() && !ip.is_unspecified() && !ip.is_unicast_link_local() {
+        if !ip.is_loopback()
+            && !ip.is_unspecified()
+            && !ip.is_unicast_link_local()
+            && !ip.is_unique_local()
+        {
             Some(ip.to_string())
         } else {
             None
