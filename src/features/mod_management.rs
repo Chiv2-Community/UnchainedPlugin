@@ -255,7 +255,7 @@ impl ModManager {
 
     /// Spawn/Destroy Stubs
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        // (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
+        // (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
         let world = match globals().world() {
             Some(world) => world,
             None => {
@@ -269,7 +269,7 @@ impl ModManager {
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
         let new_actor = CALL_ORIGINAL!(SpawnActor(
-            world,
+            world.cast(),
             mod_class,
             &mut loc,
             &mut rot,
@@ -287,7 +287,7 @@ impl ModManager {
                     let settings_file = "Spawned new Mod from console";
                     let mut settings_fstring = FString::from(settings_file);
                     let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
-                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.cast()));
                     TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
                 } else {
                     swarn!(fn; "globals.world missing; skipping spawn confirmation chat");

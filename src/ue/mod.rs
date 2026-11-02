@@ -9,6 +9,7 @@ mod name;
 mod object;
 pub mod object_array;
 mod string;
+pub mod stubs;
 pub mod sync;
 mod url;
 
@@ -20,6 +21,7 @@ pub use memory::*;
 pub use name::*;
 pub use object::*;
 pub use string::*;
+pub use stubs::*;
 pub use url::*;
 
 use std::ffi::c_void;

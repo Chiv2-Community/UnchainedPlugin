@@ -23,7 +23,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
 
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
-                let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world));
+                let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world.cast()));
                 let uworld_ptr = world as *mut UWorld;
 
                 let game = unsafe { game_ptr.as_mut() };

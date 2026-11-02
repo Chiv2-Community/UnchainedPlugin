@@ -21,14 +21,15 @@ pub struct GenericGCGObj {
 /// Generic hook macro for Get*Post methods (e.g. GetMotd, GetCurrentGames)
 /// OpenAPIMerged::OpenAPIClientApi::GetMotdPost
 //   (OpenAPIClientApi *this,TSharedPtr<> *__return_storage_ptr__,GetMotdPostRequest *param_1,TBaseDelegate<> *param_2)
+// Delegate specializations depend on the response type; keep that slot untyped.
 #[macro_export]
 macro_rules! CREATE_REQUEST_HOOK {
     ($name:ident) => {
-        $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut std::os::raw::c_void,
+        $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut $crate::ue::TSharedPtrIHttpRequest,
             (
-                this_ptr: *mut $crate::resolvers::getpost_requests::GenericGCGObj, 
-                a2: *mut std::os::raw::c_void, 
-                request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
+                this_ptr: *mut $crate::resolvers::getpost_requests::GenericGCGObj,
+                a2: *mut $crate::ue::TSharedPtrIHttpRequest,
+                request: *mut $crate::resolvers::getpost_requests::GenericRequest,
                 a4: *mut std::os::raw::c_void
             ), {
                 let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
@@ -59,11 +60,11 @@ macro_rules! CREATE_REQUEST_HOOK {
 #[macro_export]
 macro_rules! CREATE_REQUEST_HOOK_DUMMY {
     ($name:ident) => {
-        $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut std::os::raw::c_void,
+        $crate::CREATE_HOOK!($name, ACTIVE, NONE, *mut $crate::ue::TSharedPtrIHttpRequest,
             (
-                this_ptr: *mut $crate::resolvers::getpost_requests::GenericGCGObj, 
-                a2: *mut std::os::raw::c_void, 
-                request: *mut $crate::resolvers::getpost_requests::GenericRequest, 
+                this_ptr: *mut $crate::resolvers::getpost_requests::GenericGCGObj,
+                a2: *mut $crate::ue::TSharedPtrIHttpRequest,
+                request: *mut $crate::resolvers::getpost_requests::GenericRequest,
                 a4: *mut std::os::raw::c_void), {
                 if this_ptr.is_null() || request.is_null() {
                     $crate::serror!(fn; "Dummy request had null pointers");

@@ -15,9 +15,8 @@ use std::{collections::HashSet, sync::Mutex};
 use crate::{
     resolvers::ini::{o_ConfigCacheFind, o_ConfigCacheSetInt, o_ConfigFileGetInt, o_LoadConfig},
     tools::hook_globals::{cli_args, globals, globals_initialized},
-    ue::{EObjectFlags, FString, UObject},
+    ue::{EObjectFlags, FConfigCacheIni, FString, UObject},
 };
-use std::ffi::c_void;
 
 pub(crate) use layering::route_config;
 use layering::ConfigLayers;
@@ -123,9 +122,9 @@ fn game_config() -> Option<ConfigLocation> {
         .clone()
 }
 
-fn remember_game_config(cache_address: usize, filename: String) {
+fn remember_game_config(cache: *mut FConfigCacheIni, filename: String) {
     *GAME_CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = Some(ConfigLocation {
-        cache_address,
+        cache_address: cache as usize,
         filename,
     });
 }
@@ -152,7 +151,7 @@ fn capture_startup(map: &str) {
     };
     let filename = FString::from(config.filename.as_str());
     let baseline = CALL_ORIGINAL!(ConfigCacheFind(
-        config.cache_address as *mut c_void,
+        config.cache_address as *mut FConfigCacheIni,
         &filename,
         false
     ));
@@ -185,7 +184,7 @@ fn preserve_rotation_index(index: i32) {
     // Bypass Find layering for this one scalar so the next generation starts at the live slot.
     with_native_layer((), || {
         CALL_ORIGINAL!(ConfigCacheSetInt(
-            config.cache_address as *mut c_void,
+            config.cache_address as *mut FConfigCacheIni,
             key.section.as_ptr(),
             key.property.as_ptr(),
             index,

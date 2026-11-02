@@ -1,7 +1,15 @@
 use std::{cell::Cell, os::raw::c_void};
 
 use crate::{
-    game::engine::{FActorSpawnParameters, FRotator}, tools::hook_globals::{cli_args, globals}, ue::{FString, FVector, TArray, UClass},
+    game::{
+        chivalry2::AActor,
+        engine::{FActorSpawnParameters, FRotator, UWorld},
+    },
+    tools::hook_globals::{cli_args, globals},
+    ue::{
+        APlayerController, FGuid, FOnlineSessionPlayFab, FString, FVector,
+        GetCurrentGamesPostResponse, TArray, TFunctionFIcmpEchoResult, UClass, UObject,
+    },
 };
 
 // PingSomeServers splits the PlayFab endpoint at the first ':' before it
@@ -21,8 +29,8 @@ define_pattern_resolver!(OnGetCurrentGames_, [
 ]);
 
 CREATE_HOOK!(OnGetCurrentGames_, { || !cli_args().is_server() }, NONE, (), (
-    this_ptr: *mut c_void,
-    response: *mut c_void,
+    this_ptr: *mut FOnlineSessionPlayFab,
+    response: *mut GetCurrentGamesPostResponse,
     param_2: i32
 ), {
     let already_in_endpoint_path = IN_ON_GET_CURRENT_GAMES.with(|state| state.replace(true));
@@ -38,7 +46,7 @@ define_pattern_resolver!(PingSomeServers, [
 ]);
 
 CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
-    this_ptr: *mut c_void,
+    this_ptr: *mut FOnlineSessionPlayFab,
     max_servers: i32
 ), {
     let already_in_ping = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
@@ -124,7 +132,7 @@ fn bracket_ipv6_udp_endpoint(endpoint: &str) -> Option<String> {
 CREATE_HOOK!(UDPEcho, { || !cli_args().is_server() }, NONE, (), (
     endpoint: *mut FString,
     timeout_seconds: f32,
-    callback: *mut c_void
+    callback: *mut TFunctionFIcmpEchoResult
 ), {
     if !endpoint.is_null() {
         let endpoint_text = unsafe { (*endpoint).to_string() };
@@ -202,40 +210,40 @@ define_pattern_resolver!(GetGameInfo, {
 
 // FIXME: When is this called?
 CREATE_HOOK!(GetGameInfo, ACTIVE, POST,
-    *mut FString, (ret_ptr: *mut FString, uWorld: *mut c_void),
-    |ret_val: *mut FString| {
-        unsafe {
-            sinfo!(fn; "{}", (&*ret_val).to_string());
-        }
-        ret_val
-    });
+*mut FString, (ret_ptr: *mut FString, uWorld: *mut UWorld),
+|ret_val: *mut FString| {
+    unsafe {
+        sinfo!(fn; "{}", (&*ret_val).to_string());
+    }
+    ret_val
+});
 
 define_pattern_resolver!(ClientTravelInternal,["4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 6B 10 41 0F B6 E9 49 89 73 18 48"]);
 // void __thiscall
 // APlayerController::ClientTravelInternal
 // 		  (APlayerController *this,FString *param_1,ETravelType param_2,bool param_3,FGuid *param_4)
-CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut c_void),{
+CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut FGuid),{
 
-	#[derive(Debug, serde::Deserialize)]
-	#[allow(dead_code)]
-	struct ConnectionInfo {
-		Address: String,
-		PartyId: Option<String>,
-		PartySize: Option<u32>,
-		PlayFabId: Option<String>,
-		UnofficialTicket: Option<String>,
-	}
-	
-	//127.0.0.1:7777&PartyId=1231231&PartySize=1&PlayFabId=123123&UnofficialTicket=12323
-	fn parse_connection_info(raw: &str) -> Result<ConnectionInfo, Box<dyn std::error::Error>> {
+    #[derive(Debug, serde::Deserialize)]
+    #[allow(dead_code)]
+    struct ConnectionInfo {
+        Address: String,
+        PartyId: Option<String>,
+        PartySize: Option<u32>,
+        PlayFabId: Option<String>,
+        UnofficialTicket: Option<String>,
+    }
+
+    //127.0.0.1:7777&PartyId=1231231&PartySize=1&PlayFabId=123123&UnofficialTicket=12323
+    fn parse_connection_info(raw: &str) -> Result<ConnectionInfo, Box<dyn std::error::Error>> {
         sinfo!(fn; "raw: {}", raw);
-		let query_str = raw.replace('?', "&");
-		let query_with_address = format!("Address={}", query_str);
-		let info: ConnectionInfo = serde_urlencoded::from_str(&query_with_address)?;
-		Ok(info)
-	}
-	
-	let string_ref: &FString = unsafe{ &*arg1 };
+        let query_str = raw.replace('?', "&");
+        let query_with_address = format!("Address={}", query_str);
+        let info: ConnectionInfo = serde_urlencoded::from_str(&query_with_address)?;
+        Ok(info)
+    }
+
+    let string_ref: &FString = unsafe{ &*arg1 };
 
     let previous_world = globals().world();
     globals().set_world(std::ptr::null_mut());
@@ -249,9 +257,9 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
         ),
     }
 
-	match parse_connection_info(string_ref.to_string().as_str()) {
+    match parse_connection_info(string_ref.to_string().as_str()) {
         Ok(info) => {
-			sinfo!(fn; "info: {:#?}", info);
+            sinfo!(fn; "info: {:#?}", info);
         }
         Err(e) => serror!(fn; "Error: {}", e),
     }
@@ -260,7 +268,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut c_void, arg1: *mut 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
-CREATE_HOOK!(SpawnActor, INACTIVE, *mut c_void, (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
+CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
     sinfo![fn; "Triggered!"];
 });
 /*
@@ -274,7 +282,6 @@ define_pattern_resolver![GetTBLGameMode, {
         ]
 }];
 
-
-CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut c_void),{
+CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject),{
     sinfo![fn; "Triggered!"];
 });

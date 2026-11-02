@@ -4,7 +4,7 @@ use super::{with_state, GENERATION};
 use crate::{
     resolvers::ini::{o_ConfigFileAddLayer, o_ConfigFileCopy, o_ConfigFileDestroy},
     tools::hook_globals::globals_initialized,
-    ue::{FConfigFile, FString},
+    ue::{FConfigCacheIni, FConfigFile, FString},
 };
 
 use super::selection::{
@@ -122,14 +122,14 @@ impl OverlayCache {
 
     fn find(
         &self,
-        cache_address: usize,
+        cache: *mut FConfigCacheIni,
         filename: &[u16],
         baseline: *mut FConfigFile,
     ) -> Option<*mut FConfigFile> {
         self.files
             .iter()
             .find(|entry| {
-                entry.key.cache_address == cache_address
+                entry.key.cache_address == cache as usize
                     && entry.key.filename == filename
                     && entry.key.baseline_address == baseline as usize
             })
@@ -186,7 +186,7 @@ pub(super) fn reset_overlays() {
 }
 
 pub(crate) fn route_config(
-    cache_address: usize,
+    cache: *mut FConfigCacheIni,
     filename: &FString,
     baseline: *mut FConfigFile,
 ) -> *mut FConfigFile {
@@ -196,11 +196,7 @@ pub(crate) fn route_config(
     with_native_layer(baseline, || {
         // Find borrows its caller's const FString for the duration of the call.
         // Compare it in place; only first discovery needs an owned key or UTF-16 decode.
-        let cached = CACHE.with(|cache| {
-            cache
-                .borrow()
-                .find(cache_address, filename.as_slice(), baseline)
-        });
+        let cached = CACHE.with(|overlays| overlays.borrow().find(cache, filename.as_slice(), baseline));
         if let Some(file) = cached {
             return file;
         }
@@ -208,13 +204,13 @@ pub(crate) fn route_config(
             return baseline;
         };
         if config_filename(&name).is_some_and(|name| name.eq_ignore_ascii_case("Game.ini")) {
-            super::remember_game_config(cache_address, name.clone());
+            super::remember_game_config(cache, name.clone());
         }
         // Even known cache addresses have no lifetime lease across map boundaries.
         // Materialize once from Find's current baseline, including late native/mod configs.
         // Paths are already selected; only UE's one-time INI read/merge remains.
         let key = OverlayKey {
-            cache_address,
+            cache_address: cache as usize,
             filename: filename.as_slice().to_vec(),
             baseline_address: baseline as usize,
         };
@@ -234,6 +230,7 @@ mod tests {
     #[test]
     fn routing_requires_current_baseline_cache_and_filename() {
         let filename = "Custom.ini\0".encode_utf16().collect::<Vec<_>>();
+        let cache_pointer = std::ptr::without_provenance_mut::<FConfigCacheIni>(1);
         let baseline = std::ptr::without_provenance_mut(0x1000);
         let mut cache = OverlayCache {
             generation: 7,
@@ -246,20 +243,33 @@ mod tests {
                 file: None,
             }],
         };
-        assert_eq!(cache.find(1, &filename, baseline), Some(baseline));
-        assert_eq!(cache.find(2, &filename, baseline), None);
-        assert_eq!(cache.find(1, &[1, 0], baseline), None);
         assert_eq!(
-            cache.find(1, &filename, std::ptr::without_provenance_mut(0x2000)),
+            cache.find(cache_pointer, &filename, baseline),
+            Some(baseline)
+        );
+        assert_eq!(
+            cache.find(std::ptr::without_provenance_mut(2), &filename, baseline),
+            None
+        );
+        assert_eq!(cache.find(cache_pointer, &[1, 0], baseline), None);
+        assert_eq!(
+            cache.find(
+                cache_pointer,
+                &filename,
+                std::ptr::without_provenance_mut(0x2000)
+            ),
             None
         );
         // Continuing GameMode creation keeps this generation's borrowed pointers.
         assert!(cache.retire(7).is_empty());
-        assert_eq!(cache.find(1, &filename, baseline), Some(baseline));
+        assert_eq!(
+            cache.find(cache_pointer, &filename, baseline),
+            Some(baseline)
+        );
         // Destination selection and failed-load restoration both publish a new generation.
         let retired = cache.retire(8);
         assert_eq!(retired.len(), 1);
-        assert_eq!(cache.find(1, &filename, baseline), None);
+        assert_eq!(cache.find(cache_pointer, &filename, baseline), None);
         // Detached entries remain owned until after the cache borrow is released.
         assert_eq!(retired[0].key.baseline_address, baseline as usize);
     }
