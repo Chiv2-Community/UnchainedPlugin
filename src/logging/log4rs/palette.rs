@@ -120,13 +120,19 @@ pub(crate) struct PaletteEncoder {
 impl PaletteEncoderConfig {
     pub(crate) fn build(self) -> anyhow::Result<PaletteEncoder> {
         let palette = self.palette.unwrap_or_else(|| {
-            [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
+            let mut palette: BTreeMap<_, _> = [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
                 ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
                 ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
                 ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-                ("trace_body", Some([92, 92, 92])), ("title", Some([242, 204, 120])),
-                ("subtitle", Some([242, 139, 130]))]
-                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect()
+                ("trace_body", Some([92, 92, 92]))]
+                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
+            for name in ["title", "subtitle"] {
+                palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
+                    foreground: Some(Channel::Rgb([208, 145, 40])),
+                    background: Some(Channel::Rgb([47, 47, 47])),
+                })));
+            }
+            palette
         });
         let mut entries = BTreeMap::new();
         let mut colors = Vec::new();
@@ -1001,9 +1007,14 @@ mod tests {
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
-        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
+        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238], [208, 145, 40]];
         for encoder in [shipped, encoder("defaults")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap()).collect::<Vec<_>>(), expected.map(Channel::Rgb));
+            assert!(encoder.colors[..6].iter().all(|entry| entry.channels.background.is_none()));
+            assert_eq!(encoder.colors[6].channels.background, Some(Channel::Rgb([47, 47, 47])));
+            for name in ["title", "subtitle"] {
+                assert_eq!(encoder.names.iter().find(|(key, _)| key == name).unwrap().1, Some(6));
+            }
         }
     }
 }
