@@ -599,15 +599,18 @@ mod tests {
         let mut yaml = fixtures::config("palette-index");
         yaml["appenders"]["test"].as_mapping_mut().unwrap().remove("encoder");
         let (_, implicit) = super::super::config_with_warnings(yaml.clone(), "implicit-defaults").unwrap();
-        assert!(!implicit.contains("info"));
-        assert!(implicit.contains("__test_palette_present"));
+        assert!(implicit.is_empty(), "console appenders default to a pattern encoder");
+        yaml["appenders"]["test"]["encoder"] = serde_yaml::Value::Null;
+        let (_, null_encoder) = super::super::config_with_warnings(yaml.clone(), "null-encoder").unwrap();
+        assert!(null_encoder.is_empty());
         yaml["appenders"]["test"]["encoder"] = fixtures::encoder("defaults");
         yaml["appenders"]["test"]["encoder"]["kind"] = "palette".into();
         let (_, explicit) = super::super::config_with_warnings(yaml.clone(), "explicit-defaults").unwrap();
-        assert_eq!(implicit, explicit);
+        assert!(!explicit.contains("info"));
+        assert!(explicit.contains("__test_palette_present"));
         yaml["appenders"]["test"]["encoder"]["palette"] = serde_yaml::Value::Null;
         let (_, null) = super::super::config_with_warnings(yaml, "null-defaults").unwrap();
-        assert_eq!(implicit, null);
+        assert_eq!(explicit, null);
 
         let mut yaml = fixtures::config("palette-index");
         yaml["appenders"]["other"] = yaml["appenders"]["test"].clone();

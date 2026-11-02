@@ -105,8 +105,7 @@ fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
         .filter(|name| !name.is_empty()).collect();
     let encoders = yaml["appenders"].as_mapping().into_iter()
         .flat_map(|appenders| appenders.values())
-        .filter(|appender| appender["encoder"]["kind"].as_str() == Some("palette")
-            || (appender["encoder"].is_null() && appender["kind"].as_str() == Some("console")))
+        .filter(|appender| appender["encoder"]["kind"].as_str() == Some("palette"))
         .map(|appender| &appender["encoder"]);
     encoders.flat_map(|encoder| {
         let names = match encoder["palette"].as_mapping() {
