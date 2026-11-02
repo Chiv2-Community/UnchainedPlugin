@@ -2167,7 +2167,7 @@ dependencies = [
 [[package]]
 name = "retour"
 version = "0.3.1"
-source = "git+https://github.com/Chiv2-Community/retour-rs?branch=chiv-v0.3.1#35a9b3c28a756a44a10b4b9ebc1a10e47ff8fb81"
+source = "git+https://github.com/Chiv2-Community/retour-rs?rev=35a9b3c28a756a44a10b4b9ebc1a10e47ff8fb81#35a9b3c28a756a44a10b4b9ebc1a10e47ff8fb81"
 dependencies = [
  "cfg-if",
  "generic-array",
