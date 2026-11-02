@@ -6,20 +6,20 @@ use crate::game::chivalry2::{AController, APlayerState, ATBLCharacter, FDeathDam
 use crate::tools::hook_globals::globals;
 use crate::ue::{UObject, UStruct};
 
-fn object_class_name(ptr: *mut UObject) -> Option<String> {
+fn object_class_name(ptr: *mut c_void) -> Option<String> {
     if !is_live_object(ptr) { return None; }
     let obj = unsafe { (ptr as *const UObject).as_ref() }?;
     let class = unsafe { obj.uobject_base_utility.uobject_base.class_private.as_ref() }?;
     Some(class.ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private.to_string())
 }
 
-fn object_name(ptr: *mut UObject) -> Option<String> {
+fn object_name(ptr: *mut c_void) -> Option<String> {
     if !is_live_object(ptr) { return None; }
     let obj = unsafe { (ptr as *const UObject).as_ref() }?;
     Some(obj.uobject_base_utility.uobject_base.name_private.to_string())
 }
 
-fn object_display_name(ptr: *mut UObject) -> Option<String> {
+fn object_display_name(ptr: *mut c_void) -> Option<String> {
     object_name(ptr)
         .or_else(|| object_class_name(ptr))
         .map(|name| normalize_display_name(&name))
@@ -36,12 +36,11 @@ fn looks_like_pointer(p: *const c_void) -> bool {
 
 /// True when `p` is a live UObject according to GUObjectArray (FUObjectArray::is_live): catches
 /// unmapped garbage and dangling pointers to destroyed objects alike.
-fn is_live_object(p: *const UObject) -> bool {
-    looks_like_pointer(p.cast())
-        && unsafe { globals().guobject_array_unchecked() }.is_live(p.cast())
+fn is_live_object(p: *const c_void) -> bool {
+    looks_like_pointer(p) && unsafe { globals().guobject_array_unchecked() }.is_live(p.cast())
 }
 
-fn object_inherits_from(ptr: *mut UObject, needle: &str) -> bool {
+fn object_inherits_from(ptr: *mut c_void, needle: &str) -> bool {
     if !is_live_object(ptr) { return false; }
     let mut curr = unsafe { (ptr as *const UObject).as_ref() }
         .and_then(|o| unsafe { o.uobject_base_utility.uobject_base.class_private.as_ref() })
@@ -73,7 +72,7 @@ fn normalize_display_name(name: &str) -> String {
     without_instance.trim_end_matches("_C").to_string()
 }
 
-fn fallback_combat_actor(ptr: *mut UObject) -> Option<CombatActor> {
+fn fallback_combat_actor(ptr: *mut c_void) -> Option<CombatActor> {
     let cls = object_class_name(ptr)?;
     let obj = object_name(ptr).unwrap_or_else(|| cls.clone());
     let is_bot = cls.to_lowercase().contains("bot") || obj.to_lowercase().contains("bot");
@@ -95,7 +94,7 @@ fn combat_actor_from_player_state(player_state: *mut APlayerState, via: &str) ->
     })
 }
 
-fn combat_actor_from_actor(ptr: *mut UObject) -> Option<CombatActor> {
+fn combat_actor_from_actor(ptr: *mut c_void) -> Option<CombatActor> {
     if ptr.is_null() { return None; }
     if !is_live_object(ptr) {
         swarn!(fn; "ignoring combat actor {:p}: not a live object", ptr);
@@ -112,7 +111,7 @@ fn combat_actor_from_actor(ptr: *mut UObject) -> Option<CombatActor> {
 
         return combat_actor_from_player_state(pawn.player_state as *mut APlayerState, "Pawn.PlayerState")
             .or_else(|| {
-                if !is_live_object(pawn.controller.cast()) { return None; }
+                if !is_live_object(pawn.controller) { return None; }
                 let controller = unsafe { pawn.controller.cast::<AController>().as_ref() }?;
                 combat_actor_from_player_state(controller.player_state, "Pawn.Controller.PlayerState")
             })
@@ -144,7 +143,7 @@ fn resolve_killer_from_damage_event(damage_event: &FDamageTakenEvent) -> Option<
 
 fn resolve_killers_from_death_event(death_event: &FDeathDamageTakenEvent) -> Vec<CombatActor> {
     let mut resolved: Vec<_> = death_event.killers.as_slice().iter()
-        .filter_map(|&ptr| combat_actor_from_actor(ptr.cast()))
+        .filter_map(|&ptr| combat_actor_from_actor(ptr))
         .collect();
 
     if resolved.is_empty() {
@@ -162,15 +161,9 @@ fn resolve_victim(damage_event: &FDamageTakenEvent) -> Option<CombatActor> {
 fn damage_source_name(damage_event: &FDamageTakenEvent) -> String {
     // Prefer concrete weapon/projectile identity over abstract UDamageSource.
     let candidates = [
-        (
-            "inventory_item",
-            damage_event.inventory_item.cast::<UObject>(),
-        ),
-        ("projectile", damage_event.projectile.cast::<UObject>()),
-        (
-            "damage_source",
-            damage_event.damage_source.cast::<UObject>(),
-        ),
+        ("inventory_item", damage_event.inventory_item),
+        ("projectile", damage_event.projectile),
+        ("damage_source", damage_event.damage_source.cast::<c_void>()),
     ];
 
     for (kind, ptr) in candidates {

@@ -1,24 +1,26 @@
-use crate::ue::{FString, USaveGame};
+use std::os::raw::c_void;
+
+use crate::ue::{FString};
 
 define_pattern_resolver!(LoadGameFromSlot,["48 8B C4 55 57 48 8D A8 E8 FE FF FF 48 81 EC 08 02 00 00 48 89 58 08 33 FF 48 89 70"]);
 // USaveGame * __cdecl UGameplayStatics::LoadGameFromSlot(FString *param_1,int param_2)
-CREATE_HOOK!(LoadGameFromSlot, ACTIVE, *mut USaveGame, (arg0: *mut FString, arg1: i32),{
+CREATE_HOOK!(LoadGameFromSlot, ACTIVE, *mut c_void, (arg0: *mut FString, arg1: i32),{
     let url_w = unsafe { (*arg0).to_string() };
     sinfo![fn; "Triggered! {url_w}"];
 });
 define_pattern_resolver!(SaveGameToSlot,["48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 48 8B DA 33 F6 48 8D 54 24 30 48 89 74 24 30 48 89 74 24 38 41"]);
 // bool __cdecl UGameplayStatics::SaveGameToSlot(USaveGame *param_1,FString *param_2,int param_3)
-CREATE_HOOK!(SaveGameToSlot, ACTIVE, bool, (savegame: *mut USaveGame, file: *mut FString, index: i32),{
+CREATE_HOOK!(SaveGameToSlot, ACTIVE, bool, (savegame: *mut c_void, file: *mut FString, index: i32),{
     let url_w = unsafe { (*file).to_string() };
     sinfo![fn; "Triggered! {url_w}"];
 });
 
 
 // Allows loading loose assets instead of pak files
-#[cfg(feature = "loose_assets")]
+#[cfg(feature="loose_assets")]
 mod loose_assets {
-
-    use crate::ue::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray};
+    
+    use std::os::raw::c_void;
     use widestring::U16CStr;
     use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
     use windows::core::PCWSTR;
@@ -26,23 +28,22 @@ mod loose_assets {
     define_pattern_resolver!(FindFileInPakFiles_1, [
         "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 30 33 FF"
     ]);
-    // FPakPlatformFile::FindFileInPakFiles(const TCHAR*, FPakFile**, FPakEntry*).
     CREATE_HOOK!(FindFileInPakFiles_1, ACTIVE, NONE,
     u64, (
-        this_ptr: *mut FPakPlatformFile,
-        Filename: *const u16,
-        OutPakFile: *mut *mut FPakFile,
-        OutEntry: *mut FPakEntry), {
+        this_ptr: *mut c_void, 
+        Filename: *const u16, 
+        OutPakFile: *mut *mut c_void, 
+        OutEntry: *mut c_void), {
         let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };
         let u16_str = u16_wstr.to_string_lossy();
         let attr = unsafe { GetFileAttributesW(Filename) };
         if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
             // swarn!(fn; "Blocked path traversal attempt: {}", u16_str);
-
+            
             if !OutPakFile.is_null() {
                 unsafe { *OutPakFile = std::ptr::null_mut() };
             }
-            return 0;
+            return 0; 
         }
         CALL_ORIGINAL!(FindFileInPakFiles_1(this_ptr, Filename, OutPakFile, OutEntry))
     });
@@ -50,23 +51,22 @@ mod loose_assets {
     define_pattern_resolver!(FindFileInPakFiles_2, [
         "48 8B C4 4C 89 48 ?? 4C 89 40 ?? 48 89 48 ?? 55 53 48 8B EC"
     ]);
-    // Static FPakPlatformFile::FindFileInPakFiles(TArray<FPakListEntry>&, ...).
     CREATE_HOOK!(FindFileInPakFiles_2, ACTIVE, NONE,
     u64, (
-        this_ptr: *mut TArray<FPakListEntry>,
-        Filename: *const u16,
-        OutPakFile: *mut *mut FPakFile,
-        OutEntry: *mut FPakEntry), {
+        this_ptr: *mut c_void, 
+        Filename: *const u16, 
+        OutPakFile: *mut *mut c_void, 
+        OutEntry: *mut c_void), {
         let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };
         let u16_str = u16_wstr.to_string_lossy();
         let attr = unsafe { GetFileAttributesW(Filename) };
         if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
             // swarn!(fn; "Blocked path traversal attempt: {}", u16_str);
-
+            
             if !OutPakFile.is_null() {
                 unsafe { *OutPakFile = std::ptr::null_mut() };
             }
-            return 0;
+            return 0; 
         }
         CALL_ORIGINAL!(FindFileInPakFiles_2(this_ptr, Filename, OutPakFile, OutEntry))
     });
@@ -75,7 +75,7 @@ mod loose_assets {
         "48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 30 48 8B F1 45 33 C0"
     ]);
     CREATE_HOOK!(IsNonPakFilenameAllowed, ACTIVE, NONE,
-    u64, (this_ptr: *mut FPakPlatformFile, InFilename: *mut FString), {
+    u64, (this_ptr: *mut c_void, InFilename: *mut c_void), {
         1
     });
 }

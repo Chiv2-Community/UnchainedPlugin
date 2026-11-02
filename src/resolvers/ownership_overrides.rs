@@ -21,8 +21,9 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
     OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
 });
 
+
 CREATE_HOOK!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, ACTIVE, POST,
-    *mut FOwnershipResponse, (result: *mut FOwnershipResponse, PlayerController: *mut ATBLPlayerController, PlayerState: *mut ATBLPlayerState, AssetIdToCheck: *mut FPrimaryAssetId, BaseOnly: bool),
+    *mut FOwnershipResponse, (result: *mut FOwnershipResponse, PlayerController: *mut c_void, PlayerState: *mut c_void, AssetIdToCheck: *mut c_void, BaseOnly: bool),
     | response: *mut FOwnershipResponse | {
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
@@ -42,8 +43,9 @@ define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
         ], // STEAM
 });
 
+
 CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
-    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, InLoadOutSelection: *mut TSubclassOfULoadoutSelection, InItem: *mut TSubclassOfAInventoryItem),
+    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, InLoadOutSelection: *mut c_void, InItem: *mut c_void), 
     | response: *mut FOwnershipResponse | {
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
@@ -63,7 +65,7 @@ define_pattern_resolver!(
 );
 
 CREATE_HOOK!(ATBLPlayerController__CanUseCharacter, ACTIVE, POST,
-    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, CharacterSubclass: *mut TSubclassOfATBLCharacter),
+    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, CharacterSubclass: *mut c_void), 
     | response: *mut FOwnershipResponse | {
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
@@ -84,14 +86,7 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
 
 use std::os::raw::c_void;
 
-use crate::{
-    game::chivalry2::{ATBLPlayerController, ATBLPlayerState},
-    ue::{
-        FPrimaryAssetId, TSubclassOfAInventoryItem, TSubclassOfATBLCharacter,
-        TSubclassOfULoadoutSelection,
-    },
-};
-// The extra legacy player_state argument is not established by the native signature.
+use crate::game::chivalry2::ATBLPlayerController;
 CREATE_HOOK!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, ACTIVE, PRE,
     c_void, (this: *mut ATBLPlayerController, player_state: *mut c_void), {
         if let Some(pc) = unsafe { this.as_mut() } {

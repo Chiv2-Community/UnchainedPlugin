@@ -1,18 +1,7 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Once,
-};
+use std::{os::raw::c_void, sync::{Once, atomic::{AtomicBool, Ordering}}};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
-use crate::{
-    commands::NATIVE_COMMAND_QUEUE,
-    events::models::{GameEvent, MapChange},
-    features::events::EVENT_SYSTEM,
-    game::engine::{ENetMode, UWorld},
-    tools::hook_globals::{cli_args, globals},
-    ue::{AGameMode, FName, FString, UGameEngine, UTBLGameInstance},
-    ENGINE_READY,
-};
+use crate::{ENGINE_READY, commands::NATIVE_COMMAND_QUEUE, events::models::{MapChange, GameEvent}, features::events::EVENT_SYSTEM, game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{FName, FString}};
 
 
 // Sets Server password and rcon flag
@@ -20,8 +9,7 @@ define_pattern_resolver!(
     LoadFrontEndMap,
     ["48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"]
 );
-// UTBLGameInstance::LoadFrontEndMap.
-CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut UTBLGameInstance, param_1: *mut FString), {
+CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut c_void, param_1: *mut FString), {
     let args = &cli_args();
     static INITIALIZED: AtomicBool = AtomicBool::new(false);
     let pwd_opt = args.server_password.as_ref()
@@ -54,7 +42,7 @@ define_pattern_resolver!(InternalGetNetMode, {
         "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
         ], // STEAM
 });
-CREATE_HOOK!(InternalGetNetMode, CALLED, ENetMode, (world: *mut UWorld), {});
+CREATE_HOOK!(InternalGetNetMode, CALLED, ENetMode, (world: *mut c_void), {});
 
 // Disable message on startup
 define_pattern_resolver!(EACAntiCheatMesssage, Simple,  [
@@ -85,7 +73,7 @@ thread_local! {
     static IN_TICK: std::cell::Cell<bool> = std::cell::Cell::new(false);
 }
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
-CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:f32, state:u8), {
+CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut c_void, delta:f32, state:u8), {
 
     // FIXME: Just a bunch of bullshit
 
@@ -153,8 +141,8 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
 
 // class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
 define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]);
-CREATE_HOOK!(UWorld__GetMapName, INACTIVE, bool, (this_ptr: *mut UWorld, return_value: *mut FString), {});
-pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
+CREATE_HOOK!(UWorld__GetMapName, INACTIVE, bool, (this_ptr: *mut c_void, return_value: *mut FString), {});
+pub fn get_current_map_name(uworld: *mut c_void) -> Option<String> {
     let mut map_name = FString::default();
     CALL_ORIGINAL!(UWorld__GetMapName(uworld, &mut map_name));
     map_name.copy_to_string().ok()
@@ -164,7 +152,7 @@ pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
 
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
-CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut FString),{
+CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut c_void, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     sinfo![fn; "{}", url_w];
 
@@ -182,18 +170,18 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut F
 // old: "40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
-CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UWorld),{
+CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut c_void, world: *mut c_void),{
     sinfo![fn; "Triggered"];
     match globals().world() {
         Some(current_world) => {
-            if current_world != world.cast() {
+            if current_world != world {
                 swarn!(fn; "World changed from {:p} to {:p} without ever being unset", current_world, world);
-                globals().set_world(world.cast());
+                globals().set_world(world);
             }
         }
         None => {
             sdebug!(fn; "globals.world was None before update; setting world from post-load hook");
-            globals().set_world(world.cast());
+            globals().set_world(world);
         }
     }
 
@@ -215,7 +203,7 @@ define_pattern_resolver!(SetMatchState,[
     "48 89 5C 24 ?? 56 48 83 EC 20 48 8B DA 48 8B F1 48 39 91 ?? ?? ?? ??"
     ]);
 // void AGameMode::SetMatchState(FName NewState)
-CREATE_HOOK!(SetMatchState,(this_ptr: *mut AGameMode, new_state: FName),{
+CREATE_HOOK!(SetMatchState,(this_ptr: *mut u8, new_state: FName),{
     sinfo!["Match state: {}", new_state];
 });
 
