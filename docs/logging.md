@@ -141,11 +141,14 @@ palette:
   accent: "#f2cc78"
   highlighted: {foreground: "#f2cc78", background: "#202020"}
   background_only: {background: "#202020"}
+  keep_background: {foreground: "#f2cc78", background: inherit}
+  keep_foreground: {foreground: inherit, background: "#202020"}
   normal: null
 ```
 
-Objects require at least one color. Omitted channels use terminal defaults, not
-the previous entry's colors. Strings set foreground and reset background;
+Objects require at least one channel. `inherit` keeps that channel's current color.
+Omitted channels use terminal defaults, not the previous entry's colors.
+Strings set foreground and reset background;
 `null` resets both. RGB terminals use exact colors; legacy console backgrounds
 use the nearest of the eight colors supported by log4rs.
 `{palette(name)}` switches colors

@@ -1,4 +1,5 @@
 use std::{collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
+use std::io::Write as _;
 use log::{Level, Record};
 use log4rs::config::{Deserialize, Deserializers};
 use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
@@ -32,33 +33,43 @@ impl PaletteWarnings {
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Rgb([u8; 3]);
+enum Channel {
+    Rgb([u8; 3]),
+    Inherit,
+}
 
-impl<'de> serde::Deserialize<'de> for Rgb {
+impl<'de> serde::Deserialize<'de> for Channel {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = String::deserialize(deserializer)?;
+        if value == "inherit" { return Ok(Self::Inherit); }
         let hex = value.strip_prefix('#').filter(|hex| hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
-            .ok_or_else(|| serde::de::Error::custom("expected a quoted #RRGGBB color or null"))?;
+            .ok_or_else(|| serde::de::Error::custom("expected a quoted #RRGGBB color or inherit"))?;
         let mut rgb = [0; 3];
         for (i, channel) in rgb.iter_mut().enumerate() {
             *channel = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16)
                 .map_err(serde::de::Error::custom)?;
         }
-        Ok(Self(rgb))
+        Ok(Self::Rgb(rgb))
     }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Channels {
-    foreground: Option<Rgb>,
-    background: Option<Rgb>,
+    foreground: Option<Channel>,
+    background: Option<Channel>,
+}
+
+impl Channels {
+    fn inherits(self) -> bool {
+        self.foreground == Some(Channel::Inherit) || self.background == Some(Channel::Inherit)
+    }
 }
 
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum PaletteColor {
-    Foreground(Rgb),
+    Foreground(Channel),
     Channels(Channels),
 }
 
@@ -68,7 +79,7 @@ impl PaletteColor {
             Self::Foreground(rgb) => Ok(Channels { foreground: Some(rgb), background: None }),
             Self::Channels(channels) => {
                 anyhow::ensure!(channels.foreground.is_some() || channels.background.is_some(),
-                    "Palette objects require a foreground or background color");
+                    "Palette objects require a foreground or background channel");
                 Ok(channels)
             }
         }
@@ -115,7 +126,7 @@ impl PaletteEncoderConfig {
                 ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
                 ("trace_body", Some([92, 92, 92])), ("title", Some([242, 204, 120])),
                 ("subtitle", Some([242, 139, 130]))]
-                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Rgb(rgb))))).collect()
+                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect()
         });
         let mut entries = BTreeMap::new();
         let mut colors = Vec::new();
@@ -137,14 +148,18 @@ impl PaletteEncoderConfig {
         let (chunks, plain) = parse(self.pattern.as_deref().unwrap_or(DEFAULT_PATTERN), &entries)?;
         // Inline messages can reference any configured entry, not just pattern colors.
         let colors = colors.into_iter().map(|rgb| {
-            let mut ansi = String::from("\x1b[0");
+            let mut ansi = String::from("\x1b[");
+            if !rgb.inherits() { ansi.push_str("0;"); }
             for (channel, color) in [(38, rgb.foreground), (48, rgb.background)] {
-                if let Some(Rgb([r, g, b])) = color {
-                    use std::fmt::Write;
-                    write!(ansi, ";{channel};2;{r};{g};{b}").unwrap();
+                use std::fmt::Write;
+                match color {
+                    Some(Channel::Rgb([r, g, b])) => write!(ansi, "{channel};2;{r};{g};{b};").unwrap(),
+                    None if rgb.inherits() => write!(ansi, "{};", channel + 1).unwrap(),
+                    _ => {},
                 }
             }
-            ansi.push('m');
+            if ansi.ends_with(';') { ansi.pop(); ansi.push('m'); }
+            else { ansi.clear(); }
             Entry { channels: rgb, ansi, style: Style::new() }
         }).collect();
         Ok(PaletteEncoder {
@@ -286,8 +301,10 @@ impl PaletteEncoder {
         if self.colors.is_empty() && !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_))) { return; }
         let mut colors = Vec::new();
         for entry in &self.colors {
-            for Rgb(rgb) in [entry.channels.foreground, entry.channels.background].into_iter().flatten() {
-                if !colors.contains(&rgb) { colors.push(rgb); }
+            for channel in [entry.channels.foreground, entry.channels.background] {
+                if let Some(Channel::Rgb(rgb)) = channel {
+                    if !colors.contains(&rgb) { colors.push(rgb); }
+                }
             }
         }
         let Some((truecolor, slots)) = crate::logging::console::configure_palette(target, &colors) else { return };
@@ -299,11 +316,11 @@ impl PaletteEncoder {
                 4 => Color::Red, 5 => Color::Magenta, 6 => Color::Yellow, _ => Color::White,
         };
         for entry in &mut self.colors {
-            if let Some(Rgb(rgb)) = entry.channels.foreground {
+            if let Some(Channel::Rgb(rgb)) = entry.channels.foreground {
                 let slot = slots[colors.iter().position(|color| *color == rgb).unwrap()];
                 entry.style.text(color(slot)).intense(slot & 8 != 0);
             }
-            if let Some(Rgb(rgb)) = entry.channels.background {
+            if let Some(Channel::Rgb(rgb)) = entry.channels.background {
                 let slot = backgrounds[colors.iter().position(|color| *color == rgb).unwrap()];
                 entry.style.background(color(slot));
             }
@@ -324,9 +341,24 @@ impl Encode for PaletteEncoder {
 }
 
 impl PaletteEncoder {
-    fn set_color(&self, writer: &mut dyn Write, index: Option<usize>) -> std::io::Result<()> {
+    fn set_color(&self, writer: &mut PaletteWriter<'_>, index: Option<usize>) -> std::io::Result<()> {
         if let Some(index) = index {
             let entry = &self.colors[index];
+            if entry.channels.foreground == Some(Channel::Inherit) && entry.channels.background == Some(Channel::Inherit) {
+                return Ok(());
+            }
+            if entry.channels.inherits() {
+                if self.truecolor { return writer.write_all(entry.ansi.as_bytes()); }
+                let mut style = entry.style.clone();
+                if entry.channels.foreground == Some(Channel::Inherit) {
+                    style.text = writer.style.text;
+                    style.intense = writer.style.intense;
+                }
+                if entry.channels.background == Some(Channel::Inherit) {
+                    style.background = writer.style.background;
+                }
+                return writer.set_style(&style);
+            }
             writer.set_style(&entry.style)?;
             if self.truecolor { writer.write_all(entry.ansi.as_bytes())?; }
         } else {
@@ -336,6 +368,7 @@ impl PaletteEncoder {
     }
 
     fn encode_chunks(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
+        let mut writer = PaletteWriter { inner: writer, style: Style::new() };
         let colors = record.key_values().get(COLORS_KEY.into());
         let inline = colors.and_then(|value| value.to_borrowed_str())
             .and_then(|json| serde_json::from_str::<Vec<ColorChange<'_>>>(json).ok())
@@ -351,7 +384,7 @@ impl PaletteEncoder {
         let level = record.level() as usize - 1;
         for chunk in &self.chunks {
             match chunk {
-                Chunk::Text(pattern) => pattern.encode(writer, record)?,
+                Chunk::Text(pattern) => pattern.encode(&mut writer, record)?,
                 Chunk::Message => {
                     if let Some((message, changes)) = &inline {
                         let mut start = 0;
@@ -361,7 +394,7 @@ impl PaletteEncoder {
                                 self.names.binary_search_by(|(key, _)|
                                     key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
                                     .ok().and_then(|position| self.names[position].1));
-                            self.set_color(writer, index)?;
+                            self.set_color(&mut writer, index)?;
                             start = change.offset;
                         }
                         writer.write_all(message[start..].as_bytes())?;
@@ -369,9 +402,30 @@ impl PaletteEncoder {
                         write!(writer, "{}", record.args())?;
                     }
                 }
-                Chunk::Color(indexes) => self.set_color(writer, indexes[level])?,
+                Chunk::Color(indexes) => self.set_color(&mut writer, indexes[level])?,
             }
         }
+        Ok(())
+    }
+}
+
+// Track native styles, including changes made by nested pattern formatters.
+struct PaletteWriter<'a> {
+    inner: &'a mut dyn Write,
+    style: Style,
+}
+
+impl std::io::Write for PaletteWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> { self.inner.write(bytes) }
+    fn flush(&mut self) -> std::io::Result<()> { self.inner.flush() }
+    fn write_all(&mut self, bytes: &[u8]) -> std::io::Result<()> { self.inner.write_all(bytes) }
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> std::io::Result<()> { self.inner.write_fmt(args) }
+}
+
+impl Write for PaletteWriter<'_> {
+    fn set_style(&mut self, style: &Style) -> std::io::Result<()> {
+        self.inner.set_style(style)?;
+        self.style = style.clone();
         Ok(())
     }
 }
@@ -437,6 +491,66 @@ mod tests {
             .args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
         assert_eq!(plain.bytes, b"ABCDE");
         assert!(plain.styles.is_empty());
+    }
+
+    #[test]
+    fn inherited_rgb_channels_do_not_reset_the_previous_color() {
+        use crate::logging::inline::{Message, Segment::{Palette, Text}};
+        let mut encoder = encoder("inherit");
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        let message = Message::new(&[
+            Palette("both"), Text(format_args!("A")),
+            Palette("keep"), Text(format_args!("B")),
+            Palette("foreground"), Text(format_args!("C")),
+            Palette("background"), Text(format_args!("D")),
+            Palette("default-foreground"), Text(format_args!("E")),
+            Palette("default-background"), Text(format_args!("F")),
+            Palette("simple"), Text(format_args!("G")),
+            Palette("normal"), Text(format_args!("H")),
+        ]);
+        let values = [(COLORS_KEY, message.colors.as_str())];
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder()
+            .args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
+        assert_eq!(output.bytes, b"\x1b[0;38;2;18;52;86;48;2;171;205;239mAB\x1b[38;2;254;220;186mC\x1b[48;2;101;67;33mD\x1b[39mE\x1b[49mF\x1b[49mGH");
+        assert_eq!(output.styles.len(), 3, "inheriting RGB switches must not reset native style");
+        assert_eq!(output.styles[1].0, output.bytes.len() - 1, "null resets before H");
+    }
+
+    #[test]
+    fn inherited_native_channels_follow_palette_and_pattern_styles() {
+        let mut encoder = encoder("inherit");
+        encoder.enabled = true;
+        for (name, index) in &encoder.names {
+            let Some(index) = index else { continue };
+            let style = &mut encoder.colors[*index].style;
+            match name.as_str() {
+                "both" => { style.text(Color::Blue).background(Color::Green).intense(true); },
+                "foreground" => { style.text(Color::Red).intense(false); },
+                "background" => { style.background(Color::Yellow); },
+                _ => {},
+            }
+        }
+        encoder.chunks = parse("{palette(both)}A{palette(keep)}B{palette(foreground)}C{palette(background)}D{palette(default-foreground)}E{palette(default-background)}F", &encoder.names.iter().cloned().collect()).unwrap().0;
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().build()).unwrap();
+        assert_eq!(output.bytes, b"ABCDEF");
+        let styles: Vec<_> = output.styles.iter().map(|(_, style)| (style.text, style.background, style.intense)).collect();
+        assert_eq!(styles, [
+            (Some(Color::Blue), Some(Color::Green), Some(true)),
+            (Some(Color::Red), Some(Color::Green), Some(false)),
+            (Some(Color::Red), Some(Color::Yellow), Some(false)),
+            (None, Some(Color::Yellow), None),
+            (None, None, None), (None, None, None),
+        ]);
+        encoder.chunks = parse("{palette(both)}{h(x)}{palette(background)}{m}", &encoder.names.iter().cloned().collect()).unwrap().0;
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().args(format_args!("Y")).build()).unwrap();
+        assert_eq!(output.bytes, b"xY");
+        let style = &output.styles[output.styles.len() - 2].1;
+        assert_eq!(style.text, None, "inherit observes h's reset, not the earlier palette");
+        assert_eq!(style.background, Some(Color::Yellow));
     }
 
     // Never invoked: registration must not depend on a log call being enabled or executed.
@@ -592,7 +706,7 @@ mod tests {
     #[test]
     fn pattern_unused_colors_remain_available_to_inline_messages() {
         let mut table = BTreeMap::new();
-        for i in 0..64 { table.insert(format!("color{i}"), Some(PaletteColor::Foreground(Rgb([i, i, i])))); }
+        for i in 0..64 { table.insert(format!("color{i}"), Some(PaletteColor::Foreground(Channel::Rgb([i, i, i])))); }
         let encoder = PaletteEncoderConfig {
             pattern: Some("{palette(color63)}hello{palette()}".to_owned()), palette: Some(table),
         }.build().unwrap();
@@ -889,7 +1003,7 @@ mod tests {
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
         let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
         for encoder in [shipped, encoder("defaults")] {
-            assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap().0).collect::<Vec<_>>(), expected);
+            assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap()).collect::<Vec<_>>(), expected.map(Channel::Rgb));
         }
     }
 }

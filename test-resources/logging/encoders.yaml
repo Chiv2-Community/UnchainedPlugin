@@ -7,6 +7,17 @@ channels:
     both: {foreground: '#123456', background: '#abcdef'}
     object-foreground: {foreground: '#123456'}
     normal: null
+inherit:
+  pattern: '{m}'
+  palette:
+    both: {foreground: '#123456', background: '#abcdef'}
+    foreground: {foreground: '#fedcba', background: inherit}
+    background: {foreground: inherit, background: '#654321'}
+    keep: {foreground: inherit, background: inherit}
+    default-foreground: {background: inherit}
+    default-background: {foreground: inherit}
+    simple: inherit
+    normal: null
 plain:
   pattern: '{m}'
 empty:
@@ -64,6 +75,10 @@ native-fill:
   kind: palette
   pattern: '{m:{>20}{palette(error)}tail'
 invalid:
+  - pattern: '{m}'
+    palette: {bad: {foreground: inheritance}}
+  - pattern: '{m}'
+    palette: {bad: {background: true}}
   - pattern: '{m}'
     palette: {empty: {}}
   - pattern: '{m}'
