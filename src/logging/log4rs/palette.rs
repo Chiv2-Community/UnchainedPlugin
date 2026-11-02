@@ -86,8 +86,8 @@ impl PaletteEncoderConfig {
                 ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
                 ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
                 ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-                ("trace_body", Some([92, 92, 92])), ("title", Some([255, 255, 0])),
-                ("subtitle", Some([255, 0, 0]))]
+                ("trace_body", Some([92, 92, 92])), ("title", Some([242, 204, 120])),
+                ("subtitle", Some([242, 139, 130]))]
                 .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(Rgb))).collect()
         });
         let mut entries = BTreeMap::new();
@@ -801,8 +801,7 @@ mod tests {
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
-        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238],
-            [255, 0, 0], [255, 255, 0]];
+        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238]];
         for encoder in [shipped, encoder("defaults")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.rgb).collect::<Vec<_>>(), expected);
         }
