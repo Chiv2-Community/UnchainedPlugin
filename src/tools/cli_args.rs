@@ -81,8 +81,20 @@ pub struct CLIArgs {
     )]
     pub server_browser_backend: Option<String>,
 
-    #[arg(long="local-ip", default_value = "127.0.0.1")]
+    // Keep localhost as the default so local test servers remain visible in
+    // normal IPv4 launches; IPv6 auto mode does not publish this default
+    // unless --local-ip was explicitly supplied.
+    #[arg(long = "local-ip", default_value = "127.0.0.1")]
     pub local_ip: String,
+
+    #[arg(skip)]
+    pub local_ip_explicit: bool,
+
+    /// Bind server-browser HTTP registration traffic to the IPv6 address in
+    /// `--local-ip`. This is opt-in so existing IPv4 deployments keep their
+    /// normal source-address selection.
+    #[arg(long = "use-ipv6")]
+    pub use_ipv6: bool,
     // //
     #[arg(long = "server-password")]
     pub server_password: Option<String>,
@@ -183,7 +195,7 @@ impl std::fmt::Debug for CLIArgs {
             game_server_ping_port, game_server_query_port, game_port,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
             discord_event_log_channel_id, discord_admin_role_id, discord_bot_token,
-            discord_mention_admins, censor_mode, motd, extra_args,
+            discord_mention_admins, censor_mode, motd, extra_args, local_ip_explicit, use_ipv6,
         } = self;
         let mut debug = f.debug_struct("CLIArgs");
         debug
@@ -205,6 +217,8 @@ impl std::fmt::Debug for CLIArgs {
             // URLs may contain credentials in userinfo, query strings or paths.
             .field("server_browser_backend", &server_browser_backend.as_ref().map(|_| "[REDACTED]"))
             .field("local_ip", local_ip)
+            .field("local_ip_explicit", local_ip_explicit)
+            .field("use_ipv6", use_ipv6)
             .field("server_password", &server_password.as_ref().map(|_| "[REDACTED]"))
             .field("platform", platform)
             .field("saved_dir_suffix", saved_dir_suffix)
@@ -328,7 +342,11 @@ fn normalize_and_filter_args<I: IntoIterator<Item = String>>(args: I) -> Vec<Str
 pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
     let args = std::env::args();
     let parsed = normalize_and_filter_args(args);
+    let local_ip_explicit = parsed.iter().any(|arg| {
+        arg == "--local-ip" || arg.starts_with("--local-ip=")
+    });
     let mut cli = CLIArgs::try_parse_from(parsed)?;
+    cli.local_ip_explicit = local_ip_explicit;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
     Ok(cli)
 }
@@ -521,6 +539,8 @@ mod tests {
                 register: false,
                 server_browser_backend: None,
                 local_ip: "127.0.0.1".to_string(),
+                local_ip_explicit: false,
+                use_ipv6: false,
                 server_password: None,
                 platform: None,
                 saved_dir_suffix: None,
