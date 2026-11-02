@@ -47,7 +47,7 @@ const BASIC_COLORS: [u32; 16] = [
     0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
 ];
 
-fn nearest_slots(colors: [u32; 16], palette: &[[u8; 3]]) -> Vec<u8> {
+fn nearest_slots<const N: usize>(colors: [u32; N], palette: &[[u8; 3]]) -> Vec<u8> {
     palette.iter().map(|rgb| {
         colors.iter().enumerate().min_by_key(|(_, color)| {
             rgb.iter().enumerate().map(|(i, channel)| {
@@ -56,6 +56,17 @@ fn nearest_slots(colors: [u32; 16], palette: &[[u8; 3]]) -> Vec<u8> {
             }).sum::<i32>()
         }).unwrap().0 as u8
     }).collect()
+}
+
+// log4rs exposes eight native background colors; RGB terminals use exact ANSI colors.
+pub(crate) fn background_slots(target: Target, colors: &[[u8; 3]]) -> Vec<u8> {
+    #[cfg(windows)]
+    { windows_backend::background_slots(target, colors) }
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        nearest_slots::<8>(BASIC_COLORS[..8].try_into().unwrap(), colors)
+    }
 }
 
 #[cfg(any(windows, test))]
@@ -82,7 +93,6 @@ pub(crate) fn configure_palette(target: Target, colors: &[[u8; 3]]) -> Option<(b
         Target::Stderr => ConsoleWriter::stderr(),
     };
     writer?;
-    if colors.is_empty() { return Some((false, Vec::new())); }
     #[cfg(windows)]
     { Some(windows_backend::configure(target, colors)) }
     #[cfg(not(windows))]

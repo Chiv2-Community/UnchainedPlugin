@@ -22,5 +22,5 @@ const SUBTITLE: &str = "███    █▄  ███▄▄▄▄    ▄██�
 ";
 
 pub(crate) fn print_banner() {
-    sinfo!("{TITLE}{SUBTITLE}");
+    sinfo!(("\r\n"), palette("title"), "{TITLE}", palette("subtitle"), "{SUBTITLE}");
 }

@@ -68,6 +68,20 @@ pub(crate) fn spawn_console() {
     }
 }
 
+pub(super) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
+    unsafe {
+        let output = match target {
+            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
+            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
+        };
+        let info = GetStdHandle(output).ok().and_then(|handle| screen_info(handle));
+        let bank = info.as_ref().map_or(0, |info| usize::from(info.wAttributes.0 & 0x80 != 0) * 8);
+        let colors = info.map_or(BASIC_COLORS, |info| info.ColorTable.map(|color| color.0));
+        // log4rs preserves the terminal's background-intensity bit.
+        nearest_slots::<8>(colors[bank..bank + 8].try_into().unwrap(), palette)
+    }
+}
+
 pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> (bool, Vec<u8>) {
     unsafe {
         let output = match target {
@@ -79,8 +93,8 @@ pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8;
         if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
-        if !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
-            // Do not recreate a suppressed console or mutate a shared terminal.
+        if palette.is_empty() || !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
+            // Detect capability without reconfiguring empty palettes or shared terminals.
             return (use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
                 std::env::var_os("WT_SESSION").is_some()),
                 nearest_slots(screen_info(handle).map_or(BASIC_COLORS, |info| info.ColorTable.map(|c| c.0)), palette));
@@ -265,6 +279,8 @@ mod tests {
             ("null", "stdout", "stdout"), ("pattern", "stderr", "stderr"),
             ("json", "stdout", "stderr"), ("plain_palette", "stderr", "stdout"),
             ("default", "stdout", "stderr"), ("plain_pattern", "stderr", "stdout"),
+            ("inherit_foreground", "stdout", "stderr"), ("inherit_background", "stderr", "stdout"),
+            ("inherit_both", "stdout", "stderr"), ("inherit_reset", "stderr", "stdout"),
         ].into_iter().map(|(first, target, later)| ("owned", first, target, later));
         let controls = ["shared", "attached", "suppressed", "redirected", "no_color"]
             .into_iter().map(|context| (context, "plain_palette", "stdout",
@@ -304,32 +320,34 @@ mod tests {
             let output = console_output();
             if context == "redirected" { restore_standard_handles(handles); }
             let console_handle = HANDLE(output.as_raw_handle() as isize);
+            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
+            if first.starts_with("inherit_") {
+                let mut mode = CONSOLE_MODE(0);
+                GetConsoleMode(console_handle, &mut mode).unwrap();
+                SetConsoleMode(console_handle, mode & !ENABLE_VIRTUAL_TERMINAL_PROCESSING).unwrap();
+            }
             let before = screen_info(console_handle).unwrap();
             let mut before_mode = CONSOLE_MODE(0);
             GetConsoleMode(console_handle, &mut before_mode).unwrap();
+            let before_handles = standard_handles();
             let mut registry = log4rs::config::Deserializers::default();
             crate::logging::log4rs::register(&mut registry);
-            let build = |target: &str, encoder: &str| -> Box<dyn log4rs::append::Append> {
-                let config: log4rs::append::AppenderConfig = serde_yaml::from_str(
-                    &format!("kind: console\ntarget: {target}\n{encoder}")).unwrap();
+            let build = |target: &str, name: &str| -> Box<dyn log4rs::append::Append> {
+                let mut yaml = crate::logging::test_resources::appender(name);
+                yaml["target"] = target.into();
+                let config: log4rs::append::AppenderConfig = serde_yaml::from_value(yaml).unwrap();
                 registry.deserialize(&config.kind, config.config).unwrap()
             };
-            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
-            let encoder = match first.as_str() {
-                "null" => "encoder:\n  kind: palette\n  pattern: '{palette(normal)}{m}'\n  palette: {normal: null}\n",
-                "pattern" => "encoder:\n  kind: pattern\n  pattern: '{h({m})}'\n",
-                "json" => "encoder:\n  kind: json\n",
-                "plain_palette" => "encoder:\n  kind: palette\n  pattern: '{m}'\n",
-                "default" => "",
-                "plain_pattern" => "encoder:\n  kind: pattern\n  pattern: '{m}'\n",
-                _ => unreachable!(),
-            };
-            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), encoder);
+            let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), &first);
             let first_handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
             let first_info = screen_info(console_handle).unwrap();
             assert_eq!(first_info.ColorTable.map(|c| c.0), before.ColorTable.map(|c| c.0));
             assert_eq!(first_info.wAttributes, before.wAttributes);
-            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "encoder:\n  kind: palette\n");
+            assert_eq!(standard_handles(), before_handles);
+            let mut first_mode = CONSOLE_MODE(0);
+            GetConsoleMode(console_handle, &mut first_mode).unwrap();
+            assert_eq!(first_mode, before_mode);
+            let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "palette");
             let record = log::Record::builder().args(format_args!("writer order regression")).build();
             first_appender.append(&record).expect("earlier native writer must remain valid");
             assert_eq!(GetStdHandle(STD_OUTPUT_HANDLE).unwrap(), first_handle);
