@@ -50,7 +50,7 @@ fn override_paths(context: &MapContext, filename: &str) -> Vec<String> {
     let Some(config) = config_filename(filename) else {
         return Vec::new();
     };
-    build_override_paths(root, &[config], &layers(context, root))
+    build_override_paths(root, &config, &layers(context, root))
         .into_iter()
         .filter(|path| std::path::Path::new(path).is_file())
         .collect()

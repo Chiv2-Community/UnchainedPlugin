@@ -46,9 +46,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --release
+            cargo test --locked --release
           else
-            cargo test
+            cargo test --locked
           fi
 
       # Build the project
@@ -56,9 +56,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo build --release
+            cargo build --locked --release
           else
-            cargo build
+            cargo build --locked
           fi
 
       # Upload artifacts if build succeeds

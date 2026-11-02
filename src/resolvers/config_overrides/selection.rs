@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverrideLayer {
     Map,
@@ -19,6 +17,7 @@ impl OverrideLayer {
 
 /// A single Windows directory component, never a path supplied by a map URL.
 pub fn valid_component(value: &str) -> bool {
+    let stem = value.split('.').next().unwrap().to_ascii_uppercase();
     !value.is_empty()
         && value.len() <= 128
         && value != "."
@@ -27,36 +26,16 @@ pub fn valid_component(value: &str) -> bool {
         && value
             .chars()
             .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
-        && !matches!(
-            value
-                .split('.')
-                .next()
-                .unwrap()
-                .to_ascii_uppercase()
-                .as_str(),
-            "CON"
-                | "PRN"
-                | "AUX"
-                | "NUL"
-                | "COM1"
-                | "COM2"
-                | "COM3"
-                | "COM4"
-                | "COM5"
-                | "COM6"
-                | "COM7"
-                | "COM8"
-                | "COM9"
-                | "LPT1"
-                | "LPT2"
-                | "LPT3"
-                | "LPT4"
-                | "LPT5"
-                | "LPT6"
-                | "LPT7"
-                | "LPT8"
-                | "LPT9"
-        )
+        && !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        && !stem
+            .strip_prefix("COM")
+            .or_else(|| stem.strip_prefix("LPT"))
+            .is_some_and(|suffix| {
+                matches!(
+                    suffix,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
+            })
 }
 
 fn valid_slot(layer: OverrideLayer, slot: &str) -> bool {
@@ -166,24 +145,18 @@ pub fn build_profile_override_path(
 
 pub fn build_override_paths(
     root: &str,
-    candidates: &[String],
+    config: &str,
     layers: &[(OverrideLayer, String)],
 ) -> Vec<String> {
-    let mut seen = HashSet::new();
+    if config_filename(config).as_deref() != Some(config) {
+        return Vec::new();
+    }
     let mut paths = Vec::new();
     for (layer, slot) in layers {
         if !valid_slot(*layer, slot) {
             continue;
         }
-        for config in candidates {
-            if config_filename(config).as_ref() != Some(config) {
-                continue;
-            }
-            let path = build_profile_override_path(root, *layer, slot, config);
-            if seen.insert(path.to_ascii_lowercase()) {
-                paths.push(path);
-            }
-        }
+        paths.push(build_profile_override_path(root, *layer, slot, config));
     }
     paths
 }
@@ -256,42 +229,38 @@ mod tests {
     }
 
     #[test]
-    fn paths_are_layer_major_and_case_insensitively_unique() {
-        let paths = build_override_paths(
-            r"C:\Profiles\Server\",
-            &[
-                "Engine.ini".into(),
-                "Game.ini".into(),
-                "engine.ini".into(),
-                "../Bad.ini".into(),
-            ],
-            &[
-                (OverrideLayer::Map, "Quarry".into()),
-                (OverrideLayer::MapProfile, "busy".into()),
-                (OverrideLayer::MapIndex, "2".into()),
-            ],
-        );
-        assert_eq!(
-            paths,
-            [
-                "C:/Profiles/Server/ini-overrides/maps/Quarry/Engine.ini",
-                "C:/Profiles/Server/ini-overrides/maps/Quarry/Game.ini",
-                "C:/Profiles/Server/ini-overrides/profiles/busy/Engine.ini",
-                "C:/Profiles/Server/ini-overrides/profiles/busy/Game.ini",
-                "C:/Profiles/Server/ini-overrides/indices/2/Engine.ini",
-                "C:/Profiles/Server/ini-overrides/indices/2/Game.ini",
-            ]
-        );
+    fn rejects_superscript_device_names_but_preserves_unicode() {
+        for prefix in ["COM", "cOm", "LPT", "lPt"] {
+            for digit in ["1", "9", "¹", "²", "³"] {
+                for extension in ["", ".ini", ".extra.ini"] {
+                    let name = format!("{prefix}{digit}{extension}");
+                    assert!(!valid_component(&name), "{name}");
+                    assert!(!valid_slot(OverrideLayer::Map, &format!("{name}~")));
+                    assert!(!valid_slot(OverrideLayer::MapProfile, &format!("{name}~")));
+                }
+            }
+        }
+        for valid in ["COM10", "COM¹-extra", "LPT10", "LPT²-extra", "夜間"] {
+            assert!(valid_component(valid), "{valid}");
+        }
     }
 
     #[test]
     fn no_fallback_categories_or_unsafe_slots() {
         assert!(build_override_paths(
             "C:/P",
-            &["Game.ini".into()],
+            "Game.ini",
             &[(OverrideLayer::Map, "../escape".into())]
         )
         .is_empty());
+        for invalid in ["../Game.ini", r"C:\Game.ini", "Game.yaml", "COM¹.ini"] {
+            assert!(build_override_paths(
+                "C:/P",
+                invalid,
+                &[(OverrideLayer::Map, "Quarry".into())]
+            )
+            .is_empty());
+        }
         assert_eq!(
             config_filename(r"C:\Saved\WindowsServer\Game.ini").as_deref(),
             Some("Game.ini")
@@ -343,7 +312,9 @@ mod tests {
     fn wildcard_maps_and_profiles_merge_broad_to_specific_then_exact() {
         let folders = [
             "FFA_Courtyard",
+            "ffa_courtyard",
             "FFA_~",
+            "ffa_~",
             "F~",
             "~",
             "TDM_~",
@@ -384,7 +355,7 @@ mod tests {
         assert!(matching_slots(OverrideLayer::Map, "../bad", &[]).is_empty());
         let paths = build_override_paths(
             "P",
-            &["Game.ini".into()],
+            "Game.ini",
             &[
                 (OverrideLayer::Map, "FFA_~".into()),
                 (OverrideLayer::MapProfile, "busy~".into()),
@@ -426,6 +397,20 @@ mod tests {
                 (OverrideLayer::MapIndex, "2".into()),
             ]
         );
+        for config in ["Engine.ini", "Game.ini"] {
+            let paths = build_override_paths(root.to_str().unwrap(), config, &expanded);
+            assert_eq!(paths.len(), expanded.len());
+            for (path, (layer, slot)) in paths.iter().zip(&expanded) {
+                assert_eq!(
+                    path,
+                    &format!(
+                        "{}/ini-overrides/{}/{slot}/{config}",
+                        root.display(),
+                        layer.dir()
+                    )
+                );
+            }
+        }
         std::fs::remove_dir_all(root).unwrap();
     }
 }
