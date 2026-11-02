@@ -15,8 +15,27 @@ impl OverrideLayer {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LayerSelection {
+    pub layer: OverrideLayer,
+    pub slot: String,
+}
+
+impl LayerSelection {
+    pub fn new(layer: OverrideLayer, slot: impl Into<String>) -> Self {
+        Self {
+            layer,
+            slot: slot.into(),
+        }
+    }
+}
+
 /// A single Windows directory component, never a path supplied by a map URL.
 pub fn valid_component(value: &str) -> bool {
+    valid_name(value, false)
+}
+
+fn valid_name(value: &str, wildcards: bool) -> bool {
     let stem = value.split('.').next().unwrap().to_ascii_uppercase();
     !value.is_empty()
         && value.len() <= 128
@@ -25,7 +44,7 @@ pub fn valid_component(value: &str) -> bool {
         && !value.ends_with('.')
         && value
             .chars()
-            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.') || (wildcards && c == '~'))
         && !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         && !stem
             .strip_prefix("COM")
@@ -39,14 +58,28 @@ pub fn valid_component(value: &str) -> bool {
 }
 
 fn valid_slot(layer: OverrideLayer, slot: &str) -> bool {
-    valid_component(slot)
-        || (layer != OverrideLayer::MapIndex
-            && slot.strip_suffix('~').is_some_and(|prefix| {
-                slot.len() <= 128 && (prefix.is_empty() || valid_component(prefix))
-            }))
+    valid_name(slot, layer != OverrideLayer::MapIndex)
 }
 
-/// Windows-safe prefix wildcards: broadest first, exact match last.
+/// Match anchored literals separated by zero-or-more-character wildcards.
+fn wildcard_match(pattern: &str, target: &str) -> bool {
+    let Some((prefix, rest)) = pattern.split_once('~') else {
+        return pattern == target;
+    };
+    let Some(mut remaining) = target.strip_prefix(prefix) else {
+        return false;
+    };
+    let (middle, suffix) = rest.rsplit_once('~').unwrap_or(("", rest));
+    for part in middle.split('~') {
+        let Some(position) = remaining.find(part) else {
+            return false;
+        };
+        remaining = &remaining[position + part.len()..];
+    }
+    remaining.ends_with(suffix)
+}
+
+/// Windows-safe wildcards: fewer literal characters first, exact match last.
 pub fn matching_slots(layer: OverrideLayer, target: &str, folders: &[String]) -> Vec<String> {
     if !valid_component(target) {
         return Vec::new();
@@ -55,21 +88,14 @@ pub fn matching_slots(layer: OverrideLayer, target: &str, folders: &[String]) ->
     let mut matches: Vec<_> = folders
         .iter()
         .filter(|folder| {
-            valid_slot(layer, folder)
-                && match folder.strip_suffix('~') {
-                    Some(prefix) => {
-                        layer != OverrideLayer::MapIndex
-                            && target_lower.starts_with(&prefix.to_ascii_lowercase())
-                    }
-                    None => target.eq_ignore_ascii_case(folder),
-                }
+            valid_slot(layer, folder) && wildcard_match(&folder.to_ascii_lowercase(), &target_lower)
         })
         .cloned()
         .collect();
     matches.sort_by_key(|folder| {
         (
-            !folder.ends_with('~'),
-            folder.chars().count(),
+            !folder.contains('~'),
+            folder.chars().filter(|c| *c != '~').count(),
             folder.to_ascii_lowercase(),
             folder.clone(),
         )
@@ -85,19 +111,16 @@ pub fn matching_slots(layer: OverrideLayer, target: &str, folders: &[String]) ->
     matches
 }
 
-pub fn expand_layers(
-    root: &str,
-    layers: &[(OverrideLayer, String)],
-) -> Vec<(OverrideLayer, String)> {
+pub fn expand_layers(root: &str, layers: &[LayerSelection]) -> Vec<LayerSelection> {
     let mut expanded = Vec::new();
-    for (layer, target) in layers {
-        if *layer == OverrideLayer::MapIndex {
-            expanded.push((*layer, target.clone()));
+    for selection in layers {
+        if selection.layer == OverrideLayer::MapIndex {
+            expanded.push(selection.clone());
             continue;
         }
         let directory = std::path::Path::new(root)
             .join("ini-overrides")
-            .join(layer.dir());
+            .join(selection.layer.dir());
         let folders = std::fs::read_dir(directory)
             .into_iter()
             .flatten()
@@ -106,9 +129,9 @@ pub fn expand_layers(
             .filter_map(|entry| entry.file_name().into_string().ok())
             .collect::<Vec<_>>();
         expanded.extend(
-            matching_slots(*layer, target, &folders)
+            matching_slots(selection.layer, &selection.slot, &folders)
                 .into_iter()
-                .map(|slot| (*layer, slot)),
+                .map(|slot| LayerSelection::new(selection.layer, slot)),
         );
     }
     expanded
@@ -143,20 +166,21 @@ pub fn build_profile_override_path(
     .replace('\\', "/")
 }
 
-pub fn build_override_paths(
-    root: &str,
-    config: &str,
-    layers: &[(OverrideLayer, String)],
-) -> Vec<String> {
+pub fn build_override_paths(root: &str, config: &str, layers: &[LayerSelection]) -> Vec<String> {
     if config_filename(config).as_deref() != Some(config) {
         return Vec::new();
     }
     let mut paths = Vec::new();
-    for (layer, slot) in layers {
-        if !valid_slot(*layer, slot) {
+    for selection in layers {
+        if !valid_slot(selection.layer, &selection.slot) {
             continue;
         }
-        paths.push(build_profile_override_path(root, *layer, slot, config));
+        paths.push(build_profile_override_path(
+            root,
+            selection.layer,
+            &selection.slot,
+            config,
+        ));
     }
     paths
 }
@@ -177,16 +201,19 @@ impl MapContext {
 }
 
 /// Lowest precedence first; a profile never replaces the index layer.
-pub fn select_layers(context: &MapContext, profile: Option<&str>) -> Vec<(OverrideLayer, String)> {
+pub fn select_layers(context: &MapContext, profile: Option<&str>) -> Vec<LayerSelection> {
     let mut layers = Vec::new();
     if let Some(map) = &context.map {
-        layers.push((OverrideLayer::Map, map.clone()));
+        layers.push(LayerSelection::new(OverrideLayer::Map, map));
     }
     if let Some(index) = context.index {
         if let Some(profile) = profile.filter(|profile| valid_component(profile)) {
-            layers.push((OverrideLayer::MapProfile, profile.to_owned()));
+            layers.push(LayerSelection::new(OverrideLayer::MapProfile, profile));
         }
-        layers.push((OverrideLayer::MapIndex, index.to_string()));
+        layers.push(LayerSelection::new(
+            OverrideLayer::MapIndex,
+            index.to_string(),
+        ));
     }
     layers
 }
@@ -235,8 +262,8 @@ mod tests {
                 for extension in ["", ".ini", ".extra.ini"] {
                     let name = format!("{prefix}{digit}{extension}");
                     assert!(!valid_component(&name), "{name}");
-                    assert!(!valid_slot(OverrideLayer::Map, &format!("{name}~")));
-                    assert!(!valid_slot(OverrideLayer::MapProfile, &format!("{name}~")));
+                    assert!(!valid_slot(OverrideLayer::Map, &name));
+                    assert!(!valid_slot(OverrideLayer::MapProfile, &name));
                 }
             }
         }
@@ -250,14 +277,14 @@ mod tests {
         assert!(build_override_paths(
             "C:/P",
             "Game.ini",
-            &[(OverrideLayer::Map, "../escape".into())]
+            &[LayerSelection::new(OverrideLayer::Map, "../escape")]
         )
         .is_empty());
         for invalid in ["../Game.ini", r"C:\Game.ini", "Game.yaml", "COM¹.ini"] {
             assert!(build_override_paths(
                 "C:/P",
                 invalid,
-                &[(OverrideLayer::Map, "Quarry".into())]
+                &[LayerSelection::new(OverrideLayer::Map, "Quarry")]
             )
             .is_empty());
         }
@@ -283,9 +310,9 @@ mod tests {
         assert_eq!(
             select_layers(&context, Some("busy")),
             vec![
-                (OverrideLayer::Map, "Quarry".into()),
-                (OverrideLayer::MapProfile, "busy".into()),
-                (OverrideLayer::MapIndex, "2".into()),
+                LayerSelection::new(OverrideLayer::Map, "Quarry"),
+                LayerSelection::new(OverrideLayer::MapProfile, "busy"),
+                LayerSelection::new(OverrideLayer::MapIndex, "2"),
             ]
         );
     }
@@ -297,14 +324,14 @@ mod tests {
             assert_eq!(
                 select_layers(&context, profile),
                 vec![
-                    (OverrideLayer::Map, "Quarry".into()),
-                    (OverrideLayer::MapIndex, "2".into()),
+                    LayerSelection::new(OverrideLayer::Map, "Quarry"),
+                    LayerSelection::new(OverrideLayer::MapIndex, "2"),
                 ]
             );
         }
         assert_eq!(
             select_layers(&MapContext::new("Quarry", None), Some("busy")),
-            vec![(OverrideLayer::Map, "Quarry".into())]
+            vec![LayerSelection::new(OverrideLayer::Map, "Quarry")]
         );
     }
 
@@ -320,7 +347,6 @@ mod tests {
             "TDM_~",
             "FFA_*",
             "../~",
-            "FFA_~~",
         ]
         .map(String::from);
         for layer in [OverrideLayer::Map, OverrideLayer::MapProfile] {
@@ -340,6 +366,46 @@ mod tests {
     }
 
     #[test]
+    fn suffix_middle_and_multiple_wildcards_match_without_overlapping_literals() {
+        for (pattern, target, expected) in [
+            ("~Courtyard", "FFA_Courtyard", true),
+            ("~Courtyard", "FFA_Courtyard_extra", false),
+            ("FFA~yard", "FFA_Courtyard", true),
+            ("FFA~yard", "TDM_Courtyard", false),
+            ("~FFA~Court~yard~", "FFA_Courtyard", true),
+            ("FFA~~Courtyard", "FFA_Courtyard", true),
+            ("F~F", "F", false),
+            ("~ab~bc", "abc", false),
+            ("~ab~bc", "ababc", true),
+            ("~Court~FFA~", "FFA_Courtyard", false),
+            ("~~~", "FFA_Courtyard", true),
+            ("夜~間", "夜間", true),
+            ("夜~間", "夜の時間", true),
+        ] {
+            assert_eq!(
+                wildcard_match(pattern, target),
+                expected,
+                "{pattern}: {target}"
+            );
+        }
+        let folders = [
+            "~yard",
+            "FFA~yard",
+            "~",
+            "FFA_~",
+            "ffa~YARD",
+            "FFA_Courtyard",
+        ]
+        .map(String::from);
+        for layer in [OverrideLayer::Map, OverrideLayer::MapProfile] {
+            assert_eq!(
+                matching_slots(layer, "FFA_Courtyard", &folders),
+                ["~", "FFA_~", "~yard", "FFA~yard", "FFA_Courtyard"]
+            );
+        }
+    }
+
+    #[test]
     fn indices_are_exact_and_wildcard_paths_are_validated() {
         assert_eq!(
             matching_slots(
@@ -349,17 +415,21 @@ mod tests {
             ),
             ["2"]
         );
-        for invalid in ["../~", "foo/~", "foo\\~", "foo~~", "foo*", "CON~"] {
+        for invalid in ["../~", "foo/~", "foo\\~", "foo*", "CON", "foo~.", "foo?~"] {
             assert!(!valid_slot(OverrideLayer::Map, invalid), "{invalid}");
+        }
+        for valid in ["~yard", "FFA~yard", "~FFA~yard~", "foo~~", "CON~"] {
+            assert!(valid_slot(OverrideLayer::Map, valid), "{valid}");
+            assert!(!valid_slot(OverrideLayer::MapIndex, valid), "{valid}");
         }
         assert!(matching_slots(OverrideLayer::Map, "../bad", &[]).is_empty());
         let paths = build_override_paths(
             "P",
             "Game.ini",
             &[
-                (OverrideLayer::Map, "FFA_~".into()),
-                (OverrideLayer::MapProfile, "busy~".into()),
-                (OverrideLayer::MapIndex, "2~".into()),
+                LayerSelection::new(OverrideLayer::Map, "FFA_~"),
+                LayerSelection::new(OverrideLayer::MapProfile, "busy~"),
+                LayerSelection::new(OverrideLayer::MapIndex, "2~"),
             ],
         );
         assert_eq!(
@@ -377,6 +447,8 @@ mod tests {
         for folder in [
             "maps/F~",
             "maps/FFA_~",
+            "maps/~Courtyard",
+            "maps/F~Court~yard",
             "maps/FFA_Courtyard",
             "profiles/b~",
             "profiles/busy",
@@ -389,24 +461,27 @@ mod tests {
         assert_eq!(
             expanded,
             vec![
-                (OverrideLayer::Map, "F~".into()),
-                (OverrideLayer::Map, "FFA_~".into()),
-                (OverrideLayer::Map, "FFA_Courtyard".into()),
-                (OverrideLayer::MapProfile, "b~".into()),
-                (OverrideLayer::MapProfile, "busy".into()),
-                (OverrideLayer::MapIndex, "2".into()),
+                LayerSelection::new(OverrideLayer::Map, "F~"),
+                LayerSelection::new(OverrideLayer::Map, "FFA_~"),
+                LayerSelection::new(OverrideLayer::Map, "~Courtyard"),
+                LayerSelection::new(OverrideLayer::Map, "F~Court~yard"),
+                LayerSelection::new(OverrideLayer::Map, "FFA_Courtyard"),
+                LayerSelection::new(OverrideLayer::MapProfile, "b~"),
+                LayerSelection::new(OverrideLayer::MapProfile, "busy"),
+                LayerSelection::new(OverrideLayer::MapIndex, "2"),
             ]
         );
         for config in ["Engine.ini", "Game.ini"] {
             let paths = build_override_paths(root.to_str().unwrap(), config, &expanded);
             assert_eq!(paths.len(), expanded.len());
-            for (path, (layer, slot)) in paths.iter().zip(&expanded) {
+            for (path, selection) in paths.iter().zip(&expanded) {
                 assert_eq!(
                     path,
                     &format!(
-                        "{}/ini-overrides/{}/{slot}/{config}",
+                        "{}/ini-overrides/{}/{}/{config}",
                         root.display().to_string().replace('\\', "/"),
-                        layer.dir()
+                        selection.layer.dir(),
+                        selection.slot
                     )
                 );
             }

@@ -1,5 +1,3 @@
-/// FConfigFile layout verified against the shipping executable; see docs/config-overrides.md.
-/// Containers remain opaque: the native constructor/destructor own their allocations.
 #[repr(C, align(8))]
 pub struct FConfigFile {
     pairs: [u8; 0x50],

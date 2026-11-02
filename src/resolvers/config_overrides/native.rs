@@ -1,8 +1,8 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     ffi::c_void,
-    sync::Mutex,
+    sync::{atomic::Ordering, Mutex},
 };
 
 use crate::{
@@ -12,9 +12,9 @@ use crate::{
 };
 
 use super::{
-    enter_map, override_paths,
+    enter_map,
     travel::{capture_rotation, restore_context},
-    with_state, Context,
+    with_state, Context, GENERATION,
 };
 
 // FConfigFile::FConfigFile(const FConfigFile&) — call-only binding, not an active detour.
@@ -51,21 +51,42 @@ CREATE_HOOK!(ConfigCacheSetInt, CALLED, NONE, (), (
     cache: *mut c_void, section: *const u16, key: *const u16, value: i32, filename: *const FString
 ), {});
 
-// Keep the native cache identity and filename, not a borrowed FConfigFile pointer.
-static GAME_CONFIG: Mutex<Option<(usize, String)>> = Mutex::new(None);
+// UObject::LoadConfig — call-only binding.
+// Used only to refresh existing class defaults before destination gameplay is initialized.
+// Each import reads ONE already-merged config, not a sequence of individual override INIs.
+define_pattern_resolver!(LoadConfig, [
+    "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
+]);
+CREATE_HOOK!(LoadConfig, CALLED, NONE, (), (
+    object: *mut UObject, class: *mut UClass, filename: *const u16, flags: u32, property: *mut c_void
+), {});
 
-fn game_config() -> Option<(usize, String)> {
+// Keep the native cache identity and filename, not a borrowed FConfigFile pointer.
+#[derive(Clone)]
+struct ConfigLocation {
+    cache_address: usize,
+    filename: String,
+}
+
+static GAME_CONFIG: Mutex<Option<ConfigLocation>> = Mutex::new(None);
+
+fn game_config() -> Option<ConfigLocation> {
     GAME_CONFIG
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
 }
 
-fn index_key() -> (Vec<u16>, Vec<u16>) {
-    (
-        "/Script/TBL.TBLGameMode\0".encode_utf16().collect(),
-        "MapListIndex\0".encode_utf16().collect(),
-    )
+struct ConfigKey {
+    section: Vec<u16>,
+    property: Vec<u16>,
+}
+
+fn index_key() -> ConfigKey {
+    ConfigKey {
+        section: "/Script/TBL.TBLGameMode\0".encode_utf16().collect(),
+        property: "MapListIndex\0".encode_utf16().collect(),
+    }
 }
 
 fn capture_startup(map: &str) {
@@ -73,20 +94,24 @@ fn capture_startup(map: &str) {
     if !with_state(|state| state.startup.can_capture(map, starting_map)) {
         return;
     }
-    let Some((cache, name)) = game_config() else {
+    let Some(config) = game_config() else {
         return;
     };
-    let filename = FString::from(name.as_str());
-    let baseline = CALL_ORIGINAL!(ConfigCacheFind(cache as *mut c_void, &filename, false));
+    let filename = FString::from(config.filename.as_str());
+    let baseline = CALL_ORIGINAL!(ConfigCacheFind(
+        config.cache_address as *mut c_void,
+        &filename,
+        false
+    ));
     if baseline.is_null() {
         return;
     }
-    let (section, key) = index_key();
+    let key = index_key();
     let mut index = 0;
     let index = CALL_ORIGINAL!(ConfigFileGetInt(
         baseline,
-        section.as_ptr(),
-        key.as_ptr(),
+        key.section.as_ptr(),
+        key.property.as_ptr(),
         &mut index
     ))
     .then_some(index);
@@ -98,25 +123,27 @@ fn capture_startup(map: &str) {
 }
 
 fn preserve_rotation_index(index: i32) {
-    let Some((cache, name)) = game_config() else {
+    let Some(config) = game_config() else {
         return;
     };
-    let filename = FString::from(name.as_str());
-    let (section, key) = index_key();
+    let filename = FString::from(config.filename.as_str());
+    let key = index_key();
     // Rotation SaveConfig has already written to the non-saving outgoing overlay.
     // Bypass Find layering for this one scalar so the next generation starts at the live slot.
     with_native_layer((), || {
         CALL_ORIGINAL!(ConfigCacheSetInt(
-            cache as *mut c_void,
-            section.as_ptr(),
-            key.as_ptr(),
+            config.cache_address as *mut c_void,
+            key.section.as_ptr(),
+            key.property.as_ptr(),
             index,
             &filename
         ))
     });
 }
 
-struct OwnedConfig(Box<FConfigFile>);
+struct OwnedConfig {
+    file: Box<FConfigFile>,
+}
 
 impl OwnedConfig {
     unsafe fn copy(source: *const FConfigFile) -> Self {
@@ -125,11 +152,11 @@ impl OwnedConfig {
         // Do not mutate or destroy the baseline's source config through the shallow copy.
         file.source_config_file = std::ptr::null_mut();
         file.no_save = 1;
-        Self(file)
+        Self { file }
     }
 
     fn ptr(&self) -> *mut FConfigFile {
-        (&*self.0 as *const FConfigFile).cast_mut()
+        (&*self.file as *const FConfigFile).cast_mut()
     }
 }
 
@@ -142,8 +169,45 @@ impl Drop for OwnedConfig {
 #[derive(Default)]
 struct OverlayCache {
     generation: u64,
-    // Cache misses too: normal config reads must not repeatedly probe the filesystem.
-    files: HashMap<(usize, String, usize), Option<OwnedConfig>>,
+    // Small per-thread routing table, including configs without conditional layers.
+    files: Vec<Overlay>,
+}
+
+struct OverlayKey {
+    cache_address: usize,
+    filename: Vec<u16>,
+    baseline_address: usize,
+}
+
+struct Overlay {
+    key: OverlayKey,
+    file: Option<OwnedConfig>,
+}
+
+impl OverlayCache {
+    fn retire(&mut self, generation: u64) -> Vec<Overlay> {
+        if self.generation == generation {
+            return Vec::new();
+        }
+        self.generation = generation;
+        std::mem::take(&mut self.files)
+    }
+
+    fn find(
+        &self,
+        cache_address: usize,
+        filename: &[u16],
+        baseline: *mut FConfigFile,
+    ) -> Option<*mut FConfigFile> {
+        self.files
+            .iter()
+            .find(|entry| {
+                entry.key.cache_address == cache_address
+                    && entry.key.filename == filename
+                    && entry.key.baseline_address == baseline as usize
+            })
+            .map(|entry| entry.file.as_ref().map_or(baseline, OwnedConfig::ptr))
+    }
 }
 
 thread_local! {
@@ -164,6 +228,82 @@ fn with_native_layer<T>(fallback: T, f: impl FnOnce() -> T) -> T {
     })
 }
 
+fn materialize(key: OverlayKey, name: &str, baseline: *mut FConfigFile) -> Overlay {
+    let paths = with_state(|state| state.overrides.paths(name).to_vec());
+    let file = (!paths.is_empty()).then(|| unsafe {
+        let file = OwnedConfig::copy(baseline);
+        for path in &paths {
+            let filename = FString::from(path.as_str());
+            CALL_ORIGINAL!(ConfigFileAddLayer(file.ptr(), &filename));
+        }
+        file
+    });
+    #[cfg(feature = "config_overrides_verbose_hooks")]
+    if !paths.is_empty() {
+        sdebug!("INI layers for {name}: {}", paths.join(" -> "));
+    }
+    Overlay { key, file }
+}
+
+// Drop this thread's outgoing overlays at the destination boundary. Other threads
+// retire their own storage on their next lookup, never while a reader is using it.
+fn reset_overlays() {
+    if !globals_initialized() {
+        return;
+    }
+    with_native_layer((), || {
+        let generation = GENERATION.load(Ordering::Acquire);
+        let old = CACHE.with(|cache| cache.borrow_mut().retire(generation));
+        drop(old);
+    });
+}
+
+fn route_config(
+    cache_address: usize,
+    filename: &FString,
+    baseline: *mut FConfigFile,
+) -> *mut FConfigFile {
+    if CACHE.with(|cache| cache.borrow().generation) != GENERATION.load(Ordering::Acquire) {
+        reset_overlays();
+    }
+    with_native_layer(baseline, || {
+        // Find borrows its caller's const FString for the duration of the call.
+        // Compare it in place; only first discovery needs an owned key or UTF-16 decode.
+        let cached = CACHE.with(|cache| {
+            cache
+                .borrow()
+                .find(cache_address, filename.as_slice(), baseline)
+        });
+        if let Some(file) = cached {
+            return file;
+        }
+        let Ok(name) = filename.copy_to_string() else {
+            return baseline;
+        };
+        if super::selection::config_filename(&name)
+            .is_some_and(|name| name.eq_ignore_ascii_case("Game.ini"))
+        {
+            *GAME_CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = Some(ConfigLocation {
+                cache_address,
+                filename: name.clone(),
+            });
+        }
+        // Even known cache addresses have no lifetime lease across map boundaries.
+        // Materialize once from Find's current baseline, including late native/mod configs.
+        // Paths are already selected; only UE's one-time INI read/merge remains.
+        let key = OverlayKey {
+            cache_address,
+            filename: filename.as_slice().to_vec(),
+            baseline_address: baseline as usize,
+        };
+        let entry = materialize(key, &name, baseline);
+        let result = entry.file.as_ref().map_or(baseline, OwnedConfig::ptr);
+        // Retain older identities until the boundary: native readers may still borrow them.
+        CACHE.with(|cache| cache.borrow_mut().files.push(entry));
+        result
+    })
+}
+
 // FConfigCacheIni::Find — intercept config lookup to return a private merged config.
 define_pattern_resolver!(ConfigCacheFind, [
     "40 53 56 41 54 41 56 48 81 EC A8 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 90 01 00 00 8B 42 08 33 DB 85 C0 45 0F B6 E0 4C 8B F2"
@@ -175,54 +315,8 @@ CREATE_HOOK!(ConfigCacheFind, { || cli_args().unchained_profile_location.is_some
     if baseline.is_null() || filename.is_null() || !globals_initialized() {
         return baseline;
     }
-    with_native_layer(baseline, || {
-    let Ok(name) = (*filename).copy_to_string() else { return baseline };
-    if super::selection::config_filename(&name).is_some_and(|name| name.eq_ignore_ascii_case("Game.ini")) {
-        *GAME_CONFIG.lock().unwrap_or_else(|e| e.into_inner()) = Some((cache as usize, name.clone()));
-    }
-    let context = with_state(|state| state.context.clone());
-    let key = (cache as usize, name.clone(), baseline as usize);
-
-    let cached = CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.generation != context.generation {
-            cache.generation = context.generation;
-            let old = std::mem::take(&mut cache.files);
-            drop(cache);
-            drop(old);
-            return None;
-        }
-        cache.files.get(&key).map(|file| file.as_ref().map_or(baseline, OwnedConfig::ptr))
-    });
-    if let Some(file) = cached { return file }
-
-    let paths = override_paths(&context.selection, &name);
-    if paths.is_empty() {
-        CACHE.with(|cache| { cache.borrow_mut().files.insert(key, None); });
-        return baseline;
-    }
-    let file = OwnedConfig::copy(baseline);
-    for path in &paths {
-        let filename = FString::from(path.as_str());
-        CALL_ORIGINAL!(ConfigFileAddLayer(file.ptr(), &filename));
-    }
-    let result = file.ptr();
-    CACHE.with(|cache| { cache.borrow_mut().files.insert(key, Some(file)); });
-    #[cfg(feature = "config_overrides_verbose_hooks")]
-    sdebug!("INI layers for {name}: {}", paths.join(" -> "));
-    result
-    })
+    route_config(cache as usize, &*filename, baseline)
 });
-
-// UObject::LoadConfig — call-only binding.
-// Used only to refresh existing class defaults before destination gameplay is initialized.
-// Each import reads ONE already-merged config, not a sequence of individual override INIs.
-define_pattern_resolver!(LoadConfig, [
-    "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
-]);
-CREATE_HOOK!(LoadConfig, CALLED, NONE, (), (
-    object: *mut UObject, class: *mut UClass, filename: *const u16, flags: u32, property: *mut c_void
-), {});
 
 fn refresh_defaults(categories: &HashSet<String>) {
     if categories.is_empty() || !globals_initialized() {
@@ -273,9 +367,10 @@ fn refresh_defaults(categories: &HashSet<String>) {
 
 fn select_map(map: &str, world: Option<usize>) -> Option<Context> {
     capture_startup(map);
-    let (previous, categories) = enter_map(map, world)?;
-    refresh_defaults(&categories);
-    Some(previous)
+    let change = enter_map(map, world)?;
+    reset_overlays();
+    refresh_defaults(&change.categories);
+    Some(change.previous)
 }
 
 // UEngine::LoadMap — select destination context early and restore it if loading fails.
@@ -292,11 +387,9 @@ CREATE_HOOK!(ConfigLoadMap, { || cli_args().unchained_profile_location.is_some()
         if let Some(previous) = previous {
             let categories = with_state(|state| {
                 restore_context(&mut state.context, &mut state.pending_rotation, previous);
-                let mut categories = std::mem::take(&mut state.categories);
-                state.categories = super::categories_for(&state.context.selection);
-                categories.extend(state.categories.iter().cloned());
-                categories
+                super::prepare_context(state, super::profile_root().unwrap())
             });
+            reset_overlays();
             refresh_defaults(&categories);
         }
     }
@@ -351,7 +444,40 @@ const _: () = {
 
 #[cfg(test)]
 mod tests {
-    use super::with_native_layer;
+    use super::{with_native_layer, Overlay, OverlayCache, OverlayKey};
+
+    #[test]
+    fn routing_requires_current_baseline_cache_and_filename() {
+        let filename = "Custom.ini\0".encode_utf16().collect::<Vec<_>>();
+        let baseline = std::ptr::without_provenance_mut(0x1000);
+        let mut cache = OverlayCache {
+            generation: 7,
+            files: vec![Overlay {
+                key: OverlayKey {
+                    cache_address: 1,
+                    filename: filename.clone(),
+                    baseline_address: baseline as usize,
+                },
+                file: None,
+            }],
+        };
+        assert_eq!(cache.find(1, &filename, baseline), Some(baseline));
+        assert_eq!(cache.find(2, &filename, baseline), None);
+        assert_eq!(cache.find(1, &[1, 0], baseline), None);
+        assert_eq!(
+            cache.find(1, &filename, std::ptr::without_provenance_mut(0x2000)),
+            None
+        );
+        // Continuing GameMode creation keeps this generation's borrowed pointers.
+        assert!(cache.retire(7).is_empty());
+        assert_eq!(cache.find(1, &filename, baseline), Some(baseline));
+        // Destination selection and failed-load restoration both publish a new generation.
+        let retired = cache.retire(8);
+        assert_eq!(retired.len(), 1);
+        assert_eq!(cache.find(1, &filename, baseline), None);
+        // Detached entries remain owned until after the cache borrow is released.
+        assert_eq!(retired[0].key.baseline_address, baseline as usize);
+    }
 
     #[test]
     fn nested_native_calls_use_baseline_and_release_scope() {
@@ -371,5 +497,14 @@ mod tests {
         });
         assert!(result.is_err());
         assert!(with_native_layer(false, || true));
+    }
+
+    #[test]
+    fn native_scope_does_not_bypass_other_threads() {
+        assert!(with_native_layer(false, || {
+            std::thread::spawn(|| with_native_layer(false, || true))
+                .join()
+                .unwrap()
+        }));
     }
 }
