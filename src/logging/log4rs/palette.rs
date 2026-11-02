@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, BTreeSet}, sync::{Arc, Mutex}};
+use std::collections::BTreeMap;
 use std::io::Write as _;
 use log::{Level, Record};
 use log4rs::config::{Deserialize, Deserializers};
@@ -6,29 +6,6 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
-
-#[derive(Clone, Default)]
-pub struct PaletteWarnings(Arc<Mutex<BTreeSet<String>>>);
-
-impl PaletteWarnings {
-    pub(super) fn check(&self, encoder: &PaletteEncoder) {
-        let mut missing = self.0.lock().unwrap();
-        for reference in inventory::iter::<crate::logging::inline::PaletteReference> {
-            let name = reference.0.to_ascii_lowercase();
-            if !name.is_empty() && encoder.names.binary_search_by(|(key, _)| key.cmp(&name)).is_err() {
-                missing.insert(name);
-            }
-        }
-    }
-
-    pub fn report(&self) {
-        let missing = std::mem::take(&mut *self.0.lock().unwrap());
-        for name in missing {
-            swarn!(undefined_palette = name.as_str();
-                "Undefined inline palette reference in a configured palette encoder: {}", name);
-        }
-    }
-}
 
 pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
 
@@ -118,22 +95,28 @@ pub(crate) struct PaletteEncoder {
 }
 
 impl PaletteEncoderConfig {
+    pub(super) fn default_names() -> impl Iterator<Item = String> {
+        Self::default_palette().into_keys()
+    }
+
+    fn default_palette() -> BTreeMap<String, Option<PaletteColor>> {
+        let mut palette: BTreeMap<_, _> = [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
+            ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
+            ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
+            ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
+            ("trace_body", Some([92, 92, 92]))]
+            .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
+        for name in ["title", "subtitle"] {
+            palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
+                foreground: Some(Channel::Rgb([208, 145, 40])),
+                background: Some(Channel::Rgb([47, 47, 47])),
+            })));
+        }
+        palette
+    }
+
     pub(crate) fn build(self) -> anyhow::Result<PaletteEncoder> {
-        let palette = self.palette.unwrap_or_else(|| {
-            let mut palette: BTreeMap<_, _> = [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
-                ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
-                ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
-                ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-                ("trace_body", Some([92, 92, 92]))]
-                .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
-            for name in ["title", "subtitle"] {
-                palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
-                    foreground: Some(Channel::Rgb([208, 145, 40])),
-                    background: Some(Channel::Rgb([47, 47, 47])),
-                })));
-            }
-            palette
-        });
+        let palette = self.palette.unwrap_or_else(Self::default_palette);
         let mut entries = BTreeMap::new();
         let mut colors = Vec::new();
         let mut palette: Vec<_> = palette.into_iter()
@@ -436,7 +419,7 @@ impl Write for PaletteWriter<'_> {
     }
 }
 
-pub struct PaletteEncoderDeserializer(pub(super) PaletteWarnings);
+pub struct PaletteEncoderDeserializer;
 
 impl Deserialize for PaletteEncoderDeserializer {
     type Trait = dyn Encode;
@@ -444,9 +427,7 @@ impl Deserialize for PaletteEncoderDeserializer {
 
     fn deserialize(&self, config: PaletteEncoderConfig, _: &Deserializers)
         -> anyhow::Result<Box<dyn Encode>> {
-        let encoder = config.build()?;
-        self.0.check(&encoder);
-        Ok(Box::new(encoder))
+        Ok(Box::new(config.build()?))
     }
 }
 
@@ -567,6 +548,7 @@ mod tests {
         serror!(request = 42; palette("__TEST_PALETTE_MISSING"), "fixture");
         sdebug!(palette(r#"__test_palette_raw"#), "fixture");
         strace!(palette(""), "fixture", palette());
+        sinfo!(palette("info"), "fixture");
         let dynamic = String::from("__test_palette_dynamic");
         sinfo!(palette(&dynamic), "fixture");
     }
@@ -589,9 +571,7 @@ mod tests {
             let mut yaml = fixtures::config("palette-index");
             yaml["appenders"]["test"]["kind"] = kind.into();
             if kind == "file" { yaml["appenders"]["test"]["path"] = path.to_string_lossy().as_ref().into(); }
-            let raw_config = serde_yaml::from_value(yaml).unwrap();
-            let (config, warnings) = super::super::config_with_warnings(raw_config, "palette-index-test").unwrap();
-            let missing = warnings.0.lock().unwrap();
+            let (config, missing) = super::super::config_with_warnings(yaml, "palette-index-test").unwrap();
             let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
             assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
             assert!(!missing.contains(""));
@@ -602,19 +582,38 @@ mod tests {
 
     #[test]
     fn missing_reference_warnings_are_deduplicated_and_skip_non_palette_encoders() {
-        let warnings = PaletteWarnings::default();
-        let encoder = encoder("empty");
-        warnings.check(&encoder);
-        let once = warnings.0.lock().unwrap().clone();
-        warnings.check(&encoder);
-        assert_eq!(*warnings.0.lock().unwrap(), once);
+        let mut yaml = fixtures::config("palette-index");
+        let once = super::super::missing_palette_references(&yaml);
+        yaml["appenders"]["duplicate"] = yaml["appenders"]["test"].clone();
+        assert_eq!(super::super::missing_palette_references(&yaml), once);
         for kind in ["pattern", "json"] {
             let mut yaml = fixtures::config("non-palette-index");
             yaml["appenders"]["test"]["encoder"]["kind"] = kind.into();
-            let raw_config = serde_yaml::from_value(yaml).unwrap();
-            let (_, warnings) = super::super::config_with_warnings(raw_config, "non-palette-test").unwrap();
-            assert!(warnings.0.lock().unwrap().is_empty());
+            let (_, warnings) = super::super::config_with_warnings(yaml, "non-palette-test").unwrap();
+            assert!(warnings.is_empty());
         }
+    }
+
+    #[test]
+    fn centralized_warnings_preserve_default_and_per_encoder_names() {
+        let mut yaml = fixtures::config("palette-index");
+        yaml["appenders"]["test"].as_mapping_mut().unwrap().remove("encoder");
+        let (_, implicit) = super::super::config_with_warnings(yaml.clone(), "implicit-defaults").unwrap();
+        assert!(!implicit.contains("info"));
+        assert!(implicit.contains("__test_palette_present"));
+        yaml["appenders"]["test"]["encoder"] = fixtures::encoder("defaults");
+        yaml["appenders"]["test"]["encoder"]["kind"] = "palette".into();
+        let (_, explicit) = super::super::config_with_warnings(yaml.clone(), "explicit-defaults").unwrap();
+        assert_eq!(implicit, explicit);
+        yaml["appenders"]["test"]["encoder"]["palette"] = serde_yaml::Value::Null;
+        let (_, null) = super::super::config_with_warnings(yaml, "null-defaults").unwrap();
+        assert_eq!(implicit, null);
+
+        let mut yaml = fixtures::config("palette-index");
+        yaml["appenders"]["other"] = yaml["appenders"]["test"].clone();
+        yaml["appenders"]["other"]["encoder"]["palette"] = serde_yaml::Mapping::new().into();
+        let (_, missing) = super::super::config_with_warnings(yaml, "per-encoder-names").unwrap();
+        assert!(missing.contains("__test_palette_present"), "defined in one encoder but missing in another");
     }
 
     #[derive(Default)]

@@ -2,7 +2,6 @@ use anyhow::Context;
 use log4rs::config::{Config, Deserializers, RawConfig};
 use console::ConsoleAppenderDeserializer;
 use palette::PaletteEncoderDeserializer;
-pub use palette::PaletteWarnings;
 use pattern::PatternEncoderDeserializer;
 
 mod console;
@@ -12,6 +11,7 @@ use std::backtrace::Backtrace;
 use std::panic;
 use crate::tools::hook_globals::cli_args;
 use std::path::PathBuf;
+use std::collections::BTreeSet;
 
 const EMBEDDED_LOG4RS_YAML: &str = include_str!("log4rs.default.yaml");
 const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
@@ -44,17 +44,20 @@ pub fn init() -> anyhow::Result<()> {
     let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
     let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
-    let raw_config: RawConfig = serde_yaml::from_str(&resolved_yaml).with_context(|| {
+    let yaml = serde_yaml::from_str(&resolved_yaml).with_context(|| {
         format!(
             "Failed to parse logger config {}",
             config_source_name
         )
     })?;
-    let (config, warnings) = config_with_warnings(raw_config, config_source_name)?;
+    let (config, warnings) = config_with_warnings(yaml, config_source_name)?;
     log4rs::init_config(config)
         .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
-    warnings.report();
+    for name in warnings {
+        swarn!(undefined_palette = name.as_str();
+            "Undefined inline palette reference in a configured palette encoder: {}", name);
+    }
     crate::logging::console::report_attachment_failure();
 
     Ok(())
@@ -68,9 +71,12 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
     }
 }
 
-fn config_with_warnings(raw_config: RawConfig, config_source_name: &str) -> anyhow::Result<(Config, PaletteWarnings)> {
+fn config_with_warnings(yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<(Config, BTreeSet<String>)> {
+    let warnings = missing_palette_references(&yaml);
+    let raw_config: RawConfig = serde_yaml::from_value(yaml)
+        .with_context(|| format!("Failed to parse logger config {}", config_source_name))?;
     let mut deserializers = Deserializers::default();
-    let warnings = register(&mut deserializers);
+    register(&mut deserializers);
     let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
     anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
     let config = Config::builder()
@@ -83,18 +89,37 @@ fn config_with_warnings(raw_config: RawConfig, config_source_name: &str) -> anyh
 
 #[cfg(test)]
 fn config_from_value(yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<Config> {
-    let raw_config = serde_yaml::from_value(yaml)
-        .with_context(|| format!("Failed to parse logger config {}", config_source_name))?;
-    config_with_warnings(raw_config, config_source_name).map(|(config, _)| config)
+    config_with_warnings(yaml, config_source_name).map(|(config, _)| config)
 }
 
-/// Register encoders. Report returned warnings after installing the logger.
-pub fn register(deserializers: &mut Deserializers) -> PaletteWarnings {
-    let warnings = PaletteWarnings::default();
-    deserializers.insert("palette", PaletteEncoderDeserializer(warnings.clone()));
-    deserializers.insert("console", ConsoleAppenderDeserializer(warnings.clone()));
+/// Register encoders and the console appender.
+pub fn register(deserializers: &mut Deserializers) {
+    deserializers.insert("palette", PaletteEncoderDeserializer);
+    deserializers.insert("console", ConsoleAppenderDeserializer);
     deserializers.insert("pattern", PatternEncoderDeserializer);
-    warnings
+}
+
+fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
+    let references: BTreeSet<_> = inventory::iter::<crate::logging::inline::PaletteReference>
+        .into_iter().map(|reference| reference.0.to_ascii_lowercase())
+        .filter(|name| !name.is_empty()).collect();
+    let mut missing = BTreeSet::new();
+    if let Some(appenders) = yaml["appenders"].as_mapping() {
+        for appender in appenders.values() {
+            let encoder = &appender["encoder"];
+            if encoder["kind"].as_str() != Some("palette")
+                && !(encoder.is_null() && appender["kind"].as_str() == Some("console")) {
+                continue;
+            }
+            let names = match encoder["palette"].as_mapping() {
+                Some(palette) => palette.keys().filter_map(|key| key.as_str())
+                    .map(str::to_ascii_lowercase).collect(),
+                None => palette::PaletteEncoderConfig::default_names().collect::<BTreeSet<_>>(),
+            };
+            missing.extend(references.difference(&names).cloned());
+        }
+    }
+    missing
 }
 
 fn apply_logger_placeholders(yaml: &str) -> String {
