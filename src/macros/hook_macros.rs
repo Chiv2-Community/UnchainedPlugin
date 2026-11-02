@@ -125,8 +125,6 @@ macro_rules! __create_hook_impl {
                         type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
                         let base_address = * $crate::resolvers::BASE_ADDR;
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
-                        
-                        
                         [<o_ $name>].initialize(target, |$( $arg ),+| {
                             unsafe { [<$name _detour_fkt>]($( $arg ),+) }
                         }).unwrap();

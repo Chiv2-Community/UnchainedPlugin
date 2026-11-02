@@ -13,6 +13,19 @@ The Unchained Plugin patches the Chivalry 2 binary to allow connection to unoffi
 ### Configuration
 Both VS Code and RustRover configurations rely on the `CHIVALRY2_DIR` environment variable to locate the game files.
 
+For server-browser registration, `--local-ip` is the advertised address. Add
+`--use-ipv6` to discover a non-loopback global IPv6 address automatically,
+bind the registration HTTP client to it, and use it for the transport. An IPv6 backend URL
+selects the registration transport family. An explicit `--local-ip <IPv6>`
+still takes precedence when the host has multiple global IPv6 addresses. The
+server-browser backend URL must itself be reachable over IPv6 for the request
+source address to be IPv6.
+
+In normal IPv4 mode, the default `local_ip` remains `127.0.0.1` so local test
+servers can appear in the browser. In IPv6 auto mode, the discovered IPv6 is
+used internally for source binding but is not published unless `--local-ip`
+was explicitly supplied.
+
 1.  **Define `CHIVALRY2_DIR`**: 
     Copy the `.env.example` file to a new file named `.env` in the project root. Then, update the `CHIVALRY2_DIR` path to your Chivalry 2 installation directory.
     ```env
