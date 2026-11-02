@@ -23,28 +23,6 @@ pub(crate) struct ColorChange<'a> {
     pub palette: Option<Cow<'a, str>>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn color_attributes_preserve_utf8_offsets_escaped_names_and_same_position_changes() {
-        let name = "a\"b\\c\n";
-        let message = Message::new(&[
-            Segment::Palette("warn"), Segment::Text(format_args!("界é")),
-            Segment::Palette(name), Segment::Palette(""), Segment::Text(format_args!("!")),
-        ]);
-        assert_eq!(message.text, "界é!");
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&message.colors).unwrap(), serde_json::json!([
-            {"utf8_offset": 0, "palette": "warn"},
-            {"utf8_offset": 5, "palette": name},
-            {"utf8_offset": 5, "palette": null}
-        ]));
-        let changes: Vec<ColorChange<'_>> = serde_json::from_str(&message.colors).unwrap();
-        assert_eq!(changes[1].palette.as_deref(), Some(name));
-    }
-}
-
 #[doc(hidden)]
 pub struct Message {
     pub text: String,
@@ -64,5 +42,27 @@ impl Message {
             }
         }
         Self { text, colors: serde_json::to_string(&changes).expect("inline colors serialization failed") }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_attributes_preserve_utf8_offsets_escaped_names_and_same_position_changes() {
+        let name = "a\"b\\c\n";
+        let message = Message::new(&[
+            Segment::Palette("warn"), Segment::Text(format_args!("界é")),
+            Segment::Palette(name), Segment::Palette(""), Segment::Text(format_args!("!")),
+        ]);
+        assert_eq!(message.text, "界é!");
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&message.colors).unwrap(), serde_json::json!([
+            {"utf8_offset": 0, "palette": "warn"},
+            {"utf8_offset": 5, "palette": name},
+            {"utf8_offset": 5, "palette": null}
+        ]));
+        let changes: Vec<ColorChange<'_>> = serde_json::from_str(&message.colors).unwrap();
+        assert_eq!(changes[1].palette.as_deref(), Some(name));
     }
 }
