@@ -541,4 +541,55 @@ mod tests {
             assert!(error.to_string().contains("invalid-console-options"));
         }
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn inherit_only_palettes_preserve_channels_at_real_console_boundary() {
+        let mut failures = Vec::new();
+        for target in ["stdout", "stderr"] {
+            for (fixture, update) in [
+                ("inherit_foreground", "\x1b[49m"),
+                ("inherit_background", "\x1b[39m"),
+                ("inherit_both", ""),
+                ("inherit_reset", "\x1b[0m"),
+            ] {
+                for unused_rgb in [false, true] {
+                    let output = std::process::Command::new(std::env::current_exe().unwrap())
+                        .args(["--ignored", "--exact", "--nocapture",
+                            &format!("{}::inherit_console_child", module_path!().split_once("::").unwrap().1)])
+                        .env("UNCHAINED_TEST_INHERIT_FIXTURE", fixture)
+                        .env("UNCHAINED_TEST_CONSOLE_TARGET", target)
+                        .env("UNCHAINED_TEST_UNUSED_RGB", unused_rgb.to_string())
+                        .env("CLICOLOR_FORCE", "1").env_remove("NO_COLOR").env_remove("CLICOLOR")
+                        .output().unwrap();
+                    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+                    let bytes = if target == "stdout" { &output.stdout } else { &output.stderr };
+                    let expected = format!("inherit-boundary:\x1b[38;2;18;52;86;48;2;171;205;239mA{update}B\x1b[0mC");
+                    let text = String::from_utf8_lossy(bytes);
+                    if !text.contains(&expected) {
+                        failures.push(format!("{target}/{fixture}/unused_rgb={unused_rgb}: {text:?}"));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "subprocess fixture for inherit-only console palettes"]
+    fn inherit_console_child() {
+        let fixture = std::env::var("UNCHAINED_TEST_INHERIT_FIXTURE").unwrap();
+        let mut appender = fixtures::appender(&fixture);
+        appender["target"] = std::env::var("UNCHAINED_TEST_CONSOLE_TARGET").unwrap().into();
+        if std::env::var("UNCHAINED_TEST_UNUSED_RGB").unwrap() == "true" {
+            appender["encoder"]["palette"]["unused"] = "#112233".into();
+        }
+        let mut yaml = fixtures::config("console");
+        yaml["appenders"]["console"] = appender;
+        let logger = log4rs::Logger::new(config_from_value(yaml, "inherit-console-child").unwrap());
+        logger.log(&Record::builder().args(format_args!(
+            "inherit-boundary:\x1b[38;2;18;52;86;48;2;171;205;239mA")).build());
+        logger.flush();
+    }
 }

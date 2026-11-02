@@ -93,8 +93,8 @@ pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8;
         if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
         let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
             .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
-        if !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
-            // Do not recreate a suppressed console or mutate a shared terminal.
+        if palette.is_empty() || !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
+            // Detect capability without reconfiguring empty palettes or shared terminals.
             return (use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
                 std::env::var_os("WT_SESSION").is_some()),
                 nearest_slots(screen_info(handle).map_or(BASIC_COLORS, |info| info.ColorTable.map(|c| c.0)), palette));
@@ -279,6 +279,8 @@ mod tests {
             ("null", "stdout", "stdout"), ("pattern", "stderr", "stderr"),
             ("json", "stdout", "stderr"), ("plain_palette", "stderr", "stdout"),
             ("default", "stdout", "stderr"), ("plain_pattern", "stderr", "stdout"),
+            ("inherit_foreground", "stdout", "stderr"), ("inherit_background", "stderr", "stdout"),
+            ("inherit_both", "stdout", "stderr"), ("inherit_reset", "stderr", "stdout"),
         ].into_iter().map(|(first, target, later)| ("owned", first, target, later));
         let controls = ["shared", "attached", "suppressed", "redirected", "no_color"]
             .into_iter().map(|context| (context, "plain_palette", "stdout",
@@ -318,9 +320,16 @@ mod tests {
             let output = console_output();
             if context == "redirected" { restore_standard_handles(handles); }
             let console_handle = HANDLE(output.as_raw_handle() as isize);
+            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
+            if first.starts_with("inherit_") {
+                let mut mode = CONSOLE_MODE(0);
+                GetConsoleMode(console_handle, &mut mode).unwrap();
+                SetConsoleMode(console_handle, mode & !ENABLE_VIRTUAL_TERMINAL_PROCESSING).unwrap();
+            }
             let before = screen_info(console_handle).unwrap();
             let mut before_mode = CONSOLE_MODE(0);
             GetConsoleMode(console_handle, &mut before_mode).unwrap();
+            let before_handles = standard_handles();
             let mut registry = log4rs::config::Deserializers::default();
             crate::logging::log4rs::register(&mut registry);
             let build = |target: &str, name: &str| -> Box<dyn log4rs::append::Append> {
@@ -329,12 +338,15 @@ mod tests {
                 let config: log4rs::append::AppenderConfig = serde_yaml::from_value(yaml).unwrap();
                 registry.deserialize(&config.kind, config.config).unwrap()
             };
-            let first = std::env::var("UNCHAINED_TEST_FIRST_ENCODER").unwrap();
             let first_appender = build(&std::env::var("UNCHAINED_TEST_FIRST_TARGET").unwrap(), &first);
             let first_handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
             let first_info = screen_info(console_handle).unwrap();
             assert_eq!(first_info.ColorTable.map(|c| c.0), before.ColorTable.map(|c| c.0));
             assert_eq!(first_info.wAttributes, before.wAttributes);
+            assert_eq!(standard_handles(), before_handles);
+            let mut first_mode = CONSOLE_MODE(0);
+            GetConsoleMode(console_handle, &mut first_mode).unwrap();
+            assert_eq!(first_mode, before_mode);
             let later = build(&std::env::var("UNCHAINED_TEST_LATER_TARGET").unwrap(), "palette");
             let record = log::Record::builder().args(format_args!("writer order regression")).build();
             first_appender.append(&record).expect("earlier native writer must remain valid");

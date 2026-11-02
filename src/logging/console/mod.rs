@@ -93,7 +93,6 @@ pub(crate) fn configure_palette(target: Target, colors: &[[u8; 3]]) -> Option<(b
         Target::Stderr => ConsoleWriter::stderr(),
     };
     writer?;
-    if colors.is_empty() { return Some((false, Vec::new())); }
     #[cfg(windows)]
     { Some(windows_backend::configure(target, colors)) }
     #[cfg(not(windows))]

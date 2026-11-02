@@ -24,6 +24,34 @@ plain_pattern:
   kind: console
   target: stdout
   encoder: {kind: pattern, pattern: '{m}'}
+inherit_foreground:
+  kind: console
+  target: stdout
+  encoder:
+    kind: palette
+    pattern: '{m}{palette(keep)}B{palette()}C{n}'
+    palette: {keep: inherit}
+inherit_background:
+  kind: console
+  target: stdout
+  encoder:
+    kind: palette
+    pattern: '{m}{palette(keep)}B{palette()}C{n}'
+    palette: {keep: {background: inherit}}
+inherit_both:
+  kind: console
+  target: stdout
+  encoder:
+    kind: palette
+    pattern: '{m}{palette(keep)}B{palette()}C{n}'
+    palette: {keep: {foreground: inherit, background: inherit}}
+inherit_reset:
+  kind: console
+  target: stdout
+  encoder:
+    kind: palette
+    pattern: '{m}{palette(keep)}B{palette()}C{n}'
+    palette: {keep: null}
 palette:
   kind: console
   target: stdout
