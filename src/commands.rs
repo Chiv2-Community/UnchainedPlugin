@@ -43,6 +43,15 @@ pub fn spawn_cli_handler() {
         let mut buffer = String::new();
         
         while input_source.read_line(&mut buffer).is_ok_and(|count| count != 0) {
+            // Event subscribers only exist on servers; clients send the line to the engine console.
+            if !crate::cli_args().is_server() {
+                let line = buffer.trim();
+                if !line.is_empty() {
+                    NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.to_string());
+                }
+                buffer.clear();
+                continue;
+            }
             let maybe_command_parts = shlex::split(buffer.trim());
             if let Some(command_parts) = maybe_command_parts {
                 if !command_parts.is_empty() {

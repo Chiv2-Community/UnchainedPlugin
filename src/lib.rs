@@ -439,22 +439,21 @@ fn postinit_rustlib() {
 
     #[cfg(feature="cli_commands")]
     {
-        if cli_args().is_server() {
-            thread::spawn(move || {
-                sinfo!("waiting for engine to start..");
-                
-                while !ENGINE_READY.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(500));
-                }
+        // The console accepts commands for every instance; only servers run world_init.
+        thread::spawn(move || {
+            sinfo!("waiting for engine to start..");
 
-                spawn_cli_handler();
-                if cli_args().is_server() {
-                    world_init();
-                }
-            });
-        } else {
-            sinfo!(fn; "Not a server, skipping server cli initialization");
-        }
+            while !ENGINE_READY.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(500));
+            }
+
+            spawn_cli_handler();
+            if cli_args().is_server() {
+                world_init();
+            } else {
+                sinfo!(fn; "Not a server, skipping server initialization");
+            }
+        });
     }
 }
 
