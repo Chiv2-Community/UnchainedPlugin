@@ -1,0 +1,89 @@
+inline-palette:
+  appenders:
+    console:
+      kind: console
+      encoder:
+        kind: palette
+        pattern: '{m}{n}'
+        palette: {accent: '#123456', first: '#abcdef', second: '#fedcba'}
+    file:
+      kind: file
+      path: null
+      encoder: {kind: json}
+  root:
+    level: info
+    appenders: [console, file]
+console:
+  appenders:
+    console:
+      kind: console
+      encoder: {kind: palette}
+  root:
+    level: info
+    appenders: [console]
+json-sinks:
+  appenders:
+    console:
+      kind: console
+      target: stdout
+      encoder: {kind: json}
+    file:
+      kind: file
+      path: null
+      encoder: {kind: json}
+  root:
+    level: info
+    appenders: [console, file]
+rolling-policy:
+  kind: compound
+  trigger: {kind: size, limit: 1048576}
+  roller: {kind: delete}
+console-policy:
+  appenders:
+    console:
+      kind: console
+      target: stdout
+      encoder: {kind: palette}
+  root:
+    level: trace
+    appenders: [console]
+custom-console-palette:
+  error: '#112233'
+  warn: '#223344'
+  info: '#334455'
+  debug: '#445566'
+  trace: '#556677'
+  error_body: null
+  warn_body: null
+  info_body: null
+  debug_body: '#445566'
+  trace_body: '#556677'
+file-pattern:
+  appenders:
+    file:
+      kind: file
+      path: null
+      append: false
+      encoder: {pattern: ''}
+  root:
+    level: info
+    appenders: [file]
+palette-index:
+  appenders:
+    test:
+      kind: console
+      encoder:
+        kind: palette
+        pattern: '{m}'
+        palette: {__test_palette_present: null}
+  root:
+    level: off
+    appenders: [test]
+non-palette-index:
+  appenders:
+    test:
+      kind: console
+      encoder: {kind: pattern}
+  root:
+    level: off
+    appenders: [test]

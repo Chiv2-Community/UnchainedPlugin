@@ -4,7 +4,7 @@ use crate::{
     tools::hook_globals::{cli_args, globals_initialized},
     ue::{
         AGameModeBase, FConfigCacheIni, FConfigFile, FProperty, FString, FWorldContext, UClass,
-        UEngine, UObject, UPendingNetGame, UTBLGameInstance, FURL,
+        UEngine, UObject, UPendingNetGame, UTBLGameInstance, FURL, TCHAR,
     },
 };
 
@@ -31,7 +31,7 @@ define_pattern_resolver!(ConfigFileGetInt, [
     "40 53 48 83 EC 30 33 C0 49 8B D9 4C 8D 4C 24 20 48 89 44 24 20 48 89 44 24 28 E8 ?? ?? ?? ?? 84 C0 74 1E 83 7C 24 28 00 48 8D 0D ?? ?? ?? ?? 48 0F 45 4C 24 20 FF 15 ?? ?? ?? ?? 89 03"
 ]);
 CREATE_HOOK!(ConfigFileGetInt, CALLED, NONE, bool, (
-    file: *const FConfigFile, section: *const u16, key: *const u16, value: *mut i32
+    file: *const FConfigFile, section: *const TCHAR, key: *const TCHAR, value: *mut i32
 ), false);
 
 // FConfigCacheIni::SetInt — preserve only native rotation state, never conditional settings.
@@ -39,7 +39,7 @@ define_pattern_resolver!(ConfigCacheSetInt, [
     "40 53 55 56 57 41 56 48 81 EC 40 08 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 30 08 00 00 48 8B 9C 24 90 08 00 00 4D 8B F0 48 8B EA 48 8B F1"
 ]);
 CREATE_HOOK!(ConfigCacheSetInt, CALLED, NONE, (), (
-    cache: *mut FConfigCacheIni, section: *const u16, key: *const u16, value: i32, filename: *const FString
+    cache: *mut FConfigCacheIni, section: *const TCHAR, key: *const TCHAR, value: i32, filename: *const FString
 ), {});
 
 // UObject::LoadConfig — call-only binding.
@@ -49,7 +49,7 @@ define_pattern_resolver!(LoadConfig, [
     "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
 ]);
 CREATE_HOOK!(LoadConfig, CALLED, NONE, (), (
-    object: *mut UObject, class: *mut UClass, filename: *const u16, flags: u32, property: *mut FProperty
+    object: *mut UObject, class: *mut UClass, filename: *const TCHAR, flags: u32, property: *mut FProperty
 ), {});
 
 // FConfigCacheIni::Find — intercept config lookup to return a private merged config.

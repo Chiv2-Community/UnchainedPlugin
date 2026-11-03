@@ -1,7 +1,8 @@
 
 #[cfg(feature="server_registration")]
 use std::sync::{Arc, Mutex};
-use std::{env, os::raw::c_void, panic};
+use std::{env, panic};
+use crate::game::engine::UWorld;
 
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
@@ -123,8 +124,13 @@ impl std::ops::Deref for SyncFUObjectArray {
 
 /// Pointer wrapper for things like world, gamemode
 #[repr(transparent)]
-#[derive(Debug)]
 pub struct SyncPtr<T>(pub *mut T);
+
+impl<T> std::fmt::Debug for SyncPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SyncPtr").field(&self.0).finish()
+    }
+}
 
 unsafe impl<T> Send for SyncPtr<T> {}
 unsafe impl<T> Sync for SyncPtr<T> {}
@@ -178,7 +184,7 @@ pub struct Globals {
     // base_address: usize,
     is_server: bool,
     // pub(crate) cli_args: CLIArgs,
-    pub world: RwLock<SyncPtr<c_void>>,
+    pub world: RwLock<SyncPtr<UWorld>>,
     #[cfg(feature="server_registration")]
     pub registration: Mutex<Option<Arc<Registration>>>,
     #[cfg(feature="mod_management")]
@@ -230,7 +236,7 @@ impl Globals {
     // fn args(&self) -> &CLIArgs {
     //     &self.cli_args
     // }
-    global_ptr!(world, c_void);
+    global_ptr!(world, UWorld);
 }
 
 pub fn init_globals() -> Result<(), String> {
@@ -294,4 +300,25 @@ pub fn init_globals() -> Result<(), String> {
     }
     strace!(fn; "{GLOBALS:#?}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn world_pointer_contracts() {
+        let _: fn(&Globals) -> Option<*mut UWorld> = Globals::world;
+        let _: fn(&Globals, *mut UWorld) = Globals::set_world;
+        let _: fn(&Globals) -> &RwLock<SyncPtr<UWorld>> = |globals| &globals.world;
+        let _: fn(*mut UWorld) -> Option<String> =
+            crate::resolvers::unchained_integration::get_current_map_name;
+    }
+
+    #[test]
+    fn pointer_debug_does_not_require_pointee_debug() {
+        struct NoDebug;
+        let pointer = SyncPtr::<NoDebug>::default();
+        assert_eq!(format!("{pointer:?}"), format!("SyncPtr({:?})", pointer.0));
+    }
 }

@@ -1,0 +1,110 @@
+defaults: {}
+channels:
+  pattern: '{m}'
+  palette:
+    foreground: '#123456'
+    background: {background: '#abcdef'}
+    both: {foreground: '#123456', background: '#abcdef'}
+    object-foreground: {foreground: '#123456'}
+    normal: null
+inherit:
+  pattern: '{m}'
+  palette:
+    both: {foreground: '#123456', background: '#abcdef'}
+    foreground: {foreground: '#fedcba', background: inherit}
+    background: {foreground: inherit, background: '#654321'}
+    keep: {foreground: inherit, background: inherit}
+    default-foreground: {background: inherit}
+    default-background: {foreground: inherit}
+    simple: inherit
+    normal: null
+plain:
+  pattern: '{m}'
+empty:
+  pattern: '{m}'
+  palette: {}
+severity:
+  pattern: '{palette(text)}[{palette({l})}{l:5}{palette({level}_body)}] [{sm}] {fn}|{K(request)}|{m}{palette()}'
+  palette:
+    text: '#eeeeee'
+    error: '#f28b82'
+    warn: '#f2cc78'
+    info: '#8cb4e1'
+    debug: '#808080'
+    trace: '#5c5c5c'
+    error_body: null
+    warn_body: null
+    info_body: null
+    debug_body: '#808080'
+    trace_body: '#5c5c5c'
+accent:
+  pattern: '{palette(accent)}{m}{palette(normal)}end'
+  palette: {ACCENT: '#123456', normal: null}
+repeated-message:
+  pattern: '{m}|{m}'
+  palette: {accent: '#123456', normal: null}
+escaped-name:
+  pattern: '{m}'
+  palette:
+    "a\"b\\c\n": '#123456'
+module-pattern:
+  kind: pattern
+  pattern: '{sm}|{M}|{t}|{fn}'
+module-palette:
+  kind: palette
+  pattern: '{sm}|{M}|{t}|{fn}'
+boundary-escapes:
+  kind: palette
+  pattern: '{m}'
+  palette:
+    error: null
+    warn: null
+    info: null
+    debug: null
+    trace: null
+    'a}b': null
+    'a{b': null
+    'a)}b': null
+native-fill:
+  kind: palette
+  pattern: '{m:{>20}{palette(error)}tail'
+invalid:
+  - pattern: '{m}'
+    palette: {bad: {foreground: inheritance}}
+  - pattern: '{m}'
+    palette: {bad: {background: true}}
+  - pattern: '{m}'
+    palette: {empty: {}}
+  - pattern: '{m}'
+    palette: {empty: {foreground: null, background: null}}
+  - pattern: '{m}'
+    palette: {bad: {foreground: red}}
+  - pattern: '{m}'
+    palette: {bad: {background: '#12345'}}
+  - pattern: '{m}'
+    palette: {bad: {background: 123}}
+  - pattern: '{m}'
+    palette: {bad: {foreground: '#123456', unknown: '#abcdef'}}
+  - palette: {info: red}
+  - palette: {info: '#12345'}
+  - palette: {info: '#gg2233'}
+  - palette: {info: '#é2233'}
+  - palette: {info: '#+f3344'}
+  - palette: {info: 123}
+  - palette: {'': null}
+  - palette: {info: null, INFO: null}
+  - unknown: true
+  - pattern: '{palette(missing)}'
+  - pattern: '{palette({l}_missing)}'
+  - pattern: '{palette({K(user)})}'
+  - pattern: '{h({palette(error)}text)}'
+  - pattern: '{palette(error)'
+  - pattern: '{palette(error}'
+  - pattern: '{palette({l})}hello'
+    palette: {info: '#112233'}
+  - pattern: '{h({m:{>20}{palette(error)})}'
+  - pattern: '{h({m:}>20}{palette()})}'
+  - pattern: '{h(text:{>20}{palette(error)})}'
+  - pattern: '{palette({m:{>20})}'
+  - pattern: '{palette({K(user):}>20})}'
+  - pattern: '{palette({l:{>8}_missing)}'
