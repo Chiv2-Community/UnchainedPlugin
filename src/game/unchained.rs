@@ -64,35 +64,10 @@ pub struct UModLoaderSettings_C {
     pub padding_0: [u8; 0x3],
     // 0x0064 (size: 0x04)
     pub num_player_bots: i32,
-    // 0x0068 (size: 0x01)
-    pub test: bool,
-    // 0x0069 (size: 0x01)
-    pub test_0: u8,
-    // 0x006A (size: 0x02) - Padding
-    pub padding_1: [u8; 0x2],
-    // 0x006C (size: 0x04)
-    pub test_1: i32,
-    // 0x0070 (size: 0x04)
-    pub test_2: f32,
-    // 0x0074 (size: 0x04) - Padding
-    pub padding_2: [u8; 0x4],
-    // 0x0078 (size: 0x10)
-    pub test_3: FString,
-    // 0x0088 (size: 0x18)
-    pub test_4_pad: [u8; 0x18], 
-    // pub test_4: FText,
-    // 0x00A0 (size: 0x10)
-    pub test_5: TArray<FString>,
-    // 0x00B0 (size: 0x50)
-    pub test_6_pad: [u8; 0x50], 
-    // pub test_6: TSet<FString>,
-    // 0x0100 (size: 0x50)
-    pub test_7_pad: [u8; 0x50], 
-    // pub test_7: TMap<FString, i32>,
-    // 0x0150 (size: 0x10)
+    // 0x0068 (size: 0x10)
     pub enabled_mods: TArray<TSoftClassPtr>,
-    // 0x0160 (size: 0x01)
+    // 0x0078 (size: 0x01)
     pub b_use_player_bots: bool,
-    // 0x0161 (size: 0x01)
+    // 0x0079 (size: 0x01)
     pub b_show_gui: bool,
 }
