@@ -14,11 +14,7 @@ The plugin selects one configuration at startup, in this order:
 2. `log4rs.yaml` in the game or server process's current working directory.
 3. The [embedded `log4rs.default.yaml`](../src/logging/log4rs/log4rs.default.yaml).
 
-The working directory may differ from the executable or startup script's folder.
-If the selected file cannot be read or contains invalid configuration, the plugin
-prints the file name and error details to startup stderr, pauses for five seconds,
-then resumes with the embedded defaults. It also records the error in the default
-log. A failed explicit override does not fall back to CWD `log4rs.yaml`.
+If the provided log4rs.yaml is malformed, an error is printed and execution resumes with the default logging configuration.
 
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
