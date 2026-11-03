@@ -15,8 +15,10 @@ The plugin selects one configuration at startup, in this order:
 3. The [embedded `log4rs.default.yaml`](../src/logging/log4rs/log4rs.default.yaml).
 
 The working directory may differ from the executable or startup script's folder.
-An unreadable or invalid selected file is a startup error, not a reason to fall
-back to a lower-priority configuration.
+If the selected file cannot be read or contains invalid configuration, the plugin
+prints the file name and error details to startup stderr, pauses for five seconds,
+then resumes with the embedded defaults. It also records the error in the default
+log. A failed explicit override does not fall back to CWD `log4rs.yaml`.
 
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
@@ -95,9 +97,9 @@ game or server process's **current working directory**.
 5. Restart the game or server. Configuration is loaded at startup, not
    automatically reloaded when the file changes.
 
-If the file is absent, the plugin uses its embedded defaults. If the file exists
-but cannot be read or contains invalid configuration, startup fails instead of
-silently using the defaults.
+If the file is absent, the plugin uses its embedded defaults without a pause.
+If the file cannot be read or contains invalid configuration, the plugin reports
+the problem, pauses for five seconds, then resumes with the embedded defaults.
 
 ### Use an explicit configuration path
 
@@ -112,7 +114,8 @@ launch arguments, preserving the other arguments:
 This file takes priority over CWD `log4rs.yaml`. Prefer an absolute path; a
 relative path resolves from the process's working directory, not from the
 startup script's folder. Restart after changing the option or file. A missing,
-unreadable, or invalid explicitly selected file is a startup error.
+unreadable, or invalid explicitly selected file produces an error and a five-second
+pause, then the plugin resumes with the embedded defaults, not CWD `log4rs.yaml`.
 
 ### Log file paths
 
@@ -415,10 +418,13 @@ Older custom configurations using `function`, `RCON`, `game_chat`, or
 
 - **No TRACE in the console:** enable `trace` for the target and lower the console
   threshold to `trace`. Restart, then reproduce the action.
-- **A custom file prevents startup:** check startup stderr for path or YAML
-  errors. An unreadable or invalid file does not fall back to defaults. Remove
-  `--log4rs-yaml` and rename or remove any `log4rs.yaml` in the process's working
-  directory, then restart to restore the embedded configuration.
+- **A custom file is rejected:** check startup stderr or `unchained.log` for the
+  file name and full error. The plugin pauses for five seconds, then uses the
+  embedded defaults. Fix the file and restart to try it again. To stop loading it,
+  remove `--log4rs-yaml` and rename or remove CWD `log4rs.yaml`.
+- **Logging still cannot start:** fallback requires the embedded configuration's
+  appenders to initialize successfully. Check stderr for default log-file path
+  or permission errors.
 - **No file output:** check the server account, saved-directory suffix, and write
   permissions. If `%LOCALAPPDATA%` is unavailable, the default directory falls
   back to `Logs` under the process's working directory.
