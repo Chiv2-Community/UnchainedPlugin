@@ -236,7 +236,7 @@ impl<E: Debug> Debug for TSparseArray<E> {
 }
 
 #[repr(C)]
-pub struct TMap<K: UEHash, V> {
+pub struct TMap<K, V> {
     pub elements: TSparseArray<TSetElement<TTuple<K, V>>>,
     hash: TInlineAllocator<1, FSetElementId>,
     hash_size: i32,
