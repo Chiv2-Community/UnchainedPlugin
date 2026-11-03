@@ -271,7 +271,25 @@ impl ModManager {
     
 
     /// Spawn/Destroy Stubs
+    ///
+    /// Spawning needs the game thread; when called from another thread this
+    /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
+        use crate::resolvers::unchained_integration::{in_game_thread_job, run_on_game_thread};
+
+        if mod_class.is_null() {
+            serror!(fn; "mod class was null; skipping actor spawn");
+            return;
+        }
+        if !in_game_thread_job() {
+            let class_addr = mod_class as usize;
+            run_on_game_thread(move || {
+                if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
+                    unsafe { mm.spawn_mod_actor(class_addr as *mut UClass) };
+                }
+            });
+            return;
+        }
         // (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
         let world = match globals().world() {
             Some(world) => world,
@@ -285,36 +303,64 @@ impl ModManager {
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
-        let new_actor = CALL_ORIGINAL!(SpawnActor(
+        let new_actor = match CALL_ORIGINAL_SAFE!(SpawnActor(
             world,
             mod_class,
             &mut loc,
             &mut rot,
             &mut params
-        ));
+        )) {
+            Ok(actor) => actor,
+            Err(error) => {
+                serror!(fn; "Cannot spawn mod actor: {}", error);
+                return;
+            }
+        };
 
         unsafe {
             let actor_obj = new_actor as *mut UObject;
             if actor_obj.is_null() { serror!(fn; "Failed to spawn")}
-            else { 
+            else {
                 sinfo!(fn; "Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
-                let mut txt = FText::default();
-                
-                if let Some(world) = globals().world() {
-                    let settings_file = "Spawned new Mod from console";
-                    let mut settings_fstring = FString::from(settings_file);
-                    let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
-                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
-                    TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
-                } else {
-                    swarn!(fn; "globals.world missing; skipping spawn confirmation chat");
-                }
+                self.broadcast_spawn_confirmation();
             }
         }
 
         if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
             let _ = self.scan_active_mod_actors();
             reg.set_mods(self.get_active_mod_metadata());
+        }
+    }
+
+    /// Best-effort admin chat after a spawn; every step may be unavailable
+    /// (no world, no game mode in the menu, detour not installed).
+    fn broadcast_spawn_confirmation(&self) {
+        let Some(world) = globals().world() else {
+            swarn!(fn; "globals.world missing; skipping spawn confirmation chat");
+            return;
+        };
+        let mut txt = FText::default();
+        let mut message = FString::from("Spawned new Mod from console");
+        let converted = CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(&mut txt, &mut message));
+        // The engine may take ownership of the string (by-value overload), so
+        // don't free it a second time; at worst this leaks a short string.
+        std::mem::forget(message);
+        let text = match converted {
+            Ok(text) if !text.is_null() => text,
+            _ => {
+                swarn!(fn; "FText conversion unavailable; skipping spawn confirmation chat");
+                return;
+            }
+        };
+        let game_mode = match CALL_ORIGINAL_SAFE!(GetTBLGameMode(world.as_uobject())) {
+            Ok(game_mode) if !game_mode.is_null() => game_mode,
+            _ => {
+                swarn!(fn; "No game mode; skipping spawn confirmation chat");
+                return;
+            }
+        };
+        if let Err(error) = CALL_ORIGINAL_SAFE!(BroadcastLocalizedChat(game_mode, text, EChatType::Admin)) {
+            swarn!(fn; "Cannot broadcast spawn confirmation: {}", error);
         }
     }
 
@@ -329,6 +375,7 @@ impl ModManager {
      */
     /// Replace saved mod selection with validated CLI classes, on the game thread.
     pub fn update_save_game(&self) {
+        crate::sinfo!(fn; "Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
         let mut settings_fstring = FString::from(settings_file);
         let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;

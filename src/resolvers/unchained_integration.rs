@@ -84,6 +84,10 @@ static ENABLE_IPV6: Once = Once::new();
 thread_local! {
     static IN_TICK: std::cell::Cell<bool> = std::cell::Cell::new(false);
 }
+/// True while the game thread is draining jobs in `UGameEngineTick`.
+pub fn in_game_thread_job() -> bool {
+    IN_TICK.with(|f| f.get())
+}
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
 CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:f32, state:u8), {
 
