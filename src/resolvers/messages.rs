@@ -1,24 +1,37 @@
 use std::os::raw::c_void;
 
-use crate::{game::{chivalry2::{ATBLGameMode, EChatType}, engine::FText}, ue::FString};
+use crate::{
+    game::{
+        chivalry2::{ATBLGameMode, EChatType},
+        engine::FText,
+    },
+    ue::{FConsoleOutputDevice, FString, TCHAR},
+};
 
 
 // Chat messages
 // #[cfg(feature="client_message")]
 mod client_message {
-    use regex::Regex;
-    use std::os::raw::c_void;
-    use crate::{events::models::{GameChatMessage, GameEvent}, game::chivalry2::EChatType, ue::{FName, FString}};
-    use crate::events::models::{ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandSource, CommandRequest, PermissionFlags};
+    use crate::events::models::{
+        ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandRequest,
+        CommandSource, PermissionFlags,
+    };
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
+    use crate::ue::APlayerController;
+    use crate::{
+        events::models::{GameChatMessage, GameEvent},
+        game::chivalry2::EChatType,
+        ue::{FName, FString},
+    };
+    use regex::Regex;
 
     define_pattern_resolver!(ClientMessage, [
         "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
     ]);
 
     // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
-    CREATE_HOOK!(ClientMessage, (this:*mut c_void, S:*mut FString, Type:FName, MsgLifeTime: f32), {
+    CREATE_HOOK!(ClientMessage, (this:*mut APlayerController, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         let string_ref: &FString = unsafe{ &*S };
         let message = string_ref.to_string();
         match parse_client_message(message.as_str()) {
@@ -309,13 +322,12 @@ mod client_message {
             }
         }
     }
-
 }
 
 // Kismet error messages
 #[cfg(feature="kismet_log")]
 pub mod kismet_log {
-    use crate::ue::{FName, UObject};
+    use crate::ue::{FName, UObject, TCHAR};
     
     // Chiv is spamming these from time to time. Shame, Shame, Shame
     // TODO: Maybe make it dynamic
@@ -331,7 +343,7 @@ pub mod kismet_log {
     ]);
 
     // void __cdecl FFrame::KismetExecutionMessage(wchar_t *param_1,Type param_2,FName param_3)
-    CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const u16, Type: u8, fname: FName), {
+    CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const TCHAR, Type: u8, fname: FName), {
         
         if !Message.is_null() {
             unsafe {
@@ -383,6 +395,7 @@ CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text:
 // TODO: Not used?
 define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
 // void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
+// The receiver is missing from this legacy signature; leave its ABI unresolved.
 CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
     if !S.is_null() {
         let url_w = unsafe { (*S).to_string() };
@@ -393,7 +406,7 @@ CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mu
 // Console output (e.g. "Command not recognized: ...")
 define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
 // void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
-CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut c_void, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
+CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut FConsoleOutputDevice, arg1: *const TCHAR, arg2: *const u16, arg3: *const u16),{
     unsafe {
         if !arg1.is_null() {
             // get a rust string

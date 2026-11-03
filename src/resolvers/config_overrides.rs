@@ -1,10 +1,7 @@
 use std::cell::Cell;
 
 use crate::{
-    game::{
-        chivalry2::ATBLGameMode,
-        engine::UWorld,
-    },
+    game::chivalry2::ATBLGameMode,
     tools::hook_globals::globals,
 };
 
@@ -126,7 +123,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
 fn current_map_list_index() -> Option<i32> {
     // This index is the rotation slot currently active in the match.
     let world = globals().world()?;
-    let world_ref = unsafe { &*(world as *mut UWorld) };
+    let world_ref = unsafe { &*world };
     let game_mode = unsafe { (world_ref.authority_game_mode as *mut ATBLGameMode).as_ref() }?;
     let index = game_mode.map_list_index;
     (index >= 0).then_some(index)

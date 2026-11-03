@@ -1,7 +1,15 @@
-use std::{cell::{Cell, RefCell}, collections::{HashMap, HashSet}, os::raw::c_void};
+use std::{
+    cell::{Cell, RefCell},
+    collections::{HashMap, HashSet},
+    os::raw::c_void,
+};
 
-use crate::{game::engine::ENetMode, tools::hook_globals::{cli_args, globals}, ue::{UFunction, UObject, UStruct}};
 use crate::resolvers::unchained_integration::*;
+use crate::{
+    game::engine::ENetMode,
+    tools::hook_globals::{cli_args, globals},
+    ue::{APlayerController, UFunction, UObject, UStruct},
+};
 
 // Desync patch
 // FIXME: Add conditionals to CREATE_HOOK?
@@ -15,7 +23,7 @@ CREATE_PATCH!(UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3
 define_pattern_resolver!(DedicatedServerInit, [
    "41 56 48 83 EC 30 48 89 6C 24 48 48 89 74 24 50 48 89 7C 24 28 4C 89 7C 24 20 4C 8B F9 ?? ?? ?? ?? ?? 48 8B C8 4C 8B F0"
 ]);
-CREATE_HOOK!(DedicatedServerInit, ACTIVE, NONE, (), (this_ptr: *mut c_void), {});
+CREATE_HOOK!(DedicatedServerInit, ACTIVE, NONE, (), (this_ptr: *mut APlayerController), {});
 
 
 // PROCESSEVENT FILTERING

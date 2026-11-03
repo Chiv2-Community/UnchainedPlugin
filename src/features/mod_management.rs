@@ -12,7 +12,7 @@ use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::ue::{FString, FVector, TArray, UClass, UObject};
+use crate::ue::{AsUObject, FString, FVector, TArray, UClass, UObject};
 use crate::resolvers::{asset_registry::*, asset_loading::*};
 #[allow(unused_imports)]
 use serde::Serialize;
@@ -221,7 +221,7 @@ impl ModManager {
         let mut res_arr = TArray::<*mut UObject>::default();
         
         CALL_ORIGINAL_SAFE!(GetAllActorsOfClass(
-            world as *const UObject,
+            world.as_uobject(),
             mod_base_class,
             &mut res_arr
         ))?;
@@ -255,7 +255,7 @@ impl ModManager {
 
     /// Spawn/Destroy Stubs
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        // (world: *mut c_void, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
+        // (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters)
         let world = match globals().world() {
             Some(world) => world,
             None => {
@@ -287,7 +287,7 @@ impl ModManager {
                     let settings_file = "Spawned new Mod from console";
                     let mut settings_fstring = FString::from(settings_file);
                     let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring)) as *mut FText;
-                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world));
+                    let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
                     TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, EChatType::Admin));
                 } else {
                     swarn!(fn; "globals.world missing; skipping spawn confirmation chat");

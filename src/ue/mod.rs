@@ -6,8 +6,10 @@ mod map;
 mod memory;
 mod name;
 mod object;
+mod object_ptr;
 pub mod object_array;
 mod string;
+pub mod stubs;
 pub mod sync;
 
 pub use array::*;
@@ -16,7 +18,9 @@ pub use map::*;
 pub use memory::*;
 pub use name::*;
 pub use object::*;
+pub use object_ptr::*;
 pub use string::*;
+pub use stubs::*;
 
 use std::ffi::c_void;
 
@@ -30,7 +34,7 @@ pub type FnFFrameStepExplicitProperty = unsafe extern "system" fn(
     property: *const FProperty,
 );
 pub type FnFNameToString = unsafe extern "system" fn(&FName, &mut FString);
-pub type FnFNameCtorWchar = unsafe extern "system" fn(&mut FName, *const u16, EFindName);
+pub type FnFNameCtorWchar = unsafe extern "system" fn(&mut FName, *const TCHAR, EFindName);
 
 pub type FnUObjectBaseUtilityGetPathName =
     unsafe extern "system" fn(&UObjectBase, Option<&UObject>, &mut FString);

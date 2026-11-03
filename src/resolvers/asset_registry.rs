@@ -1,12 +1,15 @@
+use crate::ue::{
+    EFindName, FName, FString, FUObjectSerializeContext, IAssetRegistry, TArray, UAssetManager,
+    UAssetRegistryImpl, UClass, UObject, UPackageMap, TCHAR,
+};
 use std::{fmt, os::raw::c_void};
 use widestring::U16CStr;
-use crate::ue::{EFindName, FName, FString, TArray, UClass, UObject};
 
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
 // IAssetRegistry * __thiscall UAssetManager::GetAssetRegistry(UAssetManager *this)
-CREATE_HOOK!(GetAssetRegistry, CALLED, *mut c_void, (asset_manager: *mut c_void),{
+CREATE_HOOK!(GetAssetRegistry, CALLED, *mut IAssetRegistry, (asset_manager: *mut UAssetManager),{
     // sinfo![fn; "Triggered!"];
 });
 
@@ -18,8 +21,9 @@ mod hook_signature_tests {
     fn get_asset_registry_preserves_pointer_return_signature() {
         // Both the detour entry point and original trampoline must return the
         // native IAssetRegistry pointer, even when the hook body ignores it.
-        let _: unsafe extern "C" fn(*mut c_void) -> *mut c_void = GetAssetRegistry_detour_fkt;
-        let _: fn(*mut c_void) -> *mut c_void =
+        let _: unsafe extern "C" fn(*mut UAssetManager) -> *mut IAssetRegistry =
+            GetAssetRegistry_detour_fkt;
+        let _: fn(*mut UAssetManager) -> *mut IAssetRegistry =
             |asset_manager| CALL_ORIGINAL!(GetAssetRegistry(asset_manager));
     }
 }
@@ -58,7 +62,7 @@ define_pattern_resolver!(GetAssetsByClass,[
     ]);
 
 // bool __thiscall UAssetRegistryImpl::GetAssetsByClass(UAssetRegistryImpl *this,FName param_1,TArray<> *param_2,bool param_3)
-CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut c_void, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
+CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
     // Debug code
     sinfo![fn; "Triggered! {}", ClassPathName];
     let res: bool;
@@ -111,7 +115,7 @@ CREATE_HOOK!(GetAssetRegistry_Helper, CALLED,  *mut TScriptInterface, (ret_val_t
 
 define_pattern_resolver!(FNameCtorWchar, Simple, ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]);
 // FName * __thiscall FName::FName(FName *this,wchar_t *param_1,EFindName param_2)
-CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const u16, findname: EFindName),{
+CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const TCHAR, findname: EFindName),{
     // sinfo![fn; "Triggered!"];
     unsafe {
         if findname == EFindName::Find {
@@ -128,9 +132,9 @@ CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const
 define_pattern_resolver!(StaticFindObject,["48 89 5C 24 08 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 83 EC 60 80 3D 98 BB"]);
 // UObject* StaticFindObject( UClass* ObjectClass, UObject* InObjectPackage, const TCHAR* OrigInName, bool ExactClass )
 CREATE_HOOK!(StaticFindObject, CALLED, *mut UObject, (
-    obj_class: *mut c_void,
-    package: *mut c_void,
-    name: *const u16,
+    obj_class: *mut UClass,
+    package: *mut UObject,
+    name: *const TCHAR,
     exact_class: bool
 ), {
     if !name.is_null() {
@@ -154,15 +158,16 @@ CREATE_HOOK!(GetAllActorsOfClass, CALLED, (WorldContextObject: *const UObject, A
 define_pattern_resolver!(StaticLoadObject,["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 FA FF FF 48 81 EC D8 06 00 00 48 8B 05 25 5E 9F 03 48 33 C4 48 89 85 C0 05 00 00 48"]);
 // UObject* StaticLoadObject(UClass* ObjectClass, UObject* InOuter, const TCHAR* InName, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowObjectReconciliation, FUObjectSerializeContext* InSerializeContext)
 // UObject* StaticLoadObject(UClass* Class, UObject* InOuter, const TCHAR* Name, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowNativeComponentClass, const FLinkerInstancingContext* InstancingContext)
+// The resolved target uses FUObjectSerializeContext, not FLinkerInstancingContext.
 CREATE_HOOK!(StaticLoadObject, CALLED, *mut UObject, (
-    obj_class: *mut c_void, 
-    in_outer: *mut c_void, 
-    name: *const u16, 
-    filename: *const u16, 
-    load_flags: u32, 
-    sandbox: *mut c_void, 
+    obj_class: *mut UClass,
+    in_outer: *mut UObject,
+    name: *const TCHAR,
+    filename: *const TCHAR,
+    load_flags: u32,
+    sandbox: *mut UPackageMap,
     allow_native_comp: bool,
-    instancing_context: *mut c_void
+    instancing_context: *mut FUObjectSerializeContext
 ), {
     if !name.is_null() {
         let name_str = unsafe { U16CStr::from_ptr_str(name) };

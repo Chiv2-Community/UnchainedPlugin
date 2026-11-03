@@ -1,18 +1,17 @@
 use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
-use crate::game::chivalry2::{AController, ATBLGameMode, PlayerFlags};
+use crate::game::chivalry2::{AController, ATBLGameMode, FUniqueNetIdRepl, PlayerFlags};
 use crate::tools::hook_globals::globals;
 use crate::{
     backend_url,
     tools::hook_globals::cli_args,
-    ue::{FString, FStringCopyError},
+    ue::{FString, FStringCopyError, FTBLOnlineStats, TSharedRefIHttpRequest, TCHAR},
 };
-use std::os::raw::c_void;
 
 define_pattern_resolver!(FString_AppendChars, [
     "45 85 C0 0F 84 89 00 00 00 48 89 5C 24 18 48 89 6C 24 20 56 48 83 EC 20 48 89 7C 24 30 48 8B EA 48 63 79 08 48 8B D9 4C 89 74 24 38 45 33 F6 85 FF 49 63 F0 41 8B C6 0F 94 C0 03 C7 03 C6 89 41 08 3B 41 0C 7E 07 8B D7 E8 ?? ?? ?? ?? 85 FF 49 8B C6 48 8B CF 48 8B D5 0F 95 C0 48 2B C8 48 8B 03 48 8D 1C 36 4C 8B C3 48 8D 3C 48 48 8B CF E8 ?? ?? ?? ?? 48 8B 6C 24 48 66 44 89 34 3B 4C 8B 74 24 38 48 8B 7C 24 30 48 8B 5C 24 40 48 83 C4 20 5E C3" // Universal
 ]);
-CREATE_HOOK!(FString_AppendChars, CALLED, (), (this_ptr: *mut FString, str_ptr: *const u16, count: u32), {
+CREATE_HOOK!(FString_AppendChars, CALLED, (), (this_ptr: *mut FString, str_ptr: *const TCHAR, count: u32), {
 });
 
 define_pattern_resolver!(
@@ -27,7 +26,7 @@ define_pattern_resolver!(
         " Minutes"
     )]
 );
-     */
+*/
 
 /// Extracts a value from UE4 options strings of the form `?Key1=Val1?Key2=Val2`.
 fn extract_option_value<'a>(options: &'a str, key: &str) -> Option<&'a str> {
@@ -121,7 +120,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLGameMode,
     options: *const FString,
     address: *const FString,
-    unique_id: *const c_void, // FUniqueNetIdRepl
+    unique_id: *const FUniqueNetIdRepl,
     error_message: *mut FString
 ), {
     let options_string = unsafe { options.as_ref() }
@@ -227,8 +226,10 @@ define_pattern_resolver!(SendRequest, [
     "48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 55 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 40 48 8B D9 49 8B F9"
 ]);
 // TODO: check if some copying can be avoided
-CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut c_void, (
-    this_ptr: *mut c_void, u_ptr: *mut FString, body: *mut FString, a_key: *mut FString, a_val: *mut FString
+// PlayFab::PlayFabRequestHandler::SendRequest returns TSharedRef<IHttpRequest, 0>
+// through caller-provided storage; this_ptr is that storage, not a handler.
+CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
+    this_ptr: *mut TSharedRefIHttpRequest, u_ptr: *mut FString, body: *mut FString, a_key: *mut FString, a_val: *mut FString
 ), {
     // let original_url = unsafe { ManuallyDrop::new(std::ptr::read(u_ptr)) };
     let original_ptr = u_ptr;
@@ -267,7 +268,7 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut c_void, (
 //     "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 80 79 10 00 41 8B E8 48 63 FA 48 8B D9 ?? ?? ?? ?? ?? ?? 48 8B 05 52 86 1F 04 80 3C" // Universal
 // ]);
 // CREATE_HOOK!(IncStat, ACTIVE, NONE, (),
-//     (this_ptr: *mut c_void, p1: i32, p2: i32),
+//     (this_ptr: *mut FTBLOnlineStats, p1: i32, p2: i32),
 // {
 //     // sinfo!(fn; "Stat: {:?}", p1);
 //     // CALL_ORIGINAL!(IncStat(this_ptr, p1, p2));
@@ -284,7 +285,7 @@ define_pattern_resolver!(
 ]
 );
 CREATE_HOOK!(SetStatInner, ACTIVE, NONE, (),
-    (this_ptr: *mut c_void, p1: i32, p2: i32),
+    (this_ptr: *mut FTBLOnlineStats, p1: i32, p2: i32),
 {
     // sinfo!(fn; "Stat: {:?} {:?}", p1, p2);
     // CALL_ORIGINAL!(SetStatInner(this_ptr, p1, p2));
