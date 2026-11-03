@@ -32,6 +32,8 @@ use travel::{Destination, TravelState};
 struct State {
     travel: TravelState,
     layers: ConfigLayers,
+    pending_refresh: HashSet<String>,
+    refreshing_generation: Option<u64>,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -51,7 +53,7 @@ fn profile_root() -> Option<&'static str> {
 
 impl State {
     // Called only at destination boundaries, including failed-load restoration.
-    fn prepare_layers(&mut self, root: &str) -> HashSet<String> {
+    fn prepare_layers(&mut self, root: &str) {
         let context = &self.travel.current.selection;
         let profile = context
             .index
@@ -60,29 +62,50 @@ impl State {
         let expanded = expand_layers(root, &selected);
         let layers = ConfigLayers::new(root, &expanded);
         // Removed categories must also reload their baseline defaults.
-        let mut categories = self.layers.categories().collect::<HashSet<_>>();
-        categories.extend(layers.categories());
+        self.pending_refresh.extend(self.layers.categories());
+        self.pending_refresh.extend(layers.categories());
         self.layers = layers;
         GENERATION.store(self.travel.current.generation, Ordering::Release);
-        categories
     }
 
-    fn enter_map(&mut self, root: &str, map: &str, world: Option<usize>) -> MapChange {
+    fn enter_map(&mut self, root: &str, map: &str, world: Option<usize>) -> Destination {
         let previous = self.travel.enter(map, world);
-        let categories = if previous.generation != self.travel.current.generation {
-            self.prepare_layers(root)
-        } else {
-            self.layers.categories().collect()
-        };
-        MapChange {
-            previous,
-            categories,
+        if previous.generation != self.travel.current.generation {
+            self.prepare_layers(root);
         }
+        previous
     }
 }
 
-struct MapChange {
-    previous: Destination,
+// Keep outgoing categories pending until a ready refresh completes. Native calls may
+// reenter selection; neither repeat an in-flight generation nor clear a newer one.
+fn refresh_selected(refresh: impl FnOnce(&HashSet<String>) -> bool) {
+    let Some(pending) = with_state(|state| {
+        let generation = state.travel.current.generation;
+        if state.pending_refresh.is_empty() || state.refreshing_generation == Some(generation) {
+            return None;
+        }
+        state.refreshing_generation = Some(generation);
+        Some(DefaultRefresh {
+            generation,
+            categories: state.pending_refresh.clone(),
+        })
+    }) else {
+        return;
+    };
+    let refreshed = refresh(&pending.categories);
+    with_state(|state| {
+        if state.refreshing_generation == Some(pending.generation) {
+            state.refreshing_generation = None;
+        }
+        if refreshed && state.travel.current.generation == pending.generation {
+            state.pending_refresh.clear();
+        }
+    });
+}
+
+struct DefaultRefresh {
+    generation: u64,
     categories: HashSet<String>,
 }
 
@@ -184,9 +207,9 @@ fn preserve_rotation_index(index: i32) {
     });
 }
 
-fn refresh_defaults(categories: &HashSet<String>) {
-    if categories.is_empty() || !globals_initialized() {
-        return;
+fn refresh_defaults(categories: &HashSet<String>) -> bool {
+    if !globals_initialized() {
+        return false;
     }
     // Release the object-array lock before invoking engine code, which can allocate UObjects.
     let candidates = {
@@ -230,25 +253,26 @@ fn refresh_defaults(categories: &HashSet<String>) {
             }
         }
     }
+    true
 }
 
 /// Select destination layers before native map/game-mode initialization.
 pub(crate) fn select_map(map: &str, world: Option<usize>) -> Option<Destination> {
     capture_startup(map);
     let root = profile_root()?;
-    let change = with_state(|state| state.enter_map(root, map, world));
+    let previous = with_state(|state| state.enter_map(root, map, world));
     reset_overlays();
-    refresh_defaults(&change.categories);
-    Some(change.previous)
+    refresh_selected(refresh_defaults);
+    Some(previous)
 }
 
 pub(crate) fn restore_map(previous: Destination) {
-    let categories = with_state(|state| {
+    with_state(|state| {
         state.travel.restore(previous);
-        state.prepare_layers(profile_root().unwrap())
+        state.prepare_layers(profile_root().unwrap());
     });
     reset_overlays();
-    refresh_defaults(&categories);
+    refresh_selected(refresh_defaults);
 }
 
 pub(crate) fn capture_rotation(map: &str, index: i32, entry: Option<&str>) -> Option<MapContext> {
@@ -257,4 +281,99 @@ pub(crate) fn capture_rotation(map: &str, index: i32, entry: Option<&str>) -> Op
 
 pub(crate) fn accept_travel(pending: Option<MapContext>) {
     with_state(|state| state.travel.accept_rotation(pending));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn destination_refresh_retries_deduplicates_and_preserves_pending_categories() {
+        let root = std::env::temp_dir().join(format!("unchained-refresh-{}", std::process::id()));
+        for (map, category) in [("A", "Engine"), ("B", "Game")] {
+            let folder = root.join("ini-overrides/maps").join(map);
+            std::fs::create_dir_all(&folder).unwrap();
+            std::fs::write(folder.join(format!("{category}.ini")), "[Test]\nValue=1").unwrap();
+        }
+        let root = root.to_str().unwrap();
+        with_state(|state| *state = State::default());
+        let enter = |map, world| with_state(|state| state.enter_map(root, map, world));
+        let refreshed = |expected: &[&str]| {
+            let mut called = false;
+            refresh_selected(|categories| {
+                called = true;
+                assert_eq!(
+                    categories,
+                    &expected.iter().map(|s| s.to_string()).collect()
+                );
+                true
+            });
+            assert!(called);
+        };
+        let unchanged = || refresh_selected(|_| panic!("already refreshed"));
+
+        enter("A", None);
+        refresh_selected(|_| false); // Globals are not ready: retain the work.
+        enter("A", Some(42));
+        refreshed(&["engine"]);
+        enter("A", Some(42));
+        unchanged();
+        // A ready ordinary load and its GameMode share a single refresh too.
+        enter("A", None);
+        refreshed(&["engine"]);
+        enter("A", Some(43));
+        unchanged();
+        enter("A", Some(43));
+        unchanged();
+        enter("A", Some(44));
+        refreshed(&["engine"]);
+
+        let previous = enter("B", None);
+        refreshed(&["engine", "game"]); // Removed Engine overrides reload baseline.
+        with_state(|state| {
+            state.travel.restore(previous);
+            state.prepare_layers(root);
+        });
+        refreshed(&["engine", "game"]);
+        unchanged();
+
+        enter("B", None);
+        refresh_selected(|_| false);
+        enter("C", None);
+        refresh_selected(|_| false);
+        enter("C", Some(45));
+        refreshed(&["engine", "game"]); // Neither skipped generation loses its categories.
+
+        with_state(|state| {
+            state
+                .travel
+                .accept_rotation(Some(MapContext::new("A", Some(2))));
+        });
+        enter("B", Some(46)); // Seamless transition must keep the final slot pending.
+        refreshed(&["game"]);
+        enter("A", Some(47));
+        assert_eq!(
+            with_state(|state| state.travel.current.selection.index),
+            Some(2)
+        );
+        refreshed(&["engine", "game"]);
+
+        enter("B", None);
+        refresh_selected(|_| {
+            enter("B", Some(48));
+            unchanged(); // Native reentry must not recurse into the same refresh.
+            enter("C", None); // Publish a newer generation while native code runs.
+            true
+        });
+        refreshed(&["engine", "game"]); // Old completion cannot consume newer work.
+        unchanged();
+
+        enter("A", None);
+        refresh_selected(|_| {
+            enter("B", None);
+            refreshed(&["engine", "game"]);
+            true
+        });
+        unchanged(); // Newer nested completion remains authoritative.
+    }
 }
