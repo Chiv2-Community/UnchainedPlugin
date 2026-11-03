@@ -98,8 +98,8 @@ pub struct FSoftObjectPath {
 impl FSoftObjectPath {
     pub fn new(path: &str) -> Self {
         Self {
-            // We use 'Find' for existing assets, or 'Add' if you are creating a path
-            asset_path_name: FName::with_type(path, EFindName::Find),
+            // A loaded object need not have its full path interned as one FName.
+            asset_path_name: FName::with_type(path, EFindName::Add),
             sub_path_string: FString::default(),
         }
     }

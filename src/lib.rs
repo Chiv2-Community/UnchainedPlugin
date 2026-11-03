@@ -548,11 +548,14 @@ pub fn world_init() {
         let mm = Arc::new(ModManager::new());
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
+        drop(global_mm);
 
-        sinfo!(fn; "Mod scans in progress");
-        mm.scan_asset_registry();
-        mm.update_save_game();
-        sinfo!(fn; "Started mod manager");
+        resolvers::unchained_integration::run_on_game_thread(move || {
+            sinfo!(fn; "Mod scans in progress");
+            mm.scan_asset_registry();
+            mm.update_save_game();
+            sinfo!(fn; "Started mod manager");
+        });
     }
 }
 

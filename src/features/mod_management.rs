@@ -1,6 +1,4 @@
-use std::os::raw::c_void;
 use std::sync::Mutex;
-use itertools::enumerate;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
@@ -111,6 +109,25 @@ pub struct ModManager {
     registry: Mutex<HashMap<String, Mod>>,
     /// Set of active object paths
     active_paths: Mutex<HashSet<String>>,
+}
+
+// Validate syntax before passing launcher input to Unreal's string/path APIs.
+fn enabled_mod_paths<'a>(
+    mods: Option<&'a [String]>,
+    mut class_exists: impl FnMut(&str) -> bool,
+) -> Vec<&'a str> {
+    mods.into_iter().flatten().filter_map(|path| {
+        let valid_path = path.starts_with('/') && !path.contains('\0')
+            && path.rsplit_once('.').is_some_and(|(package, class)| {
+                package.len() > 1 && !class.is_empty()
+            });
+        if valid_path && class_exists(path) {
+            Some(path.as_str())
+        } else {
+            swarn!("Skipping missing or invalid mod class: {:?}", path);
+            None
+        }
+    }).collect()
 }
 
 impl ModManager {
@@ -310,6 +327,7 @@ impl ModManager {
     --server-mods /Game/Mods/AgMods/GiantSlayers/GiantSlayers.GiantSlayers_C,/Game/Mods/AgMods/ManlyMen/ManlyMen.ManlyMen_C,/Game/Mods/AgMods/ChatHooks/ChatHooks.ChatHooks_C,/Game/Mods/AgMods/PropHuntOnline/PropHuntOnline.PropHuntOnline_C
     
      */
+    /// Replace saved mod selection with validated CLI classes, on the game thread.
     pub fn update_save_game(&self) {
         let settings_file = "ModLoader";
         let mut settings_fstring = FString::from(settings_file);
@@ -323,21 +341,48 @@ impl ModManager {
         sinfo!(fn; "Enable Bots: {}", save_game.b_enable_bots);
         sinfo!(fn; "PlayerBots:  {}", save_game.b_use_player_bots);
         sinfo!(fn; "Bot count:   {}", save_game.num_player_bots);
-        for (cnt, r#mod) in enumerate(save_game.enabled_mods.as_slice()) {
-            sinfo!(fn; "{:02}: Mod: {}", cnt, r#mod.soft_ptr.path.asset_path_name);
-        }
-        // FIXME: apply mods from cli
-        save_game.enabled_mods.clear();
-        if let Some(mod_list) = cli_args().server_mods.as_ref() {
-            for r#mod in mod_list.iter() {  
-                if let Some(name_short) = r#mod.rsplit_once('.').map(|(_, n)| n) {                    
-                    let soft_ptr = TSoftClassPtr::from_path(r#mod.as_str());
-                    sinfo!(fn; "Enabling mod {}", name_short);
-                    save_game.enabled_mods.push(soft_ptr);
+        // Loading with a Class filter rejects ordinary assets as well as stale paths.
+        let server_mods = cli_args().server_mods.as_deref();
+        let class_type = if server_mods.is_some_and(|mods| !mods.is_empty()) {
+            let class_type = unsafe { get_uobject_from_path("/Script/CoreUObject.Class", false) };
+            if class_type.is_null() {
+                serror!(fn; "Class type not found; cannot validate any mods");
+            }
+            class_type
+        } else {
+            std::ptr::null_mut()
+        };
+        let paths = enabled_mod_paths(server_mods, |path| {
+            if class_type.is_null() {
+                return false;
+            }
+            let wide_path = U16CString::from_str(path).expect("validated mod path");
+            match CALL_ORIGINAL_SAFE!(StaticLoadObject(
+                class_type as *mut UClass,
+                std::ptr::null_mut(),
+                wide_path.as_ptr(),
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                false,
+                std::ptr::null_mut()
+            )) {
+                Ok(object) => !object.is_null(),
+                Err(error) => {
+                    serror!(fn; "Cannot validate mod {}: {}", path, error);
+                    false
                 }
-            }      
-        }  
-        let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr as *mut c_void, &mut settings_fstring, 0));
+            }
+        });
+        // Both lists belong to the previous launch. Empty CLI input must also
+        // remove the cached active mods, rather than allowing them to return.
+        save_game.enabled_mods.clear();
+        save_game.last_active_mods.clear();
+        for path in paths {
+            sinfo!(fn; "Enabling mod {}", path);
+            save_game.enabled_mods.push(TSoftClassPtr::from_path(path));
+        }
+        let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
         if res {
             sinfo!(fn; "Modloader settings saved: {res}");
         }
@@ -419,6 +464,31 @@ impl ModManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn absent_or_empty_server_mods_enable_nothing() {
+        let unexpected_lookup = |_: &str| panic!("empty input must not resolve classes");
+        assert!(enabled_mod_paths(None, unexpected_lookup).is_empty());
+        assert!(enabled_mod_paths(Some(&[]), unexpected_lookup).is_empty());
+    }
+
+    #[test]
+    fn invalid_and_missing_classes_are_skipped() {
+        let mods: Vec<String> = [
+            "/Game/Mods/Example.Example_C",
+            "/Game/Mods/Old.Old_C",
+            "", "/Game/Mods/NoClass", "/Game/Mods/Empty.",
+            "/Game/Mods/Bad.Bad\0_C",
+            "/Game/Mods/Other.Other_C",
+        ].into_iter().map(String::from).collect();
+        let mut resolved = Vec::new();
+        let paths = enabled_mod_paths(Some(&mods), |path| {
+            resolved.push(path.to_owned());
+            !path.contains("Old")
+        });
+        assert_eq!(paths, [mods[0].as_str(), mods[6].as_str()]);
+        assert_eq!(resolved, [mods[0].clone(), mods[1].clone(), mods[6].clone()]);
+    }
 
     #[test]
     fn owned_collections_preserve_mod_queries_and_reset() {
