@@ -141,6 +141,7 @@ emojis = "0.6"
 unicode-segmentation = "1.12"
 
 [dev-dependencies]
+rstest = { version = "0.26", default-features = false }
 tokio = { version = "1.0", features = ["test-util"] }
 [patch.crates-io]
 # Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.

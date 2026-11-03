@@ -57,6 +57,7 @@ pub fn parse_server_settings(yaml: &str) -> Result<ServerSettings, serde_yaml::E
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     macro_rules! fixture {
         ($name:literal) => {
@@ -69,12 +70,8 @@ mod tests {
     }
 
     #[test]
-    fn array_positions_select_profiles_and_metadata_is_preserved() {
+    fn metadata_is_preserved() {
         let settings = parse_server_settings(fixture!("metadata-and-profiles")).unwrap();
-        assert_eq!(settings.profile_at(0), Some("quiet"));
-        assert_eq!(settings.profile_at(1), Some("busy"));
-        assert_eq!(settings.profile_at(-1), None);
-        assert_eq!(settings.profile_at(2), None);
         let entry = &settings.match_rotation[0];
         assert_eq!(entry.name, "First match");
         assert_eq!(entry.description, "Display only");
@@ -83,31 +80,35 @@ mod tests {
         assert!(settings.match_rotation[1].mod_actors.is_empty());
     }
 
-    #[test]
-    fn rejects_duplicate_unsafe_or_missing_profiles() {
-        for yaml in [
-            fixture!("duplicate-profiles"),
-            fixture!("unsafe-profile"),
-            fixture!("empty-profile"),
-            fixture!("missing-profile"),
-            fixture!("invalid-mod-actors"),
-            fixture!("legacy-profile-mapping"),
-        ] {
-            assert!(parse_server_settings(yaml).is_err(), "{yaml}");
-        }
+    #[rstest]
+    #[case::first(0, Some("quiet"))]
+    #[case::second(1, Some("busy"))]
+    #[case::negative(-1, None)]
+    #[case::past_end(2, None)]
+    fn array_positions_select_profiles(#[case] index: i32, #[case] expected: Option<&str>) {
+        let settings = parse_server_settings(fixture!("metadata-and-profiles")).unwrap();
+        assert_eq!(settings.profile_at(index), expected);
     }
 
-    #[test]
-    fn empty_rotation_is_valid() {
-        for yaml in [
-            fixture!("empty-document"),
-            fixture!("empty-settings"),
-            fixture!("empty-rotation"),
-        ] {
-            assert!(parse_server_settings(yaml)
-                .unwrap()
-                .match_rotation
-                .is_empty());
-        }
+    #[rstest]
+    #[case::duplicate(fixture!("duplicate-profiles"))]
+    #[case::unsafe_name(fixture!("unsafe-profile"))]
+    #[case::empty_profile(fixture!("empty-profile"))]
+    #[case::missing_profile(fixture!("missing-profile"))]
+    #[case::invalid_mod_actors(fixture!("invalid-mod-actors"))]
+    #[case::legacy_mapping(fixture!("legacy-profile-mapping"))]
+    fn rejects_invalid_settings(#[case] yaml: &str) {
+        assert!(parse_server_settings(yaml).is_err());
+    }
+
+    #[rstest]
+    #[case::empty_document(fixture!("empty-document"))]
+    #[case::empty_settings(fixture!("empty-settings"))]
+    #[case::empty_rotation(fixture!("empty-rotation"))]
+    fn empty_rotation_is_valid(#[case] yaml: &str) {
+        assert!(parse_server_settings(yaml)
+            .unwrap()
+            .match_rotation
+            .is_empty());
     }
 }

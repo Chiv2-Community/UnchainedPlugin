@@ -1,10 +1,11 @@
+use itertools::Itertools;
 use std::{cell::RefCell, collections::HashMap, ptr::NonNull, sync::atomic::Ordering};
 
 use super::{with_state, GENERATION};
 use crate::{
     resolvers::ini::{o_ConfigFileAddLayer, o_ConfigFileCopy, o_ConfigFileDestroy},
     tools::hook_globals::globals_initialized,
-    ue::{FConfigCacheIni, FConfigFile, FString},
+    ue::{FConfigCacheIni, FConfigFile, FString, TCHAR},
 };
 
 use super::selection::{
@@ -25,7 +26,7 @@ impl ConfigLayers {
             let Ok(entries) = std::fs::read_dir(folder) else {
                 continue;
             };
-            let mut files = entries
+            entries
                 .flatten()
                 .filter(|entry| entry.path().is_file())
                 .filter_map(|entry| {
@@ -33,20 +34,19 @@ impl ConfigLayers {
                     config_filename(&name)?;
                     Some(name)
                 })
-                .collect::<Vec<_>>();
-            files.sort();
-            files.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
-            for name in files {
-                prepared
-                    .paths
-                    .entry(name.to_ascii_lowercase())
-                    .or_default()
-                    .extend(build_override_paths(
-                        root,
-                        &name,
-                        std::slice::from_ref(selection),
-                    ));
-            }
+                .sorted()
+                .dedup_by(|a, b| a.eq_ignore_ascii_case(b))
+                .for_each(|name| {
+                    prepared
+                        .paths
+                        .entry(name.to_ascii_lowercase())
+                        .or_default()
+                        .extend(build_override_paths(
+                            root,
+                            &name,
+                            std::slice::from_ref(selection),
+                        ));
+                });
         }
         prepared
     }
@@ -102,7 +102,7 @@ struct OverlayCache {
 
 struct OverlayKey {
     cache_address: usize,
-    filename: Vec<u16>,
+    filename: Box<[TCHAR]>,
     baseline_address: usize,
 }
 
@@ -123,14 +123,14 @@ impl OverlayCache {
     fn find(
         &self,
         cache: *mut FConfigCacheIni,
-        filename: &[u16],
+        filename: &[TCHAR],
         baseline: *mut FConfigFile,
     ) -> Option<*mut FConfigFile> {
         self.files
             .iter()
             .find(|entry| {
                 entry.key.cache_address == cache as usize
-                    && entry.key.filename == filename
+                    && entry.key.filename.as_ref() == filename
                     && entry.key.baseline_address == baseline as usize
             })
             .map(|entry| entry.file.as_ref().map_or(baseline, OwnedConfig::ptr))
@@ -211,7 +211,7 @@ pub(crate) fn route_config(
         // Paths are already selected; only UE's one-time INI read/merge remains.
         let key = OverlayKey {
             cache_address: cache as usize,
-            filename: filename.as_slice().to_vec(),
+            filename: filename.as_slice().into(),
             baseline_address: baseline as usize,
         };
         let entry = materialize(key, &name, baseline);
@@ -226,40 +226,55 @@ pub(crate) fn route_config(
 mod tests {
     use super::super::selection::{expand_layers, select_layers, MapContext};
     use super::*;
+    use rstest::{fixture, rstest};
 
-    #[test]
-    fn routing_requires_current_baseline_cache_and_filename() {
-        let filename = "Custom.ini\0".encode_utf16().collect::<Vec<_>>();
-        let cache_pointer = std::ptr::without_provenance_mut::<FConfigCacheIni>(1);
-        let baseline = std::ptr::without_provenance_mut(0x1000);
-        let mut cache = OverlayCache {
+    #[fixture]
+    fn overlay_cache() -> OverlayCache {
+        OverlayCache {
             generation: 7,
             files: vec![Overlay {
                 key: OverlayKey {
                     cache_address: 1,
-                    filename: filename.clone(),
-                    baseline_address: baseline as usize,
+                    filename: "Custom.ini\0".encode_utf16().collect(),
+                    baseline_address: 0x1000,
                 },
                 file: None,
             }],
-        };
+        }
+    }
+
+    #[rstest]
+    #[case::matching(1, "Custom.ini\0", 0x1000, true)]
+    #[case::different_cache(2, "Custom.ini\0", 0x1000, false)]
+    #[case::different_filename(1, "Other.ini\0", 0x1000, false)]
+    #[case::different_baseline(1, "Custom.ini\0", 0x2000, false)]
+    fn routing_requires_current_baseline_cache_and_filename(
+        overlay_cache: OverlayCache,
+        #[case] cache_address: usize,
+        #[case] filename: &str,
+        #[case] baseline_address: usize,
+        #[case] expected_match: bool,
+    ) {
+        let filename = filename.encode_utf16().collect::<Box<[TCHAR]>>();
+        let baseline = std::ptr::without_provenance_mut(baseline_address);
         assert_eq!(
-            cache.find(cache_pointer, &filename, baseline),
-            Some(baseline)
-        );
-        assert_eq!(
-            cache.find(std::ptr::without_provenance_mut(2), &filename, baseline),
-            None
-        );
-        assert_eq!(cache.find(cache_pointer, &[1, 0], baseline), None);
-        assert_eq!(
-            cache.find(
-                cache_pointer,
+            overlay_cache.find(
+                std::ptr::without_provenance_mut(cache_address),
                 &filename,
-                std::ptr::without_provenance_mut(0x2000)
+                baseline
             ),
-            None
+            expected_match.then_some(baseline)
         );
+    }
+
+    #[rstest]
+    fn cache_retirement_preserves_current_generation_and_retires_old_entries(
+        mut overlay_cache: OverlayCache,
+    ) {
+        let cache = &mut overlay_cache;
+        let filename = "Custom.ini\0".encode_utf16().collect::<Box<[TCHAR]>>();
+        let cache_pointer = std::ptr::without_provenance_mut::<FConfigCacheIni>(1);
+        let baseline = std::ptr::without_provenance_mut(0x1000);
         // Continuing GameMode creation keeps this generation's borrowed pointers.
         assert!(cache.retire(7).is_empty());
         assert_eq!(

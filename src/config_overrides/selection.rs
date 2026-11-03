@@ -221,55 +221,52 @@ pub fn select_layers(context: &MapContext, profile: Option<&str>) -> Vec<LayerSe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn destination_map_is_a_validated_leaf() {
-        assert_eq!(
-            map_folder("/Game/Maps/TDM_QuarryKP?NumBots=12").as_deref(),
-            Some("TDM_QuarryKP")
-        );
-        assert_eq!(
-            map_folder(r"\Game\Maps\TDM_QuarryKP.TDM_QuarryKP").as_deref(),
-            Some("TDM_QuarryKP")
-        );
-        for invalid in ["", "../", "..", "/Game/Maps/", "C:Foo", "Foo\0Bar", "CON"] {
-            assert_eq!(map_folder(invalid), None, "{invalid:?}");
-        }
+    #[rstest]
+    #[case::package_url("/Game/Maps/TDM_QuarryKP?NumBots=12", Some("TDM_QuarryKP"))]
+    #[case::object_path(r"\Game\Maps\TDM_QuarryKP.TDM_QuarryKP", Some("TDM_QuarryKP"))]
+    #[case::empty("", None)]
+    #[case::parent_path("../", None)]
+    #[case::parent_component("..", None)]
+    #[case::directory("/Game/Maps/", None)]
+    #[case::drive("C:Foo", None)]
+    #[case::nul("Foo\0Bar", None)]
+    #[case::device("CON", None)]
+    fn destination_map_is_a_validated_leaf(#[case] url: &str, #[case] expected: Option<&str>) {
+        assert_eq!(map_folder(url).as_deref(), expected);
     }
 
-    #[test]
-    fn rejects_profile_traversal_and_windows_aliases() {
-        for invalid in [
-            "../other",
-            r"..\other",
-            ".",
-            "..",
-            "x:y",
-            "foo?x",
-            "NUL.ini",
-            "LPT1",
-            "foo.",
-        ] {
-            assert!(!valid_component(invalid), "{invalid:?}");
-        }
-        assert!(valid_component("night_tdm-2"));
+    #[rstest]
+    #[case::parent_path("../other", false)]
+    #[case::windows_parent_path(r"..\other", false)]
+    #[case::current(".", false)]
+    #[case::parent("..", false)]
+    #[case::colon("x:y", false)]
+    #[case::query("foo?x", false)]
+    #[case::device_extension("NUL.ini", false)]
+    #[case::device("LPT1", false)]
+    #[case::trailing_dot("foo.", false)]
+    #[case::profile("night_tdm-2", true)]
+    #[case::com_ten("COM10", true)]
+    #[case::com_suffix("COM¹-extra", true)]
+    #[case::lpt_ten("LPT10", true)]
+    #[case::lpt_suffix("LPT²-extra", true)]
+    #[case::unicode("夜間", true)]
+    fn validates_components(#[case] name: &str, #[case] expected: bool) {
+        assert_eq!(valid_component(name), expected);
     }
 
-    #[test]
-    fn rejects_superscript_device_names_but_preserves_unicode() {
-        for prefix in ["COM", "cOm", "LPT", "lPt"] {
-            for digit in ["1", "9", "¹", "²", "³"] {
-                for extension in ["", ".ini", ".extra.ini"] {
-                    let name = format!("{prefix}{digit}{extension}");
-                    assert!(!valid_component(&name), "{name}");
-                    assert!(!valid_slot(OverrideLayer::Map, &name));
-                    assert!(!valid_slot(OverrideLayer::MapProfile, &name));
-                }
-            }
-        }
-        for valid in ["COM10", "COM¹-extra", "LPT10", "LPT²-extra", "夜間"] {
-            assert!(valid_component(valid), "{valid}");
-        }
+    #[rstest]
+    fn rejects_windows_device_names(
+        #[values("COM", "cOm", "LPT", "lPt")] prefix: &str,
+        #[values("1", "9", "¹", "²", "³")] digit: &str,
+        #[values("", ".ini", ".extra.ini")] extension: &str,
+    ) {
+        let name = format!("{prefix}{digit}{extension}");
+        assert!(!valid_component(&name));
+        assert!(!valid_slot(OverrideLayer::Map, &name));
+        assert!(!valid_slot(OverrideLayer::MapProfile, &name));
     }
 
     #[test]
@@ -280,19 +277,25 @@ mod tests {
             &[LayerSelection::new(OverrideLayer::Map, "../escape")]
         )
         .is_empty());
-        for invalid in ["../Game.ini", r"C:\Game.ini", "Game.yaml", "COM¹.ini"] {
-            assert!(build_override_paths(
-                "C:/P",
-                invalid,
-                &[LayerSelection::new(OverrideLayer::Map, "Quarry")]
-            )
-            .is_empty());
-        }
         assert_eq!(
             config_filename(r"C:\Saved\WindowsServer\Game.ini").as_deref(),
             Some("Game.ini")
         );
         assert_eq!(config_filename("Game.yaml"), None);
+    }
+
+    #[rstest]
+    #[case::parent_path("../Game.ini")]
+    #[case::absolute_path(r"C:\Game.ini")]
+    #[case::wrong_extension("Game.yaml")]
+    #[case::device("COM¹.ini")]
+    fn override_paths_reject_invalid_filenames(#[case] filename: &str) {
+        assert!(build_override_paths(
+            "C:/P",
+            filename,
+            &[LayerSelection::new(OverrideLayer::Map, "Quarry")]
+        )
+        .is_empty());
     }
 
     #[test]
@@ -317,26 +320,37 @@ mod tests {
         );
     }
 
-    #[test]
-    fn missing_or_invalid_profile_keeps_index_layer() {
+    #[rstest]
+    #[case::missing(None)]
+    #[case::invalid(Some("../escape"))]
+    fn missing_or_invalid_profile_keeps_index_layer(#[case] profile: Option<&str>) {
         let context = MapContext::new("Quarry", Some(2));
-        for profile in [None, Some("../escape")] {
-            assert_eq!(
-                select_layers(&context, profile),
-                vec![
-                    LayerSelection::new(OverrideLayer::Map, "Quarry"),
-                    LayerSelection::new(OverrideLayer::MapIndex, "2"),
-                ]
-            );
-        }
+        assert_eq!(
+            select_layers(&context, profile),
+            vec![
+                LayerSelection::new(OverrideLayer::Map, "Quarry"),
+                LayerSelection::new(OverrideLayer::MapIndex, "2"),
+            ]
+        );
+    }
+
+    #[test]
+    fn profile_without_index_is_not_selected() {
         assert_eq!(
             select_layers(&MapContext::new("Quarry", None), Some("busy")),
             vec![LayerSelection::new(OverrideLayer::Map, "Quarry")]
         );
     }
 
-    #[test]
-    fn wildcard_maps_and_profiles_merge_broad_to_specific_then_exact() {
+    #[rstest]
+    #[case::exact("FFA_Courtyard", &["~", "F~", "FFA_~", "~yard", "FFA~yard", "FFA_Courtyard"])]
+    #[case::fallback("ffa_other", &["~", "F~", "FFA_~", "ffa_other"])]
+    #[case::empty_wildcard("FFA_", &["~", "F~", "FFA_~", "FFA_"])]
+    fn matching_slots_orders_by_specificity_then_name_and_deduplicates_case(
+        #[values(OverrideLayer::Map, OverrideLayer::MapProfile)] layer: OverrideLayer,
+        #[case] target: &str,
+        #[case] expected: &[&str],
+    ) {
         let folders = [
             "FFA_Courtyard",
             "ffa_courtyard",
@@ -345,64 +359,34 @@ mod tests {
             "F~",
             "~",
             "TDM_~",
-            "FFA_*",
-            "../~",
-        ]
-        .map(String::from);
-        for layer in [OverrideLayer::Map, OverrideLayer::MapProfile] {
-            assert_eq!(
-                matching_slots(layer, "FFA_Courtyard", &folders),
-                ["~", "F~", "FFA_~", "FFA_Courtyard"]
-            );
-            assert_eq!(
-                matching_slots(layer, "ffa_other", &folders),
-                ["~", "F~", "FFA_~", "ffa_other"]
-            );
-            assert_eq!(
-                matching_slots(layer, "FFA_", &folders),
-                ["~", "F~", "FFA_~", "FFA_"]
-            );
-        }
-    }
-
-    #[test]
-    fn suffix_middle_and_multiple_wildcards_match_without_overlapping_literals() {
-        for (pattern, target, expected) in [
-            ("~Courtyard", "FFA_Courtyard", true),
-            ("~Courtyard", "FFA_Courtyard_extra", false),
-            ("FFA~yard", "FFA_Courtyard", true),
-            ("FFA~yard", "TDM_Courtyard", false),
-            ("~FFA~Court~yard~", "FFA_Courtyard", true),
-            ("FFA~~Courtyard", "FFA_Courtyard", true),
-            ("F~F", "F", false),
-            ("~ab~bc", "abc", false),
-            ("~ab~bc", "ababc", true),
-            ("~Court~FFA~", "FFA_Courtyard", false),
-            ("~~~", "FFA_Courtyard", true),
-            ("夜~間", "夜間", true),
-            ("夜~間", "夜の時間", true),
-        ] {
-            assert_eq!(
-                wildcard_match(pattern, target),
-                expected,
-                "{pattern}: {target}"
-            );
-        }
-        let folders = [
             "~yard",
             "FFA~yard",
-            "~",
-            "FFA_~",
             "ffa~YARD",
-            "FFA_Courtyard",
         ]
         .map(String::from);
-        for layer in [OverrideLayer::Map, OverrideLayer::MapProfile] {
-            assert_eq!(
-                matching_slots(layer, "FFA_Courtyard", &folders),
-                ["~", "FFA_~", "~yard", "FFA~yard", "FFA_Courtyard"]
-            );
-        }
+        assert_eq!(matching_slots(layer, target, &folders), expected);
+    }
+
+    #[rstest]
+    #[case::suffix("~Courtyard", "FFA_Courtyard", true)]
+    #[case::anchored_suffix("~Courtyard", "FFA_Courtyard_extra", false)]
+    #[case::middle("FFA~yard", "FFA_Courtyard", true)]
+    #[case::anchored_prefix("FFA~yard", "TDM_Courtyard", false)]
+    #[case::multiple("~FFA~Court~yard~", "FFA_Courtyard", true)]
+    #[case::adjacent_wildcards("FFA~~Courtyard", "FFA_Courtyard", true)]
+    #[case::overlapping_ends("F~F", "F", false)]
+    #[case::overlapping_literals("~ab~bc", "abc", false)]
+    #[case::separate_literals("~ab~bc", "ababc", true)]
+    #[case::out_of_order("~Court~FFA~", "FFA_Courtyard", false)]
+    #[case::only_wildcards("~~~", "FFA_Courtyard", true)]
+    #[case::unicode_empty("夜~間", "夜間", true)]
+    #[case::unicode_middle("夜~間", "夜の時間", true)]
+    fn wildcard_matching_is_anchored_and_literals_do_not_overlap(
+        #[case] pattern: &str,
+        #[case] target: &str,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(wildcard_match(pattern, target), expected);
     }
 
     #[test]
@@ -415,13 +399,6 @@ mod tests {
             ),
             ["2"]
         );
-        for invalid in ["../~", "foo/~", "foo\\~", "foo*", "CON", "foo~.", "foo?~"] {
-            assert!(!valid_slot(OverrideLayer::Map, invalid), "{invalid}");
-        }
-        for valid in ["~yard", "FFA~yard", "~FFA~yard~", "foo~~", "CON~"] {
-            assert!(valid_slot(OverrideLayer::Map, valid), "{valid}");
-            assert!(!valid_slot(OverrideLayer::MapIndex, valid), "{valid}");
-        }
         assert!(matching_slots(OverrideLayer::Map, "../bad", &[]).is_empty());
         let paths = build_override_paths(
             "P",
@@ -441,9 +418,38 @@ mod tests {
         );
     }
 
-    #[test]
-    fn filesystem_expansion_preserves_layer_precedence() {
-        let root = std::env::temp_dir().join(format!("unchained-wildcards-{}", std::process::id()));
+    #[rstest]
+    #[case::parent("../~")]
+    #[case::slash("foo/~")]
+    #[case::backslash("foo\\~")]
+    #[case::asterisk("foo*")]
+    #[case::device("CON")]
+    #[case::trailing_dot("foo~.")]
+    #[case::query("foo?~")]
+    fn rejects_unsafe_slots(
+        #[values(OverrideLayer::Map, OverrideLayer::MapProfile)] layer: OverrideLayer,
+        #[case] slot: &str,
+    ) {
+        assert!(!valid_slot(layer, slot));
+    }
+
+    #[rstest]
+    fn only_maps_and_profiles_allow_wildcards(
+        #[values(OverrideLayer::Map, OverrideLayer::MapProfile, OverrideLayer::MapIndex)]
+        layer: OverrideLayer,
+        #[values("~yard", "FFA~yard", "~FFA~yard~", "foo~~", "CON~")] slot: &str,
+    ) {
+        assert_eq!(valid_slot(layer, slot), layer != OverrideLayer::MapIndex);
+    }
+
+    #[rstest]
+    fn filesystem_expansion_preserves_layer_precedence(
+        #[values("Engine.ini", "Game.ini")] config: &str,
+    ) {
+        let root = std::env::temp_dir().join(format!(
+            "unchained-wildcards-{}-{config}",
+            std::process::id()
+        ));
         for folder in [
             "maps/F~",
             "maps/FFA_~",
@@ -471,21 +477,19 @@ mod tests {
                 LayerSelection::new(OverrideLayer::MapIndex, "2"),
             ]
         );
-        for config in ["Engine.ini", "Game.ini"] {
-            let paths = build_override_paths(root.to_str().unwrap(), config, &expanded);
-            assert_eq!(paths.len(), expanded.len());
-            for (path, selection) in paths.iter().zip(&expanded) {
-                assert_eq!(
-                    path,
-                    &format!(
-                        "{}/ini-overrides/{}/{}/{config}",
-                        root.display().to_string().replace('\\', "/"),
-                        selection.layer.dir(),
-                        selection.slot
-                    )
-                );
-            }
-        }
+        let paths = build_override_paths(root.to_str().unwrap(), config, &expanded);
+        let expected = expanded
+            .iter()
+            .map(|selection| {
+                format!(
+                    "{}/ini-overrides/{}/{}/{config}",
+                    root.display().to_string().replace('\\', "/"),
+                    selection.layer.dir(),
+                    selection.slot
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(paths, expected);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

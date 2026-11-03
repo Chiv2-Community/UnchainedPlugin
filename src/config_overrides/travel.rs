@@ -144,6 +144,7 @@ pub(super) fn restore_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn startup_uses_explicit_slot_once_and_ignores_frontend() {
@@ -158,13 +159,17 @@ mod tests {
         assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
     }
 
+    #[rstest]
+    #[case::missing(None)]
+    #[case::negative(Some(-1))]
+    fn startup_rejects_invalid_index_and_consumes_attempt(#[case] index: Option<i32>) {
+        let mut startup = StartupSelection::default();
+        assert!(startup.capture("Same", Some("Same"), index).is_none());
+        assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
+    }
+
     #[test]
-    fn startup_requires_explicit_nonnegative_index_not_yaml_metadata() {
-        for index in [None, Some(-1)] {
-            let mut startup = StartupSelection::default();
-            assert!(startup.capture("Same", Some("Same"), index).is_none());
-            assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
-        }
+    fn startup_requires_initial_map_but_not_yaml_profile() {
         let mut startup = StartupSelection::default();
         assert!(startup.capture("Same", None, Some(0)).is_none());
         // An index needs no YAML profile: its exact index directory still applies.
@@ -205,34 +210,45 @@ mod tests {
         }
     }
 
-    #[test]
-    fn invalid_rotation_never_writes_baseline_index() {
-        for (url, index, entry) in [
-            ("Manual", 1, Some("Other")),
-            ("Same", -1, Some("Same")),
-            ("Same", 9, None),
-            ("/Game/A/Same", 0, Some("/Game/B/Same")),
-        ] {
-            assert!(capture_rotation(url, index, entry, |_| {
-                panic!("invalid rotation must not write baseline")
-            })
-            .is_none());
-        }
+    #[rstest]
+    #[case::different_map("Manual", 1, Some("Other"))]
+    #[case::negative_index("Same", -1, Some("Same"))]
+    #[case::missing_entry("Same", 9, None)]
+    #[case::different_package("/Game/A/Same", 0, Some("/Game/B/Same"))]
+    fn invalid_rotation_never_writes_baseline_index(
+        #[case] url: &str,
+        #[case] index: i32,
+        #[case] entry: Option<&str>,
+    ) {
+        assert!(capture_rotation(url, index, entry, |_| {
+            panic!("invalid rotation must not write baseline")
+        })
+        .is_none());
+    }
+
+    #[rstest]
+    #[case::duplicate_map("Same?NumBots=8", 2, Some(2))]
+    #[case::different_map("Different", 2, None)]
+    #[case::past_end("Same", 5, None)]
+    #[case::negative("Same", -1, None)]
+    fn validates_the_live_slot_instead_of_searching_for_a_matching_map(
+        #[case] url: &str,
+        #[case] index: i32,
+        #[case] expected: Option<i32>,
+    ) {
+        let entries = ["Same", "Other", "Same"];
+        let entry = usize::try_from(index)
+            .ok()
+            .and_then(|index| entries.get(index))
+            .copied();
+        assert_eq!(
+            rotation_context(url, index, entry).and_then(|context| context.index),
+            expected
+        );
     }
 
     #[test]
-    fn validates_the_live_slot_instead_of_searching_for_a_matching_map() {
-        let entries = ["Same", "Other", "Same"];
-        assert_eq!(
-            rotation_context("Same?NumBots=8", 2, entries.get(2).copied())
-                .unwrap()
-                .index,
-            Some(2)
-        );
-        assert!(rotation_context("Different", 2, entries.get(2).copied()).is_none());
-        assert!(rotation_context("Same", 5, entries.get(5).copied()).is_none());
-        assert!(rotation_context("Same", -1, Some("Same")).is_none());
-        assert!(rotation_context("/Game/A/Same", 0, Some("/Game/B/Same")).is_none());
+    fn qualified_rotation_map_ignores_ascii_case_and_url_options() {
         assert_eq!(
             rotation_context("/game/maps/SAME?x", 0, Some("/Game/Maps/Same"))
                 .unwrap()
