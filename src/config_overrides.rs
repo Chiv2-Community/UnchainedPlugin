@@ -20,7 +20,7 @@ use std::{collections::HashSet, sync::Mutex};
 use crate::{
     resolvers::ini::{o_ConfigCacheFind, o_ConfigCacheSetInt, o_ConfigFileGetInt, o_LoadConfig},
     tools::hook_globals::{cli_args, globals, globals_initialized},
-    ue::{EObjectFlags, FConfigCacheIni, FString, UObject},
+    ue::{EObjectFlags, FConfigCacheIni, FString, UObject, LCPF_READ_PARENT_SECTIONS},
 };
 
 pub(crate) use layering::route_config;
@@ -207,6 +207,12 @@ fn preserve_rotation_index(index: i32) {
     });
 }
 
+// Existing child CDOs do not recopy their parent's defaults. Let LoadConfig import
+// parent sections into each object before applying its own section.
+fn reload_default(object: *mut UObject, load: impl FnOnce(*mut UObject, u32)) {
+    load(object, LCPF_READ_PARENT_SECTIONS);
+}
+
 fn refresh_defaults(categories: &HashSet<String>) -> bool {
     if !globals_initialized() {
         return false;
@@ -243,13 +249,15 @@ fn refresh_defaults(categories: &HashSet<String>) -> bool {
                 continue;
             }
             if categories.contains(&class.class_config_name.to_string().to_ascii_lowercase()) {
-                CALL_ORIGINAL!(LoadConfig(
-                    object,
-                    std::ptr::null_mut(),
-                    std::ptr::null(),
-                    0,
-                    std::ptr::null_mut()
-                ));
+                reload_default(object, |object, flags| {
+                    CALL_ORIGINAL!(LoadConfig(
+                        object,
+                        std::ptr::null_mut(),
+                        std::ptr::null(),
+                        flags,
+                        std::ptr::null_mut()
+                    ));
+                });
             }
         }
     }
@@ -286,6 +294,34 @@ pub(crate) fn accept_travel(pending: Option<MapContext>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[rstest::rstest]
+    #[case::inherited_change(4, Some(8), None, 8)]
+    #[case::child_precedence(4, Some(8), Some(12), 12)]
+    #[case::removed_override(8, Some(4), None, 4)]
+    fn reload_imports_inherited_sections(
+        #[case] mut value: i32,
+        #[case] parent: Option<i32>,
+        #[case] child: Option<i32>,
+        #[case] expected: i32,
+    ) {
+        // Scalar subset of UE LoadConfig: recurse on the same object only for
+        // ReadParentSections, then import the child section; missing keys keep memory.
+        // This checks the production dispatch contract, not native UE execution.
+        let object = std::ptr::addr_of_mut!(value).cast::<UObject>();
+        reload_default(object, |received, flags| {
+            assert_eq!(received, object);
+            if flags & 0x1 != 0 {
+                if let Some(parent) = parent {
+                    value = parent;
+                }
+            }
+            if let Some(child) = child {
+                value = child;
+            }
+        });
+        assert_eq!(value, expected);
+    }
 
     #[test]
     fn destination_refresh_retries_deduplicates_and_preserves_pending_categories() {

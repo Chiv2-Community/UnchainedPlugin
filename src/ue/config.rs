@@ -2,6 +2,9 @@ use std::mem::ManuallyDrop;
 
 use super::{FName, FString, TMap, TMultiMap};
 
+// UE4::ELoadConfigPropagationFlags, ObjectMacros.h.
+pub(crate) const LCPF_READ_PARENT_SECTIONS: u32 = 0x1;
+
 #[repr(C)]
 struct FConfigValue {
     saved_value: ManuallyDrop<FString>,
