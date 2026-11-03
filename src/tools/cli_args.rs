@@ -72,6 +72,7 @@ pub struct CLIArgs {
     #[arg(long = "playable-listen")]
     pub playable_listen: bool,
     //
+    /// Register the server with the server browser backend (servers only).
     #[arg(long = "register")]
     pub register: bool,
     // //

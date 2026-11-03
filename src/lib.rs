@@ -439,22 +439,21 @@ fn postinit_rustlib() {
 
     #[cfg(feature="cli_commands")]
     {
-        if cli_args().is_server() {
-            thread::spawn(move || {
-                sinfo!("waiting for engine to start..");
-                
-                while !ENGINE_READY.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(500));
-                }
+        // The console accepts commands for every instance; only servers run world_init.
+        thread::spawn(move || {
+            sinfo!("waiting for engine to start..");
 
-                spawn_cli_handler();
-                if cli_args().is_server() {
-                    world_init();
-                }
-            });
-        } else {
-            sinfo!(fn; "Not a server, skipping server cli initialization");
-        }
+            while !ENGINE_READY.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(500));
+            }
+
+            spawn_cli_handler();
+            if cli_args().is_server() {
+                world_init();
+            } else {
+                sinfo!("Not a server, skipping server initialization");
+            }
+        });
     }
 }
 
@@ -469,7 +468,7 @@ pub fn world_init() {
 
     #[cfg(feature="server_registration")]
     {
-        if args.is_server() || args.register {
+        if args.is_server() && args.register {
             let query_port = args.game_server_query_port.unwrap_or(7071);
             let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
                 None
@@ -548,11 +547,14 @@ pub fn world_init() {
         let mm = Arc::new(ModManager::new());
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
+        drop(global_mm);
 
-        sinfo!(fn; "Mod scans in progress");
-        mm.scan_asset_registry();
-        mm.update_save_game();
-        sinfo!(fn; "Started mod manager");
+        resolvers::unchained_integration::run_on_game_thread(move || {
+            sinfo!("Mod scans in progress");
+            mm.scan_asset_registry();
+            mm.update_save_game();
+            sinfo!("Started mod manager");
+        });
     }
 }
 
