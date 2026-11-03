@@ -111,16 +111,49 @@ pub struct ModManager {
     active_paths: Mutex<HashSet<String>>,
 }
 
+const UE_INVALID_OBJECT_PATH_CHARS: &str = "\"' ,|&!~\n\r\t@#(){}[]=;^%$`";
+const UE_INVALID_LONG_PACKAGE_CHARS: &str = "\\:*?\"<>|' ,.&!~\n\r\t@#";
+
+// Mirrors UE 4.25 FPackageName::IsValidObjectPath, with an explicit // check.
+// The loader additionally requires an object/class suffix after the first '.'.
+fn is_valid_object_path(path: &str) -> bool {
+    if !path.starts_with('/') || path.is_empty() || path.contains("//") {
+        return false;
+    }
+
+    let Some((package, object)) = path.split_once('.') else {
+        return false;
+    };
+
+    if package.len() <= 1
+        || package.ends_with('/')
+        || package
+            .chars()
+            .any(|c| UE_INVALID_LONG_PACKAGE_CHARS.contains(c))
+    {
+        return false;
+    }
+
+    if object.is_empty()
+        || object.ends_with(['.', ':'])
+        || object.contains('/')
+        || object
+            .chars()
+            .any(|c| UE_INVALID_OBJECT_PATH_CHARS.contains(c))
+    {
+        return false;
+    }
+
+    true
+}
+
 // Validate syntax before passing launcher input to Unreal's string/path APIs.
 fn enabled_mod_paths<'a>(
     mods: Option<&'a [String]>,
     mut class_exists: impl FnMut(&str) -> bool,
 ) -> Vec<&'a str> {
     mods.into_iter().flatten().filter_map(|path| {
-        let valid_path = path.starts_with('/') && !path.contains('\0')
-            && path.rsplit_once('.').is_some_and(|(package, class)| {
-                package.len() > 1 && !class.is_empty()
-            });
+        let valid_path = is_valid_object_path(path);
         if valid_path && class_exists(path) {
             Some(path.as_str())
         } else {
@@ -511,6 +544,30 @@ impl ModManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validates_unreal_object_paths() {
+        for path in [
+            "/Game/Mods/Example.Example_C",
+            "/Game/Mods/Foo.Bar.Baz_C",
+        ] {
+            assert!(is_valid_object_path(path), "expected valid path: {path}");
+        }
+
+        for path in [
+            "",
+            "Game/Mods/Example.Example_C",
+            "/Game//Mods/Example.Example_C",
+            "/Game/Mods/Example",
+            "/Game/Mods/.Example_C",
+            "/Game/Mods/Example.",
+            "/Game/Mods/Example/Bad.Example_C",
+            "/Game/Mods/Bad;Name.Bad_C",
+            "/Game/Mods/Bad\0Name.Bad_C",
+        ] {
+            assert!(!is_valid_object_path(path), "expected invalid path: {path:?}");
+        }
+    }
 
     #[test]
     fn absent_or_empty_server_mods_enable_nothing() {
