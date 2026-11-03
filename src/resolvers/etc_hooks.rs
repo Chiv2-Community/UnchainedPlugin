@@ -51,7 +51,7 @@ CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
     max_servers: i32
 ), {
     let already_in_ping = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
-    // crate::sinfo!(fn; "PingSomeServers called");
+    strace!("PingSomeServers called");
     let result = CALL_ORIGINAL!(PingSomeServers(this_ptr, max_servers));
     if !already_in_ping {
         IN_PING_SOME_SERVERS.with(|state| state.set(false));
@@ -77,7 +77,7 @@ CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
     if !haystack.is_null() && !needle.is_null() {
         let needle_ = unsafe { widestring::U16CStr::from_ptr_str(needle).to_string_lossy() };
         let endpoint_ = unsafe { (*haystack).to_string() };
-        // crate::sinfo!(fn; "FStringFind called {endpoint_} : {needle_}");
+        strace!("FStringFind called {endpoint_} : {needle_}");
     }
 
     if should_fix {
@@ -87,12 +87,12 @@ CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
             let endpoint = unsafe { (*haystack).to_string() };
             if endpoint.matches(':').count() >= 2 {
                 if in_browser {
-                    // crate::sinfo!(fn; "FString::Find: bare IPv6 endpoint {endpoint}, returning -1");
+                    strace!("FString::Find: bare IPv6 endpoint {endpoint}, returning -1");
                     return -1;
                 }
                 if let Some(last_colon) = endpoint.rfind(':') {
                     let utf16_index = endpoint[..last_colon].encode_utf16().count() as i32;
-                    // crate::sinfo!(fn; "FString::Find: IPv6 endpoint {endpoint}, using final colon at {utf16_index}");
+                    strace!("FString::Find: IPv6 endpoint {endpoint}, using final colon at {utf16_index}");
                     return utf16_index;
                 }
             }
@@ -137,9 +137,9 @@ CREATE_HOOK!(UDPEcho, { || !cli_args().is_server() }, NONE, (), (
 ), {
     if !endpoint.is_null() {
         let endpoint_text = unsafe { (*endpoint).to_string() };
-        // crate::sinfo!(fn; "UDPEcho: received endpoint {endpoint_text}");
+        strace!("UDPEcho: received endpoint {endpoint_text}");
         if let Some(normalized) = bracket_ipv6_udp_endpoint(&endpoint_text) {
-            // crate::sinfo!(fn; "UDPEcho: normalizing IPv6 endpoint to {normalized}");
+            strace!("UDPEcho: normalizing IPv6 endpoint to {normalized}");
             let mut normalized_endpoint = FString::from(normalized.as_str());
             return CALL_ORIGINAL!(UDPEcho(
                 &mut normalized_endpoint,
@@ -178,7 +178,7 @@ CREATE_HOOK!(FStringParseIntoArray, { || !cli_args().is_server() }, NONE, i32, (
                     parts.push(FString::from(host));
                     parts.push(FString::from(port));
                     unsafe { *output = parts };
-                    // crate::sinfo!(fn; "ParseIntoArray: IPv6 endpoint split into host and port");
+                    strace!("ParseIntoArray: IPv6 endpoint split into host and port");
                     return 2;
                 }
             }
