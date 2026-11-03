@@ -207,10 +207,17 @@ fn preserve_rotation_index(index: i32) {
     });
 }
 
-// Existing child CDOs do not recopy their parent's defaults. Let LoadConfig import
-// parent sections into each object before applying its own section.
-fn reload_default(object: *mut UObject, load: impl FnOnce(*mut UObject, u32)) {
-    load(object, LCPF_READ_PARENT_SECTIONS);
+// Globalconfig can read an ancestor's category, not the importing class's file.
+// Existing child CDOs also need parent sections imported into their own storage.
+fn reload_default(
+    object: *mut UObject,
+    categories: &HashSet<String>,
+    mut class_categories: impl Iterator<Item = String>,
+    load: impl FnOnce(*mut UObject, u32),
+) {
+    if class_categories.any(|category| categories.contains(&category.to_ascii_lowercase())) {
+        load(object, LCPF_READ_PARENT_SECTIONS);
+    }
 }
 
 fn refresh_defaults(categories: &HashSet<String>) -> bool {
@@ -248,17 +255,25 @@ fn refresh_defaults(categories: &HashSet<String>) -> bool {
             if class.class_flags & 0x4 == 0 {
                 continue;
             }
-            if categories.contains(&class.class_config_name.to_string().to_ascii_lowercase()) {
-                reload_default(object, |object, flags| {
-                    CALL_ORIGINAL!(LoadConfig(
-                        object,
-                        std::ptr::null_mut(),
-                        std::ptr::null(),
-                        flags,
-                        std::ptr::null_mut()
-                    ));
-                });
-            }
+            // A UClass's SuperStruct is another UClass (or null). Walk lazily so
+            // matching the class itself does not decode any ancestor names.
+            let class_categories = std::iter::successors(Some(class), |class| {
+                class
+                    .ustruct
+                    .super_struct
+                    .cast::<crate::ue::UClass>()
+                    .as_ref()
+            })
+            .map(|class| class.class_config_name.to_string());
+            reload_default(object, categories, class_categories, |object, flags| {
+                CALL_ORIGINAL!(LoadConfig(
+                    object,
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                    flags,
+                    std::ptr::null_mut()
+                ));
+            });
         }
     }
     true
@@ -309,17 +324,53 @@ mod tests {
         // ReadParentSections, then import the child section; missing keys keep memory.
         // This checks the production dispatch contract, not native UE execution.
         let object = std::ptr::addr_of_mut!(value).cast::<UObject>();
-        reload_default(object, |received, flags| {
-            assert_eq!(received, object);
-            if flags & 0x1 != 0 {
-                if let Some(parent) = parent {
-                    value = parent;
+        let categories = HashSet::from(["engine".to_string()]);
+        reload_default(
+            object,
+            &categories,
+            std::iter::once("Engine".into()),
+            |received, flags| {
+                assert_eq!(received, object);
+                if flags & 0x1 != 0 {
+                    if let Some(parent) = parent {
+                        value = parent;
+                    }
                 }
-            }
-            if let Some(child) = child {
-                value = child;
-            }
+                if let Some(child) = child {
+                    value = child;
+                }
+            },
+        );
+        assert_eq!(value, expected);
+    }
+
+    #[rstest::rstest]
+    #[case::inherited_change(4, "engine", 8, 8, true)]
+    #[case::removed_override(8, "engine", 4, 4, true)]
+    #[case::grandparent_category(4, "core", 8, 8, true)]
+    #[case::own_category(4, "game", 8, 8, true)]
+    #[case::unrelated_category(4, "editor", 8, 4, false)]
+    fn reload_selects_inherited_config_categories(
+        #[case] mut value: i32,
+        #[case] category: &str,
+        #[case] owner_value: i32,
+        #[case] expected: i32,
+        #[case] selected: bool,
+    ) {
+        // Candidate/import boundary: Child/Game inherits Parent/Engine's
+        // globalconfig scalar. Native import resolves the owner's current file,
+        // including baseline after removal; this is not native UE execution.
+        let object = std::ptr::addr_of_mut!(value).cast::<UObject>();
+        let categories = HashSet::from([category.to_string()]);
+        let class_categories = ["Game", "Engine", "Core"].into_iter().map(str::to_string);
+        let mut imports = 0;
+        reload_default(object, &categories, class_categories, |received, flags| {
+            assert_eq!(received, object);
+            assert_eq!(flags, LCPF_READ_PARENT_SECTIONS);
+            imports += 1;
+            value = owner_value;
         });
+        assert_eq!(imports, usize::from(selected));
         assert_eq!(value, expected);
     }
 
