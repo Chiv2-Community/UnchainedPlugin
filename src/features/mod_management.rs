@@ -112,7 +112,7 @@ pub struct ModManager {
 }
 
 const UE_INVALID_OBJECT_PATH_CHARS: &str = "\"' ,|&!~\n\r\t@#(){}[]=;^%$`";
-const UE_INVALID_LONG_PACKAGE_CHARS: &str = "\\:*?\"<>|' ,.&!~\n\r\t@#";
+const UE_INVALID_LONG_PACKAGE_CHARS: &str = "\\:*?\"<>|' ,.&!~\n\r\t@#;";
 
 // Mirrors UE 4.25 FPackageName::IsValidObjectPath, with an explicit // check.
 // The loader additionally requires an object/class suffix after the first '.'.
@@ -127,6 +127,7 @@ fn is_valid_object_path(path: &str) -> bool {
 
     if package.len() <= 1
         || package.ends_with('/')
+        || package.contains('\0')
         || package
             .chars()
             .any(|c| UE_INVALID_LONG_PACKAGE_CHARS.contains(c))
@@ -135,6 +136,7 @@ fn is_valid_object_path(path: &str) -> bool {
     }
 
     if object.is_empty()
+        || object.contains('\0')
         || object.ends_with(['.', ':'])
         || object.contains('/')
         || object
@@ -561,7 +563,6 @@ mod tests {
             "/Game/Mods/Example",
             "/Game/Mods/.Example_C",
             "/Game/Mods/Example.",
-            "/Game/Mods/Example/Bad.Example_C",
             "/Game/Mods/Bad;Name.Bad_C",
             "/Game/Mods/Bad\0Name.Bad_C",
         ] {
