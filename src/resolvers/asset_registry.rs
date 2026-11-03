@@ -1,6 +1,6 @@
 use crate::ue::{
     EFindName, FName, FString, FUObjectSerializeContext, IAssetRegistry, TArray, UAssetManager,
-    UAssetRegistryImpl, UClass, UObject, UPackageMap,
+    UAssetRegistryImpl, UClass, UObject, UPackageMap, TCHAR,
 };
 use std::{fmt, os::raw::c_void};
 use widestring::U16CStr;
@@ -115,7 +115,7 @@ CREATE_HOOK!(GetAssetRegistry_Helper, CALLED,  *mut TScriptInterface, (ret_val_t
 
 define_pattern_resolver!(FNameCtorWchar, Simple, ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]);
 // FName * __thiscall FName::FName(FName *this,wchar_t *param_1,EFindName param_2)
-CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const u16, findname: EFindName),{
+CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const TCHAR, findname: EFindName),{
     // sinfo![fn; "Triggered!"];
     unsafe {
         if findname == EFindName::Find {
@@ -134,7 +134,7 @@ define_pattern_resolver!(StaticFindObject,["48 89 5C 24 08 48 89 74 24 18 55 57 
 CREATE_HOOK!(StaticFindObject, CALLED, *mut UObject, (
     obj_class: *mut UClass,
     package: *mut UObject,
-    name: *const u16,
+    name: *const TCHAR,
     exact_class: bool
 ), {
     if !name.is_null() {
@@ -162,8 +162,8 @@ define_pattern_resolver!(StaticLoadObject,["40 55 53 56 57 41 54 41 55 41 56 41 
 CREATE_HOOK!(StaticLoadObject, CALLED, *mut UObject, (
     obj_class: *mut UClass,
     in_outer: *mut UObject,
-    name: *const u16,
-    filename: *const u16,
+    name: *const TCHAR,
+    filename: *const TCHAR,
     load_flags: u32,
     sandbox: *mut UPackageMap,
     allow_native_comp: bool,

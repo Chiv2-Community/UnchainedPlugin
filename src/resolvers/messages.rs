@@ -5,7 +5,7 @@ use crate::{
         chivalry2::{ATBLGameMode, EChatType},
         engine::FText,
     },
-    ue::{FConsoleOutputDevice, FString},
+    ue::{FConsoleOutputDevice, FString, TCHAR},
 };
 
 
@@ -327,7 +327,7 @@ mod client_message {
 // Kismet error messages
 #[cfg(feature="kismet_log")]
 pub mod kismet_log {
-    use crate::ue::{FName, UObject};
+    use crate::ue::{FName, UObject, TCHAR};
     
     // Chiv is spamming these from time to time. Shame, Shame, Shame
     // TODO: Maybe make it dynamic
@@ -343,7 +343,7 @@ pub mod kismet_log {
     ]);
 
     // void __cdecl FFrame::KismetExecutionMessage(wchar_t *param_1,Type param_2,FName param_3)
-    CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const u16, Type: u8, fname: FName), {
+    CREATE_HOOK!(KismetExecutionMessage, *mut UObject, (Message:*const TCHAR, Type: u8, fname: FName), {
         
         if !Message.is_null() {
             unsafe {
@@ -406,7 +406,7 @@ CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mu
 // Console output (e.g. "Command not recognized: ...")
 define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
 // void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
-CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut FConsoleOutputDevice, arg1: *const u16, arg2: *const u16, arg3: *const u16),{
+CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut FConsoleOutputDevice, arg1: *const TCHAR, arg2: *const u16, arg3: *const u16),{
     unsafe {
         if !arg1.is_null() {
             // get a rust string

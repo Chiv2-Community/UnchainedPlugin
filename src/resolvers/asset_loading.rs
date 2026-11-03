@@ -18,7 +18,7 @@ CREATE_HOOK!(SaveGameToSlot, ACTIVE, bool, (savegame: *mut USaveGame, file: *mut
 #[cfg(feature = "loose_assets")]
 mod loose_assets {
 
-    use crate::ue::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray};
+    use crate::ue::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR};
     use widestring::U16CStr;
     use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
     use windows::core::PCWSTR;
@@ -30,7 +30,7 @@ mod loose_assets {
     CREATE_HOOK!(FindFileInPakFiles_1, ACTIVE, NONE,
     u64, (
         this_ptr: *mut FPakPlatformFile,
-        Filename: *const u16,
+        Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
         OutEntry: *mut FPakEntry), {
         let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };
@@ -54,7 +54,7 @@ mod loose_assets {
     CREATE_HOOK!(FindFileInPakFiles_2, ACTIVE, NONE,
     u64, (
         this_ptr: *mut TArray<FPakListEntry>,
-        Filename: *const u16,
+        Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
         OutEntry: *mut FPakEntry), {
         let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };

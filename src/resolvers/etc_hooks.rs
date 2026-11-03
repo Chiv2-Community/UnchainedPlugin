@@ -9,7 +9,7 @@ use crate::{
     tools::hook_globals::{cli_args, globals, globals_initialized},
     ue::{
         APlayerController, FGuid, FOnlineSessionPlayFab, FString, FVector,
-        GetCurrentGamesPostResponse, TArray, TFunctionFIcmpEchoResult, UClass, UObject,
+        GetCurrentGamesPostResponse, TArray, TFunctionFIcmpEchoResult, UClass, UObject, TCHAR,
     },
 };
 
@@ -65,7 +65,7 @@ define_pattern_resolver!(FStringFind, [
 
 CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
-    needle: *const u16,
+    needle: *const TCHAR,
     search_case: i32,
     search_direction: i32,
     start_position: i32
@@ -162,7 +162,7 @@ define_pattern_resolver!(FStringParseIntoArray, [
 CREATE_HOOK!(FStringParseIntoArray, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
     output: *mut TArray<FString>,
-    delimiter: *const u16,
+    delimiter: *const TCHAR,
     cull_empty: bool
 ), {
     if !haystack.is_null() && !output.is_null() && !delimiter.is_null() {
@@ -214,7 +214,7 @@ define_pattern_resolver!(LoadConfig, [
 CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() }, NONE, (), (
     uObject: *mut UObject,
     config_class: *mut UClass,    // UClass* ConfigClass
-    filename: *mut u16,            // const TCHAR* Filename
+    filename: *mut TCHAR,            // const TCHAR* Filename
     propagation_flags: u32,        // uint32 PropagationFlags
     property_to_load: *mut c_void  // FProperty* PropertyToLoad
 ), {
@@ -320,7 +320,7 @@ CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() },
             CALL_ORIGINAL!(LoadConfig(
                 uObject,
                 config_class,
-                override_path.as_ptr() as *mut u16,
+                override_path.as_ptr() as *mut TCHAR,
                 propagation_flags,
                 property_to_load
             ));
