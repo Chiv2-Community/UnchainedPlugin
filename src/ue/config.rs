@@ -1,6 +1,6 @@
 use std::mem::ManuallyDrop;
 
-use super::{FName, FString, TMap};
+use super::{FName, FString, TMap, TMultiMap};
 
 #[repr(C)]
 struct FConfigValue {
@@ -10,8 +10,7 @@ struct FConfigValue {
 
 #[repr(C)]
 struct FConfigSection {
-    // TMultiMap<FName, FConfigValue> shares TMap's storage layout, but permits duplicate keys.
-    pairs: ManuallyDrop<TMap<FName, FConfigValue>>,
+    pairs: ManuallyDrop<TMultiMap<FName, FConfigValue>>,
     array_of_struct_keys: ManuallyDrop<TMap<FName, FString>>,
 }
 
@@ -47,6 +46,7 @@ pub struct FConfigFile {
 const _: () = {
     assert!(std::mem::size_of::<FConfigValue>() == 0x20);
     assert!(std::mem::size_of::<FConfigSection>() == 0xa0);
+    assert!(std::mem::offset_of!(FConfigSection, array_of_struct_keys) == 0x50);
     assert!(std::mem::size_of::<FIniFilename>() == 0x28);
     assert!(std::mem::offset_of!(FIniFilename, cache_key) == 0x18);
     assert!(std::mem::size_of::<FConfigFileHierarchy>() == 0x58);

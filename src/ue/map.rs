@@ -241,6 +241,13 @@ pub struct TMap<K, V> {
     hash: TInlineAllocator<1, FSetElementId>,
     hash_size: i32,
 }
+
+/// Native duplicate-key storage; deliberately exposes no unique-key TMap operations.
+#[repr(transparent)]
+pub struct TMultiMap<K, V> {
+    storage: TMap<K, V>,
+}
+
 impl<K: UEHash, V> TMap<K, V> {
     fn hash(&self) -> &[FSetElementId] {
         unsafe { std::slice::from_raw_parts(self.hash.get_allocation(), self.hash_size as usize) }
@@ -310,4 +317,13 @@ mod test {
     const _: [u8; 0x38] =
         [0; std::mem::size_of::<TSparseArray<TSetElement<TTuple<FName, [u8; 0x20]>>>>()];
     const _: [u8; 0x10] = [0; std::mem::size_of::<TInlineAllocator<1, FSetElementId>>()];
+
+    #[test]
+    fn multimap_preserves_native_map_layout() {
+        type Map = TMap<FName, [u8; 0x20]>;
+        type MultiMap = TMultiMap<FName, [u8; 0x20]>;
+        assert_eq!(std::mem::size_of::<MultiMap>(), std::mem::size_of::<Map>());
+        assert_eq!(std::mem::align_of::<MultiMap>(), std::mem::align_of::<Map>());
+        assert_eq!(std::mem::offset_of!(MultiMap, storage), 0);
+    }
 }
