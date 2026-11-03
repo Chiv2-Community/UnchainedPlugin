@@ -469,7 +469,7 @@ pub fn world_init() {
 
     #[cfg(feature="server_registration")]
     {
-        if args.is_server() || args.register {
+        if args.is_server() && args.register {
             let query_port = args.game_server_query_port.unwrap_or(7071);
             let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
                 None
