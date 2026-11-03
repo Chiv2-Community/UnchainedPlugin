@@ -8,8 +8,15 @@ Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics
 
 ## Defaults
 
-The plugin uses its [embedded configuration](../src/logging/log4rs/log4rs.default.yaml)
-unless you pass `--log4rs-yaml`.
+The plugin selects one configuration at startup, in this order:
+
+1. The file passed with `--log4rs-yaml`.
+2. `log4rs.yaml` in the game or server process's current working directory.
+3. The [embedded `log4rs.default.yaml`](../src/logging/log4rs/log4rs.default.yaml).
+
+The working directory may differ from the executable or startup script's folder.
+An unreadable or invalid selected file is a startup error, not a reason to fall
+back to a lower-priority configuration.
 
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
@@ -77,6 +84,7 @@ appenders, encoders, and filters instead of writing directly to stdout.
 
 Use an absolute path. Relative paths resolve from the game process's working
 directory, which may differ from the folder containing your startup script.
+Alternatively, place the file there as `log4rs.yaml` and omit `--log4rs-yaml`.
 
 Keep the quoted `"__UNCHAINED_LOG_PATH__"` and `"__KISMET_LOG_PATH__"` values to
 use the plugin's default file locations. The plugin replaces these tokens at
@@ -379,7 +387,8 @@ Older custom configurations using `function`, `RCON`, `game_chat`, or
   threshold to `trace`. Restart, then reproduce the action.
 - **A custom file prevents startup:** check startup stderr for path or YAML
   errors. An unreadable or invalid file does not fall back to defaults. Remove
-  `--log4rs-yaml` and restart to restore the embedded configuration.
+  `--log4rs-yaml` and rename or remove any `log4rs.yaml` in the process's working
+  directory, then restart to restore the embedded configuration.
 - **No file output:** check the server account, saved-directory suffix, and write
   permissions. If `%LOCALAPPDATA%` is unavailable, the default directory falls
   back to `Logs` under the process's working directory.

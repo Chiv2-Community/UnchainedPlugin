@@ -41,8 +41,7 @@ pub fn setup_panic_logger() {
 
 pub fn init() -> anyhow::Result<()> {
     let cli = cli_args();
-    let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
-    let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
+    let (config_source_name, yaml) = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
     let resolved_yaml = apply_logger_placeholders(&yaml);
     let yaml = serde_yaml::from_str(&resolved_yaml).with_context(|| {
         format!(
@@ -63,11 +62,13 @@ pub fn init() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
-    match override_path {
-        Some(path) => std::fs::read_to_string(path)
+fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<(&str, String)> {
+    let path = override_path.unwrap_or("log4rs.yaml");
+    match std::fs::read_to_string(path) {
+        Err(error) if override_path.is_none() && error.kind() == std::io::ErrorKind::NotFound =>
+            Ok((EMBEDDED_LOG4RS_DEFAULT_NAME, EMBEDDED_LOG4RS_YAML.to_string())),
+        result => result.map(|yaml| (path, yaml))
             .with_context(|| format!("Failed to read logger config file: {}", path)),
-        None => Ok(EMBEDDED_LOG4RS_YAML.to_string()),
     }
 }
 
@@ -161,6 +162,57 @@ mod tests {
     use crate::logging::test_resources as fixtures;
     use log::{Level, Log, Metadata, Record};
     use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    #[test]
+    fn logger_yaml_precedence_and_read_errors() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-logger-source-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        let check = |override_path: Option<&str>, source: &str, yaml: Option<&str>| {
+            // Each child has its own CWD; do not change it for parallel tests.
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::logger_yaml_source_child", module_path!().split_once("::").unwrap().1)])
+                .current_dir(&dir.0)
+                .env_remove("UNCHAINED_TEST_LOGGER_OVERRIDE")
+                .env("UNCHAINED_TEST_LOGGER_EXPECTED", serde_json::to_string(&(source, yaml)).unwrap());
+            if let Some(path) = override_path { command.env("UNCHAINED_TEST_LOGGER_OVERRIDE", path); }
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        };
+        check(None, EMBEDDED_LOG4RS_DEFAULT_NAME, Some(EMBEDDED_LOG4RS_YAML));
+        std::fs::write(dir.0.join("explicit.yaml"), "root: { level: warn }").unwrap();
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::write(dir.0.join("log4rs.yaml"), "root: { level: info }").unwrap();
+        check(None, "log4rs.yaml", Some("root: { level: info }"));
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        check(Some("missing.yaml"), "missing.yaml", None);
+        std::fs::write(dir.0.join("log4rs.yaml"), [0xff]).unwrap();
+        check(None, "log4rs.yaml", None);
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::remove_file(dir.0.join("log4rs.yaml")).unwrap();
+        std::fs::create_dir(dir.0.join("log4rs.yaml")).unwrap();
+        check(None, "log4rs.yaml", None);
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for logger YAML source selection"]
+    fn logger_yaml_source_child() {
+        let override_path = std::env::var("UNCHAINED_TEST_LOGGER_OVERRIDE").ok();
+        let expected = std::env::var("UNCHAINED_TEST_LOGGER_EXPECTED").unwrap();
+        let (source, yaml): (String, Option<String>) = serde_json::from_str(&expected).unwrap();
+        let loaded = load_logger_yaml(override_path.as_deref());
+        match yaml {
+            Some(yaml) => assert_eq!(loaded.unwrap(), (source.as_str(), yaml)),
+            None => assert_eq!(loaded.unwrap_err().to_string(), format!("Failed to read logger config file: {source}")),
+        }
+    }
 
     #[test]
     fn inline_palette_switches_color_console_and_preserve_plain_file_messages() {
