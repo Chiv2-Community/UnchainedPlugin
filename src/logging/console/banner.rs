@@ -32,7 +32,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn banner_has_matching_padding_and_indented_artwork() {
+    fn banner_has_uniform_width_matching_padding_and_indented_artwork() {
         let mut title = TITLE.lines();
         let mut subtitle = SUBTITLE.lines();
         let top = title.next().unwrap();
@@ -42,6 +42,9 @@ mod tests {
         let artwork: Vec<_> = title.chain(subtitle).collect();
         assert_eq!(artwork.len(), 17);
         assert!(artwork.iter().all(|line| line.starts_with(' ')));
-        assert_eq!(top.len(), artwork.iter().map(|line| line.chars().count()).max().unwrap());
+        let width = top.chars().count();
+        for (index, line) in TITLE.lines().chain(SUBTITLE.lines()).enumerate() {
+            assert_eq!(line.chars().count(), width, "banner row {} has a different width", index + 1);
+        }
     }
 }
