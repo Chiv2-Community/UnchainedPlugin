@@ -133,17 +133,21 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
     }
 
     // Process Jobs
-    if let Ok(mut queue) = JOB_QUEUE.try_lock() {
-        for job in queue.drain(..) {
-            let result = std::panic::catch_unwind(
-                std::panic::AssertUnwindSafe(|| {
-                    job();
-                })
-            );
+    // Take the jobs and release the lock before running them, so a long job
+    // doesn't block (or deadlock) threads calling run_on_game_thread.
+    let jobs = match JOB_QUEUE.try_lock() {
+        Ok(mut queue) => std::mem::take(&mut *queue),
+        Err(_) => Vec::new(),
+    };
+    for job in jobs {
+        let result = std::panic::catch_unwind(
+            std::panic::AssertUnwindSafe(|| {
+                job();
+            })
+        );
 
-            if result.is_err() {
-                serror!("GameThreadJob panicked! Catching to prevent engine crash.");
-            }
+        if result.is_err() {
+            serror!("GameThreadJob panicked! Catching to prevent engine crash.");
         }
     }
 
