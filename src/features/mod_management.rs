@@ -205,7 +205,7 @@ impl ModManager {
             }
         }
         
-        sinfo!(fn; "Found {} Mods", registry_local.len());
+        sinfo!("Found {} Mods", registry_local.len());
         
         {
             let mut mods = self.registry.lock().expect("Lock poisoned");
@@ -215,7 +215,7 @@ impl ModManager {
         
         match self.scan_active_mod_actors() {
             Ok(_) => {},
-            Err(e) => {serror!(fn; "Failed to scan active mods: {}", e);}
+            Err(e) => {serror!("Failed to scan active mods: {}", e);}
         };
     }
 
@@ -278,7 +278,7 @@ impl ModManager {
         use crate::resolvers::unchained_integration::{in_game_thread_job, run_on_game_thread};
 
         if mod_class.is_null() {
-            serror!(fn; "mod class was null; skipping actor spawn");
+            serror!("mod class was null; skipping actor spawn");
             return;
         }
         if !in_game_thread_job() {
@@ -294,7 +294,7 @@ impl ModManager {
         let world = match globals().world() {
             Some(world) => world,
             None => {
-                swarn!(fn; "globals.world was None; skipping actor spawn");
+                swarn!("globals.world was None; skipping actor spawn");
                 return;
             }
         };
@@ -312,16 +312,16 @@ impl ModManager {
         )) {
             Ok(actor) => actor,
             Err(error) => {
-                serror!(fn; "Cannot spawn mod actor: {}", error);
+                serror!("Cannot spawn mod actor: {}", error);
                 return;
             }
         };
 
         unsafe {
             let actor_obj = new_actor as *mut UObject;
-            if actor_obj.is_null() { serror!(fn; "Failed to spawn")}
+            if actor_obj.is_null() { serror!("Failed to spawn")}
             else {
-                sinfo!(fn; "Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
+                sinfo!("Spawned {}", (&*actor_obj).uobject_base_utility.uobject_base.name_private);
                 self.broadcast_spawn_confirmation();
             }
         }
@@ -336,7 +336,7 @@ impl ModManager {
     /// (no world, no game mode in the menu, detour not installed).
     fn broadcast_spawn_confirmation(&self) {
         let Some(world) = globals().world() else {
-            swarn!(fn; "globals.world missing; skipping spawn confirmation chat");
+            swarn!("globals.world missing; skipping spawn confirmation chat");
             return;
         };
         let mut txt = FText::default();
@@ -348,19 +348,19 @@ impl ModManager {
         let text = match converted {
             Ok(text) if !text.is_null() => text,
             _ => {
-                swarn!(fn; "FText conversion unavailable; skipping spawn confirmation chat");
+                swarn!("FText conversion unavailable; skipping spawn confirmation chat");
                 return;
             }
         };
         let game_mode = match CALL_ORIGINAL_SAFE!(GetTBLGameMode(world.as_uobject())) {
             Ok(game_mode) if !game_mode.is_null() => game_mode,
             _ => {
-                swarn!(fn; "No game mode; skipping spawn confirmation chat");
+                swarn!("No game mode; skipping spawn confirmation chat");
                 return;
             }
         };
         if let Err(error) = CALL_ORIGINAL_SAFE!(BroadcastLocalizedChat(game_mode, text, EChatType::Admin)) {
-            swarn!(fn; "Cannot broadcast spawn confirmation: {}", error);
+            swarn!("Cannot broadcast spawn confirmation: {}", error);
         }
     }
 
@@ -375,25 +375,25 @@ impl ModManager {
      */
     /// Replace saved mod selection with validated CLI classes, on the game thread.
     pub fn update_save_game(&self) {
-        crate::sinfo!(fn; "Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
+        crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
         let mut settings_fstring = FString::from(settings_file);
         let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;
         if save_game_ptr.is_null() {
-            serror!(fn; "save game is null");
+            serror!("save game is null");
             return;
         }
         let save_game = unsafe {&mut *(save_game_ptr as *mut UModLoaderSettings_C)};
-        // sinfo!(fn; "Save Game:   {:#?}", save_game);
-        sinfo!(fn; "Enable Bots: {}", save_game.b_enable_bots);
-        sinfo!(fn; "PlayerBots:  {}", save_game.b_use_player_bots);
-        sinfo!(fn; "Bot count:   {}", save_game.num_player_bots);
+        // sinfo!("Save Game:   {:#?}", save_game);
+        sinfo!("Enable Bots: {}", save_game.b_enable_bots);
+        sinfo!("PlayerBots:  {}", save_game.b_use_player_bots);
+        sinfo!("Bot count:   {}", save_game.num_player_bots);
         // Loading with a Class filter rejects ordinary assets as well as stale paths.
         let server_mods = cli_args().server_mods.as_deref();
         let class_type = if server_mods.is_some_and(|mods| !mods.is_empty()) {
             let class_type = unsafe { get_uobject_from_path("/Script/CoreUObject.Class", false) };
             if class_type.is_null() {
-                serror!(fn; "Class type not found; cannot validate any mods");
+                serror!("Class type not found; cannot validate any mods");
             }
             class_type
         } else {
@@ -416,7 +416,7 @@ impl ModManager {
             )) {
                 Ok(object) => !object.is_null(),
                 Err(error) => {
-                    serror!(fn; "Cannot validate mod {}: {}", path, error);
+                    serror!("Cannot validate mod {}: {}", path, error);
                     false
                 }
             }
@@ -426,15 +426,15 @@ impl ModManager {
         save_game.enabled_mods.clear();
         save_game.last_active_mods.clear();
         for path in paths {
-            sinfo!(fn; "Enabling mod {}", path);
+            sinfo!("Enabling mod {}", path);
             save_game.enabled_mods.push(TSoftClassPtr::from_path(path));
         }
         let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
         if res {
-            sinfo!(fn; "Modloader settings saved: {res}");
+            sinfo!("Modloader settings saved: {res}");
         }
         else {
-            serror!(fn; "Failed to save Modloader settings");
+            serror!("Failed to save Modloader settings");
 
         }
     }

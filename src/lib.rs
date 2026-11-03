@@ -451,7 +451,7 @@ fn postinit_rustlib() {
             if cli_args().is_server() {
                 world_init();
             } else {
-                sinfo!(fn; "Not a server, skipping server initialization");
+                sinfo!("Not a server, skipping server initialization");
             }
         });
     }
@@ -550,10 +550,10 @@ pub fn world_init() {
         drop(global_mm);
 
         resolvers::unchained_integration::run_on_game_thread(move || {
-            sinfo!(fn; "Mod scans in progress");
+            sinfo!("Mod scans in progress");
             mm.scan_asset_registry();
             mm.update_save_game();
-            sinfo!(fn; "Started mod manager");
+            sinfo!("Started mod manager");
         });
     }
 }
