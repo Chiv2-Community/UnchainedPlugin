@@ -348,8 +348,13 @@ impl PaletteEncoder {
                 }
                 return writer.set_style(&style);
             }
-            writer.set_style(&entry.style)?;
-            if self.truecolor { writer.write_all(entry.ansi.as_bytes())?; }
+            if self.truecolor {
+                // RGB codes replace the native fallback; avoid log4rs' small ANSI style buffer.
+                writer.set_style(&Style::new())?;
+                writer.write_all(entry.ansi.as_bytes())?;
+            } else {
+                writer.set_style(&entry.style)?;
+            }
         } else {
             writer.set_style(&Style::new())?;
         }
@@ -439,6 +444,28 @@ mod tests {
 
     fn encoder(name: &str) -> PaletteEncoder {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
+    }
+
+    #[test]
+    fn truecolor_background_does_not_pass_native_fallback_styles_to_ansi_writer() {
+        let mut encoder = encoder("channels");
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        // Console configuration prepares native fallback styles even in RGB mode.
+        for entry in &mut encoder.colors {
+            entry.style.text(Color::Yellow).background(Color::Black).intense(false);
+        }
+        let message = crate::logging::inline::Message::new(&[
+            crate::logging::inline::Segment::Palette("both"),
+            crate::logging::inline::Segment::Text(format_args!("banner")),
+            crate::logging::inline::Segment::Palette(""),
+            crate::logging::inline::Segment::Text(format_args!("\r\nnext")),
+        ]);
+        let values = [(COLORS_KEY, message.colors.as_str())];
+        let mut bytes = Vec::new();
+        encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
+            &Record::builder().args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
+        assert_eq!(bytes, b"\x1b[0m\x1b[0;38;2;18;52;86;48;2;171;205;239mbanner\x1b[0m\r\nnext\x1b[0m");
     }
 
     #[test]
@@ -748,7 +775,7 @@ mod tests {
                 else { "before 7after 世界normalend" };
             assert_eq!(output.bytes, format!("{message}|{message}").as_bytes());
             assert_eq!(output.styles[0].0, 8);
-            assert_eq!(output.styles[0].1.text, Some(Color::Magenta));
+            assert_eq!(output.styles[0].1.text, if truecolor { None } else { Some(Color::Magenta) });
             assert_eq!(output.styles[1].1, Style::new());
             assert_eq!(output.styles[1].0, message.find("normal").unwrap());
             assert_eq!(output.styles.last().unwrap().1, Style::new());
