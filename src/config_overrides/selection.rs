@@ -92,7 +92,7 @@ pub fn matching_slots(layer: OverrideLayer, target: &str, folders: &[String]) ->
         })
         .cloned()
         .collect();
-    matches.sort_by_key(|folder| {
+    matches.sort_by_cached_key(|folder| {
         (
             !folder.contains('~'),
             folder.chars().filter(|c| *c != '~').count(),
@@ -145,11 +145,10 @@ pub fn map_folder(url: &str) -> Option<String> {
     valid_component(leaf).then(|| leaf.to_owned())
 }
 
-pub fn config_filename(filename: &str) -> Option<String> {
-    let normalized = filename.replace('\\', "/");
-    let leaf = normalized.rsplit('/').next()?;
+pub fn config_filename(filename: &str) -> Option<&str> {
+    let leaf = filename.rsplit(['/', '\\']).next()?;
     let (category, extension) = leaf.rsplit_once('.')?;
-    (extension.eq_ignore_ascii_case("ini") && valid_component(category)).then(|| leaf.to_owned())
+    (extension.eq_ignore_ascii_case("ini") && valid_component(category)).then_some(leaf)
 }
 
 pub fn build_profile_override_path(
@@ -166,23 +165,9 @@ pub fn build_profile_override_path(
     .replace('\\', "/")
 }
 
-pub fn build_override_paths(root: &str, config: &str, layers: &[LayerSelection]) -> Vec<String> {
-    if config_filename(config).as_deref() != Some(config) {
-        return Vec::new();
-    }
-    let mut paths = Vec::new();
-    for selection in layers {
-        if !valid_slot(selection.layer, &selection.slot) {
-            continue;
-        }
-        paths.push(build_profile_override_path(
-            root,
-            selection.layer,
-            &selection.slot,
-            config,
-        ));
-    }
-    paths
+pub fn build_override_path(root: &str, config: &str, selection: &LayerSelection) -> Option<String> {
+    (config_filename(config) == Some(config) && valid_slot(selection.layer, &selection.slot))
+        .then(|| build_profile_override_path(root, selection.layer, &selection.slot, config))
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -269,19 +254,47 @@ mod tests {
         assert!(!valid_slot(OverrideLayer::MapProfile, &name));
     }
 
-    #[test]
-    fn no_fallback_categories_or_unsafe_slots() {
-        assert!(build_override_paths(
-            "C:/P",
-            "Game.ini",
-            &[LayerSelection::new(OverrideLayer::Map, "../escape")]
-        )
-        .is_empty());
+    #[rstest]
+    #[case::map(
+        OverrideLayer::Map,
+        "FFA_~",
+        Some("P/ini-overrides/maps/FFA_~/Game.ini")
+    )]
+    #[case::profile(
+        OverrideLayer::MapProfile,
+        "busy~",
+        Some("P/ini-overrides/profiles/busy~/Game.ini")
+    )]
+    #[case::index(
+        OverrideLayer::MapIndex,
+        "2",
+        Some("P/ini-overrides/indices/2/Game.ini")
+    )]
+    #[case::index_wildcard(OverrideLayer::MapIndex, "2~", None)]
+    #[case::unsafe_slot(OverrideLayer::Map, "../escape", None)]
+    fn override_path_validates_slot(
+        #[case] layer: OverrideLayer,
+        #[case] slot: &str,
+        #[case] expected: Option<&str>,
+    ) {
         assert_eq!(
-            config_filename(r"C:\Saved\WindowsServer\Game.ini").as_deref(),
-            Some("Game.ini")
+            build_override_path("P", "Game.ini", &LayerSelection::new(layer, slot)).as_deref(),
+            expected
         );
-        assert_eq!(config_filename("Game.yaml"), None);
+    }
+
+    #[rstest]
+    #[case::bare("Game.ini", Some("Game.ini"))]
+    #[case::unix_path("/Saved/WindowsServer/Game.ini", Some("Game.ini"))]
+    #[case::windows_path(r"C:\Saved\WindowsServer\Game.ini", Some("Game.ini"))]
+    #[case::mixed_separators(r"C:\Saved/WindowsServer\Game.ini", Some("Game.ini"))]
+    #[case::extension_case("Game.INI", Some("Game.INI"))]
+    #[case::wrong_extension("Game.yaml", None)]
+    #[case::device("COM¹.ini", None)]
+    #[case::empty("", None)]
+    #[case::directory("Saved/", None)]
+    fn config_filename_extracts_valid_leaf(#[case] filename: &str, #[case] expected: Option<&str>) {
+        assert_eq!(config_filename(filename), expected);
     }
 
     #[rstest]
@@ -289,13 +302,13 @@ mod tests {
     #[case::absolute_path(r"C:\Game.ini")]
     #[case::wrong_extension("Game.yaml")]
     #[case::device("COM¹.ini")]
-    fn override_paths_reject_invalid_filenames(#[case] filename: &str) {
-        assert!(build_override_paths(
+    fn override_path_rejects_invalid_filenames(#[case] filename: &str) {
+        assert!(build_override_path(
             "C:/P",
             filename,
-            &[LayerSelection::new(OverrideLayer::Map, "Quarry")]
+            &LayerSelection::new(OverrideLayer::Map, "Quarry")
         )
-        .is_empty());
+        .is_none());
     }
 
     #[test]
@@ -390,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn indices_are_exact_and_wildcard_paths_are_validated() {
+    fn indices_match_exactly() {
         assert_eq!(
             matching_slots(
                 OverrideLayer::MapIndex,
@@ -399,23 +412,14 @@ mod tests {
             ),
             ["2"]
         );
-        assert!(matching_slots(OverrideLayer::Map, "../bad", &[]).is_empty());
-        let paths = build_override_paths(
-            "P",
-            "Game.ini",
-            &[
-                LayerSelection::new(OverrideLayer::Map, "FFA_~"),
-                LayerSelection::new(OverrideLayer::MapProfile, "busy~"),
-                LayerSelection::new(OverrideLayer::MapIndex, "2~"),
-            ],
-        );
-        assert_eq!(
-            paths,
-            [
-                "P/ini-overrides/maps/FFA_~/Game.ini",
-                "P/ini-overrides/profiles/busy~/Game.ini"
-            ]
-        );
+    }
+
+    #[rstest]
+    fn matching_slots_rejects_unsafe_target(
+        #[values(OverrideLayer::Map, OverrideLayer::MapProfile, OverrideLayer::MapIndex)]
+        layer: OverrideLayer,
+    ) {
+        assert!(matching_slots(layer, "../bad", &[]).is_empty());
     }
 
     #[rstest]
@@ -477,7 +481,10 @@ mod tests {
                 LayerSelection::new(OverrideLayer::MapIndex, "2"),
             ]
         );
-        let paths = build_override_paths(root.to_str().unwrap(), config, &expanded);
+        let paths = expanded
+            .iter()
+            .filter_map(|selection| build_override_path(root.to_str().unwrap(), config, selection))
+            .collect::<Vec<_>>();
         let expected = expanded
             .iter()
             .map(|selection| {

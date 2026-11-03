@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::{cell::RefCell, collections::HashMap, ptr::NonNull, sync::atomic::Ordering};
 
-use super::{with_state, GENERATION};
+use super::{layer_paths, GENERATION};
 use crate::{
     resolvers::ini::{o_ConfigFileAddLayer, o_ConfigFileCopy, o_ConfigFileDestroy},
     tools::hook_globals::globals_initialized,
@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::selection::{
-    build_override_paths, build_profile_override_path, config_filename, LayerSelection,
+    build_override_path, build_profile_override_path, config_filename, LayerSelection,
 };
 
 /// A destination's INI filenames mapped to ordered layer paths, independent of native discovery.
@@ -37,15 +37,13 @@ impl ConfigLayers {
                 .sorted()
                 .dedup_by(|a, b| a.eq_ignore_ascii_case(b))
                 .for_each(|name| {
-                    prepared
-                        .paths
-                        .entry(name.to_ascii_lowercase())
-                        .or_default()
-                        .extend(build_override_paths(
-                            root,
-                            &name,
-                            std::slice::from_ref(selection),
-                        ));
+                    if let Some(path) = build_override_path(root, &name, selection) {
+                        prepared
+                            .paths
+                            .entry(name.to_ascii_lowercase())
+                            .or_default()
+                            .push(path);
+                    }
                 });
         }
         prepared
@@ -156,7 +154,7 @@ pub(super) fn with_native_layer<T>(fallback: T, f: impl FnOnce() -> T) -> T {
 }
 
 fn materialize(key: OverlayKey, name: &str, baseline: *mut FConfigFile) -> Overlay {
-    let paths = with_state(|state| state.overrides.paths(name).to_vec());
+    let paths = layer_paths(name);
     let file = (!paths.is_empty()).then(|| unsafe {
         let file = OwnedConfig::copy(baseline);
         for path in &paths {
@@ -196,7 +194,8 @@ pub(crate) fn route_config(
     with_native_layer(baseline, || {
         // Find borrows its caller's const FString for the duration of the call.
         // Compare it in place; only first discovery needs an owned key or UTF-16 decode.
-        let cached = CACHE.with(|overlays| overlays.borrow().find(cache, filename.as_slice(), baseline));
+        let cached =
+            CACHE.with(|overlays| overlays.borrow().find(cache, filename.as_slice(), baseline));
         if let Some(file) = cached {
             return file;
         }

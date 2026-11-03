@@ -111,4 +111,20 @@ mod tests {
             .match_rotation
             .is_empty());
     }
+
+    #[test]
+    fn profile_metadata_matches_layer_fixture() {
+        let root = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test-resources/test-configs/config-overrides"
+        ));
+        let yaml = std::fs::read_to_string(root.join("unchained.yaml")).unwrap();
+        let settings = parse_server_settings(&yaml).unwrap();
+        let profile = settings.profile_at(1).unwrap();
+        assert!(root
+            .join("profiles")
+            .join(profile)
+            .join("Engine.ini")
+            .is_file());
+    }
 }

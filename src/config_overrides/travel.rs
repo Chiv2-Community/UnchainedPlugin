@@ -1,45 +1,91 @@
 use super::selection::{map_folder, MapContext};
 
 #[derive(Clone, Default)]
-pub(crate) struct Context {
+pub(crate) struct Destination {
+    // Cache invalidation version, not the map rotation index.
     pub generation: u64,
     pub selection: MapContext,
     pub world: Option<usize>,
 }
 
 #[derive(Default)]
-pub(super) struct StartupSelection {
-    attempted: bool,
+pub(super) struct TravelState {
+    pub current: Destination,
+    pending_rotation: Option<MapContext>,
+    startup_finished: bool,
 }
 
-impl StartupSelection {
-    pub fn can_capture(&self, map: &str, starting_map: Option<&str>) -> bool {
-        !self.attempted
+impl TravelState {
+    pub fn can_capture_startup(&self, map: &str, starting_map: Option<&str>) -> bool {
+        !self.startup_finished
             && starting_map
                 .and_then(map_folder)
                 .zip(map_folder(map))
                 .is_some_and(|(starting, destination)| destination.eq_ignore_ascii_case(&starting))
     }
 
-    /// Only the configured initial gameplay destination may consume the baseline slot.
-    pub fn capture(
-        &mut self,
-        map: &str,
-        starting_map: Option<&str>,
-        index: Option<i32>,
-    ) -> Option<MapContext> {
-        if !self.can_capture(map, starting_map) {
-            return None;
+    pub fn capture_startup(&mut self, map: &str, starting_map: Option<&str>, index: Option<i32>) {
+        if !self.can_capture_startup(map, starting_map) {
+            return;
         }
-        self.attempted = true;
-        Some(MapContext::new(
-            map,
-            Some(index.filter(|index| *index >= 0)?),
-        ))
+        self.startup_finished = true;
+        if let Some(index) = index.filter(|index| *index >= 0) {
+            self.pending_rotation = Some(MapContext::new(map, Some(index)));
+        }
     }
 
-    pub fn finish(&mut self) {
-        self.attempted = true;
+    pub fn accept_rotation(&mut self, pending: Option<MapContext>) {
+        // Manual/unmatched travel also replaces the previous pending destination.
+        self.startup_finished = true;
+        self.pending_rotation = pending;
+    }
+    /// LoadMap and GameMode creation for the same load share one selection/version.
+    /// Return the previous destination so a failed LoadMap can restore it.
+    pub fn enter(&mut self, map: &str, world: Option<usize>) -> Destination {
+        let context = &mut self.current;
+        let pending = &mut self.pending_rotation;
+        let previous = context.clone();
+        let mut selection = MapContext::new(map, None);
+        let same_map = |a: &MapContext, b: &MapContext| {
+            a.map
+                .as_ref()
+                .zip(b.map.as_ref())
+                .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
+        };
+        let continuing_load = world.is_some()
+            && same_map(&context.selection, &selection)
+            && (context.world.is_none() || context.world == world);
+        if pending
+            .as_ref()
+            .is_some_and(|pending| same_map(pending, &selection))
+        {
+            selection.index = pending.take().and_then(|pending| pending.index);
+        } else {
+            // An ordinary LoadMap supersedes a different pending destination. A seamless
+            // transition world's GameMode must not consume the final destination's slot.
+            if world.is_none() {
+                *pending = None;
+            }
+            if continuing_load {
+                selection.index = context.selection.index;
+            }
+        }
+        if !continuing_load || context.selection.index != selection.index {
+            context.generation = context.generation.wrapping_add(1);
+        }
+        context.selection = selection;
+        context.world = world;
+        previous
+    }
+
+    pub fn restore(&mut self, previous: Destination) {
+        let context = &mut self.current;
+        let generation = context.generation.wrapping_add(1);
+        *context = Destination {
+            generation,
+            ..previous
+        };
+        self.pending_rotation = None;
     }
 }
 
@@ -88,59 +134,6 @@ pub(super) fn capture_rotation(
     Some(selection)
 }
 
-pub(super) fn enter_context(
-    context: &mut Context,
-    pending: &mut Option<MapContext>,
-    map: &str,
-    world: Option<usize>,
-) -> Context {
-    let previous = context.clone();
-    let mut selection = MapContext::new(map, None);
-    let same_map = |a: &MapContext, b: &MapContext| {
-        a.map
-            .as_ref()
-            .zip(b.map.as_ref())
-            .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
-    };
-    let continuing_load = world.is_some()
-        && same_map(&context.selection, &selection)
-        && (context.world.is_none() || context.world == world);
-    if pending
-        .as_ref()
-        .is_some_and(|pending| same_map(pending, &selection))
-    {
-        selection.index = pending.take().and_then(|pending| pending.index);
-    } else {
-        // An ordinary LoadMap supersedes a different pending destination. A seamless
-        // transition world's GameMode must not consume the final destination's slot.
-        if world.is_none() {
-            *pending = None;
-        }
-        if continuing_load {
-            selection.index = context.selection.index;
-        }
-    }
-    if !continuing_load || context.selection.index != selection.index {
-        context.generation = context.generation.wrapping_add(1);
-    }
-    context.selection = selection;
-    context.world = world;
-    previous
-}
-
-pub(super) fn restore_context(
-    context: &mut Context,
-    pending: &mut Option<MapContext>,
-    previous: Context,
-) {
-    let generation = context.generation.wrapping_add(1);
-    *context = Context {
-        generation,
-        ..previous
-    };
-    *pending = None;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,64 +141,76 @@ mod tests {
 
     #[test]
     fn startup_uses_explicit_slot_once_and_ignores_frontend() {
-        let mut startup = StartupSelection::default();
-        assert!(startup.capture("Frontend", Some("Same"), Some(2)).is_none());
-        let mut pending = startup.capture("/Game/Maps/Same?listen", Some("Same"), Some(2));
-        assert_eq!(pending.as_ref().unwrap().index, Some(2));
-        let mut context = Context::default();
-        enter_context(&mut context, &mut pending, "Same", None);
-        enter_context(&mut context, &mut pending, "Same", Some(42));
-        assert_eq!(context.selection.index, Some(2));
-        assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
+        let mut travel = TravelState::default();
+        travel.capture_startup("Frontend", Some("Same"), Some(2));
+        assert!(travel.pending_rotation.is_none());
+        travel.capture_startup("/Game/Maps/Same?listen", Some("Same"), Some(2));
+        assert_eq!(travel.pending_rotation.as_ref().unwrap().index, Some(2));
+        travel.enter("Same", None);
+        travel.enter("Same", Some(42));
+        assert_eq!(travel.current.selection.index, Some(2));
+        travel.capture_startup("Same", Some("Same"), Some(0));
+        assert!(travel.pending_rotation.is_none());
     }
 
     #[rstest]
     #[case::missing(None)]
     #[case::negative(Some(-1))]
     fn startup_rejects_invalid_index_and_consumes_attempt(#[case] index: Option<i32>) {
-        let mut startup = StartupSelection::default();
-        assert!(startup.capture("Same", Some("Same"), index).is_none());
-        assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
+        let mut travel = TravelState::default();
+        travel.capture_startup("Same", Some("Same"), index);
+        assert!(travel.pending_rotation.is_none());
+        travel.capture_startup("Same", Some("Same"), Some(0));
+        assert!(travel.pending_rotation.is_none());
     }
 
     #[test]
     fn startup_requires_initial_map_but_not_yaml_profile() {
-        let mut startup = StartupSelection::default();
-        assert!(startup.capture("Same", None, Some(0)).is_none());
+        let mut travel = TravelState::default();
+        travel.capture_startup("Same", None, Some(0));
+        assert!(travel.pending_rotation.is_none());
         // An index needs no YAML profile: its exact index directory still applies.
-        assert_eq!(
-            startup
-                .capture("Same", Some("Same"), Some(99))
-                .unwrap()
-                .index,
-            Some(99)
-        );
+        travel.capture_startup("Same", Some("Same"), Some(99));
+        assert_eq!(travel.pending_rotation.unwrap().index, Some(99));
     }
 
     #[test]
     fn accepted_travel_prevents_late_startup_reselection() {
-        let mut startup = StartupSelection::default();
-        startup.finish();
-        assert!(startup.capture("Same", Some("Same"), Some(0)).is_none());
+        let mut travel = TravelState::default();
+        travel.accept_rotation(None);
+        assert!(!travel.can_capture_startup("Same", Some("Same")));
+        travel.capture_startup("Same", Some("Same"), Some(0));
+        assert!(travel.pending_rotation.is_none());
+    }
+
+    #[rstest]
+    #[case::manual(None)]
+    #[case::next_slot(Some(1))]
+    fn accepted_travel_replaces_pending_destination(#[case] index: Option<i32>) {
+        let mut travel = TravelState::default();
+        travel.accept_rotation(Some(MapContext::new("A", Some(0))));
+        let pending = index.map(|index| MapContext::new("B", Some(index)));
+        travel.accept_rotation(pending.clone());
+        assert_eq!(travel.pending_rotation, pending);
     }
 
     #[test]
     fn successive_native_slots_survive_new_generations_and_wrap() {
         let maps = ["Same", "Other", "Same"];
-        let mut context = Context::default();
-        let mut startup = StartupSelection::default();
-        let mut pending = startup.capture("Same", Some("Same"), Some(0));
-        enter_context(&mut context, &mut pending, "Same", Some(1));
+        let mut travel = TravelState::default();
+        travel.capture_startup("Same", Some("Same"), Some(0));
+        travel.enter("Same", Some(1));
         let mut baseline_index = 0;
         for (world, live_index) in [(2, 1), (3, 2), (4, 0)] {
             let destination = maps[live_index as usize];
-            pending = capture_rotation(destination, live_index, Some(destination), |index| {
+            let pending = capture_rotation(destination, live_index, Some(destination), |index| {
                 baseline_index = index;
             });
-            let previous_generation = context.generation;
-            enter_context(&mut context, &mut pending, destination, Some(world));
-            assert!(context.generation > previous_generation);
-            assert_eq!(context.selection.index, Some(baseline_index));
+            travel.accept_rotation(pending);
+            let previous_generation = travel.current.generation;
+            travel.enter(destination, Some(world));
+            assert!(travel.current.generation > previous_generation);
+            assert_eq!(travel.current.selection.index, Some(baseline_index));
             assert_eq!(baseline_index, live_index);
         }
     }
@@ -259,66 +264,66 @@ mod tests {
 
     #[test]
     fn ordinary_load_preserves_slot_through_game_mode_creation() {
-        let mut context = Context::default();
-        let mut pending = rotation_context("B", 2, Some("B"));
-        enter_context(&mut context, &mut pending, "B", None);
-        let generation = context.generation;
-        enter_context(&mut context, &mut pending, "B", Some(42));
-        assert_eq!(context.selection.index, Some(2));
-        assert_eq!(context.generation, generation);
-        assert!(pending.is_none());
+        let mut travel = TravelState::default();
+        travel.accept_rotation(rotation_context("B", 2, Some("B")));
+        travel.enter("B", None);
+        let generation = travel.current.generation;
+        travel.enter("B", Some(42));
+        assert_eq!(travel.current.selection.index, Some(2));
+        assert_eq!(travel.current.generation, generation);
+        assert!(travel.pending_rotation.is_none());
     }
 
     #[test]
     fn seamless_transition_keeps_final_destination_slot() {
-        let mut context = Context::default();
-        let mut pending = rotation_context("Final", 3, Some("Final"));
-        enter_context(&mut context, &mut pending, "Transition", Some(1));
-        assert_eq!(context.selection.index, None);
-        assert!(pending.is_some());
-        enter_context(&mut context, &mut pending, "Final", Some(2));
-        assert_eq!(context.selection.index, Some(3));
-        assert!(pending.is_none());
+        let mut travel = TravelState::default();
+        travel.accept_rotation(rotation_context("Final", 3, Some("Final")));
+        travel.enter("Transition", Some(1));
+        assert_eq!(travel.current.selection.index, None);
+        assert!(travel.pending_rotation.is_some());
+        travel.enter("Final", Some(2));
+        assert_eq!(travel.current.selection.index, Some(3));
+        assert!(travel.pending_rotation.is_none());
     }
 
     #[test]
     fn new_world_on_same_map_does_not_inherit_a_slot() {
-        let mut context = Context::default();
-        let mut pending = rotation_context("Same", 0, Some("Same"));
-        enter_context(&mut context, &mut pending, "Same", Some(1));
-        let generation = context.generation;
-        pending = rotation_context("Same", 2, Some("Same"));
-        enter_context(&mut context, &mut pending, "Same", Some(2));
-        assert_eq!(context.selection.index, Some(2));
-        assert!(context.generation > generation);
-        enter_context(&mut context, &mut pending, "Same", Some(3));
-        assert_eq!(context.selection.index, None);
+        let mut travel = TravelState::default();
+        travel.accept_rotation(rotation_context("Same", 0, Some("Same")));
+        travel.enter("Same", Some(1));
+        let generation = travel.current.generation;
+        travel.accept_rotation(rotation_context("Same", 2, Some("Same")));
+        travel.enter("Same", Some(2));
+        assert_eq!(travel.current.selection.index, Some(2));
+        assert!(travel.current.generation > generation);
+        travel.enter("Same", Some(3));
+        assert_eq!(travel.current.selection.index, None);
     }
 
     #[test]
     fn manual_load_discards_mismatched_pending_rotation() {
-        let mut context = Context::default();
-        let mut pending = rotation_context("B", 1, Some("B"));
-        enter_context(&mut context, &mut pending, "Manual", None);
-        assert!(pending.is_none());
-        assert_eq!(context.selection.index, None);
-        enter_context(&mut context, &mut pending, "B", Some(2));
-        assert_eq!(context.selection.index, None);
+        let mut travel = TravelState::default();
+        travel.accept_rotation(rotation_context("B", 1, Some("B")));
+        travel.enter("Manual", None);
+        assert!(travel.pending_rotation.is_none());
+        assert_eq!(travel.current.selection.index, None);
+        travel.enter("B", Some(2));
+        assert_eq!(travel.current.selection.index, None);
     }
 
     #[test]
     fn failed_load_restores_context_and_invalidates_overlays() {
-        let mut context = Context::default();
-        let mut pending = rotation_context("A", 0, Some("A"));
-        enter_context(&mut context, &mut pending, "A", Some(1));
-        pending = rotation_context("B", 1, Some("B"));
-        let previous = enter_context(&mut context, &mut pending, "B", None);
-        let generation = context.generation;
-        restore_context(&mut context, &mut pending, previous);
-        assert_eq!(context.selection.map.as_deref(), Some("A"));
-        assert_eq!(context.selection.index, Some(0));
-        assert_eq!(context.world, Some(1));
-        assert!(context.generation > generation);
-        assert!(pending.is_none());
+        let mut travel = TravelState::default();
+        travel.accept_rotation(rotation_context("A", 0, Some("A")));
+        travel.enter("A", Some(1));
+        travel.accept_rotation(rotation_context("B", 1, Some("B")));
+        let previous = travel.enter("B", None);
+        let generation = travel.current.generation;
+        travel.restore(previous);
+        assert_eq!(travel.current.selection.map.as_deref(), Some("A"));
+        assert_eq!(travel.current.selection.index, Some(0));
+        assert_eq!(travel.current.world, Some(1));
+        assert!(travel.current.generation > generation);
+        assert!(travel.pending_rotation.is_none());
     }
 }

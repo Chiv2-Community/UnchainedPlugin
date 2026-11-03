@@ -1,4 +1,9 @@
-//! Conditional runtime layers. UE performs all INI parsing and array merging.
+//! Destination selection → ordered layer paths → private native config copies.
+//!
+//! `travel` owns startup, accepted rotation, seamless continuity, and rollback.
+//! `selection` validates and orders map/profile/index folders.
+//! `layering` prepares paths and lazily merges baseline copies on native Find.
+//! This module coordinates those steps and refreshes existing class defaults.
 mod layering;
 mod selection;
 mod settings;
@@ -19,17 +24,14 @@ use crate::{
 };
 
 pub(crate) use layering::route_config;
-use layering::ConfigLayers;
-use layering::{reset_overlays, with_native_layer};
-use selection::{expand_layers, select_layers, LayerSelection, MapContext};
-use travel::{enter_context, restore_context, Context, StartupSelection};
+use layering::{reset_overlays, with_native_layer, ConfigLayers};
+use selection::{expand_layers, select_layers, MapContext};
+use travel::{Destination, TravelState};
 
 #[derive(Default)]
 struct State {
-    context: Context,
-    pending_rotation: Option<MapContext>,
-    startup: StartupSelection,
-    overrides: ConfigLayers,
+    travel: TravelState,
+    layers: ConfigLayers,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -47,44 +49,46 @@ fn profile_root() -> Option<&'static str> {
         .as_deref()
 }
 
-fn layers(context: &MapContext, root: &str) -> Vec<LayerSelection> {
-    let profile = context
-        .index
-        .and_then(|index| server_settings(root).profile_at(index));
-    expand_layers(root, &select_layers(context, profile))
-}
+impl State {
+    // Called only at destination boundaries, including failed-load restoration.
+    fn prepare_layers(&mut self, root: &str) -> HashSet<String> {
+        let context = &self.travel.current.selection;
+        let profile = context
+            .index
+            .and_then(|index| server_settings(root).profile_at(index));
+        let selected = select_layers(context, profile);
+        let expanded = expand_layers(root, &selected);
+        let layers = ConfigLayers::new(root, &expanded);
+        // Removed categories must also reload their baseline defaults.
+        let mut categories = self.layers.categories().collect::<HashSet<_>>();
+        categories.extend(layers.categories());
+        self.layers = layers;
+        GENERATION.store(self.travel.current.generation, Ordering::Release);
+        categories
+    }
 
-// Called only at destination boundaries, including failed-load restoration.
-fn prepare_context(state: &mut State, root: &str) -> HashSet<String> {
-    let overrides = ConfigLayers::new(root, &layers(&state.context.selection, root));
-    // Removed categories must also reload their baseline defaults.
-    let mut categories = state.overrides.categories().collect::<HashSet<_>>();
-    categories.extend(overrides.categories());
-    state.overrides = overrides;
-    GENERATION.store(state.context.generation, Ordering::Release);
-    categories
-}
-
-/// Called with the destination URL, never the outgoing world's map or rotation index.
-fn enter_map(map: &str, world: Option<usize>) -> Option<MapChange> {
-    let root = profile_root()?;
-    Some(with_state(|state| {
-        let previous = enter_context(&mut state.context, &mut state.pending_rotation, map, world);
-        let categories = if previous.generation != state.context.generation {
-            prepare_context(state, root)
+    fn enter_map(&mut self, root: &str, map: &str, world: Option<usize>) -> MapChange {
+        let previous = self.travel.enter(map, world);
+        let categories = if previous.generation != self.travel.current.generation {
+            self.prepare_layers(root)
         } else {
-            state.overrides.categories().collect()
+            self.layers.categories().collect()
         };
         MapChange {
             previous,
             categories,
         }
-    }))
+    }
 }
 
 struct MapChange {
-    previous: Context,
+    previous: Destination,
     categories: HashSet<String>,
+}
+
+// Snapshot paths under the state lock; native merging must run after it is released.
+fn layer_paths(filename: &str) -> Vec<String> {
+    with_state(|state| state.layers.paths(filename).to_vec())
 }
 
 fn server_settings(root: &str) -> &'static ServerSettings {
@@ -129,21 +133,12 @@ fn remember_game_config(cache: *mut FConfigCacheIni, filename: String) {
     });
 }
 
-struct ConfigKey {
-    section: Vec<u16>,
-    property: Vec<u16>,
-}
-
-fn index_key() -> ConfigKey {
-    ConfigKey {
-        section: "/Script/TBL.TBLGameMode\0".encode_utf16().collect(),
-        property: "MapListIndex\0".encode_utf16().collect(),
-    }
-}
+const ROTATION_SECTION: &widestring::U16CStr = widestring::u16cstr!("/Script/TBL.TBLGameMode");
+const ROTATION_INDEX: &widestring::U16CStr = widestring::u16cstr!("MapListIndex");
 
 fn capture_startup(map: &str) {
     let starting_map = cli_args().next_map.as_deref();
-    if !with_state(|state| state.startup.can_capture(map, starting_map)) {
+    if !with_state(|state| state.travel.can_capture_startup(map, starting_map)) {
         return;
     }
     let Some(config) = game_config() else {
@@ -158,19 +153,16 @@ fn capture_startup(map: &str) {
     if baseline.is_null() {
         return;
     }
-    let key = index_key();
     let mut index = 0;
     let index = CALL_ORIGINAL!(ConfigFileGetInt(
         baseline,
-        key.section.as_ptr(),
-        key.property.as_ptr(),
+        ROTATION_SECTION.as_ptr(),
+        ROTATION_INDEX.as_ptr(),
         &mut index
     ))
     .then_some(index);
     with_state(|state| {
-        if let Some(selection) = state.startup.capture(map, starting_map, index) {
-            state.pending_rotation = Some(selection);
-        }
+        state.travel.capture_startup(map, starting_map, index);
     });
 }
 
@@ -179,14 +171,13 @@ fn preserve_rotation_index(index: i32) {
         return;
     };
     let filename = FString::from(config.filename.as_str());
-    let key = index_key();
     // Rotation SaveConfig has already written to the non-saving outgoing overlay.
     // Bypass Find layering for this one scalar so the next generation starts at the live slot.
     with_native_layer((), || {
         CALL_ORIGINAL!(ConfigCacheSetInt(
             config.cache_address as *mut FConfigCacheIni,
-            key.section.as_ptr(),
-            key.property.as_ptr(),
+            ROTATION_SECTION.as_ptr(),
+            ROTATION_INDEX.as_ptr(),
             index,
             &filename
         ))
@@ -241,18 +232,20 @@ fn refresh_defaults(categories: &HashSet<String>) {
     }
 }
 
-pub(crate) fn select_map(map: &str, world: Option<usize>) -> Option<Context> {
+/// Select destination layers before native map/game-mode initialization.
+pub(crate) fn select_map(map: &str, world: Option<usize>) -> Option<Destination> {
     capture_startup(map);
-    let change = enter_map(map, world)?;
+    let root = profile_root()?;
+    let change = with_state(|state| state.enter_map(root, map, world));
     reset_overlays();
     refresh_defaults(&change.categories);
     Some(change.previous)
 }
 
-pub(crate) fn restore_map(previous: Context) {
+pub(crate) fn restore_map(previous: Destination) {
     let categories = with_state(|state| {
-        restore_context(&mut state.context, &mut state.pending_rotation, previous);
-        prepare_context(state, profile_root().unwrap())
+        state.travel.restore(previous);
+        state.prepare_layers(profile_root().unwrap())
     });
     reset_overlays();
     refresh_defaults(&categories);
@@ -263,30 +256,5 @@ pub(crate) fn capture_rotation(map: &str, index: i32, entry: Option<&str>) -> Op
 }
 
 pub(crate) fn accept_travel(pending: Option<MapContext>) {
-    // Every accepted travel replaces the previous snapshot, including manual/unmatched travel.
-    with_state(|state| {
-        state.startup.finish();
-        state.pending_rotation = pending;
-    });
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn profiles_parse_and_fixture_exists() {
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/test-resources/test-configs");
-        let yaml = std::fs::read_to_string(format!("{root}/unchained.yaml")).unwrap();
-        let settings = super::parse_server_settings(&yaml).unwrap();
-        let profile = settings.profile_at(1).unwrap();
-        assert!(super::selection::valid_component(profile));
-        assert!(
-            std::path::Path::new(&super::selection::build_profile_override_path(
-                root,
-                super::selection::OverrideLayer::MapProfile,
-                profile,
-                "Engine.ini"
-            ))
-            .is_file()
-        );
-    }
+    with_state(|state| state.travel.accept_rotation(pending));
 }
