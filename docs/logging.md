@@ -8,8 +8,13 @@ Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics
 
 ## Defaults
 
-The plugin uses its [embedded configuration](../src/logging/log4rs/log4rs.default.yaml)
-unless you pass `--log4rs-yaml`.
+The plugin selects one configuration at startup, in this order:
+
+1. The file passed with `--log4rs-yaml`.
+2. `log4rs.yaml` in the game or server process's current working directory.
+3. The [embedded `log4rs.default.yaml`](../src/logging/log4rs/log4rs.default.yaml).
+
+If the provided log4rs.yaml is malformed, an error is printed and execution resumes with the default logging configuration.
 
 Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
 Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
@@ -58,41 +63,9 @@ color codes already present in a message are not stripped.
 The startup banner is an ordinary `INFO` log record. It follows configured
 appenders, encoders, and filters instead of writing directly to stdout.
 
-## Use a custom configuration
-
-1. Download or copy the [default YAML](../src/logging/log4rs/log4rs.default.yaml) to a local
-   file, such as `C:\Unchained\logging.yaml`.
-2. Edit that copy. A custom file **replaces the entire configuration**; it does
-   not merge with the defaults. Keep the dependency filters unless you want more
-   library output.
-3. Add this option to the Chivalry 2 game or server process's launch arguments,
-   preserving the other arguments:
-
-   ```text
-   --log4rs-yaml "C:\Unchained\logging.yaml"
-   ```
-
-4. Restart the game or server after changing the file. Configuration is loaded
-   at startup, not automatically reloaded.
-
-Use an absolute path. Relative paths resolve from the game process's working
-directory, which may differ from the folder containing your startup script.
-
-Keep the quoted `"__UNCHAINED_LOG_PATH__"` and `"__KISMET_LOG_PATH__"` values to
-use the plugin's default file locations. The plugin replaces these tokens at
-startup. To choose a different file, use a writable path; forward slashes avoid
-YAML backslash escaping:
-
-```yaml
-path: "C:/Unchained/Logs/unchained.log"
-```
-
-Do not substitute `%LOCALAPPDATA%` into the YAML and expect it to expand like the
-plugin's path tokens.
-
 ## Structured logging
 
-In your [custom configuration](#use-a-custom-configuration), select the standard
+In your logging configuration, select the standard
 [log4rs JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html)
 on each console or file appender that should emit JSON:
 
@@ -377,9 +350,13 @@ Older custom configurations using `function`, `RCON`, `game_chat`, or
 
 - **No TRACE in the console:** enable `trace` for the target and lower the console
   threshold to `trace`. Restart, then reproduce the action.
-- **A custom file prevents startup:** check startup stderr for path or YAML
-  errors. An unreadable or invalid file does not fall back to defaults. Remove
-  `--log4rs-yaml` and restart to restore the embedded configuration.
+- **A custom file is rejected:** check startup stderr or `unchained.log` for the
+  file name and full error. The plugin pauses for five seconds, then uses the
+  embedded defaults. Fix the file and restart to try it again. To stop loading it,
+  remove `--log4rs-yaml` and rename or remove CWD `log4rs.yaml`.
+- **Logging still cannot start:** fallback requires the embedded configuration's
+  appenders to initialize successfully. Check stderr for default log-file path
+  or permission errors.
 - **No file output:** check the server account, saved-directory suffix, and write
   permissions. If `%LOCALAPPDATA%` is unavailable, the default directory falls
   back to `Logs` under the process's working directory.

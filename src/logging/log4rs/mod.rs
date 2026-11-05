@@ -41,19 +41,31 @@ pub fn setup_panic_logger() {
 
 pub fn init() -> anyhow::Result<()> {
     let cli = cli_args();
-    let config_source_name = cli.log4rs_yaml.as_deref().unwrap_or(EMBEDDED_LOG4RS_DEFAULT_NAME);
-    let yaml = load_logger_yaml(cli.log4rs_yaml.as_deref())?;
-    let resolved_yaml = apply_logger_placeholders(&yaml);
-    let yaml = serde_yaml::from_str(&resolved_yaml).with_context(|| {
-        format!(
-            "Failed to parse logger config {}",
-            config_source_name
-        )
-    })?;
-    let (config, warnings) = config_with_warnings(yaml, config_source_name)?;
+    init_with_path(cli.log4rs_yaml.as_deref(), cli.saved_dir_suffix.as_deref())
+}
+
+fn init_with_path(override_path: Option<&str>, saved_dir_suffix: Option<&str>) -> anyhow::Result<()> {
+    let selected = load_logger_yaml(override_path).and_then(|(source, yaml)|
+        config_from_yaml(&yaml, source, saved_dir_suffix).map(|config| (source, config)));
+    let mut rejected = None;
+    let (config_source_name, (config, warnings)) = match selected {
+        Ok(config) => config,
+        Err(error) => {
+            // No logger is available yet; report the complete error chain on stderr.
+            eprintln!("[UnchainedPlugin ERROR] Failed to load logging configuration: {error:#}");
+            eprintln!("[UnchainedPlugin ERROR] Startup will resume with embedded {EMBEDDED_LOG4RS_DEFAULT_NAME} in 5 seconds.");
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            rejected = Some(error);
+            (EMBEDDED_LOG4RS_DEFAULT_NAME,
+                config_from_yaml(EMBEDDED_LOG4RS_YAML, EMBEDDED_LOG4RS_DEFAULT_NAME, saved_dir_suffix)?)
+        }
+    };
     log4rs::init_config(config)
         .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
     setup_panic_logger();
+    if let Some(error) = rejected {
+        serror!("Rejected logging configuration: {error:#}. Resumed with embedded {EMBEDDED_LOG4RS_DEFAULT_NAME} after a 5-second pause.");
+    }
     for name in warnings {
         swarn!(undefined_palette = name.as_str();
             "Undefined inline palette reference in a configured palette encoder: {}", name);
@@ -63,11 +75,20 @@ pub fn init() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<String> {
-    match override_path {
-        Some(path) => std::fs::read_to_string(path)
+fn config_from_yaml(yaml: &str, source: &str, saved_dir_suffix: Option<&str>) -> anyhow::Result<(Config, BTreeSet<String>)> {
+    let resolved = apply_logger_placeholders(yaml, saved_dir_suffix);
+    let yaml = serde_yaml::from_str(&resolved)
+        .with_context(|| format!("Failed to parse logger config {source}"))?;
+    config_with_warnings(yaml, source)
+}
+
+fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<(&str, String)> {
+    let path = override_path.unwrap_or("log4rs.yaml");
+    match std::fs::read_to_string(path) {
+        Err(error) if override_path.is_none() && error.kind() == std::io::ErrorKind::NotFound =>
+            Ok((EMBEDDED_LOG4RS_DEFAULT_NAME, EMBEDDED_LOG4RS_YAML.to_string())),
+        result => result.map(|yaml| (path, yaml))
             .with_context(|| format!("Failed to read logger config file: {}", path)),
-        None => Ok(EMBEDDED_LOG4RS_YAML.to_string()),
     }
 }
 
@@ -117,10 +138,8 @@ fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
     }).collect()
 }
 
-fn apply_logger_placeholders(yaml: &str) -> String {
-    let suffix = cli_args()
-        .saved_dir_suffix
-        .as_deref()
+fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+    let suffix = saved_dir_suffix
         .map(|value| format!("_{}", value))
         .unwrap_or_default();
 
@@ -161,6 +180,109 @@ mod tests {
     use crate::logging::test_resources as fixtures;
     use log::{Level, Log, Metadata, Record};
     use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    #[test]
+    fn logger_yaml_precedence_and_read_errors() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-logger-source-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        let check = |override_path: Option<&str>, source: &str, yaml: Option<&str>| {
+            // Each child has its own CWD; do not change it for parallel tests.
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::logger_yaml_source_child", module_path!().split_once("::").unwrap().1)])
+                .current_dir(&dir.0)
+                .env_remove("UNCHAINED_TEST_LOGGER_OVERRIDE")
+                .env("UNCHAINED_TEST_LOGGER_EXPECTED", serde_json::to_string(&(source, yaml)).unwrap());
+            if let Some(path) = override_path { command.env("UNCHAINED_TEST_LOGGER_OVERRIDE", path); }
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        };
+        check(None, EMBEDDED_LOG4RS_DEFAULT_NAME, Some(EMBEDDED_LOG4RS_YAML));
+        std::fs::write(dir.0.join("explicit.yaml"), "root: { level: warn }").unwrap();
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::write(dir.0.join("log4rs.yaml"), "root: { level: info }").unwrap();
+        check(None, "log4rs.yaml", Some("root: { level: info }"));
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        check(Some("missing.yaml"), "missing.yaml", None);
+        std::fs::write(dir.0.join("log4rs.yaml"), [0xff]).unwrap();
+        check(None, "log4rs.yaml", None);
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::remove_file(dir.0.join("log4rs.yaml")).unwrap();
+        std::fs::create_dir(dir.0.join("log4rs.yaml")).unwrap();
+        check(None, "log4rs.yaml", None);
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for logger YAML source selection"]
+    fn logger_yaml_source_child() {
+        let override_path = std::env::var("UNCHAINED_TEST_LOGGER_OVERRIDE").ok();
+        let expected = std::env::var("UNCHAINED_TEST_LOGGER_EXPECTED").unwrap();
+        let (source, yaml): (String, Option<String>) = serde_json::from_str(&expected).unwrap();
+        let loaded = load_logger_yaml(override_path.as_deref());
+        match yaml {
+            Some(yaml) => assert_eq!(loaded.unwrap(), (source.as_str(), yaml)),
+            None => assert_eq!(loaded.unwrap_err().to_string(), format!("Failed to read logger config file: {source}")),
+        }
+    }
+
+    #[test]
+    fn invalid_logger_config_reports_pauses_and_resumes_with_defaults() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-logger-recovery-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        for (name, contents, override_path, error) in [
+            ("read", &b"\xff"[..], None, "Failed to read logger config file"),
+            ("yaml", &b"["[..], None, "Failed to parse logger config"),
+            ("schema", &b"root: { level: invalid }"[..], None, "Failed to parse logger config"),
+            ("appender", &b"appenders: { bad: { kind: missing } }\nroot: { level: info, appenders: [bad] }"[..], None, "Invalid logger config"),
+            ("explicit", &b"root: { level: off }"[..], Some("missing.yaml"), "Failed to read logger config file"),
+        ] {
+            let cwd = dir.0.join(name);
+            std::fs::create_dir(&cwd).unwrap();
+            std::fs::write(cwd.join("log4rs.yaml"), contents).unwrap();
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::logger_config_recovery_child", module_path!().split_once("::").unwrap().1)])
+                .current_dir(&cwd).env("LOCALAPPDATA", &cwd).env("NO_COLOR", "1")
+                .env_remove("UNCHAINED_TEST_LOGGER_OVERRIDE");
+            if let Some(path) = override_path { command.env("UNCHAINED_TEST_LOGGER_OVERRIDE", path); }
+            let start = std::time::Instant::now();
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{name}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            assert!(start.elapsed() >= std::time::Duration::from_secs(5), "{name}: skipped pause");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains(error), "{name}: {stderr}");
+            assert!(stderr.contains(override_path.unwrap_or("log4rs.yaml")), "{name}: {stderr}");
+            assert!(stderr.contains("in 5 seconds"), "{name}: {stderr}");
+            let log = std::fs::read_to_string(cwd.join(r"Chivalry 2\Saved").join("Logs/unchained.log")).unwrap();
+            assert!(log.contains("Rejected logging configuration:"), "{name}: {log}");
+            assert!(log.contains("Logging continued after fallback"), "{name}: {log}");
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for logger configuration recovery"]
+    fn logger_config_recovery_child() {
+        let override_path = std::env::var("UNCHAINED_TEST_LOGGER_OVERRIDE").ok();
+        init_with_path(override_path.as_deref(), None).unwrap();
+        assert!(log::logger().enabled(&Metadata::builder().target("UnchainedPlugin").level(Level::Debug).build()));
+        assert!(!log::logger().enabled(&Metadata::builder().target("UnchainedPlugin").level(Level::Trace).build()));
+        sinfo!("Logging continued after fallback");
+        log::logger().flush();
+    }
 
     #[test]
     fn inline_palette_switches_color_console_and_preserve_plain_file_messages() {

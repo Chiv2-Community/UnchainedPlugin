@@ -106,6 +106,7 @@ pub struct CLIArgs {
     #[arg(long = "saveddirsuffix")]
     pub saved_dir_suffix: Option<String>,
 
+    /// Use this logging configuration instead of CWD log4rs.yaml or the embedded default.
     #[arg(long = "log4rs-yaml")]
     pub log4rs_yaml: Option<String>,
 

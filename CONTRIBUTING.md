@@ -202,7 +202,7 @@ macros are declared first too.
 ### Configuring output
 
 See the logging guide for [defaults and colors](docs/logging.md#defaults),
-[custom YAML](docs/logging.md#use-a-custom-configuration),
+[configuration selection](docs/logging.md#defaults),
 [structured logging](docs/logging.md#structured-logging),
 [patterns and function fields](docs/logging.md#format-log-lines), and
 [module filters](docs/logging.md#set-log-levels). The guide also covers TRACE
