@@ -1,0 +1,103 @@
+{
+  "CachedMods": [
+    {
+      "latest_release_info": {
+        "repo_url": "https://github.com/Knutschbert/BigNumbers",
+        "name": "BigNumbers",
+        "Organization": "Knutschbert",
+        "RepoName": "BigNumbers"
+      },
+      "releases": [
+        {
+          "tag": "v0.0.2",
+          "hash": "db251fff4df084cca305ed7003b85cc61d43f5476bab209c3c18dca35321b68ab68d116f5834ba0729e7462ff38d43a7c7b7ec7037f272d49d759050d0063378",
+          "pak_file_name": "BigNumbers.pak",
+          "release_date": "2024-12-04T19:47:45",
+          "info": { "name": "BigNumbers" },
+          "manifest": {
+            "markers": [
+              {
+                "associated_blueprints": ["TBL/Content/Mods/AgMods/BigNumbers/BigNumbers.uasset"],
+                "path": "TBL/Content/Mods/AgMods/BigNumbers/BigNumbers_Marker.uasset",
+                "hash": "c3035fc9af32eea73c4787f21b474793c9061c14866c8c65094a4464b4f209a8",
+                "class_path": null,
+                "object_class": "DA_ModMarker_C"
+              }
+            ],
+            "blueprints": [
+              {
+                "mod_name": "BigNumbers",
+                "version": "1.0.0",
+                "path": "TBL/Content/Mods/AgMods/BigNumbers/BigNumbers.uasset",
+                "hash": "e241c6e5f3dd3b056aaa553ced03bba",
+                "object_class": "ArgonSDKModBase_C"
+              }
+            ],
+            "arbitrary": [
+              {
+                "mod_name": null,
+                "path": "TBL/Content/Mods/AgMods/BigNumbers/BigNumbersLoadoutMod.uasset",
+                "hash": "dbebdbd58428ad02e7ece212faec5c8e265a187e841cff511532ccd4a86959ea5",
+                "class_path": null,
+                "object_class": "IngameModMenuBaseWidget_C"
+              }
+            ]
+          },
+          "release_notes_markdown": "",
+          "ReleaseUrl": null,
+          "Version": "v0.0.2"
+        }
+      ],
+      "LatestRelease": []
+    },
+    {
+      "latest_release_info": {
+        "repo_url": "https://example.invalid/SimpleMap",
+        "name": "SimpleMap",
+        "Organization": "Example",
+        "RepoName": "SimpleMap"
+      },
+      "releases": [],
+      "LatestRelease": [
+        {
+          "tag": "v0.1.0",
+          "hash": "d0708eac01d11e34",
+          "pak_file_name": "SimpleMap.pak",
+          "release_date": "2025-01-01T00:00:00",
+          "info": { "name": "SimpleMap" },
+          "manifest": {
+            "maps": [
+              {
+                "game_mode": "Mode_FFA_C",
+                "map_name": "Example map",
+                "map_description": null,
+                "attacking_faction": null,
+                "defending_faction": "EFaction::FFA",
+                "game_mode_type": "EGameModeType::FreeForAll",
+                "tbl_default_gamemode": null,
+                "path": "TBL/Content/Mods/Maps/SimpleMap/SimpleMap.umap",
+                "hash": "bf0690cdc969121db432617a0b87a510d9a45d895ba3043fb0ed401d33fa1a238",
+                "class_path": null,
+                "object_class": null
+              }
+            ],
+            "arbitrary": []
+          },
+          "release_notes_markdown": "",
+          "ReleaseUrl": null,
+          "Version": "v0.1.0"
+        }
+      ]
+    }
+  ],
+  "EnabledModReleases": [
+    { "Version": "v0.0.2", "Org": "Knutschbert", "ModuleName": "BigNumbers" }
+  ],
+  "PakDir": {
+    "DirPath": "TBL\\Content\\Paks",
+    "ManagedPaks": [
+      { "Coordinates": { "Version": "v0.0.2", "Org": "Knutschbert", "ModuleName": "BigNumbers" }, "PakFileName": "qv__-__BigNumbers.pak", "Priority": 1 }
+    ]
+  },
+  "Kind": "StandardModManager"
+}
