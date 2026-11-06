@@ -11,6 +11,7 @@ pub mod game_info;
 pub mod mod_list;
 pub mod mod_list_maps;
 pub mod mod_register_maps;
+pub mod mod_load_all_assets;
 pub mod vote;
 pub mod votes;
 pub mod discord;

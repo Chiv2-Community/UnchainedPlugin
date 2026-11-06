@@ -29,13 +29,16 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut UTBLGameInstan
         .unwrap_or_default();
     // Old RCON widget
     let rcon_opt = if args.rcon_port.is_some() {"?rcon"} else {""};
-    let init_opt = match INITIALIZED.load(Ordering::Relaxed) {
-        true => "",
-        false => {
-            INITIALIZED.store(true, Ordering::Relaxed);
-            "?startup"
-        }
-    };
+    let first_load = INITIALIZED.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok();
+    let init_opt = if first_load { "?startup" } else { "" };
+
+    if first_load {
+        // The mod paks are already mounted by the time the frontend map loads,
+        // so register every mod asset into the Asset Registry exactly once here.
+        // Async + non-blocking (off-thread discovery, chunked game-thread
+        // registration); the helper's own guard makes it idempotent.
+        crate::features::mod_maps::auto_register_all_assets();
+    }
 
     let map_url = format!("Frontend{pwd_opt}{rcon_opt}{init_opt}");
     #[cfg(feature="verbose_hooks")]

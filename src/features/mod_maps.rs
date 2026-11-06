@@ -248,16 +248,18 @@ fn decode_aes_key(key: &str) -> Result<aes::Aes256> {
 // Registration (game thread, amortized)
 // ---------------------------------------------------------------------------
 
-/// Max number of package files registered per game-thread tick; mirrors the
-/// engine's own amortization budget (MaxSecondsPerFrame = 0.04s per tick).
-pub const REGISTRATION_CHUNK_SIZE: usize = 16;
+/// Max number of package files registered per game-thread tick. Matches the
+/// `--mod-map-batch` CLI default; larger batches trade per-tick game-thread time
+/// for fewer ticks. The engine's own amortization budget is ~16, so 128 batches
+/// do more work per frame.
+pub const REGISTRATION_CHUNK_SIZE: usize = 128;
 
 pub type OnRegistrationDone = Box<dyn FnOnce(Result<usize, String>) + Send>;
 
 /// Splits package file paths into game-thread registration batches. Pure logic.
-pub fn registration_batches(file_paths: &[String]) -> Vec<Vec<String>> {
+pub fn registration_batches(file_paths: &[String], chunk_size: usize) -> Vec<Vec<String>> {
     file_paths
-        .chunks(REGISTRATION_CHUNK_SIZE)
+        .chunks(chunk_size)
         .map(<[String]>::to_vec)
         .collect()
 }
@@ -267,12 +269,15 @@ pub fn registration_batches(file_paths: &[String]) -> Vec<Vec<String>> {
 /// the whole job queue in one frame, so batching must happen from inside the
 /// jobs). The completion callback fires on the game thread.
 ///
+/// `chunk_size` is the number of files handed to the engine per tick (see the
+/// `--mod-map-batch` CLI knob; the engine's own budget is ~16).
+///
 /// Safe to call from any thread: only the jobs touch the engine, and each
 /// returns `Err` gracefully while the signature is a placeholder.
-pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, on_complete: OnRegistrationDone) {
+pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, chunk_size: usize, on_complete: OnRegistrationDone) {
     let total = file_paths.len();
-    swarn!(fn; "[modmaps] sending {} mod map(s) to the Asset Registry", total);
-    let batches = VecDeque::from(registration_batches(&file_paths));
+    swarn!(fn; "[modmaps] sending {} file(s) to the Asset Registry", total);
+    let batches = VecDeque::from(registration_batches(&file_paths, chunk_size));
     queue_next_registration_batch(batches, 0, total, on_complete);
 }
 
@@ -291,7 +296,7 @@ pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_co
                 // Measure the Asset Registry registration step separately from
                 // the gathering (pak scan) step.
                 let ar_started = std::time::Instant::now();
-                register_scanned_mod_maps_async(file_paths, Box::new(move |r| {
+                register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
                     let ar_elapsed = ar_started.elapsed();
                     swarn!(fn; "[modmaps] profiler: gathering (pak scan) {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
                     on_complete(r);
@@ -300,6 +305,187 @@ pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_co
             Err(e) => on_complete(Err(e.to_string())),
         }
     }))
+}
+
+// ---------------------------------------------------------------------------
+// All-assets discovery (benchmark: register every pak entry, no filtering)
+// ---------------------------------------------------------------------------
+
+pub type OnAllAssetsDone = Box<dyn FnOnce(Result<AllAssetScan>) + Send>;
+
+/// One discovered asset file: the physical-relative pak path (mount_point +
+/// entry) that UE maps back to a package name during registration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredAsset {
+    pub file_path: String,
+    /// Engine package path when derivable (e.g. `/Game/Mods/...`); `None` for
+    /// entries that can't be mapped to a package (non-Content paths).
+    pub package_path: Option<String>,
+}
+
+/// Result of an all-assets discovery pass (every entry, any extension).
+#[derive(Debug, Clone, Default)]
+pub struct AllAssetScan {
+    pub assets: Vec<DiscoveredAsset>,
+    pub skipped: Vec<(String, String)>,
+}
+
+/// Reads one pak index and collects every entry — no `.umap` or `/Game/Mods`
+/// filtering (raw benchmark of "load everything").
+fn read_pak_all_assets(pak_path: &Path, key: Option<&aes::Aes256>) -> Result<Vec<DiscoveredAsset>> {
+    let mut file = std::fs::File::open(pak_path)
+        .with_context(|| format!("failed to open {}", pak_path.display()))?;
+    let builder = repak::PakBuilder::new();
+    let builder = match key {
+        Some(k) => builder.key(k.clone()),
+        None => builder,
+    };
+    let reader = builder.reader(&mut file).context("failed to parse pak index")?;
+    let mount_point = reader.mount_point();
+    let mut assets = Vec::new();
+    for entry in reader.files() {
+        let full_path = format!("{}{}", mount_point, entry);
+        let package_path = physical_path_to_package_path(&full_path);
+        assets.push(DiscoveredAsset { file_path: full_path, package_path });
+    }
+    Ok(assets)
+}
+
+/// Synchronous discovery of every asset in the source paks (no filtering).
+pub fn scan_all_assets(source: MapSource, aes_key: Option<String>) -> Result<AllAssetScan> {
+    let pak_paths = match source {
+        MapSource::PakDir(dir) => list_pak_files(&dir)?,
+        MapSource::PakFiles(files) => files,
+    };
+    let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
+    let mut scan = AllAssetScan::default();
+    let mut seen: HashSet<String> = HashSet::new();
+    for pak_path in pak_paths {
+        let name = pak_path.display().to_string();
+        match read_pak_all_assets(&pak_path, key.as_ref()) {
+            Ok(assets) => {
+                let mut found = 0usize;
+                for a in assets {
+                    // Dedup on the engine package path (consistent with the map
+                    // path below) so an asset present in several mounted paks is
+                    // registered only once. Fall back to the raw file path for
+                    // entries that don't map to a package.
+                    let key = a.package_path.as_deref().unwrap_or(&a.file_path);
+                    if seen.insert(key.to_string()) {
+                        scan.assets.push(a);
+                        found += 1;
+                    }
+                }
+                swarn!(fn; "[modmaps] {}: {} asset(s)", name, found);
+            }
+            Err(e) => {
+                swarn!(fn; "Skipping pak {}: {}", name, e);
+                scan.skipped.push((name, e.to_string()));
+            }
+        }
+    }
+    Ok(scan)
+}
+
+/// Runs an all-assets discovery pass on a worker thread and delivers the result.
+pub fn discover_all_assets_async(source: MapSource, aes_key: Option<String>, on_done: OnAllAssetsDone) {
+    crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
+        let joined = tokio::task::spawn_blocking(move || scan_all_assets(source, aes_key)).await;
+        on_done(joined
+            .context("all-assets scan task panicked or was cancelled")
+            .and_then(|r| r));
+    });
+}
+
+/// Glues all-assets discovery and registration, with gathering/registration/total
+/// profiling (mirrors `register_mod_maps_async`).
+pub fn register_all_assets_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
+    let started = std::time::Instant::now();
+    discover_all_assets_async(source, aes_key, Box::new(move |result| {
+        match result {
+            Ok(scan) => {
+                let gather_elapsed = started.elapsed();
+                let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
+                sinfo!(fn; "Discovered {} asset(s); registering", file_paths.len());
+                let ar_started = std::time::Instant::now();
+                register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
+                    let ar_elapsed = ar_started.elapsed();
+                    swarn!(fn; "[modmaps] profiler(all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+                    on_complete(r);
+                }));
+            }
+            Err(e) => on_complete(Err(e.to_string())),
+        }
+    }))
+}
+
+static AUTO_ALL_ASSETS_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Synchronous, game-thread all-assets registration: runs the pak scan inline
+/// (pure Rust, no engine calls) and then every registration batch back-to-back
+/// in one go. The Asset Registry work all happens in a single game-thread
+/// block, so it is hidden inside the loading screen instead of hitching
+/// gameplay one batch per tick.
+///
+/// MUST run on the game thread (it drives `ScanPathsAndFilesSynchronous`).
+/// Intended for the auto/init path (`LoadFrontEndMap` / dedicated-server
+/// fallback), where a multi-second block is acceptable. The manual
+/// `loadallassets` command keeps the async/chunked path instead.
+pub fn register_all_assets_sync() {
+    let started = std::time::Instant::now();
+
+    let Some(source) = default_paks_dir().map(MapSource::PakDir) else {
+        serror!(fn; "Synchronous all-asset registration skipped: could not derive Content/Paks from the executable");
+        return;
+    };
+
+    // Gathering step — inline pak index scan (no engine calls).
+    let gather_started = std::time::Instant::now();
+    let scan = match scan_all_assets(source, None) {
+        Ok(scan) => scan,
+        Err(e) => {
+            serror!(fn; "Synchronous all-asset scan failed: {}", e);
+            return;
+        }
+    };
+    let gather_elapsed = gather_started.elapsed();
+
+    let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
+    let total = file_paths.len();
+    sinfo!(fn; "Discovered {} asset(s); registering synchronously", total);
+
+    // Registration step — every batch back-to-back on the game thread.
+    let ar_started = std::time::Instant::now();
+    let chunk = crate::cli_args().mod_map_batch;
+    let mut registered = 0usize;
+    for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
+        let batch_timer = std::time::Instant::now();
+        if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
+            serror!(fn; "Synchronous registration batch {} failed: {}", i, e);
+            return;
+        }
+        registered += batch.len();
+        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
+        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
+    }
+    let ar_elapsed = ar_started.elapsed();
+
+    swarn!(fn; "[modmaps] profiler(sync all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+    sinfo!(fn; "Auto-registered {} asset(s) into the Asset Registry", registered);
+}
+
+/// One-shot auto-registration of every asset from the default Content/Paks into
+/// the Asset Registry, fired after the mod paks are mounted (from
+/// `LoadFrontEndMap`, with a server `world_init` fallback). Runs synchronously
+/// on the game thread so the work lands during initialization/loading rather
+/// than hitching gameplay; the internal guard makes the call idempotent across
+/// call sites, so only the first invocation does any work.
+pub fn auto_register_all_assets() {
+    use std::sync::atomic::Ordering;
+    if AUTO_ALL_ASSETS_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    register_all_assets_sync();
 }
 
 /// The game's `Content/Paks` directory, derived from the running executable
@@ -337,12 +523,14 @@ fn queue_next_registration_batch(
     let next_registered = registered + batch.len();
     let batch_len = batch.len();
     crate::resolvers::unchained_integration::run_on_game_thread(move || {
+        let batch_started = std::time::Instant::now();
         let result = unsafe { crate::game::engine::scan_files_synchronous(&batch) };
         if let Err(e) = result {
             serror!(fn; "Registration batch failed: {}", e);
             on_complete(Err(e));
             return;
         }
+        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch_len, batch_started.elapsed());
         sinfo!(fn; "Registered {} package file(s) ({} / {})", batch_len, next_registered, total);
         queue_next_registration_batch(next_remaining, next_registered, total, on_complete);
     });
@@ -462,10 +650,10 @@ mod tests {
         let files: Vec<String> = (0..35)
             .map(|i| format!("/Game/Mods/TestMod/Maps/Map{i}.umap"))
             .collect();
-        let batches = registration_batches(&files);
+        let batches = registration_batches(&files, 16);
         assert_eq!(batches.len(), 3);
-        assert_eq!(batches[0].len(), REGISTRATION_CHUNK_SIZE);
-        assert_eq!(batches[1].len(), REGISTRATION_CHUNK_SIZE);
+        assert_eq!(batches[0].len(), 16);
+        assert_eq!(batches[1].len(), 16);
         assert_eq!(batches[2].len(), 3);
         let flattened: Vec<String> = batches.concat();
         assert_eq!(flattened, files, "batches must preserve order and content");
@@ -473,15 +661,31 @@ mod tests {
 
     #[test]
     fn exact_chunk_boundaries_do_not_spill() {
-        let files: Vec<String> = (0..REGISTRATION_CHUNK_SIZE)
+        let files: Vec<String> = (0..16)
             .map(|i| format!("/Game/Mods/M{i}.umap"))
             .collect();
-        let batches = registration_batches(&files);
+        let batches = registration_batches(&files, 16);
         assert_eq!(batches.len(), 1);
-        assert_eq!(batches[0].len(), REGISTRATION_CHUNK_SIZE);
+        assert_eq!(batches[0].len(), 16);
 
         let empty: Vec<String> = Vec::new();
-        assert!(registration_batches(&empty).is_empty());
+        assert!(registration_batches(&empty, 16).is_empty());
+    }
+
+    #[test]
+    fn custom_chunk_size_is_honored() {
+        let files: Vec<String> = (0..10)
+            .map(|i| format!("/Game/Mods/M{i}.umap"))
+            .collect();
+        let batches = registration_batches(&files, 4);
+        assert_eq!(
+            batches.iter().map(|b| b.len()).collect::<Vec<_>>(),
+            vec![4, 4, 2]
+        );
+        // A chunk larger than the total yields a single batch.
+        let large = registration_batches(&files, 100);
+        assert_eq!(large.len(), 1);
+        assert_eq!(large[0].len(), 10);
     }
 
     #[test]

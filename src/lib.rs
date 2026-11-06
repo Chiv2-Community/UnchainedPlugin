@@ -567,24 +567,15 @@ pub fn world_init() {
             sinfo!("Started mod manager");
         });
 
-        // Auto-register mod maps from Content/Paks into the Asset Registry,
-        // once per session (explicit re-runs go through the registermodmaps
-        // command, which is idempotent).
-        static AUTO_REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        if !AUTO_REGISTERED.swap(true, std::sync::atomic::Ordering::SeqCst) {
-            if let Some(paks_dir) = crate::features::mod_maps::default_paks_dir() {
-                crate::features::mod_maps::register_mod_maps_async(
-                    crate::features::mod_maps::MapSource::PakDir(paks_dir),
-                    None,
-                    Box::new(|result| match result {
-                        Ok(count) => sinfo!(fn; "Auto-registered {} mod package(s) into the Asset Registry", count),
-                        Err(e) => serror!(fn; "Auto-registration of mod packages failed: {}", e),
-                    }),
-                );
-            } else {
-                serror!(fn; "Auto-registration of mod packages skipped: could not derive Content/Paks from the executable");
-            }
-        }
+        // Server fallback: register every mod asset into the Asset Registry once.
+        // The primary trigger is LoadFrontEndMap (fires after the paks are
+        // mounted, on both client and server); this covers the case where a
+        // dedicated server never loads the frontend. The sync registration must
+        // run on the game thread, and the helper's one-shot guard makes it
+        // idempotent regardless of which site fires first.
+        crate::resolvers::unchained_integration::run_on_game_thread(|| {
+            crate::features::mod_maps::auto_register_all_assets();
+        });
     }
 }
 

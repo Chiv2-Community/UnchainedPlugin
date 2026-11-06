@@ -30,6 +30,7 @@ use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
 use crate::modules::mod_list_maps::ListModMapsCommand;
 use crate::modules::mod_register_maps::RegisterModMapsCommand;
+use crate::modules::mod_load_all_assets::LoadAllAssetsCommand;
 use crate::modules::votes::endmap::EndMapVote;
 use crate::modules::votes::voterestartserver::RestartServerVote;
 
@@ -122,6 +123,7 @@ pub async fn initialize_subscribers() {
         command_subscriber.register(ListModsCommand);
         command_subscriber.register(ListModMapsCommand);
         command_subscriber.register(RegisterModMapsCommand);
+        command_subscriber.register(LoadAllAssetsCommand);
     }
 
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
@@ -152,6 +154,7 @@ pub async fn initialize_client_commands() {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
         command_subscriber.register(ListModMapsCommand);
         command_subscriber.register(RegisterModMapsCommand);
+        command_subscriber.register(LoadAllAssetsCommand);
     }
 
     let _ = game_event_bus
