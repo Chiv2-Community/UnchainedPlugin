@@ -76,6 +76,14 @@ move-autonomous-desync = []
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
 patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
 anyhow = "1.0.79"
+# Pak index reads for off-thread mod-map discovery. The crates.io `repak`
+# crate is an unrelated name-squatter; use trumank/repak.
+repak = { git = "https://github.com/trumank/repak" }
+# AES-256 key pass-through for paks with encrypted indexes (must unify with
+# repak's own aes version).
+aes = "0.8"
+base64 = "0.22"
+hex = "0.4"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 serde_yaml = "0.9"
