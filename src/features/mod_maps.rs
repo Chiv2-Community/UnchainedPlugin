@@ -78,12 +78,12 @@ pub fn discover_mod_maps_async(source: MapSource, aes_key: Option<String>, on_do
 /// Synchronous discovery pass. No engine calls; safe on any thread.
 pub fn scan_mod_maps(source: MapSource, aes_key: Option<String>) -> Result<ModMapScan> {
     let _scan_started = std::time::Instant::now();
-    swarn!(fn; "[modmaps] discover: scan_mod_maps STARTED");
+    sdebug!( "[modmaps] discover: scan_mod_maps STARTED");
     let pak_paths = match source {
         MapSource::PakDir(dir) => list_pak_files(&dir)?,
         MapSource::PakFiles(files) => files,
     };
-    swarn!(fn; "[modmaps] discover: listed {} pak file(s) in {:?}", pak_paths.len(), _scan_started.elapsed());
+    sdebug!( "[modmaps] discover: listed {} pak file(s) in {:?}", pak_paths.len(), _scan_started.elapsed());
 
     let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
 
@@ -103,10 +103,10 @@ pub fn scan_mod_maps(source: MapSource, aes_key: Option<String>) -> Result<ModMa
                         found += 1;
                     }
                 }
-                swarn!(fn; "[modmaps] {}: {} map(s)", name, found);
+                sdebug!( "[modmaps] {}: {} map(s)", name, found);
             }
             Err(e) => {
-                swarn!(fn; "Skipping pak {}: {}", name, e);
+                sdebug!( "Skipping pak {}: {}", name, e);
                 scan.skipped.push((name, e.to_string()));
             }
         }
@@ -180,7 +180,7 @@ fn list_pak_files(dir: &Path) -> Result<Vec<PathBuf>> {
         }
         let file_name = entry.file_name().to_string_lossy().to_lowercase();
         if file_name.starts_with("pakchunk") {
-            swarn!(fn; "Skipping game pak {}", path.display());
+            sdebug!( "Skipping game pak {}", path.display());
             continue;
         }
         paks.push(path);
@@ -276,7 +276,7 @@ pub fn registration_batches(file_paths: &[String], chunk_size: usize) -> Vec<Vec
 /// returns `Err` gracefully while the signature is a placeholder.
 pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, chunk_size: usize, on_complete: OnRegistrationDone) {
     let total = file_paths.len();
-    swarn!(fn; "[modmaps] sending {} file(s) to the Asset Registry", total);
+    sdebug!( "[modmaps] sending {} file(s) to the Asset Registry", total);
     let batches = VecDeque::from(registration_batches(&file_paths, chunk_size));
     queue_next_registration_batch(batches, 0, total, on_complete);
 }
@@ -292,13 +292,13 @@ pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_co
             Ok(scan) => {
                 let gather_elapsed = started.elapsed();
                 let file_paths: Vec<String> = scan.maps.iter().map(|p| p.file_path.clone()).collect();
-                sinfo!(fn; "Discovered {} mod map(s); registering", file_paths.len());
+                sdebug!( "Discovered {} mod map(s); registering", file_paths.len());
                 // Measure the Asset Registry registration step separately from
                 // the gathering (pak scan) step.
                 let ar_started = std::time::Instant::now();
                 register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
                     let ar_elapsed = ar_started.elapsed();
-                    swarn!(fn; "[modmaps] profiler: gathering (pak scan) {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+                    sdebug!( "[modmaps] profiler: gathering (pak scan) {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
                     on_complete(r);
                 }));
             }
@@ -376,10 +376,10 @@ pub fn scan_all_assets(source: MapSource, aes_key: Option<String>) -> Result<All
                         found += 1;
                     }
                 }
-                swarn!(fn; "[modmaps] {}: {} asset(s)", name, found);
+                sdebug!( "[modmaps] {}: {} asset(s)", name, found);
             }
             Err(e) => {
-                swarn!(fn; "Skipping pak {}: {}", name, e);
+                sdebug!( "Skipping pak {}: {}", name, e);
                 scan.skipped.push((name, e.to_string()));
             }
         }
@@ -581,7 +581,7 @@ pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Resul
                 }
             }
             Err(e) => {
-                swarn!(fn; "Skipping pak {}: {}", name, e);
+                sdebug!( "Skipping pak {}: {}", name, e);
                 scan.skipped.push((name, e.clone()));
             }
         }
@@ -599,11 +599,11 @@ pub fn register_all_assets_async(source: MapSource, aes_key: Option<String>, on_
             Ok(scan) => {
                 let gather_elapsed = started.elapsed();
                 let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
-                sinfo!(fn; "Discovered {} asset(s); registering", file_paths.len());
+                sdebug!( "Discovered {} asset(s); registering", file_paths.len());
                 let ar_started = std::time::Instant::now();
                 register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
                     let ar_elapsed = ar_started.elapsed();
-                    swarn!(fn; "[modmaps] profiler(all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+                    sdebug!( "[modmaps] profiler(all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
                     on_complete(r);
                 }));
             }
@@ -645,7 +645,7 @@ pub fn register_all_assets_sync() {
 
     let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
     let total = file_paths.len();
-    sinfo!(fn; "Discovered {} asset(s); registering synchronously", total);
+    sdebug!( "Discovered {} asset(s); registering synchronously", total);
 
     // Registration step — every batch back-to-back on the game thread.
     let ar_started = std::time::Instant::now();
@@ -658,13 +658,13 @@ pub fn register_all_assets_sync() {
             return;
         }
         registered += batch.len();
-        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
-        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
+        sdebug!( "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
+        sdebug!( "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
     }
     let ar_elapsed = ar_started.elapsed();
 
-    swarn!(fn; "[modmaps] profiler(sync all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
-    sinfo!(fn; "Auto-registered {} asset(s) into the Asset Registry", registered);
+    sdebug!( "[modmaps] profiler(sync all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+    sdebug!( "Auto-registered {} asset(s) into the Asset Registry", registered);
 }
 
 /// One-shot auto-registration of maps + marker packages into the Asset Registry,
@@ -690,10 +690,12 @@ pub fn auto_register_all_assets() {
 pub fn register_filtered_assets_sync() {
     let started = std::time::Instant::now();
 
-    let Some(source) = default_paks_dir().map(MapSource::PakDir) else {
-        serror!(fn; "Synchronous filtered registration skipped: could not derive Content/Paks from the executable");
+    let paks = discovery_pak_paths();
+    if paks.is_empty() {
+        serror!(fn; "Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
         return;
-    };
+    }
+    let source = MapSource::PakFiles(paks);
 
     // Gathering + marker detection (pure Rust, no engine calls), parallel.
     let marker_started = std::time::Instant::now();
@@ -707,32 +709,25 @@ pub fn register_filtered_assets_sync() {
     let marker_elapsed = marker_started.elapsed();
 
     let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
-    let total = file_paths.len();
-    sinfo!(fn; "Paks contained {} total file(s) ({} .uasset) across {} pak(s) (scanned on {} thread(s)); registering {} required package(s)",
-        scan.stats.total_entries, scan.stats.total_uasset, scan.stats.total_paks, scan.stats.threads, total);
-    sinfo!(fn; "Filtered discovery: {} package(s) — {} map(s), {} DA_ModMarker, {} DA_MapInfo; registering",
-        total, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos);
 
     // Registration step — every batch back-to-back on the game thread.
     let ar_started = std::time::Instant::now();
     let chunk = crate::cli_args().mod_map_batch;
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
-        let batch_timer = std::time::Instant::now();
         if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
             serror!(fn; "Synchronous filtered batch {} failed: {}", i, e);
             return;
         }
         registered += batch.len();
-        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
-        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
     }
     let ar_elapsed = ar_started.elapsed();
 
-    swarn!(fn; "[modmaps] profiler(filtered): marker-detection ({} threads) {:?} | AR registration {:?} | total {:?}",
+    sdebug!( "[modmaps] registered {} package(s): {} map(s), {} DA_ModMarker, {} DA_MapInfo (from {} .uasset across {} pak(s), {} thread(s))",
+        registered, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos,
+        scan.stats.total_uasset, scan.stats.total_paks, scan.stats.threads);
+    sdebug!( "[modmaps] profiler: marker-detection ({}) {:?} | AR registration {:?} | total {:?}",
         scan.stats.threads, marker_elapsed, ar_elapsed, started.elapsed());
-    sinfo!(fn; "Auto-registered {} package(s) into the Asset Registry: {} map(s), {} mod marker(s) (DA_ModMarker), {} map info(s) (DA_MapInfo)",
-        registered, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos);
 
     // List the loaded maps so the main-menu package set is easy to verify.
     let maps: Vec<&DiscoveredAsset> = scan
@@ -740,9 +735,9 @@ pub fn register_filtered_assets_sync() {
         .iter()
         .filter(|a| a.file_path.to_lowercase().ends_with(".umap"))
         .collect();
-    sinfo!(fn; "Loaded {} map(s):", maps.len());
+    sdebug!( "Loaded {} map(s):", maps.len());
     for m in &maps {
-        sinfo!(fn; "  {}", m.package_path.as_deref().unwrap_or(&m.file_path));
+        sdebug!( "  {}", m.package_path.as_deref().unwrap_or(&m.file_path));
     }
 }
 
@@ -757,6 +752,49 @@ pub fn default_paks_dir() -> Option<PathBuf> {
             .and_then(|p| p.parent()) // <Project>
             .map(|project| project.join("Content").join("Paks"))
     })
+}
+
+/// Filter a mounted-pak filename list down to non-game (non-`pakchunk*`) `.pak`
+/// files, sorted and deduped. Pure; unit-tested.
+fn filter_mounted_paks(mounted: &[String]) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = mounted
+        .iter()
+        .map(PathBuf::from)
+        .filter(|p| {
+            p.extension().map(|e| e.eq_ignore_ascii_case("pak")).unwrap_or(false)
+                && !p.file_name()
+                    .map(|n| n.to_string_lossy().to_lowercase().starts_with("pakchunk"))
+                    .unwrap_or(false)
+        })
+        .collect();
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+/// Candidate pak paths for discovery: the engine's actually-mounted paks (covers
+/// extra dirs and excludes unsigned / not-loadable paks), filtered to non-game
+/// paks. Falls back to a `Content/Paks` scan if no mounts were captured (e.g. the
+/// `Mount` resolver isn't populated yet).
+fn discovery_pak_paths() -> Vec<PathBuf> {
+    let mounted = crate::resolvers::pak_mount::mounted_pak_filenames();
+    let fallback = || {
+        default_paks_dir().and_then(|d| list_pak_files(&d).ok()).unwrap_or_default()
+    };
+    if mounted.is_empty() {
+        sdebug!("[modmaps] pak discovery: Mount list empty — falling back to Content/Paks scan");
+        return fallback();
+    }
+    let paths = filter_mounted_paks(&mounted);
+    if paths.is_empty() {
+        sdebug!("[modmaps] pak discovery: {} mounted, all game (pakchunk) — falling back to Content/Paks scan", mounted.len());
+        return fallback();
+    }
+    sdebug!("[modmaps] pak discovery: using Mount — {} mod pak(s) loaded:", paths.len());
+    for p in &paths {
+        sdebug!("[modmaps]   {}", p.display());
+    }
+    paths
 }
 
 fn queue_next_registration_batch(
@@ -788,8 +826,8 @@ fn queue_next_registration_batch(
             on_complete(Err(e));
             return;
         }
-        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch_len, batch_started.elapsed());
-        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch_len, next_registered, total);
+        sdebug!( "[modmaps] batch of {} file(s) took {:?}", batch_len, batch_started.elapsed());
+        sdebug!( "Registered {} package file(s) ({} / {})", batch_len, next_registered, total);
         queue_next_registration_batch(next_remaining, next_registered, total, on_complete);
     });
 }
@@ -944,6 +982,23 @@ mod tests {
         let large = registration_batches(&files, 100);
         assert_eq!(large.len(), 1);
         assert_eq!(large[0].len(), 10);
+    }
+
+    #[test]
+    fn filter_mounted_paks_excludes_game_paks_and_dedups() {
+        let mounted = [
+            "U:/Games/Chivalry2_c/TBL/Content/Paks/pakchunk0-WindowsNoEditor.pak".to_string(),
+            "U:/Games/Chivalry2_c/TBL/Content/Paks/NihiMaps.pak".to_string(),
+            "U:/Games/Chivalry2_c/TBL/Content/Paks/NihiMaps.pak".to_string(),
+            "U:/Games/Chivalry2_c/TBL/Content/Paks/Hippodromeum.pak".to_string(),
+        ];
+        let filtered = filter_mounted_paks(&mounted);
+        let names: Vec<String> = filtered
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        // pakchunk excluded; duplicate NihiMaps deduped; sorted.
+        assert_eq!(names, vec!["Hippodromeum.pak", "NihiMaps.pak"]);
     }
 
     #[test]

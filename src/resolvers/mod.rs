@@ -90,6 +90,7 @@ pub mod chiv2_macros;
 #[macro_use]
 pub mod getpost_requests;
 pub mod gameplay;
+pub mod pak_mount;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
