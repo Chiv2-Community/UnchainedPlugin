@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 mod array;
+mod config;
 pub mod kismet;
 mod malloc;
 mod map;
@@ -11,8 +12,10 @@ pub mod object_array;
 mod string;
 pub mod stubs;
 pub mod sync;
+mod url;
 
 pub use array::*;
+pub use config::*;
 pub use malloc::*;
 pub use map::*;
 pub use memory::*;
@@ -21,6 +24,7 @@ pub use object::*;
 pub use object_ptr::*;
 pub use string::*;
 pub use stubs::*;
+pub use url::*;
 
 use std::ffi::c_void;
 
