@@ -9,15 +9,17 @@
 //!
 //! This module performs ZERO engine calls and is safe to run on a worker
 //! thread. Registration into the live Asset Registry happens separately on
-//! the game thread (see `game::engine::get_assets_by_path` and the
+//! the game thread (see `game::engine::get_assets_by_path`,
+//! `game::engine::scan_files_synchronous`, and the
 //! `ScanPathsAndFilesSynchronous` resolver work).
 //!
 //! NOTE: the `repak` crate is pulled from https://github.com/trumank/repak —
 //! the crates.io crate of that name is an unrelated name-squatter.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 
+use aes::cipher::KeyInit;
 use anyhow::{Context, Result};
 
 /// The asset path all discovered mod maps must live under.
@@ -191,15 +193,15 @@ fn list_pak_files(dir: &Path) -> Result<Vec<PathBuf>> {
 /// Maps a physical pak path to the in-engine package path: the first
 /// `.../Content/` segment maps to `/Game/`, the `.umap` extension is stripped.
 /// Returns `None` for paths without a content root or with invalid package
-/// characters (callers log these instead of registering garbage).
+/// characters (callers log these instead of registering garbage); packages
+/// outside [`MOD_ROOT`] still derive and are filtered by the caller.
 fn physical_path_to_package_path(full_path: &str) -> Option<String> {
     let normalized = full_path.replace('\\', "/");
     let content_start = normalized.find(CONTENT_SEGMENT)? + CONTENT_SEGMENT.len();
     let remainder = normalized.get(content_start..)?;
     let stem = strip_umap(remainder)?;
     let package_path = format!("/Game/{}", stem);
-    if package_path.starts_with(MOD_ROOT)
-        && !package_path.contains("//")
+    if !package_path.contains("//")
         && !package_path.contains('\0')
         && !package_path.ends_with('/')
         && !package_path.chars().any(|c| INVALID_PACKAGE_CHARS.contains(c))
@@ -219,22 +221,92 @@ fn strip_umap(name: &str) -> Option<&str> {
 }
 
 /// Decodes an AES-256 key given as base64 or hex (optionally `0x`-prefixed),
-/// matching the repak CLI convention.
+/// matching the repak CLI convention. Base64 results are only accepted when
+/// they decode to exactly 32 bytes, so plain-hex keys (which are also valid
+/// base64 strings) fall through to the hex path.
 fn decode_aes_key(key: &str) -> Result<aes::Aes256> {
     let trimmed = key.trim();
-    let bytes = if let Some(hex_part) = trimmed
+    if let Some(hex_part) = trimmed
         .strip_prefix("0x")
         .or_else(|| trimmed.strip_prefix("0X"))
     {
-        hex::decode(hex_part).context("invalid hex AES key")?
-    } else {
-        use base64::Engine as _;
-        base64::engine::general_purpose::STANDARD
-            .decode(trimmed)
-            .or_else(|_| hex::decode(trimmed))
-            .context("AES key must be base64 or hex")?
+        let bytes = hex::decode(hex_part).context("invalid hex AES key")?;
+        return aes::Aes256::new_from_slice(&bytes).context("AES key must decode to 32 bytes");
+    }
+    use base64::Engine as _;
+    let bytes = match base64::engine::general_purpose::STANDARD
+        .decode(trimmed)
+        .ok()
+        .filter(|bytes| bytes.len() == 32)
+    {
+        Some(bytes) => bytes,
+        None => hex::decode(trimmed).context("AES key must be base64 or hex")?,
     };
     aes::Aes256::new_from_slice(&bytes).context("AES key must decode to 32 bytes")
+}
+
+// ---------------------------------------------------------------------------
+// Registration (game thread, amortized)
+// ---------------------------------------------------------------------------
+
+/// Max number of package files registered per game-thread tick; mirrors the
+/// engine's own amortization budget (MaxSecondsPerFrame = 0.04s per tick).
+pub const REGISTRATION_CHUNK_SIZE: usize = 16;
+
+pub type OnRegistrationDone = Box<dyn FnOnce(Result<usize, String>) + Send>;
+
+/// Splits package file paths into game-thread registration batches. Pure logic.
+pub fn registration_batches(file_paths: &[String]) -> Vec<Vec<String>> {
+    file_paths
+        .chunks(REGISTRATION_CHUNK_SIZE)
+        .map(<[String]>::to_vec)
+        .collect()
+}
+
+/// Registers the given package files into the live Asset Registry, one batch
+/// per game-thread tick (each job re-queues the next — the tick hook drains
+/// the whole job queue in one frame, so batching must happen from inside the
+/// jobs). The completion callback fires on the game thread.
+///
+/// Safe to call from any thread: only the jobs touch the engine, and each
+/// returns `Err` gracefully while the signature is a placeholder.
+pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, on_complete: OnRegistrationDone) {
+    let total = file_paths.len();
+    let batches = VecDeque::from(registration_batches(&file_paths));
+    queue_next_registration_batch(batches, 0, total, on_complete);
+}
+
+fn queue_next_registration_batch(
+    mut remaining: VecDeque<Vec<String>>,
+    registered: usize,
+    total: usize,
+    on_complete: OnRegistrationDone,
+) {
+    let Some(batch) = remaining.pop_front() else {
+        if registered == 0 && total == 0 {
+            // Nothing to do — still deliver completion on the game thread.
+            crate::resolvers::unchained_integration::run_on_game_thread(move || {
+                on_complete(Ok(0));
+            });
+        } else {
+            // Already inside a game-thread job (the last batch re-queued us).
+            on_complete(Ok(registered));
+        }
+        return;
+    };
+    let next_remaining = remaining;
+    let next_registered = registered + batch.len();
+    let batch_len = batch.len();
+    crate::resolvers::unchained_integration::run_on_game_thread(move || {
+        let result = unsafe { crate::game::engine::scan_files_synchronous(&batch) };
+        if let Err(e) = result {
+            serror!(fn; "Registration batch failed: {}", e);
+            on_complete(Err(e));
+            return;
+        }
+        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch_len, next_registered, total);
+        queue_next_registration_batch(next_remaining, next_registered, total, on_complete);
+    });
 }
 
 #[cfg(test)]
@@ -347,6 +419,33 @@ mod tests {
     }
 
     #[test]
+    fn registration_batches_chunk_and_preserve_order() {
+        let files: Vec<String> = (0..35)
+            .map(|i| format!("/Game/Mods/TestMod/Maps/Map{i}.umap"))
+            .collect();
+        let batches = registration_batches(&files);
+        assert_eq!(batches.len(), 3);
+        assert_eq!(batches[0].len(), REGISTRATION_CHUNK_SIZE);
+        assert_eq!(batches[1].len(), REGISTRATION_CHUNK_SIZE);
+        assert_eq!(batches[2].len(), 3);
+        let flattened: Vec<String> = batches.concat();
+        assert_eq!(flattened, files, "batches must preserve order and content");
+    }
+
+    #[test]
+    fn exact_chunk_boundaries_do_not_spill() {
+        let files: Vec<String> = (0..REGISTRATION_CHUNK_SIZE)
+            .map(|i| format!("/Game/Mods/M{i}.umap"))
+            .collect();
+        let batches = registration_batches(&files);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), REGISTRATION_CHUNK_SIZE);
+
+        let empty: Vec<String> = Vec::new();
+        assert!(registration_batches(&empty).is_empty());
+    }
+
+    #[test]
     fn path_derivation_handles_windows_separators_and_case() {
         assert_eq!(
             physical_path_to_package_path(
@@ -375,6 +474,25 @@ mod tests {
     /// Smoke test against real paks: run with
     /// `MOD_PAKS_DIR=/mnt/u/Games/Chivalry2_c/TBL/Content/Paks cargo test real_paks_smoke`
     /// (plain mod paks need no key — `repak list` works on them as-is).
+    #[test]
+    fn scans_committed_dummy_test_pak() {
+        // The dummy v9 pak is generated with repak and committed under
+        // test-resources (4 entries: 2 mod maps, 1 mod asset, 1 game map).
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let pak_path = Path::new(manifest_dir).join("test-resources/mod_maps/test_mod.pak");
+        if !pak_path.exists() {
+            eprintln!("skipping: {} not present in this crate", pak_path.display());
+            return;
+        }
+
+        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak_path]), None).expect("scan ok");
+        let packages: Vec<&str> = scan.maps.iter().map(|m| m.package_path.as_str()).collect();
+        assert_eq!(packages, [
+            "/Game/Mods/EvalMod/Maps/EvalMap",
+            "/Game/Mods/EvalMod/Maps/Nested/InnerMap",
+        ]);
+    }
+
     #[test]
     fn real_paks_smoke_when_mod_paks_dir_is_set() {
         let Ok(dir) = std::env::var("MOD_PAKS_DIR") else {

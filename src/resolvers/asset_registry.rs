@@ -106,6 +106,22 @@ CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistry
     }
 });
 
+// PLACEHOLDER SIGNATURE — same protocol as GetAssetsByPath above: populate the
+// real pattern for `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` BEFORE
+// removing the name from `RESOLVERS_TO_IGNORE` in lib.rs.
+define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
+    "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC"
+]);
+// void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
+// Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.
+CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, InPaths: *const TArray<FString>, InSpecificFiles: *const TArray<FString>, bForceRescan: bool, AssetDataCacheMode: u8, OutFoundAssets: *mut TArray<FName>, OutFoundPaths: *mut TArray<FName>), {
+    // CALLED hooks are never enabled on attach; this body only runs if someone
+    // explicitly enables the detour after a real signature is populated.
+    unsafe {
+        CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
+    }
+});
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct TScriptInterface {

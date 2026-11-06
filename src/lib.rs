@@ -89,6 +89,7 @@ static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
         // pattern in src/resolvers/asset_registry.rs, then remove the name
         // from this set so the resolver starts being scanned again.
         "GetAssetsByPath",
+        "ScanPathsAndFilesSynchronous",
     ])
 );
 
