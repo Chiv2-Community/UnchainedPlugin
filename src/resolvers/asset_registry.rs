@@ -87,6 +87,25 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistr
     res
 });
 
+// PLACEHOLDER SIGNATURE — populate with the real byte pattern (function start,
+// `?? ?? ?? ??` for RIP-relative displacements) for
+// `UAssetRegistryImpl::GetAssetsByPath` BEFORE removing the name from
+// `RESOLVERS_TO_IGNORE` in lib.rs. While the name is in that set this resolver
+// is never scanned and the detour is never attached, so this placeholder is
+// never used as a call target (calls return Err instead).
+define_pattern_resolver!(GetAssetsByPath,[
+    "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC"
+]);
+// bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
+// virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
+CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
+    // CALLED hooks are never enabled on attach; this body only runs if someone
+    // explicitly enables the detour after a real signature is populated.
+    unsafe {
+        CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
+    }
+});
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct TScriptInterface {

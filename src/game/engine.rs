@@ -327,6 +327,46 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
     }
 }
 
+/// Queries `UAssetRegistryImpl::GetAssetsByPath` on the registry singleton.
+///
+/// Must run on the game thread. Returns `Err` (without panicking) while the
+/// `GetAssetsByPath` signature is a placeholder and the detour is not
+/// attached — see `src/resolvers/asset_registry.rs`.
+pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<TArray<FAssetData>, String> {
+    let mut asset_registry = TScriptInterface::new();
+    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
+        &mut asset_registry as *mut TScriptInterface
+    ))
+    .expect("GetAssetRegistry_Helper failed");
+
+    let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
+
+    let asset_registry_interface = {
+        if asset_registry.interface.is_null() {
+            // Fallback: If the interface pointer isn't set,
+            // sometimes the Object itself IS the interface.
+            asset_registry.object as *mut c_void
+        } else {
+            asset_registry.interface as *mut c_void
+        }
+    };
+
+    let mut asset_data = TArray::<FAssetData>::default();
+    // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
+    let out = CALL_ORIGINAL_SAFE!(GetAssetsByPath(
+        asset_registry_interface,
+        name_res,
+        &mut asset_data as *mut TArray<FAssetData>,
+        recursive,
+        false
+    ))?;
+
+    match out {
+        true => Ok(asset_data),
+        false => Err(format!("GetAssetsByPath returned false for {}", package_path)),
+    }
+}
+
 
 
 

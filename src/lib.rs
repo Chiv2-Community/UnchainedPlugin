@@ -84,7 +84,11 @@ static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
         "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
-        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory"
+        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory",
+        // Placeholder signatures pending real byte patterns: populate the
+        // pattern in src/resolvers/asset_registry.rs, then remove the name
+        // from this set so the resolver starts being scanned again.
+        "GetAssetsByPath",
     ])
 );
 

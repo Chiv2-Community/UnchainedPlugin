@@ -9,6 +9,7 @@ pub mod cmd;
 pub mod mod_dump;
 pub mod game_info;
 pub mod mod_list;
+pub mod mod_list_maps;
 pub mod vote;
 pub mod votes;
 pub mod discord;

@@ -28,6 +28,7 @@ use crate::modules::votes::votemod::ModVote;
 use crate::modules::mod_dump::DumpModsCommand;
 use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
+use crate::modules::mod_list_maps::ListModMapsCommand;
 use crate::modules::votes::endmap::EndMapVote;
 use crate::modules::votes::voterestartserver::RestartServerVote;
 
@@ -118,6 +119,7 @@ pub async fn initialize_subscribers() {
         command_subscriber.register(DumpModsCommand);
         command_subscriber.register(GameInfoCommand);
         command_subscriber.register(ListModsCommand);
+        command_subscriber.register(ListModMapsCommand);
     }
 
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
