@@ -560,6 +560,21 @@ pub fn world_init() {
             mm.update_save_game();
             sinfo!("Started mod manager");
         });
+
+        // Auto-register mod maps from Content/Paks into the Asset Registry,
+        // once per session (explicit re-runs go through the registermodmaps
+        // command, which is idempotent).
+        static AUTO_REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !AUTO_REGISTERED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            crate::features::mod_maps::register_mod_maps_async(
+                crate::features::mod_maps::MapSource::PakDir(crate::features::mod_maps::default_paks_dir()),
+                None,
+                Box::new(|result| match result {
+                    Ok(count) => sinfo!(fn; "Auto-registered {} mod package(s) into the Asset Registry", count),
+                    Err(e) => serror!(fn; "Auto-registration of mod packages failed: {}", e),
+                }),
+            );
+        }
     }
 }
 

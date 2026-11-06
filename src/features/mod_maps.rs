@@ -276,6 +276,36 @@ pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, on_complete: OnR
     queue_next_registration_batch(batches, 0, total, on_complete);
 }
 
+/// Glues discovery and registration: discovers mod maps for `source` on a
+/// worker thread, then registers them chunked on the game thread. The
+/// completion callback fires on the game thread with the number of
+/// registered packages (or the failure reason).
+pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
+    discover_mod_maps_async(source, aes_key, Box::new(move |result| {
+        match result {
+            Ok(scan) => {
+                let file_paths: Vec<String> = scan.maps.iter().map(|p| p.file_path.clone()).collect();
+                sinfo!(fn; "Discovered {} mod map(s); registering", file_paths.len());
+                register_scanned_mod_maps_async(file_paths, on_complete);
+            }
+            Err(e) => on_complete(Err(e.to_string())),
+        }
+    }))
+}
+
+/// The game's `Content/Paks` directory, derived from the running executable
+/// (`.../TBL/Binaries/Win64/Chivalry2-Win64-Shipping.exe` → `.../TBL/Content/Paks`).
+/// This is where the loader's mod paks live; the `pakchunk*` guard excludes the
+/// game's own paks.
+pub fn default_paks_dir() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|exe| {
+        exe.parent() // Binaries/Win64
+            .and_then(|p| p.parent()) // Binaries
+            .and_then(|p| p.parent()) // <Project>
+            .map(|project| project.join("Content").join("Paks"))
+    })
+}
+
 fn queue_next_registration_batch(
     mut remaining: VecDeque<Vec<String>>,
     registered: usize,
