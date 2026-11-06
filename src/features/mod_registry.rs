@@ -250,6 +250,135 @@ impl ModManagerConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Fast-path lookup: mounted pak filename -> manifest
+// ---------------------------------------------------------------------------
+
+use std::collections::HashMap;
+
+/// Strip the launcher's load-order prefix used on managed pak filenames, e.g.
+/// `qv__-__BigNumbers.pak` → `BigNumbers.pak` (split on `__-__`, keep last part).
+fn strip_load_prefix(name: &str) -> &str {
+    name.rsplit("__-__").next().unwrap_or(name)
+}
+
+/// Normalize a pak filename to a comparable key: drop `.pak`, the `__-__`
+/// prefix, and a trailing ` (N)` duplicate suffix; lowercase.
+fn normalize_pak_name(name: &str) -> String {
+    let mut base = name.strip_suffix(".pak").unwrap_or(name).trim();
+    base = strip_load_prefix(base).trim();
+    if let Some(idx) = base.rfind(" (") {
+        if base[idx + 2..].ends_with(')') {
+            base = &base[..idx];
+        }
+    }
+    base.to_lowercase()
+}
+
+/// Pak-name → manifest lookup over the manager's cached mod releases, so a
+/// mounted pak that is in the registry can skip header parsing.
+#[derive(Default)]
+pub struct ModRegistry {
+    by_name: HashMap<String, ModManifest>,
+    by_hash: HashMap<String, ModManifest>,
+}
+
+impl ModRegistry {
+    /// Load the registry from a `mod_manager_config.json` path.
+    pub fn load(path: &std::path::Path) -> anyhow::Result<Self> {
+        let cfg = ModManagerConfig::load(path)?;
+        let mut by_name = HashMap::new();
+        let mut by_hash = HashMap::new();
+        for (name, hash, manifest) in cfg.release_manifests() {
+            let key = normalize_pak_name(name);
+            if !key.is_empty() {
+                by_name.entry(key).or_insert_with(|| manifest.clone());
+            }
+            if let Some(h) = hash.filter(|h| !h.is_empty()) {
+                by_hash.entry(h.to_lowercase()).or_insert_with(|| manifest.clone());
+            }
+        }
+        Ok(Self { by_name, by_hash })
+    }
+
+    /// Number of distinct pak manifests known.
+    pub fn len(&self) -> usize {
+        self.by_name.len()
+    }
+
+    /// Find the manifest for a mounted pak filename (mangle-aware).
+    pub fn manifest_for_pak(&self, file_name: &str) -> Option<&ModManifest> {
+        let key = normalize_pak_name(file_name);
+        if let Some(m) = self.by_name.get(&key) {
+            return Some(m);
+        }
+        // Rare case: a shorter/cleaner config name is a suffix of a mangled one.
+        for (k, m) in &self.by_name {
+            if k.len() < key.len() && key.ends_with(k) {
+                return Some(m);
+            }
+        }
+        None
+    }
+
+    /// Find the manifest for a pak by its SHA-512 hex digest (the launcher's key).
+    pub fn manifest_for_hash(&self, sha512_hex: &str) -> Option<&ModManifest> {
+        self.by_hash.get(&sha512_hex.to_lowercase())
+    }
+}
+
+/// SHA-512 of a file, read in 1 MiB chunks (larger reads cut syscall overhead at
+/// multi-GB sizes; digest is unchanged). Matches the launcher's `get_file_sha512`.
+pub fn compute_sha512(path: &std::path::Path) -> anyhow::Result<String> {
+    use sha2::{Digest, Sha512};
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)
+        .with_context(|| format!("failed to open {} for hashing", path.display()))?;
+    let mut hasher = Sha512::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+/// SHA-512 of each path, computed in parallel across worker threads (strided,
+/// deterministic order). Each element is `Some(hex)` on success.
+pub fn compute_sha512_parallel(
+    paths: &[&std::path::Path],
+    threads: usize,
+) -> Vec<Option<String>> {
+    let n = paths.len();
+    let threads = threads.min(n).max(1);
+    let mut results: Vec<(usize, Option<String>)> = std::thread::scope(|s| {
+        let mut all: Vec<(usize, Option<String>)> = Vec::new();
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                let paths = &paths;
+                s.spawn(move || {
+                    let mut out: Vec<(usize, Option<String>)> = Vec::new();
+                    let mut i = t;
+                    while i < paths.len() {
+                        out.push((i, compute_sha512(paths[i]).ok()));
+                        i += threads;
+                    }
+                    out
+                })
+            })
+            .collect();
+        for h in handles {
+            all.extend(h.join().expect("sha worker panicked"));
+        }
+        all
+    });
+    results.sort_by_key(|(i, _)| *i);
+    results.into_iter().map(|(_, v)| v).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,5 +437,33 @@ mod tests {
         // SimpleMap was declared only under LatestRelease (array) — proves the
         // release_manifests() chaining picks it up.
         assert!(manifests.iter().any(|(n, _, _)| n == &"SimpleMap.pak"));
+    }
+
+    #[test]
+    fn matches_mangled_pak_names() {
+        let path = format!(
+            "{}/test-resources/mod_registry/mod_manager_config.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let reg = ModRegistry::load(std::path::Path::new(&path)).expect("registry loads");
+        assert_eq!(reg.len(), 2);
+        assert!(reg.manifest_for_pak("qv__-__BigNumbers.pak").is_some());
+        assert!(reg.manifest_for_pak("qw__-__BigNumbers (1).pak").is_some());
+        assert!(reg.manifest_for_pak("BigNumbers.pak").is_some());
+        assert!(reg.manifest_for_pak("SimpleMap.pak").is_some());
+        assert!(reg.manifest_for_pak("NihiMaps.pak").is_none(), "unknown pak not matched");
+    }
+
+    #[test]
+    fn parallel_sha_matches_sequential() {
+        let path = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test-resources/mod_registry/mod_manager_config.json"
+        ));
+        let seq = compute_sha512(path).expect("seq hash");
+        let par = compute_sha512_parallel(&[path], 2)[0].clone().expect("par hash");
+        assert_eq!(seq, par, "parallel hashing must produce the same digest");
+        // 64-byte (128 hex char) sha512 digest.
+        assert_eq!(seq.len(), 128);
     }
 }

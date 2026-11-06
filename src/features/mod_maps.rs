@@ -688,6 +688,9 @@ pub fn auto_register_all_assets() {
 ///
 /// MUST run on the game thread (it drives `ScanPathsAndFilesSynchronous`).
 pub fn register_filtered_assets_sync() {
+    if crate::cli_args().bench_mod_registry {
+        bench_registry();
+    }
     let started = std::time::Instant::now();
 
     let paks = discovery_pak_paths();
@@ -795,6 +798,112 @@ fn discovery_pak_paths() -> Vec<PathBuf> {
         sdebug!("[modmaps]   {}", p.display());
     }
     paths
+}
+
+/// Derive the mod-manager config path from the running exe:
+/// `.../TBL/Binaries/Win64/<exe>` → game root (TBL's parent) → `.mod_cache/mod_manager_config.json`.
+fn mod_manager_config_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let game_root = exe.parent()?.parent()?.parent()?.parent()?;
+    Some(game_root.join(".mod_cache").join("mod_manager_config.json"))
+}
+
+/// A/B benchmark (dev; `--bench-mod-registry`): for the registry-matched paks,
+/// profile each step separately so we can decide whether the SHA-512 + JSON
+/// fast path is cheaper than the header-parse pipeline:
+///   JSON load+parse | sha512 | hash lookup | filename lookup | header-parse
+pub fn bench_registry() {
+    use crate::features::mod_registry::{compute_sha512, compute_sha512_parallel, ModRegistry};
+    use std::time::Instant;
+
+    // 1) JSON file read + serde parse + index build.
+    let Some(cfg_path) = mod_manager_config_path() else {
+        sdebug!("[modmaps] bench: could not derive mod registry config path");
+        return;
+    };
+    let j = Instant::now();
+    let Ok(registry) = ModRegistry::load(&cfg_path) else {
+        sdebug!("[modmaps] bench: could not load {}", cfg_path.display());
+        return;
+    };
+    let json_elapsed = j.elapsed();
+
+    let paks = discovery_pak_paths();
+    let matched: Vec<PathBuf> = paks
+        .iter()
+        .filter(|p| {
+            p.file_name()
+                .map(|n| registry.manifest_for_pak(&n.to_string_lossy()).is_some())
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+    if matched.is_empty() {
+        sdebug!("[modmaps] bench: 0 registry-matched paks ({} total)", paks.len());
+        return;
+    }
+    let threads = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(4)
+        .min(8)
+        .min(matched.len())
+        .max(1);
+    sdebug!("[modmaps] bench: {} registry-matched paks ({} total), {} threads", matched.len(), paks.len(), threads);
+
+    let zero = std::time::Duration::ZERO;
+    let mut t_sha = zero;
+    let mut t_hash_lookup = zero;
+    let mut t_fn = zero;
+    let mut t_parse = zero;
+    let mut hash_hits = 0usize;
+    let mut parse_assets = 0usize;
+    for pak in &matched {
+        // A) SHA-512 (sequential, 1 MiB reads).
+        let t = Instant::now();
+        let sha = compute_sha512(pak).ok();
+        t_sha += t.elapsed();
+        // A2) hash → manifest lookup.
+        let t = Instant::now();
+        if let Some(m) = sha.as_deref().and_then(|s| registry.manifest_for_hash(s)) {
+            hash_hits += 1;
+            let _ = m;
+        }
+        t_hash_lookup += t.elapsed();
+        // B) header-parse pipeline (the thing we might avoid).
+        let t = Instant::now();
+        if let Ok((assets, _, _)) = read_pak_filtered_assets(pak, None, &mut FilterStats::default()) {
+            parse_assets += assets.len();
+        }
+        t_parse += t.elapsed();
+        // C) free filename lookup (reference).
+        let t = Instant::now();
+        let _ = pak
+            .file_name()
+            .and_then(|n| registry.manifest_for_pak(&n.to_string_lossy()));
+        t_fn += t.elapsed();
+    }
+
+    // A-par) SHA-512 computed in parallel across the matched paks.
+    let matched_refs: Vec<&std::path::Path> = matched.iter().map(|p| p.as_path()).collect();
+    let t = Instant::now();
+    let parallel_hashes = compute_sha512_parallel(&matched_refs, threads);
+    let t_sha_par = t.elapsed();
+    let par_hits = matching_edges(&registry, &matched, &parallel_hashes);
+
+    sdebug!( "[modmaps] bench ({} matched paks, {} threads): JSON load+parse {:?} | sha512 SEQ {:?} | sha512 PAR(8) {:?} | hash lookup {:?} | filename lookup {:?} | header-parse {:?} ({} assets)\n  (hash hits seq {}, par {})",
+        matched.len(), threads, json_elapsed, t_sha, t_sha_par, t_hash_lookup, t_fn, t_parse, parse_assets,
+        hash_hits, par_hits);
+}
+
+/// Count how many `sha` results matched a registry manifest by hash.
+fn matching_edges(
+    registry: &crate::features::mod_registry::ModRegistry,
+    _matched: &[PathBuf],
+    shas: &[Option<String>],
+) -> usize {
+    shas.iter()
+        .filter(|s| s.as_deref().and_then(|x| registry.manifest_for_hash(x)).is_some())
+        .count()
 }
 
 fn queue_next_registration_batch(

@@ -132,6 +132,11 @@ pub struct CLIArgs {
     #[arg(long = "mod-map-batch", default_value_t = 128)]
     pub mod_map_batch: usize,
 
+    /// Run the A/B benchmark: for registry-matched paks, compare SHA-512 +
+    /// JSON retrieval time vs the header-parse pipeline (dev/testing only).
+    #[arg(long = "bench-mod-registry")]
+    pub bench_mod_registry: bool,
+
     #[arg(long = "discord-admin-channel-id")]
     pub discord_admin_channel_id: Option<u64>,
 
@@ -199,7 +204,7 @@ impl std::fmt::Debug for CLIArgs {
             use_backend_banlist, is_headless, next_map, launched_profile,
             unchained_profile_location, playable_listen, register, server_browser_backend,
             local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
-            game_server_ping_port, game_server_query_port, game_port, mod_map_batch,
+            game_server_ping_port, game_server_query_port, game_port, mod_map_batch, bench_mod_registry,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
             discord_event_log_channel_id, discord_admin_role_id, discord_bot_token,
             discord_mention_admins, censor_mode, motd, extra_args, local_ip_explicit, use_ipv6,
@@ -236,6 +241,7 @@ impl std::fmt::Debug for CLIArgs {
             .field("game_server_query_port", game_server_query_port)
             .field("game_port", game_port)
             .field("mod_map_batch", mod_map_batch)
+            .field("bench_mod_registry", bench_mod_registry)
             .field("discord_admin_channel_id", discord_admin_channel_id)
             .field("discord_general_channel_id", discord_general_channel_id)
             .field("discord_dashboard_channel_id", discord_dashboard_channel_id)
@@ -559,6 +565,7 @@ mod tests {
                 game_server_query_port: None,
                 game_port: None,
                 mod_map_batch: 128,
+                bench_mod_registry: false,
                 discord_admin_channel_id: None,
                 discord_general_channel_id: None,
                 discord_dashboard_channel_id: None,
