@@ -397,6 +397,199 @@ pub fn discover_all_assets_async(source: MapSource, aes_key: Option<String>, on_
     });
 }
 
+// ---------------------------------------------------------------------------
+// Filtered discovery (maps + marker packages) — the cheap main-menu path
+// ---------------------------------------------------------------------------
+
+/// Per-scan timing split, so we can see how long finding the pak assets costs
+/// vs how long the header parse ("finding markers") costs.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FilterStats {
+    /// Time spent reading pak indexes (enumerating entries).
+    pub index_elapsed: std::time::Duration,
+    /// Time spent parsing package headers to detect marker instances.
+    pub parse_elapsed: std::time::Duration,
+    /// Total files enumerated across all scanned paks (any extension).
+    pub total_entries: usize,
+    /// Total `.uasset` files seen across all scanned paks.
+    pub total_uasset: usize,
+    /// Number of paks scanned.
+    pub total_paks: usize,
+    /// Number of worker threads used to scan the paks (parallelism).
+    pub threads: usize,
+}
+
+/// Result of the filtered discovery pass (maps + marker data-asset packages).
+#[derive(Debug, Clone, Default)]
+pub struct FilteredScan {
+    pub assets: Vec<DiscoveredAsset>,
+    pub skipped: Vec<(String, String)>,
+    /// Number of `.uasset` headers parsed.
+    pub parsed_packages: usize,
+    /// Per-category package counts (maps / DA_ModMarker / DA_MapInfo).
+    pub counts: CategoryCounts,
+    pub stats: FilterStats,
+}
+
+/// Counts of the different package kinds the filtered path picks up.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CategoryCounts {
+    /// `.umap` map packages.
+    pub maps: usize,
+    /// Packages containing a `DA_ModMarker` instance.
+    pub mod_markers: usize,
+    /// Packages containing a `DA_MapInfo` instance.
+    pub map_infos: usize,
+}
+
+/// Reads one pak: keeps every `.umap` (map) plus every `.uasset` package that
+/// contains a DA_ModMarker / DA_MapInfo instance (detected via header parse).
+/// Other extensions (`.uexp`, `.ubulk`, `.ini`, ...) are skipped.
+fn read_pak_filtered_assets(
+    pak_path: &Path,
+    key: Option<&aes::Aes256>,
+    stats: &mut FilterStats,
+) -> Result<(Vec<DiscoveredAsset>, usize, CategoryCounts)> {
+    let mut file = std::fs::File::open(pak_path)
+        .with_context(|| format!("failed to open {}", pak_path.display()))?;
+    let builder = repak::PakBuilder::new();
+    let builder = match key {
+        Some(k) => builder.key(k.clone()),
+        None => builder,
+    };
+    let mut br = std::io::BufReader::new(&mut file);
+    let mut reader = builder.reader(&mut br).context("failed to parse pak index")?;
+    let mount_point = reader.mount_point().to_string();
+
+    let index_t = std::time::Instant::now();
+    let entries = reader.files();
+    stats.index_elapsed += index_t.elapsed();
+    stats.total_paks += 1;
+    stats.total_entries += entries.len();
+
+    let mut assets = Vec::new();
+    let mut parsed = 0usize;
+    let mut counts = CategoryCounts::default();
+    for entry in entries {
+        let lower = entry.to_lowercase();
+        let full_path = format!("{}{}", mount_point, entry);
+        if lower.ends_with(".umap") {
+            // Maps are always wanted; no header read needed.
+            let package_path = physical_path_to_package_path(&full_path);
+            counts.maps += 1;
+            assets.push(DiscoveredAsset { file_path: full_path, package_path });
+        } else if lower.ends_with(".uasset") {
+            // Read the package header and keep it only if it holds a marker instance.
+            let package_path = physical_path_to_package_path(&full_path);
+            stats.total_uasset += 1;
+            parsed += 1;
+            let parse_t = std::time::Instant::now();
+            let kind = reader
+                .get(&entry, &mut br)
+                .map(|data| crate::features::cooked_header::marker_counts(&data))
+                .unwrap_or((0, 0));
+            stats.parse_elapsed += parse_t.elapsed();
+            if kind.0 > 0 || kind.1 > 0 {
+                if kind.0 > 0 {
+                    counts.mod_markers += 1;
+                }
+                if kind.1 > 0 {
+                    counts.map_infos += 1;
+                }
+                assets.push(DiscoveredAsset { file_path: full_path, package_path });
+            }
+        }
+        // Non-package extensions are skipped.
+    }
+    Ok((assets, parsed, counts))
+}
+
+/// Synchronous discovery of maps + marker packages across the source paks.
+/// Paks are processed in parallel across worker threads (pure Rust: repak index
+/// reads + header parse; no engine calls), then aggregated in deterministic
+/// (original pak) order. Results are identical to a sequential scan.
+pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Result<FilteredScan> {
+    let pak_paths = match source {
+        MapSource::PakDir(dir) => list_pak_files(&dir)?,
+        MapSource::PakFiles(files) => files,
+    };
+    let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
+
+    let n = pak_paths.len();
+    if n == 0 {
+        return Ok(FilteredScan::default());
+    }
+    // Pak scanning is IO-bound; a modest worker count beats max oversubscription
+    // (measured: 12 threads slower than 4 on this disk). Cap at 8.
+    let num_threads = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(4)
+        .min(8)
+        .min(n)
+        .max(1);
+
+    // Each worker handles every `num_threads`th pak (strided interleave) and
+    // returns (pak_index, result, per-pak stats).
+    let results: Vec<(usize, Result<(Vec<DiscoveredAsset>, usize, CategoryCounts), String>, FilterStats)> =
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..num_threads)
+                .map(|t| {
+                    let pak_paths = &pak_paths;
+                    let key = &key;
+                    scope.spawn(move || {
+                        let mut out = Vec::new();
+                        let mut i = t;
+                        while i < pak_paths.len() {
+                            let mut stats = FilterStats::default();
+                            let r = read_pak_filtered_assets(&pak_paths[i], key.as_ref(), &mut stats);
+                            out.push((i, r.map_err(|e| e.to_string()), stats));
+                            i += num_threads;
+                        }
+                        out
+                    })
+                })
+                .collect();
+            let mut all = Vec::new();
+            for h in handles {
+                all.extend(h.join().expect("pak scan worker panicked"));
+            }
+            all
+        });
+
+    let mut scan = FilteredScan::default();
+    scan.stats.threads = num_threads;
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut by_index: Vec<&(usize, Result<(Vec<DiscoveredAsset>, usize, CategoryCounts), String>, FilterStats)> =
+        results.iter().collect();
+    by_index.sort_by_key(|r| r.0);
+    for (idx, result, stats) in by_index {
+        scan.stats.total_entries += stats.total_entries;
+        scan.stats.total_uasset += stats.total_uasset;
+        scan.stats.total_paks += stats.total_paks;
+        let name = pak_paths[*idx].display().to_string();
+        match result {
+            Ok((assets, parsed, counts)) => {
+                scan.parsed_packages += parsed;
+                scan.counts.maps += counts.maps;
+                scan.counts.mod_markers += counts.mod_markers;
+                scan.counts.map_infos += counts.map_infos;
+                for a in assets {
+                    let k = a.package_path.as_deref().unwrap_or(&a.file_path);
+                    if seen.insert(k.to_string()) {
+                        scan.assets.push(a.clone());
+                    }
+                }
+            }
+            Err(e) => {
+                swarn!(fn; "Skipping pak {}: {}", name, e);
+                scan.skipped.push((name, e.clone()));
+            }
+        }
+    }
+    Ok(scan)
+}
+
+
 /// Glues all-assets discovery and registration, with gathering/registration/total
 /// profiling (mirrors `register_mod_maps_async`).
 pub fn register_all_assets_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
@@ -474,18 +667,83 @@ pub fn register_all_assets_sync() {
     sinfo!(fn; "Auto-registered {} asset(s) into the Asset Registry", registered);
 }
 
-/// One-shot auto-registration of every asset from the default Content/Paks into
-/// the Asset Registry, fired after the mod paks are mounted (from
-/// `LoadFrontEndMap`, with a server `world_init` fallback). Runs synchronously
-/// on the game thread so the work lands during initialization/loading rather
-/// than hitching gameplay; the internal guard makes the call idempotent across
-/// call sites, so only the first invocation does any work.
+/// One-shot auto-registration of maps + marker packages into the Asset Registry,
+/// fired after the mod paks are mounted (from `LoadFrontEndMap`, with a server
+/// `world_init` fallback). Uses the cheap filtered path (blanket all-assets or
+/// maps-only commands are still available explicitly). Runs synchronously on the
+/// game thread during init; the internal guard makes the call idempotent.
 pub fn auto_register_all_assets() {
     use std::sync::atomic::Ordering;
     if AUTO_ALL_ASSETS_STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
-    register_all_assets_sync();
+    register_filtered_assets_sync();
+}
+
+/// Synchronous, game-thread registration of just the main-menu assets: every
+/// map plus every package containing a DA_ModMarker / DA_MapInfo instance. This
+/// is the production init path — far cheaper than the all-assets benchmark
+/// (dozens of packages vs thousands). All batches run back-to-back on the game
+/// thread inside the loading screen.
+///
+/// MUST run on the game thread (it drives `ScanPathsAndFilesSynchronous`).
+pub fn register_filtered_assets_sync() {
+    let started = std::time::Instant::now();
+
+    let Some(source) = default_paks_dir().map(MapSource::PakDir) else {
+        serror!(fn; "Synchronous filtered registration skipped: could not derive Content/Paks from the executable");
+        return;
+    };
+
+    // Gathering + marker detection (pure Rust, no engine calls), parallel.
+    let marker_started = std::time::Instant::now();
+    let scan = match scan_filtered_assets(source, None) {
+        Ok(scan) => scan,
+        Err(e) => {
+            serror!(fn; "Synchronous filtered scan failed: {}", e);
+            return;
+        }
+    };
+    let marker_elapsed = marker_started.elapsed();
+
+    let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
+    let total = file_paths.len();
+    sinfo!(fn; "Paks contained {} total file(s) ({} .uasset) across {} pak(s) (scanned on {} thread(s)); registering {} required package(s)",
+        scan.stats.total_entries, scan.stats.total_uasset, scan.stats.total_paks, scan.stats.threads, total);
+    sinfo!(fn; "Filtered discovery: {} package(s) — {} map(s), {} DA_ModMarker, {} DA_MapInfo; registering",
+        total, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos);
+
+    // Registration step — every batch back-to-back on the game thread.
+    let ar_started = std::time::Instant::now();
+    let chunk = crate::cli_args().mod_map_batch;
+    let mut registered = 0usize;
+    for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
+        let batch_timer = std::time::Instant::now();
+        if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
+            serror!(fn; "Synchronous filtered batch {} failed: {}", i, e);
+            return;
+        }
+        registered += batch.len();
+        swarn!(fn; "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
+        sinfo!(fn; "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
+    }
+    let ar_elapsed = ar_started.elapsed();
+
+    swarn!(fn; "[modmaps] profiler(filtered): marker-detection ({} threads) {:?} | AR registration {:?} | total {:?}",
+        scan.stats.threads, marker_elapsed, ar_elapsed, started.elapsed());
+    sinfo!(fn; "Auto-registered {} package(s) into the Asset Registry: {} map(s), {} mod marker(s) (DA_ModMarker), {} map info(s) (DA_MapInfo)",
+        registered, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos);
+
+    // List the loaded maps so the main-menu package set is easy to verify.
+    let maps: Vec<&DiscoveredAsset> = scan
+        .assets
+        .iter()
+        .filter(|a| a.file_path.to_lowercase().ends_with(".umap"))
+        .collect();
+    sinfo!(fn; "Loaded {} map(s):", maps.len());
+    for m in &maps {
+        sinfo!(fn; "  {}", m.package_path.as_deref().unwrap_or(&m.file_path));
+    }
 }
 
 /// The game's `Content/Paks` directory, derived from the running executable
