@@ -88,8 +88,6 @@ static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
         // Placeholder signatures pending real byte patterns: populate the
         // pattern in src/resolvers/asset_registry.rs, then remove the name
         // from this set so the resolver starts being scanned again.
-        "GetAssetsByPath",
-        "ScanPathsAndFilesSynchronous",
     ])
 );
 
@@ -566,14 +564,18 @@ pub fn world_init() {
         // command, which is idempotent).
         static AUTO_REGISTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !AUTO_REGISTERED.swap(true, std::sync::atomic::Ordering::SeqCst) {
-            crate::features::mod_maps::register_mod_maps_async(
-                crate::features::mod_maps::MapSource::PakDir(crate::features::mod_maps::default_paks_dir()),
-                None,
-                Box::new(|result| match result {
-                    Ok(count) => sinfo!(fn; "Auto-registered {} mod package(s) into the Asset Registry", count),
-                    Err(e) => serror!(fn; "Auto-registration of mod packages failed: {}", e),
-                }),
-            );
+            if let Some(paks_dir) = crate::features::mod_maps::default_paks_dir() {
+                crate::features::mod_maps::register_mod_maps_async(
+                    crate::features::mod_maps::MapSource::PakDir(paks_dir),
+                    None,
+                    Box::new(|result| match result {
+                        Ok(count) => sinfo!(fn; "Auto-registered {} mod package(s) into the Asset Registry", count),
+                        Err(e) => serror!(fn; "Auto-registration of mod packages failed: {}", e),
+                    }),
+                );
+            } else {
+                serror!(fn; "Auto-registration of mod packages skipped: could not derive Content/Paks from the executable");
+            }
         }
     }
 }

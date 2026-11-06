@@ -417,6 +417,51 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// Fallback registration path: synthesizes a minimal `World`-class AssetData
+/// entry for a map package and registers it via the private
+/// `UAssetRegistryImpl::AddAssetData`. Use only if the primary
+/// `ScanFilesSynchronous` path proves unstable — the synthetic entry carries
+/// no tags and no dependencies. Must run on the game thread.
+pub unsafe fn add_asset_data_for_map(package_path: &str) -> Result<(), String> {
+    let mut asset_registry = TScriptInterface::new();
+    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
+        &mut asset_registry as *mut TScriptInterface
+    ))
+    .expect("GetAssetRegistry_Helper failed");
+
+    let registry = {
+        if asset_registry.interface.is_null() {
+            asset_registry.object as *mut c_void
+        } else {
+            asset_registry.interface as *mut c_void
+        }
+    };
+
+    // Split "…/MapName" into the parent package path and the map name.
+    let (parent, asset_name) = package_path
+        .rsplit_once('/')
+        .map(|(p, n)| (p, n))
+        .unwrap_or(("", package_path));
+
+    const PKG_FILTER_EDITOR_ONLY: u32 = 0x8000_0000;
+    let mut data = FAssetData {
+        ObjectPath: FName::with_type(&format!("{}.{}", package_path, asset_name), crate::ue::EFindName::Add),
+        PackageName: FName::with_type(package_path, crate::ue::EFindName::Add),
+        PackagePath: FName::with_type(parent, crate::ue::EFindName::Add),
+        AssetName: FName::with_type(asset_name, crate::ue::EFindName::Add),
+        AssetClass: FName::with_type("World", crate::ue::EFindName::Add),
+        TagsAndValues: [0; 0x10], // null TSharedPtr<FAssetDataTagMap>
+        ChunkIDs: [0; 0x10],      // empty TArray<int32>
+        PackageFlags: PKG_FILTER_EDITOR_ONLY,
+        padding: [0; 4],
+    };
+
+    // void UAssetRegistryImpl::AddAssetData(FAssetData* AssetData)
+    CALL_ORIGINAL_SAFE!(AddAssetData(registry, &mut data))?;
+
+    Ok(())
+}
+
 
 
 

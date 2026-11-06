@@ -87,14 +87,12 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistr
     res
 });
 
-// PLACEHOLDER SIGNATURE — populate with the real byte pattern (function start,
-// `?? ?? ?? ??` for RIP-relative displacements) for
-// `UAssetRegistryImpl::GetAssetsByPath` BEFORE removing the name from
-// `RESOLVERS_TO_IGNORE` in lib.rs. While the name is in that set this resolver
-// is never scanned and the detour is never attached, so this placeholder is
-// never used as a call target (calls return Err instead).
+// Signature source: owner-provided pattern for
+// `UAssetRegistryImpl::GetAssetsByPath` (function start; the RIP-relative
+// displacement bytes are pinned to the current game version — wildcard them
+// if a future game update shifts code).
 define_pattern_resolver!(GetAssetsByPath,[
-    "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC"
+    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 2E EA AA 02 48 33 C4 48 89 45 10 45"
 ]);
 // bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
 // virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
@@ -106,11 +104,11 @@ CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistry
     }
 });
 
-// PLACEHOLDER SIGNATURE — same protocol as GetAssetsByPath above: populate the
-// real pattern for `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` BEFORE
-// removing the name from `RESOLVERS_TO_IGNORE` in lib.rs.
+// Signature source: owner-provided pattern for
+// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start; the
+// RIP-relative displacement bytes are pinned to the current game version).
 define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
-    "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC"
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 C2 01 AA 02 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
 ]);
 // void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
 // Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.
@@ -119,6 +117,18 @@ CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAs
     // explicitly enables the detour after a real signature is populated.
     unsafe {
         CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
+    }
+});
+
+// Signature source: owner-provided pattern for the private
+// `UAssetRegistryImpl::AddAssetData` — the fallback registration path.
+define_pattern_resolver!(AddAssetData,[
+    "40 55 53 56 57 48 8B EC 48 83 EC 78 48 8B F9 48 8B F2 48 83 C1 30 ?? ?? ?? ?? ?? 48 8D 8F 90"
+]);
+// void UAssetRegistryImpl::AddAssetData(FAssetData* AssetData)  // private
+CREATE_HOOK!(AddAssetData, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, AssetData: *mut FAssetData), {
+    unsafe {
+        CALL_ORIGINAL!(AddAssetData(this_ptr, AssetData))
     }
 });
 
