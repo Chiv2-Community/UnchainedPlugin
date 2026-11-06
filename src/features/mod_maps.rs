@@ -77,10 +77,13 @@ pub fn discover_mod_maps_async(source: MapSource, aes_key: Option<String>, on_do
 
 /// Synchronous discovery pass. No engine calls; safe on any thread.
 pub fn scan_mod_maps(source: MapSource, aes_key: Option<String>) -> Result<ModMapScan> {
+    let _scan_started = std::time::Instant::now();
+    swarn!(fn; "[modmaps] discover: scan_mod_maps STARTED");
     let pak_paths = match source {
         MapSource::PakDir(dir) => list_pak_files(&dir)?,
         MapSource::PakFiles(files) => files,
     };
+    swarn!(fn; "[modmaps] discover: listed {} pak file(s) in {:?}", pak_paths.len(), _scan_started.elapsed());
 
     let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
 
@@ -100,11 +103,7 @@ pub fn scan_mod_maps(source: MapSource, aes_key: Option<String>) -> Result<ModMa
                         found += 1;
                     }
                 }
-                if found == 0 {
-                    sinfo!(fn; "No new .umap entries under {} in {}", MOD_ROOT, name);
-                } else {
-                    sinfo!(fn; "Found {} mod map(s) in {}", found, name);
-                }
+                swarn!(fn; "[modmaps] {}: {} map(s)", name, found);
             }
             Err(e) => {
                 swarn!(fn; "Skipping pak {}: {}", name, e);
@@ -272,6 +271,7 @@ pub fn registration_batches(file_paths: &[String]) -> Vec<Vec<String>> {
 /// returns `Err` gracefully while the signature is a placeholder.
 pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, on_complete: OnRegistrationDone) {
     let total = file_paths.len();
+    swarn!(fn; "[modmaps] sending {} mod map(s) to the Asset Registry", total);
     let batches = VecDeque::from(registration_batches(&file_paths));
     queue_next_registration_batch(batches, 0, total, on_complete);
 }
@@ -281,12 +281,21 @@ pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, on_complete: OnR
 /// completion callback fires on the game thread with the number of
 /// registered packages (or the failure reason).
 pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
+    let started = std::time::Instant::now();
     discover_mod_maps_async(source, aes_key, Box::new(move |result| {
         match result {
             Ok(scan) => {
+                let gather_elapsed = started.elapsed();
                 let file_paths: Vec<String> = scan.maps.iter().map(|p| p.file_path.clone()).collect();
                 sinfo!(fn; "Discovered {} mod map(s); registering", file_paths.len());
-                register_scanned_mod_maps_async(file_paths, on_complete);
+                // Measure the Asset Registry registration step separately from
+                // the gathering (pak scan) step.
+                let ar_started = std::time::Instant::now();
+                register_scanned_mod_maps_async(file_paths, Box::new(move |r| {
+                    let ar_elapsed = ar_started.elapsed();
+                    swarn!(fn; "[modmaps] profiler: gathering (pak scan) {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
+                    on_complete(r);
+                }));
             }
             Err(e) => on_complete(Err(e.to_string())),
         }

@@ -88,11 +88,12 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistr
 });
 
 // Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::GetAssetsByPath` (function start; the RIP-relative
-// displacement bytes are pinned to the current game version — wildcard them
-// if a future game update shifts code).
+// `UAssetRegistryImpl::GetAssetsByPath` (function start). The RIP-relative
+// displacement in the `48 8B 05` stack-cookie load (immediately followed by
+// the `48 33 C4` xor with rsp) is wildcarded so the pattern survives
+// rebuilds that relocate the cookie global.
 define_pattern_resolver!(GetAssetsByPath,[
-    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 2E EA AA 02 48 33 C4 48 89 45 10 45"
+    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 10 45"
 ]);
 // bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
 // virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
@@ -105,10 +106,11 @@ CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistry
 });
 
 // Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start; the
-// RIP-relative displacement bytes are pinned to the current game version).
+// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start). The
+// RIP-relative displacement in the `48 8B 05` load is wildcarded so the
+// pattern survives rebuilds that relocate the pointed-to global.
 define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
-    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 C2 01 AA 02 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
 ]);
 // void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
 // Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.

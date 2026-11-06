@@ -342,12 +342,12 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
     let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
 
     let asset_registry_interface = {
-        if asset_registry.interface.is_null() {
-            // Fallback: If the interface pointer isn't set,
-            // sometimes the Object itself IS the interface.
-            asset_registry.object as *mut c_void
+        // GetAssetsByPath is virtual, but `this` still wants the impl object for
+        // member access; prefer object, fall back to the interface pointer.
+        if asset_registry.object.is_null() {
+            asset_registry.interface
         } else {
-            asset_registry.interface as *mut c_void
+            asset_registry.object as *mut c_void
         }
     };
 
@@ -381,12 +381,15 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
     .expect("GetAssetRegistry_Helper failed");
 
     let registry = {
-        if asset_registry.interface.is_null() {
-            // Fallback: If the interface pointer isn't set,
-            // sometimes the Object itself IS the interface.
-            asset_registry.object as *mut c_void
+        // ScanPathsAndFilesSynchronous is a non-virtual __thiscall on
+        // UAssetRegistryImpl, so `this` must be the real object pointer, not
+        // the IAssetRegistry interface pointer (which may be object+offset for
+        // a multiple-inheritance interface). Prefer object; fall back to the
+        // interface only if the object is unset.
+        if asset_registry.object.is_null() {
+            asset_registry.interface
         } else {
-            asset_registry.interface as *mut c_void
+            asset_registry.object as *mut c_void
         }
     };
 

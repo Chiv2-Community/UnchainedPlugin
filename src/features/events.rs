@@ -139,6 +139,28 @@ pub async fn initialize_subscribers() {
 
 }
 
+/// Sets up the minimal command surface exposed on *client* instances, where the
+/// full `initialize_subscribers` (votes, server-oriented commands, MOTD, …) does
+/// not run because it is driven by server-only `world_init`. Clients subscribe
+/// the command subscriber to the game event bus and register only the
+/// client-safe diagnostic commands (registermodmaps / listmodmaps).
+pub async fn initialize_client_commands() {
+    let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
+    let game_event_bus = &EVENT_SYSTEM.game_event_bus;
+
+    {
+        let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
+        command_subscriber.register(ListModMapsCommand);
+        command_subscriber.register(RegisterModMapsCommand);
+    }
+
+    let _ = game_event_bus
+        .subscribe(Box::new(CommandSubscriberProxy {
+            inner: EVENT_SYSTEM.command_subscriber.clone(),
+        }))
+        .await;
+}
+
 async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
     let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(VotingState::new()))));
 

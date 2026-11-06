@@ -450,11 +450,19 @@ fn postinit_rustlib() {
                 thread::sleep(Duration::from_millis(500));
             }
 
+            if !cli_args().is_server() {
+                sinfo!("Not a server, skipping server initialization");
+                // Clients still expose the client-safe diagnostic commands
+                // (registermodmaps / listmodmaps) through the plugin console.
+                // Spawn this before spawn_cli_handler so the commands are
+                // registered by the time the console accepts input.
+                crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
+                    let _ = crate::features::events::initialize_client_commands().await;
+                });
+            }
             spawn_cli_handler();
             if cli_args().is_server() {
                 world_init();
-            } else {
-                sinfo!("Not a server, skipping server initialization");
             }
         });
     }

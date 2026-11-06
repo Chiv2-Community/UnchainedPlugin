@@ -4,7 +4,6 @@ use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use async_trait::async_trait;
 use clap::Parser;
 use std::path::PathBuf;
-use std::sync::mpsc;
 
 #[derive(Parser, Clone)]
 #[command(name = "registermodmaps", about = "Discovers and registers mod maps from the game's Content/Paks dir into the Asset Registry")]
@@ -19,7 +18,9 @@ pub struct RegisterModMapsCommand;
 impl Command<RegisterModMapsArgs> for RegisterModMapsCommand {
     fn group(&self) -> String { "Mod Management".into() }
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
-    fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
+    // Not gated to a specific source so it also works on a client-hosted
+    // listen server / in-game chat, not just a dedicated server console.
+    fn required_source(&self) -> Option<CommandSource> { None }
     async fn execute(&self, args: RegisterModMapsArgs, _command: &CommandRequest) {
         use crate::features::mod_maps::{default_paks_dir, MapSource, register_mod_maps_async};
 
@@ -34,13 +35,15 @@ impl Command<RegisterModMapsArgs> for RegisterModMapsCommand {
                 }
             },
         };
-
-        let (tx, rx) = mpsc::channel();
+        // Await the async completion with a tokio oneshot instead of a blocking
+        // mpsc recv: execute() runs on a tokio worker, and a blocking recv() pins
+        // that worker so the spawned discovery task is never polled (deadlock).
+        let (tx, rx) = tokio::sync::oneshot::channel();
         register_mod_maps_async(source, None, Box::new(move |result| {
             let _ = tx.send(result);
         }));
 
-        match rx.recv() {
+        match rx.await {
             Ok(Ok(count)) => sinfo!(fn; "Registered {} mod package(s); run listmodmaps to verify", count),
             Ok(Err(e)) => {
                 serror!(fn; "Mod map registration failed: {}", e);

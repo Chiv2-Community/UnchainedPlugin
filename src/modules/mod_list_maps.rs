@@ -3,7 +3,6 @@ use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use async_trait::async_trait;
 use clap::Parser;
-use std::sync::mpsc;
 
 #[derive(Parser, Clone)]
 #[command(name = "listmodmaps", about = "Lists mod assets currently known to the Asset Registry under /Game/Mods")]
@@ -15,10 +14,15 @@ pub struct ListModMapsCommand;
 impl Command<ListModMapsArgs> for ListModMapsCommand {
     fn group(&self) -> String { "Mod Management".into() }
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
-    fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
+    // Not gated to a specific source so it also works on a client-hosted
+    // listen server / in-game chat, not just a dedicated server console.
+    fn required_source(&self) -> Option<CommandSource> { None }
     async fn execute(&self, _args: ListModMapsArgs, _command: &CommandRequest) {
         use crate::resolvers::unchained_integration::run_on_game_thread;
-        let (tx, rx) = mpsc::channel();
+        // Await the game-thread result with a tokio oneshot instead of a blocking
+        // mpsc recv: execute() runs on a tokio worker, and a blocking recv() pins
+        // that worker (an anti-pattern on a tokio runtime).
+        let (tx, rx) = tokio::sync::oneshot::channel();
         sinfo!(fn; "Querying the Asset Registry for /Game/Mods on the game thread");
 
         run_on_game_thread(move || {
@@ -54,7 +58,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
             let _ = tx.send(outcome);
         });
 
-        match rx.recv() {
+        match rx.await {
             Ok((Ok(summary), lines)) => {
                 sinfo!(fn; "{}", summary);
                 for line in lines.iter().filter(|l| l.starts_with("[map]")) {

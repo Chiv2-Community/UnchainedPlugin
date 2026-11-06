@@ -43,38 +43,40 @@ pub fn spawn_cli_handler() {
         let mut buffer = String::new();
         
         while input_source.read_line(&mut buffer).is_ok_and(|count| count != 0) {
-            // Event subscribers only exist on servers; clients send the line to the engine console.
-            if !crate::cli_args().is_server() {
-                let line = buffer.trim();
-                if !line.is_empty() {
-                    NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.to_string());
-                }
-                buffer.clear();
-                continue;
-            }
             let maybe_command_parts = shlex::split(buffer.trim());
             if let Some(command_parts) = maybe_command_parts {
                 if !command_parts.is_empty() {
                     let command_slice = command_parts.as_slice();
-                    let (command, args) = match command_slice.first().map(|s| s.as_str()) {
-                        Some("help") => ("help".to_string(), command_slice[1..].to_vec()),
-                        Some(name) => {
-                            let is_unchained_command = EVENT_SYSTEM.command_subscriber.blocking_lock().get_registered_commands()
-                                .iter()
-                                .any(|registered_command|
-                                    registered_command.name().to_lowercase() == name.to_string().to_lowercase()
-                                        && (registered_command.required_source() == Some(CommandSource::ServerConsole)
-                                            || registered_command.required_source() == None
-                                        )
-                                );
+                    let name = command_slice[0].to_lowercase();
+                    let is_help = name == "help";
 
-                            if is_unchained_command {
-                                (name.to_string(), command_slice[1..].to_vec())
-                            } else {
-                                ("cmd".to_string(), command_slice.to_vec())
-                            }
-                        },
-                        None => continue,
+                    // A line names a plugin command when it matches a registered
+                    // command that is console-eligible (ServerConsole or
+                    // source-agnostic). This check runs on every instance so the
+                    // console works for both dedicated servers and clients.
+                    let is_plugin_command = !is_help && EVENT_SYSTEM.command_subscriber.blocking_lock()
+                        .get_registered_commands()
+                        .iter()
+                        .any(|registered_command|
+                            registered_command.name().to_lowercase() == name
+                                && (registered_command.required_source() == Some(CommandSource::ServerConsole)
+                                    || registered_command.required_source() == None
+                                )
+                        );
+
+                    let (command, args) = if is_help {
+                        ("help".to_string(), command_slice[1..].to_vec())
+                    } else if is_plugin_command {
+                        (command_slice[0].to_string(), command_slice[1..].to_vec())
+                    } else if crate::cli_args().is_server() {
+                        // Server: unrecognized lines go to the engine's `cmd`.
+                        ("cmd".to_string(), command_slice.to_vec())
+                    } else {
+                        // Client: unrecognized lines are native engine commands, so
+                        // forward them to the engine console verbatim.
+                        NATIVE_COMMAND_QUEUE.lock().unwrap().push(buffer.trim().to_string());
+                        buffer.clear();
+                        continue;
                     };
 
                     EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
