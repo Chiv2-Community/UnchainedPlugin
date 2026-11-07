@@ -93,8 +93,22 @@ callback handling. Steam may still need restarting once to clear prior leaks.
 
 ## Validation
 
-The callsite patch is a draft and has not been live-tested.
-The live results below cover the earlier allocate-and-cancel implementation.
+The callsite patch was live-tested through Proton on 2026-11-07 without client
+RCON or server flags. Process memory contained `EB 26` at `0x140eb1a56`.
+After resuming the deliberately suspended diagnostic process, plugin logs showed
+frontend initialization, client-mode initialization, travel to the local Heroic
+server's Courtyard map, post-load completion, and an in-game chat message.
+The client later exited; active ticket snapshots returned 15 before launch and
+15 after exit, with no new active handles. The installed DLL was not replaced.
+
+The debugger orchestration failed before login tracing, so this run does not
+establish EOS callback results or allocation counts during login. Post-exit
+snapshots alone cannot exclude transient allocations. Interactive smoothness
+and exit reason were not independently confirmed. Evidence is in the external
+investigation directory's `callsite-live-*` files and the diagnostic saved
+suffix `AuthDiagnosticCallsiteLive20261107`.
+
+The remaining live results below cover the earlier allocate-and-cancel implementation.
 
 Offline checks found one signature match with the pinned patternsleuth scanner,
 at `0x140eb1a56`, and verified the jump target `0x140eb1a7e`. Eighteen emulated
