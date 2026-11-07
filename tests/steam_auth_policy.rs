@@ -2,15 +2,19 @@
 // rustc --edition=2021 --test tests/steam_auth_policy.rs -o <test-binary>
 #[path = "../src/resolvers/steam_auth/policy.rs"]
 mod policy;
-#[path = "../src/resolvers/steam_auth/signatures.rs"]
-mod signatures;
 
 #[test]
 #[ignore = "requires a local copy of the supported Steam executable"]
 fn supported_executable_has_unique_signatures() {
     let path = std::env::var_os("STEAM_AUTH_TEST_EXE").expect("Set STEAM_AUTH_TEST_EXE");
     let binary = std::fs::read(path).unwrap();
-    for signature in [signatures::NODE_SIGNATURE, signatures::TOKEN_SIGNATURE] {
+    let source = include_str!("../src/resolvers/steam_auth/mod.rs");
+    for name in ["RedpointSteamLoginProbe", "SteamIdentityGetAuthToken"] {
+        let resolver = source
+            .split_once(&format!("define_pattern_resolver!({name},"))
+            .unwrap()
+            .1;
+        let signature = resolver.split('"').nth(1).unwrap();
         let prefix: Vec<u8> = signature
             .split_ascii_whitespace()
             .take(10)

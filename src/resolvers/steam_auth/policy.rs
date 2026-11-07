@@ -70,6 +70,7 @@ pub(super) fn temporary_token(
         .collect()
 }
 
+#[cfg(test)]
 pub(super) fn signature_matches(code: &[u8], signature: &str) -> bool {
     let mut count = 0;
     for (index, token) in signature.split_ascii_whitespace().enumerate() {
