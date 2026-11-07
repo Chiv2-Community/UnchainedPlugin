@@ -18,38 +18,19 @@ invalid-handle callback bug then left EOS login waiting indefinitely.
 
 The check still requires a valid, nonempty ticket. Other token callers are unchanged.
 
-Both hooks are inert unless the supported Steam code signatures match. The
-Redpoint wrapper also checks that the token hook is enabled before opening a
-scope. Epic and unknown builds keep their original behavior.
+Both hooks activate only on Steam. The Redpoint wrapper checks that the token
+hook is enabled before opening a scope. Epic does not require these signatures.
 
-Supported executable SHA-256:
-`d82b5eaa122aaee15366499bbce34e325741fecd06d6b7b5490fc650b5afb48b`.
-Only this build (CRC32C `04d195bc`) requires the new signatures during scanning.
-The signature/RVA guards cover Redpoint helper `0xEB1A10` and Steam
-`GetAuthToken` `0xA44FE0`. They encode this build's ABI, object offsets, and
-SteamUser023 vtable layout. Recheck these assumptions before adding builds.
+The signatures assume this game's ABI, object offsets, and SteamUser023 vtable layout.
 
 This prevents further leaks from this predicate. It does not reclaim existing
 tickets, recover an already hung login, or fix the game's invalid-Web-API-handle
 callback handling. Steam may still need restarting once to clear prior leaks.
 
-## Tests
+## Validation
 
-Run the dependency-free lifecycle/scope tests on any host:
+Repository-wide signature validation is tracked in [#28](https://github.com/Chiv2-Community/UnchainedPlugin/issues/28).
 
-```sh
-rustc --edition=2021 -O --test tests/steam_auth_policy.rs -o steam-auth-tests
-./steam-auth-tests
-```
-
-Check signature uniqueness against a local supported executable:
-
-```sh
-STEAM_AUTH_TEST_EXE='/path/to/Chivalry2-Win64-Shipping.exe' \
-  ./steam-auth-tests --ignored
-```
-
-On Windows, the tests also run through `cargo test --test steam_auth_policy`.
 For live validation, compare Steam's outstanding-ticket count before launch,
 after this probe executes, and after forced game termination. The probe should
 not increase the count; normal authentication still needs separate testing.

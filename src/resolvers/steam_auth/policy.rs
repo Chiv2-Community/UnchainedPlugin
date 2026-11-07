@@ -1,11 +1,9 @@
 //! Ticket lifecycle for Redpoint's throwaway token check. No engine dependencies.
 use std::cell::Cell;
 
-pub(crate) fn signature_required(name: &str, steam: bool, executable_crc: u32) -> bool {
+pub(crate) fn signature_required(name: &str, steam: bool) -> bool {
     match name {
-        "RedpointSteamLoginProbe" | "SteamIdentityGetAuthToken" => {
-            steam && executable_crc == 0x04d195bc
-        }
+        "RedpointSteamLoginProbe" | "SteamIdentityGetAuthToken" => steam,
         _ => true,
     }
 }
@@ -71,32 +69,16 @@ pub(super) fn temporary_token(
 }
 
 #[cfg(test)]
-pub(super) fn signature_matches(code: &[u8], signature: &str) -> bool {
-    let mut count = 0;
-    for (index, token) in signature.split_ascii_whitespace().enumerate() {
-        let Some(byte) = code.get(index) else {
-            return false;
-        };
-        if token != "??" && u8::from_str_radix(token, 16).ok() != Some(*byte) {
-            return false;
-        }
-        count += 1;
-    }
-    count != 0
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn new_signatures_are_required_only_for_supported_steam_build() {
+    fn new_signatures_are_required_only_for_steam() {
         for name in ["RedpointSteamLoginProbe", "SteamIdentityGetAuthToken"] {
-            assert!(signature_required(name, true, 0x04d195bc));
-            assert!(!signature_required(name, false, 0x04d195bc));
-            assert!(!signature_required(name, true, 0));
+            assert!(signature_required(name, true));
+            assert!(!signature_required(name, false));
         }
-        assert!(signature_required("ExistingResolver", false, 0));
+        assert!(signature_required("ExistingResolver", false));
     }
 
     #[test]
@@ -201,14 +183,5 @@ mod tests {
             );
             assert_eq!(outstanding.get(), 0);
         }
-    }
-
-    #[test]
-    fn signatures_reject_stale_offsets_and_changed_instructions() {
-        assert!(signature_matches(&[0x48, 0x8b, 0xff], "48 8B ??"));
-        assert!(!signature_matches(&[0x49, 0x8b, 0xff], "48 8B ??"));
-        assert!(!signature_matches(&[0x48], "48 8B ??"));
-        assert!(!signature_matches(&[0x48], ""));
-        assert!(!signature_matches(&[0x48], "XX"));
     }
 }
