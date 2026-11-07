@@ -82,6 +82,7 @@ pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;
 pub mod desync;
+pub(crate) mod steam_auth;
 #[cfg(feature="move-autonomous-desync")]
 pub mod desync_tests;
 

@@ -153,6 +153,9 @@ impl BuildInfo {
         resolvers_in
             .into_iter()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
+            .filter(|resolver| resolvers::steam_auth::signature_required(
+                resolver.name, self.platform == PlatformType::STEAM, self.file_hash,
+            ))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -194,7 +197,7 @@ mod build_info_tests {
     fn incomplete_cache_requires_normal_rescan() {
         let required: Vec<_> = resolvers().filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name)).collect();
         let mut info = BuildInfo {
-            plugin_version: String::new(), build: 0, file_hash: 0,
+            plugin_version: String::new(), build: 0, file_hash: 0x04d195bc,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
             offsets: required.iter().map(|resolver| (resolver.name.to_string(), 1)).collect(),
         };
@@ -331,6 +334,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
+                resolvers::steam_auth::configure(bi.platform, bi.file_hash);
                 if let Some(offset) = offsets.get("GMalloc") {
                     unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
                 }
