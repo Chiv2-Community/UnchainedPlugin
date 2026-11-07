@@ -5,6 +5,10 @@ pub(crate) fn signature_required(name: &str, steam: bool) -> bool {
     name != "RedpointSteamSkipTokenCheck" || steam
 }
 
+// Patch out only Redpoint's nonempty-token check and its unused ticket allocation.
+// Steam login is still checked by GetLoginStatus(), which calls BLoggedOn().
+// The discarded token adds no authentication/ownership verification; EOS still
+// authenticates separately. Other GetAuthToken callers remain unchanged.
 // Match the helper through its status/token checks and temporary-string cleanup.
 // `|` resolves to the token block, after GetLoginStatus() == LoggedIn succeeds.
 define_pattern_resolver!(RedpointSteamSkipTokenCheck, { STEAM: [

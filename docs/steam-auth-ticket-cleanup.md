@@ -44,6 +44,10 @@ at `0x140a494d0` already calls `BLoggedOn()` and returns `LoggedIn` (2) on succe
 The patch retains that check and skips the following `GetAuthToken()` call and
 length check. No replacement call or marker string is needed.
 
+The discarded token was extra work, not additional authentication: this caller
+never submitted it for verification. Only ticket-allocation success was checked
+beyond the Steam login status already established.
+
 The existing full helper signature marks the token-block entry with patternsleuth's
 `|` offset syntax. A two-byte jump skips to the predicate's success assignment.
 The temporary-string cleanup is skipped because its initialized flag remains
@@ -61,7 +65,7 @@ that the later Web API ticket request would succeed.
 See Steam's documentation for [BLoggedOn](https://partner.steamgames.com/doc/api/ISteamUser#BLoggedOn)
 and [GetAuthSessionTicket](https://partner.steamgames.com/doc/api/ISteamUser#GetAuthSessionTicket).
 
-### Why interception is scoped
+### Why only this callsite is patched
 
 Static analysis of the tested Steam executable found other callers:
 
@@ -91,7 +95,41 @@ This prevents further leaks from this predicate. It does not reclaim existing
 tickets, recover an already hung login, or fix the game's invalid-Web-API-handle
 callback handling. Steam may still need restarting once to clear prior leaks.
 
-## Validation
+## Validation of the current callsite patch
+
+### Interactive Steam client and Steam server — 2026-11-07
+
+The user confirmed successful interactive play with both the Steam dedicated
+server and Steam client using the callsite-patch DLL through Proton's normal
+entry point. The client had no RCON or server flags. Server and client logs
+confirmed Courtyard post-load; the server reached `InProgress` and listened on
+UDP port `17777`. The installed plugin DLL was not replaced.
+
+Initial server launches stopped in the frontend because the new saved profile
+lacked ModLoader settings and persisted first-run preferences. Reusing the
+working server's `ModLoader.sav` enabled GiantSlayers but did not fix startup by
+itself. Persisting these settings in the server profile's `Config/WindowsNoEditor/Game.ini`
+allowed Courtyard to load:
+
+```ini
+[/Script/TBL.TBLTitleScreen]
+bSavedHasAgreedToTOS=True
+
+[/Script/TBL.TBLGameInstance]
+FirstLoadCompleted=True
+```
+
+The launch command's equivalent INI overrides were insufficient in this run.
+Frontend post-load or `InProgress` alone is not proof of a playable server;
+verify the intended map and listening game port. No DLL change was needed to
+resolve this setup failure.
+
+A separate console `exit` access violation is tracked in
+[#29](https://github.com/Chiv2-Community/UnchainedPlugin/issues/29); its cause and
+relationship to this patch are unproven. Successful gameplay does not establish
+clean shutdown. Native Windows and official matchmaking remain untested.
+
+### Initial callsite-patch run and offline checks
 
 The callsite patch was live-tested through Proton on 2026-11-07 without client
 RCON or server flags. Process memory contained `EB 26` at `0x140eb1a56`.
@@ -104,11 +142,9 @@ The client later exited; active ticket snapshots returned 15 before launch and
 The debugger orchestration failed before login tracing, so this run does not
 establish EOS callback results or allocation counts during login. Post-exit
 snapshots alone cannot exclude transient allocations. Interactive smoothness
-and exit reason were not independently confirmed. Evidence is in the external
+and exit reason were not independently confirmed for that initial run. Evidence is in the external
 investigation directory's `callsite-live-*` files and the diagnostic saved
 suffix `AuthDiagnosticCallsiteLive20261107`.
-
-The remaining live results below cover the earlier allocate-and-cancel implementation.
 
 Offline checks found one signature match with the pinned patternsleuth scanner,
 at `0x140eb1a56`, and verified the jump target `0x140eb1a7e`. Eighteen emulated
@@ -121,6 +157,12 @@ live validation. The callsite-patch DLL has SHA-256
 the installed DLL was not replaced.
 
 Repository-wide signature validation is tracked in [#28](https://github.com/Chiv2-Community/UnchainedPlugin/issues/28).
+
+## Historical validation of the allocate-and-cancel implementation
+
+The following results cover the earlier two-hook implementation, not the current
+callsite patch. Its scope/lifecycle unit tests were removed with that code;
+they are not current-patch test coverage.
 
 Three live tests using the game's Steam API DLL cancelled the same handle
 repeatedly, including after allocating a replacement, then shut down normally.
@@ -187,4 +229,5 @@ validation must use Proton's normal entry point and verify the graphics backend.
 After switching to the proper Proton entry point, mapped D3D library hashes
 matched DXVK. The user reported smooth frontend and local multiplayer with the
 GitHub RC3 release, then reported the allocate-and-cancel patch also worked.
-These interactive results do not yet validate the new `BLoggedOn()` draft.
+These historical interactive results cover allocate-and-cancel only; the current
+callsite patch's successful Steam client/server retest is recorded above.
