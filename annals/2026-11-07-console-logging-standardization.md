@@ -26,3 +26,7 @@ The separate resolver and hook record at Git commit `de3098e9887825904ae2216f668
 ## Reconsideration and open questions
 
 Revisit queue sizing and warning behavior if real workloads show memory pressure, sustained backlog, unacceptable loss, or measurable latency. Verify selection and file output during a live game on native Windows and on Proton; investigate other synchronous output paths before claiming all game threads are protected. Confirm PR merge and compatibility with concurrent resolver changes. The full pre-compaction discussion, native-Windows measurements, and final-DLL live validation are unavailable here.
+
+## Subsequent developments (2026-11-07)
+
+The user subsequently reported selection did not work in a live preview. A targeted uncommitted input-buffer fix and limited mode validation are recorded in [Console selection with redirected input](2026-11-07-console-selection-input-buffer.md). This does not refute the queued-output design or establish the original failure's cause; actual drag selection remains unconfirmed.
