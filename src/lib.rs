@@ -565,46 +565,48 @@ pub fn attach_hooks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!(fn; "Attaching hooks via auto-discovery:");
 
-    // inventory::iter finds everything submitted via CREATE_HOOK!
-    for hook in inventory::iter::<resolvers::HookRegistration> {
-        if !resolvers::supports_platform(hook.name, crate::get_current_platform()) {
-            continue;
-        }
-        let cond = (hook.condition)();
-        if !cond {
-            // swarn!(fn; "inactive hook: {}", hook.name);
-            // Inactive hooks initialize but don't enable the detour
-            // continue;
-        }
+    let platform = crate::get_current_platform();
+    let (active, ref_only): (Vec<_>, Vec<_>) = inventory::iter::<resolvers::HookRegistration>
+        .into_iter()
+        .filter(|hook| resolvers::supports_platform(hook.name, platform))
+        .partition(|hook| (hook.condition)());
 
-        match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
-            Ok(_) => sinfo!(fn; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
+    // Initialize callable references before enabling hooks that may use them.
+    ref_only.into_iter().for_each(|hook| {
+        match unsafe { (hook.hook_fn)(offsets.clone(), false) } {
+            Ok(_) => strace!(fn; "☐ {}: initialized (passive)", hook.name.to_uppercase()),
+            Err(e) => strace!(fn; "☐ {}: {}", hook.name.to_uppercase(), e),
+        }
+    });
+    active.into_iter().try_for_each(|hook| {
+        match unsafe { (hook.hook_fn)(offsets.clone(), true) } {
+            Ok(_) => {
+                sinfo!(fn; "☑ {} attached", hook.name);
+                Ok(())
+            }
             Err(e) => {
                 serror!(fn; "☐ {}: {}", hook.name.to_uppercase(), e);
-                if cond {
-                    return Err(e);
-                }
-            },
+                Err(e)
+            }
         }
-    }
-
-    Ok(())
+    })
 }
 
 /// The base program address of the running application will be used.
 pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
-    for p in inventory::iter::<resolvers::PatchRegistration> {
-        if !resolvers::supports_platform(p.name, crate::get_current_platform()) {
-            continue;
+    let platform = crate::get_current_platform();
+    let (active, inactive): (Vec<_>, Vec<_>) = inventory::iter::<resolvers::PatchRegistration>
+        .into_iter()
+        .filter(|p| resolvers::supports_platform(p.name, platform))
+        .partition(|p| (p.enabled_fn)());
+
+    active.into_iter().for_each(|p| {
+        match unsafe { (p.patch_fn)(offsets.clone()) } {
+            Ok(_) => sinfo!(fn; "[+] Patch Applied: {} ({})", p.name, p.tag),
+            Err(e) => serror!(fn; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
         }
-        // Run the condition check
-        if (p.enabled_fn)() {
-            match unsafe { (p.patch_fn)(offsets.clone()) } {
-                Ok(_) => sinfo!(fn; "[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => serror!(fn; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
-            }
-        } else {
-            sdebug!(fn; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
-        }
-    }
+    });
+    inactive.into_iter().for_each(|p| {
+        sdebug!(fn; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+    });
 }
