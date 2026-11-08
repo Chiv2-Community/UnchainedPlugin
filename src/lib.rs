@@ -563,7 +563,7 @@ pub fn world_init() {
 pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    sdebug!(fn; "Attaching hooks via auto-discovery:");
+    sdebug!("Attaching hooks via auto-discovery:");
 
     let platform = crate::get_current_platform();
     inventory::iter::<resolvers::HookRegistration>
@@ -572,13 +572,13 @@ pub fn attach_hooks(
         .try_for_each(|hook| {
             let condition = (hook.condition)();
             match unsafe { (hook.hook_fn)(offsets.clone(), condition) } {
-                Ok(_) if condition => sinfo!(fn; "☑ {} attached", hook.name),
-                Ok(_) => strace!(fn; "☐ {}: initialized (passive)", hook.name.to_uppercase()),
+                Ok(_) if condition => sinfo!("☑ {} attached", hook.name),
+                Ok(_) => sinfo!("☐ {}: initialized (passive)", hook.name),
                 Err(e) if condition => {
-                    serror!(fn; "☐ {}: {}", hook.name.to_uppercase(), e);
+                    serror!("☐ {}: {}", hook.name, e);
                     return Err(e);
                 }
-                Err(e) => strace!(fn; "☐ {}: {}", hook.name.to_uppercase(), e),
+                Err(e) => serror!("☐ {}: {}", hook.name, e),
             }
             Ok(())
         })
@@ -593,12 +593,12 @@ pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
         .for_each(|p| {
             let condition = (p.enabled_fn)();
             if !condition {
-                sdebug!(fn; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+                sdebug!("[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
                 return;
             }
             match unsafe { (p.patch_fn)(offsets.clone()) } {
-                Ok(_) => sinfo!(fn; "[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => serror!(fn; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
+                Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
+                Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
         });
 }
