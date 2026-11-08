@@ -22,3 +22,7 @@ The earlier [redirected-input fix](2026-11-07-console-selection-input-buffer.md)
 ## Follow-up and reconsideration
 
 Review and commit the working-tree changes through the normal PR process if approved; verify real user selection, gameplay and file output under Proton and native Windows. Reconsider the defaults or synchronization if supported console hosts fail, registry restoration is unreliable, selection still fails, or display accessibility and compatibility issues arise. The full source conversation, final runtime binary identity, original failure's cause, and native-Windows results remain unavailable.
+
+## Subsequent developments (2026-11-07)
+
+The neutral function color described above was superseded by gold for the module, `::`, and function; the separator was specified as gray. See [Console function and separator colors](2026-11-07-console-function-separator-colors.md). The remaining selection decision and limitations are not reversed.
