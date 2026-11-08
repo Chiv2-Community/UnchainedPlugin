@@ -41,7 +41,7 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 
 }];
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-CREATE_HOOK!(FText_AsCultureInvariant, REF_ONLY, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
+CREATE_HOOK!(FText_AsCultureInvariant, CALLED, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
 });
 
 // ,|ctx, patterns| {

@@ -420,7 +420,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
-CREATE_HOOK!(SpawnActor, REF_ONLY, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
+CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
     sinfo![fn; "Triggered!"];
 });
 /*
@@ -434,6 +434,6 @@ define_pattern_resolver![GetTBLGameMode, {
         ]
 }];
 
-CREATE_HOOK!(GetTBLGameMode, REF_ONLY, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject),{
+CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject),{
     sinfo![fn; "Triggered!"];
 });

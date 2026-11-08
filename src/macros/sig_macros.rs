@@ -186,33 +186,6 @@ macro_rules! define_pattern_resolver {
         };
     };
 
-    // Explicitly acknowledge missing platform coverage without enabling it.
-    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident, $mode:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@platform $name, $mode, [$($missing),+], {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        });
-    };
-    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
-        |$ctx:ident, $patterns:ident| $body:block) => {
-        define_pattern_resolver!(@platform_custom $name, [$($missing),+], {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        }, |$ctx, $patterns| $body);
-    };
-    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
-        { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@platform $name, MultiCall, [$($missing),+], {
-            $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
-        });
-    };
-    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@platform $name, Simple, [$($missing),+], {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        });
-    };
-
     // Internal: produce header
     (@emit_header $name:ident) => {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -246,63 +219,33 @@ macro_rules! define_pattern_resolver {
 
     // Called with Mode (Process) specified
     //  (NAME, MODE, DICT) 
-    ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@platform $name, $mode, [], {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        });
-    };
-    (@platform $name:ident, $mode:ident, [$($missing:ident),*],
+    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident, $mode:ident,
         { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
         define_pattern_resolver!(@emit_header $name);
-        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($missing),*]);
+        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($($missing),+)?]);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let platform = super::current_platform();
-            let mut patterns: Vec<_> = Vec::new();
-            for var in [platform, super::PlatformType::OTHER] {
-                // println!("Testing {}", stringify!($name));                
-                let pattern_part: &[_] = match var {
-                    $(
-                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
-                    )+
-                    _ => &[],
-                };                
-                // println!("{}: {:?}", var, pattern_part);
-                patterns.extend_from_slice(pattern_part);
-            }            
-            // println!("combined {:?}", patterns);            
+            let patterns = $crate::resolvers::select_patterns(
+                $crate::resolvers::current_platform(),
+                &[$(($crate::resolvers::PlatformType::$platform, &[$($pattern),+])),+],
+            );
             define_pocess!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
     // Called with a body block
     //  (NAME, MODE, DICT) 
-    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
-        define_pattern_resolver!(@platform_custom $name, [], {
-            $( $platform : [ $( $pattern ),+ ] ),+
-        }, |$ctx, $patterns| $body);
-    };
-    (@platform_custom $name:ident, [$($missing:ident),*],
+    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
         { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
         |$ctx:ident, $patterns:ident| $body:block) => {
         define_pattern_resolver!(@emit_header $name);
-        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($missing),*]);
+        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($($missing),+)?]);
         
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
-            let platform = super::current_platform();
-            let mut $patterns: Vec<_> = Vec::new();
-            for var in [platform, super::PlatformType::OTHER] {
-                // println!("Testing {}", stringify!($name));                
-                let pattern_part: &[_] = match var {
-                    $(
-                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
-                    )+
-                    _ => &[],
-                };                
-                // println!("{}: {:?}", var, pattern_part);
-                $patterns.extend_from_slice(pattern_part);
-            }            
-            // println!("combined {:?}", patterns);            
+            let $patterns = $crate::resolvers::select_patterns(
+                $crate::resolvers::current_platform(),
+                &[$(($crate::resolvers::PlatformType::$platform, &[$($pattern),+])),+],
+            );
 
             define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
         });
@@ -329,8 +272,9 @@ macro_rules! define_pattern_resolver {
     //     ],
     //     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
     // });
-    ($name:ident, { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($name, MultiCall, {
+    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
+        { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!($(#[allow_missing_platforms($($missing),+)])? $name, MultiCall, {
             $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
         });
     };
@@ -356,8 +300,9 @@ macro_rules! define_pattern_resolver {
     //     ],
     //     STEAM: ["4C 89 | ?? ?? ?? ?? BE EF"]
     // });
-    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($name, Simple, {
+    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!($(#[allow_missing_platforms($($missing),+)])? $name, Simple, {
             $( $platform : [ $( $pattern ),+ ] ),+
         });
     };

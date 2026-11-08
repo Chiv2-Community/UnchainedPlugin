@@ -8,6 +8,17 @@ pub struct ResolverPlatforms {
 
 inventory::collect!(ResolverPlatforms);
 
+/// Select platform-specific patterns first, followed by shared patterns.
+pub fn select_patterns<T: Clone>(platform: PlatformType, groups: &[(PlatformType, &[T])]) -> Vec<T> {
+    let specific = groups.iter().filter(|(key, _)| *key == platform);
+    let shared = groups.iter().filter(|(key, _)| {
+        *key == PlatformType::OTHER && platform != PlatformType::OTHER
+    });
+    specific.chain(shared)
+        .flat_map(|(_, patterns)| patterns.iter().cloned())
+        .collect()
+}
+
 pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
     inventory::iter::<ResolverPlatforms>
         .into_iter()
@@ -25,6 +36,20 @@ mod tests {
     define_pattern_resolver!(@register_platforms TestEpicOnly, [EGS], [STEAM]);
     define_pattern_resolver!(@register_platforms TestBoth, [STEAM, EGS], []);
     define_pattern_resolver!(@register_platforms TestShared, [OTHER], []);
+
+    #[test]
+    fn pattern_selection_orders_specific_before_shared_and_excludes_other_platforms() {
+        let groups: &[(PlatformType, &[&str])] = &[
+            (PlatformType::OTHER, &["shared"]),
+            (PlatformType::EGS, &["epic"]),
+            (PlatformType::STEAM, &["steam", "fallback"]),
+        ];
+        assert_eq!(select_patterns(PlatformType::STEAM, groups), ["steam", "fallback", "shared"]);
+        assert_eq!(select_patterns(PlatformType::EGS, groups), ["epic", "shared"]);
+        assert_eq!(select_patterns(PlatformType::XBOX, groups), ["shared"]);
+        assert_eq!(select_patterns(PlatformType::OTHER, groups), ["shared"]);
+        assert!(select_patterns::<&str>(PlatformType::STEAM, &[]).is_empty());
+    }
 
     #[test]
     fn steam_only_is_skipped_on_other_platforms_even_when_warning_is_suppressed() {

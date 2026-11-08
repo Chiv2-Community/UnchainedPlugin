@@ -388,7 +388,7 @@ pub mod kismet_log {
 
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK!(BroadcastLocalizedChat, REF_ONLY, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
+CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
     sinfo![fn; "Triggered!"];
 });
 
@@ -396,7 +396,7 @@ CREATE_HOOK!(BroadcastLocalizedChat, REF_ONLY, (gamemode: *mut ATBLGameMode, tex
 define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
 // void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
 // The receiver is missing from this legacy signature; leave its ABI unresolved.
-CREATE_HOOK!(ClientReceiveChat_Implementation, REF_ONLY, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
+CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
     if !S.is_null() {
         let url_w = unsafe { (*S).to_string() };
         sinfo![fn; "Triggered! {url_w}"];

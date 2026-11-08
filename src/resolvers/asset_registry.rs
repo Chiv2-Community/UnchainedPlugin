@@ -9,7 +9,7 @@ define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
 // IAssetRegistry * __thiscall UAssetManager::GetAssetRegistry(UAssetManager *this)
-CREATE_HOOK!(GetAssetRegistry, REF_ONLY, *mut IAssetRegistry, (asset_manager: *mut UAssetManager),{
+CREATE_HOOK!(GetAssetRegistry, CALLED, *mut IAssetRegistry, (asset_manager: *mut UAssetManager),{
     // sinfo![fn; "Triggered!"];
 });
 
@@ -62,7 +62,7 @@ define_pattern_resolver!(GetAssetsByClass,[
     ]);
 
 // bool __thiscall UAssetRegistryImpl::GetAssetsByClass(UAssetRegistryImpl *this,FName param_1,TArray<> *param_2,bool param_3)
-CREATE_HOOK!(GetAssetsByClass, REF_ONLY, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
+CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
     // Debug code
     sinfo![fn; "Triggered! {}", ClassPathName];
     let res: bool;
@@ -109,13 +109,13 @@ define_pattern_resolver!(GetAssetRegistry_Helper,[
     "48 89 5C 24 ?? 57 48 83 EC 20 48 8B F9 48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 ?? 41 B8 01 00 00 00 E8 ?? ?? ?? ?? 48 8B 18 E8 ?? ?? ?? ?? 48 8B D3 48 8B C8 E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 85 C0"
     ]);
 // TScriptInterface<> * __cdecl UAssetRegistryHelpers::GetAssetRegistry(TScriptInterface<> *__return_storage_ptr__)
-CREATE_HOOK!(GetAssetRegistry_Helper, REF_ONLY,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
+CREATE_HOOK!(GetAssetRegistry_Helper, CALLED,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
     sinfo![fn; "Triggered!"];
 });
 
 define_pattern_resolver!(FNameCtorWchar, Simple, ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]);
 // FName * __thiscall FName::FName(FName *this,wchar_t *param_1,EFindName param_2)
-CREATE_HOOK!(FNameCtorWchar, REF_ONLY,  *mut FName, (this: *mut FName, Str: *const TCHAR, findname: EFindName),{
+CREATE_HOOK!(FNameCtorWchar, CALLED,  *mut FName, (this: *mut FName, Str: *const TCHAR, findname: EFindName),{
     // sinfo![fn; "Triggered!"];
     unsafe {
         if findname == EFindName::Find {
@@ -131,7 +131,7 @@ CREATE_HOOK!(FNameCtorWchar, REF_ONLY,  *mut FName, (this: *mut FName, Str: *con
 
 define_pattern_resolver!(StaticFindObject,["48 89 5C 24 08 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 83 EC 60 80 3D 98 BB"]);
 // UObject* StaticFindObject( UClass* ObjectClass, UObject* InObjectPackage, const TCHAR* OrigInName, bool ExactClass )
-CREATE_HOOK!(StaticFindObject, REF_ONLY, *mut UObject, (
+CREATE_HOOK!(StaticFindObject, CALLED, *mut UObject, (
     obj_class: *mut UClass,
     package: *mut UObject,
     name: *const TCHAR,
@@ -145,13 +145,13 @@ CREATE_HOOK!(StaticFindObject, REF_ONLY, *mut UObject, (
 
 define_pattern_resolver!(GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
 // UObject* GetDefaultObject(bool bCreateIfNeeded = true) const
-CREATE_HOOK!(GetDefaultObject, REF_ONLY, *mut UObject, (this_ptr: *mut UClass, create_if_needed: bool),{
+CREATE_HOOK!(GetDefaultObject, CALLED, *mut UObject, (this_ptr: *mut UClass, create_if_needed: bool),{
     sinfo![fn; "Triggered!"];
 });
 
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
 // static void GetAllActorsOfClass(const UObject* WorldContextObject, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
-CREATE_HOOK!(GetAllActorsOfClass, REF_ONLY, (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>),{
+CREATE_HOOK!(GetAllActorsOfClass, CALLED, (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>),{
     sinfo![fn; "Triggered!"];
 });
 
@@ -159,7 +159,7 @@ define_pattern_resolver!(StaticLoadObject,["40 55 53 56 57 41 54 41 55 41 56 41 
 // UObject* StaticLoadObject(UClass* ObjectClass, UObject* InOuter, const TCHAR* InName, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowObjectReconciliation, FUObjectSerializeContext* InSerializeContext)
 // UObject* StaticLoadObject(UClass* Class, UObject* InOuter, const TCHAR* Name, const TCHAR* Filename, uint32 LoadFlags, UPackageMap* Sandbox, bool bAllowNativeComponentClass, const FLinkerInstancingContext* InstancingContext)
 // The resolved target uses FUObjectSerializeContext, not FLinkerInstancingContext.
-CREATE_HOOK!(StaticLoadObject, REF_ONLY, *mut UObject, (
+CREATE_HOOK!(StaticLoadObject, CALLED, *mut UObject, (
     obj_class: *mut UClass,
     in_outer: *mut UObject,
     name: *const TCHAR,

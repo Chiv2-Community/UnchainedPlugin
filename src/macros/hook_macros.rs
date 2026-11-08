@@ -36,8 +36,7 @@
 ///
 /// # Arguments
 /// * `Name` - The identifier of the function (used to generate `o_Name` and `attach_Name`).
-/// * `Status` - `ACTIVE` enables interception; `REF_ONLY` initializes the target
-///   for `CALL_ORIGINAL!` without intercepting game calls.
+/// * `Status` - `ACTIVE` or `INACTIVE`. Controls if the hook enables on startup.
 /// * `HookType` - 
 ///     * `NONE`: The body is the complete implementation. You are responsible for calling `o_Name.call()`.
 ///     * `PRE`: The body runs first, then the original function is called automatically.
@@ -65,7 +64,7 @@ macro_rules! __create_hook_inner {
         $crate::__create_hook_impl!($name, ACTIVE, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
 
-    // 2. Status Identifier: Name, ACTIVE/REF_ONLY, (args), {body}
+    // 2. Status Identifier: Name, ACTIVE/INACTIVE, (args), {body}
     ($name:ident, $status:ident, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!($name, $status, PRE, (), ( $( $arg: $ty ),+ ), $body);
     };
@@ -96,7 +95,6 @@ macro_rules! __create_hook_inner {
 macro_rules! __create_hook_impl {
     // Internal helper to turn Status/Expressions into fn() -> bool
     (@as_cond ACTIVE) => { || true };
-    (@as_cond REF_ONLY) => { || false };
     (@as_cond INACTIVE) => { || false };
     (@as_cond CALLED) => { || false };
     (@as_cond DISABLED) => { || false };
@@ -245,9 +243,9 @@ macro_rules! TRY_OR_RETURN {
 #[cfg(test)]
 mod tests {
     CREATE_HOOK!(TestVoidBasic, (value: i32), {});
-    CREATE_HOOK!(TestVoidStatus, REF_ONLY, (value: i32), {});
+    CREATE_HOOK!(TestVoidStatus, INACTIVE, (value: i32), {});
     CREATE_HOOK!(TestVoidCondition, { || false }, (value: i32), {});
-    CREATE_HOOK!(TestConstPointer, REF_ONLY, *const std::ffi::c_void,
+    CREATE_HOOK!(TestConstPointer, INACTIVE, *const std::ffi::c_void,
         (value: *const std::ffi::c_void), {});
 
     #[test]
@@ -269,22 +267,4 @@ mod tests {
         let _: fn(Pointer) -> Pointer = |value| CALL_ORIGINAL!(TestConstPointer(value));
     }
 
-    CREATE_HOOK!(TestRefOnly, REF_ONLY, NONE, i32, (value: i32), 0);
-
-    #[inline(never)]
-    unsafe extern "C" fn reference_target(value: i32) -> i32 {
-        std::hint::black_box(value.wrapping_add(1))
-    }
-
-    #[test]
-    fn ref_only_initializes_a_callable_target_without_enabling_interception() {
-        let offset = reference_target as *const () as usize - *crate::resolvers::BASE_ADDR;
-        let offsets = std::collections::HashMap::from([("TestRefOnly".to_owned(), offset as u64)]);
-        unsafe {
-            attach_TestRefOnly(offsets, true).unwrap();
-            assert!(!o_TestRefOnly.is_enabled());
-            assert_eq!(CALL_ORIGINAL!(TestRefOnly(4)), 5);
-            assert_eq!(reference_target(4), 5);
-        }
-    }
 }
