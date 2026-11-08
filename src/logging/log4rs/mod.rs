@@ -471,6 +471,7 @@ mod tests {
             for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
                 let record = Record::builder().level(level)
                     .module_path(Some("UnchainedPlugin::example"))
+                    .target("distinct_filter_target")
                     .key_values(&values).args(format_args!("plain message")).build();
                 let output = render_encoder(&registry, yaml["appenders"][name]["encoder"].clone(), &record);
                 let text = String::from_utf8(output).unwrap();
@@ -483,6 +484,7 @@ mod tests {
                 };
                 assert!(text.contains(&format!("{context} plain message")), "{name}: {text:?}");
                 assert!(!text.contains('\u{1b}'), "{name}: {text:?}");
+                assert!(!text.contains("distinct_filter_target"), "{name}: {text:?}");
             }
         }
     }
@@ -491,12 +493,6 @@ mod tests {
     fn embedded_configuration_preserves_patterns_and_filters() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         assert_eq!(yaml["appenders"]["console"]["encoder"]["pattern"], palette::DEFAULT_PATTERN);
-        for name in ["file", "kismet"] {
-            let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
-            assert!(pattern.contains("{l:>5}"));
-            assert!(pattern.contains("{M}"));
-            assert!(!pattern.contains("{t}"));
-        }
         // Exercise the shipped console config without opening log files.
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));

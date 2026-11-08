@@ -15,6 +15,16 @@ pub(crate) fn preserve_console_handles() {
     *LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner()) = true;
 }
 
+pub(crate) fn is_console(target: log4rs::append::console::Target) -> bool {
+    let output = match target {
+        log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
+        log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
+    };
+    unsafe {
+        GetStdHandle(output).is_ok_and(|handle| GetConsoleMode(handle, &mut CONSOLE_MODE(0)).is_ok())
+    }
+}
+
 unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
     [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
         let handle = GetStdHandle(kind).ok().filter(|handle| {

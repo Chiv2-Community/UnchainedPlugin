@@ -20,7 +20,6 @@ appenders:
         trace_body: "#5c5c5c"
         timestamp: "#909090"
         module: "#BE9D5C"
-        message: "#eeeeee"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
   file:

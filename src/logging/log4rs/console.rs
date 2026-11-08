@@ -26,7 +26,7 @@ mod tests {
     use windows::Win32::System::Console::*;
 
     #[test]
-    fn selection_is_enabled_only_for_owned_queued_consoles_with_or_without_colors() {
+    fn routing_and_selection_respect_console_ownership_target_and_color_policy() {
         for color in [false, true] {
             let mut child = std::process::Command::new(std::env::current_exe().unwrap());
             child.args(["--ignored", "--exact", "--nocapture",
@@ -50,8 +50,8 @@ mod tests {
             unsafe { SetStdHandle(STD_INPUT_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap(); }
             file
         };
-        let build = || ConsoleAppenderDeserializer.deserialize(
-            serde_yaml::from_str("encoder:\n  kind: palette\n").unwrap(),
+        let build = |target, tty_only| ConsoleAppenderDeserializer.deserialize(
+            serde_yaml::from_str(&format!("target: {target}\ntty_only: {tty_only}\nencoder:\n  kind: palette\n  pattern: '{{m}}'\n")).unwrap(),
             &Deserializers::default()).unwrap();
         let mode = || unsafe {
             let input = std::fs::OpenOptions::new().read(true).write(true).open("CONIN$").unwrap();
@@ -70,7 +70,7 @@ mod tests {
         }
         assert!(!crate::logging::console::owns_console());
         let before = mode();
-        drop(build());
+        assert!(!format!("{:?}", build("stdout", false)).starts_with("QueuedConsole"));
         assert_eq!(mode(), before, "shared consoles must remain unchanged");
         unsafe { FreeConsole().unwrap(); }
         drop(shared_input);
@@ -87,7 +87,7 @@ mod tests {
         let redirected_input = std::fs::File::open("NUL").unwrap();
         let redirected_handle = HANDLE(redirected_input.as_raw_handle() as isize);
         unsafe { SetStdHandle(STD_INPUT_HANDLE, redirected_handle).unwrap(); }
-        let appender = build();
+        let appender = build("stdout", false);
         assert!(format!("{appender:?}").starts_with("QueuedConsole"));
         drop(appender);
         assert!(mode().contains(ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS));
@@ -121,6 +121,30 @@ mod tests {
                 assert!(highlighted, "mouse drag must visibly highlight console cells");
             }
         }
+        let path = std::env::temp_dir().join(format!("unchained-console-routing-{}", std::process::id()));
+        let message = "x".repeat(70 * 1024);
+        for (target, handle) in [("stdout", STD_OUTPUT_HANDLE), ("stderr", STD_ERROR_HANDLE)] {
+            let redirected = std::fs::File::create(&path).unwrap();
+            unsafe { SetStdHandle(handle, HANDLE(owned_output.as_raw_handle() as isize)).unwrap(); }
+            for tty_only in [false, true] {
+                assert!(format!("{:?}", build(target, tty_only)).starts_with("QueuedConsole"));
+            }
+            unsafe { SetStdHandle(handle, HANDLE(redirected.as_raw_handle() as isize)).unwrap(); }
+            for tty_only in [false, true] {
+                redirected.set_len(0).unwrap();
+                let appender = build(target, tty_only);
+                assert!(!format!("{appender:?}").starts_with("QueuedConsole"));
+                appender.append(&log::Record::builder().args(format_args!("{message}")).build()).unwrap();
+                appender.flush();
+                assert_eq!(std::fs::read(&path).unwrap(), if tty_only { b"" } else { message.as_bytes() });
+            }
+            unsafe { SetStdHandle(handle, HANDLE(owned_output.as_raw_handle() as isize)).unwrap(); }
+        }
+        std::fs::remove_file(path).unwrap();
+        crate::logging::console::attach_stdio();
+        for target in ["stdout", "stderr"] {
+            assert!(!format!("{:?}", build(target, false)).starts_with("QueuedConsole"));
+        }
     }
 }
 
@@ -151,18 +175,15 @@ impl Deserialize for ConsoleAppenderDeserializer {
         #[cfg(windows)]
         {
             crate::logging::console::preserve_console_handles();
-            if crate::logging::console::owns_console() {
+            if crate::logging::console::owns_console() && crate::logging::console::is_console(target) {
                 use log4rs::encode::writer::console::ConsoleWriter;
                 let writer = match target {
                     Target::Stdout => ConsoleWriter::stdout(),
                     Target::Stderr => ConsoleWriter::stderr(),
                 };
-                if writer.is_some() || !config.tty_only.unwrap_or(false) {
-                    let appender = queued_console::QueuedConsole::new(encoder, target, writer)?;
-                    crate::logging::console::enable_selection();
-                    return Ok(Box::new(appender));
-                }
+                let appender = queued_console::QueuedConsole::new(encoder, target, writer)?;
                 crate::logging::console::enable_selection();
+                return Ok(Box::new(appender));
             }
         }
         Ok(Box::new(ConsoleAppender::builder().target(target)

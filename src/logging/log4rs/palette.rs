@@ -105,7 +105,7 @@ impl PaletteEncoderConfig {
             ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
             ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
-            ("module", Some([190, 157, 92])), ("message", Some([238, 238, 238]))]
+            ("module", Some([190, 157, 92]))]
             .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
         for name in ["title", "subtitle"] {
             palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
