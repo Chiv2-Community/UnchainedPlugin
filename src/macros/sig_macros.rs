@@ -140,8 +140,39 @@ macro_rules! define_pocess {
     }};
 }
 
+/// Platform maps restrict scanning, hooks, and patches to the listed platforms.
+/// `OTHER` and plain pattern lists are shared across platforms.
+/// Missing STEAM/EGS coverage warns at compile time. Intentional omissions use:
+/// `define_pattern_resolver!(#[allow_missing_platforms(EGS)] Name, { STEAM: ["..."] });`
 #[macro_export]
 macro_rules! define_pattern_resolver {
+
+    // Explicitly acknowledge missing platform coverage without enabling it.
+    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident, $mode:ident,
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!(@platform $name, $mode, [$($missing),+], {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        });
+    };
+    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
+        |$ctx:ident, $patterns:ident| $body:block) => {
+        define_pattern_resolver!(@platform_custom $name, [$($missing),+], {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        }, |$ctx, $patterns| $body);
+    };
+    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
+        { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!(@platform $name, MultiCall, [$($missing),+], {
+            $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
+        });
+    };
+    (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident,
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!(@platform $name, Simple, [$($missing),+], {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        });
+    };
 
     // Internal: produce header
     (@emit_header $name:ident) => {
@@ -177,7 +208,14 @@ macro_rules! define_pattern_resolver {
     // Called with Mode (Process) specified
     //  (NAME, MODE, DICT) 
     ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!(@platform $name, $mode, [], {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        });
+    };
+    (@platform $name:ident, $mode:ident, [$($missing:ident),*],
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
         define_pattern_resolver!(@emit_header $name);
+        ::sleuth_macros::resolver_platforms!($name, [$($platform),+], [$($missing),*]);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let platform = super::current_platform();
@@ -201,7 +239,15 @@ macro_rules! define_pattern_resolver {
     // Called with a body block
     //  (NAME, MODE, DICT) 
     ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
+        define_pattern_resolver!(@platform_custom $name, [], {
+            $( $platform : [ $( $pattern ),+ ] ),+
+        }, |$ctx, $patterns| $body);
+    };
+    (@platform_custom $name:ident, [$($missing:ident),*],
+        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
+        |$ctx:ident, $patterns:ident| $body:block) => {
         define_pattern_resolver!(@emit_header $name);
+        ::sleuth_macros::resolver_platforms!($name, [$($platform),+], [$($missing),*]);
         
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
             let platform = super::current_platform();

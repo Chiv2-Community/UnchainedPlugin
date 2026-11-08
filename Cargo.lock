@@ -2519,6 +2519,7 @@ name = "sleuth_macros"
 version = "0.1.0"
 dependencies = [
  "darling",
+ "inventory",
  "proc-macro2",
  "quote",
  "serde",

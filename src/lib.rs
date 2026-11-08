@@ -153,9 +153,7 @@ impl BuildInfo {
         resolvers_in
             .into_iter()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
-            .filter(|resolver| resolvers::steam_auth::signature_required(
-                resolver.name, self.platform == PlatformType::STEAM,
-            ))
+            .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -569,6 +567,9 @@ pub fn attach_hooks(
 
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
+        if !resolvers::supports_platform(hook.name, crate::get_current_platform()) {
+            continue;
+        }
         let cond = (hook.condition)();
         if !cond {
             // swarn!(fn; "inactive hook: {}", hook.name);
@@ -593,6 +594,9 @@ pub fn attach_hooks(
 /// The base program address of the running application will be used.
 pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
     for p in inventory::iter::<resolvers::PatchRegistration> {
+        if !resolvers::supports_platform(p.name, crate::get_current_platform()) {
+            continue;
+        }
         // Run the condition check
         if (p.enabled_fn)() {
             match unsafe { (p.patch_fn)(offsets.clone()) } {

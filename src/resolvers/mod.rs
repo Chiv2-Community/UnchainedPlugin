@@ -16,6 +16,9 @@ pub enum PlatformType {
 
 pub static PLATFORM: OnceCell<PlatformType> = OnceCell::new();
 
+mod platforms;
+pub use platforms::{supports_platform, ResolverPlatforms};
+
 pub fn current_platform() -> PlatformType {
     *PLATFORM.get().expect("Platform not initialized")
 }
