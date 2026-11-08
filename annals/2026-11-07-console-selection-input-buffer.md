@@ -22,3 +22,5 @@ The change is a targeted hypothesis and may not explain the user's original fail
 ## Subsequent developments (2026-11-07)
 
 A synthetic live-console drag later reported a visible highlight, and Wine-specific temporary defaults were added to the uncommitted fix. The earlier statement that actual drag selection was unconfirmed applied at this record's time; human selection and the original failure's cause remain unverified. See [Console field colors and Wine selection defaults](2026-11-07-console-fields-wine-selection.md).
+
+The fix was subsequently committed in `2c1649a`; see [implementation milestone](2026-11-07-console-selection-format-implementation.md). The original failure's cause remains unverified.

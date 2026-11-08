@@ -26,3 +26,5 @@ Review and commit the working-tree changes through the normal PR process if appr
 ## Subsequent developments (2026-11-07)
 
 The neutral function color described above was superseded by gold for the module, `::`, and function; the separator was specified as gray. See [Console function and separator colors](2026-11-07-console-function-separator-colors.md). The remaining selection decision and limitations are not reversed.
+
+The previously uncommitted work was subsequently committed in `2c1649a`; see [implementation milestone](2026-11-07-console-selection-format-implementation.md). Validation limitations remain.

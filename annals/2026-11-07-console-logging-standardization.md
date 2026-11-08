@@ -32,3 +32,5 @@ Revisit queue sizing and warning behavior if real workloads show memory pressure
 The user subsequently reported selection did not work in a live preview. A targeted uncommitted input-buffer fix and limited mode validation are recorded in [Console selection with redirected input](2026-11-07-console-selection-input-buffer.md). This does not refute the queued-output design or establish the original failure's cause; actual drag selection remains unconfirmed.
 
 Later uncommitted work changes the default format and reports a synthetic selection highlight; see [Console field colors and Wine selection defaults](2026-11-07-console-fields-wine-selection.md). The committed format and queue decision above remain historical baseline facts; human selection remains unverified.
+
+The later format and selection changes were committed in `2c1649a`; see [implementation milestone](2026-11-07-console-selection-format-implementation.md). The earlier format remains a historical baseline, not the current default.

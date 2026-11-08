@@ -17,3 +17,7 @@ Wine selection remains rectangular. The supplied checkpoint reports that line-ba
 The uncommitted `src/logging/log4rs/palette.rs` pattern colors `{sm}::{fn}` as a unit and switches to timestamp gray for ` - `. `docs/logging.md` describes the same format. The external `function-separator-colors-tests.log` reports the focused shipped-and-built-in palette test passed. The earlier 175-passed, 16-ignored Proton suite preceded this color-only revision, not a full test of the final working tree. The checkpoint reports the running preview still has the previous colors and needs rebuilding and relaunching; no current visual confirmation or binary hash is established.
 
 The change remains outside the committed baseline. Review and test the complete diff, rebuild the preview, and verify user-visible rendering and selection before committing through the normal PR process. Native Windows behavior and human selection remain unverified. Reconsider colors if readability or host compatibility fails, and selection strategy if line-based selection becomes a requirement. Full historical rationale and a final runtime artifact remain unavailable.
+
+## Subsequent developments (2026-11-07)
+
+The implementation was committed in `2c1649a`; the uncommitted status and pre-commit follow-up above describe the earlier recording. See [implementation milestone](2026-11-07-console-selection-format-implementation.md). Human selection and native Windows remain unverified.
