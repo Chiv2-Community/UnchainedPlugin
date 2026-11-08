@@ -147,6 +147,45 @@ macro_rules! define_pocess {
 #[macro_export]
 macro_rules! define_pattern_resolver {
 
+    (@register_platforms $name:ident, [$($platform:ident),*], [$($missing:ident),*]) => {
+        inventory::submit! {
+            $crate::resolvers::ResolverPlatforms {
+                name: stringify!($name),
+                platforms: &[$($crate::resolvers::PlatformType::$platform),*],
+            }
+        }
+        const _: () = {
+            // Type-check annotation names against the existing platform enum.
+            let _: &[$crate::resolvers::PlatformType] = &[$($crate::resolvers::PlatformType::$missing),*];
+            macro_rules! check_coverage {
+                $(($platform) => {} ;)*
+                (OTHER) => {
+                    macro_rules! warn_if_missing {
+                        $(($platform) => {} ;)*
+                        $(($missing) => {} ;)*
+                        (EGS) => {
+                            $crate::define_pattern_resolver!(@warn "EGS signatures weren't supplied; use #[allow_missing_platforms(EGS)] if intentional");
+                        };
+                        (STEAM) => {
+                            $crate::define_pattern_resolver!(@warn "STEAM signatures weren't supplied; use #[allow_missing_platforms(STEAM)] if intentional");
+                        };
+                    }
+                    warn_if_missing!(STEAM);
+                    warn_if_missing!(EGS);
+                };
+            }
+            check_coverage!(OTHER);
+        };
+    };
+    (@warn $message:literal) => {
+        // A local deprecated item supplies a stable Rust compile-time warning.
+        const _: () = {
+            #[deprecated(note = $message)]
+            const MISSING_PLATFORM_SIGNATURE: () = ();
+            let _ = MISSING_PLATFORM_SIGNATURE;
+        };
+    };
+
     // Explicitly acknowledge missing platform coverage without enabling it.
     (#[allow_missing_platforms($($missing:ident),+ $(,)?) ] $name:ident, $mode:ident,
         { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
@@ -215,7 +254,7 @@ macro_rules! define_pattern_resolver {
     (@platform $name:ident, $mode:ident, [$($missing:ident),*],
         { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
         define_pattern_resolver!(@emit_header $name);
-        ::sleuth_macros::resolver_platforms!($name, [$($platform),+], [$($missing),*]);
+        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($missing),*]);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let platform = super::current_platform();
@@ -247,7 +286,7 @@ macro_rules! define_pattern_resolver {
         { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
         |$ctx:ident, $patterns:ident| $body:block) => {
         define_pattern_resolver!(@emit_header $name);
-        ::sleuth_macros::resolver_platforms!($name, [$($platform),+], [$($missing),*]);
+        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($missing),*]);
         
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
             let platform = super::current_platform();

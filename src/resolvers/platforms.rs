@@ -21,12 +21,10 @@ pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sleuth_macros::resolver_platforms;
-
-    resolver_platforms!(TestSteamOnly, [STEAM], [EGS]);
-    resolver_platforms!(TestEpicOnly, [EGS], [STEAM]);
-    resolver_platforms!(TestBoth, [STEAM, EGS], []);
-    resolver_platforms!(TestShared, [OTHER], []);
+    define_pattern_resolver!(@register_platforms TestSteamOnly, [STEAM], [EGS]);
+    define_pattern_resolver!(@register_platforms TestEpicOnly, [EGS], [STEAM]);
+    define_pattern_resolver!(@register_platforms TestBoth, [STEAM, EGS], []);
+    define_pattern_resolver!(@register_platforms TestShared, [OTHER], []);
 
     #[test]
     fn steam_only_is_skipped_on_other_platforms_even_when_warning_is_suppressed() {

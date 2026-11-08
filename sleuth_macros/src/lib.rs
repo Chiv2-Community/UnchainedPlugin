@@ -1,15 +1,6 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
-mod resolver_platforms;
-
-#[proc_macro]
-pub fn resolver_platforms(input: TokenStream) -> TokenStream {
-    resolver_platforms::expand(syn::parse_macro_input!(input as resolver_platforms::Platforms))
-        .unwrap_or_else(syn::Error::into_compile_error)
-        .into()
-}
-
 /* -- SIGNATURES -- */
 
 #[proc_macro_attribute]
