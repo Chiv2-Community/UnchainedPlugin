@@ -5,6 +5,44 @@ use crate::ue::{
 use std::{fmt, os::raw::c_void};
 use widestring::U16CStr;
 
+/// Target-build call boundary, intentionally not backed by a resolver yet.
+///
+/// Populate only after the owner supplies a current-build byte string or a
+/// confirmed vtable slot. See `.opencode/skills/ue-signature-wildcards` before
+/// adding a pattern: relocation-sensitive bytes must be wildcarded, but a
+/// pattern must never be invented from an ABI declaration.
+pub type FnFAssetRegistryStateSerialize = unsafe extern "system" fn(
+    state: *mut crate::ue::FAssetRegistryState,
+    archive: *mut crate::ue::FArchive,
+    options: *const crate::ue::FAssetRegistrySerializationOptions,
+) -> bool;
+
+/// Target-build call boundary for the additive native merge. Deliberately
+/// unresolved until a verified signature or `IAssetRegistry` vtable slot is
+/// available; no placeholder address is callable.
+pub type FnUAssetRegistryImplAppendState = unsafe extern "system" fn(
+    registry: *mut UAssetRegistryImpl,
+    state: *const crate::ue::FAssetRegistryState,
+);
+
+// Signature source: owner-provided target-build bytes for
+// `FAssetRegistryState::Serialize`. The RIP-relative displacement in the
+// `48 8B 05` stack-cookie load is wildcarded: it relocates on each rebuild,
+// while the surrounding `48 33 C4` confirms the instruction's purpose.
+define_pattern_resolver!(FAssetRegistryStateSerialize, [
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 00 FD FF FF 48 81 EC 00 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 F0 02 00 00 F6 42 28 02 4C 8B E9 48 89 4D B0"
+]);
+// bool FAssetRegistryState::Serialize(FArchive&, const FAssetRegistrySerializationOptions&)
+CREATE_HOOK!(FAssetRegistryStateSerialize, CALLED, NONE, bool, (
+    state: *mut crate::ue::FAssetRegistryState,
+    archive: *mut crate::ue::FArchive,
+    options: *const crate::ue::FAssetRegistrySerializationOptions
+), {
+    // CALLED hooks are not activated on attach. The merge path remains gated
+    // until the archive reader and AppendState target are both verified.
+    CALL_ORIGINAL!(FAssetRegistryStateSerialize(state, archive, options))
+});
+
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);

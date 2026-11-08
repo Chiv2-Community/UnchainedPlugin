@@ -9,6 +9,7 @@ pub mod mod_management;
 pub mod events;
 pub mod tokio_runtime;
 pub mod cooked_header;
+pub mod mod_asset_registry;
 pub mod mod_maps;
 #[cfg(feature="discord_integration")]
 pub mod discord;
