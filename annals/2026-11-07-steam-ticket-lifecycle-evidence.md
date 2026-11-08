@@ -11,6 +11,8 @@
 
 ## Decision and context
 
+**Subsequent development (2026-11-07):** The statement below that the replacement's rationale was unavailable reflects the earlier recording. The [callsite patch record](2026-11-07-steam-callsite-and-resolver-platforms.md) documents the later available rationale and bounded validation; the cancellation-hook decision remains superseded.
+
 At the source commit, the Steam-only workaround captured the Redpoint login predicate's temporary session-ticket handle and cancelled it promptly, preserving the predicate's token-length check. Other authentication calls were left alone. The aim was to prevent unnecessary outstanding tickets from contributing to the Steam per-app quota, without cancelling tickets needed by other consumers. The source summary reports that ticket reuse was rejected because handles were discarded and session tickets cannot substitute for EOS Web API tickets; the full discussion is unavailable.
 
 At recording HEAD, the committed implementation instead skips that token check and its allocation altogether; `0a83920` supersedes the earlier hook. This later implementation is verified in Git, but its decision conversation is outside the supplied response and its rationale is not reconstructed here. See [PR #27](https://github.com/Chiv2-Community/UnchainedPlugin/pull/27) and [signature-testing issue #28](https://github.com/Chiv2-Community/UnchainedPlugin/issues/28); their current remote status was not checked.
