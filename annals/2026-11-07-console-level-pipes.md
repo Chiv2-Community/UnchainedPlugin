@@ -19,3 +19,5 @@ The checkpoint reports the final pipe change had not been rebuilt or relaunched.
 ## Subsequent developments (2026-11-07)
 
 A later checkpoint reports that the user requested matching gray debug and trace bodies. The earlier uncertainty about whether this was a user preference is superseded; the rationale remains unknown. See [Console debug and trace message-body colors](2026-11-07-console-message-body-colors.md).
+
+The pipes were subsequently committed locally in `2888ddf`; the earlier uncommitted status is historical. See [implementation milestone](2026-11-07-console-final-colors-implementation.md) for validation and publication limits.

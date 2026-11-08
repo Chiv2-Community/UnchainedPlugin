@@ -19,3 +19,7 @@ The uncommitted `src/logging/log4rs/log4rs.default.yaml` and `palette.rs` select
 The external `pipes-debug-trace-tests.log` reports 41 passed and 7 ignored logging tests, including the palette defaults test. The checkpoint attributes this run to Proton; the log does not independently pin the tested binary or working-tree content. The earlier Steam preview initialized with the gold shade, but the later pipe and body changes required a relaunch; visual validation of those changes is not established. Native Windows selection remains untested, and the prior Wine synthetic drag establishes highlighting, not native behavior.
 
 Review and test the complete diff, relaunch to validate rendering, and commit through the normal PR process if appropriate. Reconsider if gray body text is insufficiently readable or console compatibility fails. The full conversation, precise rationale, and final runtime artifact remain unavailable.
+
+## Subsequent development: implementation (2026-11-07)
+
+The body-color changes were subsequently committed locally in `2888ddf`; the uncommitted status above is historical. See [implementation milestone](2026-11-07-console-final-colors-implementation.md) for reported preview and validation limits.

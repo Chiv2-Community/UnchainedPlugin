@@ -27,3 +27,7 @@ A further compacted checkpoint, source session `ses_e5658faf6ffewA56PWUxX9QcPT` 
 ## Subsequent development: level pipes (2026-11-07)
 
 A later checkpoint establishes the user's request for trace-gray pipes around the level; it does not establish the rationale for the separate message-body color change. See [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md). Gold approval is unchanged.
+
+## Subsequent development: implementation (2026-11-07)
+
+The uncommitted implementation status above is historical: the gold revision was committed locally in `2888ddf`. See [implementation milestone](2026-11-07-console-final-colors-implementation.md); remote publication is not verified.
