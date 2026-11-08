@@ -47,8 +47,21 @@ pub(crate) fn spawn_console() {
     unsafe {
         if super::console_spawning_disabled() || GetConsoleWindow().0 != 0 { return; }
         let handles = standard_handles();
+        // Wine's renderer caches QuickEdit from the registry at creation and does
+        // not consult ENABLE_QUICK_EDIT_MODE when handling mouse selection.
+        let selection_defaults = if is_wine() && !super::stdio_attached() {
+            TemporaryDefaults::selection()
+        } else { None };
         if AllocConsole().is_err() { return; }
         super::OWN_CONSOLE.store(true, std::sync::atomic::Ordering::Relaxed);
+        if selection_defaults.is_some() {
+            use std::os::windows::io::AsRawHandle;
+            // Inherited stdout may be a pipe; query the actual screen buffer to
+            // wait for conhost to load its registry defaults before restoring them.
+            if let Ok(output) = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$") {
+                let _ = screen_info(HANDLE(output.as_raw_handle() as isize));
+            }
+        }
         if super::stdio_attached() {
             restore_standard_handles(handles);
             return;
@@ -69,15 +82,25 @@ pub(crate) fn spawn_console() {
     }
 }
 
+fn is_wine() -> bool {
+    unsafe {
+        GetModuleHandleW(w!("ntdll.dll")).ok()
+            .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some())
+    }
+}
+
 pub(crate) fn enable_selection() {
     if !super::owns_console() { return; }
+    use std::os::windows::io::AsRawHandle;
+    // GUI launches can retain redirected stdin after AllocConsole. Configure the
+    // console input buffer without replacing that inherited standard handle.
+    let Ok(input) = std::fs::OpenOptions::new().read(true).write(true).open("CONIN$") else { return };
     unsafe {
-        if let Ok(input) = GetStdHandle(STD_INPUT_HANDLE) {
-            let mut mode = CONSOLE_MODE(0);
-            if GetConsoleMode(input, &mut mode).is_ok() {
-                let _ = SetConsoleMode(input,
-                    (mode | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS) & !ENABLE_MOUSE_INPUT);
-            }
+        let input = HANDLE(input.as_raw_handle() as isize);
+        let mut mode = CONSOLE_MODE(0);
+        if GetConsoleMode(input, &mut mode).is_ok() {
+            let _ = SetConsoleMode(input,
+                (mode | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS) & !ENABLE_MOUSE_INPUT);
         }
     }
 }
@@ -105,8 +128,7 @@ pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8;
         let Ok(handle) = GetStdHandle(output) else { return (false, nearest_slots(BASIC_COLORS, palette)) };
         let mut mode = CONSOLE_MODE(0);
         if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
-        let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
-            .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
+        let wine = is_wine();
         if palette.is_empty() || !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
             // Detect capability without reconfiguring empty palettes or shared terminals.
             return (use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
@@ -203,7 +225,7 @@ impl Drop for PaletteLock {
 }
 
 impl TemporaryDefaults {
-    unsafe fn install(colors: [u32; 16], attributes: u16) -> Option<Self> {
+    unsafe fn path() -> Option<Vec<u16>> {
         let mut startup = STARTUPINFOW::default();
         GetStartupInfoW(&mut startup);
         let title = if startup.lpTitle.is_null() {
@@ -212,11 +234,24 @@ impl TemporaryDefaults {
             if length == 0 || length >= path.len() { return None; }
             String::from_utf16_lossy(&path[..length])
         } else { startup.lpTitle.to_string().ok()? };
-        let path = wide(&format!("Console\\{}", title.replace('\\', "_")));
-        Self::install_at(path, colors, attributes)
+        Some(wide(&format!("Console\\{}", title.replace('\\', "_"))))
+    }
+
+    unsafe fn selection() -> Option<Self> {
+        Self::install_values(Self::path()?, vec![("QuickEdit".into(), 1)])
+    }
+
+    unsafe fn install(colors: [u32; 16], attributes: u16) -> Option<Self> {
+        Self::install_at(Self::path()?, colors, attributes)
     }
 
     unsafe fn install_at(path: Vec<u16>, colors: [u32; 16], attributes: u16) -> Option<Self> {
+        let values = colors.into_iter().enumerate().map(|(i, color)| (format!("ColorTable{i:02}"), color))
+            .chain([("ScreenColors".into(), u32::from(attributes)), ("QuickEdit".into(), 1)]).collect();
+        Self::install_values(path, values)
+    }
+
+    unsafe fn install_values(path: Vec<u16>, values: Vec<(String, u32)>) -> Option<Self> {
         let lock = PaletteLock::acquire()?;
         let mut key = HKEY::default();
         let mut disposition = REG_CREATE_KEY_DISPOSITION::default();
@@ -224,8 +259,6 @@ impl TemporaryDefaults {
             REG_OPTION_VOLATILE, KEY_QUERY_VALUE | KEY_SET_VALUE, None,
             &mut key, Some(&mut disposition)).ok()?;
         let mut guard = Self { key, path, created: disposition == REG_CREATED_NEW_KEY, saved: Vec::new(), _lock: lock };
-        let values = colors.into_iter().enumerate().map(|(i, color)| (format!("ColorTable{i:02}"), color))
-            .chain(Some(("ScreenColors".into(), u32::from(attributes)))).collect::<Vec<_>>();
         for (name, _) in &values {
             let name = wide(name);
             let mut kind = REG_VALUE_TYPE::default();

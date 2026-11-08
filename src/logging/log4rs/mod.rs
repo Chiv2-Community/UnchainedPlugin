@@ -477,7 +477,7 @@ mod tests {
                 assert!(text.contains(&format!(" {level:>5}")), "{name}: {text:?}");
                 assert_eq!(text.matches("example_function").count(), 1, "{name}: {text:?}");
                 let context = if name == "console" {
-                    "[example_function]"
+                    "UP::example::example_function -"
                 } else {
                     "UnchainedPlugin::example::example_function]"
                 };

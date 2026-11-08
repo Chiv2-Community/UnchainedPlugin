@@ -161,10 +161,11 @@ case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
 The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
-The default console pattern `{sm:<-24.24}` uses exactly 24 Unicode characters
-inside the brackets: shorter labels are padded on the right; longer labels retain
-their last 24 characters. Custom `{sm}` keeps the 32-character cap and adds no
-padding unless a width is specified.
+The default console uses unpadded `{sm}::{fn}`, with a 32-character cap on `{sm}`.
+Timestamps include milliseconds and use gray; only the level uses severity colors.
+Modules, `::`, and function names use muted banner gold (`#B49A66`).
+The ` - ` separator uses timestamp gray; messages use neutral text.
+Metadata has no brackets and ends with ` - ` before the message.
 File appenders use `{M}::{fn}` for the full source module and function.
 Both defaults use `{l:>5}` to right-align the level; `{t}` shows the filtering target instead.
 
@@ -177,7 +178,7 @@ in both. To omit or replace the console's short module, edit `pattern`.
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-The default console pattern includes `[{fn}]`. The field displays the enclosing
+The default console pattern includes `{sm}::{fn}`. The function field displays the enclosing
 named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.

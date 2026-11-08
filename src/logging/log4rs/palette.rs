@@ -7,7 +7,7 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:>5}]{palette({l}_body)} [{sm:<-24.24}] [{fn}] {m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S%.3f)} {palette({l})}{l:>5}{palette(timestamp)} | {palette(module)}{sm}::{fn}{palette(timestamp)} - {palette(message)}{m}{n}";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Channel {
@@ -104,7 +104,8 @@ impl PaletteEncoderConfig {
             ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
             ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-            ("trace_body", Some([92, 92, 92]))]
+            ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
+            ("module", Some([180, 154, 102])), ("message", Some([238, 238, 238]))]
             .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
         for name in ["title", "subtitle"] {
             palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
@@ -955,13 +956,14 @@ mod tests {
         let block = &mut yaml["appenders"]["console"]["encoder"];
         block.as_mapping_mut().unwrap().remove(serde_yaml::Value::String("kind".into()));
         let shipped = serde_yaml::from_value::<PaletteEncoderConfig>(block.clone()).unwrap().build().unwrap();
-        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92], [238, 238, 238], [208, 145, 40]];
+        let expected = [[242, 139, 130], [242, 204, 120], [140, 180, 225], [128, 128, 128], [92, 92, 92],
+            [238, 238, 238], [180, 154, 102], [208, 145, 40], [144, 144, 144]];
         for mut encoder in [shipped, encoder("defaults")] {
             assert_eq!(encoder.colors.iter().map(|entry| entry.channels.foreground.unwrap()).collect::<Vec<_>>(), expected.map(Channel::Rgb));
-            assert!(encoder.colors[..6].iter().all(|entry| entry.channels.background.is_none()));
-            assert_eq!(encoder.colors[6].channels.background, Some(Channel::Rgb([47, 47, 47])));
+            assert!(encoder.colors[..7].iter().all(|entry| entry.channels.background.is_none()));
+            assert_eq!(encoder.colors[7].channels.background, Some(Channel::Rgb([47, 47, 47])));
             for name in ["title", "subtitle"] {
-                assert_eq!(encoder.names.iter().find(|(key, _)| key == name).unwrap().1, Some(6));
+                assert_eq!(encoder.names.iter().find(|(key, _)| key == name).unwrap().1, Some(7));
             }
             encoder.enabled = true;
             encoder.truecolor = true;
@@ -972,10 +974,11 @@ mod tests {
                 let mut bytes = Vec::new();
                 encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes), &record).unwrap();
                 let text = String::from_utf8(bytes).unwrap();
-                let color = text.find(&format!("\x1b[0;38;2;{rgb}m")).unwrap();
-                let body = text.find(" [p::module               ]").unwrap();
-                let body_rgb = if level <= Level::Info { "238;238;238" } else { rgb };
-                assert!(text[color + 1..body].contains(&format!("\x1b[0;38;2;{body_rgb}m")));
+                let styled = text.replace("\x1b[0m", "");
+                let severity = format!("\x1b[0;38;2;{rgb}m{level:>5}\x1b[0;38;2;144;144;144m | ");
+                assert!(styled.contains(&severity), "{text:?}");
+                assert!(styled.starts_with("\x1b[0;38;2;144;144;144m"));
+                assert!(styled.contains("\x1b[0;38;2;180;154;102mp::module::???\x1b[0;38;2;144;144;144m - \x1b[0;38;2;238;238;238mbefore"));
                 assert!(text.contains("before \x1b[31mred\x1b[0m after"));
                 assert!(text.ends_with("\x1b[0m"));
             }

@@ -50,12 +50,13 @@ mod tests {
             unsafe { SetStdHandle(STD_INPUT_HANDLE, HANDLE(file.as_raw_handle() as isize)).unwrap(); }
             file
         };
-        let build = || ConsoleAppenderDeserializer.deserialize(ConsoleAppenderConfig {
-            target: None, encoder: None, tty_only: None,
-        }, &Deserializers::default()).unwrap();
+        let build = || ConsoleAppenderDeserializer.deserialize(
+            serde_yaml::from_str("encoder:\n  kind: palette\n").unwrap(),
+            &Deserializers::default()).unwrap();
         let mode = || unsafe {
+            let input = std::fs::OpenOptions::new().read(true).write(true).open("CONIN$").unwrap();
             let mut mode = CONSOLE_MODE(0);
-            GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE).unwrap(), &mut mode).unwrap();
+            GetConsoleMode(HANDLE(input.as_raw_handle() as isize), &mut mode).unwrap();
             mode
         };
         unsafe {
@@ -83,11 +84,43 @@ mod tests {
                 (mode() | ENABLE_EXTENDED_FLAGS) & !ENABLE_QUICK_EDIT_MODE).unwrap();
         }
         assert!(!mode().contains(ENABLE_QUICK_EDIT_MODE));
+        let redirected_input = std::fs::File::open("NUL").unwrap();
+        let redirected_handle = HANDLE(redirected_input.as_raw_handle() as isize);
+        unsafe { SetStdHandle(STD_INPUT_HANDLE, redirected_handle).unwrap(); }
         let appender = build();
         assert!(format!("{appender:?}").starts_with("QueuedConsole"));
         drop(appender);
         assert!(mode().contains(ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS));
         assert!(!mode().contains(ENABLE_MOUSE_INPUT));
+        assert_eq!(unsafe { GetStdHandle(STD_INPUT_HANDLE).unwrap() }, redirected_handle);
+        // Wine reports QuickEdit in GetConsoleMode even when its renderer ignores
+        // mouse selection. Check the actual highlight, not just the input flags.
+        unsafe {
+            use windows::core::{s, w};
+            use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+            if GetProcAddress(GetModuleHandleW(w!("ntdll.dll")).unwrap(), s!("wine_get_version")).is_some() {
+                use windows::Win32::Foundation::{LPARAM, WPARAM};
+                use windows::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC};
+                use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_KEYDOWN};
+                let window = GetConsoleWindow();
+                let dc = GetDC(window);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let highlighted = loop {
+                    // Initial window paint can race with the first selection.
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    let before = GetPixel(dc, 4, 4);
+                    SendMessageW(window, WM_LBUTTONDOWN, WPARAM(1), LPARAM((4 << 16) | 4));
+                    SendMessageW(window, WM_MOUSEMOVE, WPARAM(1), LPARAM((4 << 16) | 64));
+                    SendMessageW(window, WM_LBUTTONUP, WPARAM(0), LPARAM((4 << 16) | 64));
+                    let selected = GetPixel(dc, 4, 4);
+                    SendMessageW(window, WM_KEYDOWN, WPARAM(0x1b), LPARAM(0));
+                    if before != selected { break true; }
+                    if std::time::Instant::now() >= deadline { break false; }
+                };
+                ReleaseDC(window, dc);
+                assert!(highlighted, "mouse drag must visibly highlight console cells");
+            }
+        }
     }
 }
 

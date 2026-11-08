@@ -6,7 +6,7 @@ appenders:
         level: debug
     encoder:
       kind: palette
-      pattern: "{palette({l})}[{d(%H:%M:%S)} {l:>5}]{palette({l}_body)} [{sm:<-24.24}] [{fn}] {m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S%.3f)} {palette({l})}{l:>5}{palette(timestamp)} | {palette(module)}{sm}::{fn}{palette(timestamp)} - {palette(message)}{m}{n}"
       palette:
         error: "#f28b82"
         warn: "#f2cc78"
@@ -18,6 +18,9 @@ appenders:
         info_body: "#eeeeee"
         debug_body: "#808080"
         trace_body: "#5c5c5c"
+        timestamp: "#909090"
+        module: "#B49A66"
+        message: "#eeeeee"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
   file:
