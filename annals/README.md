@@ -2,6 +2,7 @@
 
 | Date | Record | Status | Scope | Recording HEAD |
 | --- | --- | --- | --- | --- |
+| 2026-11-07 | [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md) | accepted; implementation uncommitted | Console level separators | `5685a30` |
 | 2026-11-07 | [Console context gold revision](2026-11-07-console-gold-revision.md) | accepted; approval reported; implementation uncommitted | Console context color | `90e6cd0` |
 | 2026-11-07 | [Console selection and format implementation](2026-11-07-console-selection-format-implementation.md) | implemented on PR branch | Console format and selection | `2c1649a` |
 | 2026-11-07 | [Console function and separator colors](2026-11-07-console-function-separator-colors.md) | accepted; shade subsequently superseded | Console format and selection limitation | `659a33b` |

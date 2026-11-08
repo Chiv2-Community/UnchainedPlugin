@@ -21,3 +21,5 @@ Verify actual selection, responsiveness and file output under Proton and native 
 ## Subsequent development (2026-11-07)
 
 The `#B49A66` shade in that commit was superseded as the chosen shade by `#BE9D5C`, uncommitted when recorded; the commit's historical contents are unchanged. See [Console context gold revision](2026-11-07-console-gold-revision.md).
+
+The committed single gray level separator was subsequently superseded in the uncommitted layout by two trace-gray pipes; the commit's historical contents remain unchanged. See [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md).

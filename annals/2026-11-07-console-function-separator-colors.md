@@ -23,3 +23,5 @@ The change remains outside the committed baseline. Review and test the complete 
 The implementation was committed in `2c1649a`; the uncommitted status and pre-commit follow-up above describe the earlier recording. See [implementation milestone](2026-11-07-console-selection-format-implementation.md). Human selection and native Windows remain unverified.
 
 The specific `#B49A66` shade above was superseded by the user's `#BE9D5C` revision, uncommitted at its recording; the rest of this decision remains in force. See [Console context gold revision](2026-11-07-console-gold-revision.md).
+
+The earlier gray level separator presentation was subsequently superseded by trace-gray pipes on both sides of the level. The uncommitted pattern also changes debug and trace message bodies from neutral to gray, but a decision for that change is not established. See [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md).

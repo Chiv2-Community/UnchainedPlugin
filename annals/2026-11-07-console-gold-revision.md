@@ -23,3 +23,7 @@ A later supplied checkpoint reports that the user requested a relaunch and the p
 ## Subsequent development: reported approval (2026-11-07)
 
 A further compacted checkpoint, source session `ses_e5658faf6ffewA56PWUxX9QcPT` through response `msg_1b99d158e0018E5n7HM17zusWb`, reports that the user approved `#BE9D5C` after a live preview and that plugin initialization succeeded. This updates the earlier absence of reported approval; it does not independently verify the preview's visual appearance, build provenance, or tests. The source conversation is partly compacted. At review HEAD `2777c7d6d580e6b26527ca853cfed98554a65454` on the same branch, the shade remains in uncommitted changes to the three files named above. Those changes also include other console formatting changes whose decisions are not established by this checkpoint. Native Windows validation remains unknown; test and commit through the normal PR process.
+
+## Subsequent development: level pipes (2026-11-07)
+
+A later checkpoint establishes the user's request for trace-gray pipes around the level; it does not establish the rationale for the separate message-body color change. See [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md). Gold approval is unchanged.
