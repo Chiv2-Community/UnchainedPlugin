@@ -24,3 +24,7 @@ The preceding preview used `{sm:<-24}::{fn}`, which padded before the function s
 The supplied transcript shows the change made in an external validation source copy, followed by a successful Windows release build and a Steam preview launch using DLL SHA-256 `7bbc4d9c0159018f6704d41f6f7136e14d81f3365329828807a1ee59a28cb0e8`. The launch log check reported plugin initialization. This does not independently establish visual rendering, selection responsiveness, or user acceptance. Earlier EGS and Steam preview attempts stalled; a subsequent Steam retry initialized. The assistant reported the installed DLL unchanged, but the final launch excerpt does not independently verify its hash.
 
 The repository baseline still contains the fixed-width default in `src/logging/log4rs/log4rs.default.yaml` and `src/logging/log4rs/palette.rs`; the experiment has no implementation commit on this branch. Native Windows and final live selection remain unverified. Reconsider the default only after user review of the preview and validation of formatting, tests, documentation, and compatibility. No additional alternatives or rationale are recoverable from the compacted history.
+
+## Subsequent developments (2026-11-07)
+
+The severity-colored combined-header preview was superseded by the user's field-colored layout, implemented in the uncommitted working tree; see [Console field colors and Wine selection defaults](2026-11-07-console-fields-wine-selection.md). The fixed-width pattern remains the committed baseline at that record's HEAD.
