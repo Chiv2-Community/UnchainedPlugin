@@ -17,3 +17,7 @@ The prior records preserve the options and known rationale. This milestone chang
 The external `windows-colored-fields-selection-tests.log` reports 175 passed and 16 ignored; the separate `function-separator-colors-tests.log` reports one focused palette test passed after the color revision. The full suite preceded that revision and neither log independently identifies the final committed binary. The external `field-colors-report.txt` reports a synthetic drag highlight and mode `0x1e7`, with an unexplained `attach=1 error=14007`. It does not prove human selection, native Windows behavior, gameplay responsiveness, or file output during selection. Wine selection is reported as rectangular; line-based selection remains unimplemented.
 
 Verify actual selection, responsiveness and file output under Proton and native Windows, and confirm PR merge separately. Reconsider host-specific selection handling if compatibility or registry restoration fails, queue sizing if memory or loss is unacceptable, and colors if readability suffers. Full pre-compaction discussion, original failure cause, final runtime binary identity and native Windows results remain unavailable.
+
+## Subsequent development (2026-11-07)
+
+The `#B49A66` shade in that commit was superseded as the chosen shade by `#BE9D5C`, uncommitted when recorded; the commit's historical contents are unchanged. See [Console context gold revision](2026-11-07-console-gold-revision.md).

@@ -21,3 +21,5 @@ The change remains outside the committed baseline. Review and test the complete 
 ## Subsequent developments (2026-11-07)
 
 The implementation was committed in `2c1649a`; the uncommitted status and pre-commit follow-up above describe the earlier recording. See [implementation milestone](2026-11-07-console-selection-format-implementation.md). Human selection and native Windows remain unverified.
+
+The specific `#B49A66` shade above was superseded by the user's `#BE9D5C` revision, uncommitted at its recording; the rest of this decision remains in force. See [Console context gold revision](2026-11-07-console-gold-revision.md).
