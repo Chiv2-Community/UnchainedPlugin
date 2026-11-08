@@ -43,6 +43,23 @@ CREATE_HOOK!(FAssetRegistryStateSerialize, CALLED, NONE, bool, (
     CALL_ORIGINAL!(FAssetRegistryStateSerialize(state, archive, options))
 });
 
+// Signature source: owner-identified `IAssetRegistry` vtable entry for
+// `UAssetRegistryImpl::AppendState` at 0x144d73848 -> 0x142f4c7b0. The
+// `48 8B 05` stack-cookie displacement is RIP-relative and therefore
+// wildcarded; all prologue/frame-layout bytes remain pinned.
+define_pattern_resolver!(AppendAssetRegistryState, [
+    "48 89 5C 24 18 48 89 7C 24 20 55 48 8D 6C 24 A9 48 81 EC B0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 47 48 8D 81 78 02 00 00 C7 44 24 28 02 00 00 00 48 8B D9 48 89 44 24 20"
+]);
+// void UAssetRegistryImpl::AppendState(const FAssetRegistryState&)
+CREATE_HOOK!(AppendAssetRegistryState, CALLED, NONE, (), (
+    registry: *mut UAssetRegistryImpl,
+    state: *const crate::ue::FAssetRegistryState
+), {
+    // Non-activated fallback resolver. The normal implementation will call the
+    // verified IAssetRegistry vtable slot after its reader/state boundary exists.
+    CALL_ORIGINAL!(AppendAssetRegistryState(registry, state))
+});
+
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
