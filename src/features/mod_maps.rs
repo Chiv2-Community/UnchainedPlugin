@@ -517,7 +517,12 @@ fn read_pak_mod_asset_registry(pak_path: &Path, key: Option<&aes::Aes256>) -> Re
     let mut reader = builder.reader(&mut file).context("failed to parse pak index")?;
     let mount_point = reader.mount_point().to_string();
     let entry = reader.files().into_iter().find(|entry| {
-        if !entry.ends_with(crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME) {
+        if !entry
+            .rsplit('/')
+            .next()
+            .map(|name| name.eq_ignore_ascii_case(crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME))
+            .unwrap_or(false)
+        {
             return false;
         }
         let full_path = format!("{}{}", mount_point, entry);
@@ -537,27 +542,37 @@ fn read_pak_mod_asset_registry(pak_path: &Path, key: Option<&aes::Aes256>) -> Re
     }
 }
 
-/// Test-only synchronous registry merge. It deliberately does not invoke the
-/// legacy package-header scan so a launch with `--mod-asset-registry-only`
-/// proves whether the cooked registry payload alone makes assets discoverable.
-fn register_mod_asset_registries_only_sync(paks: &[PathBuf]) {
-    let mut merged = 0usize;
+/// Partition paks into the mutually exclusive native-registry and legacy
+/// discovery paths. A pak whose optional registry cannot be inspected is
+/// skipped rather than falling through to discovery, avoiding double work if
+/// the entry was present but unreadable.
+fn classify_paks_for_asset_registry(paks: Vec<PathBuf>) -> (Vec<(PathBuf, Vec<u8>)>, Vec<PathBuf>) {
+    let mut registry_paks = Vec::new();
+    let mut legacy_paks = Vec::new();
     for pak_path in paks {
-        match read_pak_mod_asset_registry(pak_path, None) {
-            Ok(Some(bytes)) => match unsafe {
-                crate::features::mod_asset_registry::append_mod_asset_registry_on_game_thread(&bytes)
-            } {
-                Ok(()) => {
-                    merged += 1;
-                    sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
-                }
-                Err(error) => serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error),
-            },
-            Ok(None) => sdebug!("[modregistry] {} has no {}; legacy registration intentionally skipped by --mod-asset-registry-only", pak_path.display(), crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME),
-            Err(error) => serror!("[modregistry] failed to inspect {}: {}", pak_path.display(), error),
+        match read_pak_mod_asset_registry(&pak_path, None) {
+            Ok(Some(bytes)) => registry_paks.push((pak_path, bytes)),
+            Ok(None) => legacy_paks.push(pak_path),
+            Err(error) => serror!("[modregistry] failed to inspect {}; skipping pak: {}", pak_path.display(), error),
         }
     }
-    sdebug!("[modregistry] registry-only test merged {} pak(s); legacy ScanPathsAndFilesSynchronous was not called", merged);
+    (registry_paks, legacy_paks)
+}
+
+/// Synchronously merge the registry-bearing half of a classified pak set.
+/// Must run on the game thread.
+fn merge_mod_asset_registries_sync(registry_paks: Vec<(PathBuf, Vec<u8>)>) -> usize {
+    let mut merged = 0usize;
+    for (pak_path, bytes) in registry_paks {
+        match unsafe { crate::features::mod_asset_registry::append_mod_asset_registry_on_game_thread(&bytes) } {
+            Ok(()) => {
+                merged += 1;
+                sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
+            }
+            Err(error) => serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error),
+        }
+    }
+    merged
 }
 
 /// Synchronous discovery of maps + marker packages across the source paks.
@@ -751,11 +766,17 @@ pub fn register_filtered_assets_sync() {
         serror!(fn; "Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
         return;
     }
+    let (registry_paks, legacy_paks) = classify_paks_for_asset_registry(paks);
+    let registry_merged = merge_mod_asset_registries_sync(registry_paks);
     if crate::cli_args().mod_asset_registry_only {
-        register_mod_asset_registries_only_sync(&paks);
+        sdebug!("[modregistry] registry-only test merged {} pak(s); legacy ScanPathsAndFilesSynchronous was not called", registry_merged);
         return;
     }
-    let source = MapSource::PakFiles(paks);
+    if legacy_paks.is_empty() {
+        sdebug!("[modregistry] merged {} registry pak(s); no registry-less paks require legacy discovery", registry_merged);
+        return;
+    }
+    let source = MapSource::PakFiles(legacy_paks);
 
     // Gathering + marker detection (pure Rust, no engine calls), parallel.
     let marker_started = std::time::Instant::now();
@@ -1017,6 +1038,30 @@ mod tests {
             .expect("read pak")
             .expect("namespaced registry");
         assert_eq!(payload, b"registry");
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn registry_paks_are_excluded_from_legacy_discovery() {
+        let tmp = std::env::temp_dir().join("mod_maps_test_registry_routing");
+        let with_registry = tmp.join("with_registry");
+        let without_registry = tmp.join("without_registry");
+        std::fs::create_dir_all(&with_registry).expect("create registry dir");
+        std::fs::create_dir_all(&without_registry).expect("create legacy dir");
+        let registry_pak = write_test_pak(
+            &with_registry,
+            "../../../TBL/Content/",
+            &[("Mods/RegistryMod/ModAssetRegistry.bin", b"registry")],
+        );
+        let legacy_pak = write_test_pak(
+            &without_registry,
+            "../../../TBL/Content/",
+            &[("Mods/LegacyMod/Maps/Legacy.umap", b"map")],
+        );
+
+        let (registry, legacy) = classify_paks_for_asset_registry(vec![registry_pak.clone(), legacy_pak.clone()]);
+        assert_eq!(registry, vec![(registry_pak, b"registry".to_vec())]);
+        assert_eq!(legacy, vec![legacy_pak]);
         std::fs::remove_dir_all(&tmp).ok();
     }
 
