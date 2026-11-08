@@ -8,7 +8,7 @@ use widestring::U16CString;
 
 use crate::game::chivalry2::ATBLGameState;
 use crate::resolvers::asset_registry::{FAssetData, TScriptInterface, o_FNameCtorWchar};
-use crate::ue::{EFindName, EObjectFlags, FName, FString, TArray, UObject};
+use crate::ue::{EFindName, EObjectFlags, FArchive, FName, FLargeMemoryReader, FString, TArray, UObject};
 use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
 // use crate::resolvers::asset_registry::o_StaticLoadObject;
@@ -266,6 +266,62 @@ impl FActorSpawnParameters {
 }
 
 // Helper functions
+
+/// Target-verified `FLargeMemoryReader` storage: the constructor writes the
+/// final `FName` at +0xb0, so the UE 4.25 target object occupies 0xb8 bytes.
+/// Do not expose fields: the native constructor/destructor own initialization.
+#[repr(C, align(8))]
+struct FLargeMemoryReaderStorage {
+    bytes: [u8; 0xb8],
+}
+
+/// Deserialize a cooked `ModAssetRegistry.bin` into the live registry.
+///
+/// Must run on the game thread. The target's `UAssetRegistryImpl::Serialize`
+/// owns the internal state/options and calls `CachePathsFromState`; this avoids
+/// constructing either private UE object in Rust. The archive borrows `bytes`
+/// for the synchronous call, so it uses `ELargeMemoryReaderFlags::None`.
+pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Err("ModAssetRegistry.bin is empty".into());
+    }
+    let size = i64::try_from(bytes.len())
+        .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
+
+    let mut asset_registry = TScriptInterface::new();
+    CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
+        &mut asset_registry as *mut TScriptInterface
+    ))?;
+    let registry = if asset_registry.object.is_null() {
+        asset_registry.interface
+    } else {
+        asset_registry.object as *mut c_void
+    };
+    if registry.is_null() {
+        return Err("Asset Registry singleton has no object/interface pointer".into());
+    }
+
+    let mut storage = std::mem::MaybeUninit::<FLargeMemoryReaderStorage>::zeroed();
+    let reader = CALL_ORIGINAL_SAFE!(FLargeMemoryReaderCtor(
+        storage.as_mut_ptr().cast::<FLargeMemoryReader>(),
+        bytes.as_ptr(),
+        size,
+        0, // ELargeMemoryReaderFlags::None: borrow bytes, never free Rust memory.
+        FName::default()
+    ))?;
+    if reader.is_null() {
+        return Err("FLargeMemoryReader constructor returned null".into());
+    }
+
+    let serialize_result = CALL_ORIGINAL_SAFE!(SerializeAssetRegistry(
+        registry,
+        reader.cast::<FArchive>()
+    ));
+    let destroy_result = CALL_ORIGINAL_SAFE!(FLargeMemoryReaderDtor(reader));
+    serialize_result?;
+    destroy_result?;
+    Ok(())
+}
 
 pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut UObject {
     let wide_path = U16CString::from_str(path).unwrap();

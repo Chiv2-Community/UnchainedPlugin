@@ -59,6 +59,21 @@ CREATE_HOOK!(FLargeMemoryReaderDtor, CALLED, NONE, (), (
 });
 
 // Signature source: owner-provided target-build bytes for
+// `UAssetRegistryImpl::Serialize(FArchive&)`. It reads State at this+0x30 and
+// SerializationOptions at this+0x2a0, calls FAssetRegistryState::Serialize,
+// then tail-calls CachePathsFromState. Wildcard only the two rel32 calls.
+define_pattern_resolver!(SerializeAssetRegistry, [
+    "48 89 5C 24 08 57 48 83 EC 20 48 8B F9 4C 8D 81 A0 02 00 00 48 83 C1 30 E8 ?? ?? ?? ?? 48 8D 57 30 48 8B CF 48 8B 5C 24 30 48 83 C4 20 5F E9 ?? ?? ?? ??"
+]);
+// void UAssetRegistryImpl::Serialize(FArchive&)
+CREATE_HOOK!(SerializeAssetRegistry, CALLED, NONE, (), (
+    registry: *mut UAssetRegistryImpl,
+    archive: *mut crate::ue::FArchive
+), {
+    CALL_ORIGINAL!(SerializeAssetRegistry(registry, archive))
+});
+
+// Signature source: owner-provided target-build bytes for
 // `FAssetRegistryState::Serialize`. The RIP-relative displacement in the
 // `48 8B 05` stack-cookie load is wildcarded: it relocates on each rebuild,
 // while the surrounding `48 33 C4` confirms the instruction's purpose.

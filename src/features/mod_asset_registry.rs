@@ -11,48 +11,50 @@ pub const MOD_ASSET_REGISTRY_FILENAME: &str = "ModAssetRegistry.bin";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModAssetRegistryMergeError {
     EmptyPayload,
-    SignaturesUnavailable,
+    Engine(String),
 }
 
 impl fmt::Display for ModAssetRegistryMergeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyPayload => write!(f, "ModAssetRegistry.bin is empty"),
-            Self::SignaturesUnavailable => write!(
-                f,
-                "ModAssetRegistry merge is disabled: verified FAssetRegistryState::Serialize and UAssetRegistryImpl::AppendState signatures/vtable slots are required"
-            ),
+            Self::Engine(error) => write!(f, "ModAssetRegistry merge failed: {error}"),
         }
     }
 }
 
 impl std::error::Error for ModAssetRegistryMergeError {}
 
-/// Placeholder-gated, game-thread-only native merge entry point.
+fn validate_payload(bytes: &[u8]) -> Result<(), ModAssetRegistryMergeError> {
+    if bytes.is_empty() {
+        Err(ModAssetRegistryMergeError::EmptyPayload)
+    } else {
+        Ok(())
+    }
+}
+
+/// Game-thread-only native merge entry point.
 ///
-/// Keeping this boundary callable now lets pak classification hand off bytes
-/// safely. It performs no engine call until the two target-build call
-/// boundaries in `resolvers::asset_registry` are verified and enabled.
-pub fn append_mod_asset_registry_on_game_thread(
+/// The target's `UAssetRegistryImpl::Serialize(FArchive&)` owns its state and
+/// options, so Rust only constructs the verified `FLargeMemoryReader` wrapper.
+pub unsafe fn append_mod_asset_registry_on_game_thread(
     bytes: &[u8],
 ) -> Result<(), ModAssetRegistryMergeError> {
-    if bytes.is_empty() {
-        return Err(ModAssetRegistryMergeError::EmptyPayload);
-    }
-    Err(ModAssetRegistryMergeError::SignaturesUnavailable)
+    validate_payload(bytes)?;
+    crate::game::engine::serialize_mod_asset_registry_bytes(bytes)
+        .map_err(ModAssetRegistryMergeError::Engine)
 }
 
 /// Queue a registry payload for the existing game-thread job queue.
 ///
 /// Pak reads may run off-thread. The callback always runs on the game thread,
-/// and presently reports `SignaturesUnavailable` for non-empty input rather
-/// than attempting an unverified UE call.
+/// and performs the target-verified native merge there.
 pub fn append_mod_asset_registry_async<F>(bytes: Vec<u8>, on_complete: F)
 where
     F: FnOnce(Result<(), ModAssetRegistryMergeError>) + Send + 'static,
 {
     crate::resolvers::unchained_integration::run_on_game_thread(move || {
-        on_complete(append_mod_asset_registry_on_game_thread(&bytes));
+        on_complete(unsafe { append_mod_asset_registry_on_game_thread(&bytes) });
     });
 }
 
@@ -63,16 +65,16 @@ mod tests {
     #[test]
     fn empty_payload_fails_before_any_engine_boundary() {
         assert_eq!(
-            append_mod_asset_registry_on_game_thread(&[]),
+            validate_payload(&[]),
             Err(ModAssetRegistryMergeError::EmptyPayload)
         );
     }
 
     #[test]
-    fn nonempty_payload_is_explicitly_gated_until_signatures_are_verified() {
+    fn nonempty_payload_can_be_validated_without_an_engine_call() {
         assert_eq!(
-            append_mod_asset_registry_on_game_thread(&[1, 2, 3]),
-            Err(ModAssetRegistryMergeError::SignaturesUnavailable)
+            validate_payload(&[1, 2, 3]),
+            Ok(())
         );
     }
 }
