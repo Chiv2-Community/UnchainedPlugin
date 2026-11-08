@@ -155,7 +155,6 @@ impl BuildInfo {
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
             .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
-            .map(|resolver| resolver)
             .collect()
     }
 
@@ -585,20 +584,19 @@ pub fn attach_hooks(
 }
 
 /// The base program address of the running application will be used.
-pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
+pub fn apply_patches(offsets: HashMap<String, u64>) {
     let platform = crate::get_current_platform();
     inventory::iter::<resolvers::PatchRegistration>
         .into_iter()
-        .filter(|p| resolvers::supports_platform(p.name, platform))
-        .for_each(|p| {
-            let condition = (p.enabled_fn)();
-            if !condition {
-                sdebug!("[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+        .filter(|patch| resolvers::supports_platform(patch.name, platform))
+        .for_each(|patch| {
+            if !(patch.enabled_fn)() {
+                sdebug!("[.] Patch Skipped: {} ({})", patch.name, patch.tag);
                 return;
             }
-            match unsafe { (p.patch_fn)(offsets.clone()) } {
-                Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
+            match unsafe { (patch.patch_fn)(offsets.clone()) } {
+                Ok(_) => sinfo!("[+] Patch Applied: {} ({})", patch.name, patch.tag),
+                Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", patch.name, patch.tag, e),
             }
         });
 }

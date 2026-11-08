@@ -1,6 +1,21 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 
+/// Forward an outer coverage annotation into the pattern resolver macro.
+#[proc_macro_attribute]
+pub fn allow_missing_platforms(args: TokenStream, input: TokenStream) -> TokenStream {
+    let mut invocation = syn::parse_macro_input!(input as syn::ItemMacro);
+    if !invocation.mac.path.is_ident("define_pattern_resolver") {
+        return syn::Error::new_spanned(invocation, "expected define_pattern_resolver!")
+            .into_compile_error()
+            .into();
+    }
+    let args = proc_macro2::TokenStream::from(args);
+    let tokens = &invocation.mac.tokens;
+    invocation.mac.tokens = quote::quote!(#[allow_missing_platforms(#args)] #tokens);
+    quote::quote!(#invocation).into()
+}
+
 /* -- SIGNATURES -- */
 
 #[proc_macro_attribute]

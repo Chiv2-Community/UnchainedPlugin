@@ -143,7 +143,7 @@ macro_rules! define_pocess {
 /// Platform maps restrict scanning, hooks, and patches to the listed platforms.
 /// `OTHER` and plain pattern lists are shared across platforms.
 /// Missing STEAM/EGS coverage warns at compile time. Intentional omissions use:
-/// `define_pattern_resolver!(#[allow_missing_platforms(EGS)] Name, { STEAM: ["..."] });`
+/// `#[sleuth_macros::allow_missing_platforms(EGS)]` above the macro invocation.
 #[macro_export]
 macro_rules! define_pattern_resolver {
 

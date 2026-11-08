@@ -11,10 +11,11 @@ inventory::collect!(ResolverPlatforms);
 /// Select platform-specific patterns first, followed by shared patterns.
 pub fn select_patterns<T: Clone>(platform: PlatformType, groups: &[(PlatformType, &[T])]) -> Vec<T> {
     let specific = groups.iter().filter(|(key, _)| *key == platform);
-    let shared = groups.iter().filter(|(key, _)| {
-        *key == PlatformType::OTHER && platform != PlatformType::OTHER
-    });
-    specific.chain(shared)
+    let shared = groups
+        .iter()
+        .filter(|(key, _)| *key == PlatformType::OTHER && platform != PlatformType::OTHER);
+    specific
+        .chain(shared)
         .flat_map(|(_, patterns)| patterns.iter().cloned())
         .collect()
 }
@@ -44,7 +45,10 @@ mod tests {
             (PlatformType::EGS, &["epic"]),
             (PlatformType::STEAM, &["steam", "fallback"]),
         ];
-        assert_eq!(select_patterns(PlatformType::STEAM, groups), ["steam", "fallback", "shared"]);
+        assert_eq!(
+            select_patterns(PlatformType::STEAM, groups),
+            ["steam", "fallback", "shared"]
+        );
         assert_eq!(select_patterns(PlatformType::EGS, groups), ["epic", "shared"]);
         assert_eq!(select_patterns(PlatformType::XBOX, groups), ["shared"]);
         assert_eq!(select_patterns(PlatformType::OTHER, groups), ["shared"]);

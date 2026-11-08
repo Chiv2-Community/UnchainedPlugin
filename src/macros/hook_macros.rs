@@ -266,5 +266,4 @@ mod tests {
         let _: unsafe extern "C" fn(Pointer) -> Pointer = TestConstPointer_detour_fkt;
         let _: fn(Pointer) -> Pointer = |value| CALL_ORIGINAL!(TestConstPointer(value));
     }
-
 }
