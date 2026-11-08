@@ -15,3 +15,7 @@ The uncommitted changes in `src/logging/log4rs/log4rs.default.yaml`, `src/loggin
 ## Consequences and follow-up
 
 The new shade is not in the recorded HEAD. The checkpoint reports no test run, rebuild, or preview for this revision; the earlier Proton results do not validate it, and native Windows remains untested. Review and test the change, rebuild and visually check readability, and commit it through the normal PR process if approved. Reconsider the shade if visual contrast, accessibility, or host rendering proves inadequate. The full discussion and source response identifier remain unavailable.
+
+## Subsequent development (2026-11-07)
+
+A later supplied checkpoint reports that the user requested a relaunch and the preview initialized; visual approval was not reported. The external `unchained-plugin-log-saturated-gold-preview/saturatedgold/launch.json` identifies a Steam preview DLL with SHA-256 `3426f27f9561e496e57a090f7418c203071af61d9004a544299486f45e96910f`, matching the available DLL. The associated profile's `unchained.log` shows plugin activity. These artifacts support a preview launch but do not independently establish its source tree or visual appearance. The earlier statement about no preview describes the evidence available at that recording; the later checkpoint does not identify a test run. Review the color visually and test before committing. Source session and response IDs for this later checkpoint were not supplied.
