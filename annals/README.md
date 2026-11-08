@@ -2,6 +2,7 @@
 
 | Date | Record | Status | Scope | Recording HEAD |
 | --- | --- | --- | --- | --- |
+| 2026-11-07 | [Console debug and trace message-body colors](2026-11-07-console-message-body-colors.md) | accepted; implementation uncommitted | Console message-body colors | `84b1e73` |
 | 2026-11-07 | [Trace-gray pipes around console level](2026-11-07-console-level-pipes.md) | accepted; implementation uncommitted | Console level separators | `5685a30` |
 | 2026-11-07 | [Console context gold revision](2026-11-07-console-gold-revision.md) | accepted; approval reported; implementation uncommitted | Console context color | `90e6cd0` |
 | 2026-11-07 | [Console selection and format implementation](2026-11-07-console-selection-format-implementation.md) | implemented on PR branch | Console format and selection | `2c1649a` |
