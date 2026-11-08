@@ -504,6 +504,62 @@ fn read_pak_filtered_assets(
     Ok((assets, parsed, counts))
 }
 
+/// Read a namespaced runtime registry payload from one mod pak. This is pure
+/// Rust/pak I/O; the caller must hand the bytes to the engine only on the game
+/// thread. Project-root AssetRegistry.bin is intentionally never considered.
+fn read_pak_mod_asset_registry(pak_path: &Path, key: Option<&aes::Aes256>) -> Result<Option<Vec<u8>>> {
+    let mut file = std::fs::File::open(pak_path)
+        .with_context(|| format!("failed to open {}", pak_path.display()))?;
+    let builder = match key {
+        Some(key) => repak::PakBuilder::new().key(key.clone()),
+        None => repak::PakBuilder::new(),
+    };
+    let mut reader = builder.reader(&mut file).context("failed to parse pak index")?;
+    let mount_point = reader.mount_point().to_string();
+    let entry = reader.files().into_iter().find(|entry| {
+        if !entry.ends_with(crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME) {
+            return false;
+        }
+        let full_path = format!("{}{}", mount_point, entry);
+        let normalized = full_path.replace('\\', "/");
+        normalized
+            .find(CONTENT_SEGMENT)
+            .and_then(|start| normalized.get(start + CONTENT_SEGMENT.len()..))
+            .map(|path| path.starts_with("Mods/"))
+            .unwrap_or(false)
+    });
+    match entry {
+        Some(entry) => reader
+            .get(&entry, &mut file)
+            .map(Some)
+            .with_context(|| format!("failed to read {} from {}", entry, pak_path.display())),
+        None => Ok(None),
+    }
+}
+
+/// Test-only synchronous registry merge. It deliberately does not invoke the
+/// legacy package-header scan so a launch with `--mod-asset-registry-only`
+/// proves whether the cooked registry payload alone makes assets discoverable.
+fn register_mod_asset_registries_only_sync(paks: &[PathBuf]) {
+    let mut merged = 0usize;
+    for pak_path in paks {
+        match read_pak_mod_asset_registry(pak_path, None) {
+            Ok(Some(bytes)) => match unsafe {
+                crate::features::mod_asset_registry::append_mod_asset_registry_on_game_thread(&bytes)
+            } {
+                Ok(()) => {
+                    merged += 1;
+                    sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
+                }
+                Err(error) => serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error),
+            },
+            Ok(None) => sdebug!("[modregistry] {} has no {}; legacy registration intentionally skipped by --mod-asset-registry-only", pak_path.display(), crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME),
+            Err(error) => serror!("[modregistry] failed to inspect {}: {}", pak_path.display(), error),
+        }
+    }
+    sdebug!("[modregistry] registry-only test merged {} pak(s); legacy ScanPathsAndFilesSynchronous was not called", merged);
+}
+
 /// Synchronous discovery of maps + marker packages across the source paks.
 /// Paks are processed in parallel across worker threads (pure Rust: repak index
 /// reads + header parse; no engine calls), then aggregated in deterministic
@@ -693,6 +749,10 @@ pub fn register_filtered_assets_sync() {
     let paks = discovery_pak_paths();
     if paks.is_empty() {
         serror!(fn; "Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
+        return;
+    }
+    if crate::cli_args().mod_asset_registry_only {
+        register_mod_asset_registries_only_sync(&paks);
         return;
     }
     let source = MapSource::PakFiles(paks);
@@ -938,6 +998,25 @@ mod tests {
         let paks = list_pak_files(&tmp).expect("list ok");
         assert!(paks.is_empty(), "pakchunk* must never be scanned");
 
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn reads_only_namespaced_mod_asset_registry_payload() {
+        let tmp = std::env::temp_dir().join("mod_maps_test_asset_registry");
+        std::fs::create_dir_all(&tmp).expect("create tmp dir");
+        let pak = write_test_pak(
+            &tmp,
+            "../../../TBL/Content/",
+            &[
+                ("Mods/TestMod/ModAssetRegistry.bin", b"registry"),
+                ("AssetRegistry.bin", b"must-not-read"),
+            ],
+        );
+        let payload = read_pak_mod_asset_registry(&pak, None)
+            .expect("read pak")
+            .expect("namespaced registry");
+        assert_eq!(payload, b"registry");
         std::fs::remove_dir_all(&tmp).ok();
     }
 

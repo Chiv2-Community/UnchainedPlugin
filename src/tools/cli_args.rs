@@ -132,6 +132,11 @@ pub struct CLIArgs {
     #[arg(long = "mod-map-batch", default_value_t = 128)]
     pub mod_map_batch: usize,
 
+    /// Test only the cooked ModAssetRegistry.bin merge path at startup. This
+    /// disables legacy map/marker header discovery and registration.
+    #[arg(long = "mod-asset-registry-only")]
+    pub mod_asset_registry_only: bool,
+
     #[arg(long = "discord-admin-channel-id")]
     pub discord_admin_channel_id: Option<u64>,
 
@@ -199,7 +204,7 @@ impl std::fmt::Debug for CLIArgs {
             use_backend_banlist, is_headless, next_map, launched_profile,
             unchained_profile_location, playable_listen, register, server_browser_backend,
             local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
-            game_server_ping_port, game_server_query_port, game_port, mod_map_batch,
+            game_server_ping_port, game_server_query_port, game_port, mod_map_batch, mod_asset_registry_only,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
             discord_event_log_channel_id, discord_admin_role_id, discord_bot_token,
             discord_mention_admins, censor_mode, motd, extra_args, local_ip_explicit, use_ipv6,
@@ -236,6 +241,7 @@ impl std::fmt::Debug for CLIArgs {
             .field("game_server_query_port", game_server_query_port)
             .field("game_port", game_port)
             .field("mod_map_batch", mod_map_batch)
+            .field("mod_asset_registry_only", mod_asset_registry_only)
             .field("discord_admin_channel_id", discord_admin_channel_id)
             .field("discord_general_channel_id", discord_general_channel_id)
             .field("discord_dashboard_channel_id", discord_dashboard_channel_id)
@@ -559,6 +565,7 @@ mod tests {
                 game_server_query_port: None,
                 game_port: None,
                 mod_map_batch: 128,
+                mod_asset_registry_only: false,
                 discord_admin_channel_id: None,
                 discord_general_channel_id: None,
                 discord_dashboard_channel_id: None,
@@ -675,6 +682,14 @@ mod tests {
 
         let cli = CLIArgs::try_parse_from(normalized).unwrap();
         assert_eq!(cli.saved_dir_suffix, Some("test2".to_string()));
+    }
+
+    #[test]
+    fn mod_asset_registry_only_is_opt_in() {
+        assert!(!CLIArgs::try_parse_from(["app"]).unwrap().mod_asset_registry_only);
+        assert!(CLIArgs::try_parse_from(["app", "--mod-asset-registry-only"])
+            .unwrap()
+            .mod_asset_registry_only);
     }
 
     #[test]
