@@ -162,9 +162,11 @@ case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
 The default console uses unpadded `{sm}::{fn}`, with a 32-character cap on `{sm}`.
-Timestamps include milliseconds and use gray; only the level uses severity colors.
-Modules, `::`, and function names use muted banner gold (`#B49A66`).
-The ` - ` separator uses timestamp gray; messages use neutral text.
+Timestamps include milliseconds and use gray; levels use severity colors.
+Pipes before and after the level use the trace palette color.
+Modules, `::`, and function names use muted banner gold (`#BE9D5C`).
+The ` - ` separator uses timestamp gray. Debug and trace message bodies match
+their level colors; other message bodies use neutral text.
 Metadata has no brackets and ends with ` - ` before the message.
 File appenders use `{M}::{fn}` for the full source module and function.
 Both defaults use `{l:>5}` to right-align the level; `{t}` shows the filtering target instead.
