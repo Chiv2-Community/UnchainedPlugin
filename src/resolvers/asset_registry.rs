@@ -26,6 +26,39 @@ pub type FnUAssetRegistryImplAppendState = unsafe extern "system" fn(
 );
 
 // Signature source: owner-provided target-build bytes for
+// `FLargeMemoryReader::FLargeMemoryReader`. The constructor is used with
+// `ELargeMemoryReaderFlags::None` so it borrows Rust-owned bytes during the
+// synchronous registry load. Its rel32 call and RIP-relative vtable address
+// are wildcarded.
+define_pattern_resolver!(FLargeMemoryReaderCtor, [
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 41 0F B6 F1 49 8B E8 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 80 A7 98 00 00 00 FE 48 8D 15 ?? ?? ?? ?? 40 0F B6 C6 48 89 17 24 01 48 89 9F A0 00 00 00"
+]);
+// FLargeMemoryReader* FLargeMemoryReader::FLargeMemoryReader(
+//     FLargeMemoryReader*, const uint8*, int64, ELargeMemoryReaderFlags, FName)
+CREATE_HOOK!(FLargeMemoryReaderCtor, CALLED, *mut crate::ue::FLargeMemoryReader, (
+    this_ptr: *mut crate::ue::FLargeMemoryReader,
+    data: *const u8,
+    size: i64,
+    flags: u8,
+    archive_name: FName
+), {
+    CALL_ORIGINAL!(FLargeMemoryReaderCtor(this_ptr, data, size, flags, archive_name))
+});
+
+// Signature source: owner-provided target-build bytes for
+// `FLargeMemoryReader::~FLargeMemoryReader`. Wildcard the RIP-relative vtable
+// address, the `FMemory::Free` rel32 call, and the tail jump to base cleanup.
+define_pattern_resolver!(FLargeMemoryReaderDtor, [
+    "40 53 48 83 EC 20 F6 81 98 00 00 00 01 48 8D 05 ?? ?? ?? ?? 48 89 01 48 8B D9 74 0C 48 8B 89 A0 00 00 00 E8 ?? ?? ?? ?? 48 8B CB 48 83 C4 20 5B E9 ?? ?? ?? ??"
+]);
+// void FLargeMemoryReader::~FLargeMemoryReader(FLargeMemoryReader* this)
+CREATE_HOOK!(FLargeMemoryReaderDtor, CALLED, NONE, (), (
+    this_ptr: *mut crate::ue::FLargeMemoryReader
+), {
+    CALL_ORIGINAL!(FLargeMemoryReaderDtor(this_ptr))
+});
+
+// Signature source: owner-provided target-build bytes for
 // `FAssetRegistryState::Serialize`. The RIP-relative displacement in the
 // `48 8B 05` stack-cookie load is wildcarded: it relocates on each rebuild,
 // while the surrounding `48 33 C4` confirms the instruction's purpose.
