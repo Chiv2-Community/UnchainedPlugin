@@ -14,12 +14,6 @@ macro_rules! __unchained_log {
     ($level:ident, $($args:tt)+) => {
         $crate::__unchained_inline!(@detect [$level, $crate::logging::__log::logger(), module_path!()] $($args)+)
     };
-    (@emit $level:ident, $logger:expr, $target:expr, fn; $($args:tt)+) => {{
-        fn __unchained_function_marker() {}
-        $crate::__unchained_log!(@emit $level, $logger, $target,
-            "[{}] {}", $crate::logging::function_name(__unchained_function_marker),
-            format_args!($($args)+))
-    }};
     (@emit $level:ident, $logger:expr, $target:expr,
         $($key:tt $(:$capture:tt)? $(= $value:expr)?),+; $($args:tt)+) => {{
         fn __unchained_function_marker() {}
@@ -39,15 +33,6 @@ macro_rules! __unchained_log {
 #[macro_export]
 macro_rules! __unchained_inline {
     // An explicit first segment distinguishes inline calls from ordinary format arguments.
-    (@detect $context:tt fn; $($kind:ident)? ($($args:tt)*)
-        $(, $segment:tt $(($($tail:tt)*))?)* $(,)?) => {{
-        fn __unchained_function_marker() {}
-        $crate::__unchained_inline!(@finish $context []
-            [$crate::logging::inline::Segment::Text(format_args!("[{}] ",
-                $crate::logging::function_name(__unchained_function_marker))),
-             $crate::__unchained_inline!(@segment $($kind)? ($($args)*))
-             $(, $crate::__unchained_inline!(@segment $segment $(($($tail)*))?))*])
-    }};
     (@detect $context:tt $($key:tt $(:$capture:tt)? $(= $value:expr)?),+;
         $($kind:ident)? ($($args:tt)*) $(, $segment:tt $(($($tail:tt)*))?)* $(,)?) => {
         $crate::__unchained_inline!(@finish $context

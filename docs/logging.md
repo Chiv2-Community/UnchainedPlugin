@@ -143,6 +143,19 @@ beyond their available slots.
 Console coloring respects `NO_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` through
 log4rs. File output has no added colors. Restart after editing.
 
+The plugin's own console supports mouse selection. Console writes run on a
+background thread so selection does not block game logging. The queue holds
+131,072 records; full queues drop new console records. Records exceeding 64 KiB
+(text and style storage combined) or
+256 style changes are also omitted from the console. A warning reports drops
+after output resumes. File logging is unaffected. Console flush and shutdown do
+not wait for queued output; redirected or attached stdio retains synchronous delivery.
+
+Above 100 queued records, the logger warns once: "Logging thread pause detected.
+Be careful selecting text in the console for prolonged periods. It freezes the
+console log." The warning rearms below 100 queued records. A full queue can use
+8 GiB of record storage, plus queue and allocation overhead; storage grows on demand.
+
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
@@ -152,8 +165,8 @@ The default console pattern `{sm:<-24.24}` uses exactly 24 Unicode characters
 inside the brackets: shorter labels are padded on the right; longer labels retain
 their last 24 characters. Custom `{sm}` keeps the 32-character cap and adds no
 padding unless a width is specified.
-File appenders use `{M}` for the full source module. Both defaults use `{l:5}`
-for the level; `{t}` shows the filtering target instead.
+File appenders use `{M}::{fn}` for the full source module and function.
+Both defaults use `{l:>5}` to right-align the level; `{t}` shows the filtering target instead.
 
 Console and file patterns support the same fields, including `{sm}`, `{fn}`,
 `{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
@@ -164,7 +177,7 @@ in both. To omit or replace the console's short module, edit `pattern`.
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-Console and file defaults omit function names. Add `{fn}` to display the enclosing
+The default console pattern includes `[{fn}]`. The field displays the enclosing
 named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.
@@ -173,12 +186,12 @@ Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`
 through the built-in log4rs key/value formatter.
 
 For example, replace a file appender's encoder block to include the short module
-and opt-in function field without severity colors:
+and function field without severity colors:
 
 ```yaml
 encoder:
   kind: pattern
-  pattern: "[{d(%H:%M:%S)} {l:5}] [{sm}::{fn}] {m}{n}"
+  pattern: "[{d(%H:%M:%S)} {l:>5}] [{sm}::{fn}] {m}{n}"
 ```
 
 See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)

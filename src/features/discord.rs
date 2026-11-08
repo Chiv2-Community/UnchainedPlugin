@@ -98,7 +98,7 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
         {
             Ok(c) => c,
             Err(e) => {
-                swarn!(fn; "Failed to create Discord client: {}", e);
+                swarn!("Failed to create Discord client: {}", e);
                 return;
             }
         };
@@ -111,7 +111,7 @@ pub fn initialize_discord_system(config: DiscordConfig) -> SharedDiscordConfig {
         }
 
         if let Err(e) = client.start().await {
-            swarn!(fn; "Discord bot error: {}", e);
+            swarn!("Discord bot error: {}", e);
         }
     });
 
@@ -127,7 +127,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, outbox: Disco
             .subscribe(Box::new(discord_subscriber))
             .await;
     } else {
-        swarn!(fn; "Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
+        swarn!("Discord chat relay subscriber not registered because general chat channel is not configured. Discord based chat commands will also be disabled.");
     }
 
     // Admin Alert Module
@@ -145,7 +145,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, outbox: Disco
             .await
             .register(admin_alert_module);
     } else {
-        swarn!(fn; "Discord admin alert subscriber not registered because admin notification channel is not configured.");
+        swarn!("Discord admin alert subscriber not registered because admin notification channel is not configured.");
     }
 
     // Dashboard Subscriber
@@ -156,7 +156,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, outbox: Disco
             .subscribe(Box::new(dashboard_subscriber))
             .await;
     } else {
-        swarn!(fn; "Discord dashboard subscriber not registered because dashboard channel is not configured.");
+        swarn!("Discord dashboard subscriber not registered because dashboard channel is not configured.");
     }
 
     if config.event_log_channel_id.is_some() {
@@ -166,7 +166,7 @@ async fn register_discord_subscribers(config: SharedDiscordConfig, outbox: Disco
             .subscribe(Box::new(event_log_subscriber))
             .await;
     } else {
-        swarn!(fn; "Discord event log subscriber not registered because event log channel is not configured.");
+        swarn!("Discord event log subscriber not registered because event log channel is not configured.");
     }
 
     // Register Discord Connection with Command Subscriber
@@ -197,7 +197,7 @@ impl DiscordHandler for Discord {
     }
 
     async fn ready(&self, _: Context, ready: serenity::model::gateway::Ready) {
-        sinfo!(fn; "Discord bot user '{}' is connected!", ready.user.name);
+        sinfo!("Discord bot user '{}' is connected!", ready.user.name);
     }
 
     async fn message(&self, _ctx: Context, msg: Message) {

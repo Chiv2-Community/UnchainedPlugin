@@ -7,7 +7,7 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{palette({l})}[{d(%H:%M:%S)} {l:>5}]{palette({l}_body)} [{sm:<-24.24}] [{fn}] {m}{n}";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Channel {
@@ -571,7 +571,7 @@ mod tests {
     #[allow(dead_code)]
     fn indexed_test_references() {
         sinfo!(palette("__TEST_PALETTE_PRESENT"), "fixture");
-        swarn!(fn; palette("__test_palette_missing"), "fixture");
+        swarn!(palette("__test_palette_missing"), "fixture");
         serror!(request = 42; palette("__TEST_PALETTE_MISSING"), "fixture");
         sdebug!(palette(r#"__test_palette_raw"#), "fixture");
         strace!(palette(""), "fixture", palette());

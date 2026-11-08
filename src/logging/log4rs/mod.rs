@@ -372,7 +372,7 @@ mod tests {
             };
             let file = read_records(&std::fs::read(&path).unwrap());
             assert_eq!(file.len(), 3);
-            assert_eq!(file[0]["message"], "[json_sink_child] hello 世界\nsecond line");
+            assert_eq!(file[0]["message"], "hello 世界\nsecond line");
             assert_eq!(file[1]["attributes"]["request"], "42");
             assert_eq!(file[0]["attributes"]["enclosing_function"], "json_sink_child");
             assert_eq!(file[0]["module_path"], module_path!());
@@ -423,7 +423,7 @@ mod tests {
         if target == "file-only" { yaml["root"]["appenders"] = vec!["file"].into(); }
         let config = config_from_value(yaml, "json-sink-test").unwrap();
         let _handle = log4rs::init_config(config).unwrap();
-        sinfo!(fn; "hello 世界\nsecond line");
+        sinfo!("hello 世界\nsecond line");
         sinfo!(request = 42; "{}", "x".repeat(20 * 1024));
         sinfo!("fixture line one\nfixture line two");
         log::logger().flush();
@@ -462,12 +462,38 @@ mod tests {
     }
 
     #[test]
+    fn default_encoders_render_function_metadata_once_and_right_align_levels() {
+        let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
+        let mut registry = Deserializers::default();
+        register(&mut registry);
+        let values = [("enclosing_function", "example_function")];
+        for name in ["console", "file", "kismet"] {
+            for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+                let record = Record::builder().level(level)
+                    .module_path(Some("UnchainedPlugin::example"))
+                    .key_values(&values).args(format_args!("plain message")).build();
+                let output = render_encoder(&registry, yaml["appenders"][name]["encoder"].clone(), &record);
+                let text = String::from_utf8(output).unwrap();
+                assert!(text.contains(&format!(" {level:>5}")), "{name}: {text:?}");
+                assert_eq!(text.matches("example_function").count(), 1, "{name}: {text:?}");
+                let context = if name == "console" {
+                    "[example_function]"
+                } else {
+                    "UnchainedPlugin::example::example_function]"
+                };
+                assert!(text.contains(&format!("{context} plain message")), "{name}: {text:?}");
+                assert!(!text.contains('\u{1b}'), "{name}: {text:?}");
+            }
+        }
+    }
+
+    #[test]
     fn embedded_configuration_preserves_patterns_and_filters() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         assert_eq!(yaml["appenders"]["console"]["encoder"]["pattern"], palette::DEFAULT_PATTERN);
         for name in ["file", "kismet"] {
             let pattern = yaml["appenders"][name]["encoder"]["pattern"].as_str().unwrap();
-            assert!(pattern.contains("{l:5}"));
+            assert!(pattern.contains("{l:>5}"));
             assert!(pattern.contains("{M}"));
             assert!(!pattern.contains("{t}"));
         }

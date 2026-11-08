@@ -62,9 +62,21 @@ pub(crate) fn spawn_console() {
         if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
             let mut mode = CONSOLE_MODE(0);
             if GetConsoleMode(handle, &mut mode).is_ok() {
-                // Without QuickEdit, mouse input left enabled is delivered to the process
-                // instead of the console, so the wheel can no longer scroll the buffer.
+                // Keep scrolling available; enable selection once console writes are queued.
                 let _ = SetConsoleMode(handle, (mode & !(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)) | ENABLE_EXTENDED_FLAGS);
+            }
+        }
+    }
+}
+
+pub(crate) fn enable_selection() {
+    if !super::owns_console() { return; }
+    unsafe {
+        if let Ok(input) = GetStdHandle(STD_INPUT_HANDLE) {
+            let mut mode = CONSOLE_MODE(0);
+            if GetConsoleMode(input, &mut mode).is_ok() {
+                let _ = SetConsoleMode(input,
+                    (mode | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS) & !ENABLE_MOUSE_INPUT);
             }
         }
     }

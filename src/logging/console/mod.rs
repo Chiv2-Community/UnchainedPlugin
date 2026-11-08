@@ -30,7 +30,7 @@ pub(crate) fn console_spawning_disabled() -> bool {
 
 pub(crate) fn report_attachment_failure() {
     if NO_STD_OUTPUT.load(std::sync::atomic::Ordering::Relaxed) {
-        swarn!(fn; "Could not attach inherited output or the parent console.");
+        swarn!("Could not attach inherited output or the parent console.");
     }
 }
 
@@ -39,7 +39,12 @@ pub(crate) fn report_attachment_failure() {
 mod windows_backend;
 
 #[cfg(windows)]
-pub(crate) use windows_backend::{preserve_console_handles, spawn_console};
+pub(crate) use windows_backend::{enable_selection, preserve_console_handles, spawn_console};
+
+#[cfg(windows)]
+pub(crate) fn owns_console() -> bool {
+    OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) && !stdio_attached()
+}
 
 const PALETTE_SLOTS: [u8; 15] = [12, 14, 9, 7, 8, 1, 2, 3, 4, 5, 6, 10, 11, 13, 0];
 const BASIC_COLORS: [u32; 16] = [

@@ -25,29 +25,29 @@ fn named(logger: &Capture) {
 }
 
 #[test]
-fn function_flag_always_prefixes_the_message() {
+fn function_metadata_is_separate_from_messages_at_all_levels() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
-    sinfo!(logger: &logger, target: "custom", fn; "hello {}", 7);
-    swarn!(logger: &logger, fn; "warn");
-    serror!(logger: &logger, fn; "error");
-    sdebug!(logger: &logger, fn; "debug");
-    strace!(logger: &logger, fn; "trace");
+    sinfo!(logger: &logger, target: "custom", "hello {}", 7);
+    swarn!(logger: &logger, "warn");
+    serror!(logger: &logger, "error");
+    sdebug!(logger: &logger, "debug");
+    strace!(logger: &logger, "trace");
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 5);
     for (line, (level, message)) in lines.iter().zip([
         ("INFO", "hello 7"), ("WARN", "warn"), ("ERROR", "error"),
         ("DEBUG", "debug"), ("TRACE", "trace"),
     ]) {
-        assert!(line.starts_with("function_flag_always_prefixes_the_message|"));
+        assert!(line.starts_with("function_metadata_is_separate_from_messages_at_all_levels|"));
         assert!(line.contains(&format!("|{level}|")));
-        assert!(line.ends_with(&format!("[function_flag_always_prefixes_the_message] {message}")));
+        assert!(line.ends_with(&format!("||{message}")));
     }
     assert!(lines[0].contains("|custom|"));
 }
 
 #[test]
-fn function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary() {
+fn message_only_patterns_omit_function_metadata_and_preserve_f_fields() {
     #[derive(Default)]
     struct Messages(Mutex<Vec<(String, Option<String>)>>);
     impl Log for Messages {
@@ -62,12 +62,12 @@ fn function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary() {
     }
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Messages::default();
-    (|| sinfo!(logger: &logger, fn; "message only"))();
+    (|| sinfo!(logger: &logger, "message only"))();
     let f = 42;
     sinfo!(logger: &logger, f; "shorthand");
     sinfo!(logger: &logger, f = 7; "explicit");
     assert_eq!(*logger.0.lock().unwrap(), [
-        ("[function_flag_ignores_encoder_patterns_and_leaves_f_fields_ordinary] message only".into(), None),
+        ("message only".into(), None),
         ("shorthand".into(), Some("42".into())),
         ("explicit".into(), Some("7".into())),
     ]);
@@ -84,7 +84,6 @@ fn custom_logger_filtering_preserves_laziness_evaluation_counts_and_kv() {
         }
     }
     sinfo!(logger: &logger, target: "disabled", "{}", NeverFormat);
-    sinfo!(logger: &logger, target: "disabled", fn; "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
     let evaluations = std::cell::Cell::new(0);
     let get_logger = || -> &dyn Log {
@@ -113,14 +112,14 @@ fn inline_segments_keep_plain_messages_and_metadata() {
     let logger = Capture::default();
     sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
     swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), " tail");
-    sdebug!(logger: &logger, fn; ("{name}", name = "function"), palette("warn"), " tail");
+    sdebug!(logger: &logger, ("{name}", name = "function"), palette("warn"), " tail");
     strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), " tail", palette(),);
     let lines = logger.0.lock().unwrap();
     assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("inline_segments_keep_plain_messages_and_metadata|custom|INFO|"));
     assert!(lines[0].ends_with("hello 7 world!"));
     assert!(lines[1].ends_with("owned tail"));
-    assert!(lines[2].ends_with("[inline_segments_keep_plain_messages_and_metadata] function tail"));
+    assert!(lines[2].ends_with("|DEBUG||function tail"));
     assert!(lines[3].ends_with("|TRACE|42|kv tail"));
 }
 
@@ -150,7 +149,7 @@ fn inline_calls_borrow_owned_loggers() {
     sinfo!(logger: logger, target: "custom", request = 42; ("info"), palette("info"), (" tail"));
     swarn!(logger: logger, ("warn"), palette("warn"), (" tail"));
     serror!(logger: logger, ("error"), palette("error"), (" tail"));
-    sdebug!(logger: logger, fn; ("debug"), palette("debug"), (" tail"));
+    sdebug!(logger: logger, ("debug"), palette("debug"), (" tail"));
     strace!(logger: logger, ("trace"), palette("trace"), (" tail"));
     sinfo!(logger: logger, "ordinary reuse");
     let lines = logger.0.lock().unwrap();
@@ -158,7 +157,7 @@ fn inline_calls_borrow_owned_loggers() {
     assert!(lines[0].ends_with("|custom|INFO|42|info tail"));
     assert!(lines[1].ends_with("|WARN||warn tail"));
     assert!(lines[2].ends_with("|ERROR||error tail"));
-    assert!(lines[3].ends_with("[inline_calls_borrow_owned_loggers] debug tail"));
+    assert!(lines[3].ends_with("|DEBUG||debug tail"));
     assert!(lines[4].ends_with("|TRACE||trace tail"));
     assert!(lines[5].ends_with("ordinary reuse"));
 }
@@ -227,7 +226,7 @@ fn ordinary_calls_do_not_create_inline_state() {
     let logger = Plain(Capture::default());
     sinfo!(logger: &logger, "ordinary {}", 7);
     swarn!(logger: &logger, "onetwo {}", 7);
-    sdebug!(logger: &logger, fn; "onetwo");
+    sdebug!(logger: &logger, "onetwo");
     strace!(logger: &logger, request = 42; "onetwo");
     let count = 7;
     sinfo!(logger: &logger, "{} {}", "literal", (count));
@@ -235,7 +234,7 @@ fn ordinary_calls_do_not_create_inline_state() {
     assert_eq!(lines.len(), 5);
     assert!(lines[0].ends_with("ordinary 7"));
     assert!(lines[1].ends_with("onetwo 7"));
-    assert!(lines[2].ends_with("[ordinary_calls_do_not_create_inline_state] onetwo"));
+    assert!(lines[2].ends_with("|DEBUG||onetwo"));
     assert!(lines[3].ends_with("|TRACE|42|onetwo"));
     assert!(lines[4].ends_with("literal 7"));
 }
@@ -390,10 +389,9 @@ fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
     let calls = std::cell::Cell::new(0);
     let expensive = || { calls.set(calls.get() + 1); 42 };
     sinfo!(request = expensive(); "{}", expensive());
-    sinfo!(fn; "{}", expensive());
+    sinfo!("{}", expensive());
     assert_eq!(calls.get(), 0);
     log::set_max_level(log::LevelFilter::Debug);
     strace!("{}", expensive());
-    strace!(fn; "{}", expensive());
     assert_eq!(calls.get(), 0);
 }

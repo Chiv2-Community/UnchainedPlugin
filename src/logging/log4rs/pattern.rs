@@ -165,7 +165,7 @@ mod tests {
                 let suffix: String = module.chars().rev().take(24)
                     .collect::<Vec<_>>().into_iter().rev().collect();
                 let label = format!("{suffix:<24}");
-                let expected_body = format!(" [{label}] message{newline}");
+                let expected_body = format!(" [{label}] [???] message{newline}");
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
             }

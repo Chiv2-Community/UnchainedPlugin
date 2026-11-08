@@ -167,7 +167,7 @@ unsafe extern "system" fn veh(
         let (func, file) = resolve_symbol(rip);
 
         serror!(
-            fn; "ACCESS VIOLATION\n\
+            "ACCESS VIOLATION\n\
              rip=0x{:X} rsp=0x{:X}\n\
              {} addr=0x{:X}\n\
              function={}\n\
