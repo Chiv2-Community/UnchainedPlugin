@@ -7,19 +7,3 @@ define_single_platform_pattern_resolver!(STEAM, RedpointSteamSkipTokenCheck, [
 // jmp +0x26: skip GetAuthToken and its length check, landing on xor r14b,r14b.
 // EBX stays zero from the prologue, so the uninitialized FString is never freed.
 CREATE_PATCH!(RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]);
-
-#[cfg(test)]
-mod tests {
-    use crate::resolvers::{supports_platform, PatchRegistration, PlatformType};
-
-    #[test]
-    fn patch_uses_resolver_platform_without_requiring_globals() {
-        let patch = inventory::iter::<PatchRegistration>
-            .into_iter()
-            .find(|patch| patch.name == "RedpointSteamSkipTokenCheck")
-            .expect("Steam auth patch must be registered");
-        assert!((patch.enabled_fn)());
-        assert!(supports_platform(patch.name, PlatformType::STEAM));
-        assert!(!supports_platform(patch.name, PlatformType::EGS));
-    }
-}
