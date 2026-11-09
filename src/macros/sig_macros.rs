@@ -140,51 +140,28 @@ macro_rules! define_pocess {
     }};
 }
 
-/// Platform maps restrict scanning, hooks, and patches to the listed platforms.
-/// `OTHER` and plain pattern lists are shared across platforms.
-/// Missing STEAM/EGS coverage warns at compile time. Intentional omissions use:
-/// `#[sleuth_macros::allow_missing_platforms(EGS)]` above the macro invocation.
+/// Define a resolver restricted to one platform, including its hooks and patches.
+/// Accepts the same pattern lists, modes, and inline bodies as `define_pattern_resolver!`.
+///
+/// ```rust,ignore
+/// define_single_platform_pattern_resolver!(STEAM, SteamOnlyCheck, ["48 8B ?? ??"]);
+/// CREATE_PATCH!(SteamOnlyCheck, NOP, 2);
+/// ```
 #[macro_export]
-macro_rules! define_pattern_resolver {
-
-    (@register_platforms $name:ident, [$($platform:ident),*], [$($missing:ident),*]) => {
+macro_rules! define_single_platform_pattern_resolver {
+    ($platform:ident, $name:ident, $($resolver:tt)+) => {
         inventory::submit! {
-            $crate::resolvers::ResolverPlatforms {
+            $crate::resolvers::ResolverPlatform {
                 name: stringify!($name),
-                platforms: &[$($crate::resolvers::PlatformType::$platform),*],
+                platform: $crate::resolvers::PlatformType::$platform,
             }
         }
-        const _: () = {
-            // Type-check annotation names against the existing platform enum.
-            let _: &[$crate::resolvers::PlatformType] = &[$($crate::resolvers::PlatformType::$missing),*];
-            macro_rules! check_coverage {
-                $(($platform) => {} ;)*
-                (OTHER) => {
-                    macro_rules! warn_if_missing {
-                        $(($platform) => {} ;)*
-                        $(($missing) => {} ;)*
-                        (EGS) => {
-                            $crate::define_pattern_resolver!(@warn "EGS signatures weren't supplied; use #[allow_missing_platforms(EGS)] if intentional");
-                        };
-                        (STEAM) => {
-                            $crate::define_pattern_resolver!(@warn "STEAM signatures weren't supplied; use #[allow_missing_platforms(STEAM)] if intentional");
-                        };
-                    }
-                    warn_if_missing!(STEAM);
-                    warn_if_missing!(EGS);
-                };
-            }
-            check_coverage!(OTHER);
-        };
+        $crate::define_pattern_resolver!($name, $($resolver)+);
     };
-    (@warn $message:literal) => {
-        // A local deprecated item supplies a stable Rust compile-time warning.
-        const _: () = {
-            #[deprecated(note = $message)]
-            const MISSING_PLATFORM_SIGNATURE: () = ();
-            let _ = MISSING_PLATFORM_SIGNATURE;
-        };
-    };
+}
+
+#[macro_export]
+macro_rules! define_pattern_resolver {
 
     // Internal: produce header
     (@emit_header $name:ident) => {
@@ -219,33 +196,48 @@ macro_rules! define_pattern_resolver {
 
     // Called with Mode (Process) specified
     //  (NAME, MODE, DICT) 
-    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident, $mode:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
         define_pattern_resolver!(@emit_header $name);
-        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($($missing),+)?]);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let patterns = $crate::resolvers::select_patterns(
-                $crate::resolvers::current_platform(),
-                &[$(($crate::resolvers::PlatformType::$platform, &[$($pattern),+])),+],
-            );
+            let platform = super::current_platform();
+            let mut patterns: Vec<_> = Vec::new();
+            for var in [platform, super::PlatformType::OTHER] {
+                // println!("Testing {}", stringify!($name));                
+                let pattern_part: &[_] = match var {
+                    $(
+                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
+                    )+
+                    _ => &[],
+                };                
+                // println!("{}: {:?}", var, pattern_part);
+                patterns.extend_from_slice(pattern_part);
+            }            
+            // println!("combined {:?}", patterns);            
             define_pocess!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
     // Called with a body block
     //  (NAME, MODE, DICT) 
-    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? },
-        |$ctx:ident, $patterns:ident| $body:block) => {
+    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
         define_pattern_resolver!(@emit_header $name);
-        define_pattern_resolver!(@register_platforms $name, [$($platform),+], [$($($missing),+)?]);
         
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
-            let $patterns = $crate::resolvers::select_patterns(
-                $crate::resolvers::current_platform(),
-                &[$(($crate::resolvers::PlatformType::$platform, &[$($pattern),+])),+],
-            );
+            let platform = super::current_platform();
+            let mut $patterns: Vec<_> = Vec::new();
+            for var in [platform, super::PlatformType::OTHER] {
+                // println!("Testing {}", stringify!($name));                
+                let pattern_part: &[_] = match var {
+                    $(
+                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
+                    )+
+                    _ => &[],
+                };                
+                // println!("{}: {:?}", var, pattern_part);
+                $patterns.extend_from_slice(pattern_part);
+            }            
+            // println!("combined {:?}", patterns);            
 
             define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
         });
@@ -272,9 +264,8 @@ macro_rules! define_pattern_resolver {
     //     ],
     //     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
     // });
-    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
-        { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($(#[allow_missing_platforms($($missing),+)])? $name, MultiCall, {
+    ($name:ident, { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!($name, MultiCall, {
             $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
         });
     };
@@ -300,9 +291,8 @@ macro_rules! define_pattern_resolver {
     //     ],
     //     STEAM: ["4C 89 | ?? ?? ?? ?? BE EF"]
     // });
-    ($(#[allow_missing_platforms($($missing:ident),+ $(,)?)])? $name:ident,
-        { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($(#[allow_missing_platforms($($missing),+)])? $name, Simple, {
+    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        define_pattern_resolver!($name, Simple, {
             $( $platform : [ $( $pattern ),+ ] ),+
         });
     };

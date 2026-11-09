@@ -155,6 +155,7 @@ impl BuildInfo {
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
             .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
+            .map(|resolver| resolver)
             .collect()
     }
 
@@ -192,7 +193,10 @@ mod build_info_tests {
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
-        let required: Vec<_> = resolvers().filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name)).collect();
+        let required: Vec<_> = resolvers()
+            .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
+            .filter(|resolver| resolvers::supports_platform(resolver.name, PlatformType::STEAM))
+            .collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
@@ -206,6 +210,24 @@ mod build_info_tests {
             assert!(missing.iter().all(|missing| missing.name == resolver.name));
             info.offsets.insert(resolver.name.to_string(), 1);
         }
+    }
+
+    #[test]
+    fn steam_auth_offset_is_required_only_on_steam() {
+        let all: Vec<_> = resolvers().collect();
+        let mut info = BuildInfo {
+            plugin_version: String::new(), build: 0, file_hash: 0,
+            name: String::new(), platform: PlatformType::EGS, path: String::new(),
+            offsets: all.iter()
+                .filter(|resolver| resolver.name != "RedpointSteamSkipTokenCheck")
+                .map(|resolver| (resolver.name.to_string(), 1))
+                .collect(),
+        };
+        assert!(info.get_unresolved(all.clone()).is_empty());
+        info.platform = PlatformType::STEAM;
+        let missing = info.get_unresolved(all);
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].name, "RedpointSteamSkipTokenCheck");
     }
 }
 
@@ -562,41 +584,50 @@ pub fn world_init() {
 pub fn attach_hooks(
     offsets: HashMap<String, u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    sdebug!("Attaching hooks via auto-discovery:");
+    sdebug!(fn; "Attaching hooks via auto-discovery:");
 
     let platform = crate::get_current_platform();
-    inventory::iter::<resolvers::HookRegistration>
-        .into_iter()
-        .filter(|hook| resolvers::supports_platform(hook.name, platform))
-        .try_for_each(|hook| {
-            let condition = (hook.condition)();
-            match unsafe { (hook.hook_fn)(offsets.clone(), condition) } {
-                Ok(_) if condition => sinfo!("☑ {} attached", hook.name),
-                Ok(_) => sinfo!("☐ {}: initialized (passive)", hook.name),
-                Err(e) if condition => {
-                    serror!("☐ {}: {}", hook.name, e);
+    // inventory::iter finds everything submitted via CREATE_HOOK!
+    for hook in inventory::iter::<resolvers::HookRegistration> {
+        if !resolvers::supports_platform(hook.name, platform) {
+            continue;
+        }
+        let cond = (hook.condition)();
+        if !cond {
+            // swarn!(fn; "inactive hook: {}", hook.name);
+            // Inactive hooks initialize but don't enable the detour
+            // continue;
+        }
+
+        match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
+            Ok(_) => sinfo!(fn; "☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
+            Err(e) => {
+                serror!(fn; "☐ {}: {}", hook.name.to_uppercase(), e);
+                if cond {
                     return Err(e);
                 }
-                Err(e) => serror!("☐ {}: {}", hook.name, e),
-            }
-            Ok(())
-        })
+            },
+        }
+    }
+
+    Ok(())
 }
 
 /// The base program address of the running application will be used.
-pub fn apply_patches(offsets: HashMap<String, u64>) {
+pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
     let platform = crate::get_current_platform();
-    inventory::iter::<resolvers::PatchRegistration>
-        .into_iter()
-        .filter(|patch| resolvers::supports_platform(patch.name, platform))
-        .for_each(|patch| {
-            if !(patch.enabled_fn)() {
-                sdebug!("[.] Patch Skipped: {} ({})", patch.name, patch.tag);
-                return;
+    for p in inventory::iter::<resolvers::PatchRegistration> {
+        if !resolvers::supports_platform(p.name, platform) {
+            continue;
+        }
+        // Run the condition check
+        if (p.enabled_fn)() {
+            match unsafe { (p.patch_fn)(offsets.clone()) } {
+                Ok(_) => sinfo!(fn; "[+] Patch Applied: {} ({})", p.name, p.tag),
+                Err(e) => serror!(fn; "[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }
-            match unsafe { (patch.patch_fn)(offsets.clone()) } {
-                Ok(_) => sinfo!("[+] Patch Applied: {} ({})", patch.name, patch.tag),
-                Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", patch.name, patch.tag, e),
-            }
-        });
+        } else {
+            sdebug!(fn; "[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+        }
+    }
 }
