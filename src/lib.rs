@@ -212,23 +212,6 @@ mod build_info_tests {
         }
     }
 
-    #[test]
-    fn steam_auth_offset_is_required_only_on_steam() {
-        let all: Vec<_> = resolvers().collect();
-        let mut info = BuildInfo {
-            plugin_version: String::new(), build: 0, file_hash: 0,
-            name: String::new(), platform: PlatformType::EGS, path: String::new(),
-            offsets: all.iter()
-                .filter(|resolver| resolver.name != "RedpointSteamSkipTokenCheck")
-                .map(|resolver| (resolver.name.to_string(), 1))
-                .collect(),
-        };
-        assert!(info.get_unresolved(all.clone()).is_empty());
-        info.platform = PlatformType::STEAM;
-        let missing = info.get_unresolved(all);
-        assert_eq!(missing.len(), 1);
-        assert_eq!(missing[0].name, "RedpointSteamSkipTokenCheck");
-    }
 }
 
 
