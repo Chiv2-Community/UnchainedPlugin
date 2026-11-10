@@ -45,6 +45,9 @@ mod client_message {
                             palette($color), ("[{}]", $label), palette(), " [{sender}]: {message}")
                     };
                 }
+                // The repetition below is intentional. Hardcoded chat_* strings let the
+                // palette encoder detect used palette references and warn when user
+                // configurations do not define them all.
                 match (chat_type, faction) {
                     (EChatType::AllSay, _) => log_chat!("All", "chat_all"),
                     (EChatType::ServerSay, _) => log_chat!("Server", "chat_server"),
