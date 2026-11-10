@@ -314,8 +314,6 @@ impl ModManager {
     unsafe fn scan_v2_markers(&self) -> HashMap<String, Mod> {
         let mut found: HashMap<String, Mod> = HashMap::new();
         let marker_paths = marker_object_paths(MOD_MARKER_V2_CLASS);
-        // Temporary validation output for the V2 markers (the `[v2marker]` lines).
-        sinfo!("[v2marker] Asset Registry lists {} {} asset(s)", marker_paths.len(), MOD_MARKER_V2_CLASS);
         if marker_paths.is_empty() {
             return found;
         }
@@ -336,10 +334,7 @@ impl ModManager {
             let marker_class = (*marker).uobject_base_utility.uobject_base.class_private;
             let offsets = *offsets_by_class.entry(marker_class as usize).or_insert_with(|| {
                 match V2MarkerOffsets::resolve(marker_class) {
-                    Ok(offsets) => {
-                        sinfo!("[v2marker] resolved field offsets: {:x?}", offsets);
-                        Some(offsets)
-                    }
+                    Ok(offsets) => Some(offsets),
                     Err(error) => {
                         serror!("Cannot read V2 markers of this class: {}", error);
                         None
@@ -350,14 +345,14 @@ impl ModManager {
 
             let class_paths = offsets.mod_actor_classes(marker);
             let bundled_markers = offsets.bundled_markers(marker);
-            sinfo!(
-                "[v2marker] {}: ModId {:?}, ModVersion {:?}, FormatVersion {}, ModActorClasses {:?}, BundledMarkers {:?}",
+            sdebug!(
+                "V2 marker {}: ModId {:?}, ModVersion {:?}, FormatVersion {}, {} mod actor class(es), {} bundled marker(s)",
                 path,
                 offsets.mod_id(marker),
                 offsets.mod_version(marker),
                 offsets.format_version(marker),
-                class_paths,
-                bundled_markers
+                class_paths.len(),
+                bundled_markers.len()
             );
             for bundled in missing_bundled_markers(&bundled_markers, &marker_paths) {
                 swarn!("V2 marker {} bundles {}, which is not in the Asset Registry", path, bundled);
@@ -371,11 +366,9 @@ impl ModManager {
                 match load_object_of_class(class_type, &class_path) {
                     Ok(class_ptr) if !class_ptr.is_null() => {
                         if let Some((asset_path, mod_entry)) = mod_from_class(class_ptr as *mut UClass) {
-                            sinfo!("[v2marker]   mod {:?} v{} by {} ({})",
-                                mod_entry.name, mod_entry.version, mod_entry.organization, asset_path);
                             found.insert(asset_path, mod_entry);
                         } else {
-                            swarn!("[v2marker]   no CDO for mod class {}", class_path);
+                            swarn!("V2 marker {}: no CDO for mod class {}", path, class_path);
                         }
                     }
                     Ok(_) => swarn!("V2 marker {} lists a missing mod class: {}", path, class_path),

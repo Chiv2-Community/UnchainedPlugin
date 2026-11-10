@@ -495,11 +495,6 @@ fn read_pak_filtered_assets(
                 .unwrap_or_default();
             stats.parse_elapsed += parse_t.elapsed();
             if kind.any() {
-                // Temporary validation output for the V2 markers.
-                if kind.mod_markers_v2 > 0 || kind.map_markers_v2 > 0 {
-                    sinfo!("[modmaps][v2] {} DA_ModMarker_V2 / {} DA_MapMarker_V2 instance(s) in {} ({})",
-                        kind.mod_markers_v2, kind.map_markers_v2, full_path, pak_path.display());
-                }
                 counts.mod_markers += usize::from(kind.mod_markers_v1 > 0);
                 counts.mod_markers_v2 += usize::from(kind.mod_markers_v2 > 0);
                 counts.map_infos += usize::from(kind.map_infos > 0);
@@ -762,28 +757,23 @@ pub fn auto_register_all_assets() {
     log_registered_markers();
 }
 
-/// Logs which marker assets the Asset Registry holds after registration, per
-/// marker class. This covers both ways in: the header scan and a pak's merged
-/// `ModAssetRegistry.bin` (which the header scan never looks at).
+/// Logs how many marker assets the Asset Registry holds after registration,
+/// per marker class. This covers both ways in: the header scan and a pak's
+/// merged `ModAssetRegistry.bin` (which the header scan never looks at).
 ///
 /// MUST run on the game thread.
 fn log_registered_markers() {
-    for class_name in ["DA_ModMarker_C", "DA_ModMarker_V2_C", "DA_MapInfo_C", "DA_MapMarker_V2_C"] {
-        // A failed query means the registry has no asset of that class.
-        let paths: Vec<String> = match unsafe { crate::game::engine::get_assets_by_class(class_name.into()) } {
-            Ok(assets) => assets
-                .as_slice()
-                .iter()
-                .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
-                .map(|asset| asset.ObjectPath.to_string())
-                .collect(),
-            Err(_) => Vec::new(),
-        };
-        sinfo!("[markers] Asset Registry holds {} {} asset(s)", paths.len(), class_name);
-        for path in &paths {
-            sinfo!("[markers]   {}", path);
-        }
-    }
+    let counts: Vec<String> = ["DA_ModMarker_C", "DA_ModMarker_V2_C", "DA_MapInfo_C", "DA_MapMarker_V2_C"]
+        .iter()
+        .map(|class_name| {
+            // A failed query means the registry has no asset of that class.
+            let count = unsafe { crate::game::engine::get_assets_by_class(class_name.to_string()) }
+                .map(|assets| assets.len())
+                .unwrap_or(0);
+            format!("{count} {class_name}")
+        })
+        .collect();
+    sdebug!("[markers] Asset Registry holds {}", counts.join(", "));
 }
 
 /// Synchronous, game-thread registration of just the main-menu assets: every
