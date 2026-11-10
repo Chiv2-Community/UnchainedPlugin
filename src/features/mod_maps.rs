@@ -426,7 +426,7 @@ pub struct FilteredScan {
     pub skipped: Vec<(String, String)>,
     /// Number of `.uasset` headers parsed.
     pub parsed_packages: usize,
-    /// Per-category package counts (maps / DA_ModMarker / DA_MapInfo).
+    /// Per-category package counts (maps and each marker kind).
     pub counts: CategoryCounts,
     pub stats: FilterStats,
 }
@@ -436,14 +436,19 @@ pub struct FilteredScan {
 pub struct CategoryCounts {
     /// `.umap` map packages.
     pub maps: usize,
-    /// Packages containing a `DA_ModMarker` instance.
+    /// Packages containing a `DA_ModMarker` (V1) instance.
     pub mod_markers: usize,
+    /// Packages containing a `DA_ModMarker_V2` instance.
+    pub mod_markers_v2: usize,
+    /// Packages containing a `DA_MapMarker_V2` instance.
+    pub map_markers: usize,
     /// Packages containing a `DA_MapInfo` instance.
     pub map_infos: usize,
 }
 
 /// Reads one pak: keeps every `.umap` (map) plus every `.uasset` package that
-/// contains a DA_ModMarker / DA_MapInfo instance (detected via header parse).
+/// contains a marker instance (V1/V2 mod marker, map info, map marker; detected
+/// via header parse).
 /// Other extensions (`.uexp`, `.ubulk`, `.ini`, ...) are skipped.
 fn read_pak_filtered_assets(
     pak_path: &Path,
@@ -487,15 +492,18 @@ fn read_pak_filtered_assets(
             let kind = reader
                 .get(&entry, &mut br)
                 .map(|data| crate::features::cooked_header::marker_counts(&data))
-                .unwrap_or((0, 0));
+                .unwrap_or_default();
             stats.parse_elapsed += parse_t.elapsed();
-            if kind.0 > 0 || kind.1 > 0 {
-                if kind.0 > 0 {
-                    counts.mod_markers += 1;
+            if kind.any() {
+                // Temporary validation output for the V2 markers.
+                if kind.mod_markers_v2 > 0 || kind.map_markers_v2 > 0 {
+                    sinfo!("[modmaps][v2] {} DA_ModMarker_V2 / {} DA_MapMarker_V2 instance(s) in {} ({})",
+                        kind.mod_markers_v2, kind.map_markers_v2, full_path, pak_path.display());
                 }
-                if kind.1 > 0 {
-                    counts.map_infos += 1;
-                }
+                counts.mod_markers += usize::from(kind.mod_markers_v1 > 0);
+                counts.mod_markers_v2 += usize::from(kind.mod_markers_v2 > 0);
+                counts.map_infos += usize::from(kind.map_infos > 0);
+                counts.map_markers += usize::from(kind.map_markers_v2 > 0);
                 assets.push(DiscoveredAsset { file_path: full_path, package_path });
             }
         }
@@ -644,6 +652,8 @@ pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Resul
                 scan.counts.maps += counts.maps;
                 scan.counts.mod_markers += counts.mod_markers;
                 scan.counts.map_infos += counts.map_infos;
+                scan.counts.mod_markers_v2 += counts.mod_markers_v2;
+                scan.counts.map_markers += counts.map_markers;
                 for a in assets {
                     let k = a.package_path.as_deref().unwrap_or(&a.file_path);
                     if seen.insert(k.to_string()) {
@@ -749,6 +759,31 @@ pub fn auto_register_all_assets() {
         return;
     }
     register_filtered_assets_sync();
+    log_registered_markers();
+}
+
+/// Logs which marker assets the Asset Registry holds after registration, per
+/// marker class. This covers both ways in: the header scan and a pak's merged
+/// `ModAssetRegistry.bin` (which the header scan never looks at).
+///
+/// MUST run on the game thread.
+fn log_registered_markers() {
+    for class_name in ["DA_ModMarker_C", "DA_ModMarker_V2_C", "DA_MapInfo_C", "DA_MapMarker_V2_C"] {
+        // A failed query means the registry has no asset of that class.
+        let paths: Vec<String> = match unsafe { crate::game::engine::get_assets_by_class(class_name.into()) } {
+            Ok(assets) => assets
+                .as_slice()
+                .iter()
+                .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
+                .map(|asset| asset.ObjectPath.to_string())
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        sinfo!("[markers] Asset Registry holds {} {} asset(s)", paths.len(), class_name);
+        for path in &paths {
+            sinfo!("[markers]   {}", path);
+        }
+    }
 }
 
 /// Synchronous, game-thread registration of just the main-menu assets: every
@@ -804,8 +839,9 @@ pub fn register_filtered_assets_sync() {
     }
     let ar_elapsed = ar_started.elapsed();
 
-    sdebug!( "[modmaps] registered {} package(s): {} map(s), {} DA_ModMarker, {} DA_MapInfo (from {} .uasset across {} pak(s), {} thread(s))",
-        registered, scan.counts.maps, scan.counts.mod_markers, scan.counts.map_infos,
+    sdebug!( "[modmaps] registered {} package(s): {} map(s), {} DA_ModMarker, {} DA_ModMarker_V2, {} DA_MapInfo, {} DA_MapMarker_V2 (from {} .uasset across {} pak(s), {} thread(s))",
+        registered, scan.counts.maps, scan.counts.mod_markers, scan.counts.mod_markers_v2,
+        scan.counts.map_infos, scan.counts.map_markers,
         scan.stats.total_uasset, scan.stats.total_paks, scan.stats.threads);
     sdebug!( "[modmaps] profiler: marker-detection ({}) {:?} | AR registration {:?} | total {:?}",
         scan.stats.threads, marker_elapsed, ar_elapsed, started.elapsed());
@@ -1196,5 +1232,18 @@ mod tests {
             !scan.maps.is_empty() || !scan.skipped.is_empty(),
             "scanning a real pak dir should find maps or report skips"
         );
+    }
+    /// Manual check against real paks: set `UNCHAINED_TEST_PAK_DIR` to a
+    /// `Content/Paks` directory and run with `--ignored --nocapture`.
+    #[test]
+    #[ignore = "needs UNCHAINED_TEST_PAK_DIR pointing at real paks"]
+    fn prints_marker_counts_for_a_real_pak_dir() {
+        let dir = std::env::var("UNCHAINED_TEST_PAK_DIR").expect("UNCHAINED_TEST_PAK_DIR not set");
+        let scan = scan_filtered_assets(MapSource::PakDir(PathBuf::from(dir)), None).expect("scan");
+        println!("counts: {:?}", scan.counts);
+        println!("skipped paks: {:?}", scan.skipped);
+        for asset in scan.assets.iter().filter(|a| !a.file_path.to_lowercase().ends_with(".umap")) {
+            println!("marker package: {}", asset.file_path);
+        }
     }
 }

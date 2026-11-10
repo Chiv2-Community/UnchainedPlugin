@@ -1,5 +1,6 @@
 //! Minimal header-only parser for the game's unversioned cooked UE 4.25 package
-//! format. Its whole reason to exist: detect `DA_ModMarker` / `DA_MapInfo`
+//! format. Its whole reason to exist: detect marker (`DA_ModMarker`,
+//! `DA_ModMarker_V2`, `DA_MapInfo`, `DA_MapMarker_V2`)
 //! data-asset *instances* by reading ONLY the package summary + name/import/
 //! export tables — never the object payloads — so discovery can cheaply filter
 //! what to register into the Asset Registry at startup.
@@ -16,9 +17,6 @@
 //!   resolution is a two-pass over the export table, resolving both import and
 //!   in-package (export) class references.
 //! - Stored name strings carry a trailing NUL (part of the length), which we strip.
-
-/// Marker data classes we care about for the main menu.
-pub const MARKER_CLASSES: [&str; 2] = ["DA_ModMarker", "DA_MapInfo"];
 
 struct Cursor<'a> {
     data: &'a [u8],
@@ -178,14 +176,37 @@ fn parse_headers(data: &[u8]) -> Option<(Vec<String>, Vec<String>, Vec<(String, 
     Some((names, import_names, exports))
 }
 
-/// True if `class_name` (e.g. `DA_ModMarker_C`) is a marker class (case-
-/// insensitive, tolerating the `_C`/`_c` class suffix and trailing NUL).
-fn is_marker_class(class_name: &str) -> bool {
-    let mut base = class_name.trim_end_matches('\0').trim_end().to_ascii_lowercase();
-    if let Some(stripped) = base.strip_suffix("_c") {
-        base = stripped.to_string();
+/// Which marker data asset an instance class belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerKind {
+    /// `DA_ModMarker_C` (deprecated, hard references).
+    ModMarkerV1,
+    /// `DA_ModMarker_V2_C` (soft references).
+    ModMarkerV2,
+    /// `DA_MapInfo_C`.
+    MapInfo,
+    /// `DA_MapMarker_V2_C`.
+    MapMarkerV2,
+}
+
+/// Maps an instance class name (e.g. `DA_ModMarker_V2_C`) to its marker kind.
+/// Case-insensitive, tolerating the `_C`/`_c` class suffix and trailing NUL.
+/// The match is exact, so V1 and V2 never shadow each other.
+pub fn marker_kind(class_name: &str) -> Option<MarkerKind> {
+    let lower = class_name.trim_end_matches('\0').trim_end().to_ascii_lowercase();
+    let base = lower.strip_suffix("_c").unwrap_or(&lower);
+    match base {
+        "da_modmarker" => Some(MarkerKind::ModMarkerV1),
+        "da_modmarker_v2" => Some(MarkerKind::ModMarkerV2),
+        "da_mapinfo" => Some(MarkerKind::MapInfo),
+        "da_mapmarker_v2" => Some(MarkerKind::MapMarkerV2),
+        _ => None,
     }
-    MARKER_CLASSES.iter().any(|m| base == m.to_ascii_lowercase())
+}
+
+/// True if `class_name` is any marker class.
+fn is_marker_class(class_name: &str) -> bool {
+    marker_kind(class_name).is_some()
 }
 
 /// Returns one `(instance_name, class_name)` per marker instance found in the
@@ -206,35 +227,38 @@ pub fn is_marker_package(data: &[u8]) -> bool {
     !marker_instances(data).is_empty()
 }
 
-/// Returns which marker class an instance class name belongs to.
-fn marker_kind(class: &str) -> Option<&'static str> {
-    let mut base = class.trim_end_matches('\0').trim_end().to_ascii_lowercase();
-    if let Some(s) = base.strip_suffix("_c") {
-        base = s.to_string();
-    }
-    match base.as_str() {
-        "da_modmarker" => Some("DA_ModMarker"),
-        "da_mapinfo" => Some("DA_MapInfo"),
-        _ => None,
+/// Number of marker instances per kind in one package header.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MarkerCounts {
+    pub mod_markers_v1: usize,
+    pub mod_markers_v2: usize,
+    pub map_infos: usize,
+    pub map_markers_v2: usize,
+}
+
+impl MarkerCounts {
+    /// True if the package holds at least one marker instance of any kind.
+    pub fn any(&self) -> bool {
+        self.mod_markers_v1 + self.mod_markers_v2 + self.map_infos + self.map_markers_v2 > 0
     }
 }
 
-/// Counts of `DA_ModMarker` vs `DA_MapInfo` instances in the package header.
-/// Returns `(mod_markers, map_infos)`.
-pub fn marker_counts(data: &[u8]) -> (usize, usize) {
+/// Counts the marker instances of each kind in the package header.
+pub fn marker_counts(data: &[u8]) -> MarkerCounts {
+    let mut counts = MarkerCounts::default();
     let Some((_, _, exports)) = parse_headers(data) else {
-        return (0, 0);
+        return counts;
     };
-    let mut mods = 0usize;
-    let mut infos = 0usize;
     for (_, class) in exports {
         match class.as_deref().and_then(marker_kind) {
-            Some("DA_ModMarker") => mods += 1,
-            Some("DA_MapInfo") => infos += 1,
-            _ => {}
+            Some(MarkerKind::ModMarkerV1) => counts.mod_markers_v1 += 1,
+            Some(MarkerKind::ModMarkerV2) => counts.mod_markers_v2 += 1,
+            Some(MarkerKind::MapInfo) => counts.map_infos += 1,
+            Some(MarkerKind::MapMarkerV2) => counts.map_markers_v2 += 1,
+            None => {}
         }
     }
-    (mods, infos)
+    counts
 }
 
 #[cfg(test)]
@@ -274,5 +298,89 @@ mod tests {
         let data = vec![0u8; 0];
         assert!(marker_instances(&data).is_empty());
         assert!(!is_marker_package(&data));
+    }
+    /// Builds a minimal cooked header with one export named `instance` whose
+    /// class is an import named `class_name` (how a marker instance references
+    /// a Blueprint class that lives in another package).
+    fn synthetic_package(instance: &str, class_name: &str) -> Vec<u8> {
+        fn name(out: &mut Vec<u8>, s: &str) {
+            out.extend(((s.len() + 1) as i32).to_le_bytes());
+            out.extend(s.as_bytes());
+            out.push(0);
+        }
+        let names = ["None", class_name, instance];
+        let mut out = Vec::new();
+        out.extend(0x9E2A83C1u32.to_le_bytes());
+        out.extend((-7i32).to_le_bytes());
+        out.extend([0u8; 16]); // ue3, ue4, licensee, custom version count
+        out.extend(0i32.to_le_bytes()); // total header size
+        name(&mut out, "None"); // folder name
+        out.extend(0x8000_0000u32.to_le_bytes()); // PKG_FilterEditorOnly
+        out.extend((names.len() as i32).to_le_bytes());
+        let name_offset_at = out.len();
+        out.extend([0u8; 12]); // name offset, gatherable count + offset
+        out.extend(1i32.to_le_bytes());
+        let export_offset_at = out.len();
+        out.extend([0u8; 4]);
+        out.extend(1i32.to_le_bytes());
+        let import_offset_at = out.len();
+        out.extend([0u8; 4]);
+
+        let patch = |out: &mut Vec<u8>, at: usize| {
+            let here = (out.len() as i32).to_le_bytes();
+            out[at..at + 4].copy_from_slice(&here);
+        };
+        patch(&mut out, name_offset_at);
+        for n in names {
+            name(&mut out, n);
+            out.extend(0u32.to_le_bytes()); // hash
+        }
+        patch(&mut out, import_offset_at);
+        out.extend([0u8; 16]); // class package + class name refs
+        out.extend(0i32.to_le_bytes()); // outer
+        out.extend(1i32.to_le_bytes()); // object name = names[1]
+        out.extend(0i32.to_le_bytes());
+        patch(&mut out, export_offset_at);
+        out.extend((-1i32).to_le_bytes()); // class index = import 0
+        out.extend([0u8; 12]); // super, template, outer
+        out.extend(2i32.to_le_bytes()); // object name = names[2]
+        out.extend(0i32.to_le_bytes());
+        out.extend([0u8; 4 + 8 + 8 + 3 + 16 + 4 + 2 + 20]);
+        out
+    }
+
+    #[test]
+    fn marker_kind_keeps_versions_apart() {
+        assert_eq!(marker_kind("DA_ModMarker_C"), Some(MarkerKind::ModMarkerV1));
+        assert_eq!(marker_kind("DA_ModMarker_V2_C"), Some(MarkerKind::ModMarkerV2));
+        assert_eq!(marker_kind("da_modmarker_v2_c\0"), Some(MarkerKind::ModMarkerV2));
+        assert_eq!(marker_kind("DA_MapInfo_C"), Some(MarkerKind::MapInfo));
+        assert_eq!(marker_kind("DA_MapMarker_V2_C"), Some(MarkerKind::MapMarkerV2));
+        assert_eq!(marker_kind("DA_ModMarker_V3_C"), None);
+        assert_eq!(marker_kind("DA_MapMarker_C"), None);
+    }
+
+    #[test]
+    fn counts_v2_marker_instances() {
+        let data = synthetic_package("Quarry_ModMarker", "DA_ModMarker_V2_C");
+        assert_eq!(
+            marker_instances(&data),
+            vec![("Quarry_ModMarker".to_string(), "DA_ModMarker_V2_C".to_string())]
+        );
+        let counts = marker_counts(&data);
+        assert_eq!(counts, MarkerCounts { mod_markers_v2: 1, ..Default::default() });
+        assert!(counts.any());
+
+        let data = synthetic_package("Quarry_MapMarker", "DA_MapMarker_V2_C");
+        assert_eq!(marker_counts(&data), MarkerCounts { map_markers_v2: 1, ..Default::default() });
+    }
+
+    #[test]
+    fn real_v1_fixtures_count_as_v1_only() {
+        let counts = marker_counts(&fixture("NihiMaps_Marker.uasset"));
+        assert!(counts.mod_markers_v1 > 0);
+        assert_eq!(counts.mod_markers_v2, 0);
+        assert!(marker_counts(&fixture("NihiMaps_MapInfo.uasset")).map_infos > 0);
+        assert!(!marker_counts(&synthetic_package("Thing", "SomeOther_C")).any());
     }
 }
