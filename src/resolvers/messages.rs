@@ -37,20 +37,20 @@ mod client_message {
         match parse_client_message(message.as_str()) {
             Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
                 let faction = if chat_type == EChatType::TeamSay { sender_faction(sender) } else { None };
+                macro_rules! log_chat {
+                    ($color:literal) => {
+                        sinfo!(target: concat!(module_path!(), "::game_chat"),
+                            palette($color), "[{chat_type:?}]", palette(), " [{sender}]: {message}")
+                    };
+                }
                 match (chat_type, faction) {
-                    (EChatType::AllSay, _) => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        palette("chat_all"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
-                    (EChatType::ServerSay, _) => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        palette("chat_server"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    (EChatType::AllSay, _) => log_chat!("chat_all"),
+                    (EChatType::ServerSay, _) => log_chat!("chat_server"),
                     // ArgonSDK: Source/TBL/Public/EFaction.h.
-                    (EChatType::TeamSay, Some(0)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        palette("chat_agatha"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
-                    (EChatType::TeamSay, Some(1)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        palette("chat_mason"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
-                    (EChatType::TeamSay, Some(5)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        palette("chat_tenosia"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
-                    _ => sinfo!(target: concat!(module_path!(), "::game_chat"),
-                        "[{chat_type:?}] [ {sender} ]: {message}"),
+                    (EChatType::TeamSay, Some(0)) => log_chat!("chat_agatha"),
+                    (EChatType::TeamSay, Some(1)) => log_chat!("chat_mason"),
+                    (EChatType::TeamSay, Some(5)) => log_chat!("chat_tenosia"),
+                    _ => log_chat!(""),
                 }
                 if chat_type == EChatType::AllSay {
                     if let Some(content) = message.strip_prefix('!') {
