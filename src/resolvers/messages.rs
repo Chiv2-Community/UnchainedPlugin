@@ -154,10 +154,20 @@ mod client_message {
             assert_eq!(command.name, "vote");
             assert_eq!(command.args, ["kick", "reason"]);
             assert_eq!(command.raw_args, "kick\nreason");
-            for channel in [EChatType::TeamSay, EChatType::Spectator] {
+            for channel in EChatType::ALL.iter().copied().filter(|channel| *channel != EChatType::AllSay) {
                 assert!(player_command_event("Player", "!vote kick", channel).is_none());
             }
             assert!(player_command_event("Player", "!", EChatType::AllSay).is_none());
+        }
+
+        #[test]
+        fn console_named_player_keeps_game_chat_permissions() {
+            let Some(GameEvent::CommandRequestEvent(command)) =
+                player_command_event("Console", "!cmd quit", EChatType::AllSay)
+                else { panic!("missing command event"); };
+            assert_eq!(command.source, CommandSource::GameChat);
+            assert!(matches!(command.actor.identity, ActorIdentity::GamePlayer { .. }));
+            assert_eq!(command.actor.permissions.flags, PermissionFlags::USER | PermissionFlags::START_VOTE);
         }
 
         #[test]

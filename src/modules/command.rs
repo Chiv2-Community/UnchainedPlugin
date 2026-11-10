@@ -564,6 +564,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn console_only_command_rejects_remote_sources_even_for_admins() {
+        use crate::modules::mod_list::{ListModsArgs, ListModsCommand};
+        let (broadcaster, _) = mock_broadcaster();
+        let (publisher, _) = mock_game_event_publisher();
+        let subscriber = CommandSubscriber::new(broadcaster, publisher);
+        let command = CommandHandler::<ListModsCommand, ListModsArgs>::new(ListModsCommand);
+        for source in [CommandSource::GameChat, CommandSource::Discord] {
+            let mut request = mock_command_request(mock_actor_elevated("Console", true), "mod-list", vec![]);
+            request.source = source;
+            let CommandOutcome::Rejected(rejection) = subscriber.handle_command(&command, &request).await
+                else { panic!("remote source executed a console-only command"); };
+            assert!(rejection.rejection_reason.contains("must be executed from ServerConsole"));
+        }
+    }
+
+    #[tokio::test]
     async fn test_help_from_game_chat() {
         let (broadcaster, messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();

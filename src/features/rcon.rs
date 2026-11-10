@@ -70,6 +70,15 @@ mod tests {
         assert_eq!(command.name, "say");
         assert_eq!(command.args, ["hello world"]);
         assert_eq!(command.source, crate::events::models::CommandSource::ServerConsole);
-        assert!(console_say_request("teamsay hello").is_none());
+        for line in ["teamsay hello", "!say hello", "cmd quit", "say;quit", "say \"unterminated"] {
+            assert!(console_say_request(line).is_none(), "{line}");
+        }
+    }
+
+    #[test]
+    fn rcon_say_keeps_command_looking_text_as_message_arguments() {
+        let command = console_say_request("say \"!cmd quit\"").unwrap();
+        assert_eq!(command.name, "say");
+        assert_eq!(command.args, ["!cmd quit"]);
     }
 }
