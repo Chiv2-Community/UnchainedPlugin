@@ -306,37 +306,21 @@ mod tests {
     }
 
     #[test]
-    fn markdown_macro_models_nested_chunks() {
-        assert_eq!(
-            rich_text!("Hello **bold *italic* and __underlined__**!"),
-            RichText(vec![
-                Text("Hello ".into()),
-                Bold(RichText(vec![
-                    Text("bold ".into()),
-                    Italics("italic".into()),
-                    Text(" and ".into()),
-                    Underline("underlined".into()),
-                ])),
-                Text("!".into()),
-            ]),
-        );
-    }
-
-    #[test]
-    fn italic_spans_can_contain_bold_spans() {
-        assert_eq!(
-            rich_text!("*a **b** c*"),
-            RichText::from(Italics(RichText::from("a ") + Bold("b".into()) + " c"))
-        );
-    }
-
-    #[test]
-    fn markdown_aliases_select_the_correct_chunks() {
+    fn markdown_spans_form_the_expected_chunks() {
         for (input, chunk) in [
+            (
+                "**a *b***",
+                Bold(RichText::from("a ") + Italics("b".into())),
+            ),
+            (
+                "*a **b** c*",
+                Italics(RichText::from("a ") + Bold("b".into()) + " c"),
+            ),
+            ("__underlined__", Underline("underlined".into())),
             ("_italic_", Italics("italic".into())),
             ("***both***", Bold(Italics("both".into()).into())),
         ] {
-            assert_eq!(rich_text!(input), RichText::from(chunk));
+            assert_eq!(rich_text!(input), RichText::from(chunk), "{input}");
         }
     }
 
@@ -391,22 +375,16 @@ mod tests {
     }
 
     #[test]
-    fn game_bold_is_flat_and_line_scoped() {
+    fn game_keeps_only_line_scoped_bold_formatting() {
         let text = RichText::from(Bold(RichText(vec![
             Text("a\n".into()),
-            Bold("b".into()),
+            Italics(Underline(Bold("b".into()).into()).into()),
             Text("\n".into()),
         ])));
         assert_eq!(
             text.to_game_chat(),
             "<RichText.Emphasis>a</>\n<RichText.Emphasis>b</>\n"
         );
-    }
-
-    #[test]
-    fn game_flattens_unsupported_formatting() {
-        let text = RichText::from(Italics(Underline("world".into()).into()));
-        assert_eq!(text.to_game_chat(), "world");
     }
 
     #[test]

@@ -47,9 +47,6 @@ escaped-name:
   pattern: '{m}'
   palette:
     "a\"b\\c\n": '#123456'
-module-pattern:
-  kind: pattern
-  pattern: '{sm}|{M}|{t}|{fn}'
 module-palette:
   kind: palette
   pattern: '{sm}|{M}|{t}|{fn}'

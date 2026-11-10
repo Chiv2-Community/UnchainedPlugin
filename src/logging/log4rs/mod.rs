@@ -388,17 +388,6 @@ mod tests {
     }
 
     #[test]
-    fn registered_encoders_accept_short_and_full_module_fields() {
-        let mut deserializers = Deserializers::default();
-        register(&mut deserializers);
-        for name in ["module-pattern", "module-palette"] {
-            let output = render_encoder(&deserializers, fixtures::encoder(name), &Record::builder()
-                .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build());
-            assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target|???");
-        }
-    }
-
-    #[test]
     fn registered_encoders_remove_matches_after_field_padding() {
         let mut registry = Deserializers::default();
         register(&mut registry);

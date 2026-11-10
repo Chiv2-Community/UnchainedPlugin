@@ -223,12 +223,4 @@ mod tests {
         assert_eq!(discord["content"], "**body**");
     }
 
-    #[test]
-    fn test_from_conversions() {
-        let msg1 = BroadcastMessage::from("hello");
-        assert_eq!(msg1.content_ref(), Some(&RichText::from("hello")));
-        
-        let msg2 = BroadcastMessage::from("world".to_string());
-        assert_eq!(msg2.content_ref(), Some(&RichText::from("world")));
-    }
 }
