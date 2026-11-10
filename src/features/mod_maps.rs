@@ -464,7 +464,7 @@ fn read_pak_filtered_assets(
         None => builder,
     };
     let mut br = std::io::BufReader::new(&mut file);
-    let mut reader = builder.reader(&mut br).context("failed to parse pak index")?;
+    let reader = builder.reader(&mut br).context("failed to parse pak index")?;
     let mount_point = reader.mount_point().to_string();
 
     let index_t = std::time::Instant::now();
@@ -518,7 +518,7 @@ fn read_pak_mod_asset_registry(pak_path: &Path, key: Option<&aes::Aes256>) -> Re
         Some(key) => repak::PakBuilder::new().key(key.clone()),
         None => repak::PakBuilder::new(),
     };
-    let mut reader = builder.reader(&mut file).context("failed to parse pak index")?;
+    let reader = builder.reader(&mut file).context("failed to parse pak index")?;
     let mount_point = reader.mount_point().to_string();
     let entry = reader.files().into_iter().find(|entry| {
         if !entry

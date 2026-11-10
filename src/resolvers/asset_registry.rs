@@ -148,9 +148,7 @@ define_pattern_resolver!(GetAssetsByPath,[
 CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
     // CALLED hooks are never enabled on attach; this body only runs if someone
     // explicitly enables the detour after a real signature is populated.
-    unsafe {
-        CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
-    }
+    CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
 });
 
 // Signature source: owner-provided pattern for
@@ -165,9 +163,7 @@ define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
 CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, InPaths: *const TArray<FString>, InSpecificFiles: *const TArray<FString>, bForceRescan: bool, AssetDataCacheMode: u8, OutFoundAssets: *mut TArray<FName>, OutFoundPaths: *mut TArray<FName>), {
     // CALLED hooks are never enabled on attach; this body only runs if someone
     // explicitly enables the detour after a real signature is populated.
-    unsafe {
-        CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
-    }
+    CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
 });
 
 #[repr(C)]
