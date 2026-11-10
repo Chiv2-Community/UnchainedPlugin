@@ -16,6 +16,9 @@ pub enum PlatformType {
 
 pub static PLATFORM: OnceCell<PlatformType> = OnceCell::new();
 
+mod platforms;
+pub use platforms::{supports_platform, ResolverPlatform};
+
 pub fn current_platform() -> PlatformType {
     *PLATFORM.get().expect("Platform not initialized")
 }
@@ -82,6 +85,7 @@ pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;
 pub mod desync;
+pub(crate) mod steam_auth;
 #[cfg(feature="move-autonomous-desync")]
 pub mod desync_tests;
 
