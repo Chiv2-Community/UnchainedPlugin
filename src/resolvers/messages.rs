@@ -36,7 +36,22 @@ mod client_message {
         let message = string_ref.to_string();
         match parse_client_message(message.as_str()) {
             Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
-                sinfo!(target: concat!(module_path!(), "::game_chat"), "[ {chat_type:10?} ] [ {sender} ]: {message}");
+                let faction = if chat_type == EChatType::TeamSay { sender_faction(sender) } else { None };
+                match (chat_type, faction) {
+                    (EChatType::AllSay, _) => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        palette("chat_all"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    (EChatType::ServerSay, _) => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        palette("chat_server"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    // ArgonSDK: Source/TBL/Public/EFaction.h.
+                    (EChatType::TeamSay, Some(0)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        palette("chat_agatha"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    (EChatType::TeamSay, Some(1)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        palette("chat_mason"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    (EChatType::TeamSay, Some(5)) => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        palette("chat_tenosia"), "[{chat_type:?}]", palette(), " [ {sender} ]: {message}"),
+                    _ => sinfo!(target: concat!(module_path!(), "::game_chat"),
+                        "[{chat_type:?}] [ {sender} ]: {message}"),
+                }
                 if chat_type == EChatType::AllSay {
                     if let Some(content) = message.strip_prefix('!') {
                         if let Some((name, args, raw_args)) = parse_command(content) {
@@ -69,16 +84,31 @@ mod client_message {
                 }
             }
             Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
-                sinfo!(target: concat!(module_path!(), "::system_chat"), "[ {chat_type:10?} ] {message}");
+                sinfo!(target: concat!(module_path!(), "::system_chat"),
+                    palette("chat_server"), "[{chat_type:?}]", palette(), " {message}");
             }
             Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
-                sinfo!(target: concat!(module_path!(), "::system_chat"), "{message}");
+                sinfo!(target: concat!(module_path!(), "::system_chat"),
+                    palette("chat_server"), "[ServerSay]", palette(), " {message}");
             }
             Err(error) => {
                 swarn!(target: concat!(module_path!(), "::system_chat"), "Failed to parse chat message. error={error}");
             }
         }
     });
+
+    fn sender_faction(sender: &str) -> Option<u8> {
+        let world = crate::globals().world()?;
+        // ClientMessage runs on the game thread, as does player-state access.
+        let game_state = unsafe { (*world).game_state.as_ref()? };
+        let mut players = game_state.player_array.as_slice().iter()
+            .filter_map(|player| unsafe { player.as_ref() })
+            .filter(|player| player.base.player_name_private.to_string() == sender);
+        let player = players.next()?;
+        // A display name is not a unique identity; do not guess between duplicates.
+        if players.next().is_some() { return None; }
+        Some(player.faction)
+    }
 
     #[derive(Debug, PartialEq)]
     struct UserChat<'a> {
@@ -141,6 +171,15 @@ mod client_message {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn chat_palettes_are_registered_for_warnings() {
+            let references: Vec<_> = inventory::iter::<crate::logging::inline::PaletteReference>
+                .into_iter().map(|reference| reference.0).collect();
+            for name in ["chat_all", "chat_server", "chat_agatha", "chat_mason", "chat_tenosia"] {
+                assert!(references.contains(&name), "{name}");
+            }
+        }
 
         #[test]
         fn server_say_preserves_multiline_motd() {

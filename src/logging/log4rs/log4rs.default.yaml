@@ -22,6 +22,11 @@ appenders:
         module: "#BE9D5C"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
+        chat_all: "#f2b378"
+        chat_agatha: "#8cb4e1"
+        chat_mason: "#f28b82"
+        chat_tenosia: "#D09128"
+        chat_server: "#8cd8e1"
   file:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"
