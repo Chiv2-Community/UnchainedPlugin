@@ -75,7 +75,6 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
             }
             Ok((Err(e), _)) => {
                 serror!(fn; "Asset Registry query failed: {}", e);
-                serror!(fn; "Hint: the GetAssetsByPath signature is still a placeholder — populate the real pattern in src/resolvers/asset_registry.rs and remove the name from RESOLVERS_TO_IGNORE in src/lib.rs.");
             }
             Err(_) => serror!(fn; "Game thread job channel dropped before a result arrived"),
         }

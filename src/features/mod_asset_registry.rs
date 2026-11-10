@@ -1,8 +1,7 @@
-//! Placeholder-gated native merge boundary for `ModAssetRegistry.bin`.
+//! Native merge boundary for `ModAssetRegistry.bin`.
 //!
 //! The SDK packages the engine's cooked Asset Registry payload under this
-//! namespaced filename. The actual UE calls are deliberately disabled until
-//! owner-provided target-build signatures or vtable slots have been verified.
+//! namespaced filename; it is merged into the live registry on the game thread.
 
 use std::fmt;
 
@@ -43,19 +42,6 @@ pub unsafe fn append_mod_asset_registry_on_game_thread(
     validate_payload(bytes)?;
     crate::game::engine::serialize_mod_asset_registry_bytes(bytes)
         .map_err(ModAssetRegistryMergeError::Engine)
-}
-
-/// Queue a registry payload for the existing game-thread job queue.
-///
-/// Pak reads may run off-thread. The callback always runs on the game thread,
-/// and performs the target-verified native merge there.
-pub fn append_mod_asset_registry_async<F>(bytes: Vec<u8>, on_complete: F)
-where
-    F: FnOnce(Result<(), ModAssetRegistryMergeError>) + Send + 'static,
-{
-    crate::resolvers::unchained_integration::run_on_game_thread(move || {
-        on_complete(unsafe { append_mod_asset_registry_on_game_thread(&bytes) });
-    });
 }
 
 #[cfg(test)]

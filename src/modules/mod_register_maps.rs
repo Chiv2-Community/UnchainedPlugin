@@ -47,7 +47,6 @@ impl Command<RegisterModMapsArgs> for RegisterModMapsCommand {
             Ok(Ok(count)) => sinfo!(fn; "Registered {} mod package(s); run listmodmaps to verify", count),
             Ok(Err(e)) => {
                 serror!(fn; "Mod map registration failed: {}", e);
-                serror!(fn; "Hint: the GetAssetsByPath / ScanPathsAndFilesSynchronous signatures are still placeholders — populate the real patterns in src/resolvers/asset_registry.rs and remove both names from RESOLVERS_TO_IGNORE in src/lib.rs.");
             }
             Err(_) => serror!(fn; "Registration channel dropped before a result arrived"),
         }

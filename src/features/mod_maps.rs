@@ -714,59 +714,6 @@ pub fn register_all_assets_async(source: MapSource, aes_key: Option<String>, on_
 
 static AUTO_ALL_ASSETS_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Synchronous, game-thread all-assets registration: runs the pak scan inline
-/// (pure Rust, no engine calls) and then every registration batch back-to-back
-/// in one go. The Asset Registry work all happens in a single game-thread
-/// block, so it is hidden inside the loading screen instead of hitching
-/// gameplay one batch per tick.
-///
-/// MUST run on the game thread (it drives `ScanPathsAndFilesSynchronous`).
-/// Intended for the auto/init path (`LoadFrontEndMap` / dedicated-server
-/// fallback), where a multi-second block is acceptable. The manual
-/// `loadallassets` command keeps the async/chunked path instead.
-pub fn register_all_assets_sync() {
-    let started = std::time::Instant::now();
-
-    let Some(source) = default_paks_dir().map(MapSource::PakDir) else {
-        serror!(fn; "Synchronous all-asset registration skipped: could not derive Content/Paks from the executable");
-        return;
-    };
-
-    // Gathering step — inline pak index scan (no engine calls).
-    let gather_started = std::time::Instant::now();
-    let scan = match scan_all_assets(source, None) {
-        Ok(scan) => scan,
-        Err(e) => {
-            serror!(fn; "Synchronous all-asset scan failed: {}", e);
-            return;
-        }
-    };
-    let gather_elapsed = gather_started.elapsed();
-
-    let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
-    let total = file_paths.len();
-    sdebug!( "Discovered {} asset(s); registering synchronously", total);
-
-    // Registration step — every batch back-to-back on the game thread.
-    let ar_started = std::time::Instant::now();
-    let chunk = crate::cli_args().mod_map_batch;
-    let mut registered = 0usize;
-    for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
-        let batch_timer = std::time::Instant::now();
-        if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
-            serror!(fn; "Synchronous registration batch {} failed: {}", i, e);
-            return;
-        }
-        registered += batch.len();
-        sdebug!( "[modmaps] batch of {} file(s) took {:?}", batch.len(), batch_timer.elapsed());
-        sdebug!( "Registered {} package file(s) ({} / {})", batch.len(), registered, total);
-    }
-    let ar_elapsed = ar_started.elapsed();
-
-    sdebug!( "[modmaps] profiler(sync all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
-    sdebug!( "Auto-registered {} asset(s) into the Asset Registry", registered);
-}
-
 /// One-shot auto-registration of maps + marker packages into the Asset Registry,
 /// fired after the mod paks are mounted (from `LoadFrontEndMap`, with a server
 /// `world_init` fallback). Uses the cheap filtered path (blanket all-assets or
