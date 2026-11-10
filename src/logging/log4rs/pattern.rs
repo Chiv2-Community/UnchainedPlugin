@@ -4,6 +4,7 @@ use log4rs::encode::{pattern::PatternEncoder as BuiltinPatternEncoder, Encode, W
 
 const SHORT_MODULE_KEY: &str = "__unchained_short_module";
 const FUNCTION_KEY: &str = "enclosing_function";
+const DISPLAY_FUNCTION_KEY: &str = "__unchained_function";
 
 #[derive(Debug)]
 pub struct PatternEncoder {
@@ -19,7 +20,7 @@ impl PatternEncoder {
         let mut expanded = String::new();
         let mut extended = false;
         while !rest.is_empty() {
-            let alias = [("sm", SHORT_MODULE_KEY), ("fn", FUNCTION_KEY)].into_iter()
+            let alias = [("sm", SHORT_MODULE_KEY), ("fn", DISPLAY_FUNCTION_KEY)].into_iter()
                 .find(|(name, _)| rest.strip_prefix('{').and_then(|rest| rest.strip_prefix(name))
                     .is_some_and(|rest| rest.starts_with('}') || rest.starts_with(':')));
             if let Some((_, key)) = alias {
@@ -59,8 +60,11 @@ impl PatternEncoder {
     fn encode_pattern(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
         if !self.extended { return self.inner.encode(writer, record); }
         let module = ShortModule(record.module_path().unwrap_or("???"));
-        let function = record.key_values().get(FUNCTION_KEY.into()).unwrap_or(Value::from("???"));
-        let values = [(SHORT_MODULE_KEY, Value::from_display(&module)), (FUNCTION_KEY, function)];
+        let function = record.key_values().get(FUNCTION_KEY.into())
+            .map(|value| value.to_string()).unwrap_or_else(|| "???".into());
+        let function = function.strip_suffix("_detour_fkt").unwrap_or(&function);
+        let values = [(SHORT_MODULE_KEY, Value::from_display(&module)),
+            (DISPLAY_FUNCTION_KEY, Value::from(function))];
         let sources: [&dyn Source; 2] = [&values, record.key_values()];
         let extended = record.to_builder().key_values(&sources).build();
         self.inner.encode(writer, &extended)
@@ -93,15 +97,7 @@ struct ShortModule<'a>(&'a str);
 
 impl std::fmt::Display for ShortModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Retain the last 32 Unicode characters without allocating a label.
-        let mut tail = ['\0'; 32];
-        let mut next = 0;
-        let mut length = 0;
-        let mut push_char = |ch| {
-            tail[next] = ch;
-            next = (next + 1) % tail.len();
-            length = (length + 1).min(tail.len());
-        };
+        let mut label = String::new();
         let mut segments = self.0.split("::").peekable();
         while let Some(segment) = segments.next() {
             if segments.peek().is_some() {
@@ -114,23 +110,19 @@ impl std::fmt::Display for ShortModule<'_> {
                         // Start camel-case words and acronym-to-word transitions.
                         if first || (uppercase && (!previous_uppercase
                             || chars.peek().is_some_and(|next| next.is_lowercase()))) {
-                            push_char(ch);
+                            label.push(ch);
                         }
                         first = false;
                         previous_uppercase = uppercase;
                     }
                 }
-                push_char(':');
-                push_char(':');
+                label.push_str("::");
             } else {
-                for ch in segment.chars() { push_char(ch); }
+                label.push_str(segment);
             }
         }
-        let start = if length == tail.len() { next } else { 0 };
-        for offset in 0..length {
-            write!(f, "{}", tail[(start + offset) % tail.len()])?;
-        }
-        Ok(())
+        let start = label.char_indices().rev().nth(31).map_or(0, |(index, _)| index);
+        f.write_str(&label[start..])
     }
 }
 
@@ -161,6 +153,23 @@ mod tests {
         let mut output = Vec::new();
         PatternEncoder::new("{sm}").encode(&mut SimpleWriter(&mut output), &record).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "界".repeat(32));
+    }
+
+    #[test]
+    fn function_display_cleans_suffix_and_truncates_left_while_preserving_metadata() {
+        for (name, display) in [
+            ("Tick_detour_fkt", "Tick"),
+            ("long_function_name_that_exceeds_thirty_two_characters_detour_fkt",
+                "at_exceeds_thirty_two_characters"),
+            ("keep_detour_fkt_inside", "keep_detour_fkt_inside"),
+        ] {
+            let values = [(FUNCTION_KEY, name)];
+            let record = Record::builder().key_values(&values).build();
+            let mut output = Vec::new();
+            PatternEncoder::new("{fn:<-32.32}|{K(enclosing_function)}")
+                .encode(&mut SimpleWriter(&mut output), &record).unwrap();
+            assert_eq!(String::from_utf8(output).unwrap(), format!("{display:<32}|{name}"));
+        }
     }
 
     #[test]

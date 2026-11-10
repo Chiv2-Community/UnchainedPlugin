@@ -81,7 +81,7 @@ appenders:
     path: "__CHAT_LOG_PATH__"
     encoder:
       kind: pattern
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender)} - {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender):<16} - {m}{n}"
 loggers:
   chat_log:
     level: info
@@ -154,10 +154,12 @@ with these fields:
 
 | Field | Value |
 | --- | --- |
-| `{fn}` | Enclosing function's leaf name; closures use their enclosing function. |
+| `{fn}` | Enclosing function's leaf name. |
 | `{sm}` | Abbreviated source module, limited to its last 32 Unicode characters. |
 
-`{fn}` displays `???` for records without function metadata.
+`{fn}` removes the generated `_detour_fkt` suffix before padding and truncation.
+Closures use their enclosing function. Missing function metadata displays `???`.
+Defaults use `{fn:<16}`: left-aligned with a minimum width of 16 characters.
 `{sm}` abbreviates parent segments by word initials:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
 Both fields support log4rs nesting, escaping, alignment, and truncation.
@@ -183,7 +185,7 @@ encoder:
   kind: pattern
   inline-removals:
     - _detour_fkt
-  pattern: "{fn:<32.32} - {m}{n}"
+  pattern: "{fn:<16} - {m}{n}"
 ```
 
 Expressions are combined with alternation and compiled once per encoder. Removal
@@ -191,16 +193,16 @@ runs after padding and truncation, across fields and color changes. Regex matchi
 is case-sensitive by default. Invalid expressions reject the configuration.
 An empty list disables removal.
 
-The defaults remove `_detour_fkt` from diagnostic lines. This changes display text;
-raw records and JSON retain their original values. Truncation can leave a partial
-suffix. Redact credentials separately before sharing logs.
+The default rule removes `_detour_fkt` elsewhere in diagnostic lines.
+Raw records and JSON retain their original values. Redact credentials separately
+before sharing logs.
 
 ### Palette entries
 
 ```yaml
 encoder:
   kind: palette
-  pattern: "{palette({l})}{l:>5}{palette()} {m}{n}"
+  pattern: "{palette({l})}{l:<5}{palette()} {m}{n}"
   palette:
     error: "#f28b82"
     warn: "#f2cc78"

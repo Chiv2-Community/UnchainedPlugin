@@ -8,7 +8,7 @@ appenders:
       kind: palette
       inline-removals: &inline_removals
         - _detour_fkt
-      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn:<32.32}{palette(timestamp)} - {palette({l}_body)}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:<5}{palette(trace)} | {palette(module)}{fn:<16}{palette(timestamp)} - {palette({l}_body)}{m}{n}"
       palette: &console_palette
         error: "#f28b82"
         warn: "#f2cc78"
@@ -40,18 +40,18 @@ appenders:
     path: "__UNCHAINED_LOG_PATH__"
     encoder:
       inline-removals: *inline_removals
-      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:>5}| {fn:<32.32}] {m}{n}"
+      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:<5}| {fn:<16}] {m}{n}"
   chat_console:
     kind: console
     encoder:
       kind: palette
-      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(label)})}{K(label):>5.5}{palette(debug)} | {palette(team_{K(faction)})}{K(sender)}{palette(debug)} - {palette()}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(label)})}{K(label):>5.5}{palette(debug)} | {palette(team_{K(faction)})}{K(sender):<16}{palette(debug)} - {palette()}{m}{n}"
       palette: *console_palette
   chat_file:
     kind: file
     path: "__CHAT_LOG_PATH__"
     encoder:
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender)} - {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender):<16} - {m}{n}"
   chat_system_console:
     kind: console
     encoder:
@@ -68,7 +68,7 @@ appenders:
     path: "__KISMET_LOG_PATH__"
     encoder:
       inline-removals: *inline_removals
-      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:>5}| {fn:<32.32}] {m}{n}"
+      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:<5}| {fn:<16}] {m}{n}"
 
 loggers:
   chat_log:

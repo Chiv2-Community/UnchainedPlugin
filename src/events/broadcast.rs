@@ -199,15 +199,11 @@ mod tests {
     }
 
     #[test]
-    fn plain_layout_preserves_field_order() {
-        assert_eq!(formatted_message().to_plain_text(), "title\nbody\nname: value\nfooter");
-    }
-
-    #[test]
-    fn game_content_uses_emphasis_tags() {
-        let tag = "<RichText.Emphasis>bold</>";
-        let message = BroadcastMessage::new().content(crate::rich_text!("**bold**"));
-        assert_eq!(message.to_game_chat(), tag);
+    fn plain_and_game_layout_preserve_field_order() {
+        let message = formatted_message();
+        let expected = "title\nbody\nname: value\nfooter";
+        assert_eq!(message.to_plain_text(), expected);
+        assert_eq!(message.to_game_chat(), expected);
     }
 
     #[test]

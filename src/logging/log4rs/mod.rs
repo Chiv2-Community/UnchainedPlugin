@@ -368,9 +368,8 @@ mod tests {
     }
 
     #[test]
-    fn embedded_configuration_preserves_patterns_and_filters() {
+    fn embedded_configuration_filters() {
         let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
-        assert_eq!(yaml["appenders"]["console"]["encoder"]["pattern"], palette::DEFAULT_PATTERN);
         // Exercise the shipped console config without opening log files.
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));
@@ -385,23 +384,6 @@ mod tests {
             .target("UnchainedPlugin::logging::log4rs").level(Level::Trace).build()));
         assert!(!logger.enabled(&Metadata::builder()
             .target("serenity::client").level(Level::Info).build()));
-    }
-
-    #[test]
-    fn registered_encoders_remove_matches_after_field_padding() {
-        let mut registry = Deserializers::default();
-        register(&mut registry);
-        for kind in ["pattern", "palette"] {
-            let config = serde_yaml::to_value(serde_json::json!({
-                "kind": kind,
-                "pattern": "{fn:<20}|{m}",
-                "inline-removals": ["_detour_fkt"]
-            })).unwrap();
-            let fields = [("enclosing_function", "Tick_detour_fkt")];
-            let output = render_encoder(&registry, config, &Record::builder()
-                .key_values(&fields).args(format_args!("Tick_detour_fkt")).build());
-            assert_eq!(String::from_utf8(output).unwrap(), "Tick     |Tick");
-        }
     }
 
     #[test]

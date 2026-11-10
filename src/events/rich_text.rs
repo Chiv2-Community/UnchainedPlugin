@@ -117,35 +117,19 @@ impl RichText {
                 RichTextChunk::Underline(children) => (children, "__", 4),
                 RichTextChunk::Color(_, children) => (children, "", 0),
             };
-            match format {
-                Format::Discord => {
-                    let marker = if active & flag != 0 { "" } else { marker };
-                    let start = output.len();
+            if let Format::Discord = format {
+                let marker = if active & flag != 0 { "" } else { marker };
+                let start = output.len();
+                output.push_str(marker);
+                let content_start = output.len();
+                children.write(output, format, active | flag);
+                if output.len() == content_start {
+                    output.truncate(start);
+                } else {
                     output.push_str(marker);
-                    let content_start = output.len();
-                    children.write(output, format, active | flag);
-                    if output.len() == content_start {
-                        output.truncate(start);
-                    } else {
-                        output.push_str(marker);
-                    }
                 }
-                Format::Game if flag == 1 && active & 1 == 0 => {
-                    // The default Slate parser does not span newlines or compose nested tags.
-                    let mut text = String::new();
-                    children.write(&mut text, format, active | flag);
-                    for (index, line) in text.split('\n').enumerate() {
-                        if index > 0 {
-                            output.push('\n');
-                        }
-                        if !line.is_empty() {
-                            output.push_str("<RichText.Emphasis>");
-                            output.push_str(line);
-                            output.push_str("</>");
-                        }
-                    }
-                }
-                _ => children.write(output, format, active),
+            } else {
+                children.write(output, format, active);
             }
         }
     }
@@ -369,16 +353,13 @@ mod tests {
     }
 
     #[test]
-    fn game_keeps_only_line_scoped_bold_formatting() {
+    fn game_flattens_formatting_and_preserves_newlines() {
         let text = RichText::from(Bold(RichText(vec![
             Text("a\n".into()),
             Italics(Underline(Bold("b".into()).into()).into()),
             Text("\n".into()),
         ])));
-        assert_eq!(
-            text.to_game_chat(),
-            "<RichText.Emphasis>a</>\n<RichText.Emphasis>b</>\n"
-        );
+        assert_eq!(text.to_game_chat(), "a\nb\n");
     }
 
     #[test]

@@ -26,7 +26,7 @@ report.append(" Literal text is not parsed.");
   Preformat values for precision or other formatting; named placeholders and format specifiers are unsupported.
 - `append`, `+`, and `+=` accept a `RichTextChunk`, another `RichText`, or literal strings.
 - Discord renders formatting as Markdown. Discord may ignore Markdown in embed titles or footers.
-- Game chat tries `<RichText.Emphasis>` for bold; other formatting is flattened. This style is not live-verified.
+- Game chat renders plain text with escaped markup characters.
 - Console output is plain text. `RichTextChunk::Color(rgb, children)` currently preserves only its children.
 
 ## Creating a New Command

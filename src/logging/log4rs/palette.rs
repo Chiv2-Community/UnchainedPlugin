@@ -7,7 +7,7 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn:<32.32}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:<5}{palette(trace)} | {palette(module)}{fn:<16}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
 
 // Built-in chat patterns select these names from structured channel/faction fields.
 inventory::submit! { crate::logging::inline::PaletteReference("team_agatha") }
