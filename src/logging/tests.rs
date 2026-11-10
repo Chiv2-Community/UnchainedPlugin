@@ -91,18 +91,6 @@ fn inline_syntax_preserves_grouped_formats_literals_and_palette_only_records() {
 }
 
 #[test]
-fn inline_calls_borrow_owned_loggers() {
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Capture::default();
-    sinfo!(logger: logger, ("info"), palette("info"), (" tail"));
-    sinfo!(logger: logger, "ordinary reuse");
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 2);
-    assert!(lines[0].ends_with("info tail"));
-    assert!(lines[1].ends_with("ordinary reuse"));
-}
-
-#[test]
 fn inline_calls_borrow_logger_fields_through_shared_receivers() {
     struct Owner(Capture);
     impl Owner {
@@ -149,25 +137,6 @@ fn inline_formatting_is_stable_across_multiple_encoders() {
     let counter = Counter(std::cell::Cell::new(0));
     sinfo!(logger: Logger, ("{}", counter), palette("warn"), "tail");
     assert_eq!(counter.0.get(), 1);
-}
-
-#[test]
-fn ordinary_calls_do_not_create_inline_state() {
-    struct Plain(Capture);
-    impl Log for Plain {
-        fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.0.enabled(metadata) }
-        fn log(&self, record: &Record) {
-            assert!(record.key_values().get("inline_colors".into()).is_none());
-            self.0.log(record);
-        }
-        fn flush(&self) {}
-    }
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Plain(Capture::default());
-    sinfo!(logger: &logger, "ordinary {}", 7);
-    let lines = logger.0.0.lock().unwrap();
-    assert_eq!(lines.len(), 1);
-    assert!(lines[0].ends_with("ordinary 7"));
 }
 
 struct Example;

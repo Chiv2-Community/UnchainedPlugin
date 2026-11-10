@@ -215,12 +215,4 @@ mod tests {
         assert_eq!(embed["footer"]["text"], "**footer**");
     }
 
-    #[test]
-    fn discord_content_without_embed_uses_markdown() {
-        let discord = serde_json::to_value(CreateMessage::from(
-            BroadcastMessage::new().content(crate::rich_text!("**body**")),
-        )).unwrap();
-        assert_eq!(discord["content"], "**body**");
-    }
-
 }

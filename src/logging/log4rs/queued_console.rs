@@ -190,20 +190,18 @@ mod tests {
     }
 
     #[test]
-    fn pause_warning_fires_once_above_threshold() {
+    fn pause_warning_fires_once_until_backlog_recovers() {
         let mut backlog = Backlog { queued: PAUSE_THRESHOLD - 1, warned: false };
         assert!(!backlog.enqueued());
         assert!(backlog.enqueued());
         assert!(!backlog.enqueued());
-    }
-
-    #[test]
-    fn pause_warning_rearms_below_threshold() {
-        let mut backlog = Backlog { queued: PAUSE_THRESHOLD + 1, warned: true };
+        backlog.dequeued();
         backlog.dequeued();
         assert!(backlog.warned);
         backlog.dequeued();
         assert!(!backlog.warned);
+        assert!(!backlog.enqueued());
+        assert!(backlog.enqueued());
     }
 
     #[test]

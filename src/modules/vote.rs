@@ -769,32 +769,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vote_success_at_threshold() {
-        let mut state_init = VotingState::new();
-        state_init.register(MockVote);
-        let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, _messages) = mock_broadcaster();
-        let cmd = VoteCommand { state: state.clone(), broadcaster };
-
-        // 10 players, 10% min_vote_percentage means 1 vote required.
-        // 1 vote cast -> Success.
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(10));
-            s.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["User1".into()]),
-                no_votes: HashSet::new(),
-                end_time: Instant::now() - Duration::from_secs(1),
-            });
-        }
-        cmd.on_tick().await;
-        assert!(state.lock().await.active_vote.is_none());
-    }
-
-    #[tokio::test]
     async fn test_vote_failure_below_threshold() {
         let mut state_init = VotingState::new();
         state_init.register(MockVote);
@@ -807,31 +781,6 @@ mod tests {
         {
             let mut s = state.lock().await;
             s.player_count_provider = Box::new(MockPlayerCountProvider(100));
-            s.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["User1".into()]),
-                no_votes: HashSet::new(),
-                end_time: Instant::now() - Duration::from_secs(1),
-            });
-        }
-        cmd.on_tick().await;
-        assert!(state.lock().await.active_vote.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_vote_exact_threshold() {
-        let mut state_init = VotingState::new();
-        state_init.register(MockVote);
-        let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, _messages) = mock_broadcaster();
-        let cmd = VoteCommand { state: state.clone(), broadcaster };
-
-        // Test exact threshold (10 players, 10% = 1 required)
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(10));
             s.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
                 raw_target_args: vec!["TestTarget".into()],

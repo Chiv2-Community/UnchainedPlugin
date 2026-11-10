@@ -484,29 +484,15 @@ mod tests {
         ];
         let normalized = normalize_and_filter_args(args);
         
-        // Should include: app, --rcon, 9001, --Port, 7777, --nullrhi, -ini:...
-        // Should NOT include: UnknownArg=Value, -UnknownFlag
-        assert_eq!(normalized[0], "app");
-        assert!(normalized.contains(&"--rcon".to_string()));
-        assert!(normalized.contains(&"9001".to_string()));
-        assert!(normalized.contains(&"--Port".to_string()));
-        assert!(normalized.contains(&"7777".to_string()));
-        assert!(normalized.contains(&"--nullrhi".to_string()));
-        assert!(normalized.contains(&"-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string()));
-        
-        // Ensure unknown args are filtered out
-        assert!(!normalized.contains(&"UnknownArg=Value".to_string()));
-        assert!(!normalized.contains(&"--UnknownArg".to_string()));
-        assert!(!normalized.contains(&"--UnknownFlag".to_string()));
-        
-        // Check order of -ini (should be at the end)
-        assert_eq!(normalized.last().unwrap(), "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64");
+        assert_eq!(normalized, ["app", "--rcon", "9001", "--Port", "7777", "--nullrhi",
+            "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64"]);
     }
 
     #[test]
     fn test_process_ini_map() {
         let extra_args = vec![
             "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string(),
+            "-ini:Game:/Script/Engine.GameSession:ServerName=MyServer".to_string(),
             "-ini:Engine:[Core.Log]:LogHttp=VeryVerbose".to_string(),
             "not-an-ini".to_string(),
         ];
@@ -515,6 +501,10 @@ mod tests {
         assert_eq!(
             ini_map.get("Game").unwrap().get("/Script/Engine.GameSession").unwrap().get("MaxPlayers").unwrap(),
             "64"
+        );
+        assert_eq!(
+            ini_map.get("Game").unwrap().get("/Script/Engine.GameSession").unwrap().get("ServerName").unwrap(),
+            "MyServer"
         );
         assert_eq!(
             ini_map.get("Engine").unwrap().get("[Core.Log]").unwrap().get("LogHttp").unwrap(),
@@ -605,25 +595,6 @@ mod tests {
     }
 
     #[test]
-    fn test_process_ini_map_complex() {
-        let extra_args = vec![
-            "-ini:Game:/Script/Engine.GameSession:MaxPlayers=64".to_string(),
-            "-ini:Game:/Script/Engine.GameSession:ServerName=MyServer".to_string(),
-            "-ini:Engine:[Core.Log]:LogHttp=VeryVerbose".to_string(),
-        ];
-        let ini_map = CLIArgs::process_ini_map(&extra_args);
-
-        let game_session = ini_map.get("Game").unwrap().get("/Script/Engine.GameSession").unwrap();
-        assert_eq!(game_session.get("MaxPlayers").unwrap(), "64");
-        assert_eq!(game_session.get("ServerName").unwrap(), "MyServer");
-        
-        assert_eq!(
-            ini_map.get("Engine").unwrap().get("[Core.Log]").unwrap().get("LogHttp").unwrap(),
-            "VeryVerbose"
-        );
-    }
-
-    #[test]
     fn test_normalize_mixed_order() {
         let args = vec![
             "app".to_string(),
@@ -633,41 +604,16 @@ mod tests {
         ];
         let normalized = normalize_and_filter_args(args);
         
-        // -ini should be at the end
-        assert_eq!(normalized[0], "app");
-        assert_eq!(normalized[1], "--rcon");
-        assert_eq!(normalized[2], "9001");
-        assert_eq!(normalized[3], "--unchained");
-        assert_eq!(normalized[4], "-ini:G:S:K=V");
+        assert_eq!(normalized, ["app", "--rcon", "9001", "--unchained", "-ini:G:S:K=V"]);
     }
 
     #[test]
     fn test_saved_dir_suffix() {
-        let args = vec![
-            "app".to_string(),
-            "-saveddirsuffix=test".to_string(),
-        ];
-        let normalized = normalize_and_filter_args(args);
-        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
-        assert!(normalized.contains(&"test".to_string()));
-
-        let cli = CLIArgs::try_parse_from(normalized).unwrap();
-        assert_eq!(cli.saved_dir_suffix, Some("test".to_string()));
-    }
-
-    #[test]
-    fn test_saved_dir_suffix_no_equals() {
-        let args = vec![
-            "app".to_string(),
-            "-saveddirsuffix".to_string(),
-            "test2".to_string(),
-        ];
-        let normalized = normalize_and_filter_args(args);
-        assert!(normalized.contains(&"--saveddirsuffix".to_string()));
-        assert!(normalized.contains(&"test2".to_string()));
-
-        let cli = CLIArgs::try_parse_from(normalized).unwrap();
-        assert_eq!(cli.saved_dir_suffix, Some("test2".to_string()));
+        for args in [vec!["app", "-saveddirsuffix=test"], vec!["app", "-saveddirsuffix", "test"]] {
+            let normalized = normalize_and_filter_args(args.into_iter().map(str::to_owned));
+            let cli = CLIArgs::try_parse_from(normalized).unwrap();
+            assert_eq!(cli.saved_dir_suffix.as_deref(), Some("test"));
+        }
     }
 
     #[test]
@@ -681,7 +627,5 @@ mod tests {
         let normalized = normalize_and_filter_args(args);
 
         assert_eq!(normalized, vec!["app".to_string(), "--rcon".to_string(), "9001".to_string(), "SomethingElse".to_string()]);
-        assert!(!normalized.contains(&"-UnknownFlag".to_string()));
-        assert!(!normalized.contains(&"--UnknownFlag".to_string()));
     }
 }

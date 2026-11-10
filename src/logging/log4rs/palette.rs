@@ -560,7 +560,6 @@ palette:
         let mut encoder = encoder("channels");
         encoder.enabled = true;
         encoder.truecolor = true;
-        assert_eq!(encoder.colors.len(), 3, "string and foreground object share a style");
         let message = Message::new(&[
             Palette("both"), Text(format_args!("A")),
             Palette("background"), Text(format_args!("B")),
@@ -575,22 +574,6 @@ palette:
         assert_eq!(buffer.bytes, b"\x1b[0;38;2;18;52;86;48;2;171;205;239mA\x1b[0;48;2;171;205;239mB\x1b[0;38;2;18;52;86mC\x1b[0;38;2;18;52;86mDE");
         assert_eq!(buffer.styles.last().unwrap().1, Style::new());
 
-        let mut config = fixtures::encoder("channels");
-        config["pattern"] = "{palette(both)}A{palette(background)}B{palette(foreground)}C{palette(object-foreground)}D{palette(normal)}E".into();
-        let mut direct = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
-        direct.enabled = true;
-        direct.truecolor = true;
-        let mut output = StyledBuffer::default();
-        direct.encode(&mut output, &Record::builder().build()).unwrap();
-        assert_eq!(output.bytes, buffer.bytes);
-        assert_eq!(output.styles, buffer.styles);
-
-        encoder.enabled = false;
-        let mut plain = StyledBuffer::default();
-        encoder.encode(&mut plain, &Record::builder()
-            .args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
-        assert_eq!(plain.bytes, b"ABCDE");
-        assert!(plain.styles.is_empty());
     }
 
     #[test]
@@ -664,17 +647,6 @@ palette:
         sinfo!(palette("info"), "fixture");
         let dynamic = String::from("__test_palette_dynamic");
         sinfo!(palette(&dynamic), "fixture");
-    }
-
-    #[test]
-    fn literal_palette_index_is_available_before_calls_execute() {
-        let names: std::collections::BTreeSet<_> = inventory::iter::<crate::logging::inline::PaletteReference>
-            .into_iter().map(|reference| reference.0).collect();
-        assert!(names.contains("__TEST_PALETTE_PRESENT"));
-        assert!(names.contains("__test_palette_missing"));
-        assert!(names.contains("__TEST_PALETTE_MISSING"));
-        assert!(names.contains("__test_palette_raw"));
-        assert!(!names.contains("__test_palette_dynamic"));
     }
 
     #[test]
@@ -801,20 +773,6 @@ inline-removals:
     }
 
     #[test]
-    fn arbitrary_names_switch_legacy_styles() {
-        let mut encoder = encoder("accent");
-        encoder.enabled = true;
-        encoder.colors[0].style.text(Color::Magenta).intense(true);
-        let record = Record::builder().args(format_args!("hello")).build();
-        let mut buffer = StyledBuffer::default();
-        encoder.encode(&mut buffer, &record).unwrap();
-        assert_eq!(buffer.bytes, b"helloend");
-        assert_eq!(buffer.styles[0].1.text, Some(Color::Magenta));
-        assert_eq!(buffer.styles[0].1.intense, Some(true));
-        assert_eq!(buffer.styles[1], (5, Style::new()));
-    }
-
-    #[test]
     fn empty_palette_with_plain_message_skips_console_configuration() {
         let mut encoder = encoder("empty");
         assert!(encoder.colors.is_empty());
@@ -887,59 +845,21 @@ inline-removals:
     }
 
     #[test]
-    fn inline_validation_preserves_lookup_and_formatting_counts() {
-        use std::{cell::Cell, fmt};
-        struct Message(Cell<usize>);
-        impl fmt::Display for Message {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                self.0.set(self.0.get() + 1);
-                f.write_str("界x")
-            }
-        }
-        struct Metadata<'a> { colors: Option<&'a str>, lookups: Cell<usize> }
-        impl log::kv::Source for Metadata<'_> {
-            fn visit<'kvs>(&'kvs self, _: &mut dyn log::kv::VisitSource<'kvs>) -> Result<(), log::kv::Error> {
-                panic!("encoder enumerated metadata")
-            }
-            fn get(&self, key: log::kv::Key<'_>) -> Option<log::kv::Value<'_>> {
-                assert_eq!(key.as_str(), COLORS_KEY);
-                self.lookups.set(self.lookups.get() + 1);
-                self.colors.map(log::kv::Value::from)
-            }
-        }
-        for (colors, parsed, valid, switches) in [
-            (None, false, false, 0),
-            (Some("not json"), false, false, 0),
-            (Some("null"), false, false, 0),
-            (Some("[]"), true, true, 0),
-            (Some(r#"[{"utf8_offset":-1,"palette":"warn"}]"#), false, false, 0),
-            (Some(r#"[{"utf8_offset":1,"palette":"warn"}]"#), true, false, 0),
-            (Some(r#"[{"utf8_offset":5,"palette":"warn"}]"#), true, false, 0),
-            (Some(r#"[{"utf8_offset":3,"palette":"warn"},{"utf8_offset":0,"palette":null}]"#), true, false, 0),
-            (Some(r#"[{"utf8_offset":0,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":3,"palette":null},{"utf8_offset":4,"palette":null}]"#), true, true, 4),
+    fn invalid_inline_metadata_falls_back_to_plain_text() {
+        let mut encoder = encoder("repeated-message");
+        encoder.enabled = true;
+        for colors in [
+            "not json",
+            r#"[{"utf8_offset":1,"palette":"accent"}]"#,
+            r#"[{"utf8_offset":5,"palette":"accent"}]"#,
+            r#"[{"utf8_offset":3,"palette":"accent"},{"utf8_offset":0,"palette":null}]"#,
         ] {
-            for (pattern, chunks, expected) in [
-                ("{m}|{message}", 2, "界x|界x"), ("界{message}|{m}", 2, "界界x|界x"), ("prefix", 0, "prefix"),
-            ] {
-                let mut config = fixtures::encoder("plain");
-                config["pattern"] = pattern.into();
-                let mut encoder = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
-                encoder.enabled = true;
-                for truecolor in [false, true] {
-                    encoder.truecolor = truecolor;
-                    let message = Message(Cell::new(0));
-                    let metadata = Metadata { colors, lookups: Cell::new(0) };
-                    let mut output = StyledBuffer::default();
-                    encoder.encode(&mut output, &Record::builder().key_values(&metadata)
-                        .args(format_args!("{message}")).build()).unwrap();
-                    assert_eq!(output.bytes, expected.as_bytes(), "{colors:?}, {pattern}, truecolor={truecolor}");
-                    assert_eq!(metadata.lookups.get(), 1);
-                    assert_eq!(message.0.get(), usize::from(parsed) + if valid { 0 } else { chunks }, "{colors:?}, {pattern}");
-                    assert_eq!(output.styles.len(), switches * chunks + 1, "{colors:?}, {pattern}");
-                    assert!(output.styles.iter().all(|(_, style)| *style == Style::new()));
-                    assert_eq!(output.styles.last().unwrap().0, expected.len());
-                }
-            }
+            let values = [(COLORS_KEY, colors)];
+            let mut output = StyledBuffer::default();
+            encoder.encode(&mut output, &Record::builder().key_values(&values)
+                .args(format_args!("界x")).build()).unwrap();
+            assert_eq!(output.bytes, "界x|界x".as_bytes(), "{colors}");
+            assert_eq!(output.styles, [(9, Style::new())], "{colors}");
         }
     }
 

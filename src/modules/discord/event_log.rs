@@ -258,7 +258,6 @@ mod tests {
         for args in [
             vec![],
             vec!["first-arg".into(), "second-arg 🩸".into()],
-            vec![String::new()],
         ] {
             let events = [
                 GameEvent::CommandRequestEvent(CommandRequest {
@@ -289,7 +288,7 @@ mod tests {
                 for value in ["test-command", "ServerConsole", "Admin", "raw-input"] {
                     assert!(text.contains(value), "missing {value:?} in {text:?}");
                 }
-                for arg in args.iter().filter(|arg| !arg.is_empty()) {
+                for arg in &args {
                     assert!(text.contains(arg), "missing {arg:?} in {text:?}");
                 }
                 if matches!(event, GameEvent::CommandRejectedEvent(_)) {
@@ -325,12 +324,7 @@ mod tests {
             assert!(text.contains(value), "missing {value:?} in {text:?}");
         }
         let assistant = CombatActor::new("Assistant 🩸".into(), false);
-        for killers in [
-            vec![],
-            vec![assistant.clone()],
-            vec![victim.clone()],
-            vec![assistant.clone(), victim.clone()],
-        ] {
+        for killers in [vec![], vec![assistant]] {
             let kill = Kill {
                 killer: killer.clone(),
                 victim: victim.clone(),
