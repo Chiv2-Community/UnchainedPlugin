@@ -140,6 +140,26 @@ macro_rules! define_pocess {
     }};
 }
 
+/// Define a resolver restricted to one platform, including its hooks and patches.
+/// Accepts the same pattern lists, modes, and inline bodies as `define_pattern_resolver!`.
+///
+/// ```rust,ignore
+/// define_single_platform_pattern_resolver!(STEAM, SteamOnlyCheck, ["48 8B ?? ??"]);
+/// CREATE_PATCH!(SteamOnlyCheck, NOP, 2);
+/// ```
+#[macro_export]
+macro_rules! define_single_platform_pattern_resolver {
+    ($platform:ident, $name:ident, $($resolver:tt)+) => {
+        inventory::submit! {
+            $crate::resolvers::ResolverPlatform {
+                name: stringify!($name),
+                platform: $crate::resolvers::PlatformType::$platform,
+            }
+        }
+        $crate::define_pattern_resolver!($name, $($resolver)+);
+    };
+}
+
 #[macro_export]
 macro_rules! define_pattern_resolver {
 

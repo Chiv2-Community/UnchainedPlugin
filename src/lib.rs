@@ -153,6 +153,7 @@ impl BuildInfo {
         resolvers_in
             .into_iter()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
+            .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -192,7 +193,10 @@ mod build_info_tests {
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
-        let required: Vec<_> = resolvers().filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name)).collect();
+        let required: Vec<_> = resolvers()
+            .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
+            .filter(|resolver| resolvers::supports_platform(resolver.name, PlatformType::STEAM))
+            .collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
@@ -207,6 +211,7 @@ mod build_info_tests {
             info.offsets.insert(resolver.name.to_string(), 1);
         }
     }
+
 }
 
 
@@ -564,8 +569,12 @@ pub fn attach_hooks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
 
+    let platform = crate::get_current_platform();
     // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<resolvers::HookRegistration> {
+        if !resolvers::supports_platform(hook.name, platform) {
+            continue;
+        }
         let cond = (hook.condition)();
         if !cond {
             // swarn!("inactive hook: {}", hook.name);
@@ -589,7 +598,11 @@ pub fn attach_hooks(
 
 /// The base program address of the running application will be used.
 pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
+    let platform = crate::get_current_platform();
     for p in inventory::iter::<resolvers::PatchRegistration> {
+        if !resolvers::supports_platform(p.name, platform) {
+            continue;
+        }
         // Run the condition check
         if (p.enabled_fn)() {
             match unsafe { (p.patch_fn)(offsets.clone()) } {
