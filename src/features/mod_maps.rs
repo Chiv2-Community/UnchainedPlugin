@@ -258,8 +258,9 @@ pub type OnRegistrationDone = Box<dyn FnOnce(Result<usize, String>) + Send>;
 
 /// Splits package file paths into game-thread registration batches. Pure logic.
 pub fn registration_batches(file_paths: &[String], chunk_size: usize) -> Vec<Vec<String>> {
+    // `chunks` panics on 0 (`--mod-map-batch 0`); treat it as 1.
     file_paths
-        .chunks(chunk_size)
+        .chunks(chunk_size.max(1))
         .map(<[String]>::to_vec)
         .collect()
 }
@@ -615,7 +616,12 @@ pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Resul
                         let mut i = t;
                         while i < pak_paths.len() {
                             let mut stats = FilterStats::default();
-                            let r = read_pak_filtered_assets(&pak_paths[i], key.as_ref(), &mut stats);
+                            // A panic while reading one pak (third-party data)
+                            // only skips that pak.
+                            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                read_pak_filtered_assets(&pak_paths[i], key.as_ref(), &mut stats)
+                            }))
+                            .unwrap_or_else(|_| Err(anyhow::anyhow!("pak scan panicked")));
                             out.push((i, r.map_err(|e| e.to_string()), stats));
                             i += num_threads;
                         }
@@ -624,8 +630,16 @@ pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Resul
                 })
                 .collect();
             let mut all = Vec::new();
-            for h in handles {
-                all.extend(h.join().expect("pak scan worker panicked"));
+            for (t, h) in handles.into_iter().enumerate() {
+                match h.join() {
+                    Ok(out) => all.extend(out),
+                    // Report every pak of a dead worker as skipped.
+                    Err(_) => all.extend(
+                        (t..pak_paths.len())
+                            .step_by(num_threads)
+                            .map(|i| (i, Err("pak scan worker panicked".to_string()), FilterStats::default())),
+                    ),
+                }
             }
             all
         });
@@ -1094,6 +1108,13 @@ mod tests {
         assert_eq!(registry, vec![(registry_pak, b"registry".to_vec())]);
         assert_eq!(legacy, vec![legacy_pak]);
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn registration_batches_treat_zero_chunk_size_as_one() {
+        let files = vec!["a".to_string(), "b".to_string()];
+        assert_eq!(registration_batches(&files, 0), vec![vec!["a".to_string()], vec!["b".to_string()]]);
+        assert!(registration_batches(&[], 0).is_empty());
     }
 
     #[test]

@@ -364,8 +364,7 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
     let mut asset_registry = TScriptInterface::new();
     let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
         &mut asset_registry as *mut TScriptInterface
-    ))
-    .expect("GetAssetRegistry_Helper failed");
+    ))?;
 
     let name_res = FName::with_type(class_name.as_str(), crate::ue::EFindName::Find);
 
@@ -386,8 +385,7 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
         name_res,
         &mut asset_data as *mut TArray<FAssetData>,
         true
-    ))
-    .expect("GetAssetsByClass failed");
+    ))?;
 
     match out {
         true => Ok(asset_data),
@@ -404,8 +402,7 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
     let mut asset_registry = TScriptInterface::new();
     let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
         &mut asset_registry as *mut TScriptInterface
-    ))
-    .expect("GetAssetRegistry_Helper failed");
+    ))?;
 
     let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
 
@@ -445,8 +442,7 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
     let mut asset_registry = TScriptInterface::new();
     let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
         &mut asset_registry as *mut TScriptInterface
-    ))
-    .expect("GetAssetRegistry_Helper failed");
+    ))?;
 
     let registry = {
         // ScanPathsAndFilesSynchronous is a non-virtual __thiscall on
