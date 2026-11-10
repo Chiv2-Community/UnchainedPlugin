@@ -6,7 +6,7 @@ appenders:
         level: debug
     encoder:
       kind: palette
-      pattern: "{palette(timestamp)}{d(%H:%M:%S%.3f)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{sm}::{fn}{palette(timestamp)} - {palette({l}_body)}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S%.3f)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn}{palette(timestamp)} - {palette({l}_body)}{m}{n}"
       palette:
         error: "#f28b82"
         warn: "#f2cc78"
@@ -26,12 +26,12 @@ appenders:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:>5}| {M}::{fn}] {m}{n}"
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:>5}| {fn}] {m}{n}"
   kismet:
     kind: file
     path: "__KISMET_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:>5}| {M}::{fn}] {m}{n}"
+      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:>5}| {fn}] {m}{n}"
 
 loggers:
   serenity:

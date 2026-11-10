@@ -7,7 +7,7 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S%.3f)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{sm}::{fn}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S%.3f)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Channel {
@@ -979,7 +979,7 @@ mod tests {
                 assert!(styled.contains(&severity), "{text:?}");
                 assert!(styled.starts_with("\x1b[0;38;2;144;144;144m"));
                 let body_rgb = if level <= Level::Info { "238;238;238" } else { rgb };
-                assert!(styled.contains(&format!("\x1b[0;38;2;190;157;92mp::module::???\x1b[0;38;2;144;144;144m - \x1b[0;38;2;{body_rgb}mbefore")));
+                assert!(styled.contains(&format!("\x1b[0;38;2;190;157;92m???\x1b[0;38;2;144;144;144m - \x1b[0;38;2;{body_rgb}mbefore")));
                 assert!(text.contains("before \x1b[31mred\x1b[0m after"));
                 assert!(text.ends_with("\x1b[0m"));
             }

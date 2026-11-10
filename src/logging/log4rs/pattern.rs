@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn short_module_boundaries_and_unpadded_default_leave_custom_widths_independent() {
+    fn short_module_boundaries_and_function_only_default_leave_custom_widths_independent() {
         use super::super::palette::PaletteEncoderConfig;
 
         let newline = if cfg!(windows) { "\r\n" } else { "\n" };
@@ -162,7 +162,7 @@ mod tests {
                     format!("[{expected}]|[{expected:<24}]"), "{module}");
                 let mut console = Vec::new();
                 encoder.encode(&mut SimpleWriter(&mut console), &record).unwrap();
-                let expected_body = format!(" | {expected}::??? - message{newline}");
+                let expected_body = format!(" | ??? - message{newline}");
                 assert!(String::from_utf8(console).unwrap()
                     .ends_with(&expected_body), "{module}");
             }

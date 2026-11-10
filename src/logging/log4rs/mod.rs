@@ -478,13 +478,14 @@ mod tests {
                 assert!(text.contains(&format!(" {level:>5}")), "{name}: {text:?}");
                 assert_eq!(text.matches("example_function").count(), 1, "{name}: {text:?}");
                 let context = if name == "console" {
-                    "UP::example::example_function -"
+                    "example_function -"
                 } else {
-                    "UnchainedPlugin::example::example_function]"
+                    "example_function]"
                 };
                 assert!(text.contains(&format!("{context} plain message")), "{name}: {text:?}");
                 assert!(!text.contains('\u{1b}'), "{name}: {text:?}");
                 assert!(!text.contains("distinct_filter_target"), "{name}: {text:?}");
+                assert!(!text.contains("::"), "{name}: {text:?}");
             }
         }
     }

@@ -161,26 +161,26 @@ case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
 The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
-The default console uses unpadded `{sm}::{fn}`, with a 32-character cap on `{sm}`.
+The default console uses `{fn}` without a module prefix.
 Timestamps include milliseconds and use gray; levels use severity colors.
 Pipes before and after the level use the trace palette color.
-Modules, `::`, and function names use muted banner gold (`#BE9D5C`).
+Function names use muted banner gold (`#BE9D5C`).
 The ` - ` separator uses timestamp gray. Debug and trace message bodies match
 their level colors; other message bodies use neutral text.
 Metadata has no brackets and ends with ` - ` before the message.
-File appenders use `{M}::{fn}` for the full source module and function.
+File appenders also use `{fn}` without a module prefix.
 Both defaults use `{l:>5}` to right-align the level; `{t}` shows the filtering target instead.
 
 Console and file patterns support the same fields, including `{sm}`, `{fn}`,
 `{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
 and `rolling_file` appenders, with explicit or omitted `kind: pattern`.
 Nested formatters, escaping, and width specifications such as `{sm:>16}` work
-in both. To omit or replace the console's short module, edit `pattern`.
+in both. To include a module prefix, edit `pattern`.
 `kind: pattern` uses a single `pattern` field and does not apply the console's
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-The default console pattern includes `{sm}::{fn}`. The function field displays the enclosing
+The default console pattern includes `{fn}`. The function field displays the enclosing
 named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.

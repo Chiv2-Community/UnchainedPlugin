@@ -2,6 +2,7 @@
 import errno
 import os
 import pty
+import re
 import subprocess
 import sys
 
@@ -39,7 +40,8 @@ def check(target, terminal, overrides, colored, custom=False):
         output = bytes(transcript) if terminal else {"stdout": stdout, "stderr": stderr}[target]
         case = (target, terminal, overrides)
         assert child.returncode == 0, (case, stdout, stderr, transcript)
-        assert output.count(b"[policy_child            ] boundary message") == 5, (case, output)
+        plain = re.sub(rb"\x1b\[[0-9;]*m", b"", output)
+        assert plain.count(b" | ??? - boundary message") == 5, (case, output)
         if colored:
             colors = ((b"17;34;51", b"34;51;68", b"51;68;85", b"68;85;102", b"85;102;119")
                       if custom else (b"242;139;130", b"242;204;120", b"140;180;225", b"128;128;128", b"92;92;92", b"238;238;238"))

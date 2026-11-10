@@ -317,7 +317,7 @@ mod tests {
         let encoder = || -> Box<dyn Encode> {
             if std::env::var_os("UNCHAINED_BENCH_WITHOUT_TIMESTAMP").is_some() {
                 return Box::new(crate::logging::log4rs::pattern::PatternEncoder::new(
-                    "[{l:>5}] [{M}::{fn}] {m}{n}"));
+                    "[{l:>5}] [{fn}] {m}{n}"));
             }
             let config: PaletteEncoderConfig = serde_yaml::from_value(
                 crate::logging::test_resources::encoder("defaults")).unwrap();
