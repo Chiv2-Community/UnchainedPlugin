@@ -114,7 +114,7 @@ mod client_message {
         let player = players.next()?;
         // A display name is not a unique identity; do not guess between duplicates.
         if players.next().is_some() { return None; }
-        EFaction::try_from(player.faction).ok()
+        Some(player.faction)
     }
 
     #[derive(Debug, PartialEq)]

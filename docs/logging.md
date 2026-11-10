@@ -81,7 +81,7 @@ the root. Plugin macros add the enclosing function name as
 
 Chat records add `attributes.chat`, such as `AllSay`, `TeamSay`, or `ServerSay`.
 Player chat also includes `attributes.team`: `Agatha`, `Mason`, `Tenosia`,
-`FFA`, `None`, `All`, or `Unknown`. The team is looked up for `TeamSay`;
+`FFA`, `None`, `All`, `MAX`, or `Unknown`. The team is looked up for `TeamSay`;
 other chat types and unavailable or ambiguous senders use `Unknown`.
 
 For example, a Mason team message includes:

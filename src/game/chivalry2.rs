@@ -148,6 +148,7 @@ pub enum EFaction {
     None = 3,
     All = 4,
     Tenosia = 5,
+    MAX = 6,
 }
 
 impl TryFrom<u8> for EFaction {
@@ -161,6 +162,7 @@ impl TryFrom<u8> for EFaction {
             3 => Ok(Self::None),
             4 => Ok(Self::All),
             5 => Ok(Self::Tenosia),
+            6 => Ok(Self::MAX),
             _ => Err(()),
         }
     }
@@ -175,6 +177,7 @@ impl EFaction {
             Self::None => "None",
             Self::All => "All",
             Self::Tenosia => "Tenosia",
+            Self::MAX => "MAX",
         }
     }
 }
@@ -1114,7 +1117,7 @@ pub struct ATBLPlayerState {
     pub out_of_combat_time_rem: f32,    // 0x0A3C
     pub next_spawn_team: *mut c_void,   // 0x0A40 (ATBLTeam*)
     pub team: *mut c_void,              // 0x0A48 (ATBLTeam*)
-    pub faction: u8,                    // 0x0A50 (EFaction enum)
+    pub faction: EFaction,              // 0x0A50
     pub is_npc: bool,                   // 0x0A51
     pub is_player_custom_bot: bool,     // 0x0A52
     pub padding_17: [u8; 0x5],          // 0x0A53
