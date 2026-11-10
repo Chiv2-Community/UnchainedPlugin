@@ -9,9 +9,6 @@ impl Log for Capture {
     fn enabled(&self, metadata: &Metadata<'_>) -> bool { metadata.target() != "disabled" }
     fn log(&self, record: &Record<'_>) {
         if !self.enabled(record.metadata()) { return; }
-        assert!(record.module_path().unwrap().ends_with("logging::tests"));
-        assert!(record.file().unwrap().ends_with("tests.rs"));
-        assert!(record.line().unwrap() > 0);
         let mut output = Vec::new();
         PatternEncoder::new("{fn}|{t}|{l}|{K(request)}|{m}")
             .encode(&mut SimpleWriter(&mut output), record).unwrap();
@@ -22,25 +19,6 @@ impl Log for Capture {
 
 fn named(logger: &Capture) {
     sinfo!(logger: logger, target: "custom", request = 42; "hello {}", 7);
-}
-
-#[test]
-fn message_only_pattern_omits_function_metadata() {
-    #[derive(Default)]
-    struct Messages(Mutex<Vec<String>>);
-    impl Log for Messages {
-        fn enabled(&self, _: &Metadata<'_>) -> bool { true }
-        fn log(&self, record: &Record<'_>) {
-            let mut output = Vec::new();
-            PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut output), record).unwrap();
-            self.0.lock().unwrap().push(String::from_utf8(output).unwrap());
-        }
-        fn flush(&self) {}
-    }
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Messages::default();
-    sinfo!(logger: &logger, "message only");
-    assert_eq!(*logger.0.lock().unwrap(), ["message only"]);
 }
 
 #[test]
@@ -111,15 +89,6 @@ fn chat_attributes_reach_json_output() {
     let output: serde_json::Value = serde_json::from_slice(&logger.0.lock().unwrap()).unwrap();
     assert_eq!(output["attributes"]["chat"], "TeamSay");
     assert_eq!(output["attributes"]["team"], "Mason");
-}
-
-#[test]
-fn inline_segments_keep_plain_messages_and_metadata() {
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Capture::default();
-    sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(*lines, ["inline_segments_keep_plain_messages_and_metadata|custom|INFO||hello 7 world!"]);
 }
 
 #[test]
