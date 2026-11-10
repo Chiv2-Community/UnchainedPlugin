@@ -41,7 +41,7 @@ fn is_live_object(p: *const UObject) -> bool {
         && unsafe { globals().guobject_array_unchecked() }.is_live(p.cast())
 }
 
-fn object_inherits_from(ptr: *mut UObject, needle: &str) -> bool {
+pub(super) fn object_inherits_from(ptr: *mut UObject, needle: &str) -> bool {
     if !is_live_object(ptr) { return false; }
     let mut curr = unsafe { (ptr as *const UObject).as_ref() }
         .and_then(|o| unsafe { o.uobject_base_utility.uobject_base.class_private.as_ref() })

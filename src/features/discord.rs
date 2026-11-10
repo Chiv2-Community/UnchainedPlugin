@@ -256,8 +256,7 @@ impl DiscordHandler for Discord {
         } else if config.general_chat_channel_id == Some(msg.channel_id) {
             self.event_publisher
                 .publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-                    chat_source: ChatSource::Discord,
-                    chat_type: ChatType::Global,
+                    chat_source: ChatSource::Discord(ChatType::Global),
                     sender: msg.author.name,
                     message: msg.content,
                 }));

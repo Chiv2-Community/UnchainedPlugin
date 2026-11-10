@@ -1,6 +1,6 @@
 use serenity::all::{RoleId, UserId};
 use crate::features::discord::DiscordConfig;
-use crate::game::chivalry2::EChatType;
+use crate::game::chivalry2::{EChatType, EFaction};
 use strum::{Display, IntoStaticStr};
 use itertools::Itertools;
 use std::fmt;
@@ -79,7 +79,12 @@ pub struct MatchEnd {
 
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
-pub enum ChatSource { Discord, Console, Game }
+pub enum ChatSource {
+    Discord(ChatType),
+    Console(ChatType),
+    #[strum(to_string = "Game")]
+    Native(NativeChat),
+}
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum ChatType { Admin, Global, Team }
@@ -100,9 +105,64 @@ impl ChatType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameChatMessage {
     pub chat_source: ChatSource,
-    pub chat_type: ChatType,
     pub sender: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeChat {
+    Player { channel: EChatType, faction: Option<EFaction> },
+    System { channel: EChatType },
+}
+
+impl GameChatMessage {
+    pub fn chat_type(&self) -> ChatType {
+        match self.chat_source {
+            ChatSource::Discord(channel) | ChatSource::Console(channel) => channel,
+            ChatSource::Native(NativeChat::Player { channel, .. }) => match channel {
+                EChatType::AllSay => ChatType::Global,
+                EChatType::Admin => ChatType::Admin,
+                _ => ChatType::Team,
+            },
+            ChatSource::Native(NativeChat::System { .. }) => ChatType::Global,
+        }
+    }
+
+    pub fn faction(&self) -> &'static str {
+        match self.chat_source {
+            ChatSource::Discord(_) => "Discord",
+            ChatSource::Native(NativeChat::System { .. }) => "System",
+            ChatSource::Native(NativeChat::Player { faction, .. }) => faction.map(EFaction::as_str).unwrap_or("Unknown"),
+            ChatSource::Console(_) => "Console",
+        }
+    }
+
+    pub fn chat_label(&self) -> String {
+        let label = match self.chat_source {
+            ChatSource::Discord(_) => "Discord",
+            ChatSource::Console(channel) => channel.into(),
+            ChatSource::Native(NativeChat::System { channel: EChatType::AllSay }) if !self.sender.is_empty() => "All",
+            ChatSource::Native(NativeChat::System { .. }) => "System",
+            ChatSource::Native(NativeChat::Player { channel, faction }) => match channel {
+                EChatType::AllSay => "All",
+                EChatType::ServerSay => "System",
+                EChatType::Spectator => "Spectator",
+                EChatType::TeamSay if faction == Some(EFaction::None) => "Spectator",
+                EChatType::TeamSay => self.faction(),
+                _ => channel.as_str(),
+            },
+        };
+        label.to_ascii_uppercase()
+    }
+
+    /// Only non-command native global player records may be relayed externally.
+    pub fn is_relayable(&self) -> bool {
+        match self.chat_source {
+            ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, .. }) => !self.message.starts_with('!'),
+            ChatSource::Native(_) => false,
+            ChatSource::Discord(_) | ChatSource::Console(_) => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]

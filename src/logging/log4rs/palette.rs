@@ -7,7 +7,20 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S%.3f)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:>5}{palette(trace)} | {palette(module)}{fn:<32.32}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
+
+// Built-in chat patterns select these names from structured channel/faction fields.
+inventory::submit! { crate::logging::inline::PaletteReference("team_agatha") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_mason") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_tenosia") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_ffa") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_none") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_system") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_discord") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_unknown") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_max") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_all") }
+inventory::submit! { crate::logging::inline::PaletteReference("team_spectator") }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Channel {
@@ -68,6 +81,8 @@ impl PaletteColor {
 pub struct PaletteEncoderConfig {
     pattern: Option<String>,
     palette: Option<BTreeMap<String, Option<PaletteColor>>>,
+    #[serde(default, rename = "inline-removals")]
+    inline_removals: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -75,6 +90,7 @@ enum Chunk {
     Text(PatternEncoder),
     Message,
     Color([Option<usize>; 5]),
+    DynamicColor(PatternEncoder),
 }
 
 #[derive(Debug)]
@@ -86,6 +102,7 @@ struct Entry {
 
 #[derive(Debug)]
 pub(crate) struct PaletteEncoder {
+    inline_removals: Option<regex::Regex>,
     plain: PatternEncoder,
     chunks: Vec<Chunk>,
     colors: Vec<Entry>,
@@ -106,9 +123,12 @@ impl PaletteEncoderConfig {
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
             ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
             ("module", Some([190, 157, 92])), ("chat_all", Some([242, 179, 120])),
-            ("chat_agatha", Some([140, 180, 225])), ("chat_mason", Some([242, 139, 130])),
-            ("chat_tenosia", Some([208, 145, 40])), ("chat_server", Some([140, 216, 225])),
-            ("chat_unknown", Some([215, 160, 223]))]
+            ("team_discord", Some([181, 140, 255])), ("team_system", Some([140, 216, 225])),
+            ("team_agatha", Some([140, 180, 225])), ("team_mason", Some([242, 139, 130])),
+            ("team_tenosia", Some([208, 145, 40])), ("chat_server", Some([140, 216, 225])),
+            ("team_ffa", Some([168, 213, 162])), ("team_unknown", Some([215, 160, 223])),
+            ("team_none", Some([255, 255, 255])), ("team_max", Some([215, 160, 223])),
+            ("team_all", Some([168, 213, 162])), ("team_spectator", Some([255, 255, 255]))]
             .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
         for name in ["title", "subtitle"] {
             palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
@@ -156,6 +176,7 @@ impl PaletteEncoderConfig {
             Entry { channels: rgb, ansi, style: Style::new() }
         }).collect();
         Ok(PaletteEncoder {
+            inline_removals: super::removals::compile(&self.inline_removals)?,
             plain: PatternEncoder::new(&plain),
             chunks,
             colors,
@@ -190,24 +211,27 @@ fn formatter_head(pattern: &str, i: usize) -> usize {
     format_fill(pattern, end)
 }
 
-fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Result<[Option<usize>; 5]> {
-    if name.is_empty() { return Ok([None; 5]); }
+fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Result<Chunk> {
+    if name.is_empty() { return Ok(Chunk::Color([None; 5])); }
     let bytes = name.as_bytes();
     let mut i = 0;
+    let mut dynamic = false;
     while i < bytes.len() {
         if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
         if bytes[i] == b'{' {
             let head = formatter_head(name, i);
             let end = bytes[head..].iter().position(|byte| *byte == b'}')
                 .ok_or_else(|| anyhow::anyhow!("Unclosed palette name formatter"))? + head;
-            let formatter = name[i + 1..end].split(':').next().unwrap();
-            anyhow::ensure!(matches!(formatter, "l" | "level"),
-                "Palette names support only {{l}} and {{level}} interpolation");
+            let formatter = name[i + 1..head].split(':').next().unwrap();
+            anyhow::ensure!(matches!(formatter, "l" | "level" | "K"),
+                "Palette names support level and structured-field interpolation");
+            dynamic |= formatter == "K";
             i = end;
         }
         i += 1;
     }
     let pattern = PatternEncoder::new(name);
+    if dynamic { return Ok(Chunk::DynamicColor(pattern)); }
     // Resolve severity-dependent names once; encoding uses only indexes.
     let mut indexes = [None; 5];
     for (i, level) in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace].into_iter().enumerate() {
@@ -217,7 +241,7 @@ fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Res
         let key = std::str::from_utf8(&key)?;
         indexes[i] = *palette.get(key).ok_or_else(|| anyhow::anyhow!("Unknown palette color: {key}"))?;
     }
-    Ok(indexes)
+    Ok(Chunk::Color(indexes))
 }
 
 fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Result<(Vec<Chunk>, String)> {
@@ -269,7 +293,7 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
             anyhow::ensure!(i < bytes.len() && i > name_start && bytes[i - 1] == b')',
                 "Expected {{palette(name)}} or {{palette()}}");
             let name = &pattern[name_start..i - 1];
-            chunks.push(Chunk::Color(resolve(name, palette)?));
+            chunks.push(resolve(name, palette)?);
             i += 1;
             start = i;
             continue;
@@ -291,7 +315,7 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
 
 impl PaletteEncoder {
     pub(super) fn configure(&mut self, target: log4rs::append::console::Target) {
-        if self.colors.is_empty() && !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_))) { return; }
+        if self.colors.is_empty() && !self.chunks.iter().any(|chunk| matches!(chunk, Chunk::Color(_) | Chunk::DynamicColor(_))) { return; }
         let mut colors = Vec::new();
         for entry in &self.colors {
             for channel in [entry.channels.foreground, entry.channels.background] {
@@ -323,10 +347,20 @@ impl PaletteEncoder {
 
 impl Encode for PaletteEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
-        // Redirected and file output use the ordinary pattern encoder directly.
-        if !self.enabled { return self.plain.encode(writer, record); }
-        let result = self.encode_chunks(writer, record);
-        let reset = writer.set_style(&Style::new());
+        let result = if let Some(regex) = &self.inline_removals {
+            let mut line = super::removals::RenderedLine::default();
+            let rendered = if self.enabled {
+                self.encode_chunks(&mut PaletteWriter { inner: writer, style: Style::new(), capture: Some(&mut line) }, record)
+            } else {
+                self.plain.encode(&mut line, record)
+            };
+            rendered.and_then(|()| line.emit(writer, regex))
+        } else if self.enabled {
+            self.encode_chunks(&mut PaletteWriter { inner: writer, style: Style::new(), capture: None }, record)
+        } else {
+            return self.plain.encode(writer, record);
+        };
+        let reset = if self.enabled { writer.set_style(&Style::new()) } else { Ok(()) };
         result?;
         reset?;
         Ok(())
@@ -341,7 +375,7 @@ impl PaletteEncoder {
                 return Ok(());
             }
             if entry.channels.inherits() {
-                if self.truecolor { return writer.write_all(entry.ansi.as_bytes()); }
+                if self.truecolor { return writer.ansi(entry.ansi.as_bytes()); }
                 let mut style = entry.style.clone();
                 if entry.channels.foreground == Some(Channel::Inherit) {
                     style.text = writer.style.text;
@@ -355,7 +389,7 @@ impl PaletteEncoder {
             if self.truecolor {
                 // RGB codes replace the native fallback; avoid log4rs' small ANSI style buffer.
                 writer.set_style(&Style::new())?;
-                writer.write_all(entry.ansi.as_bytes())?;
+                writer.ansi(entry.ansi.as_bytes())?;
             } else {
                 writer.set_style(&entry.style)?;
             }
@@ -365,8 +399,7 @@ impl PaletteEncoder {
         Ok(())
     }
 
-    fn encode_chunks(&self, writer: &mut dyn Write, record: &Record) -> anyhow::Result<()> {
-        let mut writer = PaletteWriter { inner: writer, style: Style::new() };
+    fn encode_chunks(&self, writer: &mut PaletteWriter<'_>, record: &Record) -> anyhow::Result<()> {
         let colors = record.key_values().get(COLORS_KEY.into());
         let inline = colors.and_then(|value| value.to_borrowed_str())
             .and_then(|json| serde_json::from_str::<Vec<ColorChange<'_>>>(json).ok())
@@ -382,7 +415,7 @@ impl PaletteEncoder {
         let level = record.level() as usize - 1;
         for chunk in &self.chunks {
             match chunk {
-                Chunk::Text(pattern) => pattern.encode(&mut writer, record)?,
+                Chunk::Text(pattern) => pattern.encode(writer, record)?,
                 Chunk::Message => {
                     if let Some((message, changes)) = &inline {
                         let mut start = 0;
@@ -392,7 +425,7 @@ impl PaletteEncoder {
                                 self.names.binary_search_by(|(key, _)|
                                     key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
                                     .ok().and_then(|position| self.names[position].1));
-                            self.set_color(&mut writer, index)?;
+                            self.set_color(writer, index)?;
                             start = change.offset;
                         }
                         writer.write_all(message[start..].as_bytes())?;
@@ -400,7 +433,15 @@ impl PaletteEncoder {
                         write!(writer, "{}", record.args())?;
                     }
                 }
-                Chunk::Color(indexes) => self.set_color(&mut writer, indexes[level])?,
+                Chunk::Color(indexes) => self.set_color(writer, indexes[level])?,
+                Chunk::DynamicColor(pattern) => {
+                    let mut key = Vec::new();
+                    pattern.encode(&mut SimpleWriter(&mut key), record)?;
+                    key.make_ascii_lowercase();
+                    let index = self.names.binary_search_by(|(name, _)| name.as_bytes().cmp(&key))
+                        .ok().and_then(|position| self.names[position].1);
+                    self.set_color(writer, index)?;
+                }
             }
         }
         Ok(())
@@ -411,18 +452,32 @@ impl PaletteEncoder {
 struct PaletteWriter<'a> {
     inner: &'a mut dyn Write,
     style: Style,
+    capture: Option<&'a mut super::removals::RenderedLine>,
+}
+
+impl PaletteWriter<'_> {
+    fn ansi(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+        if let Some(line) = &mut self.capture {
+            line.ansi(bytes);
+            Ok(())
+        } else {
+            self.inner.write_all(bytes)
+        }
+    }
 }
 
 impl std::io::Write for PaletteWriter<'_> {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> { self.inner.write(bytes) }
-    fn flush(&mut self) -> std::io::Result<()> { self.inner.flush() }
-    fn write_all(&mut self, bytes: &[u8]) -> std::io::Result<()> { self.inner.write_all(bytes) }
-    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> std::io::Result<()> { self.inner.write_fmt(args) }
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        match &mut self.capture { Some(line) => line.write(bytes), None => self.inner.write(bytes) }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match &mut self.capture { Some(line) => line.flush(), None => self.inner.flush() }
+    }
 }
 
 impl Write for PaletteWriter<'_> {
     fn set_style(&mut self, style: &Style) -> std::io::Result<()> {
-        self.inner.set_style(style)?;
+        match &mut self.capture { Some(line) => line.set_style(style)?, None => self.inner.set_style(style)? }
         self.style = style.clone();
         Ok(())
     }
@@ -448,6 +503,33 @@ mod tests {
 
     fn encoder(name: &str) -> PaletteEncoder {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
+    }
+
+    #[test]
+    fn structured_fields_select_colors_or_reset_for_missing_names() {
+        let config = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
+pattern: "{palette(team_{K(label)(all)})}{K(label)(ALL)} {palette(team_{K(faction)(unknown)})}{m}"
+palette:
+  team_all: "#112233"
+  team_mason: "#778899"
+  team_unknown: null
+"##).unwrap();
+        let mut encoder = config.build().unwrap();
+        encoder.enabled = true;
+        for (name, index) in &encoder.names {
+            if let Some(index) = index {
+                encoder.colors[*index].style.text(if name == "team_all" { Color::Green } else { Color::Red });
+            }
+        }
+        for (faction, expected) in [(Some("MASON"), Some(Color::Red)), (Some("unknown"), None), (Some("absent"), None), (None, None)] {
+            let fields: Vec<_> = faction.map(|value| ("faction", value)).into_iter().collect();
+            let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
+            let mut output = StyledBuffer::default();
+            encoder.encode(&mut output, &record).unwrap();
+            assert_eq!(output.bytes, b"ALL message");
+            assert_eq!(output.styles.iter().map(|(offset, style)| (*offset, style.text)).collect::<Vec<_>>(),
+                [(0, Some(Color::Green)), (4, expected), (11, None)]);
+        }
     }
 
     #[test]
@@ -667,6 +749,35 @@ mod tests {
     }
 
     #[test]
+    fn removals_span_fields_and_colors_without_filtering_control_sequences() {
+        for enabled in [false, true] {
+            for truecolor in [false, true] {
+                let mut encoder = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
+pattern: "éDR{palette(red)}OP{m}{palette()}tail"
+palette:
+  red: "#112233"
+inline-removals:
+  - "DROPme"
+  - "[0-9]+"
+"##).unwrap().build().unwrap();
+                encoder.enabled = enabled;
+                encoder.truecolor = truecolor;
+                encoder.colors[0].style.text(Color::Red);
+                let record = Record::builder().args(format_args!("me42 kept")).build();
+                let mut output = StyledBuffer::default();
+                encoder.encode(&mut output, &record).unwrap();
+                let expected = if enabled && truecolor { "é\x1b[0;38;2;17;34;51m kepttail" } else { "é kepttail" };
+                assert_eq!(output.bytes, expected.as_bytes());
+                if !enabled { assert!(output.styles.is_empty()); }
+                if enabled && !truecolor {
+                    assert_eq!(output.styles[0].0, "é".len());
+                    assert_eq!(output.styles[0].1.text, Some(Color::Red));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn names_are_resolved_at_startup_for_all_levels_and_repeated_switches() {
         let mut encoder = encoder("severity");
         assert_eq!(encoder.colors.len(), 6, "duplicate RGB values share an entry");
@@ -711,6 +822,7 @@ mod tests {
         for i in 0..64 { table.insert(format!("color{i}"), Some(PaletteColor::Foreground(Channel::Rgb([i, i, i])))); }
         let encoder = PaletteEncoderConfig {
             pattern: Some("{palette(color63)}hello{palette()}".to_owned()), palette: Some(table),
+            inline_removals: Vec::new(),
         }.build().unwrap();
         assert_eq!(encoder.colors.len(), 64);
     }

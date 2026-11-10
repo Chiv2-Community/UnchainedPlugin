@@ -7,6 +7,7 @@ use pattern::PatternEncoderDeserializer;
 mod console;
 pub(crate) mod palette;
 pub mod pattern;
+mod removals;
 use std::backtrace::Backtrace;
 use std::panic;
 use crate::tools::hook_globals::cli_args;
@@ -17,6 +18,7 @@ const EMBEDDED_LOG4RS_YAML: &str = include_str!("log4rs.default.yaml");
 const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
 const UNCHAINED_LOG_PATH_PLACEHOLDER: &str = "__UNCHAINED_LOG_PATH__";
 const KISMET_LOG_PATH_PLACEHOLDER: &str = "__KISMET_LOG_PATH__";
+const CHAT_LOG_PATH_PLACEHOLDER: &str = "__CHAT_LOG_PATH__";
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {
@@ -68,7 +70,7 @@ fn init_with_path(override_path: Option<&str>, saved_dir_suffix: Option<&str>) -
     }
     for name in warnings {
         swarn!(undefined_palette = name.as_str();
-            "Undefined inline palette reference in a configured palette encoder: {}", name);
+            "Undefined palette reference in a configured encoder: {}", name);
     }
     crate::logging::console::report_attachment_failure();
 
@@ -92,7 +94,8 @@ fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<(&str, String
     }
 }
 
-fn config_with_warnings(yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<(Config, BTreeSet<String>)> {
+fn config_with_warnings(mut yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<(Config, BTreeSet<String>)> {
+    share_structured_appenders(&mut yaml);
     let warnings = missing_palette_references(&yaml);
     let raw_config: RawConfig = serde_yaml::from_value(yaml)
         .with_context(|| format!("Failed to parse logger config {}", config_source_name))?;
@@ -118,6 +121,25 @@ pub fn register(deserializers: &mut Deserializers) {
     deserializers.insert("palette", PaletteEncoderDeserializer);
     deserializers.insert("console", ConsoleAppenderDeserializer);
     deserializers.insert("pattern", PatternEncoderDeserializer);
+}
+
+fn share_structured_appenders(yaml: &mut serde_yaml::Value) {
+    let shared: Vec<_> = yaml["root"]["appenders"].as_sequence().into_iter().flatten()
+        .filter(|name| name.as_str().is_some_and(|name| yaml["appenders"][name]["encoder"]["kind"] == "json"))
+        .cloned().collect();
+    let Some(loggers) = yaml.get_mut("loggers").and_then(serde_yaml::Value::as_mapping_mut) else { return; };
+    for (name, logger) in loggers {
+        if !name.as_str().is_some_and(|name| name == "chat_log" || name.starts_with("chat_log::"))
+            || logger["additive"].as_bool() != Some(false) { continue; }
+        let Some(logger) = logger.as_mapping_mut() else { continue; };
+        let appenders = logger.entry(serde_yaml::Value::from("appenders"))
+            .or_insert_with(|| serde_yaml::Value::Sequence(Vec::new()));
+        if let Some(appenders) = appenders.as_sequence_mut() {
+            for name in &shared {
+                if !appenders.contains(name) { appenders.push(name.clone()); }
+            }
+        }
+    }
 }
 
 fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
@@ -166,6 +188,7 @@ fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> Stri
 
     yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &unchained_log_path)
         .replace(KISMET_LOG_PATH_PLACEHOLDER, &kismet_log_path)
+        .replace(CHAT_LOG_PATH_PLACEHOLDER, &yaml_escape_double_quoted(&log_dir.join("chat.log").to_string_lossy()))
 }
 
 fn yaml_escape_double_quoted(value: &str) -> String {
@@ -352,6 +375,8 @@ mod tests {
         yaml["appenders"].as_mapping_mut().unwrap()
             .retain(|name, _| name.as_str() == Some("console"));
         yaml["root"]["appenders"] = vec!["console"].into();
+        yaml["loggers"].as_mapping_mut().unwrap()
+            .retain(|name, _| !name.as_str().is_some_and(|name| name.starts_with("chat_log")));
         let config = config_from_value(yaml, "embedded").unwrap();
         let logger = log4rs::Logger::new(config);
         assert!(logger.enabled(&Metadata::builder()
@@ -370,6 +395,83 @@ mod tests {
             let output = render_encoder(&deserializers, fixtures::encoder(name), &Record::builder()
                 .module_path(Some("UnchainedPlugin::messages")).target("filter::target").build());
             assert_eq!(String::from_utf8(output).unwrap(), "UP::messages|UnchainedPlugin::messages|filter::target|???");
+        }
+    }
+
+    #[test]
+    fn inline_removals_filter_the_rendered_line_without_changing_records() {
+        let mut registry = Deserializers::default();
+        register(&mut registry);
+        for kind in ["pattern", "palette"] {
+            let config = serde_yaml::to_value(serde_json::json!({
+                "kind": kind,
+                "pattern": "{fn:<20}|{K(enclosing_function)}|{m}",
+                "inline-removals": ["_detour_fkt", "[0-9]+", "é"]
+            })).unwrap();
+            for (name, label) in [
+                ("Tick_detour_fkt", "Tick"), ("Tick42", "Tick"),
+                ("Tick_detour_fkt_more", "Tick_more"),
+                ("Tick_DETOUR_FKT", "Tick_DETOUR_FKT"), ("Téick", "Tick"),
+            ] {
+                let fields = [("enclosing_function", name)];
+                let output = render_encoder(&registry, config.clone(), &Record::builder()
+                    .key_values(&fields).args(format_args!("{name}")).build());
+                assert_eq!(String::from_utf8(output).unwrap(),
+                    format!("{label}{}|{label}|{label}", " ".repeat(20 - name.chars().count())));
+                assert_eq!(fields[0].1, name);
+                let raw = render_encoder(&registry, serde_yaml::to_value(serde_json::json!({
+                    "kind": "pattern", "pattern": "{fn}|{m}"
+                })).unwrap(), &Record::builder().key_values(&fields).args(format_args!("{name}")).build());
+                assert_eq!(String::from_utf8(raw).unwrap(), format!("{name}|{name}"));
+            }
+            assert!(console_config(serde_yaml::to_value(serde_json::json!({
+                "kind": kind, "inline-removals": ["["]
+            })).unwrap()).is_err());
+        }
+    }
+
+    #[test]
+    fn isolated_chat_still_reaches_shared_json_appenders_once() {
+        let prefix = std::env::temp_dir().join(format!("unchained-chat-routing-{}-{}",
+            std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        for already_shared in [false, true] {
+            let normal = prefix.with_extension(format!("{already_shared}.normal"));
+            let chat = prefix.with_extension(format!("{already_shared}.chat"));
+            let json = prefix.with_extension(format!("{already_shared}.json"));
+            let mut yaml = serde_yaml::to_value(serde_json::json!({
+                "appenders": {
+                    "normal": {"kind": "file", "path": normal, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                    "chat": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                    "system": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                    "structured": {"kind": "file", "path": json, "encoder": {"kind": "json"}}
+                },
+                "root": {"level": "info", "appenders": ["normal", "structured"]},
+                "loggers": {
+                    "chat_log": {"level": "info", "appenders": ["chat"], "additive": false},
+                    "chat_log::system": {"level": "info", "appenders": ["system"], "additive": false},
+                    "chat_log::system::sender": {"level": "info", "appenders": ["chat"], "additive": false}
+                }
+            })).unwrap();
+            if already_shared {
+                yaml["loggers"]["chat_log"]["appenders"].as_sequence_mut().unwrap().push("structured".into());
+            }
+            let logger = log4rs::Logger::new(config_from_value(yaml, "chat-routing").unwrap());
+            sinfo!(logger: &logger, target: "ordinary", "ordinary");
+            for _ in 0..2 {
+                sinfo!(logger: &logger, target: "chat_log::team", "hello");
+            }
+            sinfo!(logger: &logger, target: "chat_log::system", "notice");
+            sinfo!(logger: &logger, target: "chat_log::system::sender", "console");
+            logger.flush();
+            assert_eq!(std::fs::read_to_string(&normal).unwrap().lines().collect::<Vec<_>>(), ["ordinary"]);
+            assert_eq!(std::fs::read_to_string(&chat).unwrap().lines().collect::<Vec<_>>(), ["hello", "hello", "notice", "console"]);
+            let records: Vec<serde_json::Value> = std::fs::read_to_string(&json).unwrap().lines()
+                .map(|line| serde_json::from_str(line).unwrap()).collect();
+            assert_eq!(records.iter().map(|record| (record["target"].as_str().unwrap(), record["message"].as_str().unwrap()))
+                .collect::<Vec<_>>(), [("ordinary", "ordinary"), ("chat_log::team", "hello"),
+                    ("chat_log::team", "hello"), ("chat_log::system", "notice"), ("chat_log::system::sender", "console")]);
+            drop(logger);
+            for path in [&normal, &chat, &json] { std::fs::remove_file(path).unwrap(); }
         }
     }
 

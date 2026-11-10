@@ -19,8 +19,8 @@ impl KillstreakSubscriber {
 
     fn build_message(&self, player: &str, message: &str, color: u32) -> BroadcastMessage {
         BroadcastMessage::new()
-            .title("⚔️ Killstreak".to_string())
-            .content(format!("**{}** {}", player, message))
+            .title(crate::rich_text!("⚔️ Killstreak"))
+            .content(crate::rich_text!("**{}** {}", player, message))
             .color(color)
     }
 }

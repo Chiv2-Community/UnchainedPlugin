@@ -484,8 +484,7 @@ mod tests {
         use crate::events::models::{ChatSource, ChatType, GameChatMessage};
 
         let mut chat = GameChatMessage {
-            chat_source: ChatSource::Discord,
-            chat_type: ChatType::Global,
+            chat_source: ChatSource::Discord(ChatType::Global),
             sender: "Player".into(),
             message: String::new(),
         };
@@ -855,7 +854,7 @@ mod tests {
         use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
         use crate::events::bus::Subscriber;
         use crate::events::models::{
-            AdminAlert, ChatSource, ChatType, CommandSource, GameChatMessage,
+            AdminAlert, ChatSource, CommandSource, GameChatMessage,
         };
         use crate::features::discord::DiscordConfig;
         use crate::modules::chat::{ChatRelaySubscriber, DiscordChatSink};
@@ -905,8 +904,9 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), async {
             relay
                 .on_event(&GameEvent::GameChatMessageEvent(GameChatMessage {
-                    chat_source: ChatSource::Game,
-                    chat_type: ChatType::Global,
+                    chat_source: ChatSource::Native(crate::events::models::NativeChat::Player {
+                        channel: crate::game::chivalry2::EChatType::AllSay, faction: None,
+                    }),
                     sender: "Player".into(),
                     message: "chat".into(),
                 }))
@@ -939,6 +939,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_private_chat_never_reaches_discord_chat_or_event_log_queues() {
+        use crate::events::bus::Subscriber;
+        use crate::events::models::{ChatSource, GameChatMessage, NativeChat};
+        use crate::features::discord::DiscordConfig;
+        use crate::game::chivalry2::EChatType;
+        use crate::modules::chat::{ChatRelaySubscriber, DiscordChatSink};
+        let id = ChannelId::new(1);
+        let config = Box::leak(Box::new(DiscordConfig {
+            bot_token: "unused".into(), admin_role_id: None, mention_on_admin: false,
+            general_chat_channel_id: Some(id), event_log_channel_id: Some(id),
+            admin_notification_channel_id: None, dashboard_channel_id: None,
+        }));
+        let (sender, _receiver) = channel();
+        let outbox = DiscordOutbox { channels: Arc::new(HashMap::from([(id, sender)])) };
+        let mut relay = ChatRelaySubscriber::new(vec![Box::new(DiscordChatSink::new(config, outbox.clone()))]);
+        let mut logs = EventLogSubscriber::new(outbox.clone(), config);
+        for channel in EChatType::ALL {
+            for (native, text) in [
+                (NativeChat::Player { channel, faction: None }, if channel == EChatType::AllSay { "!help" } else { "hello" }),
+                (NativeChat::System { channel }, "system text"),
+            ] {
+                let chat = GameChatMessage {
+                    chat_source: ChatSource::Native(native),
+                    sender: "Player".into(), message: text.into(),
+                };
+                let event = GameEvent::GameChatMessageEvent(chat);
+                relay.on_event(&event).await;
+                logs.on_event(&event).await;
+            }
+        }
+        assert_eq!(outbox.channels[&id].messages.capacity(), MESSAGE_CAPACITY);
+        assert_eq!(outbox.channels[&id].events.capacity(), EVENT_CAPACITY);
+        let event = GameEvent::GameChatMessageEvent(GameChatMessage {
+            chat_source: ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, faction: None }),
+            sender: "Player".into(), message: "hello".into(),
+        });
+        for _ in 0..2 {
+            relay.on_event(&event).await;
+            logs.on_event(&event).await;
+        }
+        assert_eq!(outbox.channels[&id].messages.capacity(), MESSAGE_CAPACITY - 2);
+        assert_eq!(outbox.channels[&id].events.capacity(), EVENT_CAPACITY - 2);
+    }
+
+    #[tokio::test]
     async fn queued_broadcasts_preserve_the_admin_mention_setting() {
         use crate::events::broadcast::{BroadcastMessage, Notify};
         use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
@@ -963,11 +1008,12 @@ mod tests {
             subscriber
                 .on_event(
                     &BroadcastMessage::new()
-                        .content("alert")
+                        .content(crate::rich_text!("**{}**", "alert"))
                         .notify(Notify::Admin),
                 )
                 .await;
             let value = serde_json::to_value(receiver.messages.try_recv().unwrap().value).unwrap();
+            assert!(value["content"].as_str().unwrap().starts_with("**alert**"));
             assert_eq!(
                 value["content"].as_str().unwrap().contains("<@&7>"),
                 mentions

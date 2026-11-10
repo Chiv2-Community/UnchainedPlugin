@@ -306,8 +306,8 @@ impl Command<VoteArgs> for VoteCommand {
 
                     let message =
                         BroadcastMessage::new()
-                            .title(format!("Vote for '{}' started by '{}'", command.raw_args, command.actor.display_name))
-                            .content(format!("Type !yes or !no in chat to vote. {}", description))
+                            .title(crate::rich_text!("Vote for '{}' started by '{}'", command.raw_args, command.actor.display_name))
+                            .content(crate::rich_text!("Type !yes or !no in chat to vote. {}", description))
                             .color(0x00FF00);
 
                     self.broadcaster.publish(message);
@@ -354,8 +354,8 @@ impl Command<VoteArgs> for VoteCommand {
             let active = state.active_vote.take().unwrap();
             if success {
                 let message = BroadcastMessage::new()
-                    .title(format!("{} SUCCEEDED", active.logic.vote_description(active.raw_target_args.as_slice())))
-                    .content(format!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
+                    .title(crate::rich_text!("{} SUCCEEDED", active.logic.vote_description(active.raw_target_args.as_slice())))
+                    .content(crate::rich_text!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
                     .color(0x00FF00);
                 self.broadcaster.publish(message);
 
@@ -364,8 +364,8 @@ impl Command<VoteArgs> for VoteCommand {
                 active.logic.on_success(active.target_args);
             } else {
                 let message = BroadcastMessage::new()
-                    .title(format!("{} FAILED", active.logic.vote_description(active.raw_target_args.as_slice())))
-                    .content(format!("Result: {} Yes, {} No. {}", active.yes_votes.len(), active.no_votes.len(), failure_reason))
+                    .title(crate::rich_text!("{} FAILED", active.logic.vote_description(active.raw_target_args.as_slice())))
+                    .content(crate::rich_text!("Result: {} Yes, {} No. {}", active.yes_votes.len(), active.no_votes.len(), failure_reason))
                     .color(0xFF0000);
                 self.broadcaster.publish(message);
             }
@@ -408,7 +408,7 @@ impl Command<YesArgs> for YesCommand {
             active.no_votes.remove(&voter);
             active.yes_votes.insert(voter);
 
-            self.broadcaster.publish(format!("{} voted YES", command.actor.display_name).into());
+            self.broadcaster.publish(crate::rich_text!("{} voted YES", command.actor.display_name).into());
         }
     }
 }
@@ -447,7 +447,7 @@ impl Command<NoArgs> for NoCommand {
             let voter = command.actor.display_name.clone();
             active.yes_votes.remove(&voter);
             active.no_votes.insert(voter);
-            self.broadcaster.publish(format!("{} voted NO", command.actor.display_name).into());
+            self.broadcaster.publish(crate::rich_text!("{} voted NO", command.actor.display_name).into());
         }
     }
 }
@@ -572,7 +572,7 @@ mod tests {
         {
             let msgs = messages.lock().await;
             assert_eq!(msgs.len(), 1);
-            assert!(msgs[0].get_content().unwrap().contains("Minimum vote threshold not met (33 votes required, 2 total votes cast)"));
+            assert!(msgs[0].get_content().unwrap().to_plain_text().contains("Minimum vote threshold not met (33 votes required, 2 total votes cast)"));
         }
         messages.lock().await.clear();
 
@@ -598,7 +598,7 @@ mod tests {
         {
             let msgs = messages.lock().await;
             assert_eq!(msgs.len(), 1);
-            assert!(msgs[0].get_content().unwrap().contains("Majority not reached (50.0% required, 40.0% achieved)"));
+            assert!(msgs[0].get_content().unwrap().to_plain_text().contains("Majority not reached (50.0% required, 40.0% achieved)"));
         }
     }
 
@@ -892,11 +892,10 @@ mod tests {
         let msgs = messages.lock().await;
         assert_eq!(msgs.len(), 1);
         let msg = &msgs[0];
-        assert_eq!(msg.title, Some("🗳️ Vote Help".to_string()));
-        let fields: &[(String, String)] = msg.fields.as_ref();
-        let field = &fields[0];
-        assert_eq!(field.0, "Available Votes");
-        assert!(field.1.contains("`!vote mockvote <target>`"));
+        assert_eq!(msg.title.as_ref().map(|text| text.to_plain_text()), Some("🗳️ Vote Help".to_string()));
+        let field = &msg.fields[0];
+        assert_eq!(field.0.to_plain_text(), "Available Votes");
+        assert!(field.1.to_plain_text().contains("`!vote mockvote <target>`"));
         drop(msgs);
 
         // 2. Test GameChat source (should NOT have emojis)
@@ -908,7 +907,7 @@ mod tests {
         let msgs = messages.lock().await;
         assert_eq!(msgs.len(), 2);
         let msg = &msgs[1];
-        assert_eq!(msg.title, Some("Vote Help".to_string()));
+        assert_eq!(msg.title.as_ref().map(|text| text.to_plain_text()), Some("Vote Help".to_string()));
     }
 
     #[tokio::test]

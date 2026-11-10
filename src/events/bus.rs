@@ -88,6 +88,13 @@ impl<E> EventBus<E>
         }
     }
 
+    pub fn new_with_subscriber(tick_rate: Duration, subscriber: Box<dyn Subscriber<E>>) -> Self {
+        Self {
+            subscribers: Mutex::new(vec![subscriber]),
+            tick_rate,
+        }
+    }
+
     pub async fn subscribe(&self, subscriber: Box<dyn Subscriber<E>>) -> Result<(), String> {
         let mut subscribers = self.subscribers.lock().await;
         let id = subscriber.identifier();
@@ -187,6 +194,15 @@ mod tests {
             events: Arc::new(Mutex::new(Vec::new())),
             ticks: Arc::new(Mutex::new(0)),
         }
+    }
+
+    #[tokio::test]
+    async fn initial_subscriber_receives_first_event() {
+        let subscriber = sub("initial");
+        let events = subscriber.events.clone();
+        let bus = EventBus::new_with_subscriber(Duration::from_millis(100), Box::new(subscriber));
+        bus.dispatch(TestEvent::Hello).await;
+        assert_eq!(*events.lock().await, vec![TestEvent::Hello]);
     }
 
     #[tokio::test]

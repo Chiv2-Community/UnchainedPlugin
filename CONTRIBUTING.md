@@ -2,6 +2,33 @@
 
 Thank you for your interest in contributing! This guide will help you understand how to extend the plugin with new commands, vote types, and event subscribers.
 
+## Broadcast text
+
+Broadcast titles, content, field names/values, and footers accept `RichText` or literal strings.
+Use `rich_text!` to parse inline Discord-style Markdown:
+
+```rust
+use UnchainedPlugin::{events::broadcast::BroadcastMessage, rich_text};
+
+let message = BroadcastMessage::new()
+    .content(rich_text!("**Bold**, *italic*, _also italic_, and __underlined__"));
+let player = "Player_one";
+let announcement = rich_text!("**{}** has {} kills", player, 5);
+let mut report = announcement + rich_text!(". *Well done!*");
+report += rich_text!(" Another round?");
+report.append(" Literal text is not parsed.");
+```
+
+- Supports nested spans and backslash-escaped punctuation. Unmatched markers remain literal.
+- This is an inline subset, not a full Markdown parser; links, lists, and code blocks are unsupported.
+- String conversions do not parse markup. Keep untrusted names/text in `RichTextChunk::Text` leaves.
+- Macro arguments fill sequential `{}` placeholders as literal text, without parsing their Markdown.
+  Preformat values for precision or other formatting; named placeholders and format specifiers are unsupported.
+- `append`, `+`, and `+=` accept a `RichTextChunk`, another `RichText`, or literal strings.
+- Discord renders formatting as Markdown. Discord may ignore Markdown in embed titles or footers.
+- Game chat tries `<RichText.Emphasis>` for bold; other formatting is flattened. This style is not live-verified.
+- Console output is plain text. `RichTextChunk::Color(rgb, children)` currently preserves only its children.
+
 ## Creating a New Command
 
 The command system uses a trait-based approach integrated with `clap` for argument parsing.

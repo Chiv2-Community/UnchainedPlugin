@@ -41,7 +41,7 @@ impl Subscriber<BroadcastMessage> for InGameChatBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
-        let chat_message: String = event.clone().into();
+        let chat_message = event.to_game_chat();
         let stripped_message = Self::strip_emojis(&chat_message);
         crate::game::chivalry2::send_ingame_message(stripped_message, None);
     }

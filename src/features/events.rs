@@ -13,7 +13,7 @@ use crate::modules::votes::votebots::{AddBotsVote, NoBotsVote};
 use crate::events::broadcast_message::console::ConsoleChatBroadcastSubscriber;
 use crate::events::broadcast_message::game_chat::InGameChatBroadcastSubscriber;
 use crate::modules::command::CommandSubscriber;
-use crate::modules::chat::{ChatRelaySubscriber, GameChatSink, ConsoleChatSink};
+use crate::modules::chat::{ChatRelaySubscriber, GameChatSink, LoggingChatSink};
 use crate::modules::killstreak::KillstreakSubscriber;
 use crate::modules::event_broadcast::EventBroadcastSubscriber;
 use crate::modules::stats::{StatsTrackerSubscriber, StatsTrackerState, TopCommand, MyStatsCommand};
@@ -72,16 +72,18 @@ pub fn init_event_system() -> UnchainedEventSystem {
 }
 
 fn initialize_event_buses() -> UnchainedEventSystem {
-    let game_event_bus = Arc::new(EventBus::new(Duration::from_millis(100)));
+    let chat_relay_subscriber = ChatRelaySubscriber::new(vec![
+        Box::new(LoggingChatSink {}),
+        Box::new(GameChatSink {})
+    ]);
+    // Clients never run initialize_subscribers. Install chat logging before the bus starts.
+    let game_event_bus = Arc::new(EventBus::new_with_subscriber(
+        Duration::from_millis(100), Box::new(chat_relay_subscriber.clone())
+    ));
     let message_broadcast_event_bus = Arc::new(EventBus::new(Duration::from_millis(100)));
 
     let game_event_publisher = Arc::clone(&game_event_bus).start();
     let message_broadcast_event_publisher = Arc::clone(&message_broadcast_event_bus).start();
-
-    let chat_relay_subscriber = ChatRelaySubscriber::new(vec![
-        Box::new(ConsoleChatSink {}),
-        Box::new(GameChatSink {})
-    ]);
 
     let command_subscriber = Arc::new(Mutex::new(CommandSubscriber::new(
         Box::leak(Box::new(message_broadcast_event_publisher.clone())),
@@ -124,7 +126,6 @@ pub async fn initialize_subscribers() {
     let _ = broadcast_message_bus.subscribe(Box::new(InGameChatBroadcastSubscriber {})).await;
 
     let _ = game_event_bus.subscribe(Box::new(CommandSubscriberProxy { inner: EVENT_SYSTEM.command_subscriber.clone() })).await;
-    let _ = game_event_bus.subscribe(Box::new(EVENT_SYSTEM.chat_relay_subscriber.clone())).await;
 
     // Discord ported subscribers
     let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json"))); // Need it again for subscriber

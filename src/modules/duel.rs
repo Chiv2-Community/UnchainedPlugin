@@ -35,10 +35,10 @@ impl DuelManagerSubscriber {
     fn format_results(&self, duel: &ActiveDuel, winner: &str, loser: &str) -> BroadcastMessage {
         let duration = duel.start_time.elapsed().as_secs();
         let mut msg = BroadcastMessage::new()
-            .title("?? DUEL CONCLUDED".to_string())
+            .title(crate::rich_text!("?? DUEL CONCLUDED"))
             .color(0xe67e22)
-            .content(format!("{} has defeated {}!", winner, loser))
-            .field("Duration".to_string(), format!("{} seconds", duration));
+            .content(crate::rich_text!("{} has defeated {}!", winner, loser))
+            .field(crate::rich_text!("Duration"), crate::rich_text!("{} seconds", duration));
 
         for player in [&duel.p1, &duel.p2] {
             let dmg = duel.damage_dealt.get(player).unwrap_or(&0.0);
@@ -52,7 +52,7 @@ impl DuelManagerSubscriber {
                 }
             }
             
-            msg = msg.field(format!("Stats: {}", player), tech_stats);
+            msg = msg.field(crate::rich_text!("Stats: {}", player), crate::rich_text!("{}", tech_stats));
         }
 
         msg
@@ -79,7 +79,9 @@ impl DuelManagerSubscriber {
                     *duel.damage_dealt.entry(e.attacker.clone()).or_insert(0.0) += e.damage.amount;
                 } else if e.attacker == duel.p1 || e.attacker == duel.p2 {
                     self.state = DuelState::Idle;
-                    self.broadcaster.publish(BroadcastMessage::from("?? **Duel Cancelled**: Interference detected!"));
+                    self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!(
+                        "?? **Duel Cancelled**: Interference detected!"
+                    )));
                 }
             }
             GameEvent::KillEvent(e) => {
@@ -113,7 +115,9 @@ impl Subscriber<GameEvent> for DuelManagerSubscriber {
                     attack_counts: HashMap::new(),
                     parries: HashMap::new(),
                 });
-                self.broadcaster.publish(BroadcastMessage::from(format!("?? **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent)));
+                self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!(
+                    "?? **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent
+                )));
             }
             _ => {
                 if let DuelState::Active(mut duel) = std::mem::replace(&mut self.state, DuelState::Idle) {

@@ -516,8 +516,7 @@ pub fn world_init() {
             let _ = features::events::initialize_subscribers().await;
 
             EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
-                chat_source: ChatSource::Console,
-                chat_type: ChatType::Global,
+                chat_source: ChatSource::Console(ChatType::Global),
                 sender: "Server".to_string(),
                 message: "Initialized Event System".to_string(),
             }));
@@ -534,8 +533,7 @@ pub fn world_init() {
                 });
 
                 EVENT_SYSTEM.game_event_publisher.publish(GameChatMessageEvent(GameChatMessage {
-                    chat_source: ChatSource::Console,
-                    chat_type: ChatType::Global,
+                    chat_source: ChatSource::Console(ChatType::Global),
                     sender: "Server".to_string(),
                     message: "Initialized Discord Event Handler System".to_string(),
                 }));

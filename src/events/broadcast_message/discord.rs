@@ -32,7 +32,7 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
         let mut discord_message: CreateMessage = event.clone().into();
 
         if config.mention_on_admin && !event.notify_roles().is_empty() {
-            let mut content = event.content_ref().map(str::to_owned).unwrap_or_default();
+            let mut content = event.content_ref().map(|text| text.to_discord()).unwrap_or_default();
 
             for notify_role in event.notify_roles().iter() {
                 let notify_role_id = match notify_role {

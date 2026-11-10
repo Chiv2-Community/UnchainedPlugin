@@ -151,23 +151,6 @@ pub enum EFaction {
     MAX = 6,
 }
 
-impl TryFrom<u8> for EFaction {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::Agatha),
-            1 => Ok(Self::Mason),
-            2 => Ok(Self::FFA),
-            3 => Ok(Self::None),
-            4 => Ok(Self::All),
-            5 => Ok(Self::Tenosia),
-            6 => Ok(Self::MAX),
-            _ => Err(()),
-        }
-    }
-}
-
 impl EFaction {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -179,21 +162,6 @@ impl EFaction {
             Self::Tenosia => "Tenosia",
             Self::MAX => "MAX",
         }
-    }
-}
-
-#[cfg(test)]
-mod faction_tests {
-    use super::EFaction;
-
-    #[test]
-    fn faction_id_converts_to_a_name() {
-        assert_eq!(EFaction::try_from(5).unwrap().as_str(), "Tenosia");
-    }
-
-    #[test]
-    fn unknown_faction_id_is_rejected() {
-        assert!(EFaction::try_from(255).is_err());
     }
 }
 

@@ -102,7 +102,7 @@ impl EventLogSubscriber {
                 "Game Chat Message",
                 format!(
                     "**Source:** {:?}\n**Type:** {:?}\n**Sender:** {}\n**Message:** {}",
-                    chat.chat_source, chat.chat_type, chat.sender, chat.message
+                    chat.chat_source, chat.chat_type(), chat.sender, chat.message
                 ),
                 0x1ABC9C,
             ),
@@ -230,6 +230,9 @@ impl Subscriber<GameEvent> for EventLogSubscriber {
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
+        if matches!(event, GameEvent::GameChatMessageEvent(chat) if !chat.is_relayable()) {
+            return;
+        }
         self.outbox
             .log(self.discord_config.event_log_channel_id, event);
     }

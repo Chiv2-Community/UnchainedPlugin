@@ -37,6 +37,7 @@ For example, `--saveddirsuffix Steam` gives:
 
 Use the Windows account running the game or server when locating `%LOCALAPPDATA%`.
 The game's launch arguments may specify a different saved-directory suffix.
+Chat records are written to `chat.log` in the same directory.
 
 ### Console colors
 
@@ -79,21 +80,60 @@ include `time`, `level`, `message`, source locations, and thread metadata, all a
 the root. Plugin macros add the enclosing function name as
 `attributes.enclosing_function`.
 
-Chat records add `attributes.chat`, such as `AllSay`, `TeamSay`, or `ServerSay`.
-Player chat also includes `attributes.team`: `Agatha`, `Mason`, `Tenosia`,
-`FFA`, `None`, `All`, `MAX`, or `Unknown`. The team is looked up for `TeamSay`;
-other chat types and unavailable or ambiguous senders use `Unknown`.
+Chat records use `chat_log` or its `all`, `team`, `system`, and `external` child targets.
+Native global player chat uses `chat_log::all`, inheriting the general chat appenders.
+JSON receives the raw message body,
+without display tags or color metadata. Shared root appenders using `kind: json`
+also receive chat records, even when `chat_log` has `additive: false`.
+Explicit appender filters still apply.
+
+Chat records add `attributes.chat`, such as `AllSay`, `TeamSay`, `Spectator`, or `ServerSay`.
+Chat records also include `attributes.sender`, `attributes.source`, and
+`attributes.chat_kind` (`player`, `system`, or `external`). `attributes.label`
+is uppercase display text: `ALL`, the team faction (`MASON`, etc.), `SYSTEM`, or `DISCORD`.
+AllSay always uses `ALL`, regardless of faction. TeamSay uses the faction label;
+spectators (`None`) use the full label `SPECTATOR`, displayed as `SPECT` by the pattern.
+`attributes.faction` selects colors: native `Agatha`, `Mason`, `Tenosia`,
+`FFA`, `None`, `All`, `MAX`, or `Unknown`, plus `System` and `Discord` for those sources.
+Player-chat hooks read the sender's faction
+directly from player state, including in global chat. Only non-command global
+player chat is forwarded to Discord; other captured chat stays local.
+
+Human-readable chat uses `date | channel | sender - message`. Team chat replaces
+the channel label with the faction: `date | MASON | sender - message`. Dates include seconds,
+without milliseconds; chat omits log level and function name.
+Console system output is `time | SYSTE | message`, or `time | SYSTE | sender - message`
+when its sender is known. Native messages without sender metadata leave `sender` empty.
+Console labels are right-aligned to exactly five characters, truncating on the right:
+`ALL` becomes `  ALL`, `SYSTEM` becomes `SYSTE`. File labels use a nine-character
+minimum width, left-padded to fit `SPECTATOR`, without truncation. Structured fields
+retain their full values without padding or truncation.
+Server console and RCON `Say` use the plugin's command path and broadcast
+`[Console] message` in-game. System capture recognizes that prefix as sender metadata;
+Console `Say` is an AllSay: the console shows `  ALL | Console - message` without the
+prefix in the message body. Other known-sender system messages keep the system label.
+All console appenders use `HH:MM:SS`. Text file appenders use ISO 8601 timestamps
+with timezone offsets, for example `2026-11-10T14:30:00-06:00`.
+Chat labels use `team_*` colors selected by the full `label`. `ALL` is always green,
+regardless of the sender's faction; `SPECTATOR` is white.
+Usernames use the same faction color as the label, including Discord and spectators.
+`None` uses `team_none`
+and unknown factions use `team_unknown`; `team_max` uses the unknown-faction color.
+Message text stays uncolored. System output uses `SYSTEM` and `team_system`.
+Chat's `|` and `-` separators use the `debug` palette color.
+Discord bridge messages use `DISCORD` as their channel label, colored with
+`team_discord` (purple); in-game delivery remains `[Discord] username: message`.
 
 For example, a Mason team message includes:
 
 ```json
-{"attributes":{"chat":"TeamSay","team":"Mason"}}
+{"attributes":{"chat":"TeamSay","faction":"Mason","label":"MASON"}}
 ```
 
-To include these fields in a pattern encoder, use `{K(chat)}` and `{K(team)}`:
+AllSay, TeamSay, and Discord share the same label-based pattern:
 
 ```yaml
-pattern: "[{K(chat)} {K(team)}] {m}{n}"
+pattern: "{K(label)} | {K(sender)} - {m}{n}"
 ```
 
 `--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
@@ -104,6 +144,32 @@ diagnostics written before log4rs initializes. Stdio may also contain game and
 dependency output, so consumers may encounter non-JSON lines alongside JSON logs.
 
 ## Format log lines
+
+Both `palette` and `pattern` encoders accept an `inline-removals` list of regexes:
+
+```yaml
+encoder:
+  kind: palette
+  inline-removals:
+    - _detour_fkt
+  pattern: "{fn:<32.32} - {m}{n}"
+```
+
+Expressions are combined with alternation and compiled once per encoder. All
+non-overlapping matches are removed from the entire rendered line, after padding
+and width truncation. Matches can cross field and color boundaries; console colors
+are preserved. Matching is case-sensitive unless the regex overrides it. Invalid
+regexes fail configuration loading. Omit the list or use `[]` to disable removal.
+Raw records and JSON output are unchanged. Defaults remove `_detour_fkt` anywhere
+in console and file diagnostic lines, including message text. This is display
+cleanup, not a redaction guarantee: width truncation happens first.
+
+Chat uses ordinary `palette` and `pattern` encoders. Its layouts are configured in
+the [embedded configuration](../src/logging/log4rs/log4rs.default.yaml), with
+`additive: false` separating human-readable chat from ordinary logs.
+Palette names can use structured fields, for example
+`{palette(team_{K(faction)(Unknown)})}`. Missing dynamic names restore the normal text color;
+record values are never parsed as formatting instructions.
 
 The `palette` encoder combines log4rs patterns with a named color table:
 

@@ -4,7 +4,7 @@ use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::EventPublisher;
 
 use crate::commands::Command;
-use crate::events::models::{CommandRequest, PermissionFlags};
+use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 
 #[derive(Parser, Clone)]
 #[command(name = "say", about = "Send a global message to the server")]
@@ -33,8 +33,11 @@ impl Command<SayArgs> for SayCommand {
         "Administration".to_string()
     }
 
-    async fn execute(&self, args: SayArgs, _command: &CommandRequest) {
+    async fn execute(&self, args: SayArgs, command: &CommandRequest) {
         let message = args.message.join(" ");
-        self.broadcaster.publish(BroadcastMessage::from(message));
+        let message = if command.source == CommandSource::ServerConsole {
+            format!("[Console] {message}")
+        } else { message };
+        self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!("{}", message)));
     }
 }

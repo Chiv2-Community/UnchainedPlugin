@@ -1,30 +1,95 @@
-use std::os::raw::c_void;
-
 use crate::{
     game::{
         chivalry2::{ATBLGameMode, EChatType},
         engine::FText,
     },
-    ue::{FConsoleOutputDevice, FString, TCHAR},
+    ue::{FConsoleOutputDevice, TCHAR},
 };
 
 
-// Chat messages
-// #[cfg(feature="client_message")]
 mod client_message {
     use crate::events::models::{
-        ActorIdentity, ActorPermissions, ChatSource, ChatType, CommandActor, CommandRequest,
+        ActorIdentity, ActorPermissions, ChatSource, CommandActor, CommandRequest,
         CommandSource, PermissionFlags,
     };
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
     use crate::ue::APlayerController;
     use crate::{
-        events::models::{GameChatMessage, GameEvent},
-        game::chivalry2::{EChatType, EFaction},
+        events::models::{GameChatMessage, GameEvent, NativeChat},
+        game::chivalry2::{AActor, AController, ATBLCharacter, ATBLGameMode, ATBLPlayerState, EChatType},
         ue::{FName, FString},
     };
     use regex::Regex;
+
+    fn has_authority() -> bool {
+        crate::globals().world().is_some_and(|world| unsafe {
+            !(*world).authority_game_mode.is_null()
+        })
+    }
+
+    define_pattern_resolver!(ClientReceiveChat, [
+        "40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"
+    ]);
+    CREATE_HOOK!(ClientReceiveChat, (
+        receiver: *mut APlayerController, sender: *mut ATBLPlayerState,
+        message: *const FString, chat_type: u32, is_sender_dev: bool, override_color: u32
+    ), {
+        // Hosts capture once at BroadcastChat, not once per local recipient.
+        if !has_authority() {
+            capture_chat(sender, message, chat_type);
+        }
+    });
+
+    define_pattern_resolver!(BroadcastChat, [
+        "48 85 D2 0F 84 3E 04 00 00 48 8B C4 4C 89 40 18 48 89 48 08 55 41 55 41 56 41 57 48 8D 68 A9 48"
+    ]);
+    CREATE_HOOK!(BroadcastChat, (
+        gamemode: *mut ATBLGameMode, sender: *mut AActor,
+        message: *const FString, chat_type: u32, override_color: u32
+    ), {
+        if !sender.is_null() {
+            capture_chat(actor_player_state(sender), message, chat_type);
+        }
+    });
+
+    fn actor_player_state(sender: *mut AActor) -> *mut ATBLPlayerState {
+        use super::super::gameplay::object_inherits_from;
+        // BroadcastChat accepts either a pawn or a controller, not a PlayerState.
+        if object_inherits_from(sender.cast(), "Pawn") {
+            // Read only APawn's field; the sender need not have ATBLCharacter's full layout.
+            unsafe { std::ptr::addr_of!((*sender.cast::<ATBLCharacter>())
+                .base_tbl_character_base.base_character.base_pawn.player_state).read().cast() }
+        } else if object_inherits_from(sender.cast(), "Controller") {
+            unsafe { (*sender.cast::<AController>()).player_state.cast() }
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+
+    fn capture_chat(sender: *mut ATBLPlayerState, message: *const FString, chat_type: u32) {
+        let Some(message) = (unsafe { message.as_ref() }).and_then(|s| s.copy_to_string().ok()) else { return; };
+        let Some(chat_type) = u8::try_from(chat_type).ok().and_then(|value| EChatType::try_from(value).ok()) else {
+            swarn!("Invalid native chat type: {chat_type}");
+            return;
+        };
+        let Some(player) = (unsafe { sender.as_ref() }) else { return; };
+        let Ok(sender) = player.base.player_name_private.copy_to_string() else { return; };
+        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+            sender: sender.clone(), message: message.clone(),
+            chat_source: ChatSource::Native(NativeChat::Player { channel: chat_type, faction: Some(player.faction) }),
+        }));
+        if let Some(event) = player_command_event(&sender, &message, chat_type) {
+            EVENT_SYSTEM.game_event_publisher.publish(event);
+        }
+    }
+
+    fn publish_system_chat(chat_type: EChatType, sender: Option<&str>, message: &str) {
+        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+            sender: sender.unwrap_or_default().into(), message: message.into(),
+            chat_source: ChatSource::Native(NativeChat::System { channel: chat_type }),
+        }));
+    }
 
     define_pattern_resolver!(ClientMessage, [
         "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
@@ -32,147 +97,53 @@ mod client_message {
 
     // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
     CREATE_HOOK!(ClientMessage, (this:*mut APlayerController, S:*mut FString, Type:FName, MsgLifeTime: f32), {
-        let string_ref: &FString = unsafe{ &*S };
-        let message = string_ref.to_string();
-        match parse_client_message(message.as_str()) {
-            Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
-                let faction = if chat_type == EChatType::TeamSay { sender_faction(sender) } else { None };
-                let team = faction.map(EFaction::as_str).unwrap_or("Unknown");
-                macro_rules! log_chat {
-                    ($label:expr, $color:literal) => {
-                        sinfo!(target: concat!(module_path!(), "::game_chat"),
-                            chat = chat_type.as_str(), team = team;
-                            palette($color), ("[{}]", $label), palette(), " [{sender}]: {message}")
-                    };
-                }
-                // The repetition below is intentional. Hardcoded chat_* strings let the
-                // palette encoder detect used palette references and warn when user
-                // configurations do not define them all.
-                match (chat_type, faction) {
-                    (EChatType::AllSay, _) => log_chat!("All", "chat_all"),
-                    (EChatType::ServerSay, _) => log_chat!("Server", "chat_server"),
-                    (EChatType::TeamSay, Some(EFaction::Agatha)) => log_chat!(team, "chat_agatha"),
-                    (EChatType::TeamSay, Some(EFaction::Mason)) => log_chat!(team, "chat_mason"),
-                    (EChatType::TeamSay, Some(EFaction::Tenosia)) => log_chat!(team, "chat_tenosia"),
-                    (EChatType::TeamSay, _) => log_chat!("Unknown", "chat_unknown"),
-                    _ => log_chat!(chat_type.as_str(), ""),
-                }
-                if chat_type == EChatType::AllSay {
-                    if let Some(content) = message.strip_prefix('!') {
-                        if let Some((name, args, raw_args)) = parse_command(content) {
-                            let actor = CommandActor {
-                                display_name: sender.into(),
-                                identity: ActorIdentity::GamePlayer {
-                                    player_id: 0, // TODO
-                                    display_name: sender.into(),
-                                },
-                                permissions: ActorPermissions {
-                                    flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
-                                },
-                            };
-                            EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
-                                name,
-                                args,
-                                raw_args,
-                                actor,
-                                source: CommandSource::GameChat,
-                            }));
-                        }
-                    } else {
-                        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-                            sender: sender.into(),
-                            message: message.into(),
-                            chat_type: ChatType::Global,
-                            chat_source: ChatSource::Game,
-                        }));
-                    }
-                }
-            }
-            Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
-                sinfo!(target: concat!(module_path!(), "::system_chat"),
-                    chat = chat_type.as_str();
-                    palette("chat_server"), "[Server]", palette(), " {message}");
-            }
-            Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
-                sinfo!(target: concat!(module_path!(), "::system_chat"),
-                    chat = "ServerSay";
-                    palette("chat_server"), "[Server]", palette(), " {message}");
-            }
-            Err(error) => {
-                swarn!(target: concat!(module_path!(), "::system_chat"), "Failed to parse chat message. error={error}");
+        if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
+            if let Some((chat_type, sender, message)) = system_message(&message) {
+                publish_system_chat(chat_type, sender, message);
             }
         }
     });
 
-    fn sender_faction(sender: &str) -> Option<EFaction> {
-        let world = crate::globals().world()?;
-        // ClientMessage runs on the game thread, as does player-state access.
-        let game_state = unsafe { (*world).game_state.as_ref()? };
-        let mut players = game_state.player_array.as_slice().iter()
-            .filter_map(|player| unsafe { player.as_ref() })
-            .filter(|player| player.base.player_name_private.to_string() == sender);
-        let player = players.next()?;
-        // A display name is not a unique identity; do not guess between duplicates.
-        if players.next().is_some() { return None; }
-        Some(player.faction)
+    fn player_command_event(sender: &str, message: &str, chat_type: EChatType) -> Option<GameEvent> {
+        if chat_type != EChatType::AllSay { return None; }
+        let content = message.strip_prefix('!')?;
+        let (name, args, raw_args) = parse_command(content)?;
+        let actor = CommandActor {
+            display_name: sender.into(),
+            identity: ActorIdentity::GamePlayer {
+                player_id: 0, // TODO
+                display_name: sender.into(),
+            },
+            permissions: ActorPermissions {
+                flags: PermissionFlags::USER | PermissionFlags::START_VOTE // TODO: Figure out when this is an admin user
+            },
+        };
+        Some(GameEvent::CommandRequestEvent(CommandRequest {
+            name, args, raw_args, actor, source: CommandSource::GameChat,
+        }))
     }
 
-    #[derive(Debug, PartialEq)]
-    struct UserChat<'a> {
-        sender: &'a str,
-        chat_type: EChatType,
-    }
-
-    #[derive(Debug, PartialEq)]
-    struct SystemChat {
-        chat_type: EChatType,
-    }
-
-    #[derive(Debug, PartialEq)]
-    struct BareChat;
-
-    #[derive(Debug, PartialEq)]
-    enum ChatMessageType<'a> {
-        User(UserChat<'a>),
-        System(SystemChat),
-        Bare(BareChat),
-    }
-
-    #[derive(Debug, PartialEq)]
-    struct ChatMessage<'a> {
-        chat_type: ChatMessageType<'a>,
-        message: &'a str,
-    }
-
-    fn parse_client_message(line: &str) -> Result<ChatMessage<'_>, String> {
+    fn system_message(line: &str) -> Option<(EChatType, Option<&str>, &str)> {
         static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
-            Regex::new(concat!(
-                r"^",                                 // Start of input.
-                r"(?:(?P<sender>[^\r\n]*?)[ \t]+)??", // Optional single-line sender; prefer no sender.
-                r"<(?P<chat_type>\d+)>:",             // Numeric chat type header.
-                r"[ \t]*",                            // Skip horizontal whitespace before the body.
-                r"(?P<message>(?s:.*))",              // Body, including newlines or empty text.
-                r"$",                                 // End of input.
-            )).unwrap()
+            Regex::new(r"^(?:(?P<player>[^\r\n]*?[ \t]+))??<(?P<channel>[0-9]+)>:[ \t]*").unwrap()
         });
-
-        let Some(caps) = RE.captures(line) else {
-            return Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message: line });
+        let (channel, body) = if let Some(caps) = RE.captures(line) {
+            // Native hooks own player records; don't parse their channel or body.
+            if caps.name("player").is_some() { return None; }
+            match caps["channel"].parse::<u8>().ok().and_then(|value| EChatType::try_from(value).ok()) {
+                Some(channel) => (channel, &line[caps.get(0).unwrap().end()..]),
+                None => (EChatType::ServerSay, line),
+            }
+        } else {
+            (EChatType::ServerSay, line)
         };
-        // Validate after matching so invalid leading headers cannot fall back to player chat.
-        let value = caps.name("chat_type").unwrap().as_str();
-        let value: u8 = value.parse()
-            .map_err(|error| format!("Invalid chat type '{value}': {error}"))?;
-        let chat_type = EChatType::try_from(value)
-            .map_err(|_| format!("Invalid EChatType value: {value}"))?;
-        let chat_type = match caps.name("sender") {
-            Some(sender) => ChatMessageType::User(UserChat { sender: sender.as_str().trim(), chat_type }),
-            None => ChatMessageType::System(SystemChat { chat_type }),
-        };
-        Ok(ChatMessage {
-            chat_type,
-            message: caps.name("message").unwrap().as_str(),
-        })
+        // Console Say carries this visible sender prefix across the native broadcast.
+        if matches!(channel, EChatType::AllSay | EChatType::ServerSay) {
+            if let Some(body) = body.strip_prefix("[Console] ") {
+                return Some((channel, Some("Console"), body));
+            }
+        }
+        Some((channel, None, body))
     }
 
     #[cfg(test)]
@@ -180,192 +151,51 @@ mod client_message {
         use super::*;
 
         #[test]
-        fn chat_palettes_are_registered_for_warnings() {
-            let references: Vec<_> = inventory::iter::<crate::logging::inline::PaletteReference>
-                .into_iter().map(|reference| reference.0).collect();
-            for name in ["chat_all", "chat_server", "chat_agatha", "chat_mason", "chat_tenosia", "chat_unknown"] {
-                assert!(references.contains(&name), "{name}");
+        fn native_player_commands_remain_global_only() {
+            assert!(player_command_event("Player", "hello\nworld", EChatType::AllSay).is_none());
+            let Some(GameEvent::CommandRequestEvent(command)) = player_command_event("Player", "!vote kick\nreason", EChatType::AllSay) else { panic!("missing command event"); };
+            assert_eq!(command.name, "vote");
+            assert_eq!(command.args, ["kick", "reason"]);
+            assert_eq!(command.raw_args, "kick\nreason");
+            for channel in [EChatType::TeamSay, EChatType::Spectator] {
+                assert!(player_command_event("Player", "!vote kick", channel).is_none());
             }
+            assert!(player_command_event("Player", "!", EChatType::AllSay).is_none());
         }
 
         #[test]
         fn server_say_preserves_multiline_motd() {
-            let message = "Welcome\r\nRead the rules.\nEnjoy!";
+            let message = "Welcome\r\nExample <0>: !not_a_command\nEnjoy!";
             let line = format!("<6>: {message}");
-            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
-                chat_type: ChatMessageType::System(SystemChat { chat_type: EChatType::ServerSay }), message,
-            });
+            assert_eq!(system_message(&line), Some((EChatType::ServerSay, None, message)));
         }
 
         #[test]
-        fn player_messages_distinguish_all_chat_from_team_chat() {
-            for body in ["Hello", "", "!help", "Hello\nworld", "!vote kick\r\nreason"] {
-                for (channel, chat_type) in [(0, EChatType::AllSay), (1, EChatType::TeamSay)] {
-                    let line = format!("Player Name <{channel}>: {body}");
-                    assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
-                        chat_type: ChatMessageType::User(UserChat { sender: "Player Name", chat_type }), message: body,
-                    }, "input: {line:?}");
-                }
+        fn player_messages_are_ignored_without_parsing_their_body_or_channel() {
+            for line in ["Player Name <0>: [Console] Hello", "Player <1>:", "Player <4294967296>: !vote kick\r\nreason"] {
+                assert_eq!(system_message(line), None, "input: {line:?}");
             }
         }
 
         #[test]
-        fn senderless_messages_distinguish_all_chat_from_team_chat() {
-            for (line, chat_type) in [("<0>: Hello", EChatType::AllSay), ("<1>: Hello", EChatType::TeamSay)] {
-                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
-                    chat_type: ChatMessageType::System(SystemChat { chat_type }), message: "Hello",
-                }, "input: {line:?}");
-            }
-        }
-
-        #[test]
-        fn chat_types_are_validated_without_truncation_or_panics() {
-            for channel in ["16", "99", "256", "257", "4294967296"] {
-                for message in ["text", "!help", "!help\nreason"] {
-                    for prefix in ["", "Player "] {
-                        let line = format!("{prefix}<{channel}>: {message}");
-                        assert!(parse_client_message(&line).is_err(), "input: {line:?}");
-                    }
-                }
-            }
-            for chat_type in EChatType::ALL {
-                for (prefix, expected_type) in [
-                    ("", ChatMessageType::System(SystemChat { chat_type })),
-                    ("Player ", ChatMessageType::User(UserChat { sender: "Player", chat_type })),
-                ] {
-                    let line = format!("{prefix}<{}>: text", chat_type as u8);
-                    assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
-                        chat_type: expected_type, message: "text",
-                    });
-                }
-            }
-        }
-
-        #[test]
-        fn horizontal_separators_trim_sender_but_preserve_body() {
-            for (line, chat_type, message) in [
-                (
-                    "  Player Name \t<0>:\t Hello \t",
-                    ChatMessageType::User(UserChat { sender: "Player Name", chat_type: EChatType::AllSay }),
-                    "Hello \t",
-                ),
-                (
-                    "\t<0>:Hello",
-                    ChatMessageType::User(UserChat { sender: "", chat_type: EChatType::AllSay }),
-                    "Hello",
-                ),
-                (
-                    "Player <0>:",
-                    ChatMessageType::User(UserChat { sender: "Player", chat_type: EChatType::AllSay }),
-                    "",
-                ),
-                (
-                    "<0>:\t \r\nHello",
-                    ChatMessageType::System(SystemChat { chat_type: EChatType::AllSay }),
-                    "\r\nHello",
-                ),
-                (
-                    "Player <0>:\n Hello",
-                    ChatMessageType::User(UserChat { sender: "Player", chat_type: EChatType::AllSay }),
-                    "\n Hello",
-                ),
+        fn system_headers_preserve_channels_and_unrecognized_text() {
+            for (line, channel, body) in [
+                ("<0>: Hello", EChatType::AllSay, "Hello"),
+                ("<1>:\t \r\nHello", EChatType::TeamSay, "\r\nHello"),
+                ("<6>:", EChatType::ServerSay, ""),
+                ("<6>:Welcome", EChatType::ServerSay, "Welcome"),
             ] {
-                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
-                    chat_type, message,
-                });
+                assert_eq!(system_message(line), Some((channel, None, body)));
+            }
+            for line in ["", "Welcome!", "Welcome\nPlayer <0>: text", "<x>: text", "<256>: Example <0>: text"] {
+                assert_eq!(system_message(line), Some((EChatType::ServerSay, None, line)));
             }
         }
 
         #[test]
-        fn routing_gives_leading_typed_headers_precedence_over_embedded_player_headers() {
-            for newline in ["\n", "\r\n", "\r"] {
-                for channel in ["0", "99", "256", "4294967296"] {
-                    for text in ["text", "!help"] {
-                        for body in [
-                            format!("Example <{channel}>: {text}{newline}Read the rules."),
-                            format!("Welcome{newline}Example <{channel}>: {text}"),
-                            format!("Example <{channel}>: {text}"),
-                        ] {
-                            let line = format!("<6>: {body}");
-                            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
-                                chat_type: ChatMessageType::System(SystemChat { chat_type: EChatType::ServerSay }), message: &body,
-                            }, "input: {line:?}");
-                        }
-                    }
-                }
-            }
-        }
-
-        #[test]
-        fn routing_rejects_invalid_leading_headers_without_player_fallback() {
-            for outer_channel in ["16", "99", "256", "257", "4294967296"] {
-                for newline in ["\n", "\r\n", "\r"] {
-                    for channel in ["0", "99", "256", "4294967296"] {
-                        for text in ["text", "!help"] {
-                            for body in [
-                                format!("Example <{channel}>: {text}{newline}Read the rules."),
-                                format!("Welcome{newline}Example <{channel}>: {text}"),
-                                format!("Example <{channel}>: {text}"),
-                            ] {
-                                let line = format!("<{outer_channel}>: {body}");
-                                assert!(parse_client_message(&line).is_err(), "input: {line:?}");
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        #[test]
-        fn routing_preserves_plain_and_empty_system_text() {
-            for line in ["", "Welcome!", "Welcome\nRead the rules.", "Unknown <x>: text", "<6> text"] {
-                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
-                    chat_type: ChatMessageType::Bare(BareChat), message: line,
-                });
-            }
-            for (line, body) in [("<6>:", ""), ("<6>:Welcome", "Welcome")] {
-                assert_eq!(parse_client_message(line).unwrap(), ChatMessage {
-                    chat_type: ChatMessageType::System(SystemChat { chat_type: EChatType::ServerSay }), message: body,
-                });
-            }
-            for newline in ["\n", "\r\n", "\r"] {
-                for channel in ["0", "99", "256", "4294967296"] {
-                    for text in ["text", "!help"] {
-                        for sender in ["Example ", ""] {
-                            let line = format!("Welcome{newline}{sender}<{channel}>: {text}");
-                            assert_eq!(parse_client_message(&line).unwrap(), ChatMessage {
-                                chat_type: ChatMessageType::Bare(BareChat), message: &line,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        #[test]
-        fn routing_preserves_multiline_player_chat_and_commands() {
-            for newline in ["\n", "\r\n", "\r"] {
-                for body in [
-                    format!("Hello{newline}world"),
-                    format!("!vote kick{newline}reason"),
-                    format!("Example <6>: text{newline}<99>: !help"),
-                ] {
-                    let line = format!("Player Name <0>: {body}");
-                    let chat = parse_client_message(&line).unwrap();
-                    assert_eq!(chat.chat_type, ChatMessageType::User(UserChat {
-                        sender: "Player Name", chat_type: EChatType::AllSay,
-                    }));
-                    assert_eq!(chat.message, body);
-                    if let Some(command) = chat.message.strip_prefix('!') {
-                        let (name, args, raw_args) = parse_command(command).unwrap();
-                        assert_eq!(name, "vote");
-                        if newline == "\n" {
-                            assert_eq!(args, ["kick", "reason"]);
-                        }
-                        assert_eq!(raw_args, format!("kick{newline}reason"));
-                    }
-                }
-            }
+        fn console_system_prefix_preserves_sender_and_body() {
+            assert_eq!(system_message("<0>: [Console] Hello\r\nworld"),
+                Some((EChatType::AllSay, Some("Console"), "Hello\r\nworld")));
         }
     }
 }
@@ -410,43 +240,9 @@ pub mod kismet_log {
     });
 }
 
-// /*
-// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
-// }
-// */
-// DECL_HOOK(void, ClientReceiveChat_Implementation, (/*ATBLPlayerState * */void* SenderPlayerState, FString* S, /*TEnumAsByte<EChatType::Type>*/void * Type, bool IsSenderDev, /*FColor*/void * OverrideColor))
-// {
-// 	/*std::wcout << "crc: " << *S->str << std::endl;
-// 	log("ClientReceiveChat_Implementation");
-// 	logWideString(S->str);*/
-// 	o_ClientReceiveChat_Implementation(SenderPlayerState, S, Type, IsSenderDev, OverrideColor);
-// }
-
-// TODO: Unused
-// define_pattern_resolver!(execBroadcastLocalizedChat,["48 89 5C 24 08 57 48 83 EC 60 48 8D 4C 24 28 48 8B DA ?? ?? ?? ?? ?? 48 83 7B 20 00 48 8B"]);
-// // UTBLOnlineLibrary::execBroadcastLocalizedChat(UObject *param_1,FFrame *param_2,void *param_3)
-// CREATE_HOOK!(execBroadcastLocalizedChat, INACTIVE, (msg: *mut FString, arg2: *mut c_void, arg3: *mut c_void),{
-//     if !msg.is_null() {
-//         let url_w = unsafe { (*msg).to_string() };
-//         sinfo!["Triggered! {url_w}"];
-//     }
-// });
-
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
-    sinfo!["Triggered!"];
-});
-
-// TODO: Not used?
-define_pattern_resolver!(ClientReceiveChat_Implementation,["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]);
-// void ATBLPlayerController::ClientReceiveChat_Implementation(ATBLPlayerState* SenderPlayerState, const FString& S, TEnumAsByte<EChatType::Type> Type, bool IsSenderDev, FColor OverrideColor) {
-// The receiver is missing from this legacy signature; leave its ABI unresolved.
-CREATE_HOOK!(ClientReceiveChat_Implementation, INACTIVE, (SenderPlayerState: *mut c_void, S: *mut FString, Type: *mut c_void, IsSenderDev: bool, OverrideColor: *mut c_void),{
-    if !S.is_null() {
-        let url_w = unsafe { (*S).to_string() };
-        sinfo!["Triggered! {url_w}"];
-    }
 });
 
 // Console output (e.g. "Command not recognized: ...")

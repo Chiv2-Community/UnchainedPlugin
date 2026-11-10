@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::events::broadcast::BroadcastMessage;
+use crate::events::broadcast::{BroadcastMessage, RichText};
 use crate::events::bus::{EventPublisher, Subscriber};
 use crate::events::models::GameEvent;
 
@@ -20,28 +20,20 @@ impl EventBroadcastSubscriber {
         }
     }
 
-    fn flush_batch(&self, pending_players: &[String], action: PresenceAction) -> Option<String> {
+    fn flush_batch(&self, pending_players: &[String], action: PresenceAction) -> Option<RichText> {
         if pending_players.is_empty() {
             return None;
         }
 
-        let content = match pending_players {
-            [] => return None,
-            [first] => {
-                match action {
-                    PresenceAction::Joined => format!("📥 **{}** joined the fray.", first),
-                    PresenceAction::Left => format!("📤 **{}** left the battle.", first),
-                }
-            }
-            [first, ..] => {
-                let others = pending_players.len() - 1;
-                match action {
-                    PresenceAction::Joined => format!("📥 **{}** and **{}** others have joined the battle!", first, others),
-                    PresenceAction::Left => format!("📤 **{}** and **{}** others have left the battle!", first, others),
-                }
-            }
+        let (icon, single, multiple) = match action {
+            PresenceAction::Joined => ("📥 ", " joined the fray.", " others have joined the battle!"),
+            PresenceAction::Left => ("📤 ", " left the battle.", " others have left the battle!"),
         };
-
+        let content = if pending_players.len() == 1 {
+            crate::rich_text!("{}**{}**{}", icon, pending_players[0], single)
+        } else {
+            crate::rich_text!("{}**{}** and **{}**{}", icon, pending_players[0], pending_players.len() - 1, multiple)
+        };
         Some(content)
     }
 
@@ -101,16 +93,16 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
                 if !unsafe { SERVER_STARTED } {
                     self.broadcaster.publish(
                         BroadcastMessage::new()
-                            .title("🚀️ Server Started")
-                            .content(format!("Map {}.", new_map_name))
+                            .title(crate::rich_text!("🚀️ Server Started"))
+                            .content(crate::rich_text!("Map {}.", new_map_name))
                             .color(0x5865F2)
                     );
                     unsafe { SERVER_STARTED = true };
                 } else {
                     self.broadcaster.publish(
                         BroadcastMessage::new()
-                            .title("🗺️ Map Change")
-                            .content(format!("Map changed to {}.", new_map_name))
+                            .title(crate::rich_text!("🗺️ Map Change"))
+                            .content(crate::rich_text!("Map changed to {}.", new_map_name))
                             .color(0x5865F2)
                     );
                 }
@@ -118,17 +110,17 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
             GameEvent::MatchEndEvent(match_end) => {
                 self.broadcaster.publish(
                     BroadcastMessage::new()
-                        .title("🏁 Match Ended")
-                        .field("Winner", match_end.winner_team.to_string())
-                        .field("Score", match_end.final_score.to_string())
+                        .title(crate::rich_text!("🏁 Match Ended"))
+                        .field(crate::rich_text!("Winner"), crate::rich_text!("{}", match_end.winner_team))
+                        .field(crate::rich_text!("Score"), crate::rich_text!("{}", match_end.final_score))
                         .color(0x5865F2)
                 );
             },
             GameEvent::ServerRestartEvent => {
                 self.broadcaster.publish(
                     BroadcastMessage::new()
-                        .title("🔄 Server Restart")
-                        .content("Server is restarting")
+                        .title(crate::rich_text!("🔄 Server Restart"))
+                        .content(crate::rich_text!("Server is restarting"))
                         .color(0xE67E22)
                 );
             }
@@ -138,5 +130,28 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
 
     async fn on_tick(&mut self) {
         self.flush_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn presence_templates_preserve_text_and_emphasis() {
+        let (broadcaster, _) = crate::test_utils::mock_broadcaster();
+        let subscriber = EventBroadcastSubscriber::new(broadcaster);
+        assert!(subscriber.flush_batch(&[], PresenceAction::Joined).is_none());
+        let players = vec!["Alice".into(), "Bob".into()];
+        for (count, action, expected) in [
+            (1, PresenceAction::Joined, "📥 **Alice** joined the fray."),
+            (1, PresenceAction::Left, "📤 **Alice** left the battle."),
+            (2, PresenceAction::Joined, "📥 **Alice** and **1** others have joined the battle!"),
+            (2, PresenceAction::Left, "📤 **Alice** and **1** others have left the battle!"),
+        ] {
+            let text = subscriber.flush_batch(&players[..count], action).unwrap();
+            assert_eq!(text.to_discord(), expected);
+            assert_eq!(text.to_plain_text(), expected.replace("**", ""));
+        }
     }
 }

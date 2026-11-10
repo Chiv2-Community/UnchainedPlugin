@@ -9,6 +9,7 @@ const FUNCTION_KEY: &str = "enclosing_function";
 pub struct PatternEncoder {
     inner: BuiltinPatternEncoder,
     extended: bool,
+    inline_removals: Option<regex::Regex>,
 }
 
 impl PatternEncoder {
@@ -39,12 +40,23 @@ impl PatternEncoder {
                 }
             }
         }
-        Self { inner: BuiltinPatternEncoder::new(&expanded), extended }
+        Self { inner: BuiltinPatternEncoder::new(&expanded), extended, inline_removals: None }
     }
 }
 
 impl Encode for PatternEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
+        if let Some(regex) = &self.inline_removals {
+            let mut line = super::removals::RenderedLine::default();
+            self.encode_pattern(&mut line, record)?;
+            return line.emit(writer, regex);
+        }
+        self.encode_pattern(writer, record)
+    }
+}
+
+impl PatternEncoder {
+    fn encode_pattern(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
         if !self.extended { return self.inner.encode(writer, record); }
         let module = ShortModule(record.module_path().unwrap_or("???"));
         let function = record.key_values().get(FUNCTION_KEY.into()).unwrap_or(Value::from("???"));
@@ -59,6 +71,8 @@ impl Encode for PatternEncoder {
 #[serde(deny_unknown_fields)]
 pub struct PatternEncoderConfig {
     pattern: Option<String>,
+    #[serde(default, rename = "inline-removals")]
+    inline_removals: Vec<String>,
 }
 
 pub struct PatternEncoderDeserializer;
@@ -69,9 +83,9 @@ impl Deserialize for PatternEncoderDeserializer {
 
     fn deserialize(&self, config: PatternEncoderConfig, _: &Deserializers)
         -> anyhow::Result<Box<dyn Encode>> {
-        Ok(Box::new(PatternEncoder::new(
-            config.pattern.as_deref().unwrap_or("{d} {l} {t} - {m}{n}"),
-        )))
+        let mut encoder = PatternEncoder::new(config.pattern.as_deref().unwrap_or("{d} {l} {t} - {m}{n}"));
+        encoder.inline_removals = super::removals::compile(&config.inline_removals)?;
+        Ok(Box::new(encoder))
     }
 }
 

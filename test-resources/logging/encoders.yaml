@@ -96,7 +96,7 @@ invalid:
   - unknown: true
   - pattern: '{palette(missing)}'
   - pattern: '{palette({l}_missing)}'
-  - pattern: '{palette({K(user)})}'
+  - pattern: '{palette({m})}'
   - pattern: '{h({palette(error)}text)}'
   - pattern: '{palette(error)'
   - pattern: '{palette(error}'
@@ -106,5 +106,5 @@ invalid:
   - pattern: '{h({m:}>20}{palette()})}'
   - pattern: '{h(text:{>20}{palette(error)})}'
   - pattern: '{palette({m:{>20})}'
-  - pattern: '{palette({K(user):}>20})}'
+  - pattern: '{palette({m:}>20})}'
   - pattern: '{palette({l:{>8}_missing)}'
