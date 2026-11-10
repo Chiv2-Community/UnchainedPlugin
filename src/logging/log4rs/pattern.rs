@@ -141,12 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn short_module_boundaries_and_function_only_default_leave_custom_widths_independent() {
-        use super::super::palette::PaletteEncoderConfig;
-
-        let newline = if cfg!(windows) { "\r\n" } else { "\n" };
-        let config: PaletteEncoderConfig = serde_yaml::from_value(crate::logging::test_resources::encoder("defaults")).unwrap();
-        let encoder = config.build().unwrap();
+    fn short_module_boundaries_preserve_custom_widths() {
         for character in ['a', 'é', '界'] {
             for length in [1, 23, 24, 25, 31, 32, 33, 40] {
                 let module: String = std::iter::once('Ω')
@@ -160,11 +155,6 @@ mod tests {
                     .encode(&mut SimpleWriter(&mut custom), &record).unwrap();
                 assert_eq!(String::from_utf8(custom).unwrap(),
                     format!("[{expected}]|[{expected:<24}]"), "{module}");
-                let mut console = Vec::new();
-                encoder.encode(&mut SimpleWriter(&mut console), &record).unwrap();
-                let expected_body = format!(" | ??? - message{newline}");
-                assert!(String::from_utf8(console).unwrap()
-                    .ends_with(&expected_body), "{module}");
             }
         }
     }

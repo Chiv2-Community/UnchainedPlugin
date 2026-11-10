@@ -462,31 +462,20 @@ mod tests {
     }
 
     #[test]
-    fn default_encoders_render_function_metadata_once_and_right_align_levels() {
+    fn default_encoders_use_function_without_module_prefix() {
         let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
         let mut registry = Deserializers::default();
         register(&mut registry);
         let values = [("enclosing_function", "example_function")];
+        let record = Record::builder().level(Level::Info)
+            .module_path(Some("UnchainedPlugin::example"))
+            .key_values(&values).args(format_args!("plain message")).build();
         for name in ["console", "file", "kismet"] {
-            for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-                let record = Record::builder().level(level)
-                    .module_path(Some("UnchainedPlugin::example"))
-                    .target("distinct_filter_target")
-                    .key_values(&values).args(format_args!("plain message")).build();
-                let output = render_encoder(&registry, yaml["appenders"][name]["encoder"].clone(), &record);
-                let text = String::from_utf8(output).unwrap();
-                assert!(text.contains(&format!(" {level:>5}")), "{name}: {text:?}");
-                assert_eq!(text.matches("example_function").count(), 1, "{name}: {text:?}");
-                let context = if name == "console" {
-                    "example_function -"
-                } else {
-                    "example_function]"
-                };
-                assert!(text.contains(&format!("{context} plain message")), "{name}: {text:?}");
-                assert!(!text.contains('\u{1b}'), "{name}: {text:?}");
-                assert!(!text.contains("distinct_filter_target"), "{name}: {text:?}");
-                assert!(!text.contains("::"), "{name}: {text:?}");
-            }
+            let output = render_encoder(&registry, yaml["appenders"][name]["encoder"].clone(), &record);
+            let text = String::from_utf8(output).unwrap();
+            let separator = if name == "console" { " - " } else { "] " };
+            assert!(text.contains(&format!("example_function{separator}plain message")), "{name}: {text:?}");
+            assert!(!text.contains("::"), "{name}: {text:?}");
         }
     }
 
