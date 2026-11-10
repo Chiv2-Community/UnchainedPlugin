@@ -107,7 +107,8 @@ impl PaletteEncoderConfig {
             ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
             ("module", Some([190, 157, 92])), ("chat_all", Some([242, 179, 120])),
             ("chat_agatha", Some([140, 180, 225])), ("chat_mason", Some([242, 139, 130])),
-            ("chat_tenosia", Some([208, 145, 40])), ("chat_server", Some([140, 216, 225]))]
+            ("chat_tenosia", Some([208, 145, 40])), ("chat_server", Some([140, 216, 225])),
+            ("chat_unknown", Some([215, 160, 223]))]
             .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
         for name in ["title", "subtitle"] {
             palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {

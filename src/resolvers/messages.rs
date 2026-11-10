@@ -50,6 +50,7 @@ mod client_message {
                     (EChatType::TeamSay, Some(0)) => log_chat!("chat_agatha"),
                     (EChatType::TeamSay, Some(1)) => log_chat!("chat_mason"),
                     (EChatType::TeamSay, Some(5)) => log_chat!("chat_tenosia"),
+                    (EChatType::TeamSay, _) => log_chat!("chat_unknown"),
                     _ => log_chat!(""),
                 }
                 if chat_type == EChatType::AllSay {
@@ -176,7 +177,7 @@ mod client_message {
         fn chat_palettes_are_registered_for_warnings() {
             let references: Vec<_> = inventory::iter::<crate::logging::inline::PaletteReference>
                 .into_iter().map(|reference| reference.0).collect();
-            for name in ["chat_all", "chat_server", "chat_agatha", "chat_mason", "chat_tenosia"] {
+            for name in ["chat_all", "chat_server", "chat_agatha", "chat_mason", "chat_tenosia", "chat_unknown"] {
                 assert!(references.contains(&name), "{name}");
             }
         }
