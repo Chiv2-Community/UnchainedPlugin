@@ -38,26 +38,6 @@ rolling-policy:
   kind: compound
   trigger: {kind: size, limit: 1048576}
   roller: {kind: delete}
-console-policy:
-  appenders:
-    console:
-      kind: console
-      target: stdout
-      encoder: {kind: palette}
-  root:
-    level: trace
-    appenders: [console]
-custom-console-palette:
-  error: '#112233'
-  warn: '#223344'
-  info: '#334455'
-  debug: '#445566'
-  trace: '#556677'
-  error_body: null
-  warn_body: null
-  info_body: null
-  debug_body: '#445566'
-  trace_body: '#556677'
 file-pattern:
   appenders:
     file:

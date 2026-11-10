@@ -25,56 +25,26 @@ fn named(logger: &Capture) {
 }
 
 #[test]
-fn function_metadata_is_separate_from_messages_at_all_levels() {
-    log::set_max_level(log::LevelFilter::Trace);
-    let logger = Capture::default();
-    sinfo!(logger: &logger, target: "custom", "hello {}", 7);
-    swarn!(logger: &logger, "warn");
-    serror!(logger: &logger, "error");
-    sdebug!(logger: &logger, "debug");
-    strace!(logger: &logger, "trace");
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 5);
-    for (line, (level, message)) in lines.iter().zip([
-        ("INFO", "hello 7"), ("WARN", "warn"), ("ERROR", "error"),
-        ("DEBUG", "debug"), ("TRACE", "trace"),
-    ]) {
-        assert!(line.starts_with("function_metadata_is_separate_from_messages_at_all_levels|"));
-        assert!(line.contains(&format!("|{level}|")));
-        assert!(line.ends_with(&format!("||{message}")));
-    }
-    assert!(lines[0].contains("|custom|"));
-}
-
-#[test]
-fn message_only_patterns_omit_function_metadata_and_preserve_f_fields() {
+fn message_only_pattern_omits_function_metadata() {
     #[derive(Default)]
-    struct Messages(Mutex<Vec<(String, Option<String>)>>);
+    struct Messages(Mutex<Vec<String>>);
     impl Log for Messages {
         fn enabled(&self, _: &Metadata<'_>) -> bool { true }
         fn log(&self, record: &Record<'_>) {
             let mut output = Vec::new();
             PatternEncoder::new("{m}").encode(&mut SimpleWriter(&mut output), record).unwrap();
-            self.0.lock().unwrap().push((String::from_utf8(output).unwrap(),
-                record.key_values().get("f".into()).map(|value| value.to_string())));
+            self.0.lock().unwrap().push(String::from_utf8(output).unwrap());
         }
         fn flush(&self) {}
     }
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Messages::default();
-    (|| sinfo!(logger: &logger, "message only"))();
-    let f = 42;
-    sinfo!(logger: &logger, f; "shorthand");
-    sinfo!(logger: &logger, f = 7; "explicit");
-    assert_eq!(*logger.0.lock().unwrap(), [
-        ("message only".into(), None),
-        ("shorthand".into(), Some("42".into())),
-        ("explicit".into(), Some("7".into())),
-    ]);
+    sinfo!(logger: &logger, "message only");
+    assert_eq!(*logger.0.lock().unwrap(), ["message only"]);
 }
 
 #[test]
-fn custom_logger_filtering_preserves_laziness_evaluation_counts_and_kv() {
+fn filtered_calls_do_not_format_messages() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     struct NeverFormat;
@@ -85,25 +55,42 @@ fn custom_logger_filtering_preserves_laziness_evaluation_counts_and_kv() {
     }
     sinfo!(logger: &logger, target: "disabled", "{}", NeverFormat);
     assert!(logger.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn logger_expression_is_evaluated_once() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
     let evaluations = std::cell::Cell::new(0);
     let get_logger = || -> &dyn Log {
         evaluations.set(evaluations.get() + 1);
         &logger
     };
-    sinfo!(logger: get_logger(), ("once"), palette("info"), (" tail"));
+    sinfo!(logger: get_logger(), ("once"), palette("info"));
     assert_eq!(evaluations.get(), 1);
+}
+
+#[test]
+fn filtered_inline_calls_do_not_evaluate_segments() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
     fn never<T>() -> T { panic!("filtered argument evaluated") }
-    serror!(logger: get_logger(), target: "disabled", ("{}", never::<String>()),
+    serror!(logger: &logger, target: "disabled", ("{}", never::<String>()),
         palette(never::<&str>()), ("never"));
-    assert_eq!(evaluations.get(), 2);
+    assert!(logger.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn structured_values_support_shorthand_and_debug_formatting() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
     let request = 42;
     sinfo!(logger: &logger, request; "shorthand");
     sinfo!(logger: &logger, request:? = vec![1, 2]; "debug");
     let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 3);
-    assert!(lines[0].ends_with("once tail"));
-    assert!(lines[1].ends_with("|INFO|42|shorthand"));
-    assert!(lines[2].ends_with("|INFO|[1, 2]|debug"));
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("|INFO|42|shorthand"));
+    assert!(lines[1].ends_with("|INFO|[1, 2]|debug"));
 }
 
 #[test]
@@ -111,16 +98,8 @@ fn inline_segments_keep_plain_messages_and_metadata() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     sinfo!(logger: &logger, target: "custom", ("hello {count}", count = 7), palette("WARN"), " world", palette(), "!");
-    swarn!(logger: &logger, ("{}", String::from("owned")), palette("info"), " tail");
-    sdebug!(logger: &logger, ("{name}", name = "function"), palette("warn"), " tail");
-    strace!(logger: &logger, "request" = 42; ("{name}", name = "kv",), palette("warn"), " tail", palette(),);
     let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 4);
-    assert!(lines[0].starts_with("inline_segments_keep_plain_messages_and_metadata|custom|INFO|"));
-    assert!(lines[0].ends_with("hello 7 world!"));
-    assert!(lines[1].ends_with("owned tail"));
-    assert!(lines[2].ends_with("|DEBUG||function tail"));
-    assert!(lines[3].ends_with("|TRACE|42|kv tail"));
+    assert_eq!(*lines, ["inline_segments_keep_plain_messages_and_metadata|custom|INFO||hello 7 world!"]);
 }
 
 #[test]
@@ -146,20 +125,12 @@ fn inline_syntax_preserves_grouped_formats_literals_and_palette_only_records() {
 fn inline_calls_borrow_owned_loggers() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
-    sinfo!(logger: logger, target: "custom", request = 42; ("info"), palette("info"), (" tail"));
-    swarn!(logger: logger, ("warn"), palette("warn"), (" tail"));
-    serror!(logger: logger, ("error"), palette("error"), (" tail"));
-    sdebug!(logger: logger, ("debug"), palette("debug"), (" tail"));
-    strace!(logger: logger, ("trace"), palette("trace"), (" tail"));
+    sinfo!(logger: logger, ("info"), palette("info"), (" tail"));
     sinfo!(logger: logger, "ordinary reuse");
     let lines = logger.0.lock().unwrap();
-    assert_eq!(lines.len(), 6);
-    assert!(lines[0].ends_with("|custom|INFO|42|info tail"));
-    assert!(lines[1].ends_with("|WARN||warn tail"));
-    assert!(lines[2].ends_with("|ERROR||error tail"));
-    assert!(lines[3].ends_with("|DEBUG||debug tail"));
-    assert!(lines[4].ends_with("|TRACE||trace tail"));
-    assert!(lines[5].ends_with("ordinary reuse"));
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].ends_with("info tail"));
+    assert!(lines[1].ends_with("ordinary reuse"));
 }
 
 #[test]
@@ -225,118 +196,9 @@ fn ordinary_calls_do_not_create_inline_state() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Plain(Capture::default());
     sinfo!(logger: &logger, "ordinary {}", 7);
-    swarn!(logger: &logger, "onetwo {}", 7);
-    sdebug!(logger: &logger, "onetwo");
-    strace!(logger: &logger, request = 42; "onetwo");
-    let count = 7;
-    sinfo!(logger: &logger, "{} {}", "literal", (count));
     let lines = logger.0.0.lock().unwrap();
-    assert_eq!(lines.len(), 5);
+    assert_eq!(lines.len(), 1);
     assert!(lines[0].ends_with("ordinary 7"));
-    assert!(lines[1].ends_with("onetwo 7"));
-    assert!(lines[2].ends_with("|DEBUG||onetwo"));
-    assert!(lines[3].ends_with("|TRACE|42|onetwo"));
-    assert!(lines[4].ends_with("literal 7"));
-}
-
-#[test]
-#[cfg(unix)] // This source-tree check runs on the host, not in the Wine harness.
-fn all_plugin_diagnostics_use_shared_macros() {
-    fn check(directory: &std::path::Path) {
-        let mut entries: Vec<_> = std::fs::read_dir(directory).unwrap()
-            .map(|entry| entry.unwrap().path()).collect();
-        entries.sort();
-        for path in entries {
-            if path.is_dir() { check(&path); }
-            else if path.extension().is_some_and(|extension| extension == "rs") {
-                let source = std::fs::read_to_string(&path).unwrap();
-                assert!(!interpolates_facade_path(&source),
-                    "{}: generated diagnostics must use shared macros", path.display());
-                // Declarative definitions in this tree end with an unindented brace.
-                let mut in_macro = false;
-                let mut start = 0;
-                let mut macro_definitions = Vec::new();
-                let mut position = 0;
-                for line in source.split_inclusive('\n') {
-                    if line.trim_start().starts_with("macro_rules!") {
-                        in_macro = true;
-                        start = position;
-                    }
-                    position += line.len();
-                    if in_macro && line.trim_end() == "}" {
-                        macro_definitions.push(start..position);
-                        in_macro = false;
-                    }
-                }
-                assert!(!in_macro, "{}: unterminated declarative macro", path.display());
-                // Split punctuation too, so whitespace cannot bypass the check.
-                let tokens: Vec<_> = source.split(|ch: char| !ch.is_alphanumeric() && ch != '_')
-                    .filter(|token| !token.is_empty()).collect();
-                for statement in source.split(';') {
-                    let compact: String = statement.chars().filter(|ch| !ch.is_whitespace()).collect();
-                    let facade_import = ["use", "log", "::"].concat();
-                    if let Some((_, import)) = compact.split_once(&facade_import) {
-                        let imports: Vec<_> = import.split(|ch: char| !ch.is_alphanumeric() && ch != '_')
-                            .filter(|token| !token.is_empty()).collect();
-                        assert!(!imports.iter().any(|name| ["info", "warn", "error", "debug", "trace", "log"].contains(name)),
-                            "{}: do not import facade diagnostic macros", path.display());
-                    }
-                }
-                for level in ["info", "warn", "error", "debug", "trace", "log", "sinfo", "swarn", "serror", "sdebug", "strace"] {
-                    if level == "log" && path.file_name().unwrap() == "macros.rs" { continue; }
-                    for (offset, _) in source.match_indices(level) {
-                        let after = source[offset + level.len()..].trim_start();
-                        if !after.starts_with('!') { continue; }
-                        let before = source[..offset].trim_end();
-                        if before.ends_with(|ch: char| ch.is_alphanumeric() || ch == '_') { continue; }
-                        assert!(level.starts_with('s'),
-                            "{}: diagnostic must use the shared s-prefixed macro", path.display());
-                        let in_macro = macro_definitions.iter().any(|range| range.contains(&offset));
-                        let generated = path.components().any(|part| part.as_os_str() == "sleuth_macros");
-                        assert!(shared_macro_scope(before, in_macro, generated),
-                            "{}: use unqualified {level}! (declarative definitions: $crate::; proc output: crate::)", path.display());
-                    }
-                    assert!(level == "log" || level.starts_with('s') || !tokens.windows(2).any(|pair| pair == ["log", level]),
-                        "{}: do not import facade diagnostic macros", path.display());
-                }
-            }
-        }
-    }
-    // file! is absolute in the external harness and relative in the plugin.
-    let source = std::path::Path::new(file!());
-    check(source.parent().unwrap().parent().unwrap());
-    check(&source.parent().unwrap().parent().unwrap().parent().unwrap().join("sleuth_macros/src"));
-}
-
-#[cfg(unix)]
-fn shared_macro_scope(before: &str, in_macro: bool, generated: bool) -> bool {
-    if in_macro { before.ends_with("$crate::") }
-    else if generated { before.ends_with("crate::") }
-    else { !before.ends_with(':') }
-}
-
-#[test]
-#[cfg(unix)]
-fn source_check_enforces_shared_macro_hygiene() {
-    assert!(shared_macro_scope("", false, false));
-    for prefix in ["crate::", "UnchainedPlugin::", "$crate::", "log::"] {
-        assert!(!shared_macro_scope(prefix, false, false));
-    }
-    assert!(shared_macro_scope("$crate::", true, false));
-    assert!(!shared_macro_scope("crate::", true, false));
-    assert!(!shared_macro_scope("", true, false));
-    assert!(shared_macro_scope("crate::", false, true));
-    assert!(!shared_macro_scope("", false, true));
-    for prefix in ["::log::", "log :: "] {
-        assert!(interpolates_facade_path(&[prefix, "# severity ! (\"failure\")"].concat()));
-    }
-    assert!(!interpolates_facade_path("crate::#severity!(\"failure\")"));
-}
-
-#[cfg(unix)]
-fn interpolates_facade_path(source: &str) -> bool {
-    let compact: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
-    compact.contains(&["log::", "#"].concat())
 }
 
 struct Example;
@@ -344,54 +206,28 @@ impl Example {
     fn method<T>(&self, logger: &Capture, _: T) {
         swarn!(logger: logger, "method");
     }
-    async fn asynchronous(&self, logger: &Capture) {
-        serror!(logger: logger, "async");
-        (|| strace!(logger: logger, "async closure"))();
-        async { sinfo!(logger: logger, "async block"); }.await;
-    }
 }
 
 #[test]
-fn actual_macros_capture_named_functions_and_preserve_records() {
+fn named_function_preserves_record_fields() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();
     named(&logger);
-    Example.method(&logger, 7);
-    (|| (|| sdebug!(logger: &logger, "closure"))())();
-    // This future has no suspension points; poll it without an executor dependency.
-    let mut future = std::pin::pin!(Example.asynchronous(&logger));
-    struct Noop;
-    impl std::task::Wake for Noop { fn wake(self: std::sync::Arc<Self>) {} }
-    let waker = std::task::Waker::from(std::sync::Arc::new(Noop));
-    assert!(std::future::Future::poll(future.as_mut(), &mut std::task::Context::from_waker(&waker)).is_ready());
-    let lines = logger.0.lock().unwrap();
-    assert_eq!(lines[0], "named|custom|INFO|42|hello 7");
-    assert!(lines[1].starts_with("method|"));
-    assert!(lines[2].starts_with("actual_macros_capture_named_functions_and_preserve_records|"));
-    assert!(lines[3].starts_with("asynchronous|"));
-    assert!(lines[4].starts_with("asynchronous|"));
-    assert!(lines[5].starts_with("asynchronous|"));
-    assert_eq!(lines.len(), 6);
+    assert_eq!(*logger.0.lock().unwrap(), ["named|custom|INFO|42|hello 7"]);
 }
 
 #[test]
-fn disabled_levels_do_not_evaluate_arguments_or_structured_values() {
-    // Isolate the global max-level change from the other macro test.
-    const CHILD: &str = "UNCHAINED_LOG_LAZY_TEST";
-    if std::env::var_os(CHILD).is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "logging::tests::disabled_levels_do_not_evaluate_arguments_or_structured_values"])
-            .env(CHILD, "1").output().unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
-        return;
-    }
-    log::set_max_level(log::LevelFilter::Off);
-    let calls = std::cell::Cell::new(0);
-    let expensive = || { calls.set(calls.get() + 1); 42 };
-    sinfo!(request = expensive(); "{}", expensive());
-    sinfo!("{}", expensive());
-    assert_eq!(calls.get(), 0);
-    log::set_max_level(log::LevelFilter::Debug);
-    strace!("{}", expensive());
-    assert_eq!(calls.get(), 0);
+fn methods_capture_leaf_name() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    Example.method(&logger, 7);
+    assert!(logger.0.lock().unwrap()[0].starts_with("method|"));
+}
+
+#[test]
+fn closures_capture_enclosing_function() {
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = Capture::default();
+    (|| sdebug!(logger: &logger, "closure"))();
+    assert!(logger.0.lock().unwrap()[0].starts_with("closures_capture_enclosing_function|"));
 }

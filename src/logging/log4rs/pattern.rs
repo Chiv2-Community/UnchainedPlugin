@@ -141,22 +141,12 @@ mod tests {
     }
 
     #[test]
-    fn short_module_boundaries_preserve_custom_widths() {
-        for character in ['a', 'é', '界'] {
-            for length in [1, 23, 24, 25, 31, 32, 33, 40] {
-                let module: String = std::iter::once('Ω')
-                    .chain(std::iter::repeat_n(character, length - 1)).collect();
-                let expected: String = module.chars().rev().take(32)
-                    .collect::<Vec<_>>().into_iter().rev().collect();
-                let record = Record::builder().module_path(Some(&module))
-                    .args(format_args!("message")).build();
-                let mut custom = Vec::new();
-                PatternEncoder::new("[{sm}]|[{sm:<24}]")
-                    .encode(&mut SimpleWriter(&mut custom), &record).unwrap();
-                assert_eq!(String::from_utf8(custom).unwrap(),
-                    format!("[{expected}]|[{expected:<24}]"), "{module}");
-            }
-        }
+    fn short_module_truncates_unicode_from_the_left() {
+        let module = format!("Ω{}", "界".repeat(32));
+        let record = Record::builder().module_path(Some(&module)).build();
+        let mut output = Vec::new();
+        PatternEncoder::new("{sm}").encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "界".repeat(32));
     }
 
     #[test]

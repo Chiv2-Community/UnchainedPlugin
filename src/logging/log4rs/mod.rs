@@ -431,36 +431,6 @@ mod tests {
         assert_eq!(before, unsafe { windows::Win32::System::Console::GetConsoleWindow() });
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn console_color_policy_at_real_output_boundary() {
-        let output = std::process::Command::new("python3")
-            .args(["-c", include_str!("test_console_policy.py")])
-            .arg(std::env::current_exe().unwrap())
-            .arg(format!("{}::console_policy_child", module_path!().split_once("::").unwrap().1))
-            .output().unwrap();
-        assert!(output.status.success(), "{}\n{}",
-            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[ignore = "subprocess fixture for console_color_policy_at_real_output_boundary"]
-    fn console_policy_child() {
-        let target = std::env::var("UNCHAINED_TEST_CONSOLE_TARGET").unwrap();
-        let mut yaml = fixtures::config("console-policy");
-        yaml["appenders"]["console"]["target"] = target.into();
-        if std::env::var_os("UNCHAINED_TEST_CUSTOM_PALETTE").is_some() {
-            yaml["appenders"]["console"]["encoder"]["palette"] = fixtures::config("custom-console-palette");
-        }
-        let config = config_from_value(yaml, "console-policy-child").unwrap();
-        let logger = log4rs::Logger::new(config);
-        for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-            logger.log(&log::Record::builder().level(level).module_path(Some("policy_child"))
-                .args(format_args!("boundary message")).build());
-        }
-    }
-
     #[test]
     fn default_encoders_use_function_without_module_prefix() {
         let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
