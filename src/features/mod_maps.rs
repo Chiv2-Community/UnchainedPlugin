@@ -563,20 +563,30 @@ fn classify_paks_for_asset_registry(paks: Vec<PathBuf>) -> (Vec<(PathBuf, Vec<u8
     (registry_paks, legacy_paks)
 }
 
-/// Synchronously merge the registry-bearing half of a classified pak set.
-/// Must run on the game thread.
-fn merge_mod_asset_registries_sync(registry_paks: Vec<(PathBuf, Vec<u8>)>) -> usize {
+/// Synchronously merge the registry-bearing half of a classified pak set with
+/// `merge` (the native merge in production; must then run on the game thread).
+/// Returns the number of merged paks and the paks whose merge failed, so the
+/// caller can send those through legacy header discovery instead of losing
+/// their maps and markers.
+fn merge_mod_asset_registries_sync<E: std::fmt::Display>(
+    registry_paks: Vec<(PathBuf, Vec<u8>)>,
+    mut merge: impl FnMut(&[u8]) -> Result<(), E>,
+) -> (usize, Vec<PathBuf>) {
     let mut merged = 0usize;
+    let mut failed = Vec::new();
     for (pak_path, bytes) in registry_paks {
-        match unsafe { crate::features::mod_asset_registry::append_mod_asset_registry_on_game_thread(&bytes) } {
+        match merge(&bytes) {
             Ok(()) => {
                 merged += 1;
                 sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
             }
-            Err(error) => serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error),
+            Err(error) => {
+                serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error);
+                failed.push(pak_path);
+            }
         }
     }
-    merged
+    (merged, failed)
 }
 
 /// Synchronous discovery of maps + marker packages across the source paks.
@@ -810,11 +820,19 @@ pub fn register_filtered_assets_sync() {
         serror!(fn; "Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
         return;
     }
-    let (registry_paks, legacy_paks) = classify_paks_for_asset_registry(paks);
-    let registry_merged = merge_mod_asset_registries_sync(registry_paks);
+    let (registry_paks, mut legacy_paks) = classify_paks_for_asset_registry(paks);
+    let (registry_merged, failed_merges) = merge_mod_asset_registries_sync(registry_paks, |bytes| unsafe {
+        crate::features::mod_asset_registry::append_mod_asset_registry_on_game_thread(bytes)
+    });
     if crate::cli_args().mod_asset_registry_only {
         sdebug!("[modregistry] registry-only test merged {} pak(s); legacy ScanPathsAndFilesSynchronous was not called", registry_merged);
         return;
+    }
+    if !failed_merges.is_empty() {
+        // A registry pak normally skips the header scan; one whose merge
+        // failed would otherwise register nothing at all.
+        swarn!("[modregistry] {} pak(s) failed to merge; falling back to header discovery for them", failed_merges.len());
+        legacy_paks.extend(failed_merges);
     }
     if legacy_paks.is_empty() {
         sdebug!("[modregistry] merged {} registry pak(s); no registry-less paks require legacy discovery", registry_merged);
@@ -1108,6 +1126,19 @@ mod tests {
         assert_eq!(registry, vec![(registry_pak, b"registry".to_vec())]);
         assert_eq!(legacy, vec![legacy_pak]);
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn failed_registry_merges_are_returned_for_legacy_discovery() {
+        let paks = vec![
+            (PathBuf::from("good.pak"), b"ok".to_vec()),
+            (PathBuf::from("bad.pak"), b"broken".to_vec()),
+        ];
+        let (merged, failed) = merge_mod_asset_registries_sync(paks, |bytes| {
+            if bytes == b"ok" { Ok(()) } else { Err("merge failed") }
+        });
+        assert_eq!(merged, 1);
+        assert_eq!(failed, vec![PathBuf::from("bad.pak")]);
     }
 
     #[test]
