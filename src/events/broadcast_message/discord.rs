@@ -29,7 +29,7 @@ impl Subscriber<BroadcastMessage> for DiscordBroadcastSubscriber {
         let config = self.discord_config;
         let admin_role_id = config.admin_role_id.map(RoleId::new);
 
-        let mut discord_message: CreateMessage = event.clone().into();
+        let mut discord_message = CreateMessage::from(event);
 
         if config.mention_on_admin && !event.notify_roles().is_empty() {
             let mut content = event.content_ref().map(|text| text.to_discord()).unwrap_or_default();

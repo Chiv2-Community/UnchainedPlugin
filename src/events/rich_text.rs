@@ -251,12 +251,6 @@ impl From<&str> for RichText {
     }
 }
 
-impl From<Vec<RichTextChunk>> for RichText {
-    fn from(chunks: Vec<RichTextChunk>) -> Self {
-        Self(chunks)
-    }
-}
-
 impl From<RichTextChunk> for RichText {
     fn from(chunk: RichTextChunk) -> Self {
         Self(vec![chunk])

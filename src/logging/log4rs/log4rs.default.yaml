@@ -24,12 +24,10 @@ appenders:
         module: "#BE9D5C"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
-        chat_all: "#f2b378"
         team_agatha: "#8cb4e1"
         team_mason: "#f28b82"
         team_tenosia: "#D09128"
         team_ffa: "#a8d5a2"
-        chat_server: "#8cd8e1"
         team_unknown: "#d7a0df"
         team_none: "#ffffff"
         team_max: "#d7a0df"

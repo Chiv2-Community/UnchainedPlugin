@@ -114,8 +114,8 @@ impl BroadcastMessage {
     }
 }
 
-impl From<BroadcastMessage> for CreateMessage {
-    fn from(broadcast_message: BroadcastMessage) -> Self {
+impl From<&BroadcastMessage> for CreateMessage {
+    fn from(broadcast_message: &BroadcastMessage) -> Self {
         let mut message = CreateMessage::new();
         let BroadcastMessage {
             title,
@@ -143,7 +143,7 @@ impl From<BroadcastMessage> for CreateMessage {
                 embed = embed.footer(CreateEmbedFooter::new(footer.to_discord()));
             }
             if let Some(color) = color {
-                embed = embed.color(color);
+                embed = embed.color(*color);
             }
             message = message.embed(embed);
         } else if let Some(content) = content {
@@ -151,6 +151,12 @@ impl From<BroadcastMessage> for CreateMessage {
         }
 
         message
+    }
+}
+
+impl From<BroadcastMessage> for CreateMessage {
+    fn from(broadcast_message: BroadcastMessage) -> Self {
+        Self::from(&broadcast_message)
     }
 }
 

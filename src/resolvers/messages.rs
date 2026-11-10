@@ -75,20 +75,14 @@ mod client_message {
         };
         let Some(player) = (unsafe { sender.as_ref() }) else { return; };
         let Ok(sender) = player.base.player_name_private.copy_to_string() else { return; };
+        let command = player_command_event(&sender, &message, chat_type);
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-            sender: sender.clone(), message: message.clone(),
+            sender, message,
             chat_source: ChatSource::Native(NativeChat::Player { channel: chat_type, faction: Some(player.faction) }),
         }));
-        if let Some(event) = player_command_event(&sender, &message, chat_type) {
+        if let Some(event) = command {
             EVENT_SYSTEM.game_event_publisher.publish(event);
         }
-    }
-
-    fn publish_system_chat(chat_type: EChatType, sender: Option<&str>, message: &str) {
-        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-            sender: sender.unwrap_or_default().into(), message: message.into(),
-            chat_source: ChatSource::Native(NativeChat::System { channel: chat_type }),
-        }));
     }
 
     define_pattern_resolver!(ClientMessage, [
@@ -99,7 +93,10 @@ mod client_message {
     CREATE_HOOK!(ClientMessage, (this:*mut APlayerController, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
             if let Some((chat_type, sender, message)) = system_message(&message) {
-                publish_system_chat(chat_type, sender, message);
+                EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                    sender: sender.unwrap_or_default().into(), message: message.into(),
+                    chat_source: ChatSource::Native(NativeChat::System { channel: chat_type }),
+                }));
             }
         }
     });

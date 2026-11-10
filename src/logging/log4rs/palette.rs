@@ -122,10 +122,10 @@ impl PaletteEncoderConfig {
             ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
             ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
-            ("module", Some([190, 157, 92])), ("chat_all", Some([242, 179, 120])),
+            ("module", Some([190, 157, 92])),
             ("team_discord", Some([181, 140, 255])), ("team_system", Some([140, 216, 225])),
             ("team_agatha", Some([140, 180, 225])), ("team_mason", Some([242, 139, 130])),
-            ("team_tenosia", Some([208, 145, 40])), ("chat_server", Some([140, 216, 225])),
+            ("team_tenosia", Some([208, 145, 40])),
             ("team_ffa", Some([168, 213, 162])), ("team_unknown", Some([215, 160, 223])),
             ("team_none", Some([255, 255, 255])), ("team_max", Some([215, 160, 223])),
             ("team_all", Some([168, 213, 162])), ("team_spectator", Some([255, 255, 255]))]
