@@ -14,6 +14,29 @@ main-menu queries (`GetAssetsByPath`, `GetAssetsByClass`) can find mod **maps**
 reboot. This is the `mod_loading-5r1` epic + the `mod_loading-8wa` filtered
 epic.
 
+### Marker classes (V1 and V2)
+
+Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
+
+| Class | Header scan (registered into the AR) | Read at runtime |
+|-------|--------------------------------------|-----------------|
+| `DA_ModMarker_C` (V1, deprecated) | yes | `ModManager`: hard-ref `TMap` at fixed offset 0x30 |
+| `DA_ModMarker_V2_C` | yes | `ModManager`: `ModActorClasses` soft class paths, each class loaded for its CDO |
+| `DA_MapInfo_C` | yes | no |
+| `DA_MapMarker_V2_C` | yes | not yet (`features/map_markers.rs` stub, ticket `mod_loading-rix`) |
+
+- V2 fields are located **by property name** on the live class
+  (`ue::find_property`, a plain walk of `UStruct::child_properties`, no extra
+  signatures). `game/unchained.rs::DA_ModMarker_V2_C` mirrors the dumped layout
+  and is the fallback when a property is not found; a warning is logged when the
+  live offset differs from the dump or the fallback is used.
+- `Mod` entries are the same for both versions (name/author/version from the
+  mod actor CDO). A mod actor listed by a V1 and a V2 marker yields one entry,
+  taken from V2.
+- `BundledMarkers` are not followed: bundled markers are separate assets and
+  come back from the same registry query. A bundled path missing from the
+  registry is logged.
+
 ### Entry points / commands
 | Command | Mode | What it registers |
 |---------|------|-------------------|

@@ -10,7 +10,8 @@ use crate::ue::{EFindName, FName, FString, TArray};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// An extra per-map loading screen, injected into `UMapSpecificLoadingScreenConfig::Configs`.
-/// TODO: load these from files instead of hard-coding.
+/// TODO(mod_loading-rix): serve these from `features::map_markers` (data read
+/// from `DA_MapMarker_V2` markers) instead of hard-coding.
 struct ExtraLoadingScreen {
     /// Map name as the native lookup sees it (path and `?options` stripped).
     map: &'static str,
