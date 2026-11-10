@@ -38,20 +38,21 @@ mod client_message {
             Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
                 let faction = if chat_type == EChatType::TeamSay { sender_faction(sender) } else { None };
                 macro_rules! log_chat {
-                    ($color:literal) => {
+                    ($label:expr, $color:literal) => {
                         sinfo!(target: concat!(module_path!(), "::game_chat"),
-                            palette($color), "[{chat_type:?}]", palette(), " [{sender}]: {message}")
+                            chat = chat_type.as_str(), team_id = faction;
+                            palette($color), ("[{}]", $label), palette(), " [{sender}]: {message}")
                     };
                 }
                 match (chat_type, faction) {
-                    (EChatType::AllSay, _) => log_chat!("chat_all"),
-                    (EChatType::ServerSay, _) => log_chat!("chat_server"),
+                    (EChatType::AllSay, _) => log_chat!("All", "chat_all"),
+                    (EChatType::ServerSay, _) => log_chat!("Server", "chat_server"),
                     // ArgonSDK: Source/TBL/Public/EFaction.h.
-                    (EChatType::TeamSay, Some(0)) => log_chat!("chat_agatha"),
-                    (EChatType::TeamSay, Some(1)) => log_chat!("chat_mason"),
-                    (EChatType::TeamSay, Some(5)) => log_chat!("chat_tenosia"),
-                    (EChatType::TeamSay, _) => log_chat!("chat_unknown"),
-                    _ => log_chat!(""),
+                    (EChatType::TeamSay, Some(0)) => log_chat!("Agatha", "chat_agatha"),
+                    (EChatType::TeamSay, Some(1)) => log_chat!("Mason", "chat_mason"),
+                    (EChatType::TeamSay, Some(5)) => log_chat!("Tenosia", "chat_tenosia"),
+                    (EChatType::TeamSay, _) => log_chat!("Unknown", "chat_unknown"),
+                    _ => log_chat!(chat_type.as_str(), ""),
                 }
                 if chat_type == EChatType::AllSay {
                     if let Some(content) = message.strip_prefix('!') {
@@ -86,11 +87,13 @@ mod client_message {
             }
             Ok(ChatMessage { chat_type: ChatMessageType::System(SystemChat { chat_type }), message }) => {
                 sinfo!(target: concat!(module_path!(), "::system_chat"),
-                    palette("chat_server"), "[{chat_type:?}]", palette(), " {message}");
+                    chat = chat_type.as_str();
+                    palette("chat_server"), "[Server]", palette(), " {message}");
             }
             Ok(ChatMessage { chat_type: ChatMessageType::Bare(BareChat), message }) => {
                 sinfo!(target: concat!(module_path!(), "::system_chat"),
-                    palette("chat_server"), "[ServerSay]", palette(), " {message}");
+                    chat = "ServerSay";
+                    palette("chat_server"), "[Server]", palette(), " {message}");
             }
             Err(error) => {
                 swarn!(target: concat!(module_path!(), "::system_chat"), "Failed to parse chat message. error={error}");
