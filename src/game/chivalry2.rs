@@ -138,6 +138,69 @@ pub struct FDeathDamageTakenEvent {
 const _: [(); 0x148] = [(); std::mem::size_of::<FDamageTakenEvent>()];
 const _: [(); 0x160] = [(); std::mem::size_of::<FDeathDamageTakenEvent>()];
 
+// ArgonSDK: Source/TBL/Public/EFaction.h.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EFaction {
+    Agatha = 0,
+    Mason = 1,
+    FFA = 2,
+    None = 3,
+    All = 4,
+    Tenosia = 5,
+}
+
+impl TryFrom<u8> for EFaction {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Agatha),
+            1 => Ok(Self::Mason),
+            2 => Ok(Self::FFA),
+            3 => Ok(Self::None),
+            4 => Ok(Self::All),
+            5 => Ok(Self::Tenosia),
+            _ => Err(()),
+        }
+    }
+}
+
+impl EFaction {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Agatha => "Agatha",
+            Self::Mason => "Mason",
+            Self::FFA => "FFA",
+            Self::None => "None",
+            Self::All => "All",
+            Self::Tenosia => "Tenosia",
+        }
+    }
+}
+
+#[cfg(test)]
+mod faction_tests {
+    use super::EFaction;
+
+    #[test]
+    fn faction_has_a_readable_name() {
+        assert_eq!(EFaction::Mason.as_str(), "Mason");
+    }
+
+    #[test]
+    fn faction_ids_follow_the_sdk() {
+        assert_eq!(EFaction::try_from(0), Ok(EFaction::Agatha));
+        assert_eq!(EFaction::try_from(1), Ok(EFaction::Mason));
+        assert_eq!(EFaction::try_from(5), Ok(EFaction::Tenosia));
+    }
+
+    #[test]
+    fn unknown_faction_id_is_rejected() {
+        assert!(EFaction::try_from(255).is_err());
+    }
+}
+
 // Chat type enum
 // FIXME: More compact, wtf is this
 #[repr(C)]

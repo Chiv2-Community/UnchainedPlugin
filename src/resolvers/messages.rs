@@ -21,7 +21,7 @@ mod client_message {
     use crate::ue::APlayerController;
     use crate::{
         events::models::{GameChatMessage, GameEvent},
-        game::chivalry2::EChatType,
+        game::chivalry2::{EChatType, EFaction},
         ue::{FName, FString},
     };
     use regex::Regex;
@@ -37,20 +37,20 @@ mod client_message {
         match parse_client_message(message.as_str()) {
             Ok(ChatMessage { chat_type: ChatMessageType::User(UserChat { sender, chat_type }), message }) => {
                 let faction = if chat_type == EChatType::TeamSay { sender_faction(sender) } else { None };
+                let team = faction.map(EFaction::as_str).unwrap_or("Unknown");
                 macro_rules! log_chat {
                     ($label:expr, $color:literal) => {
                         sinfo!(target: concat!(module_path!(), "::game_chat"),
-                            chat = chat_type.as_str(), team_id = faction;
+                            chat = chat_type.as_str(), team = team;
                             palette($color), ("[{}]", $label), palette(), " [{sender}]: {message}")
                     };
                 }
                 match (chat_type, faction) {
                     (EChatType::AllSay, _) => log_chat!("All", "chat_all"),
                     (EChatType::ServerSay, _) => log_chat!("Server", "chat_server"),
-                    // ArgonSDK: Source/TBL/Public/EFaction.h.
-                    (EChatType::TeamSay, Some(0)) => log_chat!("Agatha", "chat_agatha"),
-                    (EChatType::TeamSay, Some(1)) => log_chat!("Mason", "chat_mason"),
-                    (EChatType::TeamSay, Some(5)) => log_chat!("Tenosia", "chat_tenosia"),
+                    (EChatType::TeamSay, Some(EFaction::Agatha)) => log_chat!(team, "chat_agatha"),
+                    (EChatType::TeamSay, Some(EFaction::Mason)) => log_chat!(team, "chat_mason"),
+                    (EChatType::TeamSay, Some(EFaction::Tenosia)) => log_chat!(team, "chat_tenosia"),
                     (EChatType::TeamSay, _) => log_chat!("Unknown", "chat_unknown"),
                     _ => log_chat!(chat_type.as_str(), ""),
                 }
@@ -101,7 +101,7 @@ mod client_message {
         }
     });
 
-    fn sender_faction(sender: &str) -> Option<u8> {
+    fn sender_faction(sender: &str) -> Option<EFaction> {
         let world = crate::globals().world()?;
         // ClientMessage runs on the game thread, as does player-state access.
         let game_state = unsafe { (*world).game_state.as_ref()? };
@@ -111,7 +111,7 @@ mod client_message {
         let player = players.next()?;
         // A display name is not a unique identity; do not guess between duplicates.
         if players.next().is_some() { return None; }
-        Some(player.faction)
+        EFaction::try_from(player.faction).ok()
     }
 
     #[derive(Debug, PartialEq)]

@@ -79,6 +79,23 @@ include `time`, `level`, `message`, source locations, and thread metadata, all a
 the root. Plugin macros add the enclosing function name as
 `attributes.enclosing_function`.
 
+Chat records add `attributes.chat`, such as `AllSay`, `TeamSay`, or `ServerSay`.
+Player chat also includes `attributes.team`: `Agatha`, `Mason`, `Tenosia`,
+`FFA`, `None`, `All`, or `Unknown`. The team is looked up for `TeamSay`;
+other chat types and unavailable or ambiguous senders use `Unknown`.
+
+For example, a Mason team message includes:
+
+```json
+{"attributes":{"chat":"TeamSay","team":"Mason"}}
+```
+
+To include these fields in a pattern encoder, use `{K(chat)}` and `{K(team)}`:
+
+```yaml
+pattern: "[{K(chat)} {K(team)}] {m}{n}"
+```
+
 `--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
 it does not create redirection. The calling program supplies pipes or files when
 capture is needed. `--no-spawn-console` independently suppresses console allocation.
