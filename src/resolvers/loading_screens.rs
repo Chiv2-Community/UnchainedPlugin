@@ -9,9 +9,8 @@ use crate::game::engine::{FSoftObjectPath, FText};
 use crate::ue::{EFindName, FName, FString, TArray};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-/// An extra per-map loading screen, injected into `UMapSpecificLoadingScreenConfig::Configs`.
-/// TODO(mod_loading-rix): serve these from `features::map_markers` (data read
-/// from `DA_MapMarker_V2` markers) instead of hard-coding.
+/// A built-in per-map loading screen. Maps listed by a `DA_MapMarker_V2` marker
+/// take precedence (see [`LoadingScreen::lookup`]); this table is the fallback.
 struct ExtraLoadingScreen {
     /// Map name as the native lookup sees it (path and `?options` stripped).
     map: &'static str,
@@ -37,6 +36,53 @@ impl ExtraLoadingScreen {
         EXTRA_LOADING_SCREENS
             .iter()
             .find(|extra| extra.map.eq_ignore_ascii_case(key))
+    }
+}
+
+/// A per-map loading screen to inject into
+/// `UMapSpecificLoadingScreenConfig::Configs`, from a map marker or the
+/// built-in table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LoadingScreen {
+    /// Map name as the native lookup sees it (path and `?options` stripped).
+    map: String,
+    /// Texture soft object path, without the `Texture2D'...'` wrapper.
+    texture: String,
+    /// Text stored at entry +0x28.
+    text_a: String,
+    /// Text stored at entry +0x40.
+    text_b: String,
+}
+
+impl LoadingScreen {
+    /// The loading screen a map marker provides for this map, if the marker
+    /// (or its default) names a texture. Map markers carry no texts, so the
+    /// map name stands in for the first one.
+    fn from_marker(info: &crate::features::map_markers::MapMarkerInfo) -> Option<Self> {
+        Some(Self {
+            map: info.map_name.clone(),
+            texture: info.loading_screen.clone()?,
+            text_a: info.map_name.clone(),
+            text_b: String::new(),
+        })
+    }
+
+    /// Finds the loading screen for a raw map name as passed to
+    /// `GetDataForMap`: map marker data first, then the built-in table.
+    fn lookup(raw_map_name: &str) -> Option<Self> {
+        let key = native_key(raw_map_name);
+        crate::features::map_markers::map_marker_cache()
+            .get(key)
+            .as_ref()
+            .and_then(Self::from_marker)
+            .or_else(|| {
+                ExtraLoadingScreen::find(raw_map_name).map(|extra| Self {
+                    map: extra.map.into(),
+                    texture: extra.texture.into(),
+                    text_a: extra.text_a.into(),
+                    text_b: extra.text_b.into(),
+                })
+            })
     }
 }
 
@@ -113,15 +159,15 @@ impl UMapSpecificLoadingScreenConfig {
     ///
     /// # Safety
     /// `self` must be the live engine object; must run on the game thread.
-    unsafe fn add_entry(&mut self, extra: &ExtraLoadingScreen) -> Result<(), String> {
-        if self.has_entry(extra.map) {
+    unsafe fn add_entry(&mut self, extra: &LoadingScreen) -> Result<(), String> {
+        if self.has_entry(&extra.map) {
             return Ok(());
         }
         let entry = FMapSpecificLoadingScreenConfigData {
-            map_name: FString::from(extra.map),
-            texture: FSoftObjectPath::new(extra.texture),
-            text_a: FTextRaw::from_str(extra.text_a)?,
-            text_b: FTextRaw::from_str(extra.text_b)?,
+            map_name: FString::from(extra.map.as_str()),
+            texture: FSoftObjectPath::new(&extra.texture),
+            text_a: FTextRaw::from_str(&extra.text_a)?,
+            text_b: FTextRaw::from_str(&extra.text_b)?,
             extra: [0; 0x10],
         };
         self.configs.push(entry);
@@ -132,7 +178,7 @@ impl UMapSpecificLoadingScreenConfig {
 
 /// Adds the entry, turning panics and errors into log lines: neither may cross
 /// into the engine.
-fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &ExtraLoadingScreen) {
+fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &LoadingScreen) {
     // SAFETY: `config` is the `this` pointer of a live `GetDataForMap` call on the game thread.
     match catch_unwind(AssertUnwindSafe(|| unsafe { (*config).add_entry(extra) })) {
         Ok(Ok(())) => {}
@@ -151,12 +197,12 @@ fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &Extra
 unsafe fn apply_texture_fallback(
     config: &UMapSpecificLoadingScreenConfig,
     data: &mut FMapSpecificLoadingScreenConfigData,
-    extra: &ExtraLoadingScreen,
+    extra: &LoadingScreen,
 ) {
     if data.texture.asset_path_name != config.default_screen.texture.asset_path_name {
         return;
     }
-    data.texture.asset_path_name = FName::with_type(extra.texture, EFindName::Add);
+    data.texture.asset_path_name = FName::with_type(&extra.texture, EFindName::Add);
     sinfo![fn; "Using fallback loading screen texture {}", extra.texture];
 }
 
@@ -173,12 +219,12 @@ CREATE_HOOK!(GetDataForMap, ACTIVE, NONE, (), (
     data: *mut FMapSpecificLoadingScreenConfigData,
 ), {
     // The key must be read before the call: the callee mutates and frees `map_name`.
-    let extra = ExtraLoadingScreen::find(&(*map_name).to_string());
-    if let Some(extra) = extra {
+    let extra = LoadingScreen::lookup(&(*map_name).to_string());
+    if let Some(extra) = &extra {
         add_entry_guarded(this_ptr, extra);
     }
     CALL_ORIGINAL!(GetDataForMap(this_ptr, map_name, data));
-    if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), extra) {
+    if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
         apply_texture_fallback(&*this_ptr, &mut *data, extra);
     }
 });
@@ -219,6 +265,31 @@ mod tests {
         assert!(ExtraLoadingScreen::find("TDM_Quarry").is_none());
         assert!(ExtraLoadingScreen::find("TDM_QuarryKP_Night").is_none());
         assert!(ExtraLoadingScreen::find("").is_none());
+    }
+
+    #[test]
+    fn marker_loading_screen_needs_a_texture() {
+        use crate::features::map_markers::MapMarkerInfo;
+        let mut info = MapMarkerInfo {
+            marker_path: "/Game/Mods/Quarry/Quarry_MapMarker.Quarry_MapMarker".into(),
+            map_name: "TDM_Quarry".into(),
+            map_path: "/Game/Mods/Quarry/TDM_Quarry.TDM_Quarry".into(),
+            loading_screen: Some("/Game/Mods/Quarry/T_Load.T_Load".into()),
+        };
+        let screen = LoadingScreen::from_marker(&info).expect("texture is set");
+        assert_eq!(screen.map, "TDM_Quarry");
+        assert_eq!(screen.texture, "/Game/Mods/Quarry/T_Load.T_Load");
+        assert_eq!(screen.text_a, "TDM_Quarry");
+        info.loading_screen = None;
+        assert_eq!(LoadingScreen::from_marker(&info), None);
+    }
+
+    #[test]
+    fn lookup_falls_back_to_the_built_in_table() {
+        let expected = &EXTRA_LOADING_SCREENS[0];
+        let screen = LoadingScreen::lookup(&format!("/Game/Mods/X/{}?listen", expected.map)).expect("table entry");
+        assert_eq!(screen.texture, expected.texture);
+        assert!(LoadingScreen::lookup("Frontend").is_none());
     }
 
     #[test]

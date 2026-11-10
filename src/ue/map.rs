@@ -329,9 +329,23 @@ impl<T> TSet<T> {
     }
 }
 
+/// Read-only view of an engine `TMap<K, V>` for key types the plugin cannot
+/// hash the way the engine does. Iteration only; same layout as [`TMap`].
+#[repr(C)]
+pub struct TMapView<K, V> {
+    pairs: TSet<TTuple<K, V>>,
+}
+impl<K, V> TMapView<K, V> {
+    /// Iterates the live key/value pairs.
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+        self.pairs.iter().map(|pair| (&pair.a, &pair.b))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::ue::FName;
+    const _: [u8; 0x50] = [0; std::mem::size_of::<TMapView<[u64; 3], [u64; 5]>>()];
 
     use super::*;
     const _: [u8; 0x50] = [0; std::mem::size_of::<TSet<[u8; 0x18]>>()];

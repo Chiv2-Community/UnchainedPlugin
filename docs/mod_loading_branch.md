@@ -23,7 +23,7 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
 | `DA_ModMarker_C` (V1, deprecated) | yes | `ModManager`: hard-ref `TMap` at fixed offset 0x30 |
 | `DA_ModMarker_V2_C` | yes | `ModManager`: `ModActorClasses` soft class paths, each class loaded for its CDO |
 | `DA_MapInfo_C` | yes | no |
-| `DA_MapMarker_V2_C` | yes | not yet (`features/map_markers.rs` stub, ticket `mod_loading-rix`) |
+| `DA_MapMarker_V2_C` | yes | `features/map_markers.rs`: `ShippedMapPaths` + `DefaultLoadingScreen` cached per map, used by `resolvers/loading_screens.rs` |
 
 - V2 fields are located **by property name** on the live class
   (`ue::find_property`, a plain walk of `UStruct::child_properties`, no extra
@@ -33,6 +33,11 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
 - `Mod` entries are the same for both versions (name/author/version from the
   mod actor CDO). A mod actor listed by a V1 and a V2 marker yields one entry,
   taken from V2.
+- Map markers are read once, as a game-thread job queued after registration
+  (`scan_map_markers`). Each shipped map gets its own loading screen texture or,
+  if it has none, the marker's `DefaultLoadingScreen`; `GetDataForMap` serves a
+  cached map before the built-in table. The marker has no text fields, so the
+  map name is used for the entry's first text and the second stays empty.
 - `BundledMarkers` are not followed: bundled markers are separate assets and
   come back from the same registry query. A bundled path missing from the
   registry is logged.

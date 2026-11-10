@@ -755,6 +755,11 @@ pub fn auto_register_all_assets() {
     }
     register_filtered_assets_sync();
     log_registered_markers();
+    // Reading the map markers loads their assets, so it runs as its own game
+    // thread job on a later tick rather than inside the registration call.
+    crate::resolvers::unchained_integration::run_on_game_thread(|| {
+        unsafe { crate::features::map_markers::scan_map_markers() };
+    });
 }
 
 /// Logs how many marker assets the Asset Registry holds after registration,
