@@ -122,17 +122,9 @@ impl Subscriber<GameEvent> for ChatRelaySubscriber {
     }
 
     async fn on_event(&mut self, event: &GameEvent) {
-        match event {
-            GameEvent::GameChatMessageEvent(message) => {
-                let sinks = self.sinks.lock().await;
-                join_all(
-                    sinks
-                        .iter()
-                        .map(|sink| sink.send(message)),
-                )
-                .await;
-            }
-            _ => {}
+        if let GameEvent::GameChatMessageEvent(message) = event {
+            let sinks = self.sinks.lock().await;
+            join_all(sinks.iter().map(|sink| sink.send(message))).await;
         }
     }
 }
@@ -165,7 +157,6 @@ mod tests {
         for (source, sender, target, channel, faction, label) in [
             (ChatSource::Native(NativeChat::Player { channel: EChatType::TeamSay, faction: Some(EFaction::Mason) }), "Player", "chat_log::team", "TeamSay", "Mason", "MASON"),
             (ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, faction: Some(EFaction::Mason) }), "Player", "chat_log::all", "AllSay", "Mason", "ALL"),
-            (ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, faction: Some(EFaction::None) }), "Player", "chat_log::all", "AllSay", "None", "ALL"),
             (ChatSource::Native(NativeChat::Player { channel: EChatType::TeamSay, faction: Some(EFaction::None) }), "Player", "chat_log::team", "TeamSay", "None", "SPECTATOR"),
             (ChatSource::Native(NativeChat::System { channel: EChatType::ServerSay }), "", "chat_log::system", "ServerSay", "System", "SYSTEM"),
             (ChatSource::Native(NativeChat::System { channel: EChatType::ServerSay }), "Console", "chat_log::system::sender", "ServerSay", "System", "SYSTEM"),

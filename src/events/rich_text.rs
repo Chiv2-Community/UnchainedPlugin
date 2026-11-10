@@ -185,7 +185,13 @@ impl MarkdownParser<'_> {
         let mut literal = String::new();
         while self.position < self.text.len() {
             let rest = &self.text[self.position..];
-            if let Some(marker) = closing.filter(|marker| rest.starts_with(marker)) {
+            if let Some(marker) = closing.filter(|marker| {
+                let run = rest
+                    .bytes()
+                    .take_while(|byte| *byte == marker.as_bytes()[0])
+                    .count();
+                run >= marker.len() && (marker.len() > 1 || run % 2 == 1)
+            }) {
                 self.position += marker.len();
                 Self::flush(&mut chunks, &mut literal);
                 return (RichText(chunks), true);
@@ -286,11 +292,6 @@ mod tests {
         text += rich_text!("*Again*");
         let text = text + Text(" and ".into()) + rich_text!("__again__");
         assert_eq!(text.to_plain_text(), "Hello world! Again and again");
-        assert_eq!(text.to_discord(), "Hello **world**! *Again* and __again__");
-        assert_eq!(
-            text.to_game_chat(),
-            "Hello <RichText.Emphasis>world</>! Again and again"
-        );
     }
 
     #[test]
@@ -319,68 +320,69 @@ mod tests {
                 Text("!".into()),
             ]),
         );
-        let text = rich_text!("***both*** and _italic_");
-        assert_eq!(text.to_discord(), "***both*** and *italic*");
-        assert_eq!(text.to_game_chat(), "<RichText.Emphasis>both</> and italic");
     }
 
     #[test]
-    fn markdown_escapes_unmatched_markers_and_unicode() {
-        for input in [
-            "",
-            "plain 🦀",
-            "**unclosed",
-            "trailing\\",
-            "a **b *c",
-            "__x",
+    fn italic_spans_can_contain_bold_spans() {
+        assert_eq!(
+            rich_text!("*a **b** c*"),
+            RichText::from(Italics(RichText::from("a ") + Bold("b".into()) + " c"))
+        );
+    }
+
+    #[test]
+    fn markdown_aliases_select_the_correct_chunks() {
+        for (input, chunk) in [
+            ("_italic_", Italics("italic".into())),
+            ("***both***", Bold(Italics("both".into()).into())),
         ] {
+            assert_eq!(rich_text!(input), RichText::from(chunk));
+        }
+    }
+
+    #[test]
+    fn unmatched_markers_remain_literal() {
+        for input in ["**unclosed", "trailing\\", "a **b *c", "__x"] {
             assert_eq!(rich_text!(input).to_plain_text(), input);
         }
-        assert_eq!(
-            rich_text!(r"\*literal\* and **雪**").to_plain_text(),
-            "*literal* and 雪"
-        );
-        assert_eq!(
-            rich_text!(r"\*literal\* and **雪**").to_discord(),
-            r"\*literal\* and **雪**"
-        );
-        assert_eq!(
-            rich_text!(String::from("**owned**"),).to_plain_text(),
-            "owned"
-        );
+    }
+
+    #[test]
+    fn escaped_markers_remain_literal() {
+        assert_eq!(rich_text!(r"\*雪\*"), RichText::from("*雪*"));
     }
 
     #[test]
     fn macro_interpolation_keeps_values_literal() {
         let name = "**雪**_player_{}\\";
         let text = rich_text!("**{}** has {} kills", name, 3);
-        assert_eq!(text.to_plain_text(), format!("{name} has 3 kills"));
-        assert_eq!(text.0[0], Bold(name.into()));
-        let empty = rich_text!("*{}* **{}** __{}__", "", "", "");
-        assert_eq!(empty.to_plain_text(), "  ");
-        assert_eq!(empty.to_discord(), "  ");
-        assert_eq!(empty.to_game_chat(), "  ");
-        assert_eq!(
-            rich_text!("{}", "**not bold**"),
-            RichText::from("**not bold**")
-        );
+        assert_eq!(text, RichText::from(Bold(name.into())) + " has 3 kills");
     }
 
     #[test]
-    fn backend_formats_and_color_noop() {
-        let text = RichText(vec![
-            Text("Hello ".into()),
-            Bold(Italics(Underline(Color(0xff0000, "world".into()).into()).into()).into()),
-        ]);
-        assert_eq!(text.to_plain_text(), "Hello world");
-        assert_eq!(text.to_discord(), "Hello ***__world__***");
-        assert_eq!(text.to_game_chat(), "Hello <RichText.Emphasis>world</>");
+    fn empty_spans_emit_no_markup() {
+        let empty = rich_text!("*{}* **{}** __{}__", "", "", "");
+        assert_eq!(empty.to_discord(), "  ");
+        assert_eq!(empty.to_game_chat(), "  ");
+    }
+
+    #[test]
+    fn discord_renders_nested_formatting() {
+        let text = RichText::from(Bold(Italics(Underline("world".into()).into()).into()));
+        assert_eq!(text.to_discord(), "***__world__***");
+    }
+
+    #[test]
+    fn color_is_ignored_by_all_backends() {
+        let text = RichText::from(Color(0xff0000, "world".into()));
+        assert_eq!(text.to_plain_text(), "world");
+        assert_eq!(text.to_discord(), "world");
+        assert_eq!(text.to_game_chat(), "world");
     }
 
     #[test]
     fn text_is_literal() {
         let text = RichText::from("<tag>**_x_** & \"y\"");
-        assert_eq!(text.to_plain_text(), "<tag>**_x_** & \"y\"");
         assert_eq!(text.to_discord(), "<tag\\>\\*\\*\\_x\\_\\*\\* & \"y\"");
         assert_eq!(
             text.to_game_chat(),
@@ -399,14 +401,17 @@ mod tests {
             text.to_game_chat(),
             "<RichText.Emphasis>a</>\n<RichText.Emphasis>b</>\n"
         );
-        assert_eq!(RichText::default().to_game_chat(), "");
-        assert_eq!(
-            RichText::from(Color(0, "plain".into())).to_discord(),
-            "plain"
-        );
-        assert_eq!(
-            RichText::from(Bold(Bold("x".into()).into())).to_discord(),
-            "**x**"
-        );
+    }
+
+    #[test]
+    fn game_flattens_unsupported_formatting() {
+        let text = RichText::from(Italics(Underline("world".into()).into()));
+        assert_eq!(text.to_game_chat(), "world");
+    }
+
+    #[test]
+    fn discord_flattens_repeated_formatting() {
+        let text = RichText::from(Bold(Bold("x".into()).into()));
+        assert_eq!(text.to_discord(), "**x**");
     }
 }

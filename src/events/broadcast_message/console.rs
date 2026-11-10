@@ -11,7 +11,7 @@ impl Subscriber<BroadcastMessage> for ConsoleChatBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
-        let message: String = event.clone().into();
+        let message = event.to_plain_text();
         for line in message.lines() {
             strace!("[BROADCAST] {}", line);
         }

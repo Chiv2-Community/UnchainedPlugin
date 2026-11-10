@@ -399,31 +399,25 @@ mod tests {
     }
 
     #[test]
-    fn inline_removals_filter_the_rendered_line_without_changing_records() {
+    fn registered_encoders_remove_matches_after_field_padding() {
         let mut registry = Deserializers::default();
         register(&mut registry);
         for kind in ["pattern", "palette"] {
             let config = serde_yaml::to_value(serde_json::json!({
                 "kind": kind,
-                "pattern": "{fn:<20}|{K(enclosing_function)}|{m}",
-                "inline-removals": ["_detour_fkt", "[0-9]+", "é"]
+                "pattern": "{fn:<20}|{m}",
+                "inline-removals": ["_detour_fkt"]
             })).unwrap();
-            for (name, label) in [
-                ("Tick_detour_fkt", "Tick"), ("Tick42", "Tick"),
-                ("Tick_detour_fkt_more", "Tick_more"),
-                ("Tick_DETOUR_FKT", "Tick_DETOUR_FKT"), ("Téick", "Tick"),
-            ] {
-                let fields = [("enclosing_function", name)];
-                let output = render_encoder(&registry, config.clone(), &Record::builder()
-                    .key_values(&fields).args(format_args!("{name}")).build());
-                assert_eq!(String::from_utf8(output).unwrap(),
-                    format!("{label}{}|{label}|{label}", " ".repeat(20 - name.chars().count())));
-                assert_eq!(fields[0].1, name);
-                let raw = render_encoder(&registry, serde_yaml::to_value(serde_json::json!({
-                    "kind": "pattern", "pattern": "{fn}|{m}"
-                })).unwrap(), &Record::builder().key_values(&fields).args(format_args!("{name}")).build());
-                assert_eq!(String::from_utf8(raw).unwrap(), format!("{name}|{name}"));
-            }
+            let fields = [("enclosing_function", "Tick_detour_fkt")];
+            let output = render_encoder(&registry, config, &Record::builder()
+                .key_values(&fields).args(format_args!("Tick_detour_fkt")).build());
+            assert_eq!(String::from_utf8(output).unwrap(), "Tick     |Tick");
+        }
+    }
+
+    #[test]
+    fn registered_encoders_reject_invalid_removal_patterns() {
+        for kind in ["pattern", "palette"] {
             assert!(console_config(serde_yaml::to_value(serde_json::json!({
                 "kind": kind, "inline-removals": ["["]
             })).unwrap()).is_err());

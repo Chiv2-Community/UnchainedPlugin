@@ -35,7 +35,7 @@ impl DuelManagerSubscriber {
     fn format_results(&self, duel: &ActiveDuel, winner: &str, loser: &str) -> BroadcastMessage {
         let duration = duel.start_time.elapsed().as_secs();
         let mut msg = BroadcastMessage::new()
-            .title(crate::rich_text!("?? DUEL CONCLUDED"))
+            .title(crate::rich_text!("🏆 DUEL CONCLUDED"))
             .color(0xe67e22)
             .content(crate::rich_text!("{} has defeated {}!", winner, loser))
             .field(crate::rich_text!("Duration"), crate::rich_text!("{} seconds", duration));
@@ -80,7 +80,7 @@ impl DuelManagerSubscriber {
                 } else if e.attacker == duel.p1 || e.attacker == duel.p2 {
                     self.state = DuelState::Idle;
                     self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!(
-                        "?? **Duel Cancelled**: Interference detected!"
+                        "🚫 **Duel Cancelled**: Interference detected!"
                     )));
                 }
             }
@@ -116,7 +116,7 @@ impl Subscriber<GameEvent> for DuelManagerSubscriber {
                     parries: HashMap::new(),
                 });
                 self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!(
-                    "?? **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent
+                    "⚔️ **DUEL STARTED**: {} vs {}!", e.challenger, e.opponent
                 )));
             }
             _ => {

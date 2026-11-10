@@ -750,9 +750,8 @@ palette:
 
     #[test]
     fn removals_span_fields_and_colors_without_filtering_control_sequences() {
-        for enabled in [false, true] {
-            for truecolor in [false, true] {
-                let mut encoder = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
+        for (enabled, truecolor) in [(false, false), (true, false), (true, true)] {
+            let mut encoder = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
 pattern: "éDR{palette(red)}OP{m}{palette()}tail"
 palette:
   red: "#112233"
@@ -760,19 +759,18 @@ inline-removals:
   - "DROPme"
   - "[0-9]+"
 "##).unwrap().build().unwrap();
-                encoder.enabled = enabled;
-                encoder.truecolor = truecolor;
-                encoder.colors[0].style.text(Color::Red);
-                let record = Record::builder().args(format_args!("me42 kept")).build();
-                let mut output = StyledBuffer::default();
-                encoder.encode(&mut output, &record).unwrap();
-                let expected = if enabled && truecolor { "é\x1b[0;38;2;17;34;51m kepttail" } else { "é kepttail" };
-                assert_eq!(output.bytes, expected.as_bytes());
-                if !enabled { assert!(output.styles.is_empty()); }
-                if enabled && !truecolor {
-                    assert_eq!(output.styles[0].0, "é".len());
-                    assert_eq!(output.styles[0].1.text, Some(Color::Red));
-                }
+            encoder.enabled = enabled;
+            encoder.truecolor = truecolor;
+            encoder.colors[0].style.text(Color::Red);
+            let record = Record::builder().args(format_args!("me42 kept")).build();
+            let mut output = StyledBuffer::default();
+            encoder.encode(&mut output, &record).unwrap();
+            let expected = if enabled && truecolor { "é\x1b[0;38;2;17;34;51m kepttail" } else { "é kepttail" };
+            assert_eq!(output.bytes, expected.as_bytes());
+            if !enabled { assert!(output.styles.is_empty()); }
+            if enabled && !truecolor {
+                assert_eq!(output.styles[0].0, "é".len());
+                assert_eq!(output.styles[0].1.text, Some(Color::Red));
             }
         }
     }

@@ -116,7 +116,7 @@ All console appenders use `HH:MM:SS`. Text file appenders use ISO 8601 timestamp
 with timezone offsets, for example `2026-11-10T14:30:00-06:00`.
 Chat labels use `team_*` colors selected by the full `label`. `ALL` is always green,
 regardless of the sender's faction; `SPECTATOR` is white.
-Usernames use the same faction color as the label, including Discord and spectators.
+Usernames use sender faction colors independently of the channel label, including Discord and spectators.
 `None` uses `team_none`
 and unknown factions use `team_unknown`; `team_max` uses the unknown-faction color.
 Message text stays uncolored. System output uses `SYSTEM` and `team_system`.

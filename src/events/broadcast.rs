@@ -184,41 +184,43 @@ impl From<&str> for BroadcastMessage {
 mod tests {
     use super::*;
 
-    #[test]
-    fn rich_text_reaches_every_backend_field() {
-        let bold = || crate::rich_text!("**{}**", "bold");
-        let msg = BroadcastMessage::new()
-            .title(bold())
-            .content(bold())
-            .field(bold(), bold())
-            .footer(bold());
-        assert_eq!(msg.to_plain_text(), "bold\nbold\nbold: bold\nbold");
-        let tag = "<RichText.Emphasis>bold</>";
-        assert_eq!(msg.to_game_chat(), format!("{tag}\n{tag}\n{tag}: {tag}\n{tag}"));
-        let discord = serde_json::to_value(CreateMessage::from(msg)).unwrap();
-        let embed = &discord["embeds"][0];
-        assert_eq!(embed["title"], "**bold**");
-        assert_eq!(embed["description"], "**bold**");
-        assert_eq!(embed["fields"][0]["name"], "**bold**");
-        assert_eq!(embed["fields"][0]["value"], "**bold**");
-        assert_eq!(embed["footer"]["text"], "**bold**");
-        let discord = serde_json::to_value(CreateMessage::from(
-            BroadcastMessage::new().content(bold()),
-        )).unwrap();
-        assert_eq!(discord["content"], "**bold**");
+    fn formatted_message() -> BroadcastMessage {
+        BroadcastMessage::new()
+            .title(crate::rich_text!("**title**"))
+            .content(crate::rich_text!("**body**"))
+            .field(crate::rich_text!("**name**"), crate::rich_text!("**value**"))
+            .footer(crate::rich_text!("**footer**"))
     }
 
     #[test]
-    fn test_broadcast_message_conversions() {
-        let msg = BroadcastMessage::new()
-            .title("Test Title".to_string())
-            .content("Test Content".to_string());
-        
-        let s: String = msg.clone().into();
-        assert!(s.contains("Test Title"));
-        assert!(s.contains("Test Content"));
-        
-        let _cm: CreateMessage = msg.into();
+    fn plain_layout_preserves_field_order() {
+        assert_eq!(formatted_message().to_plain_text(), "title\nbody\nname: value\nfooter");
+    }
+
+    #[test]
+    fn game_content_uses_emphasis_tags() {
+        let tag = "<RichText.Emphasis>bold</>";
+        let message = BroadcastMessage::new().content(crate::rich_text!("**bold**"));
+        assert_eq!(message.to_game_chat(), tag);
+    }
+
+    #[test]
+    fn discord_embed_formats_each_field() {
+        let discord = serde_json::to_value(CreateMessage::from(formatted_message())).unwrap();
+        let embed = &discord["embeds"][0];
+        assert_eq!(embed["title"], "**title**");
+        assert_eq!(embed["description"], "**body**");
+        assert_eq!(embed["fields"][0]["name"], "**name**");
+        assert_eq!(embed["fields"][0]["value"], "**value**");
+        assert_eq!(embed["footer"]["text"], "**footer**");
+    }
+
+    #[test]
+    fn discord_content_without_embed_uses_markdown() {
+        let discord = serde_json::to_value(CreateMessage::from(
+            BroadcastMessage::new().content(crate::rich_text!("**body**")),
+        )).unwrap();
+        assert_eq!(discord["content"], "**body**");
     }
 
     #[test]

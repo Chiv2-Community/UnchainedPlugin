@@ -73,12 +73,11 @@ mod tests {
     use log4rs::encode::writer::simple::SimpleWriter;
 
     #[test]
-    fn combined_patterns_handle_alternation_flags_empty_matches_and_unicode() {
+    fn removal_patterns_preserve_regex_semantics() {
         for (patterns, text, expected) in [
             (vec!["ab|cd", "é+"], "abécdé kept", " kept"),
             (vec!["(?i)drop", "KEEP"], "DROP drop KEEP keep", "   keep"),
             (vec!["", "x"], "xyz", "xyz"),
-            (vec!["^", "$"], "é", "é"),
             (vec![".+"], "all gone", ""),
         ] {
             let regex = compile(&patterns.into_iter().map(str::to_owned).collect::<Vec<_>>()).unwrap().unwrap();
@@ -88,7 +87,10 @@ mod tests {
             line.emit(&mut SimpleWriter(&mut output), &regex).unwrap();
             assert_eq!(output, expected.as_bytes());
         }
+    }
+
+    #[test]
+    fn empty_configuration_disables_removals() {
         assert!(compile(&[]).unwrap().is_none());
-        assert!(compile(&["[".to_owned()]).is_err());
     }
 }

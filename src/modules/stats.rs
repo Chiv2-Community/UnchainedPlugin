@@ -59,7 +59,7 @@ impl StatsTrackerState {
             message.push_str(&format!("{:<4} {:<20} {:<10}\n", i + 1, display_name, kills));
         }
 
-        crate::rich_text!("?? **All-Time Top 5 Killers** ??\n{}", message)
+        crate::rich_text!("🏆 **All-Time Top 5 Killers** 🏆\n{}", message)
     }
 }
 
@@ -91,9 +91,9 @@ impl Subscriber<GameEvent> for StatsTrackerSubscriber {
             GameEvent::MatchEndEvent(_) => {
                 let mvp = state.session_kills.iter().max_by_key(|entry| entry.1);
 
-                let mut report = crate::rich_text!("?? **Match Concluded!**\n");
+                let mut report = crate::rich_text!("🏁 **Match Concluded!**\n");
                 if let Some((name, kills)) = mvp {
-                    report += crate::rich_text!("?? **MVP:** {} with {} kills!\n", name, kills);
+                    report += crate::rich_text!("🌟 **MVP:** {} with {} kills!\n", name, kills);
                 }
 
                 state.save_to_disk();
@@ -160,7 +160,7 @@ impl Command<MyStatsArgs> for MyStatsCommand {
         let state = self.state.lock().await;
         let total = state.global_stats.total_kills.get(&command.actor.display_name).unwrap_or(&0);
         self.broadcaster.publish(BroadcastMessage::from(crate::rich_text!(
-            "?? **{}**, you have **{}** total kills.", command.actor.display_name, total
+            "📊 **{}**, you have **{}** total kills.", command.actor.display_name, total
         )));
     }
 }

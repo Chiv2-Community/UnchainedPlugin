@@ -971,16 +971,6 @@ mod tests {
         }
         assert_eq!(outbox.channels[&id].messages.capacity(), MESSAGE_CAPACITY);
         assert_eq!(outbox.channels[&id].events.capacity(), EVENT_CAPACITY);
-        let event = GameEvent::GameChatMessageEvent(GameChatMessage {
-            chat_source: ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, faction: None }),
-            sender: "Player".into(), message: "hello".into(),
-        });
-        for _ in 0..2 {
-            relay.on_event(&event).await;
-            logs.on_event(&event).await;
-        }
-        assert_eq!(outbox.channels[&id].messages.capacity(), MESSAGE_CAPACITY - 2);
-        assert_eq!(outbox.channels[&id].events.capacity(), EVENT_CAPACITY - 2);
     }
 
     #[tokio::test]

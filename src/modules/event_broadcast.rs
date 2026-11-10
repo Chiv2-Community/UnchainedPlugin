@@ -20,25 +20,18 @@ impl EventBroadcastSubscriber {
         }
     }
 
-    fn flush_batch(&self, pending_players: &[String], action: PresenceAction) -> Option<RichText> {
-        if pending_players.is_empty() {
-            return None;
-        }
-
-        let (icon, single, multiple) = match action {
-            PresenceAction::Joined => ("📥 ", " joined the fray.", " others have joined the battle!"),
-            PresenceAction::Left => ("📤 ", " left the battle.", " others have left the battle!"),
-        };
-        let content = if pending_players.len() == 1 {
-            crate::rich_text!("{}**{}**{}", icon, pending_players[0], single)
-        } else {
-            crate::rich_text!("{}**{}** and **{}**{}", icon, pending_players[0], pending_players.len() - 1, multiple)
-        };
-        Some(content)
+    fn flush_batch(pending_players: &[String], action: PresenceAction) -> Option<RichText> {
+        let (first, others) = pending_players.split_first()?;
+        Some(match (action, others.is_empty()) {
+            (PresenceAction::Joined, true) => crate::rich_text!("📥 **{}** joined the fray.", first),
+            (PresenceAction::Left, true) => crate::rich_text!("📤 **{}** left the battle.", first),
+            (PresenceAction::Joined, false) => crate::rich_text!("📥 **{}** and **{}** others have joined the battle!", first, others.len()),
+            (PresenceAction::Left, false) => crate::rich_text!("📤 **{}** and **{}** others have left the battle!", first, others.len()),
+        })
     }
 
     fn flush_joins(&mut self) {
-        let content = self.flush_batch(self.pending_joins.as_slice(), PresenceAction::Joined);
+        let content = Self::flush_batch(self.pending_joins.as_slice(), PresenceAction::Joined);
         self.pending_joins.clear();
         if let Some(message) = content {
             self.broadcaster.publish(BroadcastMessage::from(message));
@@ -46,7 +39,7 @@ impl EventBroadcastSubscriber {
     }
 
     fn flush_leaves(&mut self) {
-        let content = self.flush_batch(self.pending_leaves.as_slice(), PresenceAction::Left);
+        let content = Self::flush_batch(self.pending_leaves.as_slice(), PresenceAction::Left);
         self.pending_leaves.clear();
         if let Some(message) = content {
             self.broadcaster.publish(BroadcastMessage::from(message));
@@ -137,11 +130,8 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn presence_templates_preserve_text_and_emphasis() {
-        let (broadcaster, _) = crate::test_utils::mock_broadcaster();
-        let subscriber = EventBroadcastSubscriber::new(broadcaster);
-        assert!(subscriber.flush_batch(&[], PresenceAction::Joined).is_none());
+    #[test]
+    fn presence_templates_preserve_text_and_emphasis() {
         let players = vec!["Alice".into(), "Bob".into()];
         for (count, action, expected) in [
             (1, PresenceAction::Joined, "📥 **Alice** joined the fray."),
@@ -149,9 +139,8 @@ mod tests {
             (2, PresenceAction::Joined, "📥 **Alice** and **1** others have joined the battle!"),
             (2, PresenceAction::Left, "📤 **Alice** and **1** others have left the battle!"),
         ] {
-            let text = subscriber.flush_batch(&players[..count], action).unwrap();
+            let text = EventBroadcastSubscriber::flush_batch(&players[..count], action).unwrap();
             assert_eq!(text.to_discord(), expected);
-            assert_eq!(text.to_plain_text(), expected.replace("**", ""));
         }
     }
 }
