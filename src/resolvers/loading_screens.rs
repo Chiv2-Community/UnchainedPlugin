@@ -3,45 +3,15 @@
 //! Hooks `UMapSpecificLoadingScreenConfig::GetDataForMap` and appends our own
 //! `FMapSpecificLoadingScreenConfigData` entries to the live config's `Configs`
 //! array, so the native lookup (and the native loading screen widget) serve
-//! them like any other map.
+//! them like any other map. The entries come from `DA_MapMarker_V2` map
+//! markers (see `features::map_markers`).
 
 use crate::game::engine::{FSoftObjectPath, FText};
 use crate::ue::{EFindName, FName, FString, TArray};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-/// A built-in per-map loading screen. Maps listed by a `DA_MapMarker_V2` marker
-/// take precedence (see [`LoadingScreen::lookup`]); this table is the fallback.
-struct ExtraLoadingScreen {
-    /// Map name as the native lookup sees it (path and `?options` stripped).
-    map: &'static str,
-    /// Texture soft object path, without the `Texture2D'...'` wrapper.
-    texture: &'static str,
-    /// Text stored at entry +0x28. TODO: verify which UI label this feeds.
-    text_a: &'static str,
-    /// Text stored at entry +0x40. TODO: verify which UI label this feeds.
-    text_b: &'static str,
-}
-
-const EXTRA_LOADING_SCREENS: &[ExtraLoadingScreen] = &[ExtraLoadingScreen {
-    map: "TDM_QuarryKP",
-    texture: "/Game/Mods/AgMods/KendoPlus/TO_HIPP.TO_HIPP",
-    text_a: "Quarry KP",
-    text_b: "",
-}];
-
-impl ExtraLoadingScreen {
-    /// Finds the extra screen for a raw map name as passed to `GetDataForMap`.
-    fn find(raw_map_name: &str) -> Option<&'static Self> {
-        let key = native_key(raw_map_name);
-        EXTRA_LOADING_SCREENS
-            .iter()
-            .find(|extra| extra.map.eq_ignore_ascii_case(key))
-    }
-}
-
 /// A per-map loading screen to inject into
-/// `UMapSpecificLoadingScreenConfig::Configs`, from a map marker or the
-/// built-in table.
+/// `UMapSpecificLoadingScreenConfig::Configs`, taken from a map marker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LoadingScreen {
     /// Map name as the native lookup sees it (path and `?options` stripped).
@@ -68,21 +38,13 @@ impl LoadingScreen {
     }
 
     /// Finds the loading screen for a raw map name as passed to
-    /// `GetDataForMap`: map marker data first, then the built-in table.
+    /// `GetDataForMap`, from the map marker cache.
     fn lookup(raw_map_name: &str) -> Option<Self> {
         let key = native_key(raw_map_name);
         crate::features::map_markers::map_marker_cache()
             .get(key)
             .as_ref()
             .and_then(Self::from_marker)
-            .or_else(|| {
-                ExtraLoadingScreen::find(raw_map_name).map(|extra| Self {
-                    map: extra.map.into(),
-                    texture: extra.texture.into(),
-                    text_a: extra.text_a.into(),
-                    text_b: extra.text_b.into(),
-                })
-            })
     }
 }
 
@@ -244,30 +206,6 @@ mod tests {
     }
 
     #[test]
-    fn find_matches_case_insensitively_on_normalized_key() {
-        let expected = EXTRA_LOADING_SCREENS[0].map;
-        for raw in [
-            expected.to_string(),
-            expected.to_ascii_lowercase(),
-            format!("/Game/Mods/AgMods/KendoPlus/{expected}"),
-            format!("/Game/Mods/AgMods/KendoPlus/{expected}?listen"),
-        ] {
-            let found = ExtraLoadingScreen::find(&raw).unwrap_or_else(|| panic!("no match for {raw}"));
-            assert_eq!(found.map, expected);
-        }
-    }
-
-    #[test]
-    fn find_rejects_other_and_partial_maps() {
-        assert!(ExtraLoadingScreen::find("Frontend").is_none());
-        assert!(ExtraLoadingScreen::find("/Game/Maps/Frontend/Frontend").is_none());
-        // The native lookup does substring matching; ours must stay exact.
-        assert!(ExtraLoadingScreen::find("TDM_Quarry").is_none());
-        assert!(ExtraLoadingScreen::find("TDM_QuarryKP_Night").is_none());
-        assert!(ExtraLoadingScreen::find("").is_none());
-    }
-
-    #[test]
     fn marker_loading_screen_needs_a_texture() {
         use crate::features::map_markers::MapMarkerInfo;
         let mut info = MapMarkerInfo {
@@ -285,24 +223,8 @@ mod tests {
     }
 
     #[test]
-    fn lookup_falls_back_to_the_built_in_table() {
-        let expected = &EXTRA_LOADING_SCREENS[0];
-        let screen = LoadingScreen::lookup(&format!("/Game/Mods/X/{}?listen", expected.map)).expect("table entry");
-        assert_eq!(screen.texture, expected.texture);
-        assert!(LoadingScreen::lookup("Frontend").is_none());
-    }
-
-    #[test]
-    fn extra_table_is_well_formed() {
-        for extra in EXTRA_LOADING_SCREENS {
-            assert!(!extra.map.is_empty());
-            assert_eq!(native_key(extra.map), extra.map, "map must already be a bare key");
-            assert!(extra.texture.starts_with('/') && extra.texture.contains('.'), "{}", extra.texture);
-            assert!(!extra.texture.contains('\''), "texture must not keep the Texture2D'...' wrapper");
-        }
-        let mut maps: Vec<_> = EXTRA_LOADING_SCREENS.iter().map(|e| e.map.to_ascii_lowercase()).collect();
-        maps.sort();
-        maps.dedup();
-        assert_eq!(maps.len(), EXTRA_LOADING_SCREENS.len(), "duplicate map keys");
+    fn lookup_finds_nothing_for_a_map_without_marker_data() {
+        assert!(LoadingScreen::lookup("/Game/Maps/Frontend/Frontend?startup").is_none());
+        assert!(LoadingScreen::lookup("").is_none());
     }
 }

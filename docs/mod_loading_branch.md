@@ -35,8 +35,8 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
   taken from V2.
 - Map markers are read once, as a game-thread job queued after registration
   (`scan_map_markers`). Each shipped map gets its own loading screen texture or,
-  if it has none, the marker's `DefaultLoadingScreen`; `GetDataForMap` serves a
-  cached map before the built-in table. The marker has no text fields, so the
+  if it has none, the marker's `DefaultLoadingScreen`; `GetDataForMap` serves the
+  cached maps; a map without marker data keeps the game's default. The marker has no text fields, so the
   map name is used for the entry's first text and the second stays empty.
 - `BundledMarkers` are not followed: bundled markers are separate assets and
   come back from the same registry query. A bundled path missing from the
