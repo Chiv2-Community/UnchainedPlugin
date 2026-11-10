@@ -94,6 +94,26 @@ fn structured_values_support_shorthand_and_debug_formatting() {
 }
 
 #[test]
+fn chat_attributes_reach_json_output() {
+    #[derive(Default)]
+    struct JsonCapture(Mutex<Vec<u8>>);
+    impl Log for JsonCapture {
+        fn enabled(&self, _: &Metadata<'_>) -> bool { true }
+        fn log(&self, record: &Record<'_>) {
+            log4rs::encode::json::JsonEncoder::new()
+                .encode(&mut SimpleWriter(&mut *self.0.lock().unwrap()), record).unwrap();
+        }
+        fn flush(&self) {}
+    }
+    log::set_max_level(log::LevelFilter::Trace);
+    let logger = JsonCapture::default();
+    sinfo!(logger: &logger, chat = "TeamSay", team = "Mason"; "hello");
+    let output: serde_json::Value = serde_json::from_slice(&logger.0.lock().unwrap()).unwrap();
+    assert_eq!(output["attributes"]["chat"], "TeamSay");
+    assert_eq!(output["attributes"]["team"], "Mason");
+}
+
+#[test]
 fn inline_segments_keep_plain_messages_and_metadata() {
     log::set_max_level(log::LevelFilter::Trace);
     let logger = Capture::default();

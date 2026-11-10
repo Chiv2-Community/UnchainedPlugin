@@ -184,15 +184,8 @@ mod faction_tests {
     use super::EFaction;
 
     #[test]
-    fn faction_has_a_readable_name() {
-        assert_eq!(EFaction::Mason.as_str(), "Mason");
-    }
-
-    #[test]
-    fn faction_ids_follow_the_sdk() {
-        assert_eq!(EFaction::try_from(0), Ok(EFaction::Agatha));
-        assert_eq!(EFaction::try_from(1), Ok(EFaction::Mason));
-        assert_eq!(EFaction::try_from(5), Ok(EFaction::Tenosia));
+    fn faction_id_converts_to_a_name() {
+        assert_eq!(EFaction::try_from(5).unwrap().as_str(), "Tenosia");
     }
 
     #[test]

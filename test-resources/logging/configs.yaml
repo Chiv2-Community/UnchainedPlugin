@@ -21,19 +21,6 @@ console:
   root:
     level: info
     appenders: [console]
-json-sinks:
-  appenders:
-    console:
-      kind: console
-      target: stdout
-      encoder: {kind: json}
-    file:
-      kind: file
-      path: null
-      encoder: {kind: json}
-  root:
-    level: info
-    appenders: [console, file]
 rolling-policy:
   kind: compound
   trigger: {kind: size, limit: 1048576}
