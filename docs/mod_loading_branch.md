@@ -45,10 +45,11 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
 ### Entry points / commands
 | Command | Mode | What it registers |
 |---------|------|-------------------|
-| `registermodmaps` | async, chunked | maps only (`.umap` under `/Game/Mods/**`) |
-| `loadallassets` | async, chunked | every pak entry (benchmark/diagnostic) |
 | `listmodmaps` | diag (game thread) | lists registered `World`/assets |
 | auto (at `LoadFrontEndMap`, one-shot) | **sync, filtered** | maps + `DA_ModMarker`/`DA_MapInfo` packages (the production init path) |
+
+The earlier `registermodmaps` (maps only) and `loadallassets` (every pak entry,
+benchmark) commands were removed; only the automatic path registers assets.
 
 ## Architecture (3 layers)
 
@@ -62,8 +63,6 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
 
 ## What is already optimized
 
-- **Off-thread discovery** — the `*_async` command paths run the pak scan on a
-  tokio `spawn_blocking` worker, so gathering never touches the game thread.
 - **Header-only marker detection** — only the package header tables are read to
   resolve each export's class; the object *payloads* are never touched. This is
   what lets the filtered path detect `DA_ModMarker`/`DA_MapInfo` instances cheaply.
@@ -85,8 +84,6 @@ Branch `mod-marker-v2` adds the V2 markers next to the deprecated V1 one:
 ## Parallelism — current state
 
 **What is parallelized:**
-- Discovery (pak scan) is off the main/game thread (async `spawn_blocking` for the
-  command paths; inline on the game thread only during the init loading screen).
 - **Pak scanning is now parallel across worker threads** (pure Rust: repak index
   reads + header parse). `scan_filtered_assets` uses `std::thread` over the pak
   list (strided, deterministic order), capped at 8 threads. Measured on the test

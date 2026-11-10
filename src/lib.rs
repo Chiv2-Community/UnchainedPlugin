@@ -467,7 +467,7 @@ fn postinit_rustlib() {
                     }
                 }
                 // Clients still expose the client-safe diagnostic commands
-                // (registermodmaps / listmodmaps) through the plugin console.
+                // (listmodmaps / mod-list) through the plugin console.
                 // Spawn this before spawn_cli_handler so the commands are
                 // registered by the time the console accepts input.
                 crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {

@@ -1,29 +1,24 @@
-//! Off-thread mod-map discovery from the loader's mounted mod `.pak` files.
+//! Mod asset discovery from the loader's mounted mod `.pak` files, and their
+//! registration into the Asset Registry at startup.
 //!
-//! Pure Rust: pak indexes are read with `repak` and `.umap` entries under
-//! [`MOD_ROOT`] are turned into in-engine package paths plus the
-//! physical-relative pak paths (`mount_point + entry`) that UE's
-//! `FPackageName::FilenameToLongPackageName` maps back to the same package
-//! names during registration (the runtime reader derives `PackageName` from
-//! the filename passed to `ScanFilesSynchronous`).
+//! Discovery is pure Rust: pak indexes are read with `repak`, every `.umap` and
+//! every `.uasset` holding a marker instance is kept, as the physical-relative
+//! pak path (`mount_point + entry`) that UE's
+//! `FPackageName::FilenameToLongPackageName` maps back to the package name
+//! during registration. Paks that ship a `ModAssetRegistry.bin` are merged
+//! natively instead.
 //!
-//! This module performs ZERO engine calls and is safe to run on a worker
-//! thread. Registration into the live Asset Registry happens separately on
-//! the game thread (see `game::engine::get_assets_by_path`,
-//! `game::engine::scan_files_synchronous`, and the
-//! `ScanPathsAndFilesSynchronous` resolver work).
+//! Only `register_filtered_assets_sync` and what it calls touch the engine, and
+//! must run on the game thread.
 //!
 //! NOTE: the `repak` crate is pulled from https://github.com/trumank/repak —
 //! the crates.io crate of that name is an unrelated name-squatter.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use aes::cipher::KeyInit;
 use anyhow::{Context, Result};
-
-/// The asset path all discovered mod maps must live under.
-pub const MOD_ROOT: &str = "/Game/Mods";
 
 /// Segment that marks a physical content root; everything after the first
 /// `.../Content/` maps to `/Game/...` (standard UE mount-point convention).
@@ -40,123 +35,6 @@ pub enum MapSource {
     PakDir(PathBuf),
     /// Explicit pak files.
     PakFiles(Vec<PathBuf>),
-}
-
-/// One discovered mod map.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DiscoveredModMap {
-    /// In-engine package path, e.g. `/Game/Mods/ModName/Maps/MyMap`.
-    pub package_path: String,
-    /// Physical-relative pak path, e.g.
-    /// `../../../TBL/Content/Mods/ModName/Maps/MyMap.umap`. This is the string
-    /// to feed the registration scan; the engine derives `PackageName` from it.
-    pub file_path: String,
-}
-
-/// Result of a discovery pass.
-#[derive(Debug, Clone, Default)]
-pub struct ModMapScan {
-    pub maps: Vec<DiscoveredModMap>,
-    /// Paks skipped during the pass with the reason (unparseable, encrypted
-    /// index without a key, ...).
-    pub skipped: Vec<(String, String)>,
-}
-
-pub type OnScanDone = Box<dyn FnOnce(Result<ModMapScan>) + Send>;
-
-/// Runs a discovery pass on a worker thread (tokio `spawn_blocking`) and
-/// delivers the result to `on_done`. Never touches the engine.
-pub fn discover_mod_maps_async(source: MapSource, aes_key: Option<String>, on_done: OnScanDone) {
-    crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
-        let joined = tokio::task::spawn_blocking(move || scan_mod_maps(source, aes_key)).await;
-        on_done(joined
-            .context("mod map scan task panicked or was cancelled")
-            .and_then(|r| r));
-    });
-}
-
-/// Synchronous discovery pass. No engine calls; safe on any thread.
-pub fn scan_mod_maps(source: MapSource, aes_key: Option<String>) -> Result<ModMapScan> {
-    let _scan_started = std::time::Instant::now();
-    sdebug!( "[modmaps] discover: scan_mod_maps STARTED");
-    let pak_paths = match source {
-        MapSource::PakDir(dir) => list_pak_files(&dir)?,
-        MapSource::PakFiles(files) => files,
-    };
-    sdebug!( "[modmaps] discover: listed {} pak file(s) in {:?}", pak_paths.len(), _scan_started.elapsed());
-
-    let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
-
-    let mut scan = ModMapScan::default();
-    let mut seen_packages: HashSet<String> = HashSet::new();
-
-    for pak_path in pak_paths {
-        let name = pak_path.display().to_string();
-        match read_pak_mod_maps(&pak_path, key.as_ref()) {
-            Ok(maps) => {
-                let mut found = 0usize;
-                for map in maps {
-                    // The same package may exist in several mounted paks; the
-                    // first mount wins and the rest are ignored.
-                    if seen_packages.insert(map.package_path.clone()) {
-                        scan.maps.push(map);
-                        found += 1;
-                    }
-                }
-                sdebug!( "[modmaps] {}: {} map(s)", name, found);
-            }
-            Err(e) => {
-                sdebug!( "Skipping pak {}: {}", name, e);
-                scan.skipped.push((name, e.to_string()));
-            }
-        }
-    }
-
-    Ok(scan)
-}
-
-/// Reads one pak index and collects its `.umap` entries under [`MOD_ROOT`].
-fn read_pak_mod_maps(pak_path: &Path, key: Option<&aes::Aes256>) -> Result<Vec<DiscoveredModMap>> {
-    let mut file = std::fs::File::open(pak_path)
-        .with_context(|| format!("failed to open {}", pak_path.display()))?;
-
-    let builder = repak::PakBuilder::new();
-    let builder = match key {
-        Some(k) => builder.key(k.clone()),
-        None => builder,
-    };
-    let reader = builder.reader(&mut file).context(
-        "failed to parse pak index (unsupported version, or encrypted index without a key)",
-    )?;
-
-    let mount_point = reader.mount_point();
-    let mut maps = Vec::new();
-    for entry in reader.files() {
-        if strip_umap(&entry).is_none() {
-            continue;
-        }
-        // Index entries are relative to the mount point; the engine-visible
-        // path is mount_point + entry.
-        let full_path = format!("{}{}", mount_point, entry);
-        let Some(package_path) = physical_path_to_package_path(&full_path) else {
-            swarn!(
-                fn;
-                "Skipping .umap entry without a {} root: {}{}",
-                CONTENT_SEGMENT,
-                mount_point,
-                entry
-            );
-            continue;
-        };
-        if !package_path.starts_with(MOD_ROOT) {
-            continue; // Out of scope (game maps etc.); not an error.
-        }
-        maps.push(DiscoveredModMap {
-            package_path,
-            file_path: full_path,
-        });
-    }
-    Ok(maps)
 }
 
 /// Lists `*.pak` files in `dir`, sorted, with an explicit guard against the
@@ -192,8 +70,7 @@ fn list_pak_files(dir: &Path) -> Result<Vec<PathBuf>> {
 /// Maps a physical pak path to the in-engine package path: the first
 /// `.../Content/` segment maps to `/Game/`, the `.umap` extension is stripped.
 /// Returns `None` for paths without a content root or with invalid package
-/// characters (callers log these instead of registering garbage); packages
-/// outside [`MOD_ROOT`] still derive and are filtered by the caller.
+/// characters, and for anything that is not a `.umap`.
 fn physical_path_to_package_path(full_path: &str) -> Option<String> {
     let normalized = full_path.replace('\\', "/");
     let content_start = normalized.find(CONTENT_SEGMENT)? + CONTENT_SEGMENT.len();
@@ -245,18 +122,11 @@ fn decode_aes_key(key: &str) -> Result<aes::Aes256> {
 }
 
 // ---------------------------------------------------------------------------
-// Registration (game thread, amortized)
+// Registration (game thread)
 // ---------------------------------------------------------------------------
 
-/// Max number of package files registered per game-thread tick. Matches the
-/// `--mod-map-batch` CLI default; larger batches trade per-tick game-thread time
-/// for fewer ticks. The engine's own amortization budget is ~16, so 128 batches
-/// do more work per frame.
-pub const REGISTRATION_CHUNK_SIZE: usize = 128;
-
-pub type OnRegistrationDone = Box<dyn FnOnce(Result<usize, String>) + Send>;
-
-/// Splits package file paths into game-thread registration batches. Pure logic.
+/// Splits package file paths into registration batches of `chunk_size` files
+/// (`--mod-map-batch`, default 128), one engine call each. Pure logic.
 pub fn registration_batches(file_paths: &[String], chunk_size: usize) -> Vec<Vec<String>> {
     // `chunks` panics on 0 (`--mod-map-batch 0`); treat it as 1.
     file_paths
@@ -264,55 +134,6 @@ pub fn registration_batches(file_paths: &[String], chunk_size: usize) -> Vec<Vec
         .map(<[String]>::to_vec)
         .collect()
 }
-
-/// Registers the given package files into the live Asset Registry, one batch
-/// per game-thread tick (each job re-queues the next — the tick hook drains
-/// the whole job queue in one frame, so batching must happen from inside the
-/// jobs). The completion callback fires on the game thread.
-///
-/// `chunk_size` is the number of files handed to the engine per tick (see the
-/// `--mod-map-batch` CLI knob; the engine's own budget is ~16).
-///
-/// Safe to call from any thread: only the jobs touch the engine, and each
-/// returns `Err` gracefully while the signature is a placeholder.
-pub fn register_scanned_mod_maps_async(file_paths: Vec<String>, chunk_size: usize, on_complete: OnRegistrationDone) {
-    let total = file_paths.len();
-    sdebug!( "[modmaps] sending {} file(s) to the Asset Registry", total);
-    let batches = VecDeque::from(registration_batches(&file_paths, chunk_size));
-    queue_next_registration_batch(batches, 0, total, on_complete);
-}
-
-/// Glues discovery and registration: discovers mod maps for `source` on a
-/// worker thread, then registers them chunked on the game thread. The
-/// completion callback fires on the game thread with the number of
-/// registered packages (or the failure reason).
-pub fn register_mod_maps_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
-    let started = std::time::Instant::now();
-    discover_mod_maps_async(source, aes_key, Box::new(move |result| {
-        match result {
-            Ok(scan) => {
-                let gather_elapsed = started.elapsed();
-                let file_paths: Vec<String> = scan.maps.iter().map(|p| p.file_path.clone()).collect();
-                sdebug!( "Discovered {} mod map(s); registering", file_paths.len());
-                // Measure the Asset Registry registration step separately from
-                // the gathering (pak scan) step.
-                let ar_started = std::time::Instant::now();
-                register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
-                    let ar_elapsed = ar_started.elapsed();
-                    sdebug!( "[modmaps] profiler: gathering (pak scan) {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
-                    on_complete(r);
-                }));
-            }
-            Err(e) => on_complete(Err(e.to_string())),
-        }
-    }))
-}
-
-// ---------------------------------------------------------------------------
-// All-assets discovery (benchmark: register every pak entry, no filtering)
-// ---------------------------------------------------------------------------
-
-pub type OnAllAssetsDone = Box<dyn FnOnce(Result<AllAssetScan>) + Send>;
 
 /// One discovered asset file: the physical-relative pak path (mount_point +
 /// entry) that UE maps back to a package name during registration.
@@ -322,80 +143,6 @@ pub struct DiscoveredAsset {
     /// Engine package path when derivable (e.g. `/Game/Mods/...`); `None` for
     /// entries that can't be mapped to a package (non-Content paths).
     pub package_path: Option<String>,
-}
-
-/// Result of an all-assets discovery pass (every entry, any extension).
-#[derive(Debug, Clone, Default)]
-pub struct AllAssetScan {
-    pub assets: Vec<DiscoveredAsset>,
-    pub skipped: Vec<(String, String)>,
-}
-
-/// Reads one pak index and collects every entry — no `.umap` or `/Game/Mods`
-/// filtering (raw benchmark of "load everything").
-fn read_pak_all_assets(pak_path: &Path, key: Option<&aes::Aes256>) -> Result<Vec<DiscoveredAsset>> {
-    let mut file = std::fs::File::open(pak_path)
-        .with_context(|| format!("failed to open {}", pak_path.display()))?;
-    let builder = repak::PakBuilder::new();
-    let builder = match key {
-        Some(k) => builder.key(k.clone()),
-        None => builder,
-    };
-    let reader = builder.reader(&mut file).context("failed to parse pak index")?;
-    let mount_point = reader.mount_point();
-    let mut assets = Vec::new();
-    for entry in reader.files() {
-        let full_path = format!("{}{}", mount_point, entry);
-        let package_path = physical_path_to_package_path(&full_path);
-        assets.push(DiscoveredAsset { file_path: full_path, package_path });
-    }
-    Ok(assets)
-}
-
-/// Synchronous discovery of every asset in the source paks (no filtering).
-pub fn scan_all_assets(source: MapSource, aes_key: Option<String>) -> Result<AllAssetScan> {
-    let pak_paths = match source {
-        MapSource::PakDir(dir) => list_pak_files(&dir)?,
-        MapSource::PakFiles(files) => files,
-    };
-    let key = aes_key.map(|k| decode_aes_key(&k)).transpose()?;
-    let mut scan = AllAssetScan::default();
-    let mut seen: HashSet<String> = HashSet::new();
-    for pak_path in pak_paths {
-        let name = pak_path.display().to_string();
-        match read_pak_all_assets(&pak_path, key.as_ref()) {
-            Ok(assets) => {
-                let mut found = 0usize;
-                for a in assets {
-                    // Dedup on the engine package path (consistent with the map
-                    // path below) so an asset present in several mounted paks is
-                    // registered only once. Fall back to the raw file path for
-                    // entries that don't map to a package.
-                    let key = a.package_path.as_deref().unwrap_or(&a.file_path);
-                    if seen.insert(key.to_string()) {
-                        scan.assets.push(a);
-                        found += 1;
-                    }
-                }
-                sdebug!( "[modmaps] {}: {} asset(s)", name, found);
-            }
-            Err(e) => {
-                sdebug!( "Skipping pak {}: {}", name, e);
-                scan.skipped.push((name, e.to_string()));
-            }
-        }
-    }
-    Ok(scan)
-}
-
-/// Runs an all-assets discovery pass on a worker thread and delivers the result.
-pub fn discover_all_assets_async(source: MapSource, aes_key: Option<String>, on_done: OnAllAssetsDone) {
-    crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
-        let joined = tokio::task::spawn_blocking(move || scan_all_assets(source, aes_key)).await;
-        on_done(joined
-            .context("all-assets scan task panicked or was cancelled")
-            .and_then(|r| r));
-    });
 }
 
 // ---------------------------------------------------------------------------
@@ -690,28 +437,6 @@ pub fn scan_filtered_assets(source: MapSource, aes_key: Option<String>) -> Resul
 }
 
 
-/// Glues all-assets discovery and registration, with gathering/registration/total
-/// profiling (mirrors `register_mod_maps_async`).
-pub fn register_all_assets_async(source: MapSource, aes_key: Option<String>, on_complete: OnRegistrationDone) {
-    let started = std::time::Instant::now();
-    discover_all_assets_async(source, aes_key, Box::new(move |result| {
-        match result {
-            Ok(scan) => {
-                let gather_elapsed = started.elapsed();
-                let file_paths: Vec<String> = scan.assets.iter().map(|a| a.file_path.clone()).collect();
-                sdebug!( "Discovered {} asset(s); registering", file_paths.len());
-                let ar_started = std::time::Instant::now();
-                register_scanned_mod_maps_async(file_paths, crate::cli_args().mod_map_batch, Box::new(move |r| {
-                    let ar_elapsed = ar_started.elapsed();
-                    sdebug!( "[modmaps] profiler(all-assets): gathering {:?} | AR registration {:?} | total {:?}", gather_elapsed, ar_elapsed, started.elapsed());
-                    on_complete(r);
-                }));
-            }
-            Err(e) => on_complete(Err(e.to_string())),
-        }
-    }))
-}
-
 static AUTO_ALL_ASSETS_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// One-shot auto-registration of maps + marker packages into the Asset Registry,
@@ -888,41 +613,6 @@ fn discovery_pak_paths() -> Vec<PathBuf> {
     paths
 }
 
-fn queue_next_registration_batch(
-    mut remaining: VecDeque<Vec<String>>,
-    registered: usize,
-    total: usize,
-    on_complete: OnRegistrationDone,
-) {
-    let Some(batch) = remaining.pop_front() else {
-        if registered == 0 && total == 0 {
-            // Nothing to do — still deliver completion on the game thread.
-            crate::resolvers::unchained_integration::run_on_game_thread(move || {
-                on_complete(Ok(0));
-            });
-        } else {
-            // Already inside a game-thread job (the last batch re-queued us).
-            on_complete(Ok(registered));
-        }
-        return;
-    };
-    let next_remaining = remaining;
-    let next_registered = registered + batch.len();
-    let batch_len = batch.len();
-    crate::resolvers::unchained_integration::run_on_game_thread(move || {
-        let batch_started = std::time::Instant::now();
-        let result = unsafe { crate::game::engine::scan_files_synchronous(&batch) };
-        if let Err(e) = result {
-            serror!(fn; "Registration batch failed: {}", e);
-            on_complete(Err(e));
-            return;
-        }
-        sdebug!( "[modmaps] batch of {} file(s) took {:?}", batch_len, batch_started.elapsed());
-        sdebug!( "Registered {} package file(s) ({} / {})", batch_len, next_registered, total);
-        queue_next_registration_batch(next_remaining, next_registered, total, on_complete);
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,63 +635,38 @@ mod tests {
     }
 
     #[test]
-    fn discovers_umap_entries_under_mod_root() {
-        let tmp = std::env::temp_dir().join("mod_maps_test_discovery");
+    fn filtered_scan_keeps_maps_and_marker_packages_only() {
+        let tmp = std::env::temp_dir().join("mod_maps_test_filtered_scan");
         std::fs::create_dir_all(&tmp).expect("create tmp dir");
+        let marker = std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("test-resources/cooked_header/NihiMaps_Marker.uasset"),
+        )
+        .expect("marker fixture");
         let pak = write_test_pak(
             &tmp,
             "../../../TBL/Content/",
             &[
                 ("Mods/TestMod/Maps/MyMap.umap", b"fake"),
                 ("Mods/TestMod/Blueprints/Widget.uasset", b"fake"),
-                ("SomeGame/Content/Maps/GameMap.umap", b"fake"),
+                ("Mods/TestMod/TestMod_Marker.uasset", &marker),
+                ("Mods/TestMod/Maps/MyMap.uexp", b"fake"),
             ],
         );
 
-        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
+        let scan = scan_filtered_assets(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
         assert_eq!(scan.skipped, Vec::<(String, String)>::new());
 
-        let packages: Vec<&str> = scan.maps.iter().map(|m| m.package_path.as_str()).collect();
-        assert_eq!(packages, ["/Game/Mods/TestMod/Maps/MyMap"]);
-        assert_eq!(
-            scan.maps[0].file_path,
-            "../../../TBL/Content/Mods/TestMod/Maps/MyMap.umap"
-        );
-
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-
-    #[test]
-    fn non_umap_and_out_of_scope_entries_are_filtered() {
-        let tmp = std::env::temp_dir().join("mod_maps_test_filtered");
-        std::fs::create_dir_all(&tmp).expect("create tmp dir");
-        let pak = write_test_pak(
-            &tmp,
-            "../../../TBL/Content/",
-            &[
-                ("Mods/TestMod/Textures/T.uasset", b"fake"),
-                ("Maps/Frontend.umap", b"fake"),
-            ],
-        );
-
-        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
-        assert!(scan.maps.is_empty());
-
-        std::fs::remove_dir_all(&tmp).ok();
-    }
-
-    #[test]
-    fn entries_without_content_root_are_skipped_not_registered() {
-        let tmp = std::env::temp_dir().join("mod_maps_test_no_content");
-        std::fs::create_dir_all(&tmp).expect("create tmp dir");
-        let pak = write_test_pak(
-            &tmp,
-            "../../../Unchained/Mods/",
-            &[("Foo/Maps/Bar.umap", b"fake")],
-        );
-
-        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
-        assert!(scan.maps.is_empty(), "no package name may be derived without a content root");
+        let mut files: Vec<&str> = scan.assets.iter().map(|a| a.file_path.as_str()).collect();
+        files.sort();
+        assert_eq!(files, [
+            "../../../TBL/Content/Mods/TestMod/Maps/MyMap.umap",
+            "../../../TBL/Content/Mods/TestMod/TestMod_Marker.uasset",
+        ]);
+        let map = scan.assets.iter().find(|a| a.file_path.ends_with(".umap")).unwrap();
+        assert_eq!(map.package_path.as_deref(), Some("/Game/Mods/TestMod/Maps/MyMap"));
+        assert_eq!(scan.counts.maps, 1);
+        assert_eq!(scan.counts.mod_markers, 1);
+        assert_eq!(scan.parsed_packages, 2);
 
         std::fs::remove_dir_all(&tmp).ok();
     }
@@ -1013,11 +678,25 @@ mod tests {
         let pak = tmp.join("garbage.pak");
         std::fs::write(&pak, b"definitely not a pak file").expect("write garbage");
 
-        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
-        assert!(scan.maps.is_empty());
+        let scan = scan_filtered_assets(MapSource::PakFiles(vec![pak]), None).expect("scan ok");
+        assert!(scan.assets.is_empty());
         assert_eq!(scan.skipped.len(), 1, "garbage pak must be reported as skipped");
 
         std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn scans_committed_dummy_test_pak() {
+        // The dummy v9 pak is generated with repak and committed under
+        // test-resources (4 entries: 2 mod maps, 1 mod asset, 1 game map).
+        let pak_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("test-resources/mod_maps/test_mod.pak");
+        let scan = scan_filtered_assets(MapSource::PakFiles(vec![pak_path]), None).expect("scan ok");
+        let packages: Vec<&str> = scan.assets.iter().filter_map(|a| a.package_path.as_deref()).collect();
+        for expected in ["/Game/Mods/EvalMod/Maps/EvalMap", "/Game/Mods/EvalMod/Maps/Nested/InnerMap"] {
+            assert!(packages.contains(&expected), "missing {expected} in {packages:?}");
+        }
+        assert_eq!(scan.counts.maps, 3);
+        assert!(scan.assets.iter().all(|a| a.file_path.to_lowercase().ends_with(".umap")));
     }
 
     #[test]
@@ -1181,52 +860,6 @@ mod tests {
         assert!(decode_aes_key("0x00").is_err(), "wrong length must be rejected");
     }
 
-    /// Smoke test against real paks: run with
-    /// `MOD_PAKS_DIR=/mnt/u/Games/Chivalry2_c/TBL/Content/Paks cargo test real_paks_smoke`
-    /// (plain mod paks need no key — `repak list` works on them as-is).
-    #[test]
-    fn scans_committed_dummy_test_pak() {
-        // The dummy v9 pak is generated with repak and committed under
-        // test-resources (4 entries: 2 mod maps, 1 mod asset, 1 game map).
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let pak_path = Path::new(manifest_dir).join("test-resources/mod_maps/test_mod.pak");
-        if !pak_path.exists() {
-            eprintln!("skipping: {} not present in this crate", pak_path.display());
-            return;
-        }
-
-        let scan = scan_mod_maps(MapSource::PakFiles(vec![pak_path]), None).expect("scan ok");
-        let packages: Vec<&str> = scan.maps.iter().map(|m| m.package_path.as_str()).collect();
-        assert_eq!(packages, [
-            "/Game/Mods/EvalMod/Maps/EvalMap",
-            "/Game/Mods/EvalMod/Maps/Nested/InnerMap",
-        ]);
-    }
-
-    #[test]
-    fn real_paks_smoke_when_mod_paks_dir_is_set() {
-        let Ok(dir) = std::env::var("MOD_PAKS_DIR") else {
-            return; // Not set — hermetic run, nothing to do.
-        };
-        let scan = scan_mod_maps(MapSource::PakDir(PathBuf::from(dir)), None).expect("scan ok");
-
-        println!("discovered {} mod map(s), skipped {} pak(s)", scan.maps.len(), scan.skipped.len());
-        for (pak, reason) in &scan.skipped {
-            println!("  skipped: {pak} — {reason}");
-        }
-        for map in &scan.maps {
-            println!("  [map] {}  <-  {}", map.package_path, map.file_path);
-        }
-
-        for map in &scan.maps {
-            assert!(map.package_path.starts_with(MOD_ROOT), "all maps must be under {MOD_ROOT}");
-            assert!(map.file_path.ends_with(".umap"), "file paths keep the .umap extension");
-        }
-        assert!(
-            !scan.maps.is_empty() || !scan.skipped.is_empty(),
-            "scanning a real pak dir should find maps or report skips"
-        );
-    }
     /// Manual check against real paks: set `UNCHAINED_TEST_PAK_DIR` to a
     /// `Content/Paks` directory and run with `--ignored --nocapture`.
     #[test]

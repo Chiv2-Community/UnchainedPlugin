@@ -1,7 +1,8 @@
 # mod_loading profiling overview
 
 Startup Asset Registry registration profiling for the mod-map/marker feature
-(`registermodmaps` / `loadallassets` / auto init path). Captures run-by-run
+(auto init path, plus the since-removed `registermodmaps` / `loadallassets`
+commands that produced the all-assets runs below). Captures run-by-run
 timings so we can compare later (e.g. after the partial-read and
 parallelization tickets land).
 

@@ -29,8 +29,6 @@ use crate::modules::mod_dump::DumpModsCommand;
 use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
 use crate::modules::mod_list_maps::ListModMapsCommand;
-use crate::modules::mod_register_maps::RegisterModMapsCommand;
-use crate::modules::mod_load_all_assets::LoadAllAssetsCommand;
 use crate::modules::votes::endmap::EndMapVote;
 use crate::modules::votes::voterestartserver::RestartServerVote;
 
@@ -122,8 +120,6 @@ pub async fn initialize_subscribers() {
         command_subscriber.register(GameInfoCommand);
         command_subscriber.register(ListModsCommand);
         command_subscriber.register(ListModMapsCommand);
-        command_subscriber.register(RegisterModMapsCommand);
-        command_subscriber.register(LoadAllAssetsCommand);
     }
 
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
@@ -145,7 +141,7 @@ pub async fn initialize_subscribers() {
 /// full `initialize_subscribers` (votes, server-oriented commands, MOTD, …) does
 /// not run because it is driven by server-only `world_init`. Clients subscribe
 /// the command subscriber to the game event bus and register only the
-/// client-safe diagnostic commands (registermodmaps / listmodmaps).
+/// client-safe diagnostic commands (listmodmaps / mod-list).
 pub async fn initialize_client_commands() {
     let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
     let game_event_bus = &EVENT_SYSTEM.game_event_bus;
@@ -153,8 +149,6 @@ pub async fn initialize_client_commands() {
     {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
         command_subscriber.register(ListModMapsCommand);
-        command_subscriber.register(RegisterModMapsCommand);
-        command_subscriber.register(LoadAllAssetsCommand);
         command_subscriber.register(ListModsCommand);
     }
 

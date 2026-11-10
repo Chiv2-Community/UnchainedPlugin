@@ -127,8 +127,8 @@ pub struct CLIArgs {
     #[arg(long = "Port", default_value = "7777")]
     pub game_port: Option<u16>,
 
-    /// Number of mod-map / all-asset package files registered per game-thread
-    /// tick during Asset Registry registration (default 128).
+    /// Number of mod package files handed to the Asset Registry per engine
+    /// call during the startup registration (default 128).
     #[arg(long = "mod-map-batch", default_value_t = 128)]
     pub mod_map_batch: usize,
 
