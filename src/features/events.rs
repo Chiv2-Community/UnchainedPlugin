@@ -155,6 +155,7 @@ pub async fn initialize_client_commands() {
         command_subscriber.register(ListModMapsCommand);
         command_subscriber.register(RegisterModMapsCommand);
         command_subscriber.register(LoadAllAssetsCommand);
+        command_subscriber.register(ListModsCommand);
     }
 
     let _ = game_event_bus

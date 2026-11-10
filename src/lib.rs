@@ -63,6 +63,12 @@ pub struct BuildInfo {
 
 static CURRENT_BUILD_INFO: Lazy<Mutex<Option<BuildInfo>>> = Lazy::new(|| Mutex::new(None));
 
+/// Offset (relative to the game image base) resolved for `name` in the current
+/// build info, if any.
+pub fn current_build_offset(name: &str) -> Option<u64> {
+    CURRENT_BUILD_INFO.lock().unwrap().as_ref()?.get_offset(name).copied()
+}
+
 fn expand_env_path(path: &str) -> Option<PathBuf> {
     if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
         if let Ok(base) = env::var("LOCALAPPDATA") {
@@ -450,6 +456,16 @@ fn postinit_rustlib() {
 
             if !cli_args().is_server() {
                 sinfo!("Not a server, skipping server initialization");
+                // Clients get a mod manager so `mod-list` can scan the mod
+                // markers on demand; nothing is scanned at startup.
+                #[cfg(feature="mod_management")]
+                {
+                    use crate::features::mod_management::ModManager;
+                    let mut mod_manager = globals().mod_manager.lock().unwrap();
+                    if mod_manager.is_none() {
+                        *mod_manager = Some(Arc::new(ModManager::new()));
+                    }
+                }
                 // Clients still expose the client-safe diagnostic commands
                 // (registermodmaps / listmodmaps) through the plugin console.
                 // Spawn this before spawn_cli_handler so the commands are

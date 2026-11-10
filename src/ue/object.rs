@@ -120,7 +120,8 @@ pub struct FStructBaseChain {
 #[derive(Debug)]
 #[repr(C)]
 pub struct FFieldClass {
-    // TODO
+    // TODO: remaining members
+    /// Field type name, e.g. `StrProperty`, `SetProperty`.
     name: FName,
 }
 
@@ -134,15 +135,77 @@ pub struct FFieldVariant {
 #[derive(Debug)]
 #[repr(C)]
 pub struct FField {
+    pub vtable: *const c_void,
     pub class_private: *const FFieldClass,
     pub owner: FFieldVariant,
     pub next: *const FField,
     pub name_private: FName,
     pub flags_private: EObjectFlags,
 }
+const _: () = assert!(std::mem::offset_of!(FField, next) == 0x20);
+const _: () = assert!(std::mem::offset_of!(FField, name_private) == 0x28);
+const _: () = assert!(std::mem::size_of::<FField>() == 0x38);
 
+/// Prefix of UE 4.25 `FProperty`; later members are not needed.
+#[repr(C)]
 pub struct FProperty {
-    // TODO
+    pub field: FField,
+    pub array_dim: i32,
+    pub element_size: i32,
+    pub property_flags: u64,
+    pub rep_index: u16,
+    pub blueprint_replication_condition: u8,
+    /// Byte offset of the value inside its owning object.
+    pub offset_internal: i32,
+}
+const _: () = assert!(std::mem::offset_of!(FProperty, offset_internal) == 0x4C);
+
+/// A property located by name on a class.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FoundProperty {
+    /// Byte offset of the value inside an instance.
+    pub offset: usize,
+    /// Field type name, e.g. `StrProperty`.
+    pub type_name: String,
+}
+
+/// Looks up a property by name on `class` and its super classes, reading only
+/// the class's own field list (no engine calls besides `FName` to string).
+/// Returns `None` if there is no such property or its offset is out of range.
+///
+/// # Safety
+/// `class` must be null or a live `UClass`.
+pub unsafe fn find_property(class: *const UClass, name: &str) -> Option<FoundProperty> {
+    // Bounds guard against a wrong layout turning into an endless walk.
+    const MAX_FIELDS: usize = 4096;
+    let mut current = class.cast::<UStruct>();
+    let mut visited = 0usize;
+    while !current.is_null() {
+        let size = (*current).properties_size.max(0) as usize;
+        let mut field = (*current).child_properties;
+        while !field.is_null() {
+            visited += 1;
+            if visited > MAX_FIELDS {
+                return None;
+            }
+            if (*field).name_private.to_string() == name {
+                let offset = (*field.cast::<FProperty>()).offset_internal;
+                if offset < 0 || offset as usize >= size {
+                    return None;
+                }
+                let field_class = (*field).class_private;
+                let type_name = if field_class.is_null() {
+                    String::new()
+                } else {
+                    (*field_class).name.to_string()
+                };
+                return Some(FoundProperty { offset: offset as usize, type_name });
+            }
+            field = (*field).next;
+        }
+        current = (*current).super_struct;
+    }
+    None
 }
 
 #[derive(Debug)]

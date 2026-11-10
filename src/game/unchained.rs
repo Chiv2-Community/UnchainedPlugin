@@ -1,12 +1,181 @@
 use std::os::raw::c_void;
 
-use crate::{game::engine::TSoftClassPtr, ue::{FString, TArray, TMap, UClass, UObject}};
+use crate::{game::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr}, ue::{FString, TArray, TMap, TSet, UClass, UObject}};
 
 #[repr(C)]
 pub struct DA_ModMarker_C {
     _private: [u8; 0x30], 
     pub mod_actors: TMap<*mut UClass, FString>,    // Offset 0x0030
     pub custom_objects: TMap<*mut UObject, FString>, // Offset 0x0080
+}
+
+/// `DA_ModMarker_V2_C` as dumped from the game (size 0x142). The live layout is
+/// resolved by property name (see [`V2MarkerOffsets`]); this struct supplies the
+/// fallback offsets. Only ever used through a pointer to a live engine object.
+#[repr(C)]
+pub struct DA_ModMarker_V2_C {
+    _private: [u8; 0x30],
+    pub mod_id: FString,                          // 0x0030
+    pub mod_version: FString,                     // 0x0040
+    pub format_version: i32,                      // 0x0050
+    _padding_0: [u8; 0x4],                        // 0x0054
+    pub icon: FSoftObjectPtr,                     // 0x0058 TSoftObjectPtr<UTexture2D>
+    pub list_tags: TArray<FString>,               // 0x0080
+    pub mod_actor_classes: TSet<FSoftObjectPath>, // 0x0090 TSet<FSoftClassPath>
+    pub bundled_markers: TSet<FSoftObjectPath>,   // 0x00E0
+    pub excluded_paths: TArray<FString>,          // 0x0130
+    pub own_pak: bool,                            // 0x0140
+    pub apply_version_to_bundled: bool,           // 0x0141
+}
+const _: () = {
+    use std::mem::offset_of;
+    assert!(offset_of!(DA_ModMarker_V2_C, mod_id) == 0x30);
+    assert!(offset_of!(DA_ModMarker_V2_C, mod_version) == 0x40);
+    assert!(offset_of!(DA_ModMarker_V2_C, format_version) == 0x50);
+    assert!(offset_of!(DA_ModMarker_V2_C, icon) == 0x58);
+    assert!(offset_of!(DA_ModMarker_V2_C, list_tags) == 0x80);
+    assert!(offset_of!(DA_ModMarker_V2_C, mod_actor_classes) == 0x90);
+    assert!(offset_of!(DA_ModMarker_V2_C, bundled_markers) == 0xE0);
+    assert!(offset_of!(DA_ModMarker_V2_C, excluded_paths) == 0x130);
+    assert!(offset_of!(DA_ModMarker_V2_C, own_pak) == 0x140);
+    assert!(offset_of!(DA_ModMarker_V2_C, apply_version_to_bundled) == 0x141);
+};
+
+/// Size of `DA_ModMarker_V2_C` in the dump; a class at least this large may
+/// use the dump offsets when a property cannot be found by name.
+pub const V2_MARKER_DUMP_SIZE: usize = 0x142;
+
+/// One V2 marker field the loader reads: property name, expected field type
+/// and its offset in the dump.
+struct V2Field {
+    name: &'static str,
+    type_name: &'static str,
+    dump_offset: usize,
+}
+
+/// Picks the offset to use for one field. `found` is the by-name lookup result
+/// (`None` if the property is missing). Returns `Err` when the field cannot be
+/// read safely, and a note to log when the result deserves attention.
+fn pick_v2_offset(
+    field: &V2Field,
+    found: Option<&crate::ue::FoundProperty>,
+    properties_size: usize,
+) -> Result<(usize, Option<String>), String> {
+    match found {
+        Some(property) if property.type_name != field.type_name => Err(format!(
+            "{} is a {}, expected {}",
+            field.name, property.type_name, field.type_name
+        )),
+        Some(property) if property.offset != field.dump_offset => Ok((
+            property.offset,
+            Some(format!(
+                "{} is at {:#x}, the dump has {:#x}; using the live offset",
+                field.name, property.offset, field.dump_offset
+            )),
+        )),
+        Some(property) => Ok((property.offset, None)),
+        None if properties_size >= V2_MARKER_DUMP_SIZE => Ok((
+            field.dump_offset,
+            Some(format!(
+                "{} not found by name; using dump offset {:#x}",
+                field.name, field.dump_offset
+            )),
+        )),
+        None => Err(format!(
+            "{} not found by name and the class is too small ({:#x}) for the dump layout",
+            field.name, properties_size
+        )),
+    }
+}
+
+/// Offsets of the `DA_ModMarker_V2_C` fields the loader reads, resolved from
+/// the live class by property name with the dump layout as fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct V2MarkerOffsets {
+    mod_id: usize,
+    mod_version: usize,
+    format_version: usize,
+    mod_actor_classes: usize,
+    bundled_markers: usize,
+}
+
+impl V2MarkerOffsets {
+    /// Resolves the offsets from a marker's class. `Err` means the class does
+    /// not look like a V2 marker the loader can read.
+    ///
+    /// # Safety
+    /// `class` must be a live `UClass`.
+    pub unsafe fn resolve(class: *const UClass) -> Result<Self, String> {
+        use std::mem::offset_of;
+        if class.is_null() {
+            return Err("marker has no class".into());
+        }
+        let properties_size = (*class).ustruct.properties_size.max(0) as usize;
+        let resolve_field = |name, type_name, dump_offset| -> Result<usize, String> {
+            let field = V2Field { name, type_name, dump_offset };
+            let found = crate::ue::find_property(class, name);
+            let (offset, note) = pick_v2_offset(&field, found.as_ref(), properties_size)?;
+            if let Some(note) = note {
+                crate::swarn!("DA_ModMarker_V2: {}", note);
+            }
+            Ok(offset)
+        };
+        Ok(Self {
+            mod_id: resolve_field("ModId", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_id))?,
+            mod_version: resolve_field("ModVersion", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_version))?,
+            format_version: resolve_field("FormatVersion", "IntProperty", offset_of!(DA_ModMarker_V2_C, format_version))?,
+            mod_actor_classes: resolve_field("ModActorClasses", "SetProperty", offset_of!(DA_ModMarker_V2_C, mod_actor_classes))?,
+            bundled_markers: resolve_field("BundledMarkers", "SetProperty", offset_of!(DA_ModMarker_V2_C, bundled_markers))?,
+        })
+    }
+
+    /// # Safety
+    /// `marker` must be a live instance of the class these offsets came from,
+    /// and `T` must be the field's real type.
+    unsafe fn field<'a, T>(marker: *const UObject, offset: usize) -> &'a T {
+        &*marker.cast::<u8>().add(offset).cast::<T>()
+    }
+
+    /// # Safety
+    /// `marker` must be a live instance of the class these offsets came from.
+    pub unsafe fn mod_id(&self, marker: *const UObject) -> String {
+        Self::field::<FString>(marker, self.mod_id).to_string()
+    }
+
+    /// # Safety
+    /// See [`Self::mod_id`].
+    pub unsafe fn mod_version(&self, marker: *const UObject) -> String {
+        Self::field::<FString>(marker, self.mod_version).to_string()
+    }
+
+    /// # Safety
+    /// See [`Self::mod_id`].
+    pub unsafe fn format_version(&self, marker: *const UObject) -> i32 {
+        *Self::field::<i32>(marker, self.format_version)
+    }
+
+    /// Soft class paths of the mod actors, unset entries dropped.
+    ///
+    /// # Safety
+    /// See [`Self::mod_id`].
+    pub unsafe fn mod_actor_classes(&self, marker: *const UObject) -> Vec<String> {
+        Self::paths(Self::field(marker, self.mod_actor_classes))
+    }
+
+    /// Object paths of the markers bundled into this marker's pak.
+    ///
+    /// # Safety
+    /// See [`Self::mod_id`].
+    pub unsafe fn bundled_markers(&self, marker: *const UObject) -> Vec<String> {
+        Self::paths(Self::field(marker, self.bundled_markers))
+    }
+
+    fn paths(set: &TSet<FSoftObjectPath>) -> Vec<String> {
+        set.iter()
+            .map(FSoftObjectPath::to_path_string)
+            .filter(|path| !path.is_empty())
+            .collect()
+    }
 }
 
 #[repr(C)]
@@ -70,4 +239,44 @@ pub struct UModLoaderSettings_C {
     pub b_use_player_bots: bool,
     // 0x0079 (size: 0x01)
     pub b_show_gui: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ue::FoundProperty;
+
+    const MOD_ID: V2Field = V2Field { name: "ModId", type_name: "StrProperty", dump_offset: 0x30 };
+
+    fn found(offset: usize, type_name: &str) -> FoundProperty {
+        FoundProperty { offset, type_name: type_name.into() }
+    }
+
+    #[test]
+    fn live_offset_matching_the_dump_is_silent() {
+        let property = found(0x30, "StrProperty");
+        assert_eq!(pick_v2_offset(&MOD_ID, Some(&property), 0x142), Ok((0x30, None)));
+    }
+
+    #[test]
+    fn live_offset_wins_over_the_dump_with_a_note() {
+        let property = found(0x48, "StrProperty");
+        let (offset, note) = pick_v2_offset(&MOD_ID, Some(&property), 0x160).unwrap();
+        assert_eq!(offset, 0x48);
+        assert!(note.is_some());
+    }
+
+    #[test]
+    fn wrong_field_type_is_rejected() {
+        let property = found(0x30, "ArrayProperty");
+        assert!(pick_v2_offset(&MOD_ID, Some(&property), 0x142).is_err());
+    }
+
+    #[test]
+    fn missing_property_falls_back_only_when_the_class_is_large_enough() {
+        let (offset, note) = pick_v2_offset(&MOD_ID, None, 0x142).unwrap();
+        assert_eq!(offset, 0x30);
+        assert!(note.is_some());
+        assert!(pick_v2_offset(&MOD_ID, None, 0x141).is_err());
+    }
 }

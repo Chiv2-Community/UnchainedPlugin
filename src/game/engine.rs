@@ -7,7 +7,7 @@ use std::os::raw::c_void;
 use widestring::U16CString;
 
 use crate::game::chivalry2::ATBLGameState;
-use crate::resolvers::asset_registry::{FAssetData, TScriptInterface, o_FNameCtorWchar};
+use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
 use crate::ue::{EFindName, EObjectFlags, FArchive, FName, FLargeMemoryReader, FString, TArray, UObject};
 use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
@@ -103,7 +103,23 @@ impl FSoftObjectPath {
             sub_path_string: FString::default(),
         }
     }
+
+    /// Full object path (`/Game/Pkg.Object`, plus `:SubPath` when set). Empty
+    /// for an unset path. `FSoftClassPath` shares this layout.
+    pub fn to_path_string(&self) -> String {
+        if self.asset_path_name.comparison_index.value == 0 {
+            return String::new();
+        }
+        let asset = self.asset_path_name.to_string();
+        let sub_path = self.sub_path_string.to_string();
+        if sub_path.is_empty() {
+            asset
+        } else {
+            format!("{asset}:{sub_path}")
+        }
+    }
 }
+const _: () = assert!(std::mem::size_of::<FSoftObjectPath>() == 0x18);
 
 #[repr(C)]
 #[derive(Debug)]
@@ -114,6 +130,8 @@ pub struct FSoftObjectPtr {
 
     pub path: FSoftObjectPath, // 0x10
 }
+
+const _: () = assert!(std::mem::size_of::<FSoftObjectPtr>() == 0x28);
 
 impl FSoftObjectPtr {
     pub fn from_path(path: &str) -> Self {
@@ -151,20 +169,14 @@ impl FName {
         let mut name = FName::default();
 		// sinfo!(fn; "Constructing fname for {}", path);
 
-		CALL_ORIGINAL_SAFE!(FNameCtorWchar(
-			&mut name as *mut FName,
-			wide_path.as_ptr(),
-			find_type
-		))
-		.expect("Failed to construct FName");
+		// Called at the function entry, not through the detour trampoline;
+		// see `fname_ctor_wchar`.
+		unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), find_type) }
+			.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
 			// sinfo!(fn; "1. Name is invalid for {}", wide_path.to_string_lossy());
-			CALL_ORIGINAL_SAFE!(FNameCtorWchar(
-				&mut name as *mut FName,
-				wide_path.as_ptr(),
-				EFindName::Add
-			))
-			.expect("Failed to construct FName");
+			unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), EFindName::Add) }
+				.expect("Failed to construct FName");
 		}
 		if name.comparison_index.value == 0 {
 			sinfo!(fn; "2. Name is invalid for {}", wide_path.to_string_lossy());

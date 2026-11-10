@@ -4,7 +4,7 @@ use widestring::U16CString;
 use crate::features::Mod;
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
-use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C};
+use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};
 #[allow(unused_imports)]
 use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
@@ -149,6 +149,81 @@ fn is_valid_object_path(path: &str) -> bool {
     true
 }
 
+const MOD_MARKER_V1_CLASS: &str = "DA_ModMarker_C";
+const MOD_MARKER_V2_CLASS: &str = "DA_ModMarker_V2_C";
+
+/// Object paths of every asset of `class_name` in the Asset Registry. A failed
+/// query means no marker of that class is installed, which is not an error.
+unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
+    let Ok(assets) = get_assets_by_class(class_name.into()) else {
+        return Vec::new();
+    };
+    assets
+        .as_slice()
+        .iter()
+        .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
+        .map(|asset| asset.ObjectPath.to_string())
+        .collect()
+}
+
+/// Reads the mod metadata from a mod actor class's CDO. Returns the class path
+/// (the registry key) and the entry, or `None` if the class or CDO is missing.
+unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
+    if class_ptr.is_null() {
+        return None;
+    }
+    let cdo_new = CALL_ORIGINAL_SAFE!(GetDefaultObject(class_ptr, true)).ok()?;
+    if cdo_new.is_null() {
+        return None;
+    }
+
+    let cdo = &*(cdo_new as *mut ArgonSDKModBase);
+    let class_obj = &(*class_ptr).ustruct.ufield.uobject;
+    let asset_path = class_obj.uobject_base_utility.uobject_base.get_path_name(None);
+
+    let mod_entry = Mod {
+        name: cdo.mod_name.to_string(),
+        organization: cdo.author.to_string(),
+        version: cdo.mod_version.to_string(),
+        object_path: asset_path.clone(),
+    };
+    Some((asset_path, mod_entry))
+}
+
+/// Loads `path` as an object of `object_class`; null if it does not exist or
+/// is of another class.
+fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
+    let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
+    CALL_ORIGINAL_SAFE!(StaticLoadObject(
+        object_class,
+        std::ptr::null_mut(),
+        wide_path.as_ptr(),
+        std::ptr::null(),
+        0,
+        std::ptr::null_mut(),
+        false,
+        std::ptr::null_mut()
+    ))
+}
+
+/// Combines both marker scans; a mod actor listed by both versions keeps its
+/// V2 entry.
+fn merge_marker_scans(v1: HashMap<String, Mod>, v2: HashMap<String, Mod>) -> HashMap<String, Mod> {
+    let mut merged = v1;
+    merged.extend(v2);
+    merged
+}
+
+/// Bundled marker paths the registry query did not return. Bundled markers
+/// ship as their own assets, so each should be among `known`.
+fn missing_bundled_markers<'a>(bundled: &'a [String], known: &[String]) -> Vec<&'a str> {
+    bundled
+        .iter()
+        .filter(|path| !known.iter().any(|k| k.eq_ignore_ascii_case(path)))
+        .map(String::as_str)
+        .collect()
+}
+
 // Validate syntax before passing launcher input to Unreal's string/path APIs.
 fn enabled_mod_paths<'a>(
     mods: Option<&'a [String]>,
@@ -185,73 +260,130 @@ impl ModManager {
     }
 
     /// Populates the internal containers with mod info
-    /// 
-    /// 1. Scans for mod markers in Asset Registsry
-    /// 2. Retrieves AssetData for each mod class referenced by markers
+    ///
+    /// 1. Scans for mod markers (V1 `DA_ModMarker_C`, then V2
+    ///    `DA_ModMarker_V2_C`) in the Asset Registry
+    /// 2. Resolves each mod actor class referenced by the markers
     /// 3. For each actor, retrieves the CDO containing name/version
-    /// 
+    ///
+    /// A mod actor listed by both marker versions ends up as one entry, taken
+    /// from the V2 marker.
+    ///
     /// ## CAUTION
     /// Should run in game thread. Only stable in main menu otherwise
     pub fn scan_asset_registry(&self) {
         // TODO: check game thread here
-        let mut registry_local: HashMap<String, Mod> = HashMap::new();
-        let cmd = "DA_ModMarker_C"; 
-        
-        let res_arr = unsafe { get_assets_by_class(cmd.into()).expect("failed") };
-        
-        for asset in res_arr.as_slice() {
-            if asset.ObjectPath.comparison_index.value == 0 {
-                continue;
-            }
+        let v1 = unsafe { self.scan_v1_markers() };
+        let v2 = unsafe { self.scan_v2_markers() };
+        sinfo!("Found {} mod(s) in V1 markers, {} in V2 markers", v1.len(), v2.len());
+        let registry_local = merge_marker_scans(v1, v2);
 
-            let path = asset.ObjectPath.to_string();
-
-            let mobj = unsafe { get_uobject_from_path(&path, true) };
-            if mobj.is_null() { continue; }
-
-            let mod_struct = mobj as *mut DA_ModMarker_C;
-            
-            unsafe {
-                for (mod_class_ref, _) in (&*mod_struct).mod_actors.iter() {
-                    let class_ptr = *mod_class_ref;
-                    if class_ptr.is_null() { continue; }
-
-                    // let cdo_new = match (&*class_ptr).class_default_object.is_null() {
-                    //     true => TRY_CALL_ORIGINAL!(GetDefaultObject(class_ptr, true)),
-                    //     false =>(&*class_ptr).class_default_object as *mut UObject
-                    // };
-
-                    let cdo_new = TRY_CALL_ORIGINAL!(GetDefaultObject(class_ptr, true));
-                    if cdo_new.is_null() { continue; }
-
-                    let cdo = &*(cdo_new as *mut ArgonSDKModBase);
-                    let class_obj = &(*class_ptr).ustruct.ufield.uobject;
-                    let asset_path = class_obj.uobject_base_utility.uobject_base.get_path_name(None);
-                    
-                    let mod_entry = Mod { 
-                        name: cdo.mod_name.to_string(),
-                        organization: cdo.author.to_string(),
-                        version: cdo.mod_version.to_string(),
-                        object_path: asset_path.clone(),
-                    };
-
-                    registry_local.insert(asset_path, mod_entry);
-                }
-            }
-        }
-        
         sinfo!("Found {} Mods", registry_local.len());
-        
+
         {
             let mut mods = self.registry.lock().expect("Lock poisoned");
             *mods = registry_local;
         }
 
-        
         match self.scan_active_mod_actors() {
             Ok(_) => {},
             Err(e) => {serror!("Failed to scan active mods: {}", e);}
         };
+    }
+
+    /// Mods listed by deprecated V1 markers (`DA_ModMarker_C`), which hold hard
+    /// references to their mod actor classes.
+    unsafe fn scan_v1_markers(&self) -> HashMap<String, Mod> {
+        let mut found: HashMap<String, Mod> = HashMap::new();
+        for path in marker_object_paths(MOD_MARKER_V1_CLASS) {
+            let mobj = get_uobject_from_path(&path, true);
+            if mobj.is_null() { continue; }
+
+            let mod_struct = mobj as *mut DA_ModMarker_C;
+            for (mod_class_ref, _) in (&*mod_struct).mod_actors.iter() {
+                if let Some((asset_path, mod_entry)) = mod_from_class(*mod_class_ref) {
+                    found.insert(asset_path, mod_entry);
+                }
+            }
+        }
+        found
+    }
+
+    /// Mods listed by V2 markers (`DA_ModMarker_V2_C`), which hold soft class
+    /// paths; each listed class is loaded to read its CDO, as V1 does implicitly.
+    unsafe fn scan_v2_markers(&self) -> HashMap<String, Mod> {
+        let mut found: HashMap<String, Mod> = HashMap::new();
+        let marker_paths = marker_object_paths(MOD_MARKER_V2_CLASS);
+        // Temporary validation output for the V2 markers (the `[v2marker]` lines).
+        sinfo!("[v2marker] Asset Registry lists {} {} asset(s)", marker_paths.len(), MOD_MARKER_V2_CLASS);
+        if marker_paths.is_empty() {
+            return found;
+        }
+        let class_type = get_uobject_from_path("/Script/CoreUObject.Class", false) as *mut UClass;
+        if class_type.is_null() {
+            serror!("Class type not found; cannot resolve V2 marker mod classes");
+            return found;
+        }
+
+        // Offsets are per class; every V2 marker normally shares one class.
+        let mut offsets_by_class: HashMap<usize, Option<V2MarkerOffsets>> = HashMap::new();
+        for path in &marker_paths {
+            let marker = get_uobject_from_path(path, true);
+            if marker.is_null() {
+                swarn!("Could not load V2 marker {}", path);
+                continue;
+            }
+            let marker_class = (*marker).uobject_base_utility.uobject_base.class_private;
+            let offsets = *offsets_by_class.entry(marker_class as usize).or_insert_with(|| {
+                match V2MarkerOffsets::resolve(marker_class) {
+                    Ok(offsets) => {
+                        sinfo!("[v2marker] resolved field offsets: {:x?}", offsets);
+                        Some(offsets)
+                    }
+                    Err(error) => {
+                        serror!("Cannot read V2 markers of this class: {}", error);
+                        None
+                    }
+                }
+            });
+            let Some(offsets) = offsets else { continue };
+
+            let class_paths = offsets.mod_actor_classes(marker);
+            let bundled_markers = offsets.bundled_markers(marker);
+            sinfo!(
+                "[v2marker] {}: ModId {:?}, ModVersion {:?}, FormatVersion {}, ModActorClasses {:?}, BundledMarkers {:?}",
+                path,
+                offsets.mod_id(marker),
+                offsets.mod_version(marker),
+                offsets.format_version(marker),
+                class_paths,
+                bundled_markers
+            );
+            for bundled in missing_bundled_markers(&bundled_markers, &marker_paths) {
+                swarn!("V2 marker {} bundles {}, which is not in the Asset Registry", path, bundled);
+            }
+
+            for class_path in class_paths {
+                if !is_valid_object_path(&class_path) {
+                    swarn!("V2 marker {} lists an invalid mod class path: {:?}", path, class_path);
+                    continue;
+                }
+                match load_object_of_class(class_type, &class_path) {
+                    Ok(class_ptr) if !class_ptr.is_null() => {
+                        if let Some((asset_path, mod_entry)) = mod_from_class(class_ptr as *mut UClass) {
+                            sinfo!("[v2marker]   mod {:?} v{} by {} ({})",
+                                mod_entry.name, mod_entry.version, mod_entry.organization, asset_path);
+                            found.insert(asset_path, mod_entry);
+                        } else {
+                            swarn!("[v2marker]   no CDO for mod class {}", class_path);
+                        }
+                    }
+                    Ok(_) => swarn!("V2 marker {} lists a missing mod class: {}", path, class_path),
+                    Err(error) => serror!("Cannot load mod class {}: {}", class_path, error),
+                }
+            }
+        }
+        found
     }
 
     /// SCAN 2: Active Mod Actors (Entities currently in the World)
@@ -438,17 +570,7 @@ impl ModManager {
             if class_type.is_null() {
                 return false;
             }
-            let wide_path = U16CString::from_str(path).expect("validated mod path");
-            match CALL_ORIGINAL_SAFE!(StaticLoadObject(
-                class_type as *mut UClass,
-                std::ptr::null_mut(),
-                wide_path.as_ptr(),
-                std::ptr::null(),
-                0,
-                std::ptr::null_mut(),
-                false,
-                std::ptr::null_mut()
-            )) {
+            match load_object_of_class(class_type as *mut UClass, path) {
                 Ok(object) => !object.is_null(),
                 Err(error) => {
                     serror!("Cannot validate mod {}: {}", path, error);
@@ -593,6 +715,35 @@ mod tests {
         });
         assert_eq!(paths, [mods[0].as_str(), mods[6].as_str()]);
         assert_eq!(resolved, [mods[0].clone(), mods[1].clone(), mods[6].clone()]);
+    }
+
+    #[test]
+    fn v2_marker_entry_replaces_v1_entry_for_the_same_class() {
+        let entry = |version: &str, path: &str| Mod {
+            name: "Example".into(), organization: "Tests".into(),
+            version: version.into(), object_path: path.into(),
+        };
+        let shared = "/Game/Mods/Example/Example.Example_C";
+        let v1_only = "/Game/Mods/Old/Old.Old_C";
+        let v1 = HashMap::from([
+            (shared.to_string(), entry("1.0.0", shared)),
+            (v1_only.to_string(), entry("0.1.0", v1_only)),
+        ]);
+        let v2 = HashMap::from([(shared.to_string(), entry("2.0.0", shared))]);
+        let merged = merge_marker_scans(v1, v2);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[shared].version, "2.0.0");
+        assert_eq!(merged[v1_only].version, "0.1.0");
+    }
+
+    #[test]
+    fn reports_only_bundled_markers_missing_from_the_registry() {
+        let known = vec!["/Game/Mods/A/A_ModMarker.A_ModMarker".to_string()];
+        let bundled = vec![
+            "/Game/Mods/a/A_ModMarker.A_ModMarker".to_string(),
+            "/Game/Mods/B/B_ModMarker.B_ModMarker".to_string(),
+        ];
+        assert_eq!(missing_bundled_markers(&bundled, &known), vec![bundled[1].as_str()]);
     }
 
     #[test]

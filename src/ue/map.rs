@@ -301,11 +301,51 @@ impl<K: PartialEq + UEHash, V> TMap<K, V> {
     }
 }
 
+/// Read-only view of an engine `TSet<T>`. Only ever used through a reference
+/// into live engine memory; Rust never constructs, mutates or drops one.
+#[repr(C)]
+pub struct TSet<T> {
+    elements: TSparseArray<TSetElement<T>>,
+    hash: TInlineAllocator<1, FSetElementId>,
+    hash_size: i32,
+}
+impl<T> TSet<T> {
+    /// Iterates the live elements (allocation order, free slots skipped).
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        let elements = &self.elements;
+        let slots = elements.data.len().min(elements.allocation_flags.num_bits.max(0) as usize);
+        (0..slots)
+            .filter(move |&i| elements.allocation_flags.index(i).bool())
+            .map(move |i| &elements.index(i).value)
+    }
+
+    /// Number of live elements.
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::ue::FName;
 
     use super::*;
+    const _: [u8; 0x50] = [0; std::mem::size_of::<TSet<[u8; 0x18]>>()];
+    // TSetElement<FSoftObjectPath>: 0x18 value + two i32 links.
+    const _: [u8; 0x20] = [0; std::mem::size_of::<TSetElement<[u64; 3]>>()];
+
+    #[test]
+    fn empty_tset_iterates_nothing() {
+        // An all-zero TSet is what an empty Blueprint set property looks like.
+        let set: TSet<u64> = unsafe { std::mem::zeroed() };
+        assert_eq!(set.iter().count(), 0);
+        assert!(set.is_empty());
+        std::mem::forget(set);
+    }
     const _: [u8; 0x50] = [0; std::mem::size_of::<TMap<FName, [u8; 0x20]>>()];
     const _: [u8; 0x38] =
         [0; std::mem::size_of::<TSparseArray<TSetElement<TTuple<FName, [u8; 0x20]>>>>()];
