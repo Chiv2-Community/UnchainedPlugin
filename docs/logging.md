@@ -143,33 +143,14 @@ beyond their available slots.
 Console coloring respects `NO_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` through
 log4rs. File output has no added colors. Restart after editing.
 
-The plugin's own console supports mouse selection. Console writes run on a
-background thread so selection does not block game logging. The queue holds
-131,072 records; full queues drop new console records. Records exceeding 64 KiB
-(text and style storage combined) or
-256 style changes are also omitted from the console. A warning reports drops
-after output resumes. File logging is unaffected. Console flush and shutdown do
-not wait for queued output; redirected or attached stdio retains synchronous delivery.
-
-Above 100 queued records, the logger warns once: "Logging thread pause detected.
-Be careful selecting text in the console for prolonged periods. It freezes the
-console log." The warning rearms below 100 queued records. A full queue can use
-8 GiB of record storage, plus queue and allocation overhead; storage grows on demand.
+See the [default log4rs configuration](../src/logging/log4rs/log4rs.default.yaml)
+for the shipped patterns and colors.
 
 The `{sm}` field abbreviates parent module segments using
 case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
 `UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
 The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
 `UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
-The default console uses `{fn}` without a module prefix.
-Timestamps include milliseconds and use gray; levels use severity colors.
-Pipes before and after the level use the trace palette color.
-Function names use muted banner gold (`#BE9D5C`).
-The ` - ` separator uses timestamp gray. Debug and trace message bodies match
-their level colors; other message bodies use neutral text.
-Metadata has no brackets and ends with ` - ` before the message.
-File appenders also use `{fn}` without a module prefix.
-Both defaults use `{l:>5}` to right-align the level; `{t}` shows the filtering target instead.
 
 Console and file patterns support the same fields, including `{sm}`, `{fn}`,
 `{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
@@ -180,7 +161,7 @@ in both. To include a module prefix, edit `pattern`.
 pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
 `{M}` and `{t}` retain their standard meanings.
 
-The default console pattern includes `{fn}`. The function field displays the enclosing
+The `{fn}` field displays the enclosing
 named function's leaf. Methods show only their name,
 without the type or module. Closures and async blocks use their enclosing named
 function, not `{{closure}}`.
