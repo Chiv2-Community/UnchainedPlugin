@@ -88,19 +88,6 @@ pub enum ChatSource {
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum ChatType { Admin, Global, Team }
-impl ChatType {
-    pub fn from_chiv_chat_type(echat_type: EChatType) -> Self {
-        match echat_type {
-            EChatType::Admin => ChatType::Admin,
-            EChatType::AllSay => ChatType::Global,
-            EChatType::TeamSay => ChatType::Team,
-            _ => {
-                swarn!("Unhandled chat type {}. Falling back to Global chat", echat_type);
-                ChatType::Global // Default to global... Clean this over time.
-            }
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameChatMessage {

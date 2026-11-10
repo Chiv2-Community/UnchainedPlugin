@@ -91,24 +91,20 @@ impl QueuedConsole {
         writer: Option<log4rs::encode::writer::console::ConsoleWriter>)
         -> io::Result<Self> {
         use log4rs::encode::writer::simple::SimpleWriter;
-        Self::with_output(encoder, move |record| {
+        let output = move |record: &Rendered| {
             if let Some(writer) = &writer { return record.replay(&mut writer.lock()); }
             match target {
                 log4rs::append::console::Target::Stdout => record.replay(&mut SimpleWriter(io::stdout().lock())),
                 log4rs::append::console::Target::Stderr => record.replay(&mut SimpleWriter(io::stderr().lock())),
             }
-        }, QUEUE_CAPACITY)
-    }
-
-    fn with_output(encoder: Box<dyn Encode>, mut output: impl FnMut(&Rendered) -> io::Result<()> + Send + 'static,
-        capacity: usize) -> io::Result<Self> {
+        };
         let encoder: Arc<dyn Encode> = encoder.into();
         let worker_encoder = Arc::clone(&encoder);
         let dropped = Arc::new(AtomicUsize::new(0));
         let worker_dropped = Arc::clone(&dropped);
         let backlog = Arc::new(Mutex::new(Backlog::default()));
         let worker_backlog = Arc::clone(&backlog);
-        let (sender, receiver) = mpsc::sync_channel::<Rendered>(capacity);
+        let (sender, receiver) = mpsc::sync_channel::<Rendered>(QUEUE_CAPACITY);
         std::thread::Builder::new().name("unchained-console".into()).spawn(move || {
             while let Ok(record) = receiver.recv() {
                 worker_backlog.lock().unwrap_or_else(|error| error.into_inner()).dequeued();

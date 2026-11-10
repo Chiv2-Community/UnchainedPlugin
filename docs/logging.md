@@ -1,475 +1,342 @@
 # Logging
 
-Use a custom log4rs YAML file to control which plugin messages appear in the
-console and log files. No configuration file is required for the defaults.
-
-For machine-readable output, see [structured logging](#structured-logging).
-Contributors: see [emitting diagnostics](#contributor-guide-emitting-diagnostics).
+Logging uses [log4rs](https://docs.rs/log4rs/latest/log4rs/config/index.html).
+Appenders choose destinations, encoders format records, and loggers select targets.
 
 ## Defaults
 
-The plugin selects one configuration at startup, in this order:
+The plugin loads one configuration at startup, in this order:
 
 1. The file passed with `--log4rs-yaml`.
-2. `log4rs.yaml` in the game or server process's current working directory.
-3. The [embedded `log4rs.default.yaml`](../src/logging/log4rs/log4rs.default.yaml).
+2. `log4rs.yaml` in the process's working directory.
+3. The [embedded configuration](../src/logging/log4rs/log4rs.default.yaml).
 
-If the provided log4rs.yaml is malformed, an error is printed and execution resumes with the default logging configuration.
+Copy the embedded configuration to customize it. Pass its path with
+`--log4rs-yaml "C:\path\log4rs.yaml"` and restart after editing.
+A configuration error is reported on stderr; startup pauses for five seconds,
+then loads the embedded configuration.
 
-Startup logs parsed CLI settings at DEBUG. `CLIArgs::Debug` masks passwords,
-Discord tokens, backend URLs, and all INI/passthrough contents (counts only).
-Raw command lines are not logged. Other structured fields remain visible;
-do not put credentials in profile names, paths, MOTDs, or other public settings.
+The root level is `debug`. The diagnostic console appender has a `debug` threshold.
+Chat loggers use `info`. Console timestamps use `HH:MM:SS`; text files use
+ISO 8601 with a timezone offset, such as `2026-11-10T14:30:00-06:00`.
+Both formats have second precision.
 
 ### Log location
 
-The default main file is:
+Default files are `unchained.log`, `chat.log`, and `kismet.log` in the launched
+profile's saved directory. Most users use:
 
 ```text
-%LOCALAPPDATA%\Chivalry 2\Saved_<saveddirsuffix>\Logs\unchained.log
+%LOCALAPPDATA%\Chivalry 2\Saved_unchained\Logs
 ```
 
-For example, `--saveddirsuffix Steam` gives:
+The directory follows `--saveddirsuffix`. Server hosts can have several
+`Saved_<suffix>` folders; use the suffix passed to the relevant server process.
+For example, `--saveddirsuffix MyServer` uses:
 
 ```text
-%LOCALAPPDATA%\Chivalry 2\Saved_Steam\Logs\unchained.log
+%LOCALAPPDATA%\Chivalry 2\Saved_MyServer\Logs
 ```
 
-Use the Windows account running the game or server when locating `%LOCALAPPDATA%`.
-The game's launch arguments may specify a different saved-directory suffix.
-Chat records are written to `chat.log` in the same directory.
+Use the Windows account running the process to resolve `%LOCALAPPDATA%`.
+If that variable is unavailable, files use `Logs` in the working directory.
 
-### Console colors
+Custom configurations can use these path placeholders:
 
-| Level | Header | Message body |
-| --- | --- | --- |
-| ERROR | Pastel red | Light gray (`#eeeeee`) |
-| WARN | Pastel yellow | Light gray (`#eeeeee`) |
-| INFO | Muted pastel blue | Light gray (`#eeeeee`) |
-| DEBUG | Dark gray (`#808080`) | Dark gray |
-| TRACE | Darker gray (`#5c5c5c`) | Darker gray |
+| Placeholder | Default file |
+| --- | --- |
+| `__UNCHAINED_LOG_PATH__` | `unchained.log` |
+| `__CHAT_LOG_PATH__` | `chat.log` |
+| `__KISMET_LOG_PATH__` | `kismet.log` |
 
-Message color codes are preserved and can override the body color. Pastel shades
-use RGB terminal colors when supported. Wine's graphical console and legacy
-Windows consoles instead receive a matching 16-color palette when the plugin
-owns the console. Wine needs a dedicated console created with temporary,
-application-specific registry defaults; previous values are restored immediately
-after creation, and global console defaults are not changed. Other programs sharing
-that console see the same palette, including altered shades for embedded colors.
-Shared consoles, additional palettes, and rejected palette changes use the
-nearest available console colors without changing the palette.
-The default file appender and redirected output receive no added console colors;
-color codes already present in a message are not stripped.
+### Stdio
 
-The startup banner is an ordinary `INFO` log record. It follows configured
-appenders, encoders, and filters instead of writing directly to stdout.
+`--attach-stdio` uses inherited stdout/stderr or attaches to the parent console.
+The calling program supplies any pipes or file redirection.
+`--no-spawn-console` suppresses console allocation independently.
+
+## Chat Logging
+
+Chat records are written at `INFO` to `chat.log` in the launched profile's
+[log directory](#log-location). Most users will find it at:
+
+```text
+%LOCALAPPDATA%\Chivalry 2\Saved_unchained\Logs\chat.log
+```
+
+### Custom chat encoder
+
+Custom YAML replaces the entire default configuration. Start with a copy of the
+[embedded configuration](../src/logging/log4rs/log4rs.default.yaml).
+Save it as `log4rs.yaml` in the Chivalry 2 process's working directory, or use
+`--log4rs-yaml chat-logging.yaml` for another file in that directory.
+
+This fragment shows only the chat sections. Merge them into your copied configuration,
+retaining the other appenders, loggers, and root settings:
+
+```yaml
+appenders:
+  chat:
+    kind: file
+    path: "__CHAT_LOG_PATH__"
+    encoder:
+      kind: pattern
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender)} - {m}{n}"
+loggers:
+  chat_log:
+    level: info
+    appenders:
+      - chat
+    additive: false
+  "chat_log::system":
+    level: info
+    appenders:
+      - chat
+    additive: false
+  "chat_log::system::sender":
+    level: info
+    appenders:
+      - chat
+    additive: false
+```
+
+The `chat_log` logger routes chat and its child targets to the `chat` appender.
+`additive: false` keeps this human-readable stream separate from root output.
+This custom pattern includes the sender field for every record; senderless system
+records leave it empty.
+
+### Targets
+
+| Target | Records |
+| --- | --- |
+| `chat_log` | Other native player channels; parent for all chat targets. |
+| `chat_log::all` | Native global player chat and known-sender AllSay system chat. |
+| `chat_log::team` | Native TeamSay player chat. |
+| `chat_log::system` | Senderless native system chat. |
+| `chat_log::system::sender` | Other native system chat with a known sender. |
+| `chat_log::external` | Discord chat. |
+
+### Attributes
+
+Chat attributes are available through `{K(name)}` in patterns and under `attributes`
+in JSON records:
+
+| Attribute | Value |
+| --- | --- |
+| `chat` | Channel, such as `AllSay`, `TeamSay`, `Spectator`, `ServerSay`, or Discord's `Global`. |
+| `sender` | Sender name; empty for senderless system records. |
+| `source` | `Game` or `Discord`. |
+| `chat_kind` | `player`, `system`, or `external`. |
+| `label` | Uppercase display label, such as `ALL`, `MASON`, `SPECTATOR`, `SYSTEM`, or `DISCORD`. |
+| `faction` | Native faction (`Agatha`, `Mason`, `Tenosia`, `FFA`, `None`, `All`, `MAX`, `Unknown`), `System`, or `Discord`. |
 
 ## Structured logging
 
-In your logging configuration, select the standard
-[log4rs JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html)
-on each console or file appender that should emit JSON:
+Select the [log4rs JSON encoder](https://docs.rs/log4rs/latest/log4rs/encode/json/index.html)
+on each appender that should write structured records:
 
 ```yaml
 encoder:
   kind: json
 ```
 
-Each configured sink emits one JSON payload per line. Standard log4rs fields
-include `time`, `level`, `message`, source locations, and thread metadata, all at
-the root. Plugin macros add the enclosing function name as
-`attributes.enclosing_function`.
+Each record is one JSON line with log4rs fields and an `attributes` object for
+plugin metadata. Chat records retain their raw bodies and full attribute values.
+Root appenders with `kind: json` also receive isolated chat records once;
+their filters still apply.
 
-Chat records use `chat_log` or its `all`, `team`, `system`, and `external` child targets.
-Native global player chat uses `chat_log::all`, inheriting the general chat appenders.
-JSON receives the raw message body,
-without display tags or color metadata. Shared root appenders using `kind: json`
-also receive chat records, even when `chat_log` has `additive: false`.
-Explicit appender filters still apply.
-
-Chat records add `attributes.chat`, such as `AllSay`, `TeamSay`, `Spectator`, or `ServerSay`.
-Chat records also include `attributes.sender`, `attributes.source`, and
-`attributes.chat_kind` (`player`, `system`, or `external`). `attributes.label`
-is uppercase display text: `ALL`, the team faction (`MASON`, etc.), `SYSTEM`, or `DISCORD`.
-AllSay always uses `ALL`, regardless of faction. TeamSay uses the faction label;
-spectators (`None`) use the full label `SPECTATOR`, displayed as `SPECT` by the pattern.
-`attributes.faction` selects colors: native `Agatha`, `Mason`, `Tenosia`,
-`FFA`, `None`, `All`, `MAX`, or `Unknown`, plus `System` and `Discord` for those sources.
-Player-chat hooks read the sender's faction
-directly from player state, including in global chat. Only non-command global
-player chat is forwarded to Discord; other captured chat stays local.
-
-Human-readable chat uses `date | channel | sender - message`. Team chat replaces
-the channel label with the faction: `date | MASON | sender - message`. Dates include seconds,
-without milliseconds; chat omits log level and function name.
-Console system output is `time | SYSTE | message`, or `time | SYSTE | sender - message`
-when its sender is known. Native messages without sender metadata leave `sender` empty.
-Console labels are right-aligned to exactly five characters, truncating on the right:
-`ALL` becomes `  ALL`, `SYSTEM` becomes `SYSTE`. File labels use a nine-character
-minimum width, left-padded to fit `SPECTATOR`, without truncation. Structured fields
-retain their full values without padding or truncation.
-Server console and RCON `Say` use the plugin's command path and broadcast
-`[Console] message` in-game. System capture recognizes that prefix as sender metadata;
-Console `Say` is an AllSay: the console shows `  ALL | Console - message` without the
-prefix in the message body. Other known-sender system messages keep the system label.
-All console appenders use `HH:MM:SS`. Text file appenders use ISO 8601 timestamps
-with timezone offsets, for example `2026-11-10T14:30:00-06:00`.
-Chat labels use `team_*` colors selected by the full `label`. `ALL` is always green,
-regardless of the sender's faction; `SPECTATOR` is white.
-Usernames use sender faction colors independently of the channel label, including Discord and spectators.
-`None` uses `team_none`
-and unknown factions use `team_unknown`; `team_max` uses the unknown-faction color.
-Message text stays uncolored. System output uses `SYSTEM` and `team_system`.
-Chat's `|` and `-` separators use the `debug` palette color.
-Discord bridge messages use `DISCORD` as their channel label, colored with
-`team_discord` (purple); in-game delivery remains `[Discord] username: message`.
-
-For example, a Mason team message includes:
-
-```json
-{"attributes":{"chat":"TeamSay","faction":"Mason","label":"MASON"}}
-```
-
-AllSay, TeamSay, and Discord share the same label-based pattern:
-
-```yaml
-pattern: "{K(label)} | {K(sender)} - {m}{n}"
-```
-
-`--attach-stdio` reuses inherited stdout/stderr or attaches to the parent console;
-it does not create redirection. The calling program supplies pipes or files when
-capture is needed. `--no-spawn-console` independently suppresses console allocation.
-**Some initialization output is not in the configured format**, including
-diagnostics written before log4rs initializes. Stdio may also contain game and
-dependency output, so consumers may encounter non-JSON lines alongside JSON logs.
+See [chat targets](#targets) and [chat attributes](#attributes) for routing and metadata.
 
 ## Format log lines
 
-Both `palette` and `pattern` encoders accept an `inline-removals` list of regexes:
+The plugin extends the [log4rs pattern syntax](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
+with these fields:
+
+| Field | Value |
+| --- | --- |
+| `{fn}` | Enclosing function's leaf name; closures use their enclosing function. |
+| `{sm}` | Abbreviated source module, limited to its last 32 Unicode characters. |
+
+`{fn}` displays `???` for records without function metadata.
+`{sm}` abbreviates parent segments by word initials:
+`UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
+Both fields support log4rs nesting, escaping, alignment, and truncation.
+The extensions apply to `pattern` and `palette` encoders in console, file, and
+rolling-file appenders.
+
+Plugin metadata is available through `{K(name)}` and JSON `attributes`:
+
+| Attribute | Value |
+| --- | --- |
+| `enclosing_function` | Enclosing function name captured by plugin logging macros. |
+| `inline_colors` | JSON-encoded palette switches with UTF-8 byte offsets; used by the palette encoder. |
+| `undefined_palette` | Missing palette name reported by startup validation. |
+
+Chat metadata is listed under [chat attributes](#attributes).
+
+### Inline removals
+
+Both encoders accept regexes that remove matches from the rendered line:
 
 ```yaml
 encoder:
-  kind: palette
+  kind: pattern
   inline-removals:
     - _detour_fkt
   pattern: "{fn:<32.32} - {m}{n}"
 ```
 
-Expressions are combined with alternation and compiled once per encoder. All
-non-overlapping matches are removed from the entire rendered line, after padding
-and width truncation. Matches can cross field and color boundaries; console colors
-are preserved. Matching is case-sensitive unless the regex overrides it. Invalid
-regexes fail configuration loading. Omit the list or use `[]` to disable removal.
-Raw records and JSON output are unchanged. Defaults remove `_detour_fkt` anywhere
-in console and file diagnostic lines, including message text. This is display
-cleanup, not a redaction guarantee: width truncation happens first.
+Expressions are combined with alternation and compiled once per encoder. Removal
+runs after padding and truncation, across fields and color changes. Regex matching
+is case-sensitive by default. Invalid expressions reject the configuration.
+An empty list disables removal.
 
-Chat uses ordinary `palette` and `pattern` encoders. Its layouts are configured in
-the [embedded configuration](../src/logging/log4rs/log4rs.default.yaml), with
-`additive: false` separating human-readable chat from ordinary logs.
-Palette names can use structured fields, for example
-`{palette(team_{K(faction)(Unknown)})}`. Missing dynamic names restore the normal text color;
-record values are never parsed as formatting instructions.
+The defaults remove `_detour_fkt` from diagnostic lines. This changes display text;
+raw records and JSON retain their original values. Truncation can leave a partial
+suffix. Redact credentials separately before sharing logs.
 
-The `palette` encoder combines log4rs patterns with a named color table:
-
-- When a string is used for a palette entry, it sets the foreground color while
-  the background color remains the terminal default.
-
-  ```yaml
-  accent: "#f2cc78"
-  ```
-
-- Object entries specify `foreground`, `background`, or both. At least one must
-  be a color or `inherit`.
-
-  ```yaml
-  highlighted: {foreground: "#f2cc78", background: "#202020"}
-  ```
-
-- When foreground or background is omitted from the object or set to `null`,
-  the terminal default is used.
-
-  ```yaml
-  background_only: {background: "#202020"}
-  default_background: {foreground: "#f2cc78", background: null}
-  ```
-
-- `inherit` keeps that channel's current color.
-
-  ```yaml
-  keep_background: {foreground: "#f2cc78", background: inherit}
-  keep_foreground: {foreground: inherit, background: "#202020"}
-  ```
-
-- A null palette entry uses the terminal's default colors.
-
-  ```yaml
-  normal: null
-  ```
-
-- RGB terminals use exact colors. On legacy consoles, the background will use
-  the nearest log4rs background color.
-
-  ```yaml
-  panel: {background: "#2F2F2F"}
-  ```
-
-`{palette(name)}` switches colors
-until the next directive or end of the record; `{palette()}` restores normal text.
-Names are ASCII case-insensitive. `{l}` or `{level}` in a name selects a color by
-severity, so `{palette({l}_body)}` selects `error_body`, `warn_body`, etc.
-References are resolved at startup; unknown names reject the configuration.
-Directives must be outside other formatters. An explicit `palette` replaces the
-default table; omit it to use the defaults. Legacy consoles approximate colors
-beyond their available slots.
-Console coloring respects `NO_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` through
-log4rs. File output has no added colors. Restart after editing.
-
-See the [default log4rs configuration](../src/logging/log4rs/log4rs.default.yaml)
-for the shipped patterns and colors.
-
-The `{sm}` field abbreviates parent module segments using
-case-preserving word initials: `foo_bar` becomes `fb`, `UnchainedPlugin` becomes
-`UP`, and `HTTPServer` becomes `HS`. The final segment is not abbreviated.
-The resulting label keeps its last 32 Unicode characters, dropping any excess on the left:
-`UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
-
-Console and file patterns support the same fields, including `{sm}`, `{fn}`,
-`{M}`, `{t}`, source locations, and user key/value fields. This includes `file`
-and `rolling_file` appenders, with explicit or omitted `kind: pattern`.
-Nested formatters, escaping, and width specifications such as `{sm:>16}` work
-in both. To include a module prefix, edit `pattern`.
-`kind: pattern` uses a single `pattern` field and does not apply the console's
-pastel severity styling. `{sm}` is our extension, not a built-in log4rs field;
-`{M}` and `{t}` retain their standard meanings.
-
-The `{fn}` field displays the enclosing
-named function's leaf. Methods show only their name,
-without the type or module. Closures and async blocks use their enclosing named
-function, not `{{closure}}`.
-Records from dependencies without function metadata show `???`.
-Like `{sm}`, `{fn}` supports nesting, escaping (`{{fn}}`), and width (`{fn:>20}`)
-through the built-in log4rs key/value formatter.
-
-For example, replace a file appender's encoder block to include the short module
-and function field without severity colors:
-
-```yaml
-encoder:
-  kind: pattern
-  pattern: "[{d(%H:%M:%S)} {l:>5}] [{sm}::{fn}] {m}{n}"
-```
-
-See the [log4rs pattern reference](https://docs.rs/log4rs/latest/log4rs/encode/pattern/index.html)
-for available fields and formatting options.
-
-### Comprehensive example
-
-This encoder uses the default severity pattern and adds named palette entries:
+### Palette entries
 
 ```yaml
 encoder:
   kind: palette
-  pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
+  pattern: "{palette({l})}{l:>5}{palette()} {m}{n}"
   palette:
     error: "#f28b82"
     warn: "#f2cc78"
     info: "#8cb4e1"
     debug: "#808080"
     trace: "#5c5c5c"
-    error_body: "#eeeeee"
-    warn_body: "#eeeeee"
-    info_body: "#eeeeee"
-    debug_body: "#808080"
-    trace_body: "#5c5c5c"
-    title: {foreground: "#D09128", background: "#2F2F2F"}
-    subtitle: {foreground: "#D09128", background: "#2F2F2F"}
-    accent: "#f2cc78"
-    highlighted: {foreground: "#f2cc78", background: "#202020"}
-    background_only: {background: "#202020"}
-    default_background: {foreground: "#f2cc78", background: null}
-    keep_background: {foreground: "#f2cc78", background: inherit}
-    keep_foreground: {foreground: inherit, background: "#202020"}
-    normal: null
 ```
+
+`{palette(name)}` selects a color until the next switch or record end.
+`{palette()}` restores normal text. Names are ASCII case-insensitive.
+`{l}` or `{level}` selects a severity-specific entry.
+
+| Entry | Effect |
+| --- | --- |
+| `accent: "#f2cc78"` | Foreground color with the default background. |
+| `panel: {foreground: "#f2cc78", background: "#202020"}` | Foreground and background colors. |
+| `panel: {background: "#202020"}` | Background color with the default foreground. |
+| `accent: {foreground: "#f2cc78", background: inherit}` | Foreground color retaining the current background. |
+| `normal: null` | Default terminal colors. |
+
+Omitted or null object channels use terminal defaults; `inherit` retains the
+current channel. Objects require at least one color or `inherit` value.
+Explicit palettes replace the default table. Static names are validated at startup.
+Dynamic names can use attributes, such as `{palette(team_{K(faction)})}`;
+missing dynamic names restore normal text.
+Place palette switches outside other formatters. Legacy consoles approximate RGB colors.
 
 ## Set log levels
 
-Levels are `off`, `error`, `warn`, `info`, `debug`, and `trace`. A level includes
-messages at that severity and higher: `warn` includes WARN and ERROR; `trace`
-includes every severity. `off` disables the selected namespace.
+Levels are `off`, `error`, `warn`, `info`, `debug`, and `trace`.
+Each level includes higher severities. `off` disables the target.
 
-Add namespace entries under the existing `loggers:` mapping. For example:
+Merge entries into the existing `loggers` mapping:
 
 ```yaml
 loggers:
-  # Keep the existing dependency entries here too.
   "UnchainedPlugin::features::server_registration":
     level: info
   "UnchainedPlugin::modules::vote":
     level: warn
-  "UnchainedPlugin::resolvers::messages::client_message::game_chat":
+  "chat_log::team":
     level: off
 ```
 
-These are additions to your copied file, not a complete configuration. Do not
-create a second `loggers:` mapping.
-
-A namespace setting applies to its descendants unless a more specific setting
-overrides it. For example, `UnchainedPlugin::modules::discord` controls all Discord
-modules, while `UnchainedPlugin::modules::discord::event_log` controls just the
-event log. Names are case-sensitive; use full target namespaces, not the shortened
-console names. Both console and file output show source modules by default;
-explicit targets can differ. Add `{t}` to a file pattern to inspect those targets.
-
-Changing `root.level` changes the fallback for every namespace without a more
-specific override, including dependencies. To change only plugin output, set
-`UnchainedPlugin` under `loggers` instead.
+Target names are case-sensitive. A setting covers descendants unless a more
+specific logger overrides it. Use `{t}` to inspect full targets.
+Set `UnchainedPlugin` to change plugin diagnostics; `root.level` also affects dependencies.
+Chat uses the separate `chat_log` target family.
 
 ### Enable TRACE output
 
-To trace combat events without enabling trace everywhere, add this entry under
-`loggers`:
+Set the desired target to `trace`:
 
 ```yaml
 "UnchainedPlugin::resolvers::gameplay":
   level: trace
 ```
 
-For console output, also change the existing console threshold:
-
-```yaml
-appenders:
-  console:
-    kind: console
-    filters:
-      - kind: threshold
-        level: trace
-    encoder:
-      kind: palette
-```
-
-Keep the other appenders and root settings in your copied file. Both changes are
-needed to see these TRACE records on the console. The default file appender has
-no threshold filter, so enabled TRACE records already reach `unchained.log`.
-
-Enabling a level does not itself generate messages: reproduce the action you
-want to investigate. Logging settings cannot enable a feature missing from your
-plugin build.
+For console output, also change the existing console threshold to `trace`.
+The default file appender accepts every enabled severity.
+Restart and reproduce the relevant action.
 
 ## Namespace reference
 
-All namespaces below default to **`debug`**, inherited from the root. This lists
-the plugin's current logging targets and their parent groups. Modules with no
-log messages are omitted. Some targets emit only when their feature is enabled
-or the relevant action occurs.
+Plugin diagnostic targets inherit `debug` from the default root.
+Features emit records when enabled and exercised.
 
-### Parent groups
-
-| Namespace | Controls |
+| Target or group | Records |
 | --- | --- |
-| `UnchainedPlugin` | All plugin logs, including startup, initialization, and patch status. |
-| `UnchainedPlugin::events` | Event and broadcast diagnostics. |
-| `UnchainedPlugin::features` | Discord, mod management, remote console, and server registration. |
+| `UnchainedPlugin` | Startup, initialization, patches, and hooks; parent for plugin diagnostics. |
+| `UnchainedPlugin::commands` | Command argument parsing failures. |
+| `UnchainedPlugin::events::broadcast_message::console` | Broadcast text at TRACE. |
+| `UnchainedPlugin::features::discord` | Discord connections, HTTP delivery, rate limits, and outbound queues. |
+| `UnchainedPlugin::features::mod_management` | Mod discovery, spawning, and settings. |
+| `UnchainedPlugin::features::rcon` | RCON listener, commands, and connection failures. |
+| `UnchainedPlugin::features::server_registration` | Server discovery, registration, authentication, and heartbeats. |
 | `UnchainedPlugin::game` | Game-state access and engine helpers. |
-| `UnchainedPlugin::modules` | Commands, chat, votes, and Discord modules. |
-| `UnchainedPlugin::modules::discord` | Discord admin alerts, dashboard, and event log. |
-| `UnchainedPlugin::modules::votes` | Individual vote actions. |
-| `UnchainedPlugin::resolvers` | Game integration, asset loading, chat, combat, and map transitions. |
-| `UnchainedPlugin::tools` | Logging setup, startup arguments, and low-level initialization. |
-
-### Individual targets
-
-| Namespace | What it reports |
-| --- | --- |
-| `UnchainedPlugin::commands` | Invalid command arguments and command parsing failures. |
-| `UnchainedPlugin::events::broadcast_message::console` | Broadcast messages sent to the console. |
-| `UnchainedPlugin::events::models` | Unknown chat types and fallback handling. |
-| `UnchainedPlugin::features::discord` | Discord connection, channel configuration, and message delivery failures. |
-| `UnchainedPlugin::features::mod_management` | Mod discovery, spawning, enabled mods, and saved mod settings. |
-| `UnchainedPlugin::features::rcon` | Remote-console listener, received commands, and connection failures. |
-| `UnchainedPlugin::features::server_registration` | Server discovery, listing registration, authentication, and heartbeats. |
-| `UnchainedPlugin::game::chivalry2` | Game-state access failures, player counts, and in-game message delivery. |
-| `UnchainedPlugin::game::engine` | Asset-name and engine-interface lookup failures. |
-| `UnchainedPlugin::modules::chat` | Chat messages handled by the chat module. |
-| `UnchainedPlugin::modules::command` | Executed commands and generated command help. |
-| `UnchainedPlugin::modules::discord::admin_alert` | Admin-alert configuration problems. |
-| `UnchainedPlugin::modules::discord::dashboard` | Discord dashboard configuration problems. |
-| `UnchainedPlugin::modules::discord::event_log` | Discord event-log queue overload and dropped events. |
-| `UnchainedPlugin::modules::game_info` | Requested game/player details and unavailable game state. |
-| `UnchainedPlugin::modules::mod_dump` | Saving the mod registry to a file. |
-| `UnchainedPlugin::modules::mod_list` | Mod-list refreshes and scans. |
+| `UnchainedPlugin::logging::console` | Console attachment failures. |
+| `UnchainedPlugin::logging::log4rs` | Configuration errors, palette warnings, panics, and console drop warnings. |
+| `UnchainedPlugin::modules::command` | Command execution and generated help. |
+| `UnchainedPlugin::modules::discord` | Discord module configuration. |
+| `UnchainedPlugin::modules::game_info` | Requested game and player details. |
+| `UnchainedPlugin::modules::mod_dump` | Mod-registry file output. |
+| `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
-| `UnchainedPlugin::modules::votes::votekick` | Player kicks performed by a vote. |
-| `UnchainedPlugin::resolvers::admin_control` | In-game administration commands being executed. |
+| `UnchainedPlugin::modules::votes` | Vote actions. |
+| `UnchainedPlugin::resolvers::admin_control` | Native administration commands. |
 | `UnchainedPlugin::resolvers::asset_loading` | Save-game loading and saving. |
-| `UnchainedPlugin::resolvers::asset_registry` | Asset discovery, class lookups, and object loading. |
-| `UnchainedPlugin::resolvers::backend_hooks` | Backend ban checks, player connections, and departures. |
-| `UnchainedPlugin::resolvers::config_overrides` | Per-map/profile INI override selection; requires a build with `config_overrides_verbose_hooks`. |
-| `UnchainedPlugin::resolvers::desync` | Blocked game events and dedicated-server compatibility checks. |
-| `UnchainedPlugin::resolvers::etc_hooks` | Map summaries, travel, and assorted game calls; also override-load warnings in verbose builds. |
-| `UnchainedPlugin::resolvers::gameplay` | Combat actor validation and TRACE details for damage and kills. |
-| `UnchainedPlugin::resolvers::getpost_requests` | Backend request handling and request-function discovery. |
-| `UnchainedPlugin::resolvers::messages` | Game console output and chat-broadcast calls; also controls the chat targets below. |
-| `UnchainedPlugin::resolvers::messages::client_message` | Parent for received player chat and system messages. |
-| `UnchainedPlugin::resolvers::messages::client_message::game_chat` | Received player chat messages. |
-| `UnchainedPlugin::resolvers::messages::client_message::system_chat` | Received server/system messages, MOTD, and chat parsing warnings. |
-| `UnchainedPlugin::resolvers::messages::kismet_log` | Blueprint execution messages; requires a build with `kismet_log`. |
-| `UnchainedPlugin::resolvers::unchained_integration` | Engine startup, game-thread jobs, map loading, and match state. |
-| `UnchainedPlugin::scan` | Signature scanning, detected game builds, and discovered offsets. |
-| `UnchainedPlugin::seh` | Windows exception diagnostics and stack traces. |
-| `UnchainedPlugin::tools::hook_globals` | Game integration initialization and TRACE dumps of its state. |
-| `UnchainedPlugin::logging::log4rs` | Rust panic reports and backtraces after logging starts. |
-| `UnchainedPlugin::tools::pdb_scan` | Function-symbol lookups; requires a build with `with_pdb`. |
+| `UnchainedPlugin::resolvers::asset_registry` | Asset and object lookups. |
+| `UnchainedPlugin::resolvers::backend_hooks` | Ban checks, player connections, and departures. |
+| `UnchainedPlugin::resolvers::config_overrides` | Profile selection in verbose builds. |
+| `UnchainedPlugin::resolvers::desync` | Blocked events and dedicated-server compatibility. |
+| `UnchainedPlugin::resolvers::etc_hooks` | Travel, game calls, and verbose override warnings. |
+| `UnchainedPlugin::resolvers::gameplay` | Combat validation and damage/kill TRACE details. |
+| `UnchainedPlugin::resolvers::getpost_requests` | Backend request handling. |
+| `UnchainedPlugin::resolvers::messages` | Native console output and invalid native chat channels. |
+| `UnchainedPlugin::resolvers::messages::kismet_log` | Blueprint execution messages in `kismet_log` builds. |
+| `UnchainedPlugin::resolvers::unchained_integration` | Engine startup, game-thread jobs, maps, and match state. |
+| `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
+| `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
+| `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |
+| `UnchainedPlugin::tools::pdb_scan` | Symbol lookups in `with_pdb` builds. |
 
-Older custom configurations using `function`, `RCON`, `game_chat`, or
-`system_chat` must use the full namespace names above instead.
+Chat metadata and routing are listed under [Chat Logging](#chat-logging).
 
 ## Troubleshooting
 
-- **No TRACE in the console:** enable `trace` for the target and lower the console
-  threshold to `trace`. Restart, then reproduce the action.
-- **A custom file is rejected:** check startup stderr or `unchained.log` for the
-  file name and full error. The plugin pauses for five seconds, then uses the
-  embedded defaults. Fix the file and restart to try it again. To stop loading it,
-  remove `--log4rs-yaml` and rename or remove CWD `log4rs.yaml`.
-- **Logging still cannot start:** fallback requires the embedded configuration's
-  appenders to initialize successfully. Check stderr for default log-file path
-  or permission errors.
-- **No file output:** check the server account, saved-directory suffix, and write
-  permissions. If `%LOCALAPPDATA%` is unavailable, the default directory falls
-  back to `Logs` under the process's working directory.
-- **Too much output:** set the relevant namespace to `info` or `warn`. Leave
-  dependency filters in place when diagnosing a plugin module.
+- **Missing console TRACE:** set both the target level and console threshold to `trace`.
+- **Rejected configuration:** read stderr or `unchained.log`, fix the reported error, and restart.
+- **File initialization failure:** check the process account, resolved path, and write permissions.
+- **Excess output:** lower the relevant target to `info` or `warn` and retain dependency filters.
 
-Diagnostics emitted before logging initializes are not controlled by these
-namespace settings.
-
-Logs can include player names, network addresses, command arguments, and
-credentials in diagnostic output. Review and redact logs before sharing them;
-enable detailed logging only where needed.
+Startup records include CLI settings with passwords, tokens, and backend URLs
+masked; INI and passthrough arguments are represented by counts.
+Logs can contain player names, network addresses, command arguments, and credentials
+from other diagnostics. Review and redact logs before sharing them.
 
 ## Contributor guide: emitting diagnostics
 
-Use `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!` for plugin
-diagnostics, including hooks. The logging module brings them into scope before
-other plugin modules. Inside declarative macro definitions use `$crate::sinfo!`
-and the corresponding severities; external binaries import from `UnchainedPlugin`.
-Proc-generated diagnostics retain `crate::` paths for consumer resolution without
-depending on lexical macro imports.
+Use `sinfo!`, `swarn!`, `serror!`, `sdebug!`, and `strace!`.
+The logging module brings these macros into scope before callers.
+Declarative macros use `$crate::sinfo!` and corresponding severities;
+external binaries import them from `UnchainedPlugin`.
 
-The macros capture `enclosing_function` in the attributes for structured logging
-and the `{fn}` log format string.
+Each macro captures the enclosing function for `{fn}` and the JSON attribute
+`enclosing_function`. Add structured values before the semicolon:
 
-For other appenders, routing, and format options, see the
-[log4rs configuration reference](https://docs.rs/log4rs/latest/log4rs/config/index.html).
+```rust
+sinfo!(mod_count = count; "Loaded {} mods", count);
+```
 
 ### Inline color changes
 
-`palette("name")` selects a configured color; `palette()` restores normal text color.
-Unknown names also restore normal text color.
-Start with `palette(...)` or a grouped segment. Group format strings with their arguments.
+`palette("name")` selects a configured color; `palette()` restores normal text.
+Unknown inline names restore normal text and literal references produce startup warnings.
+Start with a palette switch or grouped segment; group format strings with their arguments:
 
 ```rust
 sinfo!(palette("warn"), "Warning", palette(), " normal text");

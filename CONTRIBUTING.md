@@ -207,17 +207,14 @@ let _ = game_event_bus.subscribe(Box::new(my_subscriber)).await;
 
 ---
 
-## Logs Location
+## Logging
 
-If you need to debug or check the plugin's output, you can find the logs in the following directory:
-
-`%localappdata%/Chivalry 2/Saved_{saveddirsuffix}/Logs`
-
-Replace `{saveddirsuffix}` with the appropriate suffix for your installation (e.g., `Steam` or `Epic`).
+See [log locations](docs/logging.md#log-location) and
+[chat logging](docs/logging.md#chat-logging) for paths, formats, and chat-only encoders.
 
 ### Emitting diagnostics
 
-Use the shared logging macros rather than direct `log::*` calls or `println!`.
+Use the shared logging macros.
 See [emitting diagnostics](docs/logging.md#contributor-guide-emitting-diagnostics)
 for macro imports and function metadata.
 
@@ -228,9 +225,7 @@ macros are declared first too.
 
 ### Configuring output
 
-See the logging guide for [defaults and colors](docs/logging.md#defaults),
-[configuration selection](docs/logging.md#defaults),
+See the logging guide for [defaults and configuration selection](docs/logging.md#defaults),
 [structured logging](docs/logging.md#structured-logging),
 [patterns and function fields](docs/logging.md#format-log-lines), and
-[module filters](docs/logging.md#set-log-levels). The guide also covers TRACE
-thresholds and legacy target names; keep configuration examples there.
+[target levels](docs/logging.md#set-log-levels).
