@@ -1,0 +1,7 @@
+match-rotation:
+  - name: "First match"
+    description: "Display only"
+    profile: quiet
+    map: DisplayMap
+    mod-actors: ["ActorA", "ActorB"]
+  - profile: busy

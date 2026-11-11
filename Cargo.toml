@@ -51,7 +51,6 @@ default = [
         # "request_dummy_hooks",
         "syslog-client",
         # "config_overrides_verbose_hooks",
-        # "map_profiles",
         ]
 serde-resolvers = []
 image-elf = []
@@ -63,7 +62,6 @@ with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
 verbose_hooks = [] # print (some) hook triggers to console
 config_overrides_verbose_hooks = [] # print (config_override) hook triggers to console
-map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "reqwest", "get_if_addrs"] # register server with backend
@@ -143,6 +141,7 @@ emojis = "0.6"
 unicode-segmentation = "1.12"
 
 [dev-dependencies]
+rstest = { version = "0.26", default-features = false }
 tokio = { version = "1.0", features = ["test-util"] }
 [patch.crates-io]
 # Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.

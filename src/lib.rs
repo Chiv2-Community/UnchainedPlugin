@@ -5,6 +5,7 @@ pub mod logging;
 #[macro_use]
 pub mod macros;
 mod resolvers;
+mod config_overrides;
 pub mod scan;
 pub mod tools;
 mod ue;

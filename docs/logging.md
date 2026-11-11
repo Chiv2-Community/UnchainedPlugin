@@ -326,7 +326,7 @@ or the relevant action occurs.
 | `UnchainedPlugin::resolvers::asset_loading` | Save-game loading and saving. |
 | `UnchainedPlugin::resolvers::asset_registry` | Asset discovery, class lookups, and object loading. |
 | `UnchainedPlugin::resolvers::backend_hooks` | Backend ban checks, player connections, and departures. |
-| `UnchainedPlugin::resolvers::config_overrides` | Per-map/profile INI override selection; requires a build with `config_overrides_verbose_hooks`. |
+| `UnchainedPlugin::config_overrides` | Per-map/profile INI override selection; requires a build with `config_overrides_verbose_hooks`. |
 | `UnchainedPlugin::resolvers::desync` | Blocked game events and dedicated-server compatibility checks. |
 | `UnchainedPlugin::resolvers::etc_hooks` | Map summaries, travel, and assorted game calls; also override-load warnings in verbose builds. |
 | `UnchainedPlugin::resolvers::gameplay` | Combat actor validation and TRACE details for damage and kills. |
