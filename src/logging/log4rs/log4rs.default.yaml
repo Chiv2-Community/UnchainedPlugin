@@ -45,24 +45,24 @@ appenders:
     kind: console
     encoder:
       kind: palette
-      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(label)})}{K(label):>5.5}{palette(debug)} | {palette(team_{K(faction)})}{K(sender):<16}{palette(debug)} - {palette()}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(label)})}{K(label):<5.5}{palette(debug)} | {palette(team_{K(faction)})}{K(sender):<16}{palette(debug)} - {palette()}{m}{n}"
       palette: *console_palette
   chat_file:
     kind: file
     path: "__CHAT_LOG_PATH__"
     encoder:
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender):<16} - {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {K(sender):<16} - {m}{n}"
   chat_system_console:
     kind: console
     encoder:
       kind: palette
-      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(faction)})}{K(label):>5.5}{palette(debug)} | {palette()}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(faction)})}{K(label):<5.5}{palette(debug)} | {palette()}{m}{n}"
       palette: *console_palette
   chat_system_file:
     kind: file
     path: "__CHAT_LOG_PATH__"
     encoder:
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {m}{n}"
   kismet:
     kind: file
     path: "__KISMET_LOG_PATH__"

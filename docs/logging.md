@@ -81,7 +81,7 @@ appenders:
     path: "__CHAT_LOG_PATH__"
     encoder:
       kind: pattern
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):>9} | {K(sender):<16} - {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {K(sender):<16} - {m}{n}"
 loggers:
   chat_log:
     level: info
