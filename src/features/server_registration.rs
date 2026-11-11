@@ -537,7 +537,7 @@ impl RegistrationInner {
                 // Parse the response to get the new refresh_before timestamp
                 if let Ok(data) = r.json::<HeartbeatResponse>() {
                     if DEBUG_LOGGING { 
-                        sdebug!("HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
+                        strace!("HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
                             ident.id, start_time.elapsed().as_millis(), data.server.is_verified, data.refresh_before); 
                     }
                     Ok(data.refresh_before as u64)

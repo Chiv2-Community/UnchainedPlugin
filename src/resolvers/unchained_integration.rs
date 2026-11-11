@@ -191,7 +191,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut F
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UWorld),{
-    sinfo!["Triggered"];
+    sdebug!["Triggered"];
     match globals().world() {
         Some(current_world) => {
             if current_world != world {

@@ -64,7 +64,7 @@ define_pattern_resolver!(GetAssetsByClass,[
 // bool __thiscall UAssetRegistryImpl::GetAssetsByClass(UAssetRegistryImpl *this,FName param_1,TArray<> *param_2,bool param_3)
 CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
     // Debug code
-    sinfo!["Triggered! {}", ClassPathName];
+    sdebug!["Triggered! {}", ClassPathName];
     let res: bool;
     unsafe {
         res = CALL_ORIGINAL!(GetAssetsByClass(this_ptr, ClassPathName, OutAssetData, bSearchSubClasses));
@@ -110,7 +110,7 @@ define_pattern_resolver!(GetAssetRegistry_Helper,[
     ]);
 // TScriptInterface<> * __cdecl UAssetRegistryHelpers::GetAssetRegistry(TScriptInterface<> *__return_storage_ptr__)
 CREATE_HOOK!(GetAssetRegistry_Helper, CALLED,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
-    sinfo!["Triggered!"];
+    sdebug!["Triggered!"];
 });
 
 define_pattern_resolver!(FNameCtorWchar, Simple, ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]);
@@ -146,13 +146,13 @@ CREATE_HOOK!(StaticFindObject, CALLED, *mut UObject, (
 define_pattern_resolver!(GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
 // UObject* GetDefaultObject(bool bCreateIfNeeded = true) const
 CREATE_HOOK!(GetDefaultObject, CALLED, *mut UObject, (this_ptr: *mut UClass, create_if_needed: bool),{
-    sinfo!["Triggered!"];
+    sdebug!["Triggered!"];
 });
 
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
 // static void GetAllActorsOfClass(const UObject* WorldContextObject, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
 CREATE_HOOK!(GetAllActorsOfClass, CALLED, (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>),{
-    sinfo!["Triggered!"];
+    sdebug!["Triggered!"];
 });
 
 define_pattern_resolver!(StaticLoadObject,["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 28 FA FF FF 48 81 EC D8 06 00 00 48 8B 05 25 5E 9F 03 48 33 C4 48 89 85 C0 05 00 00 48"]);

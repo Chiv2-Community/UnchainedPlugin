@@ -95,7 +95,7 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
                     self.broadcaster.publish(
                         BroadcastMessage::new()
                             .title(crate::rich_text!("🗺️ Map Change"))
-                            .content(crate::rich_text!("Map changed to {}.", new_map_name))
+                            .content(crate::rich_text!("Starting match on {}.", new_map_name))
                             .color(0x5865F2)
                     );
                 }
