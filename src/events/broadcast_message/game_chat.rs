@@ -5,7 +5,29 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub struct InGameChatBroadcastSubscriber;
 
+// Readable to older clients; only localized system chat is decoded by the display hook.
+const BROADCAST_PREFIX: &str = "[Unchained broadcast] ";
+
+pub(crate) fn broadcast_parts(message: &str) -> Option<(&str, &str)> {
+    let (title, body) = message.strip_prefix(BROADCAST_PREFIX)?.split_once('\n')?;
+    if title.is_empty() || title.trim() != title || title.chars().any(char::is_control) {
+        return None;
+    }
+    Some((title, body))
+}
+
 impl InGameChatBroadcastSubscriber {
+    fn encode(event: &BroadcastMessage) -> String {
+        let (title, body) = event.game_chat_parts();
+        let title = title.map(|title| Self::strip_emojis(&title)).unwrap_or_default();
+        let body = Self::strip_emojis(&body);
+        if title.is_empty() {
+            body
+        } else {
+            format!("{BROADCAST_PREFIX}{title}\n{body}")
+        }
+    }
+
     fn strip_emojis(s: &str) -> String {
         let mut intermediate = String::new();
         for g in s.graphemes(true) {
@@ -41,15 +63,48 @@ impl Subscriber<BroadcastMessage> for InGameChatBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
-        let chat_message = event.to_game_chat();
-        let stripped_message = Self::strip_emojis(&chat_message);
-        crate::game::chivalry2::send_ingame_message(stripped_message, None);
+        crate::game::chivalry2::send_ingame_message(Self::encode(event), None);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn titled_broadcast_separates_sender_from_body() {
+        let message = BroadcastMessage::new()
+            .title(crate::rich_text!("🗺️ **Map Change**"))
+            .content("Starting match on Wardenglade.\nGood luck!")
+            .field("Mode", "FFA");
+        let encoded = InGameChatBroadcastSubscriber::encode(&message);
+        assert_eq!(broadcast_parts(&encoded), Some(("Map Change", "Starting match on Wardenglade. Good luck! Mode: FFA")));
+        assert!(encoded.contains("Map Change\nStarting match on Wardenglade."));
+        assert_eq!(message.to_plain_text(), "🗺️ Map Change\nStarting match on Wardenglade.\nGood luck!\nMode: FFA");
+    }
+
+    #[test]
+    fn untitled_and_empty_title_broadcasts_remain_plain() {
+        for title in [None, Some(""), Some("🗺️\n ")] {
+            let mut message = BroadcastMessage::new().content("Hello\nworld");
+            message.title = title.map(Into::into);
+            assert_eq!(InGameChatBroadcastSubscriber::encode(&message), "Hello world");
+        }
+    }
+
+    #[test]
+    fn broadcast_envelope_preserves_literal_markup_and_title_delimiters() {
+        let message = BroadcastMessage::new().title("Round: [End]\nNext")
+            .content("<literal> & !cmd quit");
+        let encoded = InGameChatBroadcastSubscriber::encode(&message);
+        let (sender, body) = broadcast_parts(&encoded).unwrap();
+        assert_eq!(sender, "Round: [End] Next");
+        assert_eq!(body, message.content_ref().unwrap().to_game_chat());
+        assert_eq!(broadcast_parts("[Unchained broadcast] Only title\n"), Some(("Only title", "")));
+        for malformed in ["Map Change\nbody", "[Unchained broadcast] No delimiter", "[Unchained broadcast] \nbody", "[Unchained broadcast] title\r\nbody"] {
+            assert!(broadcast_parts(malformed).is_none(), "{malformed:?}");
+        }
+    }
 
     #[test]
     fn test_strip_emojis() {

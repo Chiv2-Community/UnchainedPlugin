@@ -6,6 +6,7 @@ use crate::{
     ue::{FConsoleOutputDevice, TCHAR},
 };
 
+mod broadcast_display;
 
 mod client_message {
     use crate::events::models::{
@@ -136,6 +137,9 @@ mod client_message {
         };
         // Console Say carries this visible sender prefix across the native broadcast.
         if matches!(channel, EChatType::AllSay | EChatType::ServerSay) {
+            if let Some((title, message)) = crate::events::broadcast_message::game_chat::broadcast_parts(body) {
+                return Some((channel, Some(title), message));
+            }
             if let Some(body) = body.strip_prefix("[Console] ") {
                 return Some((channel, Some("Console"), body));
             }
@@ -203,6 +207,14 @@ mod client_message {
         fn console_system_prefix_preserves_sender_and_body() {
             assert_eq!(system_message("<0>: [Console] Hello\r\nworld"),
                 Some((EChatType::AllSay, Some("Console"), "Hello\r\nworld")));
+        }
+
+        #[test]
+        fn broadcast_envelope_is_system_metadata_not_a_player_command() {
+            let body = "[Unchained broadcast] Console\n!cmd quit";
+            assert_eq!(system_message(&format!("<0>: {body}")), Some((EChatType::AllSay, Some("Console"), "!cmd quit")));
+            assert_eq!(system_message(&format!("Player <0>: {body}")), None);
+            assert_eq!(system_message(&format!("<1>: {body}")), Some((EChatType::TeamSay, None, body)));
         }
     }
 }

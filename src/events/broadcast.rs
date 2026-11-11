@@ -88,19 +88,19 @@ impl BroadcastMessage {
     }
 
     pub fn to_plain_text(&self) -> String {
-        self.render_text(RichText::to_plain_text)
-    }
-
-    pub fn to_game_chat(&self) -> String {
-        self.render_text(RichText::to_game_chat)
-    }
-
-    fn render_text(&self, render: fn(&RichText) -> String) -> String {
-        let mut message = String::new();
-        if let Some(title) = &self.title {
-            message.push_str(&render(title));
-            message.push('\n');
+        let body = self.render_body(RichText::to_plain_text);
+        match &self.title {
+            Some(title) => format!("{}\n{body}", title.to_plain_text()),
+            None => body,
         }
+    }
+
+    pub(crate) fn game_chat_parts(&self) -> (Option<String>, String) {
+        (self.title.as_ref().map(RichText::to_game_chat), self.render_body(RichText::to_game_chat))
+    }
+
+    fn render_body(&self, render: fn(&RichText) -> String) -> String {
+        let mut message = String::new();
         if let Some(content) = &self.content {
             message.push_str(&render(content));
         }
@@ -199,11 +199,10 @@ mod tests {
     }
 
     #[test]
-    fn plain_and_game_layout_preserve_field_order() {
+    fn plain_and_game_body_preserve_field_order() {
         let message = formatted_message();
-        let expected = "title\nbody\nname: value\nfooter";
-        assert_eq!(message.to_plain_text(), expected);
-        assert_eq!(message.to_game_chat(), expected);
+        assert_eq!(message.to_plain_text(), "title\nbody\nname: value\nfooter");
+        assert_eq!(message.game_chat_parts(), (Some("title".into()), "body\nname: value\nfooter".into()));
     }
 
     #[test]
