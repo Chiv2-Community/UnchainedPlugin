@@ -607,13 +607,12 @@ mod tests {
         assert_eq!(normalized, ["app", "--rcon", "9001", "--unchained", "-ini:G:S:K=V"]);
     }
 
-    #[test]
-    fn test_saved_dir_suffix() {
-        for args in [vec!["app", "-saveddirsuffix=test"], vec!["app", "-saveddirsuffix", "test"]] {
-            let normalized = normalize_and_filter_args(args.into_iter().map(str::to_owned));
-            let cli = CLIArgs::try_parse_from(normalized).unwrap();
-            assert_eq!(cli.saved_dir_suffix.as_deref(), Some("test"));
-        }
+    #[test_case::test_case(vec!["app", "-saveddirsuffix=test"]; "equals")]
+    #[test_case::test_case(vec!["app", "-saveddirsuffix", "test"]; "separate")]
+    fn test_saved_dir_suffix(args: Vec<&str>) {
+        let normalized = normalize_and_filter_args(args.into_iter().map(str::to_owned));
+        let cli = CLIArgs::try_parse_from(normalized).unwrap();
+        assert_eq!(cli.saved_dir_suffix.as_deref(), Some("test"));
     }
 
     #[test]

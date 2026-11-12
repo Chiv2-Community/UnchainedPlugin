@@ -388,49 +388,48 @@ mod tests {
         })).unwrap()).is_err());
     }
 
-    #[test]
-    fn isolated_chat_still_reaches_shared_json_appenders_once() {
+    #[test_case::test_case(false; "automatically_shared")]
+    #[test_case::test_case(true; "already_shared")]
+    fn isolated_chat_still_reaches_shared_json_appenders_once(already_shared: bool) {
         let prefix = std::env::temp_dir().join(format!("unchained-chat-routing-{}-{}",
             std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
-        for already_shared in [false, true] {
-            let normal = prefix.with_extension(format!("{already_shared}.normal"));
-            let chat = prefix.with_extension(format!("{already_shared}.chat"));
-            let json = prefix.with_extension(format!("{already_shared}.json"));
-            let mut yaml = serde_yaml::to_value(serde_json::json!({
-                "appenders": {
-                    "normal": {"kind": "file", "path": normal, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
-                    "chat": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
-                    "system": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
-                    "structured": {"kind": "file", "path": json, "encoder": {"kind": "json"}}
-                },
-                "root": {"level": "info", "appenders": ["normal", "structured"]},
-                "loggers": {
-                    "chat_log": {"level": "info", "appenders": ["chat"], "additive": false},
-                    "chat_log::system": {"level": "info", "appenders": ["system"], "additive": false},
-                    "chat_log::system::sender": {"level": "info", "appenders": ["chat"], "additive": false}
-                }
-            })).unwrap();
-            if already_shared {
-                yaml["loggers"]["chat_log"]["appenders"].as_sequence_mut().unwrap().push("structured".into());
+        let normal = prefix.with_extension(format!("{already_shared}.normal"));
+        let chat = prefix.with_extension(format!("{already_shared}.chat"));
+        let json = prefix.with_extension(format!("{already_shared}.json"));
+        let mut yaml = serde_yaml::to_value(serde_json::json!({
+            "appenders": {
+                "normal": {"kind": "file", "path": normal, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "chat": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "system": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "structured": {"kind": "file", "path": json, "encoder": {"kind": "json"}}
+            },
+            "root": {"level": "info", "appenders": ["normal", "structured"]},
+            "loggers": {
+                "chat_log": {"level": "info", "appenders": ["chat"], "additive": false},
+                "chat_log::system": {"level": "info", "appenders": ["system"], "additive": false},
+                "chat_log::system::sender": {"level": "info", "appenders": ["chat"], "additive": false}
             }
-            let logger = log4rs::Logger::new(config_from_value(yaml, "chat-routing").unwrap());
-            sinfo!(logger: &logger, target: "ordinary", "ordinary");
-            for _ in 0..2 {
-                sinfo!(logger: &logger, target: "chat_log::team", "hello");
-            }
-            sinfo!(logger: &logger, target: "chat_log::system", "notice");
-            sinfo!(logger: &logger, target: "chat_log::system::sender", "console");
-            logger.flush();
-            assert_eq!(std::fs::read_to_string(&normal).unwrap().lines().collect::<Vec<_>>(), ["ordinary"]);
-            assert_eq!(std::fs::read_to_string(&chat).unwrap().lines().collect::<Vec<_>>(), ["hello", "hello", "notice", "console"]);
-            let records: Vec<serde_json::Value> = std::fs::read_to_string(&json).unwrap().lines()
-                .map(|line| serde_json::from_str(line).unwrap()).collect();
-            assert_eq!(records.iter().map(|record| (record["target"].as_str().unwrap(), record["message"].as_str().unwrap()))
-                .collect::<Vec<_>>(), [("ordinary", "ordinary"), ("chat_log::team", "hello"),
-                    ("chat_log::team", "hello"), ("chat_log::system", "notice"), ("chat_log::system::sender", "console")]);
-            drop(logger);
-            for path in [&normal, &chat, &json] { std::fs::remove_file(path).unwrap(); }
+        })).unwrap();
+        if already_shared {
+            yaml["loggers"]["chat_log"]["appenders"].as_sequence_mut().unwrap().push("structured".into());
         }
+        let logger = log4rs::Logger::new(config_from_value(yaml, "chat-routing").unwrap());
+        sinfo!(logger: &logger, target: "ordinary", "ordinary");
+        for _ in 0..2 {
+            sinfo!(logger: &logger, target: "chat_log::team", "hello");
+        }
+        sinfo!(logger: &logger, target: "chat_log::system", "notice");
+        sinfo!(logger: &logger, target: "chat_log::system::sender", "console");
+        logger.flush();
+        assert_eq!(std::fs::read_to_string(&normal).unwrap().lines().collect::<Vec<_>>(), ["ordinary"]);
+        assert_eq!(std::fs::read_to_string(&chat).unwrap().lines().collect::<Vec<_>>(), ["hello", "hello", "notice", "console"]);
+        let records: Vec<serde_json::Value> = std::fs::read_to_string(&json).unwrap().lines()
+            .map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(records.iter().map(|record| (record["target"].as_str().unwrap(), record["message"].as_str().unwrap()))
+            .collect::<Vec<_>>(), [("ordinary", "ordinary"), ("chat_log::team", "hello"),
+                ("chat_log::team", "hello"), ("chat_log::system", "notice"), ("chat_log::system::sender", "console")]);
+        drop(logger);
+        for path in [&normal, &chat, &json] { std::fs::remove_file(path).unwrap(); }
     }
 
     #[test_case::test_case("{palette(error)}}}{m}", "}message"; "closing_brace")]
