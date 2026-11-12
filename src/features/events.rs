@@ -83,7 +83,7 @@ pub async fn initialize_subscribers() {
 
     {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
-        initalize_vote_commands(&mut command_subscriber, broadcast_message_publisher, game_event_publisher).await;
+        initialize_vote_commands(&mut command_subscriber, broadcast_message_publisher, game_event_publisher);
 
         // Discord ported commands
         let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json")));
@@ -110,25 +110,22 @@ pub async fn initialize_subscribers() {
 
 }
 
-async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
-    let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(VotingState::new()))));
+fn initialize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
+    let mut state = VotingState::new();
+    state.register(EndMapVote);
+    state.register(MapVote);
+    state.register(AddBotsVote);
+    state.register(NoBotsVote);
+    state.register(SpeedVote);
+    state.register(ModVote);
+    state.register(RestartServerVote::new(game_event_publisher));
+    let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(state))));
 
     command_subscriber.register(YesCommand::new(shared_state, broadcast_event_publisher));
     command_subscriber.register(NoCommand::new(shared_state, broadcast_event_publisher));
 
-    let mut vote_command = VoteCommand::new(
+    command_subscriber.register(VoteCommand::new(
         shared_state.clone(),
         broadcast_event_publisher
-    );
-
-    // vote_command.register(KickVote).await; // Delete this? It's built in to the game.
-    vote_command.register(EndMapVote).await;
-    vote_command.register(MapVote).await;
-    vote_command.register(AddBotsVote).await;
-    vote_command.register(NoBotsVote).await;
-    vote_command.register(SpeedVote).await;
-    vote_command.register(ModVote).await;
-    vote_command.register(RestartServerVote::new(game_event_publisher)).await;
-
-    command_subscriber.register(vote_command);
+    ));
 }
