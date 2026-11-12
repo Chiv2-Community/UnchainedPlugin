@@ -152,16 +152,24 @@ mod client_message {
         use super::*;
 
         #[test]
-        fn native_player_commands_remain_global_only() {
-            assert!(player_command_event("Player", "hello\nworld", EChatType::AllSay).is_none());
+        fn global_player_command_preserves_arguments() {
             let Some(GameEvent::CommandRequestEvent(command)) = player_command_event("Player", "!vote kick\nreason", EChatType::AllSay) else { panic!("missing command event"); };
             assert_eq!(command.name, "vote");
             assert_eq!(command.args, ["kick", "reason"]);
             assert_eq!(command.raw_args, "kick\nreason");
+        }
+
+        #[test]
+        fn nonglobal_channels_do_not_emit_player_commands() {
             for channel in EChatType::ALL.iter().copied().filter(|channel| *channel != EChatType::AllSay) {
                 assert!(player_command_event("Player", "!vote kick", channel).is_none());
             }
-            assert!(player_command_event("Player", "!", EChatType::AllSay).is_none());
+        }
+
+        #[test_case::test_case("hello\nworld"; "ordinary_chat")]
+        #[test_case::test_case("!"; "empty_command")]
+        fn global_noncommands_are_ignored(message: &str) {
+            assert!(player_command_event("Player", message, EChatType::AllSay).is_none());
         }
 
         #[test]
@@ -174,39 +182,30 @@ mod client_message {
             assert_eq!(command.actor.permissions.flags, PermissionFlags::USER | PermissionFlags::START_VOTE);
         }
 
-        #[test]
-        fn server_say_preserves_multiline_motd() {
-            let message = "Welcome\r\nExample <0>: !not_a_command\nEnjoy!";
-            let line = format!("<6>: {message}");
-            assert_eq!(system_message(&line), Some((EChatType::ServerSay, None, message)));
+        #[test_case::test_case("Player Name <0>: [Console] Hello"; "console_prefix_in_body")]
+        #[test_case::test_case("Player <1>:"; "empty_body")]
+        #[test_case::test_case("Player <4294967296>: !vote kick\r\nreason"; "overflow_channel")]
+        fn player_messages_are_ignored_without_parsing_their_body_or_channel(line: &str) {
+            assert_eq!(system_message(line), None);
         }
 
-        #[test]
-        fn player_messages_are_ignored_without_parsing_their_body_or_channel() {
-            for line in ["Player Name <0>: [Console] Hello", "Player <1>:", "Player <4294967296>: !vote kick\r\nreason"] {
-                assert_eq!(system_message(line), None, "input: {line:?}");
-            }
+        #[test_case::test_case("<0>: Hello", EChatType::AllSay, None, "Hello"; "global")]
+        #[test_case::test_case("<1>:\t \r\nHello", EChatType::TeamSay, None, "\r\nHello"; "horizontal_space_only")]
+        #[test_case::test_case("<6>:", EChatType::ServerSay, None, ""; "empty_body")]
+        #[test_case::test_case("<6>:Welcome", EChatType::ServerSay, None, "Welcome"; "no_space")]
+        #[test_case::test_case("<6>: Welcome\r\nExample <0>: !not_a_command\nEnjoy!", EChatType::ServerSay, None, "Welcome\r\nExample <0>: !not_a_command\nEnjoy!"; "multiline_motd")]
+        #[test_case::test_case("<0>: [Console] Hello\r\nworld", EChatType::AllSay, Some("Console"), "Hello\r\nworld"; "console_sender")]
+        fn system_headers_preserve_channel_sender_and_body(line: &str, channel: EChatType, sender: Option<&str>, body: &str) {
+            assert_eq!(system_message(line), Some((channel, sender, body)));
         }
 
-        #[test]
-        fn system_headers_preserve_channels_and_unrecognized_text() {
-            for (line, channel, body) in [
-                ("<0>: Hello", EChatType::AllSay, "Hello"),
-                ("<1>:\t \r\nHello", EChatType::TeamSay, "\r\nHello"),
-                ("<6>:", EChatType::ServerSay, ""),
-                ("<6>:Welcome", EChatType::ServerSay, "Welcome"),
-            ] {
-                assert_eq!(system_message(line), Some((channel, None, body)));
-            }
-            for line in ["", "Welcome!", "Welcome\nPlayer <0>: text", "<x>: text", "<256>: Example <0>: text"] {
-                assert_eq!(system_message(line), Some((EChatType::ServerSay, None, line)));
-            }
-        }
-
-        #[test]
-        fn console_system_prefix_preserves_sender_and_body() {
-            assert_eq!(system_message("<0>: [Console] Hello\r\nworld"),
-                Some((EChatType::AllSay, Some("Console"), "Hello\r\nworld")));
+        #[test_case::test_case(""; "empty")]
+        #[test_case::test_case("Welcome!"; "plain_text")]
+        #[test_case::test_case("Welcome\nPlayer <0>: text"; "player_header_inside_body")]
+        #[test_case::test_case("<x>: text"; "nonnumeric_header")]
+        #[test_case::test_case("<256>: Example <0>: text"; "overflow_header")]
+        fn unrecognized_system_headers_remain_literal(line: &str) {
+            assert_eq!(system_message(line), Some((EChatType::ServerSay, None, line)));
         }
 
         #[test]

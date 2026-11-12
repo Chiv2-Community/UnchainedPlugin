@@ -65,55 +65,43 @@ impl Batch {
 mod tests {
     use super::*;
 
-    #[test]
-    fn truncation_preserves_exact_limits_and_reports_utf16_length() {
-        for input in [
-            String::new(),
-            "short 🩸 text".into(),
-            "界".repeat(MAX_DESCRIPTION),
-            format!("{}🩸", "a".repeat(MAX_DESCRIPTION - 2)),
-            format!("{}🩸", "a".repeat(MAX_DESCRIPTION - 1)),
-            "a".repeat(MAX_DESCRIPTION + 1),
-            "🩸".repeat(MAX_DESCRIPTION),
-        ] {
-            let original_units = input.encode_utf16().count();
-            let (output, units) = truncate_description(input.clone());
-            assert_eq!(units, output.encode_utf16().count());
-            assert!(units <= MAX_DESCRIPTION);
-            if original_units <= MAX_DESCRIPTION {
-                assert_eq!(output, input);
-            } else {
-                assert!(output.ends_with('…'));
-                assert!(input.starts_with(output.trim_end_matches('…')));
-            }
-        }
+    #[test_case::test_case(String::new(); "empty")]
+    #[test_case::test_case("short 🩸 text".into(); "short_unicode")]
+    #[test_case::test_case("界".repeat(MAX_DESCRIPTION); "bmp_at_limit")]
+    #[test_case::test_case(format!("{}🩸", "a".repeat(MAX_DESCRIPTION - 2)); "surrogate_pair_at_limit")]
+    fn descriptions_within_limit_remain_unchanged(input: String) {
+        let units = input.encode_utf16().count();
+        assert_eq!(truncate_description(input.clone()), (input, units));
     }
 
-    #[test]
-    fn batch_enforces_embed_and_character_limits_and_resets() {
+    #[test_case::test_case(format!("{}🩸", "a".repeat(MAX_DESCRIPTION - 1)), format!("{}…", "a".repeat(MAX_DESCRIPTION - 1)); "pair_crosses_limit")]
+    #[test_case::test_case("a".repeat(MAX_DESCRIPTION + 1), format!("{}…", "a".repeat(MAX_DESCRIPTION - 1)); "bmp_over_limit")]
+    #[test_case::test_case("🩸".repeat(MAX_DESCRIPTION), format!("{}…", "🩸".repeat(MAX_DESCRIPTION / 2 - 1)); "pairs_over_limit")]
+    fn oversized_descriptions_reserve_space_for_ellipsis(input: String, expected: String) {
+        let units = expected.encode_utf16().count();
+        assert_eq!(truncate_description(input), (expected, units));
+    }
+
+    #[test_case::test_case(MAX_EMBEDS, 1, 1, true; "embed_limit")]
+    #[test_case::test_case(1, MAX_CHARACTERS, 1, true; "character_limit")]
+    #[test_case::test_case(1, 3500, 3500, false; "combined_character_limit")]
+    fn batch_rejects_entries_exceeding_limits(count: usize, characters: usize, incoming: usize, full: bool) {
         let mut batch = Batch::default();
-        for _ in 0..MAX_EMBEDS {
-            let entry = LogEmbed {
-                embed: CreateEmbed::new(),
-                characters: 600,
-            };
+        for _ in 0..count {
+            let entry = LogEmbed { embed: CreateEmbed::new(), characters };
             assert!(batch.fits(&entry));
             batch.push(entry);
         }
-        assert!(batch.is_full());
-        assert!(!batch.fits(&LogEmbed {
-            embed: CreateEmbed::new(),
-            characters: 1
-        }));
-        assert_eq!(batch.take().len(), MAX_EMBEDS);
+        assert_eq!(batch.is_full(), full);
+        assert!(!batch.fits(&LogEmbed { embed: CreateEmbed::new(), characters: incoming }));
+    }
+
+    #[test]
+    fn taking_batch_resets_embed_and_character_counts() {
+        let mut batch = Batch::default();
+        batch.push(LogEmbed { embed: CreateEmbed::new(), characters: MAX_CHARACTERS });
+        assert_eq!(batch.take().len(), 1);
         assert!(batch.is_empty());
-        batch.push(LogEmbed {
-            embed: CreateEmbed::new(),
-            characters: 3500,
-        });
-        assert!(!batch.fits(&LogEmbed {
-            embed: CreateEmbed::new(),
-            characters: 3500
-        }));
+        assert_eq!(batch.characters(), 0);
     }
 }
