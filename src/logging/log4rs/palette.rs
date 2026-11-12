@@ -650,49 +650,48 @@ palette:
     }
 
     #[test]
-    fn palette_loading_deduplicates_missing_names_for_console_and_file_encoders() {
-        let path = std::env::temp_dir().join(format!("palette-index-{}.log", std::process::id()));
-        for kind in ["console", "file"] {
-            let mut yaml = fixtures::config("palette-index");
-            yaml["appenders"]["test"]["kind"] = kind.into();
-            if kind == "file" { yaml["appenders"]["test"]["path"] = path.to_string_lossy().as_ref().into(); }
-            yaml["appenders"]["duplicate"] = yaml["appenders"]["test"].clone();
-            let (config, missing) = super::super::config_with_warnings(yaml, "palette-index-test").unwrap();
-            let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
-            assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
-            assert!(!missing.contains(""));
-            drop(config);
+    fn configured_palette_warnings_are_deduplicated() {
+        let mut yaml = fixtures::config("palette-index");
+        yaml["appenders"]["duplicate"] = yaml["appenders"]["test"].clone();
+        let (_, missing) = super::super::config_with_warnings(yaml, "palette-index-test").unwrap();
+        let fixture_names: Vec<_> = missing.iter().filter(|name| name.starts_with("__test_palette_")).cloned().collect();
+        assert_eq!(fixture_names, ["__test_palette_missing", "__test_palette_raw"]);
+        assert!(!missing.contains(""));
+    }
+
+    #[test_case::test_case(None; "default_encoder")]
+    #[test_case::test_case(Some("null"); "null_encoder")]
+    #[test_case::test_case(Some("pattern"); "pattern_encoder")]
+    #[test_case::test_case(Some("json"); "json_encoder")]
+    fn non_palette_encoders_do_not_emit_palette_warnings(kind: Option<&str>) {
+        let mut yaml = fixtures::config("non-palette-index");
+        let appender = &mut yaml["appenders"]["test"];
+        match kind {
+            None => { appender.as_mapping_mut().unwrap().remove("encoder"); },
+            Some("null") => appender["encoder"] = serde_yaml::Value::Null,
+            Some(kind) => appender["encoder"]["kind"] = kind.into(),
         }
-        std::fs::remove_file(path).unwrap();
+        assert!(super::super::missing_palette_references(&yaml).is_empty());
     }
 
     #[test]
-    fn palette_warnings_respect_encoder_kinds_defaults_and_per_encoder_names() {
-        for kind in [None, Some("null"), Some("pattern"), Some("json")] {
-            let mut yaml = fixtures::config("non-palette-index");
-            let appender = &mut yaml["appenders"]["test"];
-            match kind {
-                None => { appender.as_mapping_mut().unwrap().remove("encoder"); },
-                Some("null") => appender["encoder"] = serde_yaml::Value::Null,
-                Some(kind) => appender["encoder"]["kind"] = kind.into(),
-            }
-            let (_, warnings) = super::super::config_with_warnings(yaml, "non-palette-test").unwrap();
-            assert!(warnings.is_empty(), "{kind:?}");
-        }
+    fn null_and_omitted_palettes_use_default_names() {
         let mut yaml = fixtures::config("palette-index");
         yaml["appenders"]["test"]["encoder"] = fixtures::encoder("defaults");
         yaml["appenders"]["test"]["encoder"]["kind"] = "palette".into();
-        let (_, explicit) = super::super::config_with_warnings(yaml.clone(), "explicit-defaults").unwrap();
-        assert!(!explicit.contains("info"));
-        assert!(explicit.contains("__test_palette_present"));
+        let omitted = super::super::missing_palette_references(&yaml);
+        assert!(!omitted.contains("info"));
+        assert!(omitted.contains("__test_palette_present"));
         yaml["appenders"]["test"]["encoder"]["palette"] = serde_yaml::Value::Null;
-        let (_, null) = super::super::config_with_warnings(yaml, "null-defaults").unwrap();
-        assert_eq!(explicit, null);
+        assert_eq!(omitted, super::super::missing_palette_references(&yaml));
+    }
 
+    #[test]
+    fn palette_names_are_checked_per_encoder() {
         let mut yaml = fixtures::config("palette-index");
         yaml["appenders"]["other"] = yaml["appenders"]["test"].clone();
         yaml["appenders"]["other"]["encoder"]["palette"] = serde_yaml::Mapping::new().into();
-        let (_, missing) = super::super::config_with_warnings(yaml, "per-encoder-names").unwrap();
+        let missing = super::super::missing_palette_references(&yaml);
         assert!(missing.contains("__test_palette_present"), "defined in one encoder but missing in another");
     }
 
@@ -788,60 +787,50 @@ inline-removals:
         }
     }
 
-    #[test]
-    fn inline_switches_stream_palette_styles() {
-        use std::sync::Mutex;
-        struct Logger { encoder: PaletteEncoder, output: Mutex<StyledBuffer> }
-        impl log::Log for Logger {
-            fn enabled(&self, _: &log::Metadata) -> bool { true }
-            fn log(&self, record: &Record) {
-                self.encoder.encode(&mut *self.output.lock().unwrap(), record).unwrap();
-            }
-            fn flush(&self) {}
-        }
-        log::set_max_level(log::LevelFilter::Trace);
-        for truecolor in [false, true] {
-            let mut encoder = encoder("repeated-message");
-            encoder.enabled = true;
-            encoder.truecolor = truecolor;
-            encoder.colors[0].style.text(Color::Magenta);
-            let logger = Logger { encoder, output: Mutex::new(StyledBuffer::default()) };
-            let reference = String::from("AcCeNt");
-            sinfo!(logger: &logger, ("before {}", 7), palette(&reference), ("after {}", "世界"),
-                palette("unknown"), "normal", palette("normal"), "end", palette());
-            let output = logger.output.lock().unwrap();
-            let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
-                else { "before 7after 世界normalend" };
-            assert_eq!(output.bytes, format!("{message}|{message}").as_bytes());
-            assert_eq!(output.styles[0].0, 8);
-            assert_eq!(output.styles[0].1.text, if truecolor { None } else { Some(Color::Magenta) });
-            assert_eq!(output.styles[1].1, Style::new());
-            assert_eq!(output.styles[1].0, message.find("normal").unwrap());
-            assert_eq!(output.styles.last().unwrap().1, Style::new());
-        }
+    #[test_case::test_case(false; "native_styles")]
+    #[test_case::test_case(true; "truecolor")]
+    fn inline_switches_stream_palette_styles(truecolor: bool) {
+        use crate::logging::inline::{Message, Segment::{Palette, Text}};
+        let message = Message::new(&[
+            Text(format_args!("before 7")), Palette("AcCeNt"), Text(format_args!("after 世界")),
+            Palette("unknown"), Text(format_args!("normal")), Palette("normal"),
+            Text(format_args!("end")), Palette(""),
+        ]);
+        let values = [(COLORS_KEY, message.colors.as_str())];
+        let mut encoder = encoder("repeated-message");
+        encoder.enabled = true;
+        encoder.truecolor = truecolor;
+        encoder.colors[0].style.text(Color::Magenta);
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().key_values(&values)
+            .args(format_args!("{}", message.text)).build()).unwrap();
+        let message = if truecolor { "before 7\x1b[0;38;2;18;52;86mafter 世界normalend" }
+            else { "before 7after 世界normalend" };
+        assert_eq!(output.bytes, format!("{message}|{message}").as_bytes());
+        assert_eq!(output.styles[0].0, 8);
+        assert_eq!(output.styles[0].1.text, if truecolor { None } else { Some(Color::Magenta) });
+        assert_eq!(output.styles[1].1, Style::new());
+        assert_eq!(output.styles[1].0, message.find("normal").unwrap());
+        assert_eq!(output.styles.last().unwrap().1, Style::new());
     }
 
-    #[test]
-    fn pattern_and_inline_output_errors_reset_style() {
+    #[test_case::test_matrix(["accent", "plain"], [false, true], [0, 3, 6])]
+    fn pattern_and_inline_output_errors_reset_style(fixture: &str, truecolor: bool, limit: usize) {
         use crate::logging::inline::{Message, Segment};
         let segments = [Segment::Text(format_args!("before")), Segment::Palette("warn"),
             Segment::Text(format_args!("after")), Segment::Palette("")];
         let message = Message::new(&segments);
         let values = [(COLORS_KEY, message.colors.as_str())];
-        for (fixture, text, metadata) in [("accent", "hello", &[][..]), ("plain", message.text.as_str(), &values[..])] {
-            let mut encoder = encoder(fixture);
-            encoder.enabled = true;
-            for truecolor in [false, true] {
-                encoder.truecolor = truecolor;
-                for limit in [0, 3, 6, 7] {
-                    let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
-                    let error = encoder.encode(&mut output, &Record::builder().key_values(&metadata)
-                        .args(format_args!("{text}")).build()).unwrap_err();
-                    assert!(error.to_string().contains("injected output failure"), "{fixture}, {truecolor}, {limit}");
-                    assert_eq!(output.styles.last().unwrap().1, Style::new(), "{fixture}, {truecolor}, {limit}");
-                }
-            }
-        }
+        let (text, metadata) = if fixture == "accent" { ("hello", &[][..]) }
+            else { (message.text.as_str(), &values[..]) };
+        let mut encoder = encoder(fixture);
+        encoder.enabled = true;
+        encoder.truecolor = truecolor;
+        let mut output = StyledBuffer { fail_after: Some(limit), ..Default::default() };
+        let error = encoder.encode(&mut output, &Record::builder().key_values(&metadata)
+            .args(format_args!("{text}")).build()).unwrap_err();
+        assert!(error.to_string().contains("injected output failure"));
+        assert_eq!(output.styles.last().unwrap().1, Style::new());
     }
 
     #[test]

@@ -543,33 +543,30 @@ mod tests {
         }
     }
 
+    #[test_case::test_case(100, 1, 1, "Minimum vote threshold not met (33 votes required, 2 total votes cast)"; "below_minimum")]
+    #[test_case::test_case(10, 2, 3, "Majority not reached (50.0% required, 40.0% achieved)"; "below_majority")]
     #[tokio::test]
-    async fn expired_votes_report_failure_and_clear_state() {
-        for (players, yes, no, reason) in [
-            (100, 1, 1, "Minimum vote threshold not met (33 votes required, 2 total votes cast)"),
-            (10, 2, 3, "Majority not reached (50.0% required, 40.0% achieved)"),
-        ] {
-            let mut initial = VotingState::new();
-            initial.player_count_provider = Box::new(MockPlayerCountProvider(players));
-            initial.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: (0..yes).map(|i| format!("Y{i}")).collect(),
-                no_votes: (0..no).map(|i| format!("N{i}")).collect(),
-                end_time: Instant::now() - Duration::from_secs(1),
-            });
-            let state = Arc::new(Mutex::new(initial));
-            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-            let cmd = VoteCommand {
-                state: state.clone(), broadcaster: Box::leak(Box::new(EventPublisher::new(sender))),
-            };
-            cmd.on_tick().await;
-            assert!(state.lock().await.active_vote.is_none());
-            let message = receiver.try_recv().unwrap();
-            assert!(message.content_ref().unwrap().to_plain_text().contains(reason));
-            assert!(receiver.try_recv().is_err());
-        }
+    async fn expired_votes_report_failure_and_clear_state(players: usize, yes: usize, no: usize, reason: &str) {
+        let mut initial = VotingState::new();
+        initial.player_count_provider = Box::new(MockPlayerCountProvider(players));
+        initial.active_vote = Some(ActiveVote {
+            logic: Box::new(VoteTypeHandler::new(MockVote)),
+            raw_target_args: vec!["TestTarget".into()],
+            target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
+            yes_votes: (0..yes).map(|i| format!("Y{i}")).collect(),
+            no_votes: (0..no).map(|i| format!("N{i}")).collect(),
+            end_time: Instant::now() - Duration::from_secs(1),
+        });
+        let state = Arc::new(Mutex::new(initial));
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let cmd = VoteCommand {
+            state: state.clone(), broadcaster: Box::leak(Box::new(EventPublisher::new(sender))),
+        };
+        cmd.on_tick().await;
+        assert!(state.lock().await.active_vote.is_none());
+        let message = receiver.try_recv().unwrap();
+        assert!(message.content_ref().unwrap().to_plain_text().contains(reason));
+        assert!(receiver.try_recv().is_err());
     }
 
     #[tokio::test]

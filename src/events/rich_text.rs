@@ -297,6 +297,7 @@ mod tests {
             ("__underlined__", Underline("underlined".into())),
             ("_italic_", Italics("italic".into())),
             ("***both***", Bold(Italics("both".into()).into())),
+            (r"\*雪\*", Text("*雪*".into())),
         ] {
             assert_eq!(rich_text!(input), RichText::from(chunk), "{input}");
         }
@@ -307,11 +308,6 @@ mod tests {
         for input in ["**unclosed", "trailing\\", "a **b *c", "__x"] {
             assert_eq!(rich_text!(input).to_plain_text(), input);
         }
-    }
-
-    #[test]
-    fn escaped_markers_remain_literal() {
-        assert_eq!(rich_text!(r"\*雪\*"), RichText::from("*雪*"));
     }
 
     #[test]
@@ -328,10 +324,10 @@ mod tests {
         assert_eq!(empty.to_game_chat(), "  ");
     }
 
-    #[test]
-    fn discord_renders_nested_formatting() {
-        let text = RichText::from(Bold(Italics(Underline("world".into()).into()).into()));
-        assert_eq!(text.to_discord(), "***__world__***");
+    #[test_case::test_case(Bold(Italics(Underline("world".into()).into()).into()), "***__world__***"; "mixed_styles")]
+    #[test_case::test_case(Bold(Bold("x".into()).into()), "**x**"; "repeated_style")]
+    fn discord_renders_nested_formatting(chunk: RichTextChunk, expected: &str) {
+        assert_eq!(RichText::from(chunk).to_discord(), expected);
     }
 
     #[test]
@@ -362,9 +358,4 @@ mod tests {
         assert_eq!(text.to_game_chat(), "a\nb\n");
     }
 
-    #[test]
-    fn discord_flattens_repeated_formatting() {
-        let text = RichText::from(Bold(Bold("x".into()).into()));
-        assert_eq!(text.to_discord(), "**x**");
-    }
 }
