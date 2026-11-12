@@ -187,7 +187,7 @@ impl PaletteEncoderConfig {
     }
 }
 
-fn escaped(bytes: &[u8], i: usize) -> bool {
+fn is_escaped(bytes: &[u8], i: usize) -> bool {
     bytes[i] == b'\\' || (matches!(bytes[i], b'{' | b'}' | b'(' | b')')
         && bytes.get(i + 1) == Some(&bytes[i]))
 }
@@ -217,7 +217,7 @@ fn resolve(name: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Res
     let mut i = 0;
     let mut dynamic = false;
     while i < bytes.len() {
-        if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
+        if is_escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
         if bytes[i] == b'{' {
             let head = formatter_head(name, i);
             let end = bytes[head..].iter().position(|byte| *byte == b'}')
@@ -252,7 +252,7 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
     let mut i = 0;
     let mut depth: usize = 0;
     while i < bytes.len() {
-        if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
+        if is_escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
         if depth == 0 {
             if let Some(token) = ["{m}", "{message}"].into_iter().find(|token| bytes[i..].starts_with(token.as_bytes())) {
                 if start < i {
@@ -281,7 +281,7 @@ fn parse(pattern: &str, palette: &BTreeMap<String, Option<usize>>) -> anyhow::Re
                     i += 1;
                     break;
                 }
-                if escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
+                if is_escaped(bytes, i) { i = (i + 2).min(bytes.len()); continue; }
                 match bytes[i] {
                     b'{' => { braces += 1; i = formatter_head(pattern, i); continue; }
                     b'}' => { braces -= 1; if braces == 0 { break; } }
@@ -368,35 +368,39 @@ impl Encode for PaletteEncoder {
 }
 
 impl PaletteEncoder {
+    fn color_index(&self, name: &[u8]) -> Option<usize> {
+        self.names.binary_search_by(|(key, _)|
+            key.bytes().cmp(name.iter().map(|byte| byte.to_ascii_lowercase())))
+            .ok().and_then(|position| self.names[position].1)
+    }
+
     fn set_color(&self, writer: &mut PaletteWriter<'_>, index: Option<usize>) -> std::io::Result<()> {
-        if let Some(index) = index {
-            let entry = &self.colors[index];
-            if entry.channels.foreground == Some(Channel::Inherit) && entry.channels.background == Some(Channel::Inherit) {
-                return Ok(());
-            }
-            if entry.channels.inherits() {
-                if self.truecolor { return writer.ansi(entry.ansi.as_bytes()); }
-                let mut style = entry.style.clone();
-                if entry.channels.foreground == Some(Channel::Inherit) {
-                    style.text = writer.style.text;
-                    style.intense = writer.style.intense;
-                }
-                if entry.channels.background == Some(Channel::Inherit) {
-                    style.background = writer.style.background;
-                }
-                return writer.set_style(&style);
-            }
-            if self.truecolor {
-                // RGB codes replace the native fallback; avoid log4rs' small ANSI style buffer.
-                writer.set_style(&Style::new())?;
-                writer.ansi(entry.ansi.as_bytes())?;
-            } else {
-                writer.set_style(&entry.style)?;
-            }
-        } else {
-            writer.set_style(&Style::new())?;
+        let Some(index) = index else { return writer.set_style(&Style::new()); };
+        let entry = &self.colors[index];
+        if entry.channels.foreground == Some(Channel::Inherit) && entry.channels.background == Some(Channel::Inherit) {
+            return Ok(());
         }
-        Ok(())
+
+        if entry.channels.inherits() {
+            if self.truecolor { return writer.ansi(entry.ansi.as_bytes()); }
+            let mut style = entry.style.clone();
+            if entry.channels.foreground == Some(Channel::Inherit) {
+                style.text = writer.style.text;
+                style.intense = writer.style.intense;
+            }
+            if entry.channels.background == Some(Channel::Inherit) {
+                style.background = writer.style.background;
+            }
+            return writer.set_style(&style);
+        }
+
+        if self.truecolor {
+            // RGB codes replace the native fallback; avoid log4rs' small ANSI style buffer.
+            writer.set_style(&Style::new())?;
+            writer.ansi(entry.ansi.as_bytes())
+        } else {
+            writer.set_style(&entry.style)
+        }
     }
 
     fn encode_chunks(&self, writer: &mut PaletteWriter<'_>, record: &Record) -> anyhow::Result<()> {
@@ -421,10 +425,7 @@ impl PaletteEncoder {
                         let mut start = 0;
                         for change in changes {
                             writer.write_all(message[start..change.offset].as_bytes())?;
-                            let index = change.palette.as_deref().and_then(|name|
-                                self.names.binary_search_by(|(key, _)|
-                                    key.bytes().cmp(name.bytes().map(|byte| byte.to_ascii_lowercase())))
-                                    .ok().and_then(|position| self.names[position].1));
+                            let index = change.palette.as_deref().and_then(|name| self.color_index(name.as_bytes()));
                             self.set_color(writer, index)?;
                             start = change.offset;
                         }
@@ -437,10 +438,7 @@ impl PaletteEncoder {
                 Chunk::DynamicColor(pattern) => {
                     let mut key = Vec::new();
                     pattern.encode(&mut SimpleWriter(&mut key), record)?;
-                    key.make_ascii_lowercase();
-                    let index = self.names.binary_search_by(|(name, _)| name.as_bytes().cmp(&key))
-                        .ok().and_then(|position| self.names[position].1);
-                    self.set_color(writer, index)?;
+                    self.set_color(writer, self.color_index(&key))?;
                 }
             }
         }

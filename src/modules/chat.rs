@@ -18,13 +18,11 @@ pub struct LoggingChatSink;
 #[async_trait]
 impl ChatSink for LoggingChatSink {
     async fn send(&self, chat: &GameChatMessage) {
-        if matches!(chat.chat_source, ChatSource::Console(_)) {
-            return;
-        };
         let (kind, channel) = match chat.chat_source {
             ChatSource::Native(NativeChat::Player { channel, .. }) => ("player", channel.as_str()),
             ChatSource::Native(NativeChat::System { channel }) => ("system", channel.as_str()),
-            ChatSource::Discord(channel) | ChatSource::Console(channel) => ("external", channel.into()),
+            ChatSource::Discord(channel) => ("external", channel.into()),
+            ChatSource::Console(_) => return,
         };
         let source = chat.chat_source.to_string();
         let target = match chat.chat_source {

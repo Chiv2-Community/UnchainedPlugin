@@ -3,10 +3,11 @@ use crate::events::broadcast::{BroadcastMessage, RichText};
 use crate::events::bus::{EventPublisher, Subscriber};
 use crate::events::models::GameEvent;
 
+const MAX_BATCH_SIZE: usize = 10;
+
 pub struct EventBroadcastSubscriber {
     pending_joins: Vec<String>,
     pending_leaves: Vec<String>,
-    max_batch_size: usize,
     broadcaster: &'static EventPublisher<BroadcastMessage>,
 }
 
@@ -15,7 +16,6 @@ impl EventBroadcastSubscriber {
         Self {
             pending_joins: Vec::new(),
             pending_leaves: Vec::new(),
-            max_batch_size: 10,
             broadcaster,
         }
     }
@@ -61,18 +61,18 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
         match event {
             GameEvent::JoinEvent(join) => {
                 self.pending_joins.push(join.name.clone());
-                if self.pending_joins.len() >= self.max_batch_size {
+                if self.pending_joins.len() >= MAX_BATCH_SIZE {
                     self.flush_presence(PresenceAction::Joined);
                 }
             }
             GameEvent::LeaveEvent(leave) => {
                 self.pending_leaves.push(leave.name.clone());
-                if self.pending_leaves.len() >= self.max_batch_size {
+                if self.pending_leaves.len() >= MAX_BATCH_SIZE {
                     self.flush_presence(PresenceAction::Left);
                 }
             }
             GameEvent::MapChangeEvent(map_change) => {
-                let new_map_name = map_change.new_map_name.clone();
+                let new_map_name = &map_change.new_map_name;
 
                 if !unsafe { SERVER_STARTED } {
                     self.broadcaster.publish(
