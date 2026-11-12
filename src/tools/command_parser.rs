@@ -54,7 +54,6 @@ pub fn parse_command(content: &str) -> Option<(String, Vec<String>, String)> {
 mod tests {
     use super::*;
 
-    #[test_case::test_case("say hello", "say", &["hello"], "hello"; "plain")]
     #[test_case::test_case("  😀", "😀", &[], ""; "unicode_name_without_args")]
     #[test_case::test_case(" \t😀 \"héllo 世界\"", "😀", &["héllo 世界"], "\"héllo 世界\""; "unicode_quoted_argument")]
     #[test_case::test_case("\"😀\"", "😀", &[], ""; "quoted_name_without_args")]

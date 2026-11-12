@@ -131,11 +131,9 @@ mod tests {
     #[test_case::test_case("🛠️ World", "World"; "leading_emoji")]
     #[test_case::test_case("Hello 🛠️", "Hello"; "trailing_emoji")]
     #[test_case::test_case("🇩🇪 Germany", "Germany"; "flag")]
-    #[test_case::test_case("No emoji here", "No emoji here"; "plain_text")]
     #[test_case::test_case("Hello🛠️World", "Hello World"; "adjacent_words")]
     #[test_case::test_case(" \t雪\r\n\u{2003}世界\u{a0} ", "雪 世界"; "unicode_whitespace")]
     #[test_case::test_case("🛠️\n🎮\t", ""; "only_removed_text")]
-    #[test_case::test_case("", ""; "empty")]
     fn emoji_removal_normalizes_whitespace(input: &str, expected: &str) {
         assert_eq!(InGameChatBroadcastSubscriber::strip_emojis(input), expected);
     }

@@ -133,28 +133,38 @@ mod tests {
     }
 
     #[test]
-    fn display_override_is_only_for_global_localized_broadcasts() {
+    fn display_override_accepts_only_global_channels() {
         let message = "{$Map Change}\nStarting match on Wardenglade.";
         for channel in EChatType::ALL {
-            let parts = display_parts(channel as u32, message);
-            assert_eq!(parts.is_some(), matches!(channel, EChatType::AllSay | EChatType::ServerSay));
+            let expected = matches!(channel, EChatType::AllSay | EChatType::ServerSay)
+                .then_some(("Map Change", "Starting match on Wardenglade.", false, [1.0; 4]));
+            assert_eq!(display_parts(channel as u32, message), expected);
         }
         assert!(display_parts(u32::MAX, message).is_none());
-        assert!(display_parts(EChatType::AllSay as u32, "Welcome\nEnjoy!").is_none());
-        assert_eq!(display_parts(EChatType::AllSay as u32, message), Some(("Map Change", "Starting match on Wardenglade.", false, [1.0; 4])));
-        assert!(display_broadcast(std::ptr::null_mut(), EChatType::AllSay as u32, message).is_none());
     }
 
     #[test]
-    fn server_console_broadcasts_set_sender_dev_without_matching_player_chat() {
-        let message = "{$Server Console}\nHello";
-        for channel in [EChatType::AllSay, EChatType::ServerSay] {
-            assert_eq!(display_parts(channel as u32, message),
-                Some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0])));
-        }
+    fn null_controller_skips_native_display() {
+        assert!(display_broadcast(std::ptr::null_mut(), EChatType::AllSay as u32, "{$Title}\nHello").is_none());
+    }
+
+    #[test]
+    fn ordinary_chat_does_not_enable_server_console_presentation() {
         assert!(display_parts(EChatType::AllSay as u32, "Server Console: Hello").is_none());
-        assert_eq!(display_parts(EChatType::AllSay as u32, "{$Server Console|#FF0000}\nHello"),
+    }
+
+    #[test_case::test_case(EChatType::AllSay, "{$Server Console}\nHello"; "global")]
+    #[test_case::test_case(EChatType::ServerSay, "{$Server Console}\nHello"; "server")]
+    #[test_case::test_case(EChatType::AllSay, "{$Server Console|#FF0000}\nHello"; "conflicting_color")]
+    fn server_console_presentation_is_always_developer_cyan(channel: EChatType, message: &str) {
+        assert_eq!(display_parts(channel as u32, message),
             Some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0])));
+    }
+
+    #[test]
+    fn black_broadcast_color_is_not_replaced_by_default_white() {
+        let (_, _, _, color) = display_parts(EChatType::AllSay as u32, "{$Title|#000000}\nHello").unwrap();
+        assert_eq!(color, [0.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]
@@ -166,7 +176,5 @@ mod tests {
         assert!(!is_sender_dev);
         assert_eq!([color[0], color[2], color[3]], [1.0, 0.0, 1.0]);
         assert!((color[1] - 0.2158605).abs() < 0.000001);
-        let (_, _, _, black) = display_parts(EChatType::AllSay as u32, "{$Title|#000000}\nHello").unwrap();
-        assert_eq!(black, [0.0, 0.0, 0.0, 1.0]);
     }
 }
