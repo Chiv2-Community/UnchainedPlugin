@@ -1,10 +1,10 @@
+use itertools::Itertools;
 use log4rs::encode::{Style, Write};
 use regex::Regex;
 
 pub(super) fn compile(expressions: &[String]) -> anyhow::Result<Option<Regex>> {
     if expressions.is_empty() { return Ok(None); }
-    let pattern = expressions.iter().map(|expression| format!("(?:{expression})"))
-        .collect::<Vec<_>>().join("|");
+    let pattern = expressions.iter().map(|expression| format!("(?:{expression})")).join("|");
     Ok(Some(Regex::new(&pattern)?))
 }
 
@@ -48,9 +48,9 @@ impl RenderedLine {
             while cursor < end {
                 while matches.peek().is_some_and(|found| found.end <= cursor) { matches.next(); }
                 if let Some(found) = matches.peek() {
-                    let keep_end = found.start.min(end).max(cursor);
+                    let keep_end = found.start.clamp(cursor, end);
                     writer.write_all(&self.text[cursor..keep_end])?;
-                    cursor = if found.start < end { found.end.min(end).max(keep_end) } else { end };
+                    cursor = found.end.clamp(keep_end, end);
                 } else {
                     writer.write_all(&self.text[cursor..end])?;
                     cursor = end;
@@ -106,6 +106,22 @@ mod tests {
     #[test]
     fn empty_configuration_disables_removals() {
         assert!(compile(&[]).unwrap().is_none());
+    }
+
+    #[test]
+    fn removals_span_multiple_style_boundaries() {
+        use std::io::Write as _;
+        for pattern in ["DROP[0-9]+", "DROP[0-9]+|", "D|RO|P|[0-9]+"] {
+            let mut line = RenderedLine::default();
+            for text in ["éD", "RO", "P42尾"] {
+                line.write_all(text.as_bytes()).unwrap();
+                line.set_style(&Style::new()).unwrap();
+            }
+            let mut output = RenderedLine::default();
+            line.emit(&mut output, &Regex::new(pattern).unwrap()).unwrap();
+            assert_eq!(output.text, "é尾".as_bytes(), "{pattern}");
+            assert_eq!(output.controls.iter().map(|(offset, _)| *offset).collect::<Vec<_>>(), [2, 2, 5]);
+        }
     }
 
     #[test]
