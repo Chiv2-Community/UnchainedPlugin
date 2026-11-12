@@ -505,8 +505,11 @@ mod tests {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
     }
 
-    #[test]
-    fn structured_fields_select_colors_or_reset_for_missing_names() {
+    #[test_case::test_case(Some("MASON"), Some(Color::Red); "case_insensitive_name")]
+    #[test_case::test_case(Some("unknown"), None; "null_entry")]
+    #[test_case::test_case(Some("absent"), None; "missing_entry")]
+    #[test_case::test_case(None, None; "missing_field")]
+    fn structured_fields_select_colors_or_reset_for_missing_names(faction: Option<&str>, expected: Option<Color>) {
         let config = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
 pattern: "{palette(team_{K(label)(all)})}{K(label)(ALL)} {palette(team_{K(faction)(unknown)})}{m}"
 palette:
@@ -521,15 +524,13 @@ palette:
                 encoder.colors[*index].style.text(if name == "team_all" { Color::Green } else { Color::Red });
             }
         }
-        for (faction, expected) in [(Some("MASON"), Some(Color::Red)), (Some("unknown"), None), (Some("absent"), None), (None, None)] {
-            let fields: Vec<_> = faction.map(|value| ("faction", value)).into_iter().collect();
-            let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
-            let mut output = StyledBuffer::default();
-            encoder.encode(&mut output, &record).unwrap();
-            assert_eq!(output.bytes, b"ALL message");
-            assert_eq!(output.styles.iter().map(|(offset, style)| (*offset, style.text)).collect::<Vec<_>>(),
-                [(0, Some(Color::Green)), (4, expected), (11, None)]);
-        }
+        let fields: Vec<_> = faction.map(|value| ("faction", value)).into_iter().collect();
+        let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &record).unwrap();
+        assert_eq!(output.bytes, b"ALL message");
+        assert_eq!(output.styles.iter().map(|(offset, style)| (*offset, style.text)).collect::<Vec<_>>(),
+            [(0, Some(Color::Green)), (4, expected), (11, None)]);
     }
 
     #[test]
@@ -674,16 +675,16 @@ palette:
         assert!(super::super::missing_palette_references(&yaml).is_empty());
     }
 
-    #[test]
-    fn null_and_omitted_palettes_use_default_names() {
+    #[test_case::test_case(false; "omitted")]
+    #[test_case::test_case(true; "null")]
+    fn null_and_omitted_palettes_use_default_names(explicit_null: bool) {
         let mut yaml = fixtures::config("palette-index");
         yaml["appenders"]["test"]["encoder"] = fixtures::encoder("defaults");
         yaml["appenders"]["test"]["encoder"]["kind"] = "palette".into();
-        let omitted = super::super::missing_palette_references(&yaml);
-        assert!(!omitted.contains("info"));
-        assert!(omitted.contains("__test_palette_present"));
-        yaml["appenders"]["test"]["encoder"]["palette"] = serde_yaml::Value::Null;
-        assert_eq!(omitted, super::super::missing_palette_references(&yaml));
+        if explicit_null { yaml["appenders"]["test"]["encoder"]["palette"] = serde_yaml::Value::Null; }
+        let missing = super::super::missing_palette_references(&yaml);
+        assert!(!missing.contains("info"));
+        assert!(missing.contains("__test_palette_present"));
     }
 
     #[test]
@@ -719,10 +720,11 @@ palette:
         }
     }
 
-    #[test]
-    fn removals_span_fields_and_colors_without_filtering_control_sequences() {
-        for (enabled, truecolor) in [(false, false), (true, false), (true, true)] {
-            let mut encoder = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
+    #[test_case::test_case(false, false; "disabled_colors")]
+    #[test_case::test_case(true, false; "native_colors")]
+    #[test_case::test_case(true, true; "truecolor")]
+    fn removals_span_fields_and_colors_without_filtering_control_sequences(enabled: bool, truecolor: bool) {
+        let mut encoder = serde_yaml::from_str::<PaletteEncoderConfig>(r##"
 pattern: "éDR{palette(red)}OP{m}{palette()}tail"
 palette:
   red: "#112233"
@@ -730,61 +732,69 @@ inline-removals:
   - "DROPme"
   - "[0-9]+"
 "##).unwrap().build().unwrap();
-            encoder.enabled = enabled;
-            encoder.truecolor = truecolor;
-            encoder.colors[0].style.text(Color::Red);
-            let record = Record::builder().args(format_args!("me42 kept")).build();
-            let mut output = StyledBuffer::default();
-            encoder.encode(&mut output, &record).unwrap();
-            let expected = if enabled && truecolor { "é\x1b[0;38;2;17;34;51m kepttail" } else { "é kepttail" };
-            assert_eq!(output.bytes, expected.as_bytes());
-            if !enabled { assert!(output.styles.is_empty()); }
-            if enabled && !truecolor {
-                assert_eq!(output.styles[0].0, "é".len());
-                assert_eq!(output.styles[0].1.text, Some(Color::Red));
-            }
+        encoder.enabled = enabled;
+        encoder.truecolor = truecolor;
+        encoder.colors[0].style.text(Color::Red);
+        let record = Record::builder().args(format_args!("me42 kept")).build();
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &record).unwrap();
+        let expected = if enabled && truecolor { "é\x1b[0;38;2;17;34;51m kepttail" } else { "é kepttail" };
+        assert_eq!(output.bytes, expected.as_bytes());
+        if !enabled { assert!(output.styles.is_empty()); }
+        if enabled && !truecolor {
+            assert_eq!(output.styles[0].0, "é".len());
+            assert_eq!(output.styles[0].1.text, Some(Color::Red));
         }
     }
 
     #[test]
-    fn names_are_resolved_at_startup_for_all_levels_and_repeated_switches() {
+    fn duplicate_rgb_values_share_a_palette_entry() {
+        assert_eq!(encoder("severity").colors.len(), 6);
+    }
+
+    #[test_case::test_matrix([Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace])]
+    fn disabled_severity_colors_preserve_plain_output(level: Level) {
+        let encoder = encoder("severity");
+        let values = [("enclosing_function", "named"), ("request", "42")];
+        let record = Record::builder().level(level).module_path(Some("UnchainedPlugin::messages"))
+            .key_values(&values).args(format_args!("hello 世界 {{palette(text)}}")).build();
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &record).unwrap();
+        assert!(output.styles.is_empty());
+        assert_eq!(String::from_utf8(output.bytes).unwrap(),
+            format!("[{level:5}] [UP::messages] named|42|hello 世界 {{palette(text)}}"));
+    }
+
+    #[test_case::test_case(Level::Error, "242;139;130"; "error")]
+    #[test_case::test_case(Level::Warn, "242;204;120"; "warn")]
+    #[test_case::test_case(Level::Info, "140;180;225"; "info")]
+    #[test_case::test_case(Level::Debug, "128;128;128"; "debug")]
+    #[test_case::test_case(Level::Trace, "92;92;92"; "trace")]
+    fn severity_names_resolve_in_truecolor_output(level: Level, rgb: &str) {
         let mut encoder = encoder("severity");
-        assert_eq!(encoder.colors.len(), 6, "duplicate RGB values share an entry");
-        for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-            let values = [("enclosing_function", "named"), ("request", "42")];
-            let record = Record::builder().level(level).module_path(Some("UnchainedPlugin::messages"))
-                .key_values(&values).args(format_args!("hello 世界 {{palette(text)}}")).build();
-            let mut output = StyledBuffer::default();
-            encoder.encode(&mut output, &record).unwrap();
-            assert!(output.styles.is_empty(), "disabled colors must not change native styles");
-            assert_eq!(String::from_utf8(output.bytes).unwrap(),
-                format!("[{level:5}] [UP::messages] named|42|hello 世界 {{palette(text)}}"));
-            encoder.enabled = true;
-            encoder.truecolor = true;
-            let mut bytes = Vec::new();
-            encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes), &record).unwrap();
-            let text = String::from_utf8(bytes).unwrap();
-            assert!(text.contains("\x1b[0;38;2;238;238;238m"));
-            assert!(text.ends_with("\x1b[0m"));
-            encoder.truecolor = false;
-            encoder.enabled = false;
-        }
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        let mut bytes = Vec::new();
+        encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
+            &Record::builder().level(level).build()).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains(&format!("\x1b[0;38;2;{rgb}m{level:5}")), "{text:?}");
+        assert!(text.ends_with("\x1b[0m"));
     }
 
-    #[test]
-    fn empty_palette_with_plain_message_skips_console_configuration() {
+    #[test_case::test_case(log4rs::append::console::Target::Stdout; "stdout")]
+    #[test_case::test_case(log4rs::append::console::Target::Stderr; "stderr")]
+    fn empty_palette_with_plain_message_skips_console_configuration(target: log4rs::append::console::Target) {
         let mut encoder = encoder("empty");
         assert!(encoder.colors.is_empty());
-        for target in [log4rs::append::console::Target::Stdout, log4rs::append::console::Target::Stderr] {
-            encoder.configure(target);
-            assert!(!encoder.enabled);
-            assert!(!encoder.truecolor);
-            let mut buffer = StyledBuffer::default();
-            encoder.encode(&mut buffer, &Record::builder()
-                .args(format_args!("sample 世界")).build()).unwrap();
-            assert_eq!(buffer.bytes, "sample 世界".as_bytes());
-            assert!(buffer.styles.is_empty());
-        }
+        encoder.configure(target);
+        assert!(!encoder.enabled);
+        assert!(!encoder.truecolor);
+        let mut buffer = StyledBuffer::default();
+        encoder.encode(&mut buffer, &Record::builder()
+            .args(format_args!("sample 世界")).build()).unwrap();
+        assert_eq!(buffer.bytes, "sample 世界".as_bytes());
+        assert!(buffer.styles.is_empty());
     }
 
     #[test_case::test_case(false; "native_styles")]
@@ -833,23 +843,19 @@ inline-removals:
         assert_eq!(output.styles.last().unwrap().1, Style::new());
     }
 
-    #[test]
-    fn invalid_inline_metadata_falls_back_to_plain_text() {
+    #[test_case::test_case("not json"; "invalid_json")]
+    #[test_case::test_case(r#"[{"utf8_offset":1,"palette":"accent"}]"#; "inside_utf8_character")]
+    #[test_case::test_case(r#"[{"utf8_offset":5,"palette":"accent"}]"#; "past_message_end")]
+    #[test_case::test_case(r#"[{"utf8_offset":3,"palette":"accent"},{"utf8_offset":0,"palette":null}]"#; "out_of_order")]
+    fn invalid_inline_metadata_falls_back_to_plain_text(colors: &str) {
         let mut encoder = encoder("repeated-message");
         encoder.enabled = true;
-        for colors in [
-            "not json",
-            r#"[{"utf8_offset":1,"palette":"accent"}]"#,
-            r#"[{"utf8_offset":5,"palette":"accent"}]"#,
-            r#"[{"utf8_offset":3,"palette":"accent"},{"utf8_offset":0,"palette":null}]"#,
-        ] {
-            let values = [(COLORS_KEY, colors)];
-            let mut output = StyledBuffer::default();
-            encoder.encode(&mut output, &Record::builder().key_values(&values)
-                .args(format_args!("界x")).build()).unwrap();
-            assert_eq!(output.bytes, "界x|界x".as_bytes(), "{colors}");
-            assert_eq!(output.styles, [(9, Style::new())], "{colors}");
-        }
+        let values = [(COLORS_KEY, colors)];
+        let mut output = StyledBuffer::default();
+        encoder.encode(&mut output, &Record::builder().key_values(&values)
+            .args(format_args!("界x")).build()).unwrap();
+        assert_eq!(output.bytes, "界x|界x".as_bytes());
+        assert_eq!(output.styles, [(9, Style::new())]);
     }
 
     #[test]

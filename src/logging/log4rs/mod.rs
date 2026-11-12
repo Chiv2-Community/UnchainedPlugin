@@ -386,13 +386,12 @@ mod tests {
             .target("serenity::client").level(Level::Info).build()));
     }
 
-    #[test]
-    fn registered_encoders_reject_invalid_removal_patterns() {
-        for kind in ["pattern", "palette"] {
-            assert!(console_config(serde_yaml::to_value(serde_json::json!({
-                "kind": kind, "inline-removals": ["["]
-            })).unwrap()).is_err());
-        }
+    #[test_case::test_case("pattern"; "pattern_encoder")]
+    #[test_case::test_case("palette"; "palette_encoder")]
+    fn registered_encoders_reject_invalid_removal_patterns(kind: &str) {
+        assert!(console_config(serde_yaml::to_value(serde_json::json!({
+            "kind": kind, "inline-removals": ["["]
+        })).unwrap()).is_err());
     }
 
     #[test]
@@ -440,30 +439,26 @@ mod tests {
         }
     }
 
-    #[test]
-    fn registered_palette_encoder_preserves_directive_boundary_escapes() {
+    #[test_case::test_case("{palette(error)}}}{m}", "}message"; "closing_brace")]
+    #[test_case::test_case("{{{palette(error)}{l}{palette()}}}", "{INFO}"; "surrounding_braces")]
+    #[test_case::test_case("{palette(error)}}}}}{m}", "}}message"; "repeated_closing_braces")]
+    #[test_case::test_case(r"{palette(error)}\}{m}", "}message"; "backslash_escape")]
+    #[test_case::test_case("{palette(error)}{{{m}}}", "{message}"; "escaped_message_braces")]
+    #[test_case::test_case("{palette(error)}{palette()}}}{m}", "}message"; "reset_before_escape")]
+    #[test_case::test_case("{palette({l})}}}{m}", "}message"; "dynamic_name")]
+    #[test_case::test_case("{palette(a}}b)}{m}", "message"; "name_closing_brace")]
+    #[test_case::test_case("{palette(a{{b)}{m}", "message"; "name_opening_brace")]
+    #[test_case::test_case("{palette(a))}}b)}}}{m}", "}message"; "name_escaped_delimiters")]
+    #[test_case::test_case(r"{palette(a\)\}b)}}}{m}", "}message"; "name_backslash_delimiters")]
+    #[test_case::test_case(r"\{palette\(missing\)\}{palette()}{h({m})}", "{palette(missing)}message"; "literal_directive")]
+    fn registered_palette_encoder_preserves_directive_boundary_escapes(pattern: &str, expected: &str) {
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
-        for (pattern, expected) in [
-            ("{palette(error)}}}{m}", "}message"),
-            ("{{{palette(error)}{l}{palette()}}}", "{INFO}"),
-            ("{palette(error)}}}}}{m}", "}}message"),
-            (r"{palette(error)}\}{m}", "}message"),
-            ("{palette(error)}{{{m}}}", "{message}"),
-            ("{palette(error)}{palette()}}}{m}", "}message"),
-            ("{palette({l})}}}{m}", "}message"),
-            ("{palette(a}}b)}{m}", "message"),
-            ("{palette(a{{b)}{m}", "message"),
-            ("{palette(a))}}b)}}}{m}", "}message"),
-            (r"{palette(a\)\}b)}}}{m}", "}message"),
-            (r"\{palette\(missing\)\}{palette()}{h({m})}", "{palette(missing)}message"),
-        ] {
-            let mut yaml = fixtures::encoder("boundary-escapes");
-            yaml["pattern"] = pattern.into();
-            let output = render_encoder(&deserializers, yaml, &Record::builder()
-                .level(Level::Info).args(format_args!("message")).build());
-            assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
-        }
+        let mut yaml = fixtures::encoder("boundary-escapes");
+        yaml["pattern"] = pattern.into();
+        let output = render_encoder(&deserializers, yaml, &Record::builder()
+            .level(Level::Info).args(format_args!("message")).build());
+        assert_eq!(String::from_utf8(output).unwrap(), expected);
     }
 
     #[test_case::test_case("m", '{', '>'; "opening_brace")]
@@ -499,30 +494,30 @@ mod tests {
         assert_eq!(output, b"{{{{{{{{{{{{{messagetail");
     }
 
-    #[test]
-    fn registered_palette_names_accept_native_level_format_fills() {
+    #[test_case::test_case("l", '{', '>'; "opening_brace")]
+    #[test_case::test_case("level", '}', '<'; "closing_brace")]
+    #[test_case::test_case("level", '🦀', '>'; "unicode")]
+    #[test_case::test_case("l", '\\', '<'; "backslash")]
+    #[test_case::test_case("l", '(', '>'; "opening_parenthesis")]
+    #[test_case::test_case("level", ')', '<'; "closing_parenthesis")]
+    fn registered_palette_names_accept_native_level_format_fills(field: &str, fill: char, align: char) {
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
-        for (field, fill, align) in [
-            ("l", '{', '>'), ("level", '}', '<'), ("level", '🦀', '>'),
-            ("l", '\\', '<'), ("l", '(', '>'), ("level", ')', '<'),
-        ] {
-            let name = format!("{{{field}:{fill}{align}8}}");
-            let mut palette = std::collections::BTreeMap::<String, Option<String>>::new();
-            for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
-                let mut key = Vec::new();
-                log4rs::encode::pattern::PatternEncoder::new(&name).encode(&mut SimpleWriter(&mut key),
-                    &Record::builder().level(level).build()).unwrap();
-                palette.insert(String::from_utf8(key).unwrap(), None);
-            }
-            let pattern = format!("{{palette({name})}}{{m}}{{palette()}}}}}}");
-            let mut yaml = fixtures::encoder("module-palette");
-            yaml["pattern"] = pattern.as_str().into();
-            yaml["palette"] = serde_yaml::to_value(palette).unwrap();
-            let output = render_encoder(&deserializers, yaml,
-                &Record::builder().level(Level::Info).args(format_args!("message")).build());
-            assert_eq!(output, b"message}", "{pattern}");
+        let name = format!("{{{field}:{fill}{align}8}}");
+        let mut palette = std::collections::BTreeMap::<String, Option<String>>::new();
+        for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+            let mut key = Vec::new();
+            log4rs::encode::pattern::PatternEncoder::new(&name).encode(&mut SimpleWriter(&mut key),
+                &Record::builder().level(level).build()).unwrap();
+            palette.insert(String::from_utf8(key).unwrap(), None);
         }
+        let pattern = format!("{{palette({name})}}{{m}}{{palette()}}}}}}");
+        let mut yaml = fixtures::encoder("module-palette");
+        yaml["pattern"] = pattern.as_str().into();
+        yaml["palette"] = serde_yaml::to_value(palette).unwrap();
+        let output = render_encoder(&deserializers, yaml,
+            &Record::builder().level(Level::Info).args(format_args!("message")).build());
+        assert_eq!(output, b"message}");
     }
 
     #[test]
@@ -535,19 +530,25 @@ mod tests {
     }
 
     #[test]
-    fn configuration_errors_preserve_source_and_validation_boundaries() {
+    fn schema_errors_preserve_config_source_and_cause() {
         let mut yaml = fixtures::config("console");
         yaml["root"]["level"] = "invalid-level".into();
         let error = config_from_value(yaml, "invalid-level-fixture").unwrap_err();
         assert_eq!(error.to_string(), "Failed to parse logger config invalid-level-fixture");
         assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("invalid-level")));
+    }
 
+    #[test]
+    fn appender_errors_preserve_config_source_and_kind() {
         let mut yaml = fixtures::config("console");
         yaml["appenders"]["console"]["kind"] = "missing-appender-kind".into();
         let error = config_from_value(yaml, "invalid-appender-fixture").unwrap_err();
         assert!(error.to_string().starts_with("Invalid logger config invalid-appender-fixture:"));
         assert!(error.to_string().contains("missing-appender-kind"));
+    }
 
+    #[test]
+    fn missing_appender_errors_preserve_config_source_and_cause() {
         let mut yaml = fixtures::config("console");
         yaml["root"]["appenders"] = vec!["missing-appender"].into();
         let error = config_from_value(yaml, "invalid-root-fixture").unwrap_err();
