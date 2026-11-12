@@ -20,7 +20,7 @@ impl EventBroadcastSubscriber {
         }
     }
 
-    fn flush_batch(pending_players: &[String], action: PresenceAction) -> Option<RichText> {
+    fn presence_message(pending_players: &[String], action: PresenceAction) -> Option<RichText> {
         let (first, others) = pending_players.split_first()?;
         Some(match (action, others.is_empty()) {
             (PresenceAction::Joined, true) => crate::rich_text!("📥 **{}** joined the fray.", first),
@@ -30,25 +30,16 @@ impl EventBroadcastSubscriber {
         })
     }
 
-    fn flush_joins(&mut self) {
-        let content = Self::flush_batch(self.pending_joins.as_slice(), PresenceAction::Joined);
-        self.pending_joins.clear();
+    fn flush_presence(&mut self, action: PresenceAction) {
+        let pending = match action {
+            PresenceAction::Joined => &mut self.pending_joins,
+            PresenceAction::Left => &mut self.pending_leaves,
+        };
+        let content = Self::presence_message(pending, action);
+        pending.clear();
         if let Some(message) = content {
             self.broadcaster.publish(BroadcastMessage::from(message));
         }
-    }
-
-    fn flush_leaves(&mut self) {
-        let content = Self::flush_batch(self.pending_leaves.as_slice(), PresenceAction::Left);
-        self.pending_leaves.clear();
-        if let Some(message) = content {
-            self.broadcaster.publish(BroadcastMessage::from(message));
-        }
-    }
-
-    fn flush_all(&mut self) {
-        self.flush_joins();
-        self.flush_leaves();
     }
 }
 
@@ -71,13 +62,13 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
             GameEvent::JoinEvent(join) => {
                 self.pending_joins.push(join.name.clone());
                 if self.pending_joins.len() >= self.max_batch_size {
-                    self.flush_joins();
+                    self.flush_presence(PresenceAction::Joined);
                 }
             }
             GameEvent::LeaveEvent(leave) => {
                 self.pending_leaves.push(leave.name.clone());
                 if self.pending_leaves.len() >= self.max_batch_size {
-                    self.flush_leaves();
+                    self.flush_presence(PresenceAction::Left);
                 }
             }
             GameEvent::MapChangeEvent(map_change) => {
@@ -122,7 +113,8 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
     }
 
     async fn on_tick(&mut self) {
-        self.flush_all();
+        self.flush_presence(PresenceAction::Joined);
+        self.flush_presence(PresenceAction::Left);
     }
 }
 
@@ -139,8 +131,26 @@ mod tests {
             (2, PresenceAction::Joined, "📥 **Alice** and **1** others have joined the battle!"),
             (2, PresenceAction::Left, "📤 **Alice** and **1** others have left the battle!"),
         ] {
-            let text = EventBroadcastSubscriber::flush_batch(&players[..count], action).unwrap();
+            let text = EventBroadcastSubscriber::presence_message(&players[..count], action).unwrap();
             assert_eq!(text.to_discord(), expected);
         }
+    }
+
+    #[tokio::test]
+    async fn tick_flushes_joins_then_leaves_without_repeating_them() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let broadcaster = Box::leak(Box::new(EventPublisher::new(sender)));
+        let mut subscriber = EventBroadcastSubscriber::new(broadcaster);
+        subscriber.pending_joins.push("Alice".into());
+        subscriber.pending_leaves.push("Bob".into());
+        subscriber.on_tick().await;
+        for expected in ["📥 **Alice** joined the fray.", "📤 **Bob** left the battle."] {
+            let message = receiver.try_recv().unwrap();
+            assert_eq!(message.content_ref().unwrap().to_discord(), expected);
+        }
+        assert!(subscriber.pending_joins.is_empty());
+        assert!(subscriber.pending_leaves.is_empty());
+        subscriber.on_tick().await;
+        assert!(receiver.try_recv().is_err());
     }
 }

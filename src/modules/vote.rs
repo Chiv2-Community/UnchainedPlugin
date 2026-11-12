@@ -306,8 +306,8 @@ impl Command<VoteArgs> for VoteCommand {
 
                     let message =
                         BroadcastMessage::new()
-                            .title(crate::rich_text!("Vote for '{}' started by '{}'", command.raw_args, command.actor.display_name))
-                            .content(crate::rich_text!("Type !yes or !no in chat to vote. {}", description))
+                            .title(format!("Vote for '{}' started by '{}'", command.raw_args, command.actor.display_name))
+                            .content(format!("Type !yes or !no in chat to vote. {}", description))
                             .color(0x00FF00);
 
                     self.broadcaster.publish(message);
@@ -354,8 +354,8 @@ impl Command<VoteArgs> for VoteCommand {
             let active = state.active_vote.take().unwrap();
             if success {
                 let message = BroadcastMessage::new()
-                    .title(crate::rich_text!("{} SUCCEEDED", active.logic.vote_description(active.raw_target_args.as_slice())))
-                    .content(crate::rich_text!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
+                    .title(format!("{} SUCCEEDED", active.logic.vote_description(active.raw_target_args.as_slice())))
+                    .content(format!("Result: {} Yes, {} No. The action is now being executed.", active.yes_votes.len(), active.no_votes.len()))
                     .color(0x00FF00);
                 self.broadcaster.publish(message);
 
@@ -364,8 +364,8 @@ impl Command<VoteArgs> for VoteCommand {
                 active.logic.on_success(active.target_args);
             } else {
                 let message = BroadcastMessage::new()
-                    .title(crate::rich_text!("{} FAILED", active.logic.vote_description(active.raw_target_args.as_slice())))
-                    .content(crate::rich_text!("Result: {} Yes, {} No. {}", active.yes_votes.len(), active.no_votes.len(), failure_reason))
+                    .title(format!("{} FAILED", active.logic.vote_description(active.raw_target_args.as_slice())))
+                    .content(format!("Result: {} Yes, {} No. {}", active.yes_votes.len(), active.no_votes.len(), failure_reason))
                     .color(0xFF0000);
                 self.broadcaster.publish(message);
             }
@@ -408,7 +408,7 @@ impl Command<YesArgs> for YesCommand {
             active.no_votes.remove(&voter);
             active.yes_votes.insert(voter);
 
-            self.broadcaster.publish(crate::rich_text!("{} voted YES", command.actor.display_name).into());
+            self.broadcaster.publish(format!("{} voted YES", command.actor.display_name).into());
         }
     }
 }
@@ -447,7 +447,7 @@ impl Command<NoArgs> for NoCommand {
             let voter = command.actor.display_name.clone();
             active.yes_votes.remove(&voter);
             active.no_votes.insert(voter);
-            self.broadcaster.publish(crate::rich_text!("{} voted NO", command.actor.display_name).into());
+            self.broadcaster.publish(format!("{} voted NO", command.actor.display_name).into());
         }
     }
 }

@@ -242,7 +242,7 @@ impl CommandSubscriber {
                 if !executed_from_console {
                     self
                         .broadcaster
-                        .publish(crate::rich_text!("Error: User '{}' attempted to execute command '{}' from {}, but it must be executed from {}", req.actor.display_name, req.name, req.source, required_source).into());
+                        .publish(format!("Error: User '{}' attempted to execute command '{}' from {}, but it must be executed from {}", req.actor.display_name, req.name, req.source, required_source).into());
                 }
                 return CommandOutcome::Rejected(CommandRejected {
                     name: req.name.clone(),
@@ -268,7 +268,7 @@ impl CommandSubscriber {
 
             if !executed_from_console {
                 self.broadcaster.publish(
-                    crate::rich_text!(
+                    format!(
                         "Error: User '{}' is not allowed to execute command '{}'.",
                         req.actor.display_name, req.name
                     )
@@ -324,7 +324,7 @@ impl Subscriber<GameEvent> for CommandSubscriber {
             if maybe_command.is_none() {
                 let rejection_reason = format!("Command '{}' does not exist", req.name);
                 self.broadcaster.publish(
-                    crate::rich_text!(
+                    format!(
                         "User '{}' attempted to execute non-existent command '{}'.",
                         req.actor.display_name, req.name
                     )
