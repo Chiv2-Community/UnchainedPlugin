@@ -45,9 +45,9 @@ impl RichText {
             for chunk in &mut text.0 {
                 match chunk {
                     RichTextChunk::Text(text) => {
-                        let mut parts = text.split("{}");
-                        let mut result = parts.next().unwrap_or_default().to_owned();
-                        for part in parts {
+                        let Some((first, rest)) = text.split_once("{}") else { continue; };
+                        let mut result = first.to_owned();
+                        for part in rest.split("{}") {
                             result.push_str(values.next().expect("missing rich_text! argument"));
                             result.push_str(part);
                         }
