@@ -24,7 +24,7 @@ impl ChatSink for LoggingChatSink {
             ChatSource::Discord(channel) => ("external", channel.into()),
             ChatSource::Console(_) => return,
         };
-        let source = chat.chat_source.to_string();
+        let source: &'static str = chat.chat_source.into();
         let target = match chat.chat_source {
             ChatSource::Native(NativeChat::Player { channel: EChatType::AllSay, .. }) => "chat_log::all",
             ChatSource::Native(NativeChat::Player { channel: EChatType::TeamSay, .. }) => "chat_log::team",
@@ -36,7 +36,7 @@ impl ChatSink for LoggingChatSink {
         };
         let label = chat.chat_label();
         sinfo!(target: target, chat = channel, faction = chat.faction(), label = label.as_str(),
-            chat_kind = kind, source = source.as_str(), sender = chat.sender.as_str();
+            chat_kind = kind, source = source, sender = chat.sender.as_str();
             "{}", chat.message);
     }
 }

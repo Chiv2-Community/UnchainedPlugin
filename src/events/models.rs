@@ -78,7 +78,7 @@ pub struct MatchEnd {
 }
 
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 pub enum ChatSource {
     Discord(ChatType),
     Console(ChatType),
