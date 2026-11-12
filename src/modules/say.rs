@@ -35,7 +35,7 @@ impl Command<SayArgs> for SayCommand {
 
     async fn execute(&self, args: SayArgs, command: &CommandRequest) {
         let message = args.message.join(" ");
-        let mut broadcast = BroadcastMessage::from(crate::rich_text!("{}", message));
+        let mut broadcast = BroadcastMessage::from(message);
         if command.source == CommandSource::ServerConsole {
             broadcast = broadcast.title("Server Console").color(0x00FFFF);
         }

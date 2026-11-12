@@ -86,16 +86,16 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
                 if !unsafe { SERVER_STARTED } {
                     self.broadcaster.publish(
                         BroadcastMessage::new()
-                            .title(crate::rich_text!("🚀️ Server Started"))
-                            .content(crate::rich_text!("Map {}.", new_map_name))
+                            .title("🚀️ Server Started")
+                            .content(format!("Map {new_map_name}."))
                             .color(0x5865F2)
                     );
                     unsafe { SERVER_STARTED = true };
                 } else {
                     self.broadcaster.publish(
                         BroadcastMessage::new()
-                            .title(crate::rich_text!("🗺️ Map Change"))
-                            .content(crate::rich_text!("Starting match on {}.", new_map_name))
+                            .title("🗺️ Map Change")
+                            .content(format!("Starting match on {new_map_name}."))
                             .color(0x5865F2)
                     );
                 }
@@ -103,17 +103,17 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
             GameEvent::MatchEndEvent(match_end) => {
                 self.broadcaster.publish(
                     BroadcastMessage::new()
-                        .title(crate::rich_text!("🏁 Match Ended"))
-                        .field(crate::rich_text!("Winner"), crate::rich_text!("{}", match_end.winner_team))
-                        .field(crate::rich_text!("Score"), crate::rich_text!("{}", match_end.final_score))
+                        .title("🏁 Match Ended")
+                        .field("Winner", match_end.winner_team.as_str())
+                        .field("Score", match_end.final_score.as_str())
                         .color(0x5865F2)
                 );
             },
             GameEvent::ServerRestartEvent => {
                 self.broadcaster.publish(
                     BroadcastMessage::new()
-                        .title(crate::rich_text!("🔄 Server Restart"))
-                        .content(crate::rich_text!("Server is restarting"))
+                        .title("🔄 Server Restart")
+                        .content("Server is restarting")
                         .color(0xE67E22)
                 );
             }

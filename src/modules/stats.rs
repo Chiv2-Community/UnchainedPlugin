@@ -43,7 +43,7 @@ impl StatsTrackerState {
 
     fn get_top_5_leaderboard(&self) -> RichText {
         if self.global_stats.total_kills.is_empty() {
-            return crate::rich_text!("The history books are empty. No kills recorded yet!");
+            return "The history books are empty. No kills recorded yet!".into();
         }
 
         let mut entries: Vec<(&String, &u32)> = self.global_stats.total_kills.iter().collect();

@@ -217,7 +217,7 @@ impl CommandSubscriber {
                 #[cfg(not(test))]
                 crate::game::chivalry2::send_ingame_message(full_msg, None);
                 #[cfg(test)]
-                self.broadcaster.publish(crate::rich_text!("{}", full_msg).into());
+                self.broadcaster.publish(full_msg.into());
             }
             CommandSource::ServerConsole => {
                 sinfo!("{}: {}\n{}\n{}", title, content, full_text_game, footer);

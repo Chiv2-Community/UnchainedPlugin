@@ -35,10 +35,10 @@ impl DuelManagerSubscriber {
     fn format_results(&self, duel: &ActiveDuel, winner: &str, loser: &str) -> BroadcastMessage {
         let duration = duel.start_time.elapsed().as_secs();
         let mut msg = BroadcastMessage::new()
-            .title(crate::rich_text!("🏆 DUEL CONCLUDED"))
+            .title("🏆 DUEL CONCLUDED")
             .color(0xe67e22)
-            .content(crate::rich_text!("{} has defeated {}!", winner, loser))
-            .field(crate::rich_text!("Duration"), crate::rich_text!("{} seconds", duration));
+            .content(format!("{winner} has defeated {loser}!"))
+            .field("Duration", format!("{duration} seconds"));
 
         for player in [&duel.p1, &duel.p2] {
             let dmg = duel.damage_dealt.get(player).unwrap_or(&0.0);
@@ -52,7 +52,7 @@ impl DuelManagerSubscriber {
                 }
             }
             
-            msg = msg.field(crate::rich_text!("Stats: {}", player), crate::rich_text!("{}", tech_stats));
+            msg = msg.field(format!("Stats: {player}"), tech_stats);
         }
 
         msg
