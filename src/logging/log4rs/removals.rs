@@ -86,21 +86,17 @@ mod tests {
     use super::*;
     use log4rs::encode::writer::simple::SimpleWriter;
 
-    #[test]
-    fn removal_patterns_preserve_regex_semantics() {
-        for (patterns, text, expected) in [
-            (vec!["ab|cd", "é+"], "abécdé kept", " kept"),
-            (vec!["(?i)drop", "KEEP"], "DROP drop KEEP keep", "   keep"),
-            (vec!["", "x"], "xyz", "xyz"),
-            (vec![".+"], "all gone", ""),
-        ] {
-            let regex = compile(&patterns.into_iter().map(str::to_owned).collect::<Vec<_>>()).unwrap().unwrap();
-            let mut line = RenderedLine::default();
-            std::io::Write::write_all(&mut line, text.as_bytes()).unwrap();
-            let mut output = Vec::new();
-            line.emit(&mut SimpleWriter(&mut output), &regex).unwrap();
-            assert_eq!(output, expected.as_bytes());
-        }
+    #[test_case::test_case(&["ab|cd", "é+"], "abécdé kept", " kept"; "alternation_and_unicode")]
+    #[test_case::test_case(&["(?i)drop", "KEEP"], "DROP drop KEEP keep", "   keep"; "scoped_flags")]
+    #[test_case::test_case(&["", "x"], "xyz", "xyz"; "empty_alternative")]
+    #[test_case::test_case(&[".+"], "all gone", ""; "entire_line")]
+    fn removal_patterns_preserve_regex_semantics(patterns: &[&str], text: &str, expected: &str) {
+        let regex = compile(&patterns.iter().map(|pattern| (*pattern).to_owned()).collect::<Vec<_>>()).unwrap().unwrap();
+        let mut line = RenderedLine::default();
+        std::io::Write::write_all(&mut line, text.as_bytes()).unwrap();
+        let mut output = Vec::new();
+        line.emit(&mut SimpleWriter(&mut output), &regex).unwrap();
+        assert_eq!(output, expected.as_bytes());
     }
 
     #[test]
@@ -108,20 +104,20 @@ mod tests {
         assert!(compile(&[]).unwrap().is_none());
     }
 
-    #[test]
-    fn removals_span_multiple_style_boundaries() {
+    #[test_case::test_case("DROP[0-9]+"; "single_match")]
+    #[test_case::test_case("DROP[0-9]+|"; "empty_matches")]
+    #[test_case::test_case("D|RO|P|[0-9]+"; "adjacent_matches")]
+    fn removals_span_multiple_style_boundaries(pattern: &str) {
         use std::io::Write as _;
-        for pattern in ["DROP[0-9]+", "DROP[0-9]+|", "D|RO|P|[0-9]+"] {
-            let mut line = RenderedLine::default();
-            for text in ["éD", "RO", "P42尾"] {
-                line.write_all(text.as_bytes()).unwrap();
-                line.set_style(&Style::new()).unwrap();
-            }
-            let mut output = RenderedLine::default();
-            line.emit(&mut output, &Regex::new(pattern).unwrap()).unwrap();
-            assert_eq!(output.text, "é尾".as_bytes(), "{pattern}");
-            assert_eq!(output.controls.iter().map(|(offset, _)| *offset).collect::<Vec<_>>(), [2, 2, 5]);
+        let mut line = RenderedLine::default();
+        for text in ["éD", "RO", "P42尾"] {
+            line.write_all(text.as_bytes()).unwrap();
+            line.set_style(&Style::new()).unwrap();
         }
+        let mut output = RenderedLine::default();
+        line.emit(&mut output, &Regex::new(pattern).unwrap()).unwrap();
+        assert_eq!(output.text, "é尾".as_bytes());
+        assert_eq!(output.controls.iter().map(|(offset, _)| *offset).collect::<Vec<_>>(), [2, 2, 5]);
     }
 
     #[test]

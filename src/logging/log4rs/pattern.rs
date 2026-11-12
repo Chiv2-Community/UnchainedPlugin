@@ -155,42 +155,37 @@ mod tests {
         assert_eq!(String::from_utf8(output).unwrap(), "界".repeat(32));
     }
 
-    #[test]
-    fn function_display_cleans_suffix_and_truncates_left_while_preserving_metadata() {
-        for (name, display) in [
-            ("Tick_detour_fkt", "Tick"),
-            ("long_function_name_that_exceeds_thirty_two_characters_detour_fkt",
-                "at_exceeds_thirty_two_characters"),
-            ("keep_detour_fkt_inside", "keep_detour_fkt_inside"),
-        ] {
-            let values = [(FUNCTION_KEY, name)];
-            let record = Record::builder().key_values(&values).build();
-            let mut output = Vec::new();
-            PatternEncoder::new("{fn:<-32.32}|{K(enclosing_function)}")
-                .encode(&mut SimpleWriter(&mut output), &record).unwrap();
-            assert_eq!(String::from_utf8(output).unwrap(), format!("{display:<32}|{name}"));
-        }
+    #[test_case::test_case("Tick_detour_fkt", "Tick"; "detour_suffix")]
+    #[test_case::test_case("long_function_name_that_exceeds_thirty_two_characters_detour_fkt", "at_exceeds_thirty_two_characters"; "left_truncation")]
+    #[test_case::test_case("keep_detour_fkt_inside", "keep_detour_fkt_inside"; "interior_suffix")]
+    fn function_display_preserves_raw_metadata(name: &str, display: &str) {
+        let values = [(FUNCTION_KEY, name)];
+        let record = Record::builder().key_values(&values).build();
+        let mut output = Vec::new();
+        PatternEncoder::new("{fn:<-32.32}|{K(enclosing_function)}")
+            .encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), format!("{display:<32}|{name}"));
     }
 
-    #[test]
-    fn aliases_respect_escaping_nesting_format_specs_and_missing_values() {
+    #[test_case::test_case("{{sm}}", "{sm}"; "module_brace_escape")]
+    #[test_case::test_case(r"\{sm\}", "{sm}"; "module_backslash_escape")]
+    #[test_case::test_case("{{{sm}}}", "{UP::messages}"; "module_surrounding_braces")]
+    #[test_case::test_case("{sm}|{sm}", "UP::messages|UP::messages"; "repeated_module")]
+    #[test_case::test_case("{({sm}):>15}", "   UP::messages"; "nested_module_alignment")]
+    #[test_case::test_case("{sm:>15}", "   UP::messages"; "module_right_alignment")]
+    #[test_case::test_case("{sm:<24}", "UP::messages            "; "module_left_alignment")]
+    #[test_case::test_case("{sm:-.8}", "messages"; "module_left_truncation")]
+    #[test_case::test_case("{{fn}}", "{fn}"; "function_brace_escape")]
+    #[test_case::test_case(r"\{fn\}", "{fn}"; "function_backslash_escape")]
+    #[test_case::test_case("{{{fn}}}", "{???}"; "missing_function_surrounding_braces")]
+    #[test_case::test_case("{fn}|{fn}", "???|???"; "repeated_missing_function")]
+    #[test_case::test_case("{fn:>5}", "  ???"; "missing_function_alignment")]
+    #[test_case::test_case("{({fn}):>5}", "  ???"; "nested_missing_function_alignment")]
+    #[test_case::test_case("{fn:.2}", "??"; "missing_function_truncation")]
+    fn aliases_respect_pattern_syntax(pattern: &str, expected: &str) {
         let record = Record::builder().module_path(Some("UnchainedPlugin::messages")).build();
-        for (pattern, expected) in [
-            ("{{sm}}", "{sm}"),
-            (r"\{sm\}", "{sm}"),
-            ("{{{sm}}}", "{UP::messages}"),
-            ("{sm}|{sm}", "UP::messages|UP::messages"),
-            ("{({sm}):>15}", "   UP::messages"),
-            ("{sm:>15}", "   UP::messages"),
-            ("{sm:<24}", "UP::messages            "),
-            ("{sm:-.8}", "messages"),
-            ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
-            ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
-            ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
-        ] {
-            let mut output = Vec::new();
-            PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();
-            assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
-        }
+        let mut output = Vec::new();
+        PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), expected);
     }
 }

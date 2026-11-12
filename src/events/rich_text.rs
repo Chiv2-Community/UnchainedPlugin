@@ -283,31 +283,22 @@ mod tests {
         );
     }
 
-    #[test]
-    fn markdown_spans_form_the_expected_chunks() {
-        for (input, chunk) in [
-            (
-                "**a *b***",
-                Bold(RichText::from("a ") + Italics("b".into())),
-            ),
-            (
-                "*a **b** c*",
-                Italics(RichText::from("a ") + Bold("b".into()) + " c"),
-            ),
-            ("__underlined__", Underline("underlined".into())),
-            ("_italic_", Italics("italic".into())),
-            ("***both***", Bold(Italics("both".into()).into())),
-            (r"\*雪\*", Text("*雪*".into())),
-        ] {
-            assert_eq!(rich_text!(input), RichText::from(chunk), "{input}");
-        }
+    #[test_case::test_case("**a *b***", Bold(RichText::from("a ") + Italics("b".into())); "italic_inside_bold")]
+    #[test_case::test_case("*a **b** c*", Italics(RichText::from("a ") + Bold("b".into()) + " c"); "bold_inside_italic")]
+    #[test_case::test_case("__underlined__", Underline("underlined".into()); "underline")]
+    #[test_case::test_case("_italic_", Italics("italic".into()); "underscore_italic")]
+    #[test_case::test_case("***both***", Bold(Italics("both".into()).into()); "combined_delimiters")]
+    #[test_case::test_case(r"\*雪\*", Text("*雪*".into()); "escaped_markers")]
+    fn markdown_spans_form_the_expected_chunks(input: &str, chunk: RichTextChunk) {
+        assert_eq!(rich_text!(input), RichText::from(chunk));
     }
 
-    #[test]
-    fn unmatched_markers_remain_literal() {
-        for input in ["**unclosed", "trailing\\", "a **b *c", "__x"] {
-            assert_eq!(rich_text!(input).to_plain_text(), input);
-        }
+    #[test_case::test_case("**unclosed"; "bold")]
+    #[test_case::test_case("trailing\\"; "escape")]
+    #[test_case::test_case("a **b *c"; "nested")]
+    #[test_case::test_case("__x"; "underline")]
+    fn unmatched_markers_remain_literal(input: &str) {
+        assert_eq!(rich_text!(input).to_plain_text(), input);
     }
 
     #[test]

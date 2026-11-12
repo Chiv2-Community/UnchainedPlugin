@@ -75,13 +75,13 @@ mod tests {
         assert_eq!(broadcast_parts(&encoded), Some(("Map Change", "Starting match on Wardenglade. Good luck! Mode: FFA", Some(0xFFFFFF))));
     }
 
-    #[test]
-    fn untitled_and_empty_title_broadcasts_remain_plain() {
-        for title in [None, Some(""), Some("🗺️\n ")] {
-            let mut message = BroadcastMessage::new().content("Hello\nworld");
-            message.title = title.map(Into::into);
-            assert_eq!(InGameChatBroadcastSubscriber::encode(&message), "Hello world");
-        }
+    #[test_case::test_case(None; "absent")]
+    #[test_case::test_case(Some(""); "empty")]
+    #[test_case::test_case(Some("🗺️\n "); "empty_after_normalization")]
+    fn untitled_broadcasts_remain_plain(title: Option<&str>) {
+        let mut message = BroadcastMessage::new().content("Hello\nworld");
+        message.title = title.map(Into::into);
+        assert_eq!(InGameChatBroadcastSubscriber::encode(&message), "Hello world");
     }
 
     #[test]
@@ -95,19 +95,28 @@ mod tests {
         assert_eq!(color, Some(0xFFFFFF));
     }
 
-    #[test]
-    fn broadcast_parser_accepts_bare_headers_and_rejects_malformed_headers() {
-        assert_eq!(broadcast_parts("{$Only title}\n"), Some(("Only title", "", None)));
-        assert_eq!(broadcast_parts("{$Title}\nbody\nnext line"), Some(("Title", "body\nnext line", None)));
-        for malformed in [
-            "Map Change\nbody", "[Unchained broadcast] title\nbody", "{title}\nbody",
-            "{$title\nbody", "{$title}body", "{$title}", "{$}\nbody",
-            "{$ title}\nbody", "{$title }\nbody", "{$title}\r\nbody",
-            "{$title\nother}\nbody",
-            "{$title|#FF}\nbody", "{$title|#GG0000}\nbody", "{$title|#1000000}\nbody",
-        ] {
-            assert!(broadcast_parts(malformed).is_none(), "{malformed:?}");
-        }
+    #[test_case::test_case("{$Title}\n", "", None; "empty_body")]
+    #[test_case::test_case("{$Title}\nbody\nnext line", "body\nnext line", None; "multiline_body")]
+    #[test_case::test_case("{$Title|#12abef}\nHello", "Hello", Some(0x12ABEF); "lowercase_rgb")]
+    fn broadcast_parser_accepts_headers(input: &str, body: &str, color: Option<u32>) {
+        assert_eq!(broadcast_parts(input), Some(("Title", body, color)));
+    }
+
+    #[test_case::test_case("Map Change\nbody"; "ordinary_text")]
+    #[test_case::test_case("{title}\nbody"; "missing_marker")]
+    #[test_case::test_case("{$title\nbody"; "unclosed_header")]
+    #[test_case::test_case("{$title}body"; "missing_separator")]
+    #[test_case::test_case("{$title}"; "missing_body_line")]
+    #[test_case::test_case("{$}\nbody"; "empty_title")]
+    #[test_case::test_case("{$ title}\nbody"; "leading_title_space")]
+    #[test_case::test_case("{$title }\nbody"; "trailing_title_space")]
+    #[test_case::test_case("{$title}\r\nbody"; "crlf_separator")]
+    #[test_case::test_case("{$title\nother}\nbody"; "multiline_title")]
+    #[test_case::test_case("{$title|#FF}\nbody"; "short_rgb")]
+    #[test_case::test_case("{$title|#GG0000}\nbody"; "nonhex_rgb")]
+    #[test_case::test_case("{$title|#1000000}\nbody"; "long_rgb")]
+    fn broadcast_parser_rejects_malformed_headers(input: &str) {
+        assert!(broadcast_parts(input).is_none());
     }
 
     #[test]
@@ -116,24 +125,18 @@ mod tests {
         let encoded = InGameChatBroadcastSubscriber::encode(&message);
         assert_eq!(encoded, "{$Title|#123456|#12ABEF}\nHello");
         assert_eq!(broadcast_parts(&encoded), Some(("Title|#123456", "Hello", Some(0x12ABEF))));
-        assert_eq!(broadcast_parts("{$Title|#12abef}\nHello"), Some(("Title", "Hello", Some(0x12ABEF))));
     }
 
-    #[test]
-    fn emoji_removal_normalizes_whitespace() {
-        for (input, expected) in [
-            ("Hello 🛠️ World!", "Hello World!"),
-            ("🛠️ World", "World"),
-            ("Hello 🛠️", "Hello"),
-            ("🇩🇪 Germany", "Germany"),
-            ("No emoji here", "No emoji here"),
-            ("Hello🛠️World", "Hello World"),
-            (" \t雪\r\n\u{2003}世界\u{a0} ", "雪 世界"),
-            ("🛠️\n🎮\t", ""),
-            ("", ""),
-        ] {
-            let result = InGameChatBroadcastSubscriber::strip_emojis(input);
-            assert_eq!(result, expected, "Failed for input: {:?}", input);
-        }
+    #[test_case::test_case("Hello 🛠️ World!", "Hello World!"; "interior_emoji")]
+    #[test_case::test_case("🛠️ World", "World"; "leading_emoji")]
+    #[test_case::test_case("Hello 🛠️", "Hello"; "trailing_emoji")]
+    #[test_case::test_case("🇩🇪 Germany", "Germany"; "flag")]
+    #[test_case::test_case("No emoji here", "No emoji here"; "plain_text")]
+    #[test_case::test_case("Hello🛠️World", "Hello World"; "adjacent_words")]
+    #[test_case::test_case(" \t雪\r\n\u{2003}世界\u{a0} ", "雪 世界"; "unicode_whitespace")]
+    #[test_case::test_case("🛠️\n🎮\t", ""; "only_removed_text")]
+    #[test_case::test_case("", ""; "empty")]
+    fn emoji_removal_normalizes_whitespace(input: &str, expected: &str) {
+        assert_eq!(InGameChatBroadcastSubscriber::strip_emojis(input), expected);
     }
 }
