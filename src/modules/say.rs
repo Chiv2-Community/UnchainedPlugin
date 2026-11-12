@@ -48,19 +48,19 @@ mod tests {
     use super::*;
     use crate::test_utils::{mock_actor, mock_command_request};
 
+    #[test_case::test_case(CommandSource::ServerConsole, Some("Server Console"), Some(0x00FFFF); "server_console")]
+    #[test_case::test_case(CommandSource::Discord, None, None; "discord")]
+    #[test_case::test_case(CommandSource::GameChat, None, None; "game_chat")]
     #[tokio::test]
-    async fn console_say_uses_title_without_changing_other_sources_or_literal_text() {
+    async fn say_presentation_follows_source(source: CommandSource, title: Option<&str>, color: Option<u32>) {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let command = SayCommand::new(Box::leak(Box::new(EventPublisher::new(sender))));
-        for source in [CommandSource::ServerConsole, CommandSource::Discord, CommandSource::GameChat] {
-            let mut request = mock_command_request(mock_actor("Admin"), "say", vec![]);
-            request.source = source.clone();
-            command.execute(SayArgs { message: vec!["<hello>".into(), "**world**".into()] }, &request).await;
-            let broadcast = receiver.recv().await.unwrap();
-            assert_eq!(broadcast.title.as_ref().map(|title| title.to_plain_text()),
-                (source == CommandSource::ServerConsole).then(|| "Server Console".to_string()));
-            assert_eq!(broadcast.color, (source == CommandSource::ServerConsole).then_some(0x00FFFF));
-            assert_eq!(broadcast.content_ref().unwrap().to_plain_text(), "<hello> **world**");
-        }
+        let mut request = mock_command_request(mock_actor("Admin"), "say", vec![]);
+        request.source = source;
+        command.execute(SayArgs { message: vec!["<hello>".into(), "**world**".into()] }, &request).await;
+        let broadcast = receiver.try_recv().unwrap();
+        assert_eq!(broadcast.title.as_ref().map(|title| title.to_plain_text()), title.map(str::to_owned));
+        assert_eq!(broadcast.color, color);
+        assert_eq!(broadcast.content_ref().unwrap().to_plain_text(), "<hello> **world**");
     }
 }

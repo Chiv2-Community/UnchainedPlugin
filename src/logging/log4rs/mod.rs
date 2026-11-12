@@ -466,28 +466,37 @@ mod tests {
         }
     }
 
-    #[test]
-    fn registered_palette_encoder_preserves_native_format_fills() {
+    #[test_case::test_case("m", '{', '>'; "opening_brace")]
+    #[test_case::test_case("m", '}', '<'; "closing_brace")]
+    #[test_case::test_case("({m})", '{', '<'; "nested_opening_brace")]
+    #[test_case::test_case("h({m})", '}', '>'; "highlight_closing_brace")]
+    #[test_case::test_case("m", '🦀', '>'; "unicode")]
+    #[test_case::test_case("({m})", '🦀', '<'; "nested_unicode")]
+    #[test_case::test_case("({m})", '\\', '<'; "nested_backslash")]
+    #[test_case::test_case("m", '(', '<'; "opening_parenthesis")]
+    #[test_case::test_case("h({m})", ')', '>'; "highlight_closing_parenthesis")]
+    fn registered_palette_encoder_preserves_native_format_fills(formatter: &str, fill: char, align: char) {
         let mut deserializers = Deserializers::default();
         register(&mut deserializers);
         let record = Record::builder().level(Level::Info).args(format_args!("message")).build();
-        for (formatter, fill, align) in [
-            ("m", '{', '>'), ("m", '}', '<'),
-            ("({m})", '{', '<'), ("h({m})", '}', '>'),
-            ("m", '🦀', '>'), ("({m})", '🦀', '<'),
-            ("({m})", '\\', '<'), ("m", '(', '<'), ("h({m})", ')', '>'),
-        ] {
-            let native = format!("{{{formatter}:{fill}{align}20}}tail");
-            let mut expected = Vec::new();
-            log4rs::encode::pattern::PatternEncoder::new(&native)
-                .encode(&mut SimpleWriter(&mut expected), &record).unwrap();
-            let pattern = format!("{{palette(error)}}{{{formatter}:{fill}{align}20}}{{palette()}}tail");
-            let mut yaml = fixtures::encoder("module-palette");
-            yaml["pattern"] = pattern.as_str().into();
-            let output = render_encoder(&deserializers, yaml, &record);
-            assert_eq!(output, expected, "{pattern}");
-        }
-        console_config(fixtures::encoder("native-fill")).unwrap();
+        let native = format!("{{{formatter}:{fill}{align}20}}tail");
+        let mut expected = Vec::new();
+        log4rs::encode::pattern::PatternEncoder::new(&native)
+            .encode(&mut SimpleWriter(&mut expected), &record).unwrap();
+        let pattern = format!("{{palette(error)}}{{{formatter}:{fill}{align}20}}{{palette()}}tail");
+        let mut yaml = fixtures::encoder("module-palette");
+        yaml["pattern"] = pattern.as_str().into();
+        let output = render_encoder(&deserializers, yaml, &record);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn native_fill_before_palette_directive_is_preserved() {
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        let output = render_encoder(&deserializers, fixtures::encoder("native-fill"),
+            &Record::builder().args(format_args!("message")).build());
+        assert_eq!(output, b"{{{{{{{{{{{{{messagetail");
     }
 
     #[test]
@@ -546,8 +555,8 @@ mod tests {
         assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("missing-appender")));
     }
 
-    #[test]
-    fn file_appenders_support_registered_pattern_aliases() {
+    #[test_case::test_matrix(["file", "rolling_file"], [None, Some("pattern")])]
+    fn file_appenders_support_registered_pattern_aliases(appender_kind: &str, encoder_kind: Option<&str>) {
         struct TempDir(PathBuf);
         impl Drop for TempDir {
             fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
@@ -559,24 +568,19 @@ mod tests {
 
         let fields = [("enclosing_function", "file_fixture")];
         let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
-        for appender_kind in ["file", "rolling_file"] {
-            for encoder_kind in [None, Some("pattern")] {
-                let path = dir.0.join("output.log");
-                let mut yaml = fixtures::config("file-pattern");
-                let file = &mut yaml["appenders"]["file"];
-                file["kind"] = appender_kind.into();
-                file["path"] = path.to_string_lossy().as_ref().into();
-                file["encoder"]["pattern"] = "{fn}|{m}{n}".into();
-                if let Some(kind) = encoder_kind { file["encoder"]["kind"] = kind.into(); }
-                if appender_kind == "rolling_file" { file["policy"] = fixtures::config("rolling-policy"); }
-                let config = config_from_value(yaml, "file-pattern-test").unwrap();
-                let logger = log4rs::Logger::new(config);
-                logger.log(&record);
-                logger.flush();
-                assert_eq!(std::fs::read_to_string(&path).unwrap().lines().collect::<Vec<_>>(),
-                    ["file_fixture|message"], "{appender_kind}, {encoder_kind:?}");
-            }
-        }
+        let path = dir.0.join("output.log");
+        let mut yaml = fixtures::config("file-pattern");
+        let file = &mut yaml["appenders"]["file"];
+        file["kind"] = appender_kind.into();
+        file["path"] = path.to_string_lossy().as_ref().into();
+        file["encoder"]["pattern"] = "{fn}|{m}{n}".into();
+        if let Some(kind) = encoder_kind { file["encoder"]["kind"] = kind.into(); }
+        if appender_kind == "rolling_file" { file["policy"] = fixtures::config("rolling-policy"); }
+        let config = config_from_value(yaml, "file-pattern-test").unwrap();
+        let logger = log4rs::Logger::new(config);
+        logger.log(&record);
+        logger.flush();
+        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().collect::<Vec<_>>(), ["file_fixture|message"]);
     }
 
     #[test]

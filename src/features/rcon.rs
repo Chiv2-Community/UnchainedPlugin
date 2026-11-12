@@ -70,9 +70,15 @@ mod tests {
         assert_eq!(command.name, "say");
         assert_eq!(command.args, ["hello world"]);
         assert_eq!(command.source, crate::events::models::CommandSource::ServerConsole);
-        for line in ["teamsay hello", "!say hello", "cmd quit", "say;quit", "say \"unterminated"] {
-            assert!(console_say_request(line).is_none(), "{line}");
-        }
+    }
+
+    #[test_case::test_case("teamsay hello"; "team_chat")]
+    #[test_case::test_case("!say hello"; "chat_command_prefix")]
+    #[test_case::test_case("cmd quit"; "other_command")]
+    #[test_case::test_case("say;quit"; "command_separator")]
+    #[test_case::test_case("say \"unterminated"; "unclosed_quote")]
+    fn rcon_say_rejects_other_commands_and_malformed_input(line: &str) {
+        assert!(console_say_request(line).is_none());
     }
 
     #[test]

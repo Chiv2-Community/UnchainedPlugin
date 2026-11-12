@@ -122,18 +122,14 @@ impl Subscriber<GameEvent> for EventBroadcastSubscriber {
 mod tests {
     use super::*;
 
-    #[test]
-    fn presence_templates_preserve_text_and_emphasis() {
+    #[test_case::test_case(1, PresenceAction::Joined, "📥 **Alice** joined the fray."; "single_join")]
+    #[test_case::test_case(1, PresenceAction::Left, "📤 **Alice** left the battle."; "single_leave")]
+    #[test_case::test_case(2, PresenceAction::Joined, "📥 **Alice** and **1** others have joined the battle!"; "batch_join")]
+    #[test_case::test_case(2, PresenceAction::Left, "📤 **Alice** and **1** others have left the battle!"; "batch_leave")]
+    fn presence_templates_preserve_text_and_emphasis(count: usize, action: PresenceAction, expected: &str) {
         let players = vec!["Alice".into(), "Bob".into()];
-        for (count, action, expected) in [
-            (1, PresenceAction::Joined, "📥 **Alice** joined the fray."),
-            (1, PresenceAction::Left, "📤 **Alice** left the battle."),
-            (2, PresenceAction::Joined, "📥 **Alice** and **1** others have joined the battle!"),
-            (2, PresenceAction::Left, "📤 **Alice** and **1** others have left the battle!"),
-        ] {
-            let text = EventBroadcastSubscriber::presence_message(&players[..count], action).unwrap();
-            assert_eq!(text.to_discord(), expected);
-        }
+        let text = EventBroadcastSubscriber::presence_message(&players[..count], action).unwrap();
+        assert_eq!(text.to_discord(), expected);
     }
 
     #[tokio::test]

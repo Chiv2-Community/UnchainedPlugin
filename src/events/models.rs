@@ -310,57 +310,37 @@ pub enum GameEvent {
 mod tests {
     use super::*;
 
-    #[test]
-    fn combat_actor_display_includes_name_and_bot_status() {
-        for name in ["Knight", "🩸", ""] {
-            let human = CombatActor::new(name.into(), false).to_string();
-            let bot = CombatActor::new(name.into(), true).to_string();
-            assert!(human.contains(name));
-            assert!(bot.contains(name));
-            assert_ne!(human, bot, "bot status must be distinguishable");
-        }
+    #[test_case::test_case(false, "Knight"; "human")]
+    #[test_case::test_case(true, "(bot) Knight"; "bot")]
+    fn combat_actor_display_marks_bots(is_bot: bool, expected: &str) {
+        assert_eq!(CombatActor::new("Knight".into(), is_bot).to_string(), expected);
     }
 
-    #[test]
-    fn args_display_includes_argument_values() {
-        for args in [
-            vec![],
-            vec![String::new()],
-            vec!["hello".into(), "🩸".into()],
-            vec!["hello world".into(), String::new(), "last".into()],
-        ] {
-            let text = Args(&args).to_string();
-            for arg in args.iter().filter(|arg| !arg.is_empty()) {
-                assert!(text.contains(arg), "missing {arg:?} in {text:?}");
-            }
-        }
+    #[test_case::test_case(&[], "<none>"; "no_arguments")]
+    #[test_case::test_case(&[""], ""; "empty_argument")]
+    #[test_case::test_case(&["hello", "🩸"], "hello 🩸"; "unicode_arguments")]
+    #[test_case::test_case(&["hello world", "", "last"], "hello world  last"; "spaces_and_empty_argument")]
+    fn args_display_joins_arguments(args: &[&str], expected: &str) {
+        let args = args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+        assert_eq!(Args(&args).to_string(), expected);
     }
 
-    #[test]
-    fn discord_actor_permissions_follow_configured_admin_role() {
-        let mut config = DiscordConfig {
+    #[test_case::test_case(Some(7), &[7], PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER; "matching_role")]
+    #[test_case::test_case(Some(7), &[8], PermissionFlags::USER; "different_role")]
+    #[test_case::test_case(Some(7), &[], PermissionFlags::USER; "no_roles")]
+    #[test_case::test_case(None, &[7], PermissionFlags::USER; "admin_role_unconfigured")]
+    fn discord_actor_permissions_follow_configured_admin_role(admin_role_id: Option<u64>, roles: &[u64], expected_flags: PermissionFlags) {
+        let config = DiscordConfig {
             bot_token: "unused".into(),
-            admin_role_id: Some(7),
+            admin_role_id,
             dashboard_channel_id: None,
             general_chat_channel_id: None,
             admin_notification_channel_id: None,
             event_log_channel_id: None,
             mention_on_admin: false,
         };
-        for (admin_role_id, roles, expected_flags) in [
-            (
-                Some(7),
-                vec![RoleId::new(7)],
-                PermissionFlags::ADMIN | PermissionFlags::MODERATOR | PermissionFlags::USER,
-            ),
-            (Some(7), vec![RoleId::new(8)], PermissionFlags::USER),
-            (Some(7), vec![], PermissionFlags::USER),
-            (None, vec![RoleId::new(7)], PermissionFlags::USER),
-        ] {
-            config.admin_role_id = admin_role_id;
-            let actor =
-                CommandActor::from_discord(UserId::new(1), "Player".into(), &roles, &config);
-            assert_eq!(actor.permissions.flags, expected_flags);
-        }
+        let roles = roles.iter().map(|id| RoleId::new(*id)).collect::<Vec<_>>();
+        let actor = CommandActor::from_discord(UserId::new(1), "Player".into(), &roles, &config);
+        assert_eq!(actor.permissions.flags, expected_flags);
     }
 }
