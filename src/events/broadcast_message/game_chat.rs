@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use crate::events::broadcast::BroadcastMessage;
 use crate::events::bus::Subscriber;
+use itertools::Itertools;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct InGameChatBroadcastSubscriber;
@@ -41,30 +42,11 @@ impl InGameChatBroadcastSubscriber {
     }
 
     fn strip_emojis(s: &str) -> String {
-        let mut intermediate = String::new();
-        for g in s.graphemes(true) {
-            if emojis::get(g).is_some() {
-                intermediate.push(' ');
-            } else {
-                intermediate.push_str(g);
-            }
-        }
-        
-        let mut final_result = String::new();
-        let mut last_was_space = false;
-        for c in intermediate.chars() {
-            if c.is_whitespace() {
-                if !last_was_space {
-                    final_result.push(' ');
-                    last_was_space = true;
-                }
-            } else {
-                final_result.push(c);
-                last_was_space = false;
-            }
-        }
-        
-        final_result.trim().to_string()
+        s.graphemes(true)
+            .map(|grapheme| if emojis::get(grapheme).is_some() { " " } else { grapheme })
+            .collect::<String>()
+            .split_whitespace()
+            .join(" ")
     }
 }
 
@@ -145,6 +127,10 @@ mod tests {
             ("Hello 🛠️  World", "Hello World"), // multiple spaces
             ("🇩🇪 Germany", "Germany"),
             ("No emoji here", "No emoji here"),
+            ("Hello🛠️World", "Hello World"),
+            (" \t雪\r\n\u{2003}世界\u{a0} ", "雪 世界"),
+            ("🛠️\n🎮\t", ""),
+            ("", ""),
         ];
 
         for (input, expected) in cases {

@@ -39,7 +39,10 @@ pub(crate) fn report_attachment_failure() {
 mod windows_backend;
 
 #[cfg(windows)]
-pub(crate) use windows_backend::{enable_selection, is_console, preserve_console_handles, spawn_console};
+pub(crate) use windows_backend::{enable_selection, is_console, preserve_console_handles, should_strip_console_emojis, spawn_console};
+
+#[cfg(not(windows))]
+pub(crate) fn should_strip_console_emojis(_: Target) -> bool { false }
 
 #[cfg(windows)]
 pub(crate) fn owns_console() -> bool {

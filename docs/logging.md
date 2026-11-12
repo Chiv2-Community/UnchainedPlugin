@@ -55,6 +55,12 @@ Custom configurations can use these path placeholders:
 The calling program supplies any pipes or file redirection.
 `--no-spawn-console` suppresses console allocation independently.
 
+Human console output automatically omits recognized emoji in legacy graphical
+Windows/Wine consoles. Detection uses the visible console window as a host heuristic,
+not a font-by-font capability test. Modern pseudoconsole terminals, redirected output,
+file appenders, and JSON encoders retain emoji. Other Unicode text, whitespace, and
+colors are preserved.
+
 ## Chat Logging
 
 Chat records are written at `INFO` to `chat.log` in the launched profile's

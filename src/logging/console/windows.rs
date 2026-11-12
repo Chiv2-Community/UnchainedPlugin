@@ -25,6 +25,14 @@ pub(crate) fn is_console(target: log4rs::append::console::Target) -> bool {
     }
 }
 
+pub(crate) fn should_strip_console_emojis(target: log4rs::append::console::Target) -> bool {
+    // Legacy graphical conhosts lack reliable emoji shaping/fallback. Modern
+    // pseudoconsole hosts have a hidden console window; redirected output is not a console.
+    is_console(target) && unsafe {
+        windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(GetConsoleWindow()).as_bool()
+    }
+}
+
 unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
     [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
         let handle = GetStdHandle(kind).ok().filter(|handle| {
@@ -498,10 +506,12 @@ mod tests {
         use std::io::Write;
         use std::os::windows::io::BorrowedHandle;
         unsafe {
+            report_panics();
             let handles = standard_handles();
             let _ = FreeConsole();
             restore_standard_handles(handles);
             assert_eq!(GetConsoleWindow().0, 0);
+            assert!(!should_strip_console_emojis(log4rs::append::console::Target::Stdout));
             let attach = std::env::var("UNCHAINED_TEST_ATTACH").unwrap() == "true";
             let no_spawn = std::env::var("UNCHAINED_TEST_NO_SPAWN").unwrap() == "true";
             if no_spawn { super::super::disable_console_spawning(); }
@@ -509,8 +519,20 @@ mod tests {
             assert_eq!(super::super::console_spawning_disabled(), no_spawn);
             super::super::spawn_console();
             assert_eq!(GetConsoleWindow().0 != 0, !no_spawn);
+            let _output = (!attach && !no_spawn).then(console_output);
+            if !attach && !no_spawn {
+                use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE};
+                let target = log4rs::append::console::Target::Stdout;
+                let _ = screen_info(GetStdHandle(STD_OUTPUT_HANDLE).unwrap()).unwrap();
+                assert!(should_strip_console_emojis(target));
+                let _ = ShowWindow(GetConsoleWindow(), SW_HIDE);
+                assert!(!should_strip_console_emojis(target));
+                let _ = ShowWindow(GetConsoleWindow(), SW_SHOWNOACTIVATE);
+                assert!(should_strip_console_emojis(target));
+            }
             if attach {
                 assert_eq!(standard_handles(), handles);
+                assert!(!should_strip_console_emojis(log4rs::append::console::Target::Stdout));
                 configure(log4rs::append::console::Target::Stdout, &[[242, 139, 130]]);
                 configure(log4rs::append::console::Target::Stderr, &[[242, 139, 130]]);
                 assert_eq!(standard_handles(), handles);

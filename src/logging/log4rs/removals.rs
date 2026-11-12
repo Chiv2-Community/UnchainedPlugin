@@ -27,16 +27,30 @@ impl RenderedLine {
 
     pub(super) fn emit(&self, writer: &mut dyn Write, regex: &Regex) -> anyhow::Result<()> {
         let text = std::str::from_utf8(&self.text)?;
-        let mut matches = regex.find_iter(text).peekable();
+        self.emit_ranges(writer, regex.find_iter(text).map(|found| found.range()))
+    }
+
+    pub(super) fn emit_without_emojis(&self, writer: &mut dyn Write) -> anyhow::Result<()> {
+        use unicode_segmentation::UnicodeSegmentation;
+        let text = std::str::from_utf8(&self.text)?;
+        let emojis = text.grapheme_indices(true)
+            .filter(|(_, grapheme)| emojis::get(grapheme).is_some())
+            .map(|(start, grapheme)| start..start + grapheme.len());
+        self.emit_ranges(writer, emojis)
+    }
+
+    fn emit_ranges(&self, writer: &mut dyn Write,
+        ranges: impl Iterator<Item = std::ops::Range<usize>>) -> anyhow::Result<()> {
+        let mut matches = ranges.peekable();
         let mut cursor = 0;
         for (end, control) in self.controls.iter().map(|(offset, control)| (*offset, Some(control)))
-            .chain(std::iter::once((text.len(), None))) {
+            .chain(std::iter::once((self.text.len(), None))) {
             while cursor < end {
-                while matches.peek().is_some_and(|found| found.end() <= cursor) { matches.next(); }
+                while matches.peek().is_some_and(|found| found.end <= cursor) { matches.next(); }
                 if let Some(found) = matches.peek() {
-                    let keep_end = found.start().min(end).max(cursor);
+                    let keep_end = found.start.min(end).max(cursor);
                     writer.write_all(&self.text[cursor..keep_end])?;
-                    cursor = if found.start() < end { found.end().min(end).max(keep_end) } else { end };
+                    cursor = if found.start < end { found.end.min(end).max(keep_end) } else { end };
                 } else {
                     writer.write_all(&self.text[cursor..end])?;
                     cursor = end;
@@ -92,5 +106,24 @@ mod tests {
     #[test]
     fn empty_configuration_disables_removals() {
         assert!(compile(&[]).unwrap().is_none());
+    }
+
+    #[test]
+    fn emoji_removal_preserves_styles_ansi_and_nonemoji_unicode() {
+        use std::io::Write as _;
+        let mut line = RenderedLine::default();
+        line.write_all("A👩".as_bytes()).unwrap();
+        let mut style = Style::new();
+        style.text(log4rs::encode::Color::Red);
+        line.set_style(&style).unwrap();
+        line.write_all("\u{200d}💻雪🇩🇪e\u{301}".as_bytes()).unwrap();
+        line.ansi(b"\x1b[0m");
+        line.write_all(b"\t\r\n").unwrap();
+        let mut output = RenderedLine::default();
+        line.emit_without_emojis(&mut output).unwrap();
+        assert_eq!(output.text, "A雪e\u{301}\x1b[0m\t\r\n".as_bytes());
+        assert_eq!(output.controls.len(), 1);
+        assert_eq!(output.controls[0].0, 1);
+        assert!(matches!(&output.controls[0].1, Control::Style(actual) if *actual == style));
     }
 }

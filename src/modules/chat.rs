@@ -47,7 +47,7 @@ pub struct GameChatSink;
 #[async_trait]
 impl ChatSink for GameChatSink {
     async fn send(&self, chat: &GameChatMessage) {
-        if matches!(chat.chat_source, ChatSource::Native(_)) || !chat.is_relayable() {
+        if matches!(chat.chat_source, ChatSource::Native(_)) {
             return;
         };
 
