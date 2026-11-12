@@ -4,8 +4,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::events::models::GameEvent;
 use crate::events::broadcast::BroadcastMessage;
-use crate::events::bus::{EventBus, EventPublisher, Subscriber};
-use async_trait::async_trait;
+use crate::events::bus::{EventBus, EventPublisher};
 use crate::modules::vote::{NoCommand, SharedVotingState, VoteCommand, VotingState, YesCommand};
 // use crate::modules::votes::votekick::KickVote;
 use crate::modules::votes::votemap::MapVote;
@@ -44,34 +43,9 @@ pub struct UnchainedEventSystem {
     pub command_subscriber: Arc<Mutex<CommandSubscriber>>,
 }
 
-pub struct CommandSubscriberProxy {
-    inner: Arc<Mutex<CommandSubscriber>>,
-}
-
-#[async_trait]
-impl Subscriber<GameEvent> for CommandSubscriberProxy {
-    fn identifier(&self) -> &'static str {
-        "CommandSubscriber"
-    }
-
-    async fn on_event(&mut self, event: &GameEvent) {
-        let mut sub = self.inner.lock().await;
-        sub.on_event(event).await;
-    }
-
-    async fn on_tick(&mut self) {
-        let mut sub = self.inner.lock().await;
-        sub.on_tick().await;
-    }
-}
-
-pub static EVENT_SYSTEM: Lazy<UnchainedEventSystem> = Lazy::new(|| init_event_system());
+pub static EVENT_SYSTEM: Lazy<UnchainedEventSystem> = Lazy::new(init_event_system);
 
 pub fn init_event_system() -> UnchainedEventSystem {
-    initialize_event_buses()
-}
-
-fn initialize_event_buses() -> UnchainedEventSystem {
     let chat_relay_subscriber = ChatRelaySubscriber::new(vec![
         Box::new(LoggingChatSink {}),
         Box::new(GameChatSink {})
@@ -92,9 +66,9 @@ fn initialize_event_buses() -> UnchainedEventSystem {
 
     UnchainedEventSystem {
         game_event_bus,
-        game_event_publisher: game_event_publisher.clone(),
+        game_event_publisher,
         message_broadcast_event_bus,
-        message_broadcast_event_publisher: message_broadcast_event_publisher.clone(),
+        message_broadcast_event_publisher,
         chat_relay_subscriber,
         command_subscriber,
     }
@@ -125,7 +99,7 @@ pub async fn initialize_subscribers() {
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
     let _ = broadcast_message_bus.subscribe(Box::new(InGameChatBroadcastSubscriber {})).await;
 
-    let _ = game_event_bus.subscribe(Box::new(CommandSubscriberProxy { inner: EVENT_SYSTEM.command_subscriber.clone() })).await;
+    let _ = game_event_bus.subscribe(Box::new(EVENT_SYSTEM.command_subscriber.clone())).await;
 
     // Discord ported subscribers
     let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json"))); // Need it again for subscriber
