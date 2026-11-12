@@ -98,28 +98,26 @@ struct ShortModule<'a>(&'a str);
 impl std::fmt::Display for ShortModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut label = String::new();
-        let mut segments = self.0.split("::").peekable();
-        while let Some(segment) = segments.next() {
-            if segments.peek().is_some() {
+        if let Some((prefix, last)) = self.0.rsplit_once("::") {
+            for segment in prefix.split("::") {
                 for word in segment.split('_') {
-                    let mut chars = word.chars().peekable();
+                    let mut chars = word.chars().enumerate().peekable();
                     let mut previous_uppercase = false;
-                    let mut first = true;
-                    while let Some(ch) = chars.next() {
+                    while let Some((index, ch)) = chars.next() {
                         let uppercase = ch.is_uppercase();
                         // Start camel-case words and acronym-to-word transitions.
-                        if first || (uppercase && (!previous_uppercase
-                            || chars.peek().is_some_and(|next| next.is_lowercase()))) {
+                        if index == 0 || (uppercase && (!previous_uppercase
+                            || chars.peek().is_some_and(|(_, next)| next.is_lowercase()))) {
                             label.push(ch);
                         }
-                        first = false;
                         previous_uppercase = uppercase;
                     }
                 }
                 label.push_str("::");
-            } else {
-                label.push_str(segment);
             }
+            label.push_str(last);
+        } else {
+            label.push_str(self.0);
         }
         let start = label.char_indices().rev().nth(31).map_or(0, |(index, _)| index);
         f.write_str(&label[start..])
