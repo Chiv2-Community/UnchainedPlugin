@@ -115,15 +115,9 @@ where
     fn check_prerequisites(&self, args: &[String]) -> Result<Box<dyn Any + Send>, String> {
         let mut full_args = vec![self.name()];
         full_args.extend(args.iter().cloned());
-        match T::try_parse_from(full_args) {
-            Ok(parsed) => {
-                match self.logic.check_prerequisites(parsed.clone()) {
-                    Ok(_) => Ok(Box::new(parsed)),
-                    Err(e) => Err(e),
-                }
-            }
-            Err(e) => Err(format!("Invalid arguments: {}", e)),
-        }
+        let parsed = T::try_parse_from(full_args).map_err(|error| format!("Invalid arguments: {error}"))?;
+        self.logic.check_prerequisites(parsed.clone())?;
+        Ok(Box::new(parsed))
     }
     fn on_success(&self, target_args: Box<dyn Any + Send>) {
         if let Some(args) = target_args.downcast_ref::<T>() {
@@ -261,23 +255,16 @@ impl Command<VoteArgs> for VoteCommand {
 
         let maybe_vote_name = args.vote_name.as_deref().map(|name| name.to_lowercase());
 
-        if maybe_vote_name.clone().is_none_or(|name| name == "help") {
-            let sorted_keys: Vec<_> = {
-                let mut keys: Vec<_> = state.registry.keys().collect();
-                keys.sort();
-                keys
-            };
+        if maybe_vote_name.as_deref().is_none_or(|name| name == "help") {
+            let mut votes: Vec<_> = state.registry.iter().collect();
+            votes.sort_by_key(|(name, _)| *name);
 
             let mut message = String::from("Available Votes:\n");
-            for name in sorted_keys {
-                if let Some(logic) = state.registry.get(name) {
-                    message.push_str(&format!("{} - {}\n", logic.usage(), logic.description()));
-                }
+            for (_, logic) in votes {
+                message.push_str(&format!("{} - {}\n", logic.usage(), logic.description()));
             }
 
-            if !message.is_empty() {
-                send_ingame_message(message, None);
-            }
+            send_ingame_message(message, None);
             return;
         }
 
@@ -288,7 +275,7 @@ impl Command<VoteArgs> for VoteCommand {
             return;
         }
 
-        if let Some(logic) = state.registry.get(&vote_name.to_string()) {
+        if let Some(logic) = state.registry.get(&vote_name) {
             match logic.check_prerequisites(&args.args) {
                 Ok(target_args) => {
                     let logic = logic.clone_box();
