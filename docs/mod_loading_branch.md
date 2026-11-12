@@ -27,4 +27,3 @@ commands live in the
 - **Registry fast path**: a pak that ships `ModAssetRegistry.bin` is merged
   directly and skips the header scan; a missing or rejected registry falls back
   to header discovery for that pak.
-- **Timings / profiling**: see `docs/mod_loading_profiling.md`.
