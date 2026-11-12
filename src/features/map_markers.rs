@@ -1,15 +1,16 @@
 //! Cache of data read from `DA_MapMarker_V2_C` map markers.
 //!
-//! A map marker lists the maps a mod ships (`ShippedMapPaths`), each with an
-//! optional loading screen texture, plus a `DefaultLoadingScreen` for maps
-//! without their own. [`scan_map_markers`] reads every marker in the Asset
-//! Registry into [`map_marker_cache`]; `resolvers::loading_screens` looks maps
-//! up there.
+//! A map marker lists the maps a mod ships as a `Maps` array of `F_ShippedMap`
+//! rows, each with an optional loading screen texture and summary text (map name
+//! / description), plus a `DefaultLoadingScreen` for rows without their own.
+//! `Held` rows are kept in the marker but not shipped, so they are excluded here.
+//! [`scan_map_markers`] reads every marker in the Asset Registry into
+//! [`map_marker_cache`]; `resolvers::loading_screens` looks maps up there.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use crate::game::unchained::MapMarkerOffsets;
+use crate::game::unchained::{MapMarkerOffsets, MapMarkerRow};
 
 /// Asset Registry class name of the V2 map marker.
 pub const MAP_MARKER_V2_CLASS: &str = "DA_MapMarker_V2_C";
@@ -19,13 +20,21 @@ pub const MAP_MARKER_V2_CLASS: &str = "DA_MapMarker_V2_C";
 pub struct MapMarkerInfo {
     /// Object path of the marker asset the map came from.
     pub marker_path: String,
-    /// Map name without path, e.g. `TDM_QuarryKP`.
+    /// Map name without path, e.g. `TDM_QuarryKP` (the cache key).
     pub map_name: String,
     /// Object path of the map, e.g. `/Game/Mods/Quarry/TDM_QuarryKP.TDM_QuarryKP`.
     pub map_path: String,
     /// Loading screen texture object path: the map's own, else the marker's
     /// default. `None` if the marker sets neither.
     pub loading_screen: Option<String>,
+    /// Authored map name for the loading-screen title; empty when the marker
+    /// row carries none (no AR summary baked).
+    pub title: String,
+    /// Authored map description for the loading-screen subtitle; empty if unset.
+    pub subtitle: String,
+    /// Gamemode type / attacking faction carried on the row (0 when unset).
+    pub gamemode: i32,
+    pub faction: i32,
 }
 
 /// Map name of a map object or package path: the last path segment without
@@ -42,23 +51,31 @@ pub struct MapMarkerData {
     pub marker_path: String,
     /// Empty if unset.
     pub default_loading_screen: String,
-    /// `(map object path, loading screen texture path or empty)`.
-    pub shipped_maps: Vec<(String, String)>,
+    /// Every `F_ShippedMap` row (Held rows included; `map_infos` drops them).
+    pub rows: Vec<MapMarkerRow>,
 }
 
 impl MapMarkerData {
-    /// The cache entries this marker contributes, one per shipped map.
+    /// The cache entries this marker contributes, one per shipped (non-Held) map.
     pub fn map_infos(&self) -> Vec<MapMarkerInfo> {
-        self.shipped_maps
+        self.rows
             .iter()
-            .filter(|(map_path, _)| !map_name_from_path(map_path).is_empty())
-            .map(|(map_path, texture)| {
-                let texture = if texture.is_empty() { &self.default_loading_screen } else { texture };
+            .filter(|row| !row.held && !map_name_from_path(&row.map_path).is_empty())
+            .map(|row| {
+                let texture = if row.loading_screen.is_empty() {
+                    &self.default_loading_screen
+                } else {
+                    &row.loading_screen
+                };
                 MapMarkerInfo {
                     marker_path: self.marker_path.clone(),
-                    map_name: map_name_from_path(map_path).to_string(),
-                    map_path: map_path.clone(),
+                    map_name: map_name_from_path(&row.map_path).to_string(),
+                    map_path: row.map_path.clone(),
                     loading_screen: (!texture.is_empty()).then(|| texture.clone()),
+                    title: row.map_name.clone(),
+                    subtitle: row.description.clone(),
+                    gamemode: row.gamemode,
+                    faction: row.faction,
                 }
             })
             .collect()
@@ -154,12 +171,13 @@ pub unsafe fn scan_map_markers() -> usize {
         let data = MapMarkerData {
             marker_path: marker_path.clone(),
             default_loading_screen: offsets.default_loading_screen(marker),
-            shipped_maps: offsets.shipped_map_paths(marker),
+            rows: offsets.rows(marker),
         };
         crate::sdebug!(
-            "Map marker {}: {} shipped map(s), default loading screen {:?}",
+            "Map marker {}: {} row(s) ({} held), default loading screen {:?}",
             marker_path,
-            data.shipped_maps.len(),
+            data.rows.len(),
+            data.rows.iter().filter(|row| row.held).count(),
             data.default_loading_screen
         );
         for info in data.map_infos() {
@@ -191,14 +209,18 @@ mod tests {
         assert_eq!(map_name_from_path("/Game/Mods/Quarry/"), "");
     }
 
+    fn row(map: &str, loading_screen: &str) -> MapMarkerRow {
+        MapMarkerRow { map_path: map.into(), loading_screen: loading_screen.into(), ..Default::default() }
+    }
+
     #[test]
     fn map_without_own_texture_uses_the_marker_default() {
         let data = MapMarkerData {
             marker_path: MARKER.into(),
             default_loading_screen: "/Game/Mods/Quarry/T_Default.T_Default".into(),
-            shipped_maps: vec![
-                (MAP.into(), String::new()),
-                ("/Game/Mods/Quarry/FFA_Quarry.FFA_Quarry".into(), "/Game/Mods/Quarry/T_FFA.T_FFA".into()),
+            rows: vec![
+                row(MAP, ""),
+                row("/Game/Mods/Quarry/FFA_Quarry.FFA_Quarry", "/Game/Mods/Quarry/T_FFA.T_FFA"),
             ],
         };
         let infos = data.map_infos();
@@ -213,9 +235,38 @@ mod tests {
         let data = MapMarkerData {
             marker_path: MARKER.into(),
             default_loading_screen: String::new(),
-            shipped_maps: vec![(MAP.into(), String::new())],
+            rows: vec![row(MAP, "")],
         };
         assert_eq!(data.map_infos()[0].loading_screen, None);
+    }
+
+    #[test]
+    fn held_rows_are_excluded_and_summary_passes_through() {
+        let data = MapMarkerData {
+            marker_path: MARKER.into(),
+            default_loading_screen: String::new(),
+            rows: vec![
+                MapMarkerRow {
+                    map_path: MAP.into(),
+                    map_name: "The Forgotten Quarry".into(),
+                    description: "A quarry.".into(),
+                    gamemode: 1,
+                    faction: 0,
+                    ..Default::default()
+                },
+                MapMarkerRow {
+                    map_path: "/Game/Mods/Quarry/TDM_Held.TDM_Held".into(),
+                    held: true,
+                    ..Default::default()
+                },
+            ],
+        };
+        let infos = data.map_infos();
+        assert_eq!(infos.len(), 1, "Held rows must not ship");
+        assert_eq!(infos[0].map_name, "TDM_QuarryKP");
+        assert_eq!(infos[0].title, "The Forgotten Quarry");
+        assert_eq!(infos[0].subtitle, "A quarry.");
+        assert_eq!(infos[0].gamemode, 1);
     }
 
     #[test]
@@ -226,6 +277,10 @@ mod tests {
             map_name: "TDM_QuarryKP".into(),
             map_path: MAP.into(),
             loading_screen: Some(texture.into()),
+            title: String::new(),
+            subtitle: String::new(),
+            gamemode: 0,
+            faction: 0,
         };
         assert!(cache.insert(info("/Game/A.A")));
         assert!(!cache.insert(info("/Game/B.B")));

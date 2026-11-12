@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
 
-use crate::{game::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr}, ue::{FString, TArray, TMap, TMapView, TSet, UClass, UObject}};
+use crate::{game::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr}, ue::{FField, FProperty, FString, TArray, TMap, TSet, UClass, UObject, UStruct}};
 
 #[repr(C)]
 pub struct DA_ModMarker_C {
@@ -192,66 +192,168 @@ impl V2MarkerOffsets {
     }
 }
 
-/// `DA_MapMarker_V2_C` as dumped from the game (size 0x1C8). Like the mod
-/// marker, the live layout is resolved by property name (see
-/// [`MapMarkerOffsets`]) and this struct supplies the fallback offsets.
+/// Size of a UE4.25 `FProperty` (FField 0x38 + members through the four trailing
+/// property-link pointers). `FArrayProperty::Inner` and `FStructProperty::Struct`
+/// each follow the full `FProperty`, so both sit at this offset from the field.
+const FPROPERTY_SIZE: usize = 0x78;
+
+/// Raw `TArray` header {data, num, max} as laid out in memory. Only ever read as
+/// a view over engine memory - never wrapped in `TArray<T>`, whose `Drop` would
+/// free the engine's buffer.
 #[repr(C)]
-pub struct DA_MapMarker_V2_C {
-    _private: [u8; 0x30],
-    pub notes: FString,                                              // 0x0030
-    pub default_loading_screen: FSoftObjectPtr,                      // 0x0040 TSoftObjectPtr<UTexture2D>
-    /// Shipped map -> its loading screen texture (unset = use the default).
-    pub shipped_map_paths: TMapView<FSoftObjectPath, FSoftObjectPtr>, // 0x0068
-    pub ignored_maps: TSet<FSoftObjectPath>,                         // 0x00B8
-    pub shipped_map_layers: TSet<FSoftObjectPath>,                   // 0x0108
-    pub exclude_folders: TArray<FString>,                            // 0x0158
-    pub exclude_name_patterns: TArray<FString>,                      // 0x0168
-    pub extra_required_maps: TSet<FSoftObjectPath>,                  // 0x0178
+struct ArrayHeader {
+    data: *const u8,
+    num: i32,
+    max: i32,
 }
-const _: () = {
-    use std::mem::{offset_of, size_of};
-    assert!(offset_of!(DA_MapMarker_V2_C, notes) == 0x30);
-    assert!(offset_of!(DA_MapMarker_V2_C, default_loading_screen) == 0x40);
-    assert!(offset_of!(DA_MapMarker_V2_C, shipped_map_paths) == 0x68);
-    assert!(offset_of!(DA_MapMarker_V2_C, ignored_maps) == 0xB8);
-    assert!(offset_of!(DA_MapMarker_V2_C, shipped_map_layers) == 0x108);
-    assert!(offset_of!(DA_MapMarker_V2_C, exclude_folders) == 0x158);
-    assert!(offset_of!(DA_MapMarker_V2_C, exclude_name_patterns) == 0x168);
-    assert!(offset_of!(DA_MapMarker_V2_C, extra_required_maps) == 0x178);
-    assert!(size_of::<DA_MapMarker_V2_C>() == MAP_MARKER_DUMP_SIZE);
-};
 
-/// Size of `DA_MapMarker_V2_C` in the dump.
-pub const MAP_MARKER_DUMP_SIZE: usize = 0x1C8;
+/// One `F_ShippedMap` row read from a marker's `Maps` array. `DA_MapMarker_V2`'s
+/// `Maps` is a `TArray<F_ShippedMap>` (a Blueprint UserDefinedStruct); its members
+/// are resolved by authored name at runtime (see [`MapMarkerOffsets::resolve`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MapMarkerRow {
+    /// Object path of the map (empty rows are dropped by `rows`).
+    pub map_path: String,
+    /// `State == Held`: kept in the marker but excluded from shipping.
+    pub held: bool,
+    /// Per-map loading-screen texture path; empty when the row sets none.
+    pub loading_screen: String,
+    /// Authored map name (summary); empty when unset or no AR tag was baked.
+    pub map_name: String,
+    /// Authored map description (summary); empty when unset.
+    pub description: String,
+    pub gamemode: i32,
+    pub faction: i32,
+}
 
-/// Offsets of the `DA_MapMarker_V2_C` fields the plugin reads, resolved from
-/// the live class by property name with the dump layout as fallback.
+/// Property field by name on `start` or its supers, as the raw `FField` pointer
+/// (unlike [`crate::ue::find_property`], which returns only offset + type name).
+///
+/// # Safety
+/// `start` must be null or a live `UStruct` (a `UClass` cast to `UStruct`).
+unsafe fn find_field(start: *const UStruct, name: &str) -> Option<*const FField> {
+    const MAX_FIELDS: usize = 4096;
+    let mut current = start;
+    let mut visited = 0usize;
+    while !current.is_null() {
+        let mut field = (*current).child_properties;
+        while !field.is_null() {
+            visited += 1;
+            if visited > MAX_FIELDS {
+                return None;
+            }
+            if (*field).name_private.to_string() == name {
+                return Some(field);
+            }
+            field = (*field).next;
+        }
+        current = (*current).super_struct;
+    }
+    None
+}
+
+/// Member byte offsets inside a `UserDefinedStruct`, keyed by authored field name
+/// (the token before the first `_` in each member's mangled FName, e.g.
+/// `MapName_11_<GUID>` -> `MapName`).
+///
+/// # Safety
+/// `strukt` must be null or a live `UScriptStruct` (read as its `UStruct` prefix).
+unsafe fn struct_member_offsets(strukt: *const UStruct) -> std::collections::HashMap<String, usize> {
+    const MAX_FIELDS: usize = 256;
+    let mut out = std::collections::HashMap::new();
+    if strukt.is_null() {
+        return out;
+    }
+    let mut field = (*strukt).child_properties;
+    let mut visited = 0usize;
+    while !field.is_null() {
+        visited += 1;
+        if visited > MAX_FIELDS {
+            break;
+        }
+        let raw = (*field).name_private.to_string();
+        let token = raw.split('_').next().unwrap_or(&raw).to_string();
+        let offset = (*field.cast::<FProperty>()).offset_internal;
+        if offset >= 0 {
+            out.entry(token).or_insert(offset as usize);
+        }
+        field = (*field).next;
+    }
+    out
+}
+
+/// Offsets the loader reads from a `DA_MapMarker_V2` instance: the class-level
+/// `DefaultLoadingScreen` and `Maps` array, plus the element stride and each
+/// `F_ShippedMap` member offset, all resolved from the live class/struct by name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MapMarkerOffsets {
     default_loading_screen: usize,
-    shipped_map_paths: usize,
+    maps: usize,
+    element_size: usize,
+    m_map: Option<usize>,
+    m_state: Option<usize>,
+    m_loading_screen: Option<usize>,
+    m_map_name: Option<usize>,
+    m_description: Option<usize>,
+    m_gamemode: Option<usize>,
+    m_faction: Option<usize>,
 }
 
 impl MapMarkerOffsets {
     /// Resolves the offsets from a marker's class. `Err` means the class does
-    /// not look like a map marker the plugin can read.
+    /// not look like a V2 map marker the loader can read.
     ///
     /// # Safety
     /// `class` must be a live `UClass`.
     pub unsafe fn resolve(class: *const UClass) -> Result<Self, String> {
-        use std::mem::offset_of;
         if class.is_null() {
             return Err("marker has no class".into());
         }
-        let resolve_field = |name, type_name, dump_offset| {
-            resolve_marker_field(class, "DA_MapMarker_V2", MAP_MARKER_DUMP_SIZE, V2Field { name, type_name, dump_offset })
+        // DefaultLoadingScreen (soft Texture2D), required.
+        let dls = crate::ue::find_property(class, "DefaultLoadingScreen")
+            .ok_or_else(|| "DefaultLoadingScreen not found".to_string())?;
+        if dls.type_name != "SoftObjectProperty" {
+            return Err(format!("DefaultLoadingScreen is a {}, expected SoftObjectProperty", dls.type_name));
+        }
+        // Maps (TArray<F_ShippedMap>), required.
+        let maps_field = find_field(class.cast::<UStruct>(), "Maps")
+            .ok_or_else(|| "Maps array not found - not a V2 map marker".to_string())?;
+        let maps_offset = {
+            let offset = (*maps_field.cast::<FProperty>()).offset_internal;
+            if offset < 0 {
+                return Err("Maps has a negative offset".into());
+            }
+            offset as usize
         };
-        Ok(Self {
-            default_loading_screen: resolve_field(
-                "DefaultLoadingScreen", "SoftObjectProperty", offset_of!(DA_MapMarker_V2_C, default_loading_screen))?,
-            shipped_map_paths: resolve_field(
-                "ShippedMapPaths", "MapProperty", offset_of!(DA_MapMarker_V2_C, shipped_map_paths))?,
-        })
+        // FArrayProperty::Inner (a StructProperty) follows the full FProperty.
+        let inner = *(maps_field.cast::<u8>().add(FPROPERTY_SIZE).cast::<*const FProperty>());
+        if inner.is_null() {
+            return Err("Maps array has no inner property".into());
+        }
+        let element_size = (*inner).element_size.max(0) as usize;
+        if element_size == 0 {
+            return Err("Maps element size is zero".into());
+        }
+        // FStructProperty::Struct follows the full FProperty.
+        let strukt = *((inner as *const u8).add(FPROPERTY_SIZE).cast::<*const UStruct>());
+        let members = struct_member_offsets(strukt);
+        let member = |name: &str| members.get(name).copied();
+        let offsets = Self {
+            default_loading_screen: dls.offset,
+            maps: maps_offset,
+            element_size,
+            m_map: member("Map"),
+            m_state: member("State"),
+            m_loading_screen: member("LoadingScreen"),
+            m_map_name: member("MapName"),
+            m_description: member("MapDescription"),
+            m_gamemode: member("GamemodeType"),
+            m_faction: member("AttackingFaction"),
+        };
+        if offsets.m_map.is_none() {
+            return Err("F_ShippedMap has no Map member".into());
+        }
+        Ok(offsets)
     }
 
     /// Texture path of the marker's default loading screen; empty if unset.
@@ -263,20 +365,50 @@ impl MapMarkerOffsets {
         texture.path.to_path_string()
     }
 
-    /// `(map object path, loading screen texture path)` per shipped map; the
-    /// texture path is empty when the entry has none. Unset map paths are dropped.
+    /// Every `F_ShippedMap` row in the marker's `Maps` array (Held rows included;
+    /// the caller excludes them). Rows with no map path are dropped.
     ///
     /// # Safety
     /// See [`Self::default_loading_screen`].
-    pub unsafe fn shipped_map_paths(&self, marker: *const UObject) -> Vec<(String, String)> {
-        let maps = &*marker
-            .cast::<u8>()
-            .add(self.shipped_map_paths)
-            .cast::<TMapView<FSoftObjectPath, FSoftObjectPtr>>();
-        maps.iter()
-            .map(|(map, texture)| (map.to_path_string(), texture.path.to_path_string()))
-            .filter(|(map, _)| !map.is_empty())
-            .collect()
+    pub unsafe fn rows(&self, marker: *const UObject) -> Vec<MapMarkerRow> {
+        let header = &*marker.cast::<u8>().add(self.maps).cast::<ArrayHeader>();
+        let num = header.num.max(0) as usize;
+        let map_offset = match self.m_map {
+            Some(offset) => offset,
+            None => return Vec::new(),
+        };
+        if header.data.is_null() || self.element_size == 0 {
+            return Vec::new();
+        }
+        let string_at = |elem: *const u8, offset: Option<usize>| -> String {
+            offset.map_or_else(String::new, |o| (*elem.add(o).cast::<FString>()).to_string())
+        };
+        let i32_at = |elem: *const u8, offset: Option<usize>| -> i32 {
+            offset.map_or(0, |o| *elem.add(o).cast::<i32>())
+        };
+        let mut rows = Vec::with_capacity(num);
+        for index in 0..num {
+            let elem = match index.checked_mul(self.element_size) {
+                Some(step) => header.data.add(step),
+                None => break,
+            };
+            let map_path = (*elem.add(map_offset).cast::<FSoftObjectPath>()).to_path_string();
+            if map_path.is_empty() {
+                continue;
+            }
+            rows.push(MapMarkerRow {
+                map_path,
+                held: self.m_state.is_some_and(|o| *elem.add(o).cast::<u8>() != 0),
+                loading_screen: self.m_loading_screen.map_or_else(String::new, |o| {
+                    (*elem.add(o).cast::<FSoftObjectPtr>()).path.to_path_string()
+                }),
+                map_name: string_at(elem, self.m_map_name),
+                description: string_at(elem, self.m_description),
+                gamemode: i32_at(elem, self.m_gamemode),
+                faction: i32_at(elem, self.m_faction),
+            });
+        }
+        rows
     }
 }
 

@@ -26,14 +26,16 @@ struct LoadingScreen {
 
 impl LoadingScreen {
     /// The loading screen a map marker provides for this map, if the marker
-    /// (or its default) names a texture. Map markers carry no texts, so the
-    /// map name stands in for the first one.
+    /// (or its default) names a texture. The row's authored summary supplies the
+    /// texts: its map name as the title (falling back to the map's short name)
+    /// and its description as the subtitle.
     fn from_marker(info: &crate::features::map_markers::MapMarkerInfo) -> Option<Self> {
+        let title = if info.title.is_empty() { info.map_name.clone() } else { info.title.clone() };
         Some(Self {
             map: info.map_name.clone(),
             texture: info.loading_screen.clone()?,
-            text_a: info.map_name.clone(),
-            text_b: String::new(),
+            text_a: title,
+            text_b: info.subtitle.clone(),
         })
     }
 
@@ -184,10 +186,12 @@ CREATE_HOOK!(GetDataForMap, ACTIVE, NONE, (), (
     let extra = LoadingScreen::lookup(&(*map_name).to_string());
     if let Some(extra) = &extra {
         add_entry_guarded(this_ptr, extra);
+        swarn![fn; "Extra loading screen config for {} is now present", extra.map];
     }
     CALL_ORIGINAL!(GetDataForMap(this_ptr, map_name, data));
     if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
         apply_texture_fallback(&*this_ptr, &mut *data, extra);
+        swarn![fn; "Extra loading screen texture for {} is now applied", extra.map];
     }
 });
 
@@ -213,13 +217,37 @@ mod tests {
             map_name: "TDM_Quarry".into(),
             map_path: "/Game/Mods/Quarry/TDM_Quarry.TDM_Quarry".into(),
             loading_screen: Some("/Game/Mods/Quarry/T_Load.T_Load".into()),
+            title: String::new(),
+            subtitle: String::new(),
+            gamemode: 0,
+            faction: 0,
         };
         let screen = LoadingScreen::from_marker(&info).expect("texture is set");
         assert_eq!(screen.map, "TDM_Quarry");
         assert_eq!(screen.texture, "/Game/Mods/Quarry/T_Load.T_Load");
+        // No authored summary: the map's short name stands in for the title.
         assert_eq!(screen.text_a, "TDM_Quarry");
+        assert_eq!(screen.text_b, "");
         info.loading_screen = None;
         assert_eq!(LoadingScreen::from_marker(&info), None);
+    }
+
+    #[test]
+    fn marker_loading_screen_uses_the_authored_summary_when_present() {
+        use crate::features::map_markers::MapMarkerInfo;
+        let info = MapMarkerInfo {
+            marker_path: "/Game/Mods/Quarry/Quarry_MapMarker.Quarry_MapMarker".into(),
+            map_name: "TDM_Quarry".into(),
+            map_path: "/Game/Mods/Quarry/TDM_Quarry.TDM_Quarry".into(),
+            loading_screen: Some("/Game/Mods/Quarry/T_Load.T_Load".into()),
+            title: "The Forgotten Quarry".into(),
+            subtitle: "Dust and echoes.".into(),
+            gamemode: 1,
+            faction: 0,
+        };
+        let screen = LoadingScreen::from_marker(&info).expect("texture is set");
+        assert_eq!(screen.text_a, "The Forgotten Quarry");
+        assert_eq!(screen.text_b, "Dust and echoes.");
     }
 
     #[test]
