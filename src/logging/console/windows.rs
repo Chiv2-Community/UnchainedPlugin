@@ -15,13 +15,16 @@ pub(crate) fn preserve_console_handles() {
     *LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner()) = true;
 }
 
-pub(crate) fn is_console(target: log4rs::append::console::Target) -> bool {
-    let output = match target {
+fn output_handle_kind(target: log4rs::append::console::Target) -> STD_HANDLE {
+    match target {
         log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
         log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
-    };
+    }
+}
+
+pub(crate) fn is_console(target: log4rs::append::console::Target) -> bool {
     unsafe {
-        GetStdHandle(output).is_ok_and(|handle| GetConsoleMode(handle, &mut CONSOLE_MODE(0)).is_ok())
+        GetStdHandle(output_handle_kind(target)).is_ok_and(|handle| GetConsoleMode(handle, &mut CONSOLE_MODE(0)).is_ok())
     }
 }
 
@@ -125,11 +128,7 @@ pub(crate) fn enable_selection() {
 
 pub(super) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
     unsafe {
-        let output = match target {
-            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
-            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
-        };
-        let info = GetStdHandle(output).ok().and_then(|handle| screen_info(handle));
+        let info = GetStdHandle(output_handle_kind(target)).ok().and_then(|handle| screen_info(handle));
         let bank = info.as_ref().map_or(0, |info| usize::from(info.wAttributes.0 & 0x80 != 0) * 8);
         let colors = info.map_or(BASIC_COLORS, |info| info.ColorTable.map(|color| color.0));
         // log4rs preserves the terminal's background-intensity bit.
@@ -139,10 +138,7 @@ pub(super) fn background_slots(target: log4rs::append::console::Target, palette:
 
 pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> (bool, Vec<u8>) {
     unsafe {
-        let output = match target {
-            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
-            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
-        };
+        let output = output_handle_kind(target);
         let Ok(handle) = GetStdHandle(output) else { return (false, nearest_slots(BASIC_COLORS, palette)) };
         let mut mode = CONSOLE_MODE(0);
         if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
