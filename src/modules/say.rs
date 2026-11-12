@@ -37,7 +37,7 @@ impl Command<SayArgs> for SayCommand {
         let message = args.message.join(" ");
         let mut broadcast = BroadcastMessage::from(crate::rich_text!("{}", message));
         if command.source == CommandSource::ServerConsole {
-            broadcast = broadcast.title("Server Console");
+            broadcast = broadcast.title("Server Console").color(0x00FFFF);
         }
         self.broadcaster.publish(broadcast);
     }
@@ -59,6 +59,7 @@ mod tests {
             let broadcast = receiver.recv().await.unwrap();
             assert_eq!(broadcast.title.as_ref().map(|title| title.to_plain_text()),
                 (source == CommandSource::ServerConsole).then(|| "Server Console".to_string()));
+            assert_eq!(broadcast.color, (source == CommandSource::ServerConsole).then_some(0x00FFFF));
             assert_eq!(broadcast.content_ref().unwrap().to_plain_text(), "<hello> **world**");
         }
     }

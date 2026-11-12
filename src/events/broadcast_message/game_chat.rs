@@ -5,15 +5,26 @@ use unicode_segmentation::UnicodeSegmentation;
 
 pub struct InGameChatBroadcastSubscriber;
 
-// Readable to older clients; only localized system chat is decoded by the display hook.
-const BROADCAST_PREFIX: &str = "[Unchained broadcast] ";
+// Only localized system chat is decoded by the display hook.
+const BROADCAST_PREFIX: &str = "{$";
 
-pub(crate) fn broadcast_parts(message: &str) -> Option<(&str, &str)> {
-    let (title, body) = message.strip_prefix(BROADCAST_PREFIX)?.split_once('\n')?;
+pub(crate) fn broadcast_parts(message: &str) -> Option<(&str, &str, Option<u32>)> {
+    let (title, body) = message.strip_prefix(BROADCAST_PREFIX)?.split_once("}\n")?;
+    let (title, color) = match title.rsplit_once("|#") {
+        Some((title, color)) => {
+            if color.len() != 6 || !color.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return None;
+            }
+            (title, Some(u32::from_str_radix(color, 16).ok()?))
+        }
+        None => (title, None),
+    };
+
     if title.is_empty() || title.trim() != title || title.chars().any(char::is_control) {
         return None;
     }
-    Some((title, body))
+
+    Some((title, body, color))
 }
 
 impl InGameChatBroadcastSubscriber {
@@ -24,7 +35,8 @@ impl InGameChatBroadcastSubscriber {
         if title.is_empty() {
             body
         } else {
-            format!("{BROADCAST_PREFIX}{title}\n{body}")
+            let color = event.color.unwrap_or(0xFFFFFF) & 0xFFFFFF;
+            format!("{BROADCAST_PREFIX}{title}|#{color:06X}}}\n{body}")
         }
     }
 
@@ -78,8 +90,8 @@ mod tests {
             .content("Starting match on Wardenglade.\nGood luck!")
             .field("Mode", "FFA");
         let encoded = InGameChatBroadcastSubscriber::encode(&message);
-        assert_eq!(broadcast_parts(&encoded), Some(("Map Change", "Starting match on Wardenglade. Good luck! Mode: FFA")));
-        assert!(encoded.contains("Map Change\nStarting match on Wardenglade."));
+        assert_eq!(broadcast_parts(&encoded), Some(("Map Change", "Starting match on Wardenglade. Good luck! Mode: FFA", Some(0xFFFFFF))));
+        assert!(encoded.starts_with("{$Map Change|#FFFFFF}\nStarting match on Wardenglade."));
         assert_eq!(message.to_plain_text(), "🗺️ Map Change\nStarting match on Wardenglade.\nGood luck!\nMode: FFA");
     }
 
@@ -97,13 +109,30 @@ mod tests {
         let message = BroadcastMessage::new().title("Round: [End]\nNext")
             .content("<literal> & !cmd quit");
         let encoded = InGameChatBroadcastSubscriber::encode(&message);
-        let (sender, body) = broadcast_parts(&encoded).unwrap();
+        let (sender, body, color) = broadcast_parts(&encoded).unwrap();
         assert_eq!(sender, "Round: [End] Next");
         assert_eq!(body, message.content_ref().unwrap().to_game_chat());
-        assert_eq!(broadcast_parts("[Unchained broadcast] Only title\n"), Some(("Only title", "")));
-        for malformed in ["Map Change\nbody", "[Unchained broadcast] No delimiter", "[Unchained broadcast] \nbody", "[Unchained broadcast] title\r\nbody"] {
+        assert_eq!(color, Some(0xFFFFFF));
+        assert_eq!(broadcast_parts("{$Only title}\n"), Some(("Only title", "", None)));
+        assert_eq!(broadcast_parts("{$Title}\nbody\nnext line"), Some(("Title", "body\nnext line", None)));
+        for malformed in [
+            "Map Change\nbody", "[Unchained broadcast] title\nbody", "{title}\nbody",
+            "{$title\nbody", "{$title}body", "{$title}", "{$}\nbody",
+            "{$ title}\nbody", "{$title }\nbody", "{$title}\r\nbody",
+            "{$title\nother}\nbody",
+            "{$title|#FF}\nbody", "{$title|#GG0000}\nbody", "{$title|#1000000}\nbody",
+        ] {
             assert!(broadcast_parts(malformed).is_none(), "{malformed:?}");
         }
+    }
+
+    #[test]
+    fn broadcast_color_round_trips_without_becoming_sender_or_body_text() {
+        let message = BroadcastMessage::new().title("Title|#123456").content("Hello").color(0x12ABEF);
+        let encoded = InGameChatBroadcastSubscriber::encode(&message);
+        assert_eq!(encoded, "{$Title|#123456|#12ABEF}\nHello");
+        assert_eq!(broadcast_parts(&encoded), Some(("Title|#123456", "Hello", Some(0x12ABEF))));
+        assert_eq!(broadcast_parts("{$Title|#12abef}\nHello"), Some(("Title", "Hello", Some(0x12ABEF))));
     }
 
     #[test]

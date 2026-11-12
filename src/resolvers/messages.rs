@@ -135,9 +135,9 @@ mod client_message {
         } else {
             (EChatType::ServerSay, line)
         };
-        // Console Say carries this visible sender prefix across the native broadcast.
+        // Broadcast envelopes carry sender metadata only on the system-chat path.
         if matches!(channel, EChatType::AllSay | EChatType::ServerSay) {
-            if let Some((title, message)) = crate::events::broadcast_message::game_chat::broadcast_parts(body) {
+            if let Some((title, message, _)) = crate::events::broadcast_message::game_chat::broadcast_parts(body) {
                 return Some((channel, Some(title), message));
             }
             if let Some(body) = body.strip_prefix("[Console] ") {
@@ -211,8 +211,8 @@ mod client_message {
 
         #[test]
         fn broadcast_envelope_is_system_metadata_not_a_player_command() {
-            let body = "[Unchained broadcast] Console\n!cmd quit";
-            assert_eq!(system_message(&format!("<0>: {body}")), Some((EChatType::AllSay, Some("Console"), "!cmd quit")));
+            let body = "{$Server Console}\n!cmd quit";
+            assert_eq!(system_message(&format!("<0>: {body}")), Some((EChatType::AllSay, Some("Server Console"), "!cmd quit")));
             assert_eq!(system_message(&format!("Player <0>: {body}")), None);
             assert_eq!(system_message(&format!("<1>: {body}")), Some((EChatType::TeamSay, None, body)));
         }
