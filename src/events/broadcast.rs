@@ -100,10 +100,7 @@ impl BroadcastMessage {
     }
 
     fn render_body(&self, render: fn(&RichText) -> String) -> String {
-        let mut message = String::new();
-        if let Some(content) = &self.content {
-            message.push_str(&render(content));
-        }
+        let mut message = self.content.as_ref().map(render).unwrap_or_default();
         for (name, value) in &self.fields {
             message.push_str(&format!("\n{}: {}", render(name), render(value)));
         }
@@ -116,7 +113,7 @@ impl BroadcastMessage {
 
 impl From<&BroadcastMessage> for CreateMessage {
     fn from(broadcast_message: &BroadcastMessage) -> Self {
-        let mut message = CreateMessage::new();
+        let message = CreateMessage::new();
         let BroadcastMessage {
             title,
             content,
@@ -145,12 +142,12 @@ impl From<&BroadcastMessage> for CreateMessage {
             if let Some(color) = color {
                 embed = embed.color(*color);
             }
-            message = message.embed(embed);
+            message.embed(embed)
         } else if let Some(content) = content {
-            message = message.content(content.to_discord());
+            message.content(content.to_discord())
+        } else {
+            message
         }
-
-        message
     }
 }
 

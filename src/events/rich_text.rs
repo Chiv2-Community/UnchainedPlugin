@@ -89,16 +89,21 @@ impl RichText {
         for chunk in &self.0 {
             let (children, marker, flag) = match chunk {
                 RichTextChunk::Text(text) => {
-                    for ch in text.chars() {
-                        match format {
-                            Format::Game => match ch {
-                                '&' => output.push_str("&amp;"),
-                                '<' => output.push_str("&lt;"),
-                                '>' => output.push_str("&gt;"),
-                                '"' => output.push_str("&quot;"),
-                                _ => output.push(ch),
-                            },
-                            Format::Discord => {
+                    match format {
+                        Format::Plain => output.push_str(text),
+                        Format::Game => {
+                            for ch in text.chars() {
+                                match ch {
+                                    '&' => output.push_str("&amp;"),
+                                    '<' => output.push_str("&lt;"),
+                                    '>' => output.push_str("&gt;"),
+                                    '"' => output.push_str("&quot;"),
+                                    _ => output.push(ch),
+                                }
+                            }
+                        }
+                        Format::Discord => {
+                            for ch in text.chars() {
                                 if matches!(
                                     ch,
                                     '\\' | '*' | '_' | '~' | '`' | '|' | '>' | '#' | '[' | ']'
@@ -107,7 +112,6 @@ impl RichText {
                                 }
                                 output.push(ch);
                             }
-                            Format::Plain => output.push(ch),
                         }
                     }
                     continue;
