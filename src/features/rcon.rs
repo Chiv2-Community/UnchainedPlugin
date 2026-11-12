@@ -23,19 +23,19 @@ pub fn handle_rcon() {
                 thread::spawn(move || {
                     let reader = BufReader::new(stream);
                     for line in reader.lines().map_while(Result::ok) {
-                        if !line.trim().is_empty() {
-                            use crate::commands::NATIVE_COMMAND_QUEUE;
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
 
-                            swarn!("RCON Received: {}", line.trim());
-                            if cli_args().is_server() {
-                                if let Some(command) = console_say_request(line.trim()) {
-                                    crate::features::events::EVENT_SYSTEM.game_event_publisher.publish(
-                                        crate::events::models::GameEvent::CommandRequestEvent(command));
-                                    continue;
-                                }
+                        swarn!("RCON Received: {}", line);
+                        if cli_args().is_server() {
+                            if let Some(command) = console_say_request(line) {
+                                crate::features::events::EVENT_SYSTEM.game_event_publisher.publish(
+                                    crate::events::models::GameEvent::CommandRequestEvent(command));
+                                continue;
                             }
-                            NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.trim().to_string());
                         }
+
+                        crate::commands::NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.to_owned());
                     }
                 });
             }

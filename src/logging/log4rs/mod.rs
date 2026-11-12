@@ -179,16 +179,10 @@ fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> Stri
         );
     }
 
-    let unchained_log_path = yaml_escape_double_quoted(
-        &log_dir.join("unchained.log").to_string_lossy()
-    );
-    let kismet_log_path = yaml_escape_double_quoted(
-        &log_dir.join("kismet.log").to_string_lossy()
-    );
-
-    yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &unchained_log_path)
-        .replace(KISMET_LOG_PATH_PLACEHOLDER, &kismet_log_path)
-        .replace(CHAT_LOG_PATH_PLACEHOLDER, &yaml_escape_double_quoted(&log_dir.join("chat.log").to_string_lossy()))
+    let log_path = |name: &str| yaml_escape_double_quoted(&log_dir.join(name).to_string_lossy());
+    yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &log_path("unchained.log"))
+        .replace(KISMET_LOG_PATH_PLACEHOLDER, &log_path("kismet.log"))
+        .replace(CHAT_LOG_PATH_PLACEHOLDER, &log_path("chat.log"))
 }
 
 fn yaml_escape_double_quoted(value: &str) -> String {
