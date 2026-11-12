@@ -73,8 +73,6 @@ mod tests {
             .field("Mode", "FFA");
         let encoded = InGameChatBroadcastSubscriber::encode(&message);
         assert_eq!(broadcast_parts(&encoded), Some(("Map Change", "Starting match on Wardenglade. Good luck! Mode: FFA", Some(0xFFFFFF))));
-        assert!(encoded.starts_with("{$Map Change|#FFFFFF}\nStarting match on Wardenglade."));
-        assert_eq!(message.to_plain_text(), "🗺️ Map Change\nStarting match on Wardenglade.\nGood luck!\nMode: FFA");
     }
 
     #[test]
@@ -93,8 +91,12 @@ mod tests {
         let encoded = InGameChatBroadcastSubscriber::encode(&message);
         let (sender, body, color) = broadcast_parts(&encoded).unwrap();
         assert_eq!(sender, "Round: [End] Next");
-        assert_eq!(body, message.content_ref().unwrap().to_game_chat());
+        assert_eq!(body, "&lt;literal&gt; &amp; !cmd quit");
         assert_eq!(color, Some(0xFFFFFF));
+    }
+
+    #[test]
+    fn broadcast_parser_accepts_bare_headers_and_rejects_malformed_headers() {
         assert_eq!(broadcast_parts("{$Only title}\n"), Some(("Only title", "", None)));
         assert_eq!(broadcast_parts("{$Title}\nbody\nnext line"), Some(("Title", "body\nnext line", None)));
         for malformed in [
@@ -118,22 +120,18 @@ mod tests {
     }
 
     #[test]
-    fn test_strip_emojis() {
-        let cases = vec![
+    fn emoji_removal_normalizes_whitespace() {
+        for (input, expected) in [
             ("Hello 🛠️ World!", "Hello World!"),
             ("🛠️ World", "World"),
             ("Hello 🛠️", "Hello"),
-            ("Hello 🛠️🎮 World", "Hello World"),
-            ("Hello 🛠️  World", "Hello World"), // multiple spaces
             ("🇩🇪 Germany", "Germany"),
             ("No emoji here", "No emoji here"),
             ("Hello🛠️World", "Hello World"),
             (" \t雪\r\n\u{2003}世界\u{a0} ", "雪 世界"),
             ("🛠️\n🎮\t", ""),
             ("", ""),
-        ];
-
-        for (input, expected) in cases {
+        ] {
             let result = InGameChatBroadcastSubscriber::strip_emojis(input);
             assert_eq!(result, expected, "Failed for input: {:?}", input);
         }

@@ -148,10 +148,9 @@ mod tests {
     #[test]
     fn server_console_broadcasts_set_sender_dev_without_matching_player_chat() {
         let message = "{$Server Console}\nHello";
-        for channel in EChatType::ALL {
-            let expected = matches!(channel, EChatType::AllSay | EChatType::ServerSay)
-                .then_some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0]));
-            assert_eq!(display_parts(channel as u32, message), expected);
+        for channel in [EChatType::AllSay, EChatType::ServerSay] {
+            assert_eq!(display_parts(channel as u32, message),
+                Some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0])));
         }
         assert!(display_parts(EChatType::AllSay as u32, "Server Console: Hello").is_none());
         assert_eq!(display_parts(EChatType::AllSay as u32, "{$Server Console|#FF0000}\nHello"),

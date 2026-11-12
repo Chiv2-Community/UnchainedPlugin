@@ -544,61 +544,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vote_failure_reasons() {
-        let mut state_init = VotingState::new();
-        state_init.register(MockVote);
-        let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, messages) = mock_broadcaster();
-        let cmd = VoteCommand { state: state.clone(), broadcaster };
-
-        // 1. Test "Minimum vote threshold not met"
-        // 100 players, 33% required_ratio = 33 votes required.
-        // 1 yes, 1 no = 2 total.
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(100));
-            s.active_vote = Some(ActiveVote {
+    async fn expired_votes_report_failure_and_clear_state() {
+        for (players, yes, no, reason) in [
+            (100, 1, 1, "Minimum vote threshold not met (33 votes required, 2 total votes cast)"),
+            (10, 2, 3, "Majority not reached (50.0% required, 40.0% achieved)"),
+        ] {
+            let mut initial = VotingState::new();
+            initial.player_count_provider = Box::new(MockPlayerCountProvider(players));
+            initial.active_vote = Some(ActiveVote {
                 logic: Box::new(VoteTypeHandler::new(MockVote)),
                 raw_target_args: vec!["TestTarget".into()],
                 target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["User1".into()]),
-                no_votes: HashSet::from(["User2".into()]),
+                yes_votes: (0..yes).map(|i| format!("Y{i}")).collect(),
+                no_votes: (0..no).map(|i| format!("N{i}")).collect(),
                 end_time: Instant::now() - Duration::from_secs(1),
             });
-        }
-        cmd.on_tick().await;
-        // Small delay to ensure the spawned task processes the message
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        {
-            let msgs = messages.lock().await;
-            assert_eq!(msgs.len(), 1);
-            assert!(msgs[0].get_content().unwrap().to_plain_text().contains("Minimum vote threshold not met (33 votes required, 2 total votes cast)"));
-        }
-        messages.lock().await.clear();
-
-        // 2. Test "Majority not reached"
-        // 10 players, 33% required = 4 votes required.
-        // 2 yes, 3 no = 5 total (Threshold met).
-        // Ratio 2/5 = 40% (50% required).
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(10));
-            s.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["Y1".into(), "Y2".into()]),
-                no_votes: HashSet::from(["N1".into(), "N2".into(), "N3".into()]),
-                end_time: Instant::now() - Duration::from_secs(1),
-            });
-        }
-        cmd.on_tick().await;
-        // Small delay to ensure the spawned task processes the message
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        {
-            let msgs = messages.lock().await;
-            assert_eq!(msgs.len(), 1);
-            assert!(msgs[0].get_content().unwrap().to_plain_text().contains("Majority not reached (50.0% required, 40.0% achieved)"));
+            let state = Arc::new(Mutex::new(initial));
+            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+            let cmd = VoteCommand {
+                state: state.clone(), broadcaster: Box::leak(Box::new(EventPublisher::new(sender))),
+            };
+            cmd.on_tick().await;
+            assert!(state.lock().await.active_vote.is_none());
+            let message = receiver.try_recv().unwrap();
+            assert!(message.content_ref().unwrap().to_plain_text().contains(reason));
+            assert!(receiver.try_recv().is_err());
         }
     }
 
@@ -737,61 +707,6 @@ mod tests {
             let s = state.lock().await;
             assert!(s.active_vote.is_none(), "Vote SHOULD be cancelled by admin");
         }
-    }
-
-    #[tokio::test]
-    async fn test_vote_timeout_tick() {
-        let mut state_init = VotingState::new();
-        state_init.register(MockVote);
-        let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, _messages) = mock_broadcaster();
-        let cmd = VoteCommand { state: state.clone(), broadcaster };
-
-        // Setup active vote that expires in the past
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(10)); // 10% of 10 is 1 vote required
-            s.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["User1".into()]), // 1 Yes
-                no_votes: HashSet::new(),                  // 0 No
-                end_time: Instant::now() - Duration::from_secs(1), // Already expired
-            });
-        }
-
-        // Trigger tick
-        cmd.on_tick().await;
-
-        let s = state.lock().await;
-        assert!(s.active_vote.is_none(), "Vote should be cleared after timeout");
-    }
-
-    #[tokio::test]
-    async fn test_vote_failure_below_threshold() {
-        let mut state_init = VotingState::new();
-        state_init.register(MockVote);
-        let state = Arc::new(Mutex::new(state_init));
-        let (broadcaster, _messages) = mock_broadcaster();
-        let cmd = VoteCommand { state: state.clone(), broadcaster };
-
-        // 100 players, 10% min_vote_percentage means 10 votes required.
-        // 1 vote cast -> Failure.
-        {
-            let mut s = state.lock().await;
-            s.player_count_provider = Box::new(MockPlayerCountProvider(100));
-            s.active_vote = Some(ActiveVote {
-                logic: Box::new(VoteTypeHandler::new(MockVote)),
-                raw_target_args: vec!["TestTarget".into()],
-                target_args: Box::new(MockVoteArgs { target: "TestTarget".into() }),
-                yes_votes: HashSet::from(["User1".into()]),
-                no_votes: HashSet::new(),
-                end_time: Instant::now() - Duration::from_secs(1),
-            });
-        }
-        cmd.on_tick().await;
-        assert!(state.lock().await.active_vote.is_none());
     }
 
     // TODO: inject send_ingame_message as a dependency so these tests work

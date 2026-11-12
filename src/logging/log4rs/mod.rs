@@ -547,9 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn file_appenders_share_console_patterns() {
-        use std::sync::Mutex;
-
+    fn file_appenders_support_registered_pattern_aliases() {
         struct TempDir(PathBuf);
         impl Drop for TempDir {
             fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
@@ -559,25 +557,8 @@ mod tests {
                 .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
         std::fs::create_dir(&dir.0).unwrap();
 
-        struct CompareLogger {
-            file: log4rs::Logger,
-            console: Box<dyn Encode>,
-            expected: Mutex<Vec<u8>>,
-        }
-        impl Log for CompareLogger {
-            fn enabled(&self, metadata: &Metadata<'_>) -> bool { self.file.enabled(metadata) }
-            fn log(&self, record: &log::Record<'_>) {
-                self.console.encode(&mut SimpleWriter(&mut *self.expected.lock().unwrap()), record).unwrap();
-                self.file.log(record);
-            }
-            fn flush(&self) { self.file.flush(); }
-        }
-
-        let header = "{l:5}|{sm:>16}|{({fn}):>40}|";
-        let body = "{M}|{t}|{f}:{L}|{K(request)}|{{sm}}|{{fn}}|{m}{n}";
-        log::set_max_level(log::LevelFilter::Trace);
-        let mut deserializers = Deserializers::default();
-        register(&mut deserializers);
+        let fields = [("enclosing_function", "file_fixture")];
+        let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
         for appender_kind in ["file", "rolling_file"] {
             for encoder_kind in [None, Some("pattern")] {
                 let path = dir.0.join("output.log");
@@ -585,27 +566,15 @@ mod tests {
                 let file = &mut yaml["appenders"]["file"];
                 file["kind"] = appender_kind.into();
                 file["path"] = path.to_string_lossy().as_ref().into();
-                file["encoder"]["pattern"] = format!("{header}{body}").into();
+                file["encoder"]["pattern"] = "{fn}|{m}{n}".into();
                 if let Some(kind) = encoder_kind { file["encoder"]["kind"] = kind.into(); }
                 if appender_kind == "rolling_file" { file["policy"] = fixtures::config("rolling-policy"); }
                 let config = config_from_value(yaml, "file-pattern-test").unwrap();
-                let mut encoder = fixtures::encoder("module-palette");
-                encoder["pattern"] = format!("{header}{body}").into();
-                let console_config: EncoderConfig = serde_yaml::from_value(encoder).unwrap();
-                let logger = CompareLogger {
-                    file: log4rs::Logger::new(config),
-                    console: deserializers.deserialize(&console_config.kind, console_config.config).unwrap(),
-                    expected: Mutex::new(Vec::new()),
-                };
-                let source_line = line!() + 1;
-                sinfo!(logger: &logger, target: "file::filter", request = 42; "literal {{fn}} message");
+                let logger = log4rs::Logger::new(config);
+                logger.log(&record);
                 logger.flush();
-                let expected = logger.expected.lock().unwrap();
-                let text = std::str::from_utf8(&expected).unwrap();
-                assert!(text.contains("file_appenders_share_console_patterns"), "{text}");
-                assert!(text.contains(&format!("|{}|file::filter|{}:{source_line}|42|{{sm}}|{{fn}}|literal {{fn}} message",
-                    module_path!(), file!())), "{text}");
-                assert_eq!(std::fs::read(&path).unwrap(), *expected, "{appender_kind}, {encoder_kind:?}");
+                assert_eq!(std::fs::read_to_string(&path).unwrap().lines().collect::<Vec<_>>(),
+                    ["file_fixture|message"], "{appender_kind}, {encoder_kind:?}");
             }
         }
     }

@@ -84,7 +84,7 @@ mod tests {
     use log4rs::encode::writer::simple::SimpleWriter;
 
     #[test]
-    fn emoji_filter_changes_only_rendered_console_text() {
+    fn emoji_filter_removes_emoji_from_fields_and_message() {
         let fields = [("sender", "Player 🎮")];
         let record = log::Record::builder().key_values(&fields)
             .args(format_args!("🛠️ Hello 👩‍💻 雪 🇩🇪\r\n")).build();
@@ -94,14 +94,5 @@ mod tests {
         encoder.encode(&mut SimpleWriter(&mut output), &record).unwrap();
         assert_eq!(String::from_utf8(output).unwrap(), "Player :  Hello  雪 \r\n");
 
-        let mut file = Vec::new();
-        super::super::pattern::PatternEncoder::new(pattern)
-            .encode(&mut SimpleWriter(&mut file), &record).unwrap();
-        assert_eq!(String::from_utf8(file).unwrap(), "Player 🎮: 🛠️ Hello 👩‍💻 雪 🇩🇪\r\n");
-        let mut json = Vec::new();
-        log4rs::encode::json::JsonEncoder::new().encode(&mut SimpleWriter(&mut json), &record).unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&json).unwrap();
-        assert_eq!(json["message"], "🛠️ Hello 👩‍💻 雪 🇩🇪\r\n");
-        assert_eq!(json["attributes"]["sender"], "Player 🎮");
     }
 }

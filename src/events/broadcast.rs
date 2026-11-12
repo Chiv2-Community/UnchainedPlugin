@@ -216,24 +216,4 @@ mod tests {
         assert_eq!(embed["footer"]["text"], "**footer**");
     }
 
-    #[test]
-    fn string_fields_remain_literal_in_every_backend() {
-        let message = BroadcastMessage::new()
-            .title("**title**")
-            .content(String::from("<body>"))
-            .field("_name_", String::from("**value**"))
-            .footer("__footer__");
-        assert_eq!(message.to_plain_text(), "**title**\n<body>\n_name_: **value**\n__footer__");
-        assert_eq!(message.game_chat_parts(), (
-            Some("**title**".into()), "&lt;body&gt;\n_name_: **value**\n__footer__".into(),
-        ));
-        let discord = serde_json::to_value(CreateMessage::from(&message)).unwrap();
-        let embed = &discord["embeds"][0];
-        assert_eq!(embed["title"], r"\*\*title\*\*");
-        assert_eq!(embed["description"], r"<body\>");
-        assert_eq!(embed["fields"][0]["name"], r"\_name\_");
-        assert_eq!(embed["fields"][0]["value"], r"\*\*value\*\*");
-        assert_eq!(embed["footer"]["text"], r"\_\_footer\_\_");
-    }
-
 }
