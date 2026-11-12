@@ -2,8 +2,8 @@
 
 This plugin discovers mounted mod `.pak` content and registers it into the
 runtime **Asset Registry**, so maps, mod markers and loading screens are found
-without a game restart. It merges a packaged `ModAssetRegistry.bin` when one is
-present and falls back to scanning pak headers otherwise.
+without a game restart. It merges a `ModAssetRegistry.bin` contained in mod's pak
+file when one is present and falls back to scanning pak headers otherwise.
 
 **What the markers and the registry file are — and how mod authors produce
 them — is documented in the ArgonSDK repository** (the source of truth):
