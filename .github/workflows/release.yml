@@ -15,7 +15,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1.2.2
+      - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
         with:
           plugin_file: plugin.json
 
@@ -97,7 +97,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Submit DLL release request
-        uses: Chiv2-Community/zero-infra-mod-registry/actions/automated-publish@v1.2.2
+        uses: Chiv2-Community/zero-infra-mod-registry/actions/automated-publish@v1
         with:
           endpoint: https://registry.polehammer.net/registrations
           kind: plugin
