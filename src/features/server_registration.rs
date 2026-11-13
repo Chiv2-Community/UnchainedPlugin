@@ -1,4 +1,5 @@
 use std::sync::{Arc, Condvar, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::net::IpAddr;
@@ -154,6 +155,11 @@ struct RegistrationInner {
     state: Mutex<WorkerState>,
     identity: Mutex<Option<Identity>>,
     mods: Mutex<Vec<Mod>>,
+    all_mods: Mutex<Vec<Mod>>,
+    // The mod set is fixed for the server's lifetime, so the Asset Registry scan
+    // that fills `mods`/`all_mods` runs only on the first registration. Set once
+    // the game-thread scan actually returns (see `register`).
+    mods_scanned: AtomicBool,
     cvar: Condvar,
     http: Client,
 }
@@ -232,6 +238,8 @@ impl Registration {
                 state: Mutex::new(WorkerState::Idle),
                 identity: Mutex::new(None),
                 mods: Mutex::new(Vec::new()),
+                all_mods: Mutex::new(Vec::new()),
+                mods_scanned: AtomicBool::new(false),
                 cvar: Condvar::new(),
                 http,
             }),
@@ -404,34 +412,48 @@ impl RegistrationInner {
         let args = &cli_args();
         let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
         let mods;
-        let mut all_mods: Vec<Mod> = Vec::new();
+        let all_mods: Vec<Mod>;
         #[cfg(feature="mod_management")]
-        {              
+        {
             use std::sync::mpsc;
             use crate::{resolvers::unchained_integration::run_on_game_thread};
-            thread::sleep(Duration::from_millis(5000)); // sleep until mods are actually loaded
 
-            let (tx, rx) = mpsc::channel();
-            run_on_game_thread(move || {
-                if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
-                    mm.scan_asset_registry();
-                    let _ = tx.send(mm.get_active_mod_metadata());
+            // The mod set is fixed for the server's lifetime: the Asset Registry
+            // is populated once during init. Scan it (and gather the available
+            // mod list) only on the first registration, then reuse the cached
+            // results. Otherwise a backend that keeps rejecting registration
+            // would re-run the full game-thread scan -- and the 5s settle sleep
+            // -- on every backoff retry. The flag is set only once the game
+            // thread job actually returns, so an attempt made before the mods
+            // finished loading does not freeze an empty list.
+            if !self.mods_scanned.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(5000)); // sleep until mods are actually loaded
+
+                let (tx, rx) = mpsc::channel();
+                run_on_game_thread(move || {
+                    if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
+                        mm.scan_asset_registry();
+                        let active = mm.get_active_mod_metadata();
+                        let available: Vec<Mod> = mm.get_available().values().cloned().collect();
+                        let _ = tx.send((active, available));
+                    }
+                });
+
+                if let Ok((active_mods, available_mods)) = rx.recv() {
+                    *self.mods.lock().unwrap() = active_mods;
+                    *self.all_mods.lock().unwrap() = available_mods;
+                    self.mods_scanned.store(true, Ordering::Release);
                 }
-            }); 
-
-            let active_mods = rx.recv().unwrap_or_default();
-            let mut lock = self.mods.lock().unwrap();
-            *lock = active_mods.clone();
-            mods = active_mods;
-
-            if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
-                all_mods = mm.get_available().values().cloned().collect();
             }
+
+            mods = self.mods.lock().unwrap().clone();
+            all_mods = self.all_mods.lock().unwrap().clone();
         }
 
         #[cfg(not(feature = "mod_management"))]
         {
             mods = self.mods.lock().unwrap().clone();
+            all_mods = Vec::new();
         }
         let server_name = match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
             Some(name_str) => name_str,
