@@ -325,6 +325,9 @@ impl ModManager {
 
         // Offsets are per class; every V2 marker normally shares one class.
         let mut offsets_by_class: HashMap<usize, Option<V2MarkerOffsets>> = HashMap::new();
+        // Compact per-marker tokens, logged as one summary line instead of a
+        // verbose line per marker.
+        let mut marker_summary: Vec<String> = Vec::new();
         for path in &marker_paths {
             let marker = get_uobject_from_path(path, true);
             if marker.is_null() {
@@ -345,15 +348,22 @@ impl ModManager {
 
             let class_paths = offsets.mod_actor_classes(marker);
             let bundled_markers = offsets.bundled_markers(marker);
-            sdebug!(
-                "V2 marker {}: ModId {:?}, ModVersion {:?}, FormatVersion {}, {} mod actor class(es), {} bundled marker(s)",
-                path,
-                offsets.mod_id(marker),
-                offsets.mod_version(marker),
-                offsets.format_version(marker),
-                class_paths.len(),
-                bundled_markers.len()
-            );
+
+            let mod_id = offsets.mod_id(marker);
+            let mod_version = offsets.mod_version(marker);
+            let mut token = if mod_id.is_empty() {
+                "<no ModId>".to_string()
+            } else {
+                mod_id
+            };
+            if !mod_version.is_empty() {
+                token.push_str(&format!(" v{}", mod_version));
+            }
+            if !bundled_markers.is_empty() {
+                token.push_str(&format!(" (+{} bundled)", bundled_markers.len()));
+            }
+            marker_summary.push(token);
+
             for bundled in missing_bundled_markers(&bundled_markers, &marker_paths) {
                 swarn!("V2 marker {} bundles {}, which is not in the Asset Registry", path, bundled);
             }
@@ -375,6 +385,9 @@ impl ModManager {
                     Err(error) => serror!("Cannot load mod class {}: {}", class_path, error),
                 }
             }
+        }
+        if !marker_summary.is_empty() {
+            sdebug!("V2 markers ({}): {}", marker_summary.len(), marker_summary.join(", "));
         }
         found
     }
