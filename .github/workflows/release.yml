@@ -29,17 +29,10 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-Release
-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # Match release CI without restoring debug build outputs.
+          cache-shared-key: windows-release
 
       # Extract version from tag (remove 'v' prefix)
       - name: Get version from tag
