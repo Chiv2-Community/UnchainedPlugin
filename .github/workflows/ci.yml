@@ -38,6 +38,9 @@ jobs:
       # Build the project
       - name: Build
         shell: bash
+        env:
+          # Diagnose why Cargo rejects restored build outputs.
+          CARGO_LOG: cargo::core::compiler::fingerprint=info
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
             cargo build --locked --release
@@ -48,6 +51,8 @@ jobs:
       # Run tests
       - name: Test
         shell: bash
+        env:
+          CARGO_LOG: cargo::core::compiler::fingerprint=info
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
             cargo test --locked --release
