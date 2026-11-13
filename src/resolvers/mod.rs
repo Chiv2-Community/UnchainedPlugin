@@ -78,6 +78,7 @@ pub struct OffsetRegisty {
 pub mod asset_registry;
 pub mod admin_control;
 pub mod asset_loading;
+pub mod loading_screens;
 pub mod backend_hooks;
 pub mod config_overrides;
 pub mod etc_hooks;
@@ -95,6 +96,7 @@ pub mod chiv2_macros;
 #[macro_use]
 pub mod getpost_requests;
 pub mod gameplay;
+pub mod pak_mount;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
