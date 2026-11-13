@@ -28,12 +28,14 @@ pub enum Notify {
     Admin
 }
 
+pub use crate::events::rich_text::{RichText, RichTextChunk};
+
 #[derive(Clone, Debug, Default)]
 pub struct BroadcastMessage {
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub fields: Vec<(String, String)>,
-    pub footer: Option<String>,
+    pub title: Option<RichText>,
+    pub content: Option<RichText>,
+    pub fields: Vec<(RichText, RichText)>,
+    pub footer: Option<RichText>,
     pub color: Option<u32>,
     pub notify: Vec<Notify>,
 }
@@ -43,22 +45,22 @@ impl BroadcastMessage {
         Self::default()
     }
 
-    pub fn title(mut self, title: impl Into<String>) -> Self {
+    pub fn title(mut self, title: impl Into<RichText>) -> Self {
         self.title = Some(title.into());
         self
     }
 
-    pub fn content(mut self, content: impl Into<String>) -> Self {
+    pub fn content(mut self, content: impl Into<RichText>) -> Self {
         self.content = Some(content.into());
         self
     }
 
-    pub fn field(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+    pub fn field(mut self, name: impl Into<RichText>, value: impl Into<RichText>) -> Self {
         self.fields.push((name.into(), value.into()));
         self
     }
 
-    pub fn footer(mut self, footer: impl Into<String>) -> Self {
+    pub fn footer(mut self, footer: impl Into<RichText>) -> Self {
         self.footer = Some(footer.into());
         self
     }
@@ -73,22 +75,45 @@ impl BroadcastMessage {
         self
     }
 
-    pub fn content_ref(&self) -> Option<&str> {
-        self.content.as_deref()
+    pub fn content_ref(&self) -> Option<&RichText> {
+        self.content.as_ref()
     }
 
-    pub fn get_content(&self) -> Option<&str> {
+    pub fn get_content(&self) -> Option<&RichText> {
         self.content_ref()
     }
 
     pub fn notify_roles(&self) -> &[Notify] {
         &self.notify
     }
+
+    pub fn to_plain_text(&self) -> String {
+        let body = self.render_body(RichText::to_plain_text);
+        match &self.title {
+            Some(title) => format!("{}\n{body}", title.to_plain_text()),
+            None => body,
+        }
+    }
+
+    pub(crate) fn game_chat_parts(&self) -> (Option<String>, String) {
+        (self.title.as_ref().map(RichText::to_game_chat), self.render_body(RichText::to_game_chat))
+    }
+
+    fn render_body(&self, render: fn(&RichText) -> String) -> String {
+        let mut message = self.content.as_ref().map(render).unwrap_or_default();
+        for (name, value) in &self.fields {
+            message.push_str(&format!("\n{}: {}", render(name), render(value)));
+        }
+        if let Some(footer) = &self.footer {
+            message.push_str(&format!("\n{}", render(footer)));
+        }
+        message
+    }
 }
 
-impl From<BroadcastMessage> for CreateMessage {
-    fn from(broadcast_message: BroadcastMessage) -> Self {
-        let mut message = CreateMessage::new();
+impl From<&BroadcastMessage> for CreateMessage {
+    fn from(broadcast_message: &BroadcastMessage) -> Self {
+        let message = CreateMessage::new();
         let BroadcastMessage {
             title,
             content,
@@ -103,71 +128,49 @@ impl From<BroadcastMessage> for CreateMessage {
         if should_create_embed {
             let mut embed = CreateEmbed::new();
             if let Some(title) = title {
-                embed = embed.title(title);
+                embed = embed.title(title.to_discord());
             }
             if let Some(content) = content {
-                embed = embed.description(content);
+                embed = embed.description(content.to_discord());
             }
             for (name, value) in fields {
-                embed = embed.field(name, value, false);
+                embed = embed.field(name.to_discord(), value.to_discord(), false);
             }
             if let Some(footer) = footer {
-                embed = embed.footer(CreateEmbedFooter::new(footer));
+                embed = embed.footer(CreateEmbedFooter::new(footer.to_discord()));
             }
             if let Some(color) = color {
-                embed = embed.color(color);
+                embed = embed.color(*color);
             }
-            message = message.embed(embed);
+            message.embed(embed)
         } else if let Some(content) = content {
-            message = message.content(content);
+            message.content(content.to_discord())
+        } else {
+            message
         }
+    }
+}
 
-        message
+impl From<BroadcastMessage> for CreateMessage {
+    fn from(broadcast_message: BroadcastMessage) -> Self {
+        Self::from(&broadcast_message)
     }
 }
 
 impl From<BroadcastMessage> for String {
     fn from(broadcast_message: BroadcastMessage) -> Self {
-        let mut message = String::new();
-        let BroadcastMessage {
-            title,
-            content,
-            fields,
-            footer,
-            color,
-            notify: _,
-        } = broadcast_message;
-        let is_rich = title.is_some() || !fields.is_empty() || footer.is_some() || color.is_some();
-
-        if !is_rich {
-            if let Some(content) = content {
-                message.push_str(&content);
-            }
-        } else {
-            if let Some(title) = title {
-                message.push_str(&format!("{}\n", title));
-            }
-
-            if let Some(content) = content {
-                message.push_str(&content);
-            }
-
-            for (name, value) in fields {
-                message.push_str(&format!("\n{}: {}", name, value));
-            }
-
-            if let Some(footer) = footer {
-                message.push_str(&format!("\n{}", footer));
-            }
-        }
-
-
-        message
+        broadcast_message.to_plain_text()
     }
 }
 
 impl From<String> for BroadcastMessage {
     fn from(content: String) -> Self {
+        Self::new().content(content)
+    }
+}
+
+impl From<RichText> for BroadcastMessage {
+    fn from(content: RichText) -> Self {
         Self::new().content(content)
     }
 }
@@ -184,25 +187,30 @@ impl From<&str> for BroadcastMessage {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_broadcast_message_conversions() {
-        let msg = BroadcastMessage::new()
-            .title("Test Title".to_string())
-            .content("Test Content".to_string());
-        
-        let s: String = msg.clone().into();
-        assert!(s.contains("Test Title"));
-        assert!(s.contains("Test Content"));
-        
-        let _cm: CreateMessage = msg.into();
+    fn formatted_message() -> BroadcastMessage {
+        BroadcastMessage::new()
+            .title(crate::rich_text!("**title**"))
+            .content(crate::rich_text!("**body**"))
+            .field(crate::rich_text!("**name**"), crate::rich_text!("**value**"))
+            .footer(crate::rich_text!("**footer**"))
     }
 
     #[test]
-    fn test_from_conversions() {
-        let msg1 = BroadcastMessage::from("hello");
-        assert_eq!(msg1.content_ref(), Some("hello"));
-        
-        let msg2 = BroadcastMessage::from("world".to_string());
-        assert_eq!(msg2.content_ref(), Some("world"));
+    fn plain_and_game_body_preserve_field_order() {
+        let message = formatted_message();
+        assert_eq!(message.to_plain_text(), "title\nbody\nname: value\nfooter");
+        assert_eq!(message.game_chat_parts(), (Some("title".into()), "body\nname: value\nfooter".into()));
     }
+
+    #[test]
+    fn discord_embed_formats_each_field() {
+        let discord = serde_json::to_value(CreateMessage::from(formatted_message())).unwrap();
+        let embed = &discord["embeds"][0];
+        assert_eq!(embed["title"], "**title**");
+        assert_eq!(embed["description"], "**body**");
+        assert_eq!(embed["fields"][0]["name"], "**name**");
+        assert_eq!(embed["fields"][0]["value"], "**value**");
+        assert_eq!(embed["footer"]["text"], "**footer**");
+    }
+
 }

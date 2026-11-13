@@ -4,8 +4,7 @@ use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::events::models::GameEvent;
 use crate::events::broadcast::BroadcastMessage;
-use crate::events::bus::{EventBus, EventPublisher, Subscriber};
-use async_trait::async_trait;
+use crate::events::bus::{EventBus, EventPublisher};
 use crate::modules::vote::{NoCommand, SharedVotingState, VoteCommand, VotingState, YesCommand};
 // use crate::modules::votes::votekick::KickVote;
 use crate::modules::votes::votemap::MapVote;
@@ -13,7 +12,7 @@ use crate::modules::votes::votebots::{AddBotsVote, NoBotsVote};
 use crate::events::broadcast_message::console::ConsoleChatBroadcastSubscriber;
 use crate::events::broadcast_message::game_chat::InGameChatBroadcastSubscriber;
 use crate::modules::command::CommandSubscriber;
-use crate::modules::chat::{ChatRelaySubscriber, GameChatSink, ConsoleChatSink};
+use crate::modules::chat::{ChatRelaySubscriber, GameChatSink, LoggingChatSink};
 use crate::modules::killstreak::KillstreakSubscriber;
 use crate::modules::event_broadcast::EventBroadcastSubscriber;
 use crate::modules::stats::{StatsTrackerSubscriber, StatsTrackerState, TopCommand, MyStatsCommand};
@@ -45,44 +44,21 @@ pub struct UnchainedEventSystem {
     pub command_subscriber: Arc<Mutex<CommandSubscriber>>,
 }
 
-pub struct CommandSubscriberProxy {
-    inner: Arc<Mutex<CommandSubscriber>>,
-}
-
-#[async_trait]
-impl Subscriber<GameEvent> for CommandSubscriberProxy {
-    fn identifier(&self) -> &'static str {
-        "CommandSubscriber"
-    }
-
-    async fn on_event(&mut self, event: &GameEvent) {
-        let mut sub = self.inner.lock().await;
-        sub.on_event(event).await;
-    }
-
-    async fn on_tick(&mut self) {
-        let mut sub = self.inner.lock().await;
-        sub.on_tick().await;
-    }
-}
-
-pub static EVENT_SYSTEM: Lazy<UnchainedEventSystem> = Lazy::new(|| init_event_system());
+pub static EVENT_SYSTEM: Lazy<UnchainedEventSystem> = Lazy::new(init_event_system);
 
 pub fn init_event_system() -> UnchainedEventSystem {
-    initialize_event_buses()
-}
-
-fn initialize_event_buses() -> UnchainedEventSystem {
-    let game_event_bus = Arc::new(EventBus::new(Duration::from_millis(100)));
+    let chat_relay_subscriber = ChatRelaySubscriber::new(vec![
+        Box::new(LoggingChatSink {}),
+        Box::new(GameChatSink {})
+    ]);
+    // Clients never run initialize_subscribers. Install chat logging before the bus starts.
+    let game_event_bus = Arc::new(EventBus::new_with_subscriber(
+        Duration::from_millis(100), Box::new(chat_relay_subscriber.clone())
+    ));
     let message_broadcast_event_bus = Arc::new(EventBus::new(Duration::from_millis(100)));
 
     let game_event_publisher = Arc::clone(&game_event_bus).start();
     let message_broadcast_event_publisher = Arc::clone(&message_broadcast_event_bus).start();
-
-    let chat_relay_subscriber = ChatRelaySubscriber::new(vec![
-        Box::new(ConsoleChatSink {}),
-        Box::new(GameChatSink {})
-    ]);
 
     let command_subscriber = Arc::new(Mutex::new(CommandSubscriber::new(
         Box::leak(Box::new(message_broadcast_event_publisher.clone())),
@@ -91,9 +67,9 @@ fn initialize_event_buses() -> UnchainedEventSystem {
 
     UnchainedEventSystem {
         game_event_bus,
-        game_event_publisher: game_event_publisher.clone(),
+        game_event_publisher,
         message_broadcast_event_bus,
-        message_broadcast_event_publisher: message_broadcast_event_publisher.clone(),
+        message_broadcast_event_publisher,
         chat_relay_subscriber,
         command_subscriber,
     }
@@ -108,7 +84,7 @@ pub async fn initialize_subscribers() {
 
     {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
-        initalize_vote_commands(&mut command_subscriber, broadcast_message_publisher, game_event_publisher).await;
+        initialize_vote_commands(&mut command_subscriber, broadcast_message_publisher, game_event_publisher);
 
         // Discord ported commands
         let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json")));
@@ -125,8 +101,7 @@ pub async fn initialize_subscribers() {
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
     let _ = broadcast_message_bus.subscribe(Box::new(InGameChatBroadcastSubscriber {})).await;
 
-    let _ = game_event_bus.subscribe(Box::new(CommandSubscriberProxy { inner: EVENT_SYSTEM.command_subscriber.clone() })).await;
-    let _ = game_event_bus.subscribe(Box::new(EVENT_SYSTEM.chat_relay_subscriber.clone())).await;
+    let _ = game_event_bus.subscribe(Box::new(EVENT_SYSTEM.command_subscriber.clone())).await;
 
     // Discord ported subscribers
     let stats_state = Arc::new(Mutex::new(StatsTrackerState::new("stats.json"))); // Need it again for subscriber
@@ -153,31 +128,26 @@ pub async fn initialize_client_commands() {
     }
 
     let _ = game_event_bus
-        .subscribe(Box::new(CommandSubscriberProxy {
-            inner: EVENT_SYSTEM.command_subscriber.clone(),
-        }))
+        .subscribe(Box::new(EVENT_SYSTEM.command_subscriber.clone()))
         .await;
 }
 
-async fn initalize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
-    let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(VotingState::new()))));
+fn initialize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {
+    let mut state = VotingState::new();
+    state.register(EndMapVote);
+    state.register(MapVote);
+    state.register(AddBotsVote);
+    state.register(NoBotsVote);
+    state.register(SpeedVote);
+    state.register(ModVote);
+    state.register(RestartServerVote::new(game_event_publisher));
+    let shared_state: &'static SharedVotingState = Box::leak(Box::new(SharedVotingState::new(Mutex::new(state))));
 
     command_subscriber.register(YesCommand::new(shared_state, broadcast_event_publisher));
     command_subscriber.register(NoCommand::new(shared_state, broadcast_event_publisher));
 
-    let mut vote_command = VoteCommand::new(
+    command_subscriber.register(VoteCommand::new(
         shared_state.clone(),
         broadcast_event_publisher
-    );
-
-    // vote_command.register(KickVote).await; // Delete this? It's built in to the game.
-    vote_command.register(EndMapVote).await;
-    vote_command.register(MapVote).await;
-    vote_command.register(AddBotsVote).await;
-    vote_command.register(NoBotsVote).await;
-    vote_command.register(SpeedVote).await;
-    vote_command.register(ModVote).await;
-    vote_command.register(RestartServerVote::new(game_event_publisher)).await;
-
-    command_subscriber.register(vote_command);
+    ));
 }

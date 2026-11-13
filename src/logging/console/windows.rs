@@ -15,6 +15,27 @@ pub(crate) fn preserve_console_handles() {
     *LEGACY_PALETTE.lock().unwrap_or_else(|error| error.into_inner()) = true;
 }
 
+fn output_handle_kind(target: log4rs::append::console::Target) -> STD_HANDLE {
+    match target {
+        log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
+        log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
+    }
+}
+
+pub(crate) fn is_console(target: log4rs::append::console::Target) -> bool {
+    unsafe {
+        GetStdHandle(output_handle_kind(target)).is_ok_and(|handle| GetConsoleMode(handle, &mut CONSOLE_MODE(0)).is_ok())
+    }
+}
+
+pub(crate) fn should_strip_console_emojis(target: log4rs::append::console::Target) -> bool {
+    // Legacy graphical conhosts lack reliable emoji shaping/fallback. Modern
+    // pseudoconsole hosts have a hidden console window; redirected output is not a console.
+    is_console(target) && unsafe {
+        windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(GetConsoleWindow()).as_bool()
+    }
+}
+
 unsafe fn standard_handles() -> [(STD_HANDLE, Option<HANDLE>); 3] {
     [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| {
         let handle = GetStdHandle(kind).ok().filter(|handle| {
@@ -47,8 +68,21 @@ pub(crate) fn spawn_console() {
     unsafe {
         if super::console_spawning_disabled() || GetConsoleWindow().0 != 0 { return; }
         let handles = standard_handles();
+        // Wine's renderer caches QuickEdit from the registry at creation and does
+        // not consult ENABLE_QUICK_EDIT_MODE when handling mouse selection.
+        let selection_defaults = if is_wine() && !super::stdio_attached() {
+            TemporaryDefaults::selection()
+        } else { None };
         if AllocConsole().is_err() { return; }
         super::OWN_CONSOLE.store(true, std::sync::atomic::Ordering::Relaxed);
+        if selection_defaults.is_some() {
+            use std::os::windows::io::AsRawHandle;
+            // Inherited stdout may be a pipe; query the actual screen buffer to
+            // wait for conhost to load its registry defaults before restoring them.
+            if let Ok(output) = std::fs::OpenOptions::new().read(true).write(true).open("CONOUT$") {
+                let _ = screen_info(HANDLE(output.as_raw_handle() as isize));
+            }
+        }
         if super::stdio_attached() {
             restore_standard_handles(handles);
             return;
@@ -62,21 +96,39 @@ pub(crate) fn spawn_console() {
         if let Ok(handle) = GetStdHandle(STD_INPUT_HANDLE) {
             let mut mode = CONSOLE_MODE(0);
             if GetConsoleMode(handle, &mut mode).is_ok() {
-                // Without QuickEdit, mouse input left enabled is delivered to the process
-                // instead of the console, so the wheel can no longer scroll the buffer.
+                // Keep scrolling available; enable selection once console writes are queued.
                 let _ = SetConsoleMode(handle, (mode & !(ENABLE_QUICK_EDIT_MODE | ENABLE_MOUSE_INPUT)) | ENABLE_EXTENDED_FLAGS);
             }
         }
     }
 }
 
+fn is_wine() -> bool {
+    unsafe {
+        GetModuleHandleW(w!("ntdll.dll")).ok()
+            .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some())
+    }
+}
+
+pub(crate) fn enable_selection() {
+    if !super::owns_console() { return; }
+    use std::os::windows::io::AsRawHandle;
+    // GUI launches can retain redirected stdin after AllocConsole. Configure the
+    // console input buffer without replacing that inherited standard handle.
+    let Ok(input) = std::fs::OpenOptions::new().read(true).write(true).open("CONIN$") else { return };
+    unsafe {
+        let input = HANDLE(input.as_raw_handle() as isize);
+        let mut mode = CONSOLE_MODE(0);
+        if GetConsoleMode(input, &mut mode).is_ok() {
+            let _ = SetConsoleMode(input,
+                (mode | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS) & !ENABLE_MOUSE_INPUT);
+        }
+    }
+}
+
 pub(super) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
     unsafe {
-        let output = match target {
-            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
-            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
-        };
-        let info = GetStdHandle(output).ok().and_then(|handle| screen_info(handle));
+        let info = GetStdHandle(output_handle_kind(target)).ok().and_then(|handle| screen_info(handle));
         let bank = info.as_ref().map_or(0, |info| usize::from(info.wAttributes.0 & 0x80 != 0) * 8);
         let colors = info.map_or(BASIC_COLORS, |info| info.ColorTable.map(|color| color.0));
         // log4rs preserves the terminal's background-intensity bit.
@@ -86,15 +138,11 @@ pub(super) fn background_slots(target: log4rs::append::console::Target, palette:
 
 pub(super) fn configure(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> (bool, Vec<u8>) {
     unsafe {
-        let output = match target {
-            log4rs::append::console::Target::Stdout => STD_OUTPUT_HANDLE,
-            log4rs::append::console::Target::Stderr => STD_ERROR_HANDLE,
-        };
+        let output = output_handle_kind(target);
         let Ok(handle) = GetStdHandle(output) else { return (false, nearest_slots(BASIC_COLORS, palette)) };
         let mut mode = CONSOLE_MODE(0);
         if GetConsoleMode(handle, &mut mode).is_err() { return (false, nearest_slots(BASIC_COLORS, palette)); }
-        let wine = GetModuleHandleW(w!("ntdll.dll")).ok()
-            .is_some_and(|module| GetProcAddress(module, s!("wine_get_version")).is_some());
+        let wine = is_wine();
         if palette.is_empty() || !super::OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) || super::stdio_attached() {
             // Detect capability without reconfiguring empty palettes or shared terminals.
             return (use_truecolor(mode.contains(ENABLE_VIRTUAL_TERMINAL_PROCESSING), wine,
@@ -191,7 +239,7 @@ impl Drop for PaletteLock {
 }
 
 impl TemporaryDefaults {
-    unsafe fn install(colors: [u32; 16], attributes: u16) -> Option<Self> {
+    unsafe fn path() -> Option<Vec<u16>> {
         let mut startup = STARTUPINFOW::default();
         GetStartupInfoW(&mut startup);
         let title = if startup.lpTitle.is_null() {
@@ -200,11 +248,24 @@ impl TemporaryDefaults {
             if length == 0 || length >= path.len() { return None; }
             String::from_utf16_lossy(&path[..length])
         } else { startup.lpTitle.to_string().ok()? };
-        let path = wide(&format!("Console\\{}", title.replace('\\', "_")));
-        Self::install_at(path, colors, attributes)
+        Some(wide(&format!("Console\\{}", title.replace('\\', "_"))))
+    }
+
+    unsafe fn selection() -> Option<Self> {
+        Self::install_values(Self::path()?, vec![("QuickEdit".into(), 1)])
+    }
+
+    unsafe fn install(colors: [u32; 16], attributes: u16) -> Option<Self> {
+        Self::install_at(Self::path()?, colors, attributes)
     }
 
     unsafe fn install_at(path: Vec<u16>, colors: [u32; 16], attributes: u16) -> Option<Self> {
+        let values = colors.into_iter().enumerate().map(|(i, color)| (format!("ColorTable{i:02}"), color))
+            .chain([("ScreenColors".into(), u32::from(attributes)), ("QuickEdit".into(), 1)]).collect();
+        Self::install_values(path, values)
+    }
+
+    unsafe fn install_values(path: Vec<u16>, values: Vec<(String, u32)>) -> Option<Self> {
         let lock = PaletteLock::acquire()?;
         let mut key = HKEY::default();
         let mut disposition = REG_CREATE_KEY_DISPOSITION::default();
@@ -212,8 +273,6 @@ impl TemporaryDefaults {
             REG_OPTION_VOLATILE, KEY_QUERY_VALUE | KEY_SET_VALUE, None,
             &mut key, Some(&mut disposition)).ok()?;
         let mut guard = Self { key, path, created: disposition == REG_CREATED_NEW_KEY, saved: Vec::new(), _lock: lock };
-        let values = colors.into_iter().enumerate().map(|(i, color)| (format!("ColorTable{i:02}"), color))
-            .chain(Some(("ScreenColors".into(), u32::from(attributes)))).collect::<Vec<_>>();
         for (name, _) in &values {
             let name = wide(name);
             let mut kind = REG_VALUE_TYPE::default();
@@ -443,10 +502,12 @@ mod tests {
         use std::io::Write;
         use std::os::windows::io::BorrowedHandle;
         unsafe {
+            report_panics();
             let handles = standard_handles();
             let _ = FreeConsole();
             restore_standard_handles(handles);
             assert_eq!(GetConsoleWindow().0, 0);
+            assert!(!should_strip_console_emojis(log4rs::append::console::Target::Stdout));
             let attach = std::env::var("UNCHAINED_TEST_ATTACH").unwrap() == "true";
             let no_spawn = std::env::var("UNCHAINED_TEST_NO_SPAWN").unwrap() == "true";
             if no_spawn { super::super::disable_console_spawning(); }
@@ -454,8 +515,20 @@ mod tests {
             assert_eq!(super::super::console_spawning_disabled(), no_spawn);
             super::super::spawn_console();
             assert_eq!(GetConsoleWindow().0 != 0, !no_spawn);
+            let _output = (!attach && !no_spawn).then(console_output);
+            if !attach && !no_spawn {
+                use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE};
+                let target = log4rs::append::console::Target::Stdout;
+                let _ = screen_info(GetStdHandle(STD_OUTPUT_HANDLE).unwrap()).unwrap();
+                assert!(should_strip_console_emojis(target));
+                let _ = ShowWindow(GetConsoleWindow(), SW_HIDE);
+                assert!(!should_strip_console_emojis(target));
+                let _ = ShowWindow(GetConsoleWindow(), SW_SHOWNOACTIVATE);
+                assert!(should_strip_console_emojis(target));
+            }
             if attach {
                 assert_eq!(standard_handles(), handles);
+                assert!(!should_strip_console_emojis(log4rs::append::console::Target::Stdout));
                 configure(log4rs::append::console::Target::Stdout, &[[242, 139, 130]]);
                 configure(log4rs::append::console::Target::Stderr, &[[242, 139, 130]]);
                 assert_eq!(standard_handles(), handles);

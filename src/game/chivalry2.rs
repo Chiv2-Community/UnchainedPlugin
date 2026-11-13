@@ -138,6 +138,33 @@ pub struct FDeathDamageTakenEvent {
 const _: [(); 0x148] = [(); std::mem::size_of::<FDamageTakenEvent>()];
 const _: [(); 0x160] = [(); std::mem::size_of::<FDeathDamageTakenEvent>()];
 
+// ArgonSDK: Source/TBL/Public/EFaction.h.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EFaction {
+    Agatha = 0,
+    Mason = 1,
+    FFA = 2,
+    None = 3,
+    All = 4,
+    Tenosia = 5,
+    MAX = 6,
+}
+
+impl EFaction {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Agatha => "Agatha",
+            Self::Mason => "Mason",
+            Self::FFA => "FFA",
+            Self::None => "None",
+            Self::All => "All",
+            Self::Tenosia => "Tenosia",
+            Self::MAX => "MAX",
+        }
+    }
+}
+
 // Chat type enum
 // FIXME: More compact, wtf is this
 #[repr(C)]
@@ -265,7 +292,7 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
             TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
         }
     } else {
-        swarn!(fn; "globals.world was None; skipping chat broadcast");
+        swarn!("globals.world was None; skipping chat broadcast");
     }
 }
 
@@ -690,7 +717,7 @@ pub fn get_human_player_count() -> usize {
     let world_ptr = match crate::globals().world() {
         Some(ptr) => ptr,
         None => {
-            swarn!(fn; "globals.world was None; returning 0 and skipping player count scan");
+            swarn!("globals.world was None; returning 0 and skipping player count scan");
             return 0;
         }
     };
@@ -1058,7 +1085,7 @@ pub struct ATBLPlayerState {
     pub out_of_combat_time_rem: f32,    // 0x0A3C
     pub next_spawn_team: *mut c_void,   // 0x0A40 (ATBLTeam*)
     pub team: *mut c_void,              // 0x0A48 (ATBLTeam*)
-    pub faction: u8,                    // 0x0A50 (EFaction enum)
+    pub faction: EFaction,              // 0x0A50
     pub is_npc: bool,                   // 0x0A51
     pub is_player_custom_bot: bool,     // 0x0A52
     pub padding_17: [u8; 0x5],          // 0x0A53

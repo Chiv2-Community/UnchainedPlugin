@@ -1,7 +1,8 @@
 use serenity::all::UserId;
 use UnchainedPlugin::sinfo;
 use UnchainedPlugin::features::discord::DiscordConfig;
-use UnchainedPlugin::events::models::{CombatActor, GameChatMessage, Join, Kill, GameEvent, ChatSource, ChatType, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
+use UnchainedPlugin::events::models::{CombatActor, GameChatMessage, Join, Kill, GameEvent, ChatSource, NativeChat, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
+use UnchainedPlugin::game::chivalry2::EChatType;
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::logging::log4rs::init;
 use std::io::{self, Write};
@@ -63,8 +64,10 @@ fn main() {
             ["chat", ..] => {
                 let msg = parts[1..].join(" ");
                 EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-                    chat_source: ChatSource::Game,
-                    chat_type: ChatType::Admin,
+                    chat_source: ChatSource::Native(NativeChat::Player {
+                        channel: EChatType::Admin,
+                        faction: None,
+                    }),
                     sender: "MockPlayer".to_string(), 
                     message: msg,
                 }));

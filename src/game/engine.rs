@@ -40,6 +40,7 @@ impl UEHash for *mut crate::ue::UObject {
         (hasher.finish() & 0xFFFF_FFFF) as u32
     }
 }
+#[repr(C, align(8))]
 pub struct FText
 {
     pub text_data: [u8; 0x10],
@@ -167,19 +168,19 @@ impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = widestring::U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		// sinfo!(fn; "Constructing fname for {}", path);
+		// sinfo!("Constructing fname for {}", path);
 
 		// Called at the function entry, not through the detour trampoline;
 		// see `fname_ctor_wchar`.
 		unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), find_type) }
 			.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			// sinfo!(fn; "1. Name is invalid for {}", wide_path.to_string_lossy());
+			// sinfo!("1. Name is invalid for {}", wide_path.to_string_lossy());
 			unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), EFindName::Add) }
 				.expect("Failed to construct FName");
 		}
 		if name.comparison_index.value == 0 {
-			sinfo!(fn; "2. Name is invalid for {}", wide_path.to_string_lossy());
+			sinfo!("2. Name is invalid for {}", wide_path.to_string_lossy());
 		}
         name
     }

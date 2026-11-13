@@ -6,8 +6,10 @@ appenders:
         level: debug
     encoder:
       kind: palette
-      pattern: "{palette({l})}[{d(%H:%M:%S)} {l:5}]{palette({l}_body)} [{sm:<-24.24}] {m}{n}"
-      palette:
+      inline-removals: &inline_removals
+        - _detour_fkt
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:<5}{palette(trace)} | {palette(module)}{fn:<16}{palette(timestamp)} - {palette({l}_body)}{m}{n}"
+      palette: &console_palette
         error: "#f28b82"
         warn: "#f2cc78"
         info: "#8cb4e1"
@@ -18,25 +20,86 @@ appenders:
         info_body: "#eeeeee"
         debug_body: "#808080"
         trace_body: "#5c5c5c"
+        timestamp: "#909090"
+        module: "#BE9D5C"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
+        team_agatha: "#8cb4e1"
+        team_mason: "#f28b82"
+        team_tenosia: "#D09128"
+        team_ffa: "#a8d5a2"
+        team_unknown: "#d7a0df"
+        team_none: "#ffffff"
+        team_max: "#d7a0df"
+        team_all: "#a8d5a2"
+        team_spectator: "#ffffff"
+        team_system: "#8cd8e1"
+        team_discord: "#b58cff"
   file:
     kind: file
     path: "__UNCHAINED_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:5}| {M}] {m}{n}"
+      inline-removals: *inline_removals
+      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:<5}| {fn:<16}] {m}{n}"
+  chat_console:
+    kind: console
+    encoder:
+      kind: palette
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(label)})}{K(label):<5.5}{palette(debug)} | {palette(team_{K(faction)})}{K(sender):<16}{palette(debug)} - {palette()}{m}{n}"
+      palette: *console_palette
+  chat_file:
+    kind: file
+    path: "__CHAT_LOG_PATH__"
+    encoder:
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {K(sender):<16} - {m}{n}"
+  chat_system_console:
+    kind: console
+    encoder:
+      kind: palette
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(faction)})}{K(label):<5.5}{palette(debug)} | {palette()}{m}{n}"
+      palette: *console_palette
+  chat_system_file:
+    kind: file
+    path: "__CHAT_LOG_PATH__"
+    encoder:
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {m}{n}"
   kismet:
     kind: file
     path: "__KISMET_LOG_PATH__"
     encoder:
-      pattern: "[{d(%Y-%m-%d %H:%M:%S)} {P} {l:5}| {M} ] {m}{n}"
+      inline-removals: *inline_removals
+      pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:<5}| {fn:<16}] {m}{n}"
 
 loggers:
+  chat_log:
+    level: info
+    appenders:
+      - chat_console
+      - chat_file
+    additive: false
+  "chat_log::system":
+    level: info
+    appenders:
+      - chat_system_console
+      - chat_system_file
+    additive: false
+  "chat_log::system::sender":
+    level: info
+    appenders:
+      - chat_console
+      - chat_file
+    additive: false
   serenity:
     level: warn
   tracing:
     level: warn
   patternsleuth:
+    level: warn
+  ureq:
+    level: warn
+  ureq_proto:
+    level: warn
+  rustls:
     level: warn
   "h2::codec":
     level: warn

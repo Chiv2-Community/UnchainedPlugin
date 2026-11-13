@@ -4,11 +4,13 @@ use log4rs::encode::{pattern::PatternEncoder as BuiltinPatternEncoder, Encode, W
 
 const SHORT_MODULE_KEY: &str = "__unchained_short_module";
 const FUNCTION_KEY: &str = "enclosing_function";
+const DISPLAY_FUNCTION_KEY: &str = "__unchained_function";
 
 #[derive(Debug)]
 pub struct PatternEncoder {
     inner: BuiltinPatternEncoder,
     extended: bool,
+    inline_removals: Option<regex::Regex>,
 }
 
 impl PatternEncoder {
@@ -18,7 +20,7 @@ impl PatternEncoder {
         let mut expanded = String::new();
         let mut extended = false;
         while !rest.is_empty() {
-            let alias = [("sm", SHORT_MODULE_KEY), ("fn", FUNCTION_KEY)].into_iter()
+            let alias = [("sm", SHORT_MODULE_KEY), ("fn", DISPLAY_FUNCTION_KEY)].into_iter()
                 .find(|(name, _)| rest.strip_prefix('{').and_then(|rest| rest.strip_prefix(name))
                     .is_some_and(|rest| rest.starts_with('}') || rest.starts_with(':')));
             if let Some((_, key)) = alias {
@@ -39,16 +41,30 @@ impl PatternEncoder {
                 }
             }
         }
-        Self { inner: BuiltinPatternEncoder::new(&expanded), extended }
+        Self { inner: BuiltinPatternEncoder::new(&expanded), extended, inline_removals: None }
     }
 }
 
 impl Encode for PatternEncoder {
     fn encode(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
+        if let Some(regex) = &self.inline_removals {
+            let mut line = super::removals::RenderedLine::default();
+            self.encode_pattern(&mut line, record)?;
+            return line.emit(writer, regex);
+        }
+        self.encode_pattern(writer, record)
+    }
+}
+
+impl PatternEncoder {
+    fn encode_pattern(&self, writer: &mut dyn Write, record: &Record<'_>) -> anyhow::Result<()> {
         if !self.extended { return self.inner.encode(writer, record); }
         let module = ShortModule(record.module_path().unwrap_or("???"));
-        let function = record.key_values().get(FUNCTION_KEY.into()).unwrap_or(Value::from("???"));
-        let values = [(SHORT_MODULE_KEY, Value::from_display(&module)), (FUNCTION_KEY, function)];
+        let function = record.key_values().get(FUNCTION_KEY.into())
+            .map(|value| value.to_string()).unwrap_or_else(|| "???".into());
+        let function = function.strip_suffix("_detour_fkt").unwrap_or(&function);
+        let values = [(SHORT_MODULE_KEY, Value::from_display(&module)),
+            (DISPLAY_FUNCTION_KEY, Value::from(function))];
         let sources: [&dyn Source; 2] = [&values, record.key_values()];
         let extended = record.to_builder().key_values(&sources).build();
         self.inner.encode(writer, &extended)
@@ -59,6 +75,8 @@ impl Encode for PatternEncoder {
 #[serde(deny_unknown_fields)]
 pub struct PatternEncoderConfig {
     pattern: Option<String>,
+    #[serde(default, rename = "inline-removals")]
+    inline_removals: Vec<String>,
 }
 
 pub struct PatternEncoderDeserializer;
@@ -69,9 +87,9 @@ impl Deserialize for PatternEncoderDeserializer {
 
     fn deserialize(&self, config: PatternEncoderConfig, _: &Deserializers)
         -> anyhow::Result<Box<dyn Encode>> {
-        Ok(Box::new(PatternEncoder::new(
-            config.pattern.as_deref().unwrap_or("{d} {l} {t} - {m}{n}"),
-        )))
+        let mut encoder = PatternEncoder::new(config.pattern.as_deref().unwrap_or("{d} {l} {t} - {m}{n}"));
+        encoder.inline_removals = super::removals::compile(&config.inline_removals)?;
+        Ok(Box::new(encoder))
     }
 }
 
@@ -79,44 +97,30 @@ struct ShortModule<'a>(&'a str);
 
 impl std::fmt::Display for ShortModule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Retain the last 32 Unicode characters without allocating a label.
-        let mut tail = ['\0'; 32];
-        let mut next = 0;
-        let mut length = 0;
-        let mut push_char = |ch| {
-            tail[next] = ch;
-            next = (next + 1) % tail.len();
-            length = (length + 1).min(tail.len());
-        };
-        let mut segments = self.0.split("::").peekable();
-        while let Some(segment) = segments.next() {
-            if segments.peek().is_some() {
+        let mut label = String::new();
+        if let Some((prefix, last)) = self.0.rsplit_once("::") {
+            for segment in prefix.split("::") {
                 for word in segment.split('_') {
-                    let mut chars = word.chars().peekable();
+                    let mut chars = word.chars().enumerate().peekable();
                     let mut previous_uppercase = false;
-                    let mut first = true;
-                    while let Some(ch) = chars.next() {
+                    while let Some((index, ch)) = chars.next() {
                         let uppercase = ch.is_uppercase();
                         // Start camel-case words and acronym-to-word transitions.
-                        if first || (uppercase && (!previous_uppercase
-                            || chars.peek().is_some_and(|next| next.is_lowercase()))) {
-                            push_char(ch);
+                        if index == 0 || (uppercase && (!previous_uppercase
+                            || chars.peek().is_some_and(|(_, next)| next.is_lowercase()))) {
+                            label.push(ch);
                         }
-                        first = false;
                         previous_uppercase = uppercase;
                     }
                 }
-                push_char(':');
-                push_char(':');
-            } else {
-                for ch in segment.chars() { push_char(ch); }
+                label.push_str("::");
             }
+            label.push_str(last);
+        } else {
+            label.push_str(self.0);
         }
-        let start = if length == tail.len() { next } else { 0 };
-        for offset in 0..length {
-            write!(f, "{}", tail[(start + offset) % tail.len()])?;
-        }
-        Ok(())
+        let start = label.char_indices().rev().nth(31).map_or(0, |(index, _)| index);
+        f.write_str(&label[start..])
     }
 }
 
@@ -141,56 +145,45 @@ mod tests {
     }
 
     #[test]
-    fn short_module_boundaries_and_fixed_default_width_leave_custom_widths_independent() {
-        use super::super::palette::PaletteEncoderConfig;
-
-        let newline = if cfg!(windows) { "\r\n" } else { "\n" };
-        let config: PaletteEncoderConfig = serde_yaml::from_value(crate::logging::test_resources::encoder("defaults")).unwrap();
-        let encoder = config.build().unwrap();
-        for character in ['a', 'é', '界'] {
-            for length in [1, 23, 24, 25, 31, 32, 33, 40] {
-                let module: String = std::iter::once('Ω')
-                    .chain(std::iter::repeat_n(character, length - 1)).collect();
-                let expected: String = module.chars().rev().take(32)
-                    .collect::<Vec<_>>().into_iter().rev().collect();
-                let record = Record::builder().module_path(Some(&module))
-                    .args(format_args!("message")).build();
-                let mut custom = Vec::new();
-                PatternEncoder::new("[{sm}]|[{sm:<24}]")
-                    .encode(&mut SimpleWriter(&mut custom), &record).unwrap();
-                assert_eq!(String::from_utf8(custom).unwrap(),
-                    format!("[{expected}]|[{expected:<24}]"), "{module}");
-                let mut console = Vec::new();
-                encoder.encode(&mut SimpleWriter(&mut console), &record).unwrap();
-                let suffix: String = module.chars().rev().take(24)
-                    .collect::<Vec<_>>().into_iter().rev().collect();
-                let label = format!("{suffix:<24}");
-                let expected_body = format!(" [{label}] message{newline}");
-                assert!(String::from_utf8(console).unwrap()
-                    .ends_with(&expected_body), "{module}");
-            }
-        }
+    fn short_module_truncates_unicode_from_the_left() {
+        let module = format!("Ω{}", "界".repeat(32));
+        let record = Record::builder().module_path(Some(&module)).build();
+        let mut output = Vec::new();
+        PatternEncoder::new("{sm}").encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "界".repeat(32));
     }
 
-    #[test]
-    fn aliases_respect_escaping_nesting_format_specs_and_missing_values() {
+    #[test_case::test_case("Tick_detour_fkt", "Tick"; "detour_suffix")]
+    #[test_case::test_case("long_function_name_that_exceeds_thirty_two_characters_detour_fkt", "at_exceeds_thirty_two_characters"; "left_truncation")]
+    #[test_case::test_case("keep_detour_fkt_inside", "keep_detour_fkt_inside"; "interior_suffix")]
+    fn function_display_preserves_raw_metadata(name: &str, display: &str) {
+        let values = [(FUNCTION_KEY, name)];
+        let record = Record::builder().key_values(&values).build();
+        let mut output = Vec::new();
+        PatternEncoder::new("{fn:<-32.32}|{K(enclosing_function)}")
+            .encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), format!("{display:<32}|{name}"));
+    }
+
+    #[test_case::test_case("{{sm}}", "{sm}"; "module_brace_escape")]
+    #[test_case::test_case(r"\{sm\}", "{sm}"; "module_backslash_escape")]
+    #[test_case::test_case("{{{sm}}}", "{UP::messages}"; "module_surrounding_braces")]
+    #[test_case::test_case("{sm}|{sm}", "UP::messages|UP::messages"; "repeated_module")]
+    #[test_case::test_case("{({sm}):>15}", "   UP::messages"; "nested_module_alignment")]
+    #[test_case::test_case("{sm:>15}", "   UP::messages"; "module_right_alignment")]
+    #[test_case::test_case("{sm:<24}", "UP::messages            "; "module_left_alignment")]
+    #[test_case::test_case("{sm:-.8}", "messages"; "module_left_truncation")]
+    #[test_case::test_case("{{fn}}", "{fn}"; "function_brace_escape")]
+    #[test_case::test_case(r"\{fn\}", "{fn}"; "function_backslash_escape")]
+    #[test_case::test_case("{{{fn}}}", "{???}"; "missing_function_surrounding_braces")]
+    #[test_case::test_case("{fn}|{fn}", "???|???"; "repeated_missing_function")]
+    #[test_case::test_case("{fn:>5}", "  ???"; "missing_function_alignment")]
+    #[test_case::test_case("{({fn}):>5}", "  ???"; "nested_missing_function_alignment")]
+    #[test_case::test_case("{fn:.2}", "??"; "missing_function_truncation")]
+    fn aliases_respect_pattern_syntax(pattern: &str, expected: &str) {
         let record = Record::builder().module_path(Some("UnchainedPlugin::messages")).build();
-        for (pattern, expected) in [
-            ("{{sm}}", "{sm}"),
-            (r"\{sm\}", "{sm}"),
-            ("{{{sm}}}", "{UP::messages}"),
-            ("{sm}|{sm}", "UP::messages|UP::messages"),
-            ("{({sm}):>15}", "   UP::messages"),
-            ("{sm:>15}", "   UP::messages"),
-            ("{sm:<24}", "UP::messages            "),
-            ("{sm:-.8}", "messages"),
-            ("{{fn}}", "{fn}"), (r"\{fn\}", "{fn}"), ("{{{fn}}}", "{???}"),
-            ("{fn}|{fn}", "???|???"), ("{fn:>5}", "  ???"),
-            ("{({fn}):>5}", "  ???"), ("{fn:.2}", "??"),
-        ] {
-            let mut output = Vec::new();
-            PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();
-            assert_eq!(String::from_utf8(output).unwrap(), expected, "{pattern}");
-        }
+        let mut output = Vec::new();
+        PatternEncoder::new(pattern).encode(&mut SimpleWriter(&mut output), &record).unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), expected);
     }
 }

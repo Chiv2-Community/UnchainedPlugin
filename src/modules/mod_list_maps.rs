@@ -23,7 +23,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
         // mpsc recv: execute() runs on a tokio worker, and a blocking recv() pins
         // that worker (an anti-pattern on a tokio runtime).
         let (tx, rx) = tokio::sync::oneshot::channel();
-        sinfo!(fn; "Querying the Asset Registry for /Game/Mods on the game thread");
+        sinfo!("Querying the Asset Registry for /Game/Mods on the game thread");
 
         run_on_game_thread(move || {
             let outcome = match unsafe { crate::game::engine::get_assets_by_path("/Game/Mods", true) } {
@@ -60,23 +60,23 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
 
         match rx.await {
             Ok((Ok(summary), lines)) => {
-                sinfo!(fn; "{}", summary);
+                sinfo!("{}", summary);
                 for line in lines.iter().filter(|l| l.starts_with("[map]")) {
-                    sinfo!(fn; "{}", line);
+                    sinfo!("{}", line);
                 }
                 const SAMPLE: usize = 20;
                 let other_count = lines.iter().filter(|l| l.starts_with("[asset]")).count();
                 for line in lines.iter().filter(|l| l.starts_with("[asset]")).take(SAMPLE) {
-                    sinfo!(fn; "{}", line);
+                    sinfo!("{}", line);
                 }
                 if other_count > SAMPLE {
-                    sinfo!(fn; "... and {} more non-map asset(s)", other_count - SAMPLE);
+                    sinfo!("... and {} more non-map asset(s)", other_count - SAMPLE);
                 }
             }
             Ok((Err(e), _)) => {
-                serror!(fn; "Asset Registry query failed: {}", e);
+                serror!("Asset Registry query failed: {}", e);
             }
-            Err(_) => serror!(fn; "Game thread job channel dropped before a result arrived"),
+            Err(_) => serror!("Game thread job channel dropped before a result arrived"),
         }
     }
 }

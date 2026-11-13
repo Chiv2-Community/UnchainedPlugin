@@ -489,7 +489,7 @@ pub fn register_filtered_assets_sync() {
 
     let paks = discovery_pak_paths();
     if paks.is_empty() {
-        serror!(fn; "Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
+        serror!("Synchronous filtered registration skipped: no mod paks found (mounted list empty and no default Content/Paks)");
         return;
     }
     let (registry_paks, mut legacy_paks) = classify_paks_for_asset_registry(paks);
@@ -517,7 +517,7 @@ pub fn register_filtered_assets_sync() {
     let scan = match scan_filtered_assets(source, None) {
         Ok(scan) => scan,
         Err(e) => {
-            serror!(fn; "Synchronous filtered scan failed: {}", e);
+            serror!("Synchronous filtered scan failed: {}", e);
             return;
         }
     };
@@ -531,7 +531,7 @@ pub fn register_filtered_assets_sync() {
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
         if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
-            serror!(fn; "Synchronous filtered batch {} failed: {}", i, e);
+            serror!("Synchronous filtered batch {} failed: {}", i, e);
             return;
         }
         registered += batch.len();

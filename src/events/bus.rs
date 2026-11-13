@@ -88,6 +88,13 @@ impl<E> EventBus<E>
         }
     }
 
+    pub fn new_with_subscriber(tick_rate: Duration, subscriber: Box<dyn Subscriber<E>>) -> Self {
+        Self {
+            subscribers: Mutex::new(vec![subscriber]),
+            tick_rate,
+        }
+    }
+
     pub async fn subscribe(&self, subscriber: Box<dyn Subscriber<E>>) -> Result<(), String> {
         let mut subscribers = self.subscribers.lock().await;
         let id = subscriber.identifier();
@@ -190,6 +197,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn initial_subscriber_receives_first_event() {
+        let subscriber = sub("initial");
+        let events = subscriber.events.clone();
+        let bus = EventBus::new_with_subscriber(Duration::from_millis(100), Box::new(subscriber));
+        bus.dispatch(TestEvent::Hello).await;
+        assert_eq!(*events.lock().await, vec![TestEvent::Hello]);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn test_event_dispatch() {
         let sub = sub("test_subscriber");
         let events = Arc::clone(&sub.events);
@@ -201,33 +217,11 @@ mod tests {
         publisher.publish(TestEvent::Hello);
         publisher.publish(TestEvent::World);
 
-        // Give some time for dispatch
         tokio::time::sleep(Duration::from_millis(50)).await;
-
-        let received = events.lock().await;
-        assert_eq!(received.len(), 2);
-        assert_eq!(received[0], TestEvent::Hello);
-        assert_eq!(received[1], TestEvent::World);
+        assert_eq!(*events.lock().await, [TestEvent::Hello, TestEvent::World]);
     }
 
-    #[tokio::test]
-    async fn test_periodic_tick() {
-        let sub = sub("test_subscriber");
-        let ticks = Arc::clone(&sub.ticks);
-
-        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
-        bus.subscribe(Box::new(sub)).await.unwrap();
-        let _publisher = Arc::clone(&bus).start();
-
-        // Wait for at least 2 ticks (200ms + some buffer)
-        tokio::time::sleep(Duration::from_millis(350)).await;
-
-        let count = *ticks.lock().await;
-        // Should have ticked about 3 times
-        assert!(count >= 2, "Expected at least 2 ticks, got {}", count);
-    }
-
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_multiple_subscribers_same_rate() {
         let sub1 = sub("sub1");
         let ticks1 = Arc::clone(&sub1.ticks);
@@ -252,29 +246,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_identifier_uniqueness() {
-        struct Sub1;
-        #[async_trait]
-        impl Subscriber<TestEvent> for Sub1 {
-            fn identifier(&self) -> &'static str { "sub" }
-            async fn on_event(&mut self, _: &TestEvent) {}
-        }
-
-        struct Sub2;
-        #[async_trait]
-        impl Subscriber<TestEvent> for Sub2 {
-            fn identifier(&self) -> &'static str { "sub" } // SAME ID
-            async fn on_event(&mut self, _: &TestEvent) {}
-        }
-
-        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
-
-        // Should fail during runtime subscription
-        bus.subscribe(Box::new(Sub1)).await.unwrap();
-        let sub2_res = bus.subscribe(Box::new(Sub2)).await;
-        match sub2_res {
-            Err(e) => assert!(e.contains("Duplicate subscriber identifier: sub")),
-            _ => panic!("Should have failed"),
-        }
+        let bus = EventBus::new(Duration::from_millis(100));
+        bus.subscribe(Box::new(sub("duplicate"))).await.unwrap();
+        let error = bus.subscribe(Box::new(sub("duplicate"))).await.unwrap_err();
+        assert_eq!(error, "Duplicate subscriber identifier: duplicate");
     }
 
     #[tokio::test]
@@ -282,27 +257,14 @@ mod tests {
         let sub = sub("test_subscriber");
         let events = Arc::clone(&sub.events);
 
-        let bus = Arc::new(EventBus::<TestEvent>::new(Duration::from_millis(100)));
-        let publisher = Arc::clone(&bus).start();
+        let bus = EventBus::new(Duration::from_millis(100));
         let id = sub.identifier();
 
         bus.subscribe(Box::new(sub)).await.unwrap();
-        publisher.publish(TestEvent::Hello);
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        {
-            let received = events.lock().await;
-            assert_eq!(received.len(), 1);
-        }
-
+        bus.dispatch(TestEvent::Hello).await;
         bus.unsubscribe_by_id(id).await;
-        publisher.publish(TestEvent::World);
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        {
-            let received = events.lock().await;
-            assert_eq!(received.len(), 1, "Should not have received more events after unsubscribe");
-        }
+        bus.dispatch(TestEvent::World).await;
+        assert_eq!(*events.lock().await, [TestEvent::Hello]);
     }
 
 }

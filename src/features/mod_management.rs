@@ -34,7 +34,7 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 //     false,
 //     |args| {
 //         if args.is_empty() {
-//             serror!(fn; "No path provided!");
+//             serror!("No path provided!");
 //             return;
 //         }
         
@@ -50,18 +50,18 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 //                 // let obj = get_uobject_from_path(args.first().unwrap(), false);
 //                 let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
 //                 if id > mods.len() {
-//                     sinfo!(fn; "{:#?}", mods);
-//                     serror!(fn; "Invalid id {}", id);
+//                     sinfo!("{:#?}", mods);
+//                     serror!("Invalid id {}", id);
 //                     return;
 //                 }
 //                 let cur_mod = mods.get(id).expect("Not a valid mod");
-//                 sinfo!(fn; "Spawning {} {}", id, cur_mod.name);
+//                 sinfo!("Spawning {} {}", id, cur_mod.name);
 //                 let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
 //                 if !obj.is_null() {
 //                     let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
 //                     mm.spawn_mod_actor(obj as *mut UClass);
 //                 }
-//                 else { serror!(fn; "Could not load from path") }
+//                 else { serror!("Could not load from path") }
 //             }
 //             // let _ = mm.update_save_game();
 //         }
@@ -83,11 +83,11 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
             
 //             run_on_game_thread(move || {
 //                 if let Some(mm) = mm_lock().as_ref() {
-//                     sinfo!(fn; "Starting scan!");
+//                     sinfo!("Starting scan!");
 //                     mm.scan_asset_registry();
 //                     let _ = tx.send(());
 //                 }
-//                 sinfo!(fn; "Ended scan!");
+//                 sinfo!("Ended scan!");
 //             }); 
             
 //             let _ = rx.recv();
@@ -390,7 +390,7 @@ impl ModManager {
         let world = match globals().world() {
             Some(world) => world,
             None => {
-                swarn!(fn; "globals.world was None; skipping active mod actor scan");
+                swarn!("globals.world was None; skipping active mod actor scan");
                 return Err("globals.world was None".to_string());
             }
         };

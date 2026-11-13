@@ -400,6 +400,7 @@ where
 mod tests {
     use super::*;
     use crate::events::models::Join;
+    use crate::game::chivalry2::EChatType;
 
     fn event(name: impl Into<String>) -> GameEvent {
         GameEvent::JoinEvent(Join { name: name.into() })
@@ -484,8 +485,7 @@ mod tests {
         use crate::events::models::{ChatSource, ChatType, GameChatMessage};
 
         let mut chat = GameChatMessage {
-            chat_source: ChatSource::Discord,
-            chat_type: ChatType::Global,
+            chat_source: ChatSource::Discord(ChatType::Global),
             sender: "Player".into(),
             message: String::new(),
         };
@@ -855,7 +855,7 @@ mod tests {
         use crate::events::broadcast_message::discord::DiscordBroadcastSubscriber;
         use crate::events::bus::Subscriber;
         use crate::events::models::{
-            AdminAlert, ChatSource, ChatType, CommandSource, GameChatMessage,
+            AdminAlert, ChatSource, CommandSource, GameChatMessage,
         };
         use crate::features::discord::DiscordConfig;
         use crate::modules::chat::{ChatRelaySubscriber, DiscordChatSink};
@@ -905,8 +905,9 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), async {
             relay
                 .on_event(&GameEvent::GameChatMessageEvent(GameChatMessage {
-                    chat_source: ChatSource::Game,
-                    chat_type: ChatType::Global,
+                    chat_source: ChatSource::Native(crate::events::models::NativeChat::Player {
+                        channel: crate::game::chivalry2::EChatType::AllSay, faction: None,
+                    }),
                     sender: "Player".into(),
                     message: "chat".into(),
                 }))
@@ -938,6 +939,68 @@ mod tests {
         let _ = task.await;
     }
 
+    #[test_case::test_case(EChatType::AllSay, false; "player_all_say_command")]
+    #[test_case::test_case(EChatType::TeamSay, false; "player_team_say")]
+    #[test_case::test_case(EChatType::Whisper, false; "player_whisper")]
+    #[test_case::test_case(EChatType::Admin, false; "player_admin")]
+    #[test_case::test_case(EChatType::Objective, false; "player_objective")]
+    #[test_case::test_case(EChatType::System, false; "player_system")]
+    #[test_case::test_case(EChatType::ServerSay, false; "player_server_say")]
+    #[test_case::test_case(EChatType::Debug, false; "player_debug")]
+    #[test_case::test_case(EChatType::CrosshairMsg, false; "player_crosshair_msg")]
+    #[test_case::test_case(EChatType::Backend, false; "player_backend")]
+    #[test_case::test_case(EChatType::Party, false; "player_party")]
+    #[test_case::test_case(EChatType::Spectator, false; "player_spectator")]
+    #[test_case::test_case(EChatType::ClosedCaption, false; "player_closed_caption")]
+    #[test_case::test_case(EChatType::ClosedCaptionMason, false; "player_closed_caption_mason")]
+    #[test_case::test_case(EChatType::ClosedCaptionAgatha, false; "player_closed_caption_agatha")]
+    #[test_case::test_case(EChatType::AllSay, true; "system_all_say")]
+    #[test_case::test_case(EChatType::TeamSay, true; "system_team_say")]
+    #[test_case::test_case(EChatType::Whisper, true; "system_whisper")]
+    #[test_case::test_case(EChatType::Admin, true; "system_admin")]
+    #[test_case::test_case(EChatType::Objective, true; "system_objective")]
+    #[test_case::test_case(EChatType::System, true; "system_system")]
+    #[test_case::test_case(EChatType::ServerSay, true; "system_server_say")]
+    #[test_case::test_case(EChatType::Debug, true; "system_debug")]
+    #[test_case::test_case(EChatType::CrosshairMsg, true; "system_crosshair_msg")]
+    #[test_case::test_case(EChatType::Backend, true; "system_backend")]
+    #[test_case::test_case(EChatType::Party, true; "system_party")]
+    #[test_case::test_case(EChatType::Spectator, true; "system_spectator")]
+    #[test_case::test_case(EChatType::ClosedCaption, true; "system_closed_caption")]
+    #[test_case::test_case(EChatType::ClosedCaptionMason, true; "system_closed_caption_mason")]
+    #[test_case::test_case(EChatType::ClosedCaptionAgatha, true; "system_closed_caption_agatha")]
+    #[tokio::test]
+    async fn native_private_chat_never_reaches_discord_chat_or_event_log_queues(channel: EChatType, system: bool) {
+        use crate::events::bus::Subscriber;
+        use crate::events::models::{ChatSource, GameChatMessage, NativeChat};
+        use crate::features::discord::DiscordConfig;
+        use crate::modules::chat::{ChatRelaySubscriber, DiscordChatSink};
+        let id = ChannelId::new(1);
+        let config = Box::leak(Box::new(DiscordConfig {
+            bot_token: "unused".into(), admin_role_id: None, mention_on_admin: false,
+            general_chat_channel_id: Some(id), event_log_channel_id: Some(id),
+            admin_notification_channel_id: None, dashboard_channel_id: None,
+        }));
+        let (sender, _receiver) = super::channel();
+        let outbox = DiscordOutbox { channels: Arc::new(HashMap::from([(id, sender)])) };
+        let mut relay = ChatRelaySubscriber::new(vec![Box::new(DiscordChatSink::new(config, outbox.clone()))]);
+        let mut logs = EventLogSubscriber::new(outbox.clone(), config);
+        let (native, text) = if system {
+            (NativeChat::System { channel }, "system text")
+        } else {
+            (NativeChat::Player { channel, faction: None }, if channel == EChatType::AllSay { "!help" } else { "hello" })
+        };
+        let chat = GameChatMessage {
+            chat_source: ChatSource::Native(native),
+            sender: "Player".into(), message: text.into(),
+        };
+        let event = GameEvent::GameChatMessageEvent(chat);
+        relay.on_event(&event).await;
+        logs.on_event(&event).await;
+        assert_eq!(outbox.channels[&id].messages.capacity(), MESSAGE_CAPACITY);
+        assert_eq!(outbox.channels[&id].events.capacity(), EVENT_CAPACITY);
+    }
+
     #[tokio::test]
     async fn queued_broadcasts_preserve_the_admin_mention_setting() {
         use crate::events::broadcast::{BroadcastMessage, Notify};
@@ -963,11 +1026,12 @@ mod tests {
             subscriber
                 .on_event(
                     &BroadcastMessage::new()
-                        .content("alert")
+                        .content(crate::rich_text!("**{}**", "alert"))
                         .notify(Notify::Admin),
                 )
                 .await;
             let value = serde_json::to_value(receiver.messages.try_recv().unwrap().value).unwrap();
+            assert!(value["content"].as_str().unwrap().starts_with("**alert**"));
             assert_eq!(
                 value["content"].as_str().unwrap().contains("<@&7>"),
                 mentions

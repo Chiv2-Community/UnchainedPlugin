@@ -53,19 +53,19 @@ fn is_user_banned(addr: &str) -> bool {
     let mut suffix = "/api/v1/check-banned/".to_string();
     suffix.push_str(addr);
     let url = backend_url!(suffix);
-    sinfo!(fn; "Checking Unchained ban status for player");
+    sinfo!("Checking Unchained ban status for player");
     let response = ureq::get(&url.to_string()).call();
 
     match response {
         Ok(res) => match res.into_body().read_to_string() {
             Ok(body_str) => body_str.contains("true"),
             Err(error) => {
-                swarn!(fn; "Failed to read ban-check response for player: {:?}", error);
+                swarn!("Failed to read ban-check response for player: {:?}", error);
                 false
             }
         },
         Err(e) => {
-            sinfo!(fn; "Ban check failed: {:?}", e);
+            sinfo!("Ban check failed: {:?}", e);
             false
         }
     }
@@ -157,14 +157,14 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
 
         unsafe {
             if error_message.is_null() {
-            swarn!(fn; "Ban check returned banned for {}, but error_message was null", addr_string);
+            swarn!("Ban check returned banned for {}, but error_message was null", addr_string);
                 return original_result;
             }
 
             o_FString_AppendChars.call(error_message, wide_msg.as_ptr(), wide_msg.len() as u32);
         }
         #[cfg(feature="verbose_hooks")]
-        swarn!(fn; "User banned!");
+        swarn!("User banned!");
     }
     else {
         let display_name = resolve_player_display_name(&options_string);
@@ -180,31 +180,31 @@ define_pattern_resolver!(
     ["48 8B C4 55 56 41 54 41 57 48 8B EC"]
 );
 CREATE_HOOK!(ATBLGameMode__Logout, ACTIVE, NONE, (), (this_ptr: *mut ATBLGameMode, exiting_player: *mut AController), {
-    strace!(fn; "Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
+    strace!("Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
 
     if globals().world() == None {
-        swarn!(fn; "globals.world is None; skipping leave event");
+        swarn!("globals.world is None; skipping leave event");
         return CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
     }
 
     let leave_name = match resolve_leave_name_from_controller(exiting_player) {
         Ok(None) => {
-            swarn!(fn; "Player is a bot; skipping leave event");
+            swarn!("Player is a bot; skipping leave event");
             return CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
         },
         Ok(Some(name)) => {
-            sdebug!(fn; "Resolved logout player name '{}'", name);
+            sdebug!("Resolved logout player name '{}'", name);
             name
         },
         Err(error) => {
-            swarn!(fn; "{}. Publishing placeholder LeaveEvent.", error.as_str());
+            swarn!("{}. Publishing placeholder LeaveEvent.", error.as_str());
             "Unknown (logout name unavailable)".to_string()
         }
     };
 
     CALL_ORIGINAL!(ATBLGameMode__Logout(this_ptr, exiting_player));
 
-    sinfo!(fn; "Player '{}' left", leave_name);
+    sinfo!("Player '{}' left", leave_name);
     EVENT_SYSTEM
        .game_event_publisher
        .publish(GameEvent::LeaveEvent(Leave { name: leave_name }));
@@ -235,7 +235,7 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
     let original_ptr = u_ptr;
     let url_w = unsafe { (*u_ptr).to_string() };
     // #[cfg(feature="verbose_hooks")]
-    // sinfo![fn; "{}", url_w];
+    // sinfo!["{}", url_w];
 
     let (target_url, mut target_auth) = if url_w == "https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version" {
         (Some(FString::from(backend_url!("/api/playfab/Client/Matchmake"))), Some(FString::from("")))
@@ -270,7 +270,7 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
 // CREATE_HOOK!(IncStat, ACTIVE, NONE, (),
 //     (this_ptr: *mut FTBLOnlineStats, p1: i32, p2: i32),
 // {
-//     // sinfo!(fn; "Stat: {:?}", p1);
+//     // sinfo!("Stat: {:?}", p1);
 //     // CALL_ORIGINAL!(IncStat(this_ptr, p1, p2));
 // });
 
@@ -287,6 +287,6 @@ define_pattern_resolver!(
 CREATE_HOOK!(SetStatInner, ACTIVE, NONE, (),
     (this_ptr: *mut FTBLOnlineStats, p1: i32, p2: i32),
 {
-    // sinfo!(fn; "Stat: {:?} {:?}", p1, p2);
+    // sinfo!("Stat: {:?} {:?}", p1, p2);
     // CALL_ORIGINAL!(SetStatInner(this_ptr, p1, p2));
 });

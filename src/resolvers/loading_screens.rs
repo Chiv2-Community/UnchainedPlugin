@@ -135,7 +135,7 @@ impl UMapSpecificLoadingScreenConfig {
             extra: [0; 0x10],
         };
         self.configs.push(entry);
-        sinfo![fn; "Added extra loading screen config for {} ({} entries)", extra.map, self.configs.len()];
+        sinfo!["Added extra loading screen config for {} ({} entries)", extra.map, self.configs.len()];
         Ok(())
     }
 }
@@ -147,9 +147,9 @@ fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &Loadi
     match catch_unwind(AssertUnwindSafe(|| unsafe { (*config).add_entry(extra) })) {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
-            crate::swarn!(fn; "Could not add extra loading screen for {}: {}", extra.map, error)
+            crate::swarn!("Could not add extra loading screen for {}: {}", extra.map, error)
         }
-        Err(_) => crate::serror!(fn; "Panic while adding extra loading screen for {}", extra.map),
+        Err(_) => crate::serror!("Panic while adding extra loading screen for {}", extra.map),
     }
 }
 
@@ -167,7 +167,7 @@ unsafe fn apply_texture_fallback(
         return;
     }
     data.texture.asset_path_name = FName::with_type(&extra.texture, EFindName::Add);
-    sinfo![fn; "Using fallback loading screen texture {}", extra.texture];
+    sinfo!["Using fallback loading screen texture {}", extra.texture];
 }
 
 define_pattern_resolver!(GetDataForMap, [
@@ -186,12 +186,12 @@ CREATE_HOOK!(GetDataForMap, ACTIVE, NONE, (), (
     let extra = LoadingScreen::lookup(&(*map_name).to_string());
     if let Some(extra) = &extra {
         add_entry_guarded(this_ptr, extra);
-        swarn![fn; "Extra loading screen config for {} is now present", extra.map];
+        swarn!["Extra loading screen config for {} is now present", extra.map];
     }
     CALL_ORIGINAL!(GetDataForMap(this_ptr, map_name, data));
     if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
         apply_texture_fallback(&*this_ptr, &mut *data, extra);
-        swarn![fn; "Extra loading screen texture for {} is now applied", extra.map];
+        swarn!["Extra loading screen texture for {} is now applied", extra.map];
     }
 });
 

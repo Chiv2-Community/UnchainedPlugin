@@ -431,7 +431,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_command_subscriber_multiple_commands() {
+    async fn shared_subscriber_dispatches_registered_command() {
         let (broadcaster, _messages) = mock_broadcaster();
         let (game_event_pub, _events) = mock_game_event_publisher();
         let mut subscriber = CommandSubscriber::new(broadcaster, game_event_pub);
@@ -441,6 +441,8 @@ mod tests {
         subscriber.register::<SetBoolCommand, SetBoolArgs>(SetBoolCommand {
             executed: setbool_executed.clone(),
         });
+        let mut subscriber: Box<dyn Subscriber<GameEvent>> =
+            Box::new(Arc::new(tokio::sync::Mutex::new(subscriber)));
 
         let actor = mock_actor("TestUser");
         let req = mock_command_request(actor, "setbool", vec![]);
@@ -451,7 +453,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_command_tick() {
+    async fn shared_subscriber_forwards_ticks() {
         #[derive(Parser, Debug)]
         #[command(name = "tick")]
         struct TickArgs {}
@@ -478,6 +480,8 @@ mod tests {
         subscriber.register::<TickCommand, TickArgs>(TickCommand {
             ticked: ticked.clone(),
         });
+        let mut subscriber: Box<dyn Subscriber<GameEvent>> =
+            Box::new(Arc::new(tokio::sync::Mutex::new(subscriber)));
 
         subscriber.on_tick().await;
         assert!(ticked.load(std::sync::atomic::Ordering::SeqCst));
@@ -561,6 +565,22 @@ mod tests {
             executed.load(std::sync::atomic::Ordering::SeqCst),
             "Admin should be allowed to execute USER command"
         );
+    }
+
+    #[test_case::test_case(CommandSource::GameChat; "game_chat")]
+    #[test_case::test_case(CommandSource::Discord; "discord")]
+    #[tokio::test]
+    async fn console_only_command_rejects_remote_sources_even_for_admins(source: CommandSource) {
+        use crate::modules::mod_list::{ListModsArgs, ListModsCommand};
+        let (broadcaster, _) = mock_broadcaster();
+        let (publisher, _) = mock_game_event_publisher();
+        let subscriber = CommandSubscriber::new(broadcaster, publisher);
+        let command = CommandHandler::<ListModsCommand, ListModsArgs>::new(ListModsCommand);
+        let mut request = mock_command_request(mock_actor_elevated("Console", true), "mod-list", vec![]);
+        request.source = source;
+        let CommandOutcome::Rejected(rejection) = subscriber.handle_command(&command, &request).await
+            else { panic!("remote source executed a console-only command"); };
+        assert!(rejection.rejection_reason.contains("must be executed from ServerConsole"));
     }
 
     #[tokio::test]
