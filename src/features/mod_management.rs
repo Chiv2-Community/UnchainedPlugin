@@ -387,7 +387,7 @@ impl ModManager {
             }
         }
         if !marker_summary.is_empty() {
-            sdebug!("V2 markers ({}): {}", marker_summary.len(), marker_summary.join(", "));
+            sinfo!("V2 markers ({}): {}", marker_summary.len(), marker_summary.join(", "));
         }
         found
     }
@@ -547,6 +547,11 @@ impl ModManager {
     
      */
     /// Replace saved mod selection with validated CLI classes, on the game thread.
+    ///
+    /// Also seeds the active set with the server's configured mods: the Asset
+    /// Registry scan only populates *available* mods, and a live-world actor
+    /// scan is not reliable this early during init, so `--server-mods` is the
+    /// authoritative source of what this server runs for registration.
     pub fn update_save_game(&self) {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
@@ -588,10 +593,16 @@ impl ModManager {
         // remove the cached active mods, rather than allowing them to return.
         save_game.enabled_mods.clear();
         save_game.last_active_mods.clear();
+        let mut enabled = Vec::with_capacity(paths.len());
         for path in paths {
             sinfo!("Enabling mod {}", path);
             save_game.enabled_mods.push(TSoftClassPtr::from_path(path));
+            enabled.push(path.to_string());
         }
+        // The configured server mods are the active set for registration; a
+        // live-world actor scan is unreliable at init (world may be None and
+        // the mod actors are not spawned yet).
+        self.set_active_paths(enabled);
         let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
         if res {
             sinfo!("Modloader settings saved: {res}");
@@ -600,6 +611,14 @@ impl ModManager {
             serror!("Failed to save Modloader settings");
 
         }
+    }
+
+    /// Marks the given mod class paths as the active set. Used to advertise the
+    /// server's configured mods (`--server-mods`) for registration without
+    /// depending on a live-world actor scan, which is not reliable during init.
+    pub fn set_active_paths(&self, paths: impl IntoIterator<Item = String>) {
+        let mut active = self.active_paths.lock().unwrap();
+        *active = paths.into_iter().collect();
     }
 
     pub fn dump_to_console(&self) {
