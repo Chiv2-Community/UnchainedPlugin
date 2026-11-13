@@ -35,29 +35,47 @@ jobs:
           # The Rust cache also keys on the toolchain, environment, and dependencies.
           cache-shared-key: windows-${{ matrix.build_type }}
 
+      - name: Inspect restored build outputs
+        shell: pwsh
+        env:
+          BUILD_TYPE: ${{ matrix.build_type }}
+        run: |
+          $profile = Join-Path target $env:BUILD_TYPE
+          foreach ($directory in @('deps', '.fingerprint', 'build')) {
+            $path = Join-Path $profile $directory
+            if (Test-Path $path) {
+              $files = @(Get-ChildItem $path -Recurse -File)
+              $bytes = ($files | Measure-Object Length -Sum).Sum
+              Write-Output "${path}: $($files.Count) files, ${bytes} bytes"
+              Get-ChildItem $path -Filter '*proc*macro2*' | Select-Object Name, LastWriteTime
+            } else {
+              Write-Output "${path}: missing"
+            }
+          }
+
       # Build the project
       - name: Build
         shell: bash
         env:
           # Diagnose why Cargo rejects restored build outputs.
-          CARGO_LOG: cargo::core::compiler::fingerprint=info
+          CARGO_LOG: cargo::core::compiler::fingerprint=trace
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo build --locked --release
+            cargo build --locked --release -vv
           else
-            cargo build --locked
+            cargo build --locked -vv
           fi
 
       # Run tests
       - name: Test
         shell: bash
         env:
-          CARGO_LOG: cargo::core::compiler::fingerprint=info
+          CARGO_LOG: cargo::core::compiler::fingerprint=trace
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --locked --release
+            cargo test --locked --release -vv
           else
-            cargo test --locked
+            cargo test --locked -vv
           fi
 
       # Upload artifacts after build and tests succeed
