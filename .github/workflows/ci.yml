@@ -34,16 +34,6 @@ jobs:
           # Separate profiles, including fallback restores; share release builds with release.yml.
           cache-shared-key: windows-${{ matrix.build_type }}
 
-      # Run tests
-      - name: Test
-        shell: bash
-        run: |
-          if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --locked --release
-          else
-            cargo test --locked
-          fi
-
       # Build the project
       - name: Build
         shell: bash
@@ -54,11 +44,21 @@ jobs:
             cargo build --locked
           fi
 
-      # Upload artifacts if build succeeds
+      # Run tests
+      - name: Test
+        shell: bash
+        run: |
+          if [ "${{ matrix.build_type }}" == "release" ]; then
+            cargo test --locked --release
+          else
+            cargo test --locked
+          fi
+
+      # Upload artifacts after build and tests succeed
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: UnchainedPlugin-${{matrix.build_type}}
           path: |
             target/${{ matrix.build_type }}/UnchainedPlugin.dll
-          if-no-files-found: warn
+          if-no-files-found: error

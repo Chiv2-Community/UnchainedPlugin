@@ -55,13 +55,13 @@ jobs:
             exit 1
           fi
 
-      # Run tests
-      - name: Test
-        run: cargo test --locked --release
-
       # Build the project
       - name: Build
         run: cargo build --locked --release
+
+      # Run tests
+      - name: Test
+        run: cargo test --locked --release
 
       # Create GitHub Release
       - name: Create Release
@@ -72,6 +72,7 @@ jobs:
           draft: false
           prerelease: false
           files: target/release/UnchainedPlugin.dll
+          fail_on_unmatched_files: true
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
