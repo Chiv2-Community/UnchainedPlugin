@@ -12,6 +12,32 @@ pub type FPrimaryAssetId = c_void;
 pub type UAssetManager = c_void;
 pub type IAssetRegistry = c_void;
 pub type UAssetRegistryImpl = c_void;
+/// Opaque UE archive base. Its layout/vtable is target-build-specific; Rust
+/// must not construct or dereference it until the reader constructor boundary
+/// is resolved and verified.
+#[repr(C)]
+pub struct FArchive {
+    _opaque: [u8; 0],
+}
+/// Opaque `FLargeMemoryReader`/`FMemoryReader` implementation. This is kept
+/// distinct from `FArchive` so future verified construction code cannot pass a
+/// base pointer where an owning reader is required.
+#[repr(C)]
+pub struct FLargeMemoryReader {
+    _opaque: [u8; 0],
+}
+/// Opaque, engine-owned Asset Registry state. It contains UE containers and
+/// must be constructed/destructed by verified UE calls, never Rust allocation.
+#[repr(C)]
+pub struct FAssetRegistryState {
+    _opaque: [u8; 0],
+}
+/// Opaque serialization options owned by `UAssetRegistryImpl` on the target
+/// build. No Rust layout is assumed.
+#[repr(C)]
+pub struct FAssetRegistrySerializationOptions {
+    _opaque: [u8; 0],
+}
 pub type UPackageMap = c_void;
 pub type FUObjectSerializeContext = c_void;
 pub type USaveGame = c_void;

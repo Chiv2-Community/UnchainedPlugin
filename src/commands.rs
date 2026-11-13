@@ -36,49 +36,81 @@ pub static NATIVE_COMMAND_QUEUE: Lazy<Mutex<Vec<String>>> = Lazy::new(|| {
     Mutex::new(Vec::new())
 });
 
+/// Where one console (stdin) line goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConsoleRoute {
+    /// Nothing to do (empty line, or a server line that cannot be tokenized).
+    Ignore,
+    /// Forward the line verbatim to the native engine console.
+    Native(String),
+    /// Publish a plugin command request.
+    Command { name: String, args: Vec<String> },
+}
+
+/// Decides what to do with one console line. Pure logic.
+///
+/// `is_plugin_command` gets the lowercased first token and tells whether it
+/// names a registered, console-eligible plugin command. On a client every line
+/// that is not `help` or a plugin command goes to the engine console verbatim,
+/// including lines shlex cannot tokenize (`say it's me`).
+#[cfg_attr(not(feature = "cli_commands"), allow(dead_code))]
+pub fn route_console_line(
+    line: &str,
+    is_server: bool,
+    is_plugin_command: impl Fn(&str) -> bool,
+) -> ConsoleRoute {
+    let line = line.trim();
+    if line.is_empty() {
+        return ConsoleRoute::Ignore;
+    }
+    let Some(parts) = shlex::split(line) else {
+        return if is_server { ConsoleRoute::Ignore } else { ConsoleRoute::Native(line.to_string()) };
+    };
+    let Some(first) = parts.first() else {
+        return ConsoleRoute::Ignore;
+    };
+    let name = first.to_lowercase();
+    if name == "help" {
+        ConsoleRoute::Command { name: "help".to_string(), args: parts[1..].to_vec() }
+    } else if is_plugin_command(&name) {
+        ConsoleRoute::Command { name: first.clone(), args: parts[1..].to_vec() }
+    } else if is_server {
+        // Server: unrecognized lines go to the engine's `cmd`.
+        ConsoleRoute::Command { name: "cmd".to_string(), args: parts }
+    } else {
+        ConsoleRoute::Native(line.to_string())
+    }
+}
+
 #[cfg(feature="cli_commands")]
 pub fn spawn_cli_handler() {
     std::thread::spawn(move || {
         let input_source = std::io::stdin();
         let mut buffer = String::new();
-        
+
         while input_source.read_line(&mut buffer).is_ok_and(|count| count != 0) {
-            // Event subscribers only exist on servers; clients send the line to the engine console.
-            if !crate::cli_args().is_server() {
-                let line = buffer.trim();
-                if !line.is_empty() {
-                    NATIVE_COMMAND_QUEUE.lock().unwrap().push(line.to_string());
-                }
-                buffer.clear();
-                continue;
-            }
-            let maybe_command_parts = shlex::split(buffer.trim());
-            if let Some(command_parts) = maybe_command_parts {
-                if !command_parts.is_empty() {
-                    let command_slice = command_parts.as_slice();
-                    let (command, args) = match command_slice.first().map(|s| s.as_str()) {
-                        Some("help") => ("help".to_string(), command_slice[1..].to_vec()),
-                        Some(name) => {
-                            let is_unchained_command = EVENT_SYSTEM.command_subscriber.blocking_lock().get_registered_commands()
-                                .iter()
-                                .any(|registered_command|
-                                    registered_command.name().to_lowercase() == name.to_string().to_lowercase()
-                                        && (registered_command.required_source() == Some(CommandSource::ServerConsole)
-                                            || registered_command.required_source() == None
-                                        )
-                                );
+            // A line names a plugin command when it matches a registered
+            // command that is console-eligible (ServerConsole or
+            // source-agnostic). This check runs on every instance so the
+            // console works for both dedicated servers and clients.
+            let is_plugin_command = |name: &str| {
+                EVENT_SYSTEM.command_subscriber.blocking_lock()
+                    .get_registered_commands()
+                    .iter()
+                    .any(|registered_command|
+                        registered_command.name().to_lowercase() == name
+                            && (registered_command.required_source() == Some(CommandSource::ServerConsole)
+                                || registered_command.required_source() == None
+                            )
+                    )
+            };
 
-                            if is_unchained_command {
-                                (name.to_string(), command_slice[1..].to_vec())
-                            } else {
-                                ("cmd".to_string(), command_slice.to_vec())
-                            }
-                        },
-                        None => continue,
-                    };
-
+            match route_console_line(&buffer, crate::cli_args().is_server(), is_plugin_command) {
+                ConsoleRoute::Ignore => {}
+                ConsoleRoute::Native(line) => NATIVE_COMMAND_QUEUE.lock().unwrap().push(line),
+                ConsoleRoute::Command { name, args } => {
                     EVENT_SYSTEM.game_event_publisher.publish(GameEvent::CommandRequestEvent(CommandRequest {
-                        name: command,
+                        name,
                         args,
                         raw_args: buffer.clone(),
                         actor: CommandActor {
@@ -244,4 +276,44 @@ where
     async fn on_event(&self, event: &GameEvent) {
         self.command.on_event(event).await;
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn command(name: &str, args: &[&str]) -> ConsoleRoute {
+        ConsoleRoute::Command {
+            name: name.to_string(),
+            args: args.iter().map(|a| a.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn client_lines_shlex_cannot_parse_go_to_the_native_console() {
+        let known = |name: &str| name == "mod-list";
+        for line in ["say it's me\n", "open \"Some Map", "exec foo\\"] {
+            assert_eq!(
+                route_console_line(line, false, known),
+                ConsoleRoute::Native(line.trim().to_string())
+            );
+        }
+        // Servers never forwarded these lines; that is unchanged.
+        assert_eq!(route_console_line("say it's me", true, known), ConsoleRoute::Ignore);
+    }
+
+    #[test]
+    fn console_lines_are_routed_by_instance_and_command() {
+        let known = |name: &str| name == "mod-list";
+        assert_eq!(route_console_line("  \r\n", false, known), ConsoleRoute::Ignore);
+        assert_eq!(route_console_line("", true, known), ConsoleRoute::Ignore);
+        assert_eq!(route_console_line("Mod-List -v\n", false, known), command("Mod-List", &["-v"]));
+        assert_eq!(route_console_line("HELP mod-list", true, known), command("help", &["mod-list"]));
+        assert_eq!(
+            route_console_line("stat fps\n", false, known),
+            ConsoleRoute::Native("stat fps".to_string())
+        );
+        assert_eq!(route_console_line("stat fps", true, known), command("cmd", &["stat", "fps"]));
+    }
+
 }

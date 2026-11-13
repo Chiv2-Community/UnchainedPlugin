@@ -5,6 +5,54 @@ use crate::ue::{
 use std::{fmt, os::raw::c_void};
 use widestring::U16CStr;
 
+// Signature source: owner-provided target-build bytes for
+// `FLargeMemoryReader::FLargeMemoryReader`. The constructor is used with
+// `ELargeMemoryReaderFlags::None` so it borrows Rust-owned bytes during the
+// synchronous registry load. Its rel32 call and RIP-relative vtable address
+// are wildcarded.
+define_pattern_resolver!(FLargeMemoryReaderCtor, [
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 41 0F B6 F1 49 8B E8 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 80 A7 98 00 00 00 FE 48 8D 15 ?? ?? ?? ?? 40 0F B6 C6 48 89 17 24 01 48 89 9F A0 00 00 00"
+]);
+// FLargeMemoryReader* FLargeMemoryReader::FLargeMemoryReader(
+//     FLargeMemoryReader*, const uint8*, int64, ELargeMemoryReaderFlags, FName)
+CREATE_HOOK!(FLargeMemoryReaderCtor, CALLED, *mut crate::ue::FLargeMemoryReader, (
+    this_ptr: *mut crate::ue::FLargeMemoryReader,
+    data: *const u8,
+    size: i64,
+    flags: u8,
+    archive_name: FName
+), {
+    CALL_ORIGINAL!(FLargeMemoryReaderCtor(this_ptr, data, size, flags, archive_name))
+});
+
+// Signature source: owner-provided target-build bytes for
+// `FLargeMemoryReader::~FLargeMemoryReader`. Wildcard the RIP-relative vtable
+// address, the `FMemory::Free` rel32 call, and the tail jump to base cleanup.
+define_pattern_resolver!(FLargeMemoryReaderDtor, [
+    "40 53 48 83 EC 20 F6 81 98 00 00 00 01 48 8D 05 ?? ?? ?? ?? 48 89 01 48 8B D9 74 0C 48 8B 89 A0 00 00 00 E8 ?? ?? ?? ?? 48 8B CB 48 83 C4 20 5B E9 ?? ?? ?? ??"
+]);
+// void FLargeMemoryReader::~FLargeMemoryReader(FLargeMemoryReader* this)
+CREATE_HOOK!(FLargeMemoryReaderDtor, CALLED, NONE, (), (
+    this_ptr: *mut crate::ue::FLargeMemoryReader
+), {
+    CALL_ORIGINAL!(FLargeMemoryReaderDtor(this_ptr))
+});
+
+// Signature source: owner-provided target-build bytes for
+// `UAssetRegistryImpl::Serialize(FArchive&)`. It reads State at this+0x30 and
+// SerializationOptions at this+0x2a0, calls FAssetRegistryState::Serialize,
+// then tail-calls CachePathsFromState. Wildcard only the two rel32 calls.
+define_pattern_resolver!(SerializeAssetRegistry, [
+    "48 89 5C 24 08 57 48 83 EC 20 48 8B F9 4C 8D 81 A0 02 00 00 48 83 C1 30 E8 ?? ?? ?? ?? 48 8D 57 30 48 8B CF 48 8B 5C 24 30 48 83 C4 20 5F E9 ?? ?? ?? ??"
+]);
+// void UAssetRegistryImpl::Serialize(FArchive&)
+CREATE_HOOK!(SerializeAssetRegistry, CALLED, NONE, (), (
+    registry: *mut UAssetRegistryImpl,
+    archive: *mut crate::ue::FArchive
+), {
+    CALL_ORIGINAL!(SerializeAssetRegistry(registry, archive))
+});
+
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
@@ -85,6 +133,37 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistr
         }
     }
     res
+});
+
+// Signature source: owner-provided pattern for
+// `UAssetRegistryImpl::GetAssetsByPath` (function start). The RIP-relative
+// displacement in the `48 8B 05` stack-cookie load (immediately followed by
+// the `48 33 C4` xor with rsp) is wildcarded so the pattern survives
+// rebuilds that relocate the cookie global.
+define_pattern_resolver!(GetAssetsByPath,[
+    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 10 45"
+]);
+// bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
+// virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
+CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
+    // CALLED hooks are never enabled on attach; this body only runs if someone
+    // explicitly enables the detour after a real signature is populated.
+    CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
+});
+
+// Signature source: owner-provided pattern for
+// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start). The
+// RIP-relative displacement in the `48 8B 05` load is wildcarded so the
+// pattern survives rebuilds that relocate the pointed-to global.
+define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
+]);
+// void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
+// Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.
+CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, InPaths: *const TArray<FString>, InSpecificFiles: *const TArray<FString>, bForceRescan: bool, AssetDataCacheMode: u8, OutFoundAssets: *mut TArray<FName>, OutFoundPaths: *mut TArray<FName>), {
+    // CALLED hooks are never enabled on attach; this body only runs if someone
+    // explicitly enables the detour after a real signature is populated.
+    CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
 });
 
 #[repr(C)]

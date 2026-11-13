@@ -27,6 +27,7 @@ use crate::modules::votes::votemod::ModVote;
 use crate::modules::mod_dump::DumpModsCommand;
 use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
+use crate::modules::mod_list_maps::ListModMapsCommand;
 use crate::modules::votes::endmap::EndMapVote;
 use crate::modules::votes::voterestartserver::RestartServerVote;
 
@@ -94,6 +95,7 @@ pub async fn initialize_subscribers() {
         command_subscriber.register(DumpModsCommand);
         command_subscriber.register(GameInfoCommand);
         command_subscriber.register(ListModsCommand);
+        command_subscriber.register(ListModMapsCommand);
     }
 
     let _ = broadcast_message_bus.subscribe(Box::new(ConsoleChatBroadcastSubscriber {})).await;
@@ -108,6 +110,26 @@ pub async fn initialize_subscribers() {
     let _ = game_event_bus.subscribe(Box::new(StatsTrackerSubscriber::new(stats_state, broadcast_message_publisher))).await;
     let _ = game_event_bus.subscribe(Box::new(DuelManagerSubscriber::new(broadcast_message_publisher))).await;
 
+}
+
+/// Sets up the minimal command surface exposed on *client* instances, where the
+/// full `initialize_subscribers` (votes, server-oriented commands, MOTD, …) does
+/// not run because it is driven by server-only `world_init`. Clients subscribe
+/// the command subscriber to the game event bus and register only the
+/// client-safe diagnostic commands (listmodmaps / mod-list).
+pub async fn initialize_client_commands() {
+    let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
+    let game_event_bus = &EVENT_SYSTEM.game_event_bus;
+
+    {
+        let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
+        command_subscriber.register(ListModMapsCommand);
+        command_subscriber.register(ListModsCommand);
+    }
+
+    let _ = game_event_bus
+        .subscribe(Box::new(EVENT_SYSTEM.command_subscriber.clone()))
+        .await;
 }
 
 fn initialize_vote_commands(command_subscriber: &mut CommandSubscriber, broadcast_event_publisher: &'static EventPublisher<BroadcastMessage>, game_event_publisher: &'static EventPublisher<GameEvent>) {

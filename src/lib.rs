@@ -63,6 +63,12 @@ pub struct BuildInfo {
 
 static CURRENT_BUILD_INFO: Lazy<Mutex<Option<BuildInfo>>> = Lazy::new(|| Mutex::new(None));
 
+/// Offset (relative to the game image base) resolved for `name` in the current
+/// build info, if any.
+pub fn current_build_offset(name: &str) -> Option<u64> {
+    CURRENT_BUILD_INFO.lock().unwrap().as_ref()?.get_offset(name).copied()
+}
+
 fn expand_env_path(path: &str) -> Option<PathBuf> {
     if let Some(stripped) = path.strip_prefix("%LOCALAPPDATA%") {
         if let Ok(base) = env::var("LOCALAPPDATA") {
@@ -84,7 +90,8 @@ static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
         "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
-        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory"
+        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory",
+        // (sigs populated in the resolver file as of this build; nothing pending)
     ])
 );
 
@@ -452,11 +459,29 @@ fn postinit_rustlib() {
                 thread::sleep(Duration::from_millis(500));
             }
 
+            if !cli_args().is_server() {
+                sinfo!("Not a server, skipping server initialization");
+                // Clients get a mod manager so `mod-list` can scan the mod
+                // markers on demand; nothing is scanned at startup.
+                #[cfg(feature="mod_management")]
+                {
+                    use crate::features::mod_management::ModManager;
+                    let mut mod_manager = globals().mod_manager.lock().unwrap();
+                    if mod_manager.is_none() {
+                        *mod_manager = Some(Arc::new(ModManager::new()));
+                    }
+                }
+                // Clients still expose the client-safe diagnostic commands
+                // (listmodmaps / mod-list) through the plugin console.
+                // Spawn this before spawn_cli_handler so the commands are
+                // registered by the time the console accepts input.
+                crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
+                    let _ = crate::features::events::initialize_client_commands().await;
+                });
+            }
             spawn_cli_handler();
             if cli_args().is_server() {
                 world_init();
-            } else {
-                sinfo!("Not a server, skipping server initialization");
             }
         });
     }
@@ -551,6 +576,18 @@ pub fn world_init() {
         let mut global_mm = globals().mod_manager.lock().unwrap();
         *global_mm = Some(Arc::clone(&mm));
         drop(global_mm);
+
+        // Server fallback: register every mod asset into the Asset Registry once.
+        // The primary trigger is LoadFrontEndMap (fires after the paks are
+        // mounted, on both client and server); this covers the case where a
+        // dedicated server never loads the frontend. The sync registration must
+        // run on the game thread, and the helper's one-shot guard makes it
+        // idempotent regardless of which site fires first.
+        // Jobs run in queue order, so this is queued before the mod scan below:
+        // the scan must see the markers this registers.
+        crate::resolvers::unchained_integration::run_on_game_thread(|| {
+            crate::features::mod_maps::auto_register_all_assets();
+        });
 
         resolvers::unchained_integration::run_on_game_thread(move || {
             sinfo!("Mod scans in progress");
