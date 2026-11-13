@@ -31,9 +31,15 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          cache: false
+
+      # v2.9.3 supports the pinned nightly's Cargo V2 build-directory layout.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
           # Separate profiles, including fallback restores; share release builds with release.yml.
           # The Rust cache also keys on the toolchain, environment, and dependencies.
-          cache-shared-key: windows-${{ matrix.build_type }}
+          shared-key: windows-${{ matrix.build_type }}
 
       - name: Inspect restored build outputs
         shell: pwsh
