@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
         with:
           plugin_file: plugin.json
@@ -23,33 +23,26 @@ jobs:
         build_type: [debug, release]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
           submodules: recursive
 
-      - uses: actions/cache@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.build_type }}
+          cache: false
+          # Preserve v1's compiler warning policy without denying Cargo manifest warnings.
+          rustflags: -D warnings
+          build-warnings: ''
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      # Run tests
-      - name: Test
-        shell: bash
-        run: |
-          if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --locked --release
-          else
-            cargo test --locked
-          fi
+      # v2.9.3 supports the pinned nightly's Cargo V2 build-directory layout.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
+          # Separate profiles, including fallback restores; share release builds with release.yml.
+          # The Rust cache also keys on the toolchain, environment, and dependencies.
+          shared-key: windows-${{ matrix.build_type }}
 
       # Build the project
       - name: Build
@@ -61,11 +54,21 @@ jobs:
             cargo build --locked
           fi
 
-      # Upload artifacts if build succeeds
+      # Run tests
+      - name: Test
+        shell: bash
+        run: |
+          if [ "${{ matrix.build_type }}" == "release" ]; then
+            cargo test --locked --release
+          else
+            cargo test --locked
+          fi
+
+      # Upload artifacts after build and tests succeed
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: UnchainedPlugin-${{matrix.build_type}}
           path: |
             target/${{ matrix.build_type }}/UnchainedPlugin.dll
-          if-no-files-found: warn
+          if-no-files-found: error

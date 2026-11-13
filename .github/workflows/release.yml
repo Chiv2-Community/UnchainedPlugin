@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Chiv2-Community/zero-infra-mod-registry/actions/validate-metadata@v1
         with:
           plugin_file: plugin.json
@@ -24,22 +24,24 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: actions/cache@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-Release
+          cache: false
+          # Preserve v1's compiler warning policy without denying Cargo manifest warnings.
+          rustflags: -D warnings
+          build-warnings: ''
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      # v2.9.3 supports the pinned nightly's Cargo V2 build-directory layout.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
+          # Match release CI without restoring debug build outputs.
+          shared-key: windows-release
 
       # Extract version from tag (remove 'v' prefix)
       - name: Get version from tag
@@ -62,23 +64,24 @@ jobs:
             exit 1
           fi
 
-      # Run tests
-      - name: Test
-        run: cargo test --locked --release
-
       # Build the project
       - name: Build
         run: cargo build --locked --release
 
+      # Run tests
+      - name: Test
+        run: cargo test --locked --release
+
       # Create GitHub Release
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: UnchainedPlugin v${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
           files: target/release/UnchainedPlugin.dll
+          fail_on_unmatched_files: true
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
