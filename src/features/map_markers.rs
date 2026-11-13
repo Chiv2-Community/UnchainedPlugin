@@ -173,13 +173,13 @@ pub unsafe fn scan_map_markers() -> usize {
             default_loading_screen: offsets.default_loading_screen(marker),
             rows: offsets.rows(marker),
         };
-        crate::sdebug!(
-            "Map marker {}: {} row(s) ({} held), default loading screen {:?}",
-            marker_path,
-            data.rows.len(),
-            data.rows.iter().filter(|row| row.held).count(),
-            data.default_loading_screen
-        );
+        // crate::sdebug!(
+        //     "Map marker {}: {} row(s) ({} held), default loading screen {:?}",
+        //     marker_path,
+        //     data.rows.len(),
+        //     data.rows.iter().filter(|row| row.held).count(),
+        //     data.default_loading_screen
+        // );
         for info in data.map_infos() {
             let (map_name, map_path) = (info.map_name.clone(), info.map_path.clone());
             if !cache.insert(info) {

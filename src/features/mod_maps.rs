@@ -325,7 +325,7 @@ fn merge_mod_asset_registries_sync<E: std::fmt::Display>(
         match merge(&bytes) {
             Ok(()) => {
                 merged += 1;
-                sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
+                // sdebug!("[modregistry] merged {} from {}", crate::features::mod_asset_registry::MOD_ASSET_REGISTRY_FILENAME, pak_path.display());
             }
             Err(error) => {
                 serror!("[modregistry] failed to merge {}: {}", pak_path.display(), error);
@@ -546,15 +546,15 @@ pub fn register_filtered_assets_sync() {
         scan.stats.threads, marker_elapsed, ar_elapsed, started.elapsed());
 
     // List the loaded maps so the main-menu package set is easy to verify.
-    let maps: Vec<&DiscoveredAsset> = scan
-        .assets
-        .iter()
-        .filter(|a| a.file_path.to_lowercase().ends_with(".umap"))
-        .collect();
-    sdebug!( "Loaded {} map(s):", maps.len());
-    for m in &maps {
-        sdebug!( "  {}", m.package_path.as_deref().unwrap_or(&m.file_path));
-    }
+    // let maps: Vec<&DiscoveredAsset> = scan
+    //     .assets
+    //     .iter()
+    //     .filter(|a| a.file_path.to_lowercase().ends_with(".umap"))
+    //     .collect();
+    // sdebug!( "Loaded {} map(s):", maps.len());
+    // for m in &maps {
+    //     sdebug!( "  {}", m.package_path.as_deref().unwrap_or(&m.file_path));
+    // }
 }
 
 /// The game's `Content/Paks` directory, derived from the running executable
@@ -606,10 +606,10 @@ fn discovery_pak_paths() -> Vec<PathBuf> {
         sdebug!("[modmaps] pak discovery: {} mounted, all game (pakchunk) — falling back to Content/Paks scan", mounted.len());
         return fallback();
     }
-    sdebug!("[modmaps] pak discovery: using Mount — {} mod pak(s) loaded:", paths.len());
-    for p in &paths {
-        sdebug!("[modmaps]   {}", p.display());
-    }
+    // sdebug!("[modmaps] pak discovery: using Mount — {} mod pak(s) loaded:", paths.len());
+    // for p in &paths {
+    //     sdebug!("[modmaps]   {}", p.display());
+    // }
     paths
 }
 
