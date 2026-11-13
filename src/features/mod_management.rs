@@ -325,6 +325,9 @@ impl ModManager {
 
         // Offsets are per class; every V2 marker normally shares one class.
         let mut offsets_by_class: HashMap<usize, Option<V2MarkerOffsets>> = HashMap::new();
+        // Compact per-marker tokens, logged as one summary line instead of a
+        // verbose line per marker.
+        let mut marker_summary: Vec<String> = Vec::new();
         for path in &marker_paths {
             let marker = get_uobject_from_path(path, true);
             if marker.is_null() {
@@ -345,15 +348,22 @@ impl ModManager {
 
             let class_paths = offsets.mod_actor_classes(marker);
             let bundled_markers = offsets.bundled_markers(marker);
-            sdebug!(
-                "V2 marker {}: ModId {:?}, ModVersion {:?}, FormatVersion {}, {} mod actor class(es), {} bundled marker(s)",
-                path,
-                offsets.mod_id(marker),
-                offsets.mod_version(marker),
-                offsets.format_version(marker),
-                class_paths.len(),
-                bundled_markers.len()
-            );
+
+            let mod_id = offsets.mod_id(marker);
+            let mod_version = offsets.mod_version(marker);
+            let mut token = if mod_id.is_empty() {
+                "<no ModId>".to_string()
+            } else {
+                mod_id
+            };
+            if !mod_version.is_empty() {
+                token.push_str(&format!(" v{}", mod_version));
+            }
+            if !bundled_markers.is_empty() {
+                token.push_str(&format!(" (+{} bundled)", bundled_markers.len()));
+            }
+            marker_summary.push(token);
+
             for bundled in missing_bundled_markers(&bundled_markers, &marker_paths) {
                 swarn!("V2 marker {} bundles {}, which is not in the Asset Registry", path, bundled);
             }
@@ -375,6 +385,9 @@ impl ModManager {
                     Err(error) => serror!("Cannot load mod class {}: {}", class_path, error),
                 }
             }
+        }
+        if !marker_summary.is_empty() {
+            sinfo!("V2 markers ({}): {}", marker_summary.len(), marker_summary.join(", "));
         }
         found
     }
@@ -534,6 +547,11 @@ impl ModManager {
     
      */
     /// Replace saved mod selection with validated CLI classes, on the game thread.
+    ///
+    /// Also seeds the active set with the server's configured mods: the Asset
+    /// Registry scan only populates *available* mods, and a live-world actor
+    /// scan is not reliable this early during init, so `--server-mods` is the
+    /// authoritative source of what this server runs for registration.
     pub fn update_save_game(&self) {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
@@ -575,10 +593,16 @@ impl ModManager {
         // remove the cached active mods, rather than allowing them to return.
         save_game.enabled_mods.clear();
         save_game.last_active_mods.clear();
+        let mut enabled = Vec::with_capacity(paths.len());
         for path in paths {
             sinfo!("Enabling mod {}", path);
             save_game.enabled_mods.push(TSoftClassPtr::from_path(path));
+            enabled.push(path.to_string());
         }
+        // The configured server mods are the active set for registration; a
+        // live-world actor scan is unreliable at init (world may be None and
+        // the mod actors are not spawned yet).
+        self.set_active_paths(enabled);
         let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
         if res {
             sinfo!("Modloader settings saved: {res}");
@@ -587,6 +611,14 @@ impl ModManager {
             serror!("Failed to save Modloader settings");
 
         }
+    }
+
+    /// Marks the given mod class paths as the active set. Used to advertise the
+    /// server's configured mods (`--server-mods`) for registration without
+    /// depending on a live-world actor scan, which is not reliable during init.
+    pub fn set_active_paths(&self, paths: impl IntoIterator<Item = String>) {
+        let mut active = self.active_paths.lock().unwrap();
+        *active = paths.into_iter().collect();
     }
 
     pub fn dump_to_console(&self) {
