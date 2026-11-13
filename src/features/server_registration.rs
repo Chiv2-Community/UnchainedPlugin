@@ -258,7 +258,7 @@ impl Registration {
         let mut handle_lock = self.handle.lock().unwrap();
         
         *handle_lock = Some(thread::spawn(move || {
-            inner.run_worker();
+            inner.run_reg_worker();
         }));
     }
 
@@ -307,7 +307,7 @@ impl Registration {
 }
 
 impl RegistrationInner {
-    fn run_worker(&self) {
+    fn run_reg_worker(&self) {
         let a2s = A2SClient::new().expect("Failed to create A2S Client");
         let mut backoff_secs = BACKOFF_INITIAL_SECS;
 
