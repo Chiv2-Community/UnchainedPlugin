@@ -32,6 +32,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           # Separate profiles, including fallback restores; share release builds with release.yml.
+          # The Rust cache also keys on the toolchain, environment, and dependencies.
           cache-shared-key: windows-${{ matrix.build_type }}
 
       # Build the project
