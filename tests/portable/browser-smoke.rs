@@ -3,12 +3,13 @@ use std::{
     cell::Cell,
     time::{Duration, Instant},
 };
-use unchained_backend::{
+#[path = "../../src/backend.rs"]
+mod backend;
+use server_browser_client::{
     apis::api_v1_api as api,
-    lifecycle::{Clock, Event, Policy, Registration},
     models::{Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer},
-    BackendClient,
 };
+use server_browser_client_sdk::{Clock, Event, Policy, Registration};
 
 struct TestClock(Cell<Instant>);
 impl Clock for &TestClock {
@@ -19,7 +20,7 @@ impl Clock for &TestClock {
 
 fn main() {
     let url = std::env::args().nth(1).expect("local backend URL required");
-    let client = BackendClient::new(&url, None).unwrap();
+    let client = backend::transport(&url, None).unwrap();
     let config = client.configuration();
     let request = ServerRegistrationRequest::new(
         Chivalry2Ports::new(7777, 7778, 7779),
@@ -30,13 +31,8 @@ fn main() {
         32,
     );
     let clock = TestClock(Cell::new(Instant::now()));
-    let mut registration = Registration::with_clock(
-        client.registration_transport(),
-        request,
-        Policy::default(),
-        &clock,
-    )
-    .unwrap();
+    let mut registration =
+        Registration::with_clock(client.clone(), request, Policy::default(), &clock).unwrap();
     assert!(matches!(registration.poll(), Ok(Event::Registered { .. })));
     assert!(api::get_servers(config).is_ok());
     registration

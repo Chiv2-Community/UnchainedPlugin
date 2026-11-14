@@ -10,9 +10,10 @@ The plugin consumes exact backend Git revisions without its own OAS snapshot or
 generator. `unchained-auth` depends only on the model crate. Backend PR #21
 declares 64-bit claim timestamps and regenerates both language contracts.
 
-Registration, updates, heartbeat, deletion and ban checks use generated operations
-and models through `unchained-backend`. The adapter centralizes deadlines,
-redirect suppression, source-IP binding and safe debug output. Legacy ban checks
+Registration, updates, heartbeat and deletion use `server-browser-client-sdk`
+directly. Ban checks use generated bindings directly. `src/backend.rs` adds the
+plugin user-agent to the SDK transport; deadlines, redirect suppression,
+source-IP binding and safe debug output remain SDK-owned. Legacy ban checks
 remain fail-open; that behavior must not be used for required authentication.
 Existing engine-owned HTTP redirects remain engine hooks, not replacement HTTP
 clients. The generated SDK includes their compatibility endpoints as well.
@@ -39,7 +40,7 @@ key prefixes are no longer logged.
 ## Local validation
 
 ```sh
-cargo test --locked -p unchained-auth -p unchained-backend
+cargo test --locked -p unchained-auth -p plugin-portable-tests
 uv run --project ../C2ServerBrowserBackend-auth-sdk python scripts/check-auth-backend.py
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```

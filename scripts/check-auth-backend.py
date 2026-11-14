@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     # Compile before opening the listener so compilation never consumes ticket lifetime.
-    subprocess.run(["cargo", "build", "--locked", "-p", "unchained-auth", "-p", "unchained-backend", "--examples"], cwd=ROOT, check=True)
+    subprocess.run(["cargo", "build", "--locked", "-p", "unchained-auth", "-p", "plugin-portable-tests", "--examples"], cwd=ROOT, check=True)
     with tempfile.TemporaryDirectory(prefix="auth-interop-", dir="/tmp/opencode") as temporary:
         directory = Path(temporary)
         keyring = directory / "signing.json"
@@ -51,7 +51,7 @@ def main():
                         time.sleep(0.05)
                 else:
                     raise RuntimeError("Local backend startup timed out")
-                subprocess.run(["cargo", "run", "--locked", "--quiet", "-p", "unchained-backend", "--example", "browser-smoke", "--", base_url], cwd=ROOT, check=True)
+                subprocess.run(["cargo", "run", "--locked", "--quiet", "-p", "plugin-portable-tests", "--example", "browser-smoke", "--", base_url], cwd=ROOT, check=True)
                 now = int(time.time())
                 registration = str(uuid4())
                 # HTTPS issuer identity is independent of the loopback test transport.

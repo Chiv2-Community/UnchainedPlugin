@@ -51,9 +51,9 @@ fn resolve_player_display_name(options: &str) -> String {
 
 fn is_user_banned(addr: &str) -> bool {
     sinfo!("Checking Unchained ban status for player");
-    let response = unchained_backend::BackendClient::new(
+    let response = crate::backend::transport(
         cli_args().server_browser_backend.as_deref().unwrap_or_default(), None,
-    ).ok().and_then(|client| unchained_backend::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
+    ).ok().and_then(|client| server_browser_client::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
     match response {
         Some(result) => result.banned,
         None => {
