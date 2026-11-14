@@ -49,10 +49,11 @@ pub struct Registration {
 }
 
 #[derive(Debug)]
-struct RegistrationInner {
+struct RegistrationWorker {
     server_addr: String,
     local_ip_address: Option<String>,
     backend: HttpTransport,
+    registration: Option<SdkRegistration<HttpTransport>>,
 }
 
 fn discover_global_ipv6() -> Option<String> {
@@ -134,15 +135,16 @@ impl Registration {
         )
         .expect("Failed to construct bounded server-browser client");
 
-        let inner = RegistrationInner {
+        let worker = RegistrationWorker {
             server_addr: format_host_port(ip, query_port),
             local_ip_address: advertised_local_ip,
             backend,
+            registration: None,
         };
         let (commands, receiver) = mpsc::unbounded_channel();
         let update = Arc::new(Notify::new());
         let wake = Arc::clone(&update);
-        let task = TOKIO_RUNTIME.spawn(async move { inner.run(receiver, wake).await });
+        let task = TOKIO_RUNTIME.spawn(worker.run(receiver, wake));
         Self {
             commands,
             update,
@@ -171,9 +173,8 @@ impl Registration {
     }
 }
 
-impl RegistrationInner {
-    async fn run(self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>) {
-        let mut registration: Option<SdkRegistration<HttpTransport>> = None;
+impl RegistrationWorker {
+    async fn run(mut self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>) {
         let mut state = TaskState::default();
         let mut poll_at = tokio::time::Instant::now();
         loop {
@@ -183,7 +184,7 @@ impl RegistrationInner {
                 biased;
                 command = commands.recv() => {
                     if state.apply(command.unwrap_or(Command::Cleanup)) {
-                        Self::cleanup(registration.as_mut()).await;
+                        self.cleanup().await;
                     }
                     if command.is_none() {
                         break;
@@ -195,7 +196,7 @@ impl RegistrationInner {
                 _ = tokio::time::sleep_until(poll_at), if state.active() => {},
             }
 
-            match self.poll(&mut registration, &commands).await {
+            match self.poll(&commands).await {
                 Ok(delay) => poll_at = tokio::time::Instant::now() + delay,
                 Err(error) => {
                     // Preserve uncertainty instead of creating a fresh manager.
@@ -207,19 +208,19 @@ impl RegistrationInner {
     }
 
     async fn poll(
-        &self,
-        registration: &mut Option<SdkRegistration<HttpTransport>>,
+        &mut self,
         commands: &mpsc::UnboundedReceiver<Command>,
     ) -> Result<Duration, SdkError> {
-        let status = self.refresh_metadata(registration, commands).await?;
+        let status = self.refresh_metadata(commands).await?;
         // A pause/cleanup arriving during A2S must precede new HTTP.
         if !commands.is_empty() || commands.is_closed() {
             return Ok(Duration::ZERO);
         }
-        if let Some(registration) = registration.as_mut() {
+        if let Some(registration) = self.registration.as_mut() {
             Self::observe(registration.poll().await?, status);
         }
-        Ok(registration
+        Ok(self
+            .registration
             .as_ref()
             .and_then(SdkRegistration::next_delay)
             .unwrap_or(METADATA_POLL_INTERVAL)
@@ -227,15 +228,14 @@ impl RegistrationInner {
     }
 
     async fn refresh_metadata(
-        &self,
-        registration: &mut Option<SdkRegistration<HttpTransport>>,
+        &mut self,
         commands: &mpsc::UnboundedReceiver<Command>,
     ) -> Result<Option<ServerStatus>, SdkError> {
-        let Ok(info) = self.poll_a2s_with_retry(commands).await else {
+        let Some(info) = self.poll_a2s_with_retry(commands).await else {
             return Ok(None);
         };
         let (request, status) = self.metadata(&info);
-        if let Some(registration) = registration.as_mut() {
+        if let Some(registration) = self.registration.as_mut() {
             registration.set_update(UpdateRegisteredServer {
                 player_count: request.player_count,
                 max_players: request.max_players,
@@ -243,7 +243,7 @@ impl RegistrationInner {
                 mods: request.mods,
             })?;
         } else {
-            *registration = Some(SdkRegistration::new(
+            self.registration = Some(SdkRegistration::new(
                 self.backend.clone(),
                 request,
                 Policy::default(),
@@ -272,8 +272,8 @@ impl RegistrationInner {
         }
     }
 
-    async fn cleanup(registration: Option<&mut SdkRegistration<HttpTransport>>) {
-        if let Some(registration) = registration {
+    async fn cleanup(&mut self) {
+        if let Some(registration) = self.registration.as_mut() {
             if let Err(error) = registration.stop().await {
                 swarn!("Server-browser cleanup failed: {}", error);
             }
@@ -368,10 +368,10 @@ impl RegistrationInner {
     async fn poll_a2s_with_retry(
         &self,
         commands: &mpsc::UnboundedReceiver<Command>,
-    ) -> Result<Info, ()> {
+    ) -> Option<Info> {
         for i in 0..A2S_RETRIES {
             if !commands.is_empty() || commands.is_closed() {
-                return Err(());
+                return None;
             }
             let address = self.server_addr.clone();
             // The external A2S client uses bounded five-second socket IO.
@@ -382,17 +382,17 @@ impl RegistrationInner {
             })
             .await;
             match result {
-                Ok(Ok(info)) => return Ok(info),
+                Ok(Ok(info)) => return Some(info),
                 error => {
                     if i == A2S_RETRIES - 1 {
                         serror!("A2S failed after {} attempts: {:?}", A2S_RETRIES, error);
-                        return Err(());
+                        return None;
                     }
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
             }
         }
-        Err(())
+        None
     }
 }
 
