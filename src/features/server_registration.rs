@@ -9,7 +9,7 @@ use server_browser_client::models::{
 use server_browser_client_sdk::{
     Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
 };
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Notify};
@@ -28,19 +28,6 @@ use registration_control::{Command, TaskState};
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_RETRIES: u8 = 3;
 
-/// Format a socket endpoint for APIs that expect `host:port`.
-///
-/// The registration JSON carries `local_ip_address` separately from its port,
-/// so that field must remain a raw IPv6 address without brackets. Brackets are
-/// required only when the address and port are combined for A2S or a URL.
-fn format_host_port(host: &str, port: u16) -> String {
-    if host.contains(':') && !host.starts_with('[') {
-        format!("[{host}]:{port}")
-    } else {
-        format!("{host}:{port}")
-    }
-}
-
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
 pub struct Registration {
@@ -50,7 +37,7 @@ pub struct Registration {
 
 #[derive(Debug)]
 struct RegistrationWorker {
-    server_addr: String,
+    server_addr: SocketAddr,
     local_ip_address: Option<String>,
     backend: HttpTransport,
     registration: Option<SdkRegistration<HttpTransport>>,
@@ -72,7 +59,7 @@ fn discover_global_ipv6() -> Option<Ipv6Addr> {
 
 impl Registration {
     /// Initializes the registration manager.
-    pub fn new(ip: &str, query_port: u16, local_ip: Option<&str>, use_ipv6: bool) -> Self {
+    pub fn new(ip: IpAddr, query_port: u16, local_ip: Option<&str>, use_ipv6: bool) -> Self {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
@@ -120,7 +107,7 @@ impl Registration {
         .expect("Failed to construct bounded server-browser client");
 
         let worker = RegistrationWorker {
-            server_addr: format_host_port(ip, query_port),
+            server_addr: SocketAddr::new(ip, query_port),
             local_ip_address: advertised_local_ip,
             backend,
             registration: None,
@@ -340,7 +327,7 @@ impl RegistrationWorker {
             if !commands.is_empty() || commands.is_closed() {
                 return None;
             }
-            match a2s_query::query(&self.server_addr).await {
+            match a2s_query::query(self.server_addr).await {
                 Ok(info) => return Some(info),
                 Err(error) => {
                     if i == A2S_RETRIES - 1 {
@@ -352,31 +339,5 @@ impl RegistrationWorker {
             }
         }
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn formats_ipv4_endpoint_without_brackets() {
-        assert_eq!(format_host_port("127.0.0.1", 7071), "127.0.0.1:7071");
-    }
-
-    #[test]
-    fn formats_ipv6_endpoint_with_brackets() {
-        assert_eq!(
-            format_host_port("2a0c:d242:903b:ba00::ff99", 7071),
-            "[2a0c:d242:903b:ba00::ff99]:7071"
-        );
-    }
-
-    #[test]
-    fn preserves_already_bracketed_ipv6_endpoint() {
-        assert_eq!(
-            format_host_port("[2a0c:d242:903b:ba00::ff99]", 7071),
-            "[2a0c:d242:903b:ba00::ff99]:7071"
-        );
     }
 }
