@@ -132,7 +132,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    sinfo!("User joining (connection options omitted)");
+    sinfo!("User joining with options '{}'", options_string);
 
     let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
