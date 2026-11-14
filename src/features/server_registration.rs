@@ -373,17 +373,9 @@ impl RegistrationWorker {
             if !commands.is_empty() || commands.is_closed() {
                 return None;
             }
-            let address = self.server_addr.clone();
-            // The external A2S client uses bounded five-second socket IO.
-            // Await the job even on pause: detached timed-out jobs could pile up.
-            let result = tokio::task::spawn_blocking(move || {
-                let client = A2SClient::new()?;
-                client.info(&address)
-            })
-            .await;
-            match result {
-                Ok(Ok(info)) => return Some(info),
-                error => {
+            match self.query_a2s().await {
+                Ok(info) => return Some(info),
+                Err(error) => {
                     if i == A2S_RETRIES - 1 {
                         serror!("A2S failed after {} attempts: {:?}", A2S_RETRIES, error);
                         return None;
@@ -393,6 +385,17 @@ impl RegistrationWorker {
             }
         }
         None
+    }
+
+    async fn query_a2s(&self) -> a2s::errors::Result<Info> {
+        let address = self.server_addr.clone();
+        // Await the bounded socket IO even on pause; never detach retry jobs.
+        tokio::task::spawn_blocking(move || {
+            let client = A2SClient::new()?;
+            client.info(&address)
+        })
+        .await
+        .map_err(std::io::Error::other)?
     }
 }
 
