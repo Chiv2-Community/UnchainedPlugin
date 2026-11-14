@@ -4,15 +4,14 @@ use crate::features::Mod;
 use a2s::info::Info;
 use a2s::A2SClient;
 use get_if_addrs::{get_if_addrs, IfAddr};
+use server_browser_client::models::{
+    Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
+};
+use server_browser_client_sdk::{Event, HttpTransport, Policy, Registration as SdkRegistration};
 use std::net::IpAddr;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
-use unchained_backend::{
-    lifecycle::{Event, HttpTransport, Policy, Registration as SdkRegistration},
-    models::{Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer},
-    BackendClient,
-};
 
 use crate::globals;
 use crate::tools::hook_globals::cli_args;
@@ -58,7 +57,7 @@ struct RegistrationInner {
     state: Mutex<WorkerState>,
     registration: Mutex<Option<SdkRegistration<HttpTransport>>>,
     cvar: Condvar,
-    backend: BackendClient,
+    backend: HttpTransport,
 }
 
 fn discover_global_ipv6() -> Option<String> {
@@ -131,7 +130,7 @@ impl Registration {
                 address
             );
         }
-        let backend = BackendClient::new(
+        let backend = crate::backend::transport(
             cli_args()
                 .server_browser_backend
                 .as_deref()
@@ -221,12 +220,8 @@ impl RegistrationInner {
                         }
                     } else {
                         registration = Some(
-                            SdkRegistration::new(
-                                self.backend.registration_transport(),
-                                request,
-                                Policy::default(),
-                            )
-                            .expect("Invalid default registration policy"),
+                            SdkRegistration::new(self.backend.clone(), request, Policy::default())
+                                .expect("Invalid default registration policy"),
                         );
                     }
                     Some(status)
@@ -323,7 +318,7 @@ impl RegistrationInner {
             mods: Some(
                 mods.iter()
                     .map(|m| {
-                        unchained_backend::models::Mod::new(
+                        server_browser_client::models::Mod::new(
                             m.name.clone(),
                             m.organization.clone(),
                             m.version.clone(),

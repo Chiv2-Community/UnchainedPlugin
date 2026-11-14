@@ -18,7 +18,7 @@ jobs:
           rustflags: -D warnings
           build-warnings: ''
       - name: Test backend transport
-        run: cargo test --locked -p unchained-backend
+        run: cargo test --locked -p plugin-portable-tests
 
   validate-plugin:
     runs-on: ubuntu-latest

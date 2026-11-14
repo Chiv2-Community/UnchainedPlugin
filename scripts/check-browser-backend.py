@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    subprocess.run(["cargo", "build", "--locked", "-p", "unchained-backend", "--examples"], cwd=ROOT, check=True)
+    subprocess.run(["cargo", "build", "--locked", "-p", "plugin-portable-tests", "--examples"], cwd=ROOT, check=True)
     with tempfile.TemporaryDirectory(prefix="browser-interop-", dir="/tmp/opencode") as temporary:
         environment = {**os.environ, "CONFIG_DIR": temporary, "ADMIN_KEY": "local-test-admin", "TRUSTED_PROXY_CIDRS": ""}
         environment.pop("DISCORD_SIGNING_KEYRING", None)
@@ -37,7 +37,7 @@ def main():
                         time.sleep(0.05)
                 else:
                     raise RuntimeError("Local backend startup timed out")
-                subprocess.run(["cargo", "run", "--locked", "--quiet", "-p", "unchained-backend", "--example", "browser-smoke", "--", base_url], cwd=ROOT, check=True)
+                subprocess.run(["cargo", "run", "--locked", "--quiet", "-p", "plugin-portable-tests", "--example", "browser-smoke", "--", base_url], cwd=ROOT, check=True)
             finally:
                 server.terminate()
                 try:
