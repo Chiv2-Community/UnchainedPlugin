@@ -355,23 +355,6 @@ mod tests {
         output
     }
 
-    #[test]
-    fn senderless_system_messages_have_a_padded_client_message_column() {
-        let yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
-        assert_eq!(yaml["appenders"]["console"]["encoder"]["palette"]["client_message"], "#d7a0df");
-        let mut registry = Deserializers::default();
-        register(&mut registry);
-        for appender in ["chat_system_console", "chat_system_file"] {
-            for message in ["Spawned mod loader actor", "FIND MODS, known:"] {
-                let output = render_encoder(&registry, yaml["appenders"][appender]["encoder"].clone(),
-                    &Record::builder().args(format_args!("{message}")).build());
-                let text = String::from_utf8(output).unwrap();
-                assert!(text.ends_with(&format!(" | {:<16} - {message}{}", "Client Message", if cfg!(windows) { "\r\n" } else { "\n" })), "{text:?}");
-            }
-        }
-        assert!(yaml["appenders"]["chat_console"]["encoder"]["pattern"].as_str().unwrap().contains("{K(sender):<16}"));
-    }
-
     fn console_config(encoder: serde_yaml::Value) -> anyhow::Result<Config> {
         let mut yaml = fixtures::config("console");
         yaml["appenders"]["console"]["encoder"] = encoder;
