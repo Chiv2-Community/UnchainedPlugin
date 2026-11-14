@@ -7,7 +7,9 @@ use get_if_addrs::{get_if_addrs, IfAddr};
 use server_browser_client::models::{
     Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
 };
-use server_browser_client_sdk::{Event, HttpTransport, Policy, Registration as SdkRegistration};
+use server_browser_client_sdk::{
+    Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
+};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -181,11 +183,7 @@ impl RegistrationInner {
                 biased;
                 command = commands.recv() => {
                     if state.apply(command.unwrap_or(Command::Cleanup)) {
-                        if let Some(registration) = registration.as_mut() {
-                            if let Err(error) = registration.stop().await {
-                                swarn!("Server-browser cleanup failed: {}", error);
-                            }
-                        }
+                        Self::cleanup(registration.as_mut()).await;
                     }
                     if command.is_none() {
                         break;
@@ -197,64 +195,88 @@ impl RegistrationInner {
                 _ = tokio::time::sleep_until(poll_at), if state.active() => {},
             }
 
-            let status = match self.poll_a2s_with_retry(&mut commands).await {
-                Ok(info) => {
-                    let (request, status) = self.metadata(&info);
-                    if let Some(registration) = registration.as_mut() {
-                        if let Err(error) = registration.set_update(UpdateRegisteredServer {
-                            player_count: request.player_count,
-                            max_players: request.max_players,
-                            current_map: request.current_map,
-                            mods: request.mods,
-                        }) {
-                            swarn!("Server-browser lifecycle halted: {}", error);
-                            state.halt();
-                            continue;
-                        }
-                    } else {
-                        registration = Some(
-                            SdkRegistration::new(self.backend.clone(), request, Policy::default())
-                                .expect("Invalid default registration policy"),
-                        );
-                    }
-                    Some(status)
-                }
-                Err(()) => None,
-            };
-            // A pause/cleanup arriving during A2S must precede new HTTP.
-            if !commands.is_empty() || commands.is_closed() {
-                continue;
-            }
-            if let Some(registration) = registration.as_mut() {
-                match registration.poll().await {
-                    Ok(Event::Registered { server_id }) => {
-                        sinfo!("Registered server-browser identity: {}", server_id);
-                        if let Some(status) = status {
-                            EVENT_SYSTEM
-                                .game_event_publisher
-                                .publish(GameEvent::ServerStatusEvent(status));
-                        }
-                    }
-                    Ok(Event::RegistrationLost) => {
-                        swarn!("Server-browser registration expired; SDK will re-register")
-                    }
-                    Ok(Event::RetryScheduled(delay)) => {
-                        swarn!("Server-browser retry in {}s", delay.as_secs())
-                    }
-                    Ok(_) => {}
-                    Err(error) => {
-                        // Preserve uncertainty instead of creating a fresh manager.
-                        swarn!("Server-browser lifecycle halted: {}", error);
-                        state.halt();
-                        continue;
-                    }
+            match self.poll(&mut registration, &commands).await {
+                Ok(delay) => poll_at = tokio::time::Instant::now() + delay,
+                Err(error) => {
+                    // Preserve uncertainty instead of creating a fresh manager.
+                    swarn!("Server-browser lifecycle halted: {}", error);
+                    state.halt();
                 }
             }
-            let delay = registration
-                .as_ref()
-                .and_then(SdkRegistration::next_delay)
-                .unwrap_or(METADATA_POLL_INTERVAL);
-            poll_at = tokio::time::Instant::now() + delay.min(METADATA_POLL_INTERVAL);
+        }
+    }
+
+    async fn poll(
+        &self,
+        registration: &mut Option<SdkRegistration<HttpTransport>>,
+        commands: &mpsc::UnboundedReceiver<Command>,
+    ) -> Result<Duration, SdkError> {
+        let status = self.refresh_metadata(registration, commands).await?;
+        // A pause/cleanup arriving during A2S must precede new HTTP.
+        if !commands.is_empty() || commands.is_closed() {
+            return Ok(Duration::ZERO);
+        }
+        if let Some(registration) = registration.as_mut() {
+            Self::observe(registration.poll().await?, status);
+        }
+        Ok(registration
+            .as_ref()
+            .and_then(SdkRegistration::next_delay)
+            .unwrap_or(METADATA_POLL_INTERVAL)
+            .min(METADATA_POLL_INTERVAL))
+    }
+
+    async fn refresh_metadata(
+        &self,
+        registration: &mut Option<SdkRegistration<HttpTransport>>,
+        commands: &mpsc::UnboundedReceiver<Command>,
+    ) -> Result<Option<ServerStatus>, SdkError> {
+        let Ok(info) = self.poll_a2s_with_retry(commands).await else {
+            return Ok(None);
+        };
+        let (request, status) = self.metadata(&info);
+        if let Some(registration) = registration.as_mut() {
+            registration.set_update(UpdateRegisteredServer {
+                player_count: request.player_count,
+                max_players: request.max_players,
+                current_map: request.current_map,
+                mods: request.mods,
+            })?;
+        } else {
+            *registration = Some(SdkRegistration::new(
+                self.backend.clone(),
+                request,
+                Policy::default(),
+            )?);
+        }
+        Ok(Some(status))
+    }
+
+    fn observe(event: Event, status: Option<ServerStatus>) {
+        match event {
+            Event::Registered { server_id } => {
+                sinfo!("Registered server-browser identity: {}", server_id);
+                if let Some(status) = status {
+                    EVENT_SYSTEM
+                        .game_event_publisher
+                        .publish(GameEvent::ServerStatusEvent(status));
+                }
+            }
+            Event::RegistrationLost => {
+                swarn!("Server-browser registration expired; SDK will re-register")
+            }
+            Event::RetryScheduled(delay) => {
+                swarn!("Server-browser retry in {}s", delay.as_secs())
+            }
+            _ => {}
+        }
+    }
+
+    async fn cleanup(registration: Option<&mut SdkRegistration<HttpTransport>>) {
+        if let Some(registration) = registration {
+            if let Err(error) = registration.stop().await {
+                swarn!("Server-browser cleanup failed: {}", error);
+            }
         }
     }
 
@@ -345,7 +367,7 @@ impl RegistrationInner {
 
     async fn poll_a2s_with_retry(
         &self,
-        commands: &mut mpsc::UnboundedReceiver<Command>,
+        commands: &mpsc::UnboundedReceiver<Command>,
     ) -> Result<Info, ()> {
         for i in 0..A2S_RETRIES {
             if !commands.is_empty() || commands.is_closed() {
