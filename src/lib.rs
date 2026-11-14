@@ -506,18 +506,16 @@ pub fn world_init() {
             } else {
                 Some(args.local_ip.as_str())
             };
-            let reg = Arc::new(Registration::new(
+            let reg = Registration::new(
                 std::net::Ipv4Addr::LOCALHOST.into(),
                 query_port,
                 advertised_local_ip,
                 args.use_ipv6,
-            ));
+            );
             
-            let mut global_reg = globals().registration.lock().unwrap();
-            *global_reg = Some(Arc::clone(&reg));
+            globals().registration.lock().unwrap().insert(reg).start();
             
             sinfo!("Started server registration manager");
-            reg.start();
         }
     }
 
