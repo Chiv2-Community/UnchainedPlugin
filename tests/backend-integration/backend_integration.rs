@@ -1,7 +1,7 @@
 //! Exercise the pinned lifecycle SDK against the real containerized backend.
 mod support;
 use std::{
-    cell::Cell,
+    sync::Mutex,
     time::{Duration, Instant},
 };
 #[path = "../../src/backend.rs"]
@@ -12,10 +12,10 @@ use server_browser_client::{
 };
 use server_browser_client_sdk::{Clock, Event, Policy, Registration};
 
-struct TestClock(Cell<Instant>);
+struct TestClock(Mutex<Instant>);
 impl Clock for &TestClock {
     fn now(&self) -> Instant {
-        self.0.get()
+        *self.0.lock().unwrap()
     }
 }
 
@@ -25,18 +25,29 @@ fn backend_signed_ticket_verifies_once_for_live_registration() {
     use unchained_auth::{AuthError, TicketVerifier};
 
     let (container, url) = support::backend();
-    let client = backend::transport(&url, None).unwrap();
-    let request = ServerRegistrationRequest::new(
-        Chivalry2Ports::new(7777, 7778, 7779),
-        "ticket-test".into(),
-        "".into(),
-        "map".into(),
-        0,
-        32,
-    );
-    let mut registration = Registration::new(client.clone(), request, Policy::default()).unwrap();
-    assert!(matches!(registration.poll(), Ok(Event::Registered { .. })));
-    let id = registration.server_id().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (mut registration, id, jwks) = runtime.block_on(async {
+        let client = backend::transport(&url, None).unwrap();
+        let request = ServerRegistrationRequest::new(
+            Chivalry2Ports::new(7777, 7778, 7779),
+            "ticket-test".into(),
+            "".into(),
+            "map".into(),
+            0,
+            32,
+        );
+        let mut registration =
+            Registration::new(client.clone(), request, Policy::default()).unwrap();
+        assert!(matches!(
+            registration.poll().await,
+            Ok(Event::Registered { .. })
+        ));
+        let id = registration.server_id().unwrap().to_owned();
+        let jwks = api::jwks(client.configuration())
+            .await
+            .unwrap_or_else(|_| panic!("JWKS retrieval failed"));
+        (registration, id, serde_json::to_vec(&jwks).unwrap())
+    });
     // Exercise the backend's internal signing boundary inside its container.
     // No test-only HTTP endpoint or private key crosses into the plugin.
     let mut issued = container
@@ -59,7 +70,7 @@ ticket = SigningKeys(Path('/tmp/browser-test/signing.json')).issue_join_ticket(
 )
 print(json.dumps({'ticket': ticket, 'now': now}))
 "#,
-            id,
+            id.as_str(),
         ]))
         .expect("issue ticket inside backend container");
     let output = issued.stdout_to_vec().unwrap();
@@ -67,10 +78,7 @@ print(json.dumps({'ticket': ticket, 'now': now}))
     let bundle: serde_json::Value = serde_json::from_slice(&output).expect("decode signing result");
     let ticket = bundle["ticket"].as_str().unwrap();
     let now = bundle["now"].as_u64().unwrap();
-    let jwks =
-        api::jwks(client.configuration()).unwrap_or_else(|_| panic!("JWKS retrieval failed"));
-    let jwks = serde_json::to_vec(&jwks).unwrap();
-    let mut verifier = TicketVerifier::new("https://local-auth.test", id, &jwks, 32).unwrap();
+    let mut verifier = TicketVerifier::new("https://local-auth.test", &id, &jwks, 32).unwrap();
     let identity = verifier.verify_and_consume(ticket, now).unwrap();
     assert_eq!(identity.discord_id(), "123456789012345678");
     assert_eq!(identity.server_id().to_string(), id);
@@ -94,47 +102,59 @@ print(json.dumps({'ticket': ticket, 'now': now}))
             .any(|window| window == ticket.as_bytes()),
         "ticket leaked to backend logs"
     );
-    registration.stop().unwrap();
+    runtime.block_on(async { registration.stop().await.unwrap() });
 }
 
 #[test]
 fn registration_lifecycle_against_backend_container() {
     let (_container, url) = support::backend();
-    let client = backend::transport(&url, None).unwrap();
-    let config = client.configuration();
-    let request = ServerRegistrationRequest::new(
-        Chivalry2Ports::new(7777, 7778, 7779),
-        "local-sdk-test".into(),
-        "".into(),
-        "map".into(),
-        0,
-        32,
-    );
-    let clock = TestClock(Cell::new(Instant::now()));
-    let mut registration =
-        Registration::with_clock(client.clone(), request, Policy::default(), &clock).unwrap();
-    assert!(matches!(registration.poll(), Ok(Event::Registered { .. })));
-    let listing = api::get_servers(config).unwrap_or_else(|_| panic!("listing failed"));
-    assert_eq!(listing.servers.len(), 1);
-    registration
-        .set_update(UpdateRegisteredServer::new(2, 32, "next".into()))
-        .unwrap();
-    assert_eq!(registration.poll(), Ok(Event::Updated));
-    let listing = api::get_servers(config).unwrap_or_else(|_| panic!("listing failed"));
-    let server = serde_json::to_value(&listing.servers[0]).unwrap();
-    assert_eq!(server["player_count"], 2);
-    assert_eq!(server["current_map"], "next");
-    clock.0.set(clock.0.get() + Duration::from_secs(31));
-    assert_eq!(registration.poll(), Ok(Event::Heartbeat));
-    assert!(
-        !api::check_banned(config, "127.0.0.1")
-            .unwrap_or_else(|_| panic!("ban check failed"))
-            .banned
-    );
-    assert!(api::jwks(config).is_ok());
-    registration.stop().unwrap();
-    assert!(api::get_servers(config)
-        .unwrap_or_else(|_| panic!("listing failed"))
-        .servers
-        .is_empty());
+    // Docker/archive setup and Container drop stay outside async workers.
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let client = backend::transport(&url, None).unwrap();
+        let config = client.configuration();
+        let request = ServerRegistrationRequest::new(
+            Chivalry2Ports::new(7777, 7778, 7779),
+            "local-sdk-test".into(),
+            "".into(),
+            "map".into(),
+            0,
+            32,
+        );
+        let clock = TestClock(Mutex::new(Instant::now()));
+        let mut registration =
+            Registration::with_clock(client.clone(), request, Policy::default(), &clock).unwrap();
+        assert!(matches!(
+            registration.poll().await,
+            Ok(Event::Registered { .. })
+        ));
+        let listing = api::get_servers(config)
+            .await
+            .unwrap_or_else(|_| panic!("listing failed"));
+        assert_eq!(listing.servers.len(), 1);
+        registration
+            .set_update(UpdateRegisteredServer::new(2, 32, "next".into()))
+            .unwrap();
+        assert_eq!(registration.poll().await, Ok(Event::Updated));
+        let listing = api::get_servers(config)
+            .await
+            .unwrap_or_else(|_| panic!("listing failed"));
+        let server = serde_json::to_value(&listing.servers[0]).unwrap();
+        assert_eq!(server["player_count"], 2);
+        assert_eq!(server["current_map"], "next");
+        *clock.0.lock().unwrap() += Duration::from_secs(31);
+        assert_eq!(registration.poll().await, Ok(Event::Heartbeat));
+        assert!(
+            !api::check_banned(config, "127.0.0.1")
+                .await
+                .unwrap_or_else(|_| panic!("ban check failed"))
+                .banned
+        );
+        assert!(api::jwks(config).await.is_ok());
+        registration.stop().await.unwrap();
+        assert!(api::get_servers(config)
+            .await
+            .unwrap_or_else(|_| panic!("listing failed"))
+            .servers
+            .is_empty());
+    });
 }

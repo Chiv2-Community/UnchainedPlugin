@@ -2443,6 +2443,7 @@ dependencies = [
  "tar",
  "tempfile",
  "testcontainers",
+ "tokio",
  "toml 0.9.12+spec-1.1.0",
  "unchained-auth",
 ]
@@ -2772,7 +2773,6 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
- "mime_guess",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
@@ -3244,7 +3244,7 @@ dependencies = [
 [[package]]
 name = "server-browser-client"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=74e9d6ab2861109c8321156f007b3fb2596d91d9#74e9d6ab2861109c8321156f007b3fb2596d91d9"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5c79f04cdd87edef06d95aee9724b6fca8fe218b#5c79f04cdd87edef06d95aee9724b6fca8fe218b"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
@@ -3256,21 +3256,21 @@ dependencies = [
 [[package]]
 name = "server-browser-client-sdk"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=74e9d6ab2861109c8321156f007b3fb2596d91d9#74e9d6ab2861109c8321156f007b3fb2596d91d9"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5c79f04cdd87edef06d95aee9724b6fca8fe218b#5c79f04cdd87edef06d95aee9724b6fca8fe218b"
 dependencies = [
  "reqwest 0.12.28",
  "server-browser-client",
  "server-browser-models",
+ "tokio",
 ]
 
 [[package]]
 name = "server-browser-models"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=74e9d6ab2861109c8321156f007b3fb2596d91d9#74e9d6ab2861109c8321156f007b3fb2596d91d9"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5c79f04cdd87edef06d95aee9724b6fca8fe218b#5c79f04cdd87edef06d95aee9724b6fca8fe218b"
 dependencies = [
  "serde",
  "serde_json",
- "serde_repr",
  "serde_with",
 ]
 

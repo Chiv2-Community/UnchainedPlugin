@@ -15,7 +15,7 @@ path = "backend_integration.rs"
 required-features = ["container-tests"]
 
 [features]
-container-tests = ["dep:testcontainers", "dep:toml", "dep:flate2", "dep:tar", "dep:tempfile"]
+container-tests = ["dep:testcontainers", "dep:toml", "dep:flate2", "dep:tar", "dep:tempfile", "reqwest/blocking"]
 
 [dependencies]
 testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
@@ -30,3 +30,4 @@ server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
 reqwest = { workspace = true }
 serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }

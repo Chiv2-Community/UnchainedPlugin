@@ -9,12 +9,18 @@ use server_browser_client::models::{
 };
 use server_browser_client_sdk::{Event, HttpTransport, Policy, Registration as SdkRegistration};
 use std::net::IpAddr;
-use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::{mpsc, Notify};
+
+use crate::features::tokio_runtime::TOKIO_RUNTIME;
 
 use crate::globals;
 use crate::tools::hook_globals::cli_args;
+
+#[path = "registration_control.rs"]
+mod registration_control;
+use registration_control::{Command, TaskState};
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_RETRIES: u8 = 3;
@@ -32,26 +38,18 @@ fn format_host_port(host: &str, port: u16) -> String {
     }
 }
 
-#[derive(Debug, Default)]
-struct WorkerState {
-    stopping: bool,
-    update_requested: bool,
-}
-
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
 pub struct Registration {
-    inner: Arc<RegistrationInner>,
-    handle: Mutex<Option<thread::JoinHandle<()>>>,
+    commands: mpsc::UnboundedSender<Command>,
+    update: Arc<Notify>,
+    _task: tokio::task::JoinHandle<()>,
 }
 
 #[derive(Debug)]
 struct RegistrationInner {
     server_addr: String,
     local_ip_address: Option<String>,
-    state: Mutex<WorkerState>,
-    registration: Mutex<Option<SdkRegistration<HttpTransport>>>,
-    cvar: Condvar,
     backend: HttpTransport,
 }
 
@@ -134,125 +132,148 @@ impl Registration {
         )
         .expect("Failed to construct bounded server-browser client");
 
+        let inner = RegistrationInner {
+            server_addr: format_host_port(ip, query_port),
+            local_ip_address: advertised_local_ip,
+            backend,
+        };
+        let (commands, receiver) = mpsc::unbounded_channel();
+        let update = Arc::new(Notify::new());
+        let wake = Arc::clone(&update);
+        let task = TOKIO_RUNTIME.spawn(async move { inner.run(receiver, wake).await });
         Self {
-            inner: Arc::new(RegistrationInner {
-                server_addr: format_host_port(ip, query_port),
-                local_ip_address: advertised_local_ip,
-                state: Mutex::new(WorkerState::default()),
-                registration: Mutex::new(None),
-                cvar: Condvar::new(),
-                backend,
-            }),
-            handle: Mutex::new(None),
+            commands,
+            update,
+            _task: task,
         }
     }
 
-    /// Spawn one worker; a paused SDK manager retains its existing identity.
+    /// Resume the single task, retaining the paused SDK identity.
     pub fn start(self: Arc<Self>) {
-        let mut handle = self.handle.lock().unwrap();
-        if handle.is_some() {
-            return;
-        }
-        *self.inner.state.lock().unwrap() = WorkerState::default();
-        let inner = Arc::clone(&self.inner);
-        *handle = Some(thread::spawn(move || {
-            inner.run_reg_worker();
-        }));
+        let _ = self.commands.send(Command::Start);
     }
 
     /// Forces the worker to wake up and perform an update (e.g., on map change).
     pub fn trigger_update(&self) {
-        self.inner.state.lock().unwrap().update_requested = true;
-        self.inner.cvar.notify_all();
+        self.update.notify_one();
     }
 
-    /// Stops the worker thread and optionally deregisters from the backend.
+    /// Queue pause/cleanup without blocking a native hook or runtime worker.
+    /// Any in-flight request completes before cleanup; cleanup is one-shot.
     pub fn stop(&self, deregister: bool) {
-        // Serialize start/stop through the join so two workers cannot coexist.
-        let mut handle = self.handle.lock().unwrap();
-        {
-            let mut state = self.inner.state.lock().unwrap();
-            state.stopping = true;
-        }
-        self.inner.cvar.notify_all();
-
-        if let Some(handle) = handle.take() {
-            let _ = handle.join();
-        }
-
-        if deregister {
-            if let Some(mut registration) = self.inner.registration.lock().unwrap().take() {
-                if let Err(error) = registration.stop() {
-                    swarn!("Server-browser cleanup failed: {}", error);
-                }
-            }
-        }
+        let _ = self.commands.send(if deregister {
+            Command::Cleanup
+        } else {
+            Command::Pause
+        });
     }
 }
 
 impl RegistrationInner {
-    fn run_reg_worker(&self) {
-        let a2s = A2SClient::new().expect("Failed to create A2S Client");
-        let mut registration = self.registration.lock().unwrap().take();
-        while !self.is_stopping() {
-            let status = match self.poll_a2s_with_retry(&a2s) {
-                Ok(info) => {
-                    let (request, status) = self.metadata(&info);
-                    if let Some(registration) = registration.as_mut() {
-                        if let Err(error) = registration.set_update(UpdateRegisteredServer {
-                            player_count: request.player_count,
-                            max_players: request.max_players,
-                            current_map: request.current_map,
-                            mods: request.mods,
-                        }) {
-                            swarn!("Server-browser lifecycle halted: {}", error);
-                            break;
+    async fn run(self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>) {
+        let mut registration: Option<SdkRegistration<HttpTransport>> = None;
+        let mut state = TaskState::default();
+        let mut pending = None;
+        loop {
+            // One owner orders pause/resume/cleanup after in-flight HTTP. Never
+            // cancel a registration POST and risk creating a second identity.
+            let command = if let Some(command) = pending.take() {
+                command
+            } else if !state.active() {
+                commands.recv().await
+            } else {
+                match commands.try_recv() {
+                    Ok(command) => Some(command),
+                    Err(mpsc::error::TryRecvError::Disconnected) => None,
+                    Err(mpsc::error::TryRecvError::Empty) => {
+                        // Metadata and SDK polling below are serialized too.
+                        let status = match self.poll_a2s_with_retry(&mut commands).await {
+                            Ok(info) => {
+                                let (request, status) = self.metadata(&info);
+                                if let Some(registration) = registration.as_mut() {
+                                    if let Err(error) =
+                                        registration.set_update(UpdateRegisteredServer {
+                                            player_count: request.player_count,
+                                            max_players: request.max_players,
+                                            current_map: request.current_map,
+                                            mods: request.mods,
+                                        })
+                                    {
+                                        swarn!("Server-browser lifecycle halted: {}", error);
+                                        state.halt();
+                                        continue;
+                                    }
+                                } else {
+                                    registration = Some(
+                                        SdkRegistration::new(
+                                            self.backend.clone(),
+                                            request,
+                                            Policy::default(),
+                                        )
+                                        .expect("Invalid default registration policy"),
+                                    );
+                                }
+                                Some(status)
+                            }
+                            Err(()) => None,
+                        };
+                        // A pause/cleanup arriving during A2S must precede new HTTP.
+                        if !commands.is_empty() || commands.is_closed() {
+                            continue;
                         }
-                    } else {
-                        registration = Some(
-                            SdkRegistration::new(self.backend.clone(), request, Policy::default())
-                                .expect("Invalid default registration policy"),
-                        );
+                        if let Some(registration) = registration.as_mut() {
+                            match registration.poll().await {
+                                Ok(Event::Registered { server_id }) => {
+                                    sinfo!("Registered server-browser identity: {}", server_id);
+                                    if let Some(status) = status {
+                                        EVENT_SYSTEM
+                                            .game_event_publisher
+                                            .publish(GameEvent::ServerStatusEvent(status));
+                                    }
+                                }
+                                Ok(Event::RegistrationLost) => {
+                                    swarn!(
+                                        "Server-browser registration expired; SDK will re-register"
+                                    )
+                                }
+                                Ok(Event::RetryScheduled(delay)) => {
+                                    swarn!("Server-browser retry in {}s", delay.as_secs())
+                                }
+                                Ok(_) => {}
+                                Err(error) => {
+                                    // Preserve the halted manager: never turn an uncertain
+                                    // registration response into a fresh registration loop.
+                                    swarn!("Server-browser lifecycle halted: {}", error);
+                                    state.halt();
+                                    continue;
+                                }
+                            }
+                        }
+                        let delay = registration
+                            .as_ref()
+                            .and_then(SdkRegistration::next_delay)
+                            .unwrap_or(METADATA_POLL_INTERVAL);
+                        tokio::select! {
+                            biased;
+                            command = commands.recv() => { pending = Some(command); },
+                            _ = update.notified() => {},
+                            _ = tokio::time::sleep(delay.min(METADATA_POLL_INTERVAL)) => {},
+                        }
+                        continue;
                     }
-                    Some(status)
                 }
-                Err(()) => None,
             };
-            if self.is_stopping() {
+            if state.apply(command.unwrap_or(Command::Cleanup)) {
+                if let Some(registration) = registration.as_mut() {
+                    if let Err(error) = registration.stop().await {
+                        swarn!("Server-browser cleanup failed: {}", error);
+                    }
+                }
+            }
+            if command.is_none() {
                 break;
             }
-            if let Some(registration) = registration.as_mut() {
-                match registration.poll() {
-                    Ok(Event::Registered { server_id }) => {
-                        sinfo!("Registered server-browser identity: {}", server_id);
-                        if let Some(status) = status {
-                            EVENT_SYSTEM
-                                .game_event_publisher
-                                .publish(GameEvent::ServerStatusEvent(status));
-                        }
-                    }
-                    Ok(Event::RegistrationLost) => {
-                        swarn!("Server-browser registration expired; SDK will re-register")
-                    }
-                    Ok(Event::RetryScheduled(delay)) => {
-                        swarn!("Server-browser retry in {}s", delay.as_secs())
-                    }
-                    Ok(_) => {}
-                    Err(error) => {
-                        // Preserve the halted manager: never turn an uncertain
-                        // registration response into a fresh registration loop.
-                        swarn!("Server-browser lifecycle halted: {}", error);
-                        break;
-                    }
-                }
-            }
-            let delay = registration
-                .as_ref()
-                .and_then(SdkRegistration::next_delay)
-                .unwrap_or(METADATA_POLL_INTERVAL);
-            self.wait_interruptible(delay.min(METADATA_POLL_INTERVAL));
         }
-        *self.registration.lock().unwrap() = registration;
     }
 
     fn metadata(&self, info: &Info) -> (ServerRegistrationRequest, ServerStatus) {
@@ -281,8 +302,7 @@ impl RegistrationInner {
         let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
 
         let server_name =
-            match args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
-            {
+            match args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
                 Some(name_str) => name_str,
                 _ => &info.name,
             };
@@ -341,38 +361,34 @@ impl RegistrationInner {
         }
     }
 
-    fn poll_a2s_with_retry(&self, a2s: &A2SClient) -> Result<a2s::info::Info, ()> {
+    async fn poll_a2s_with_retry(
+        &self,
+        commands: &mut mpsc::UnboundedReceiver<Command>,
+    ) -> Result<Info, ()> {
         for i in 0..A2S_RETRIES {
-            if self.is_stopping() {
+            if !commands.is_empty() || commands.is_closed() {
                 return Err(());
             }
-            match a2s.info(&self.server_addr) {
-                Ok(info) => return Ok(info),
-                Err(e) => {
+            let address = self.server_addr.clone();
+            // The external A2S client uses bounded five-second socket IO.
+            // Await the job even on pause: detached timed-out jobs could pile up.
+            let result = tokio::task::spawn_blocking(move || {
+                let client = A2SClient::new()?;
+                client.info(&address)
+            })
+            .await;
+            match result {
+                Ok(Ok(info)) => return Ok(info),
+                error => {
                     if i == A2S_RETRIES - 1 {
-                        serror!("A2S failed after {} attempts: {}", A2S_RETRIES, e);
+                        serror!("A2S failed after {} attempts: {:?}", A2S_RETRIES, error);
                         return Err(());
                     }
-                    self.wait_interruptible(Duration::from_millis(500));
+                    tokio::time::sleep(Duration::from_millis(500)).await;
                 }
             }
         }
         Err(())
-    }
-
-    fn wait_interruptible(&self, duration: Duration) {
-        let state = self.state.lock().unwrap();
-        let (mut state, _) = self
-            .cvar
-            .wait_timeout_while(state, duration, |state| {
-                !state.stopping && !state.update_requested
-            })
-            .unwrap();
-        state.update_requested = false;
-    }
-
-    fn is_stopping(&self) -> bool {
-        self.state.lock().unwrap().stopping
     }
 }
 

@@ -51,11 +51,15 @@ fn resolve_player_display_name(options: &str) -> String {
 
 fn is_user_banned(addr: &str) -> bool {
     sinfo!("Checking Unchained ban status for player");
-    let response = crate::backend::transport(
-        cli_args().server_browser_backend.as_deref().unwrap_or_default(), None,
-    ).ok().and_then(|client| server_browser_client::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
+    let response = std::panic::catch_unwind(|| {
+        crate::backend::check_banned_sync(
+            cli_args().server_browser_backend.as_deref().unwrap_or_default(),
+            addr,
+            &crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE,
+        )
+    }).ok().flatten();
     match response {
-        Some(result) => result.banned,
+        Some(banned) => banned,
         None => {
             swarn!("Ban check failed (legacy banlist remains fail-open)");
             false
