@@ -26,6 +26,7 @@ tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 unchained-auth = { path = "../../crates/unchained-auth" }
+test-case = { workspace = true }
 a2s = { workspace = true }
 server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
