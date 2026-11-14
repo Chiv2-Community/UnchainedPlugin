@@ -1065,13 +1065,17 @@ components:
           enum: [unchained.join]
         auth_time:
           type: integer
+          format: int64
           description: Original Discord authentication time; refresh never advances it.
         iat:
           type: integer
+          format: int64
         nbf:
           type: integer
+          format: int64
         exp:
           type: integer
+          format: int64
           description: At most 60 seconds after issuance.
         jti:
           type: string
