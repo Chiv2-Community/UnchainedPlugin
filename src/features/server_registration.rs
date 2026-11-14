@@ -10,7 +10,7 @@ use server_browser_client::models::{
 use server_browser_client_sdk::{
     Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
 };
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv6Addr};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Notify};
@@ -45,7 +45,6 @@ fn format_host_port(host: &str, port: u16) -> String {
 pub struct Registration {
     commands: mpsc::UnboundedSender<Command>,
     update: Arc<Notify>,
-    _task: tokio::task::JoinHandle<()>,
 }
 
 #[derive(Debug)]
@@ -56,7 +55,7 @@ struct RegistrationWorker {
     registration: Option<SdkRegistration<HttpTransport>>,
 }
 
-fn discover_global_ipv6() -> Option<String> {
+fn discover_global_ipv6() -> Option<Ipv6Addr> {
     // The game may run inside a container/Wine namespace where interface
     // enumeration does not expose the host's global address. The launcher
     // therefore supplies SERVER_ADVERTISE_IP as the preferred stable source;
@@ -66,11 +65,7 @@ fn discover_global_ipv6() -> Option<String> {
             return None;
         };
         let ip = address.ip;
-        if ip.is_unicast_global() {
-            Some(ip.to_string())
-        } else {
-            None
-        }
+        ip.is_unicast_global().then_some(ip)
     })
 }
 
@@ -80,23 +75,20 @@ impl Registration {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
-        let selected_source_ip = if use_ipv6 {
+        let bind_address = if use_ipv6 {
             match local_ip {
-                Some(address) => address.to_string(),
+                Some(address) => address.parse::<Ipv6Addr>().ok(),
                 None => std::env::var("SERVER_ADVERTISE_IP")
                     .ok()
-                    .and_then(|configured| match configured.parse::<IpAddr>() {
-                        Ok(IpAddr::V6(_)) => Some(configured),
-                        _ => None,
-                    })
+                    .and_then(|configured| configured.parse::<Ipv6Addr>().ok())
                     .or_else(discover_global_ipv6)
-                    .unwrap_or_else(|| {
-                        swarn!("--use-ipv6 could not discover or obtain SERVER_ADVERTISE_IP; using 127.0.0.1");
-                        "127.0.0.1".to_string()
+                    .or_else(|| {
+                        swarn!("--use-ipv6 could not discover or obtain SERVER_ADVERTISE_IP; using the OS-selected source");
+                        None
                     }),
             }
         } else {
-            local_ip.map(str::to_string).unwrap_or_default()
+            None
         };
 
         if let Some(address) = advertised_local_ip.as_deref() {
@@ -104,21 +96,12 @@ impl Registration {
                 "Advertising server-browser registration with local address {}",
                 address
             );
-        } else if use_ipv6 {
+        } else if let Some(address) = bind_address {
             sinfo!(
                 "Using discovered IPv6 source {} without advertising local_ip_address",
-                selected_source_ip
+                address
             );
         }
-
-        let bind_address = if use_ipv6 {
-            match selected_source_ip.parse::<IpAddr>() {
-                Ok(IpAddr::V6(address)) => Some(IpAddr::V6(address)),
-                _ => None,
-            }
-        } else {
-            None
-        };
 
         if let Some(address) = bind_address {
             sinfo!(
@@ -131,7 +114,7 @@ impl Registration {
                 .server_browser_backend
                 .as_deref()
                 .unwrap_or_default(),
-            bind_address,
+            bind_address.map(IpAddr::V6),
         )
         .expect("Failed to construct bounded server-browser client");
 
@@ -143,17 +126,14 @@ impl Registration {
         };
         let (commands, receiver) = mpsc::unbounded_channel();
         let update = Arc::new(Notify::new());
-        let wake = Arc::clone(&update);
-        let task = TOKIO_RUNTIME.spawn(worker.run(receiver, wake));
-        Self {
-            commands,
-            update,
-            _task: task,
-        }
+        // Closing the command channel drives cleanup; dropping the task handle
+        // detaches it rather than aborting an in-flight registration request.
+        drop(TOKIO_RUNTIME.spawn(worker.run(receiver, Arc::clone(&update))));
+        Self { commands, update }
     }
 
     /// Resume the single task, retaining the paused SDK identity.
-    pub fn start(self: Arc<Self>) {
+    pub fn start(&self) {
         let _ = self.commands.send(Command::Start);
     }
 
