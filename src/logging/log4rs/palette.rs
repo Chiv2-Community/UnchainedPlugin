@@ -123,6 +123,7 @@ impl PaletteEncoderConfig {
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
             ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
             ("module", Some([190, 157, 92])),
+            ("client_message", Some([215, 160, 223])),
             ("team_discord", Some([181, 140, 255])), ("team_system", Some([140, 216, 225])),
             ("team_agatha", Some([140, 180, 225])), ("team_mason", Some([242, 139, 130])),
             ("team_tenosia", Some([208, 145, 40])),
