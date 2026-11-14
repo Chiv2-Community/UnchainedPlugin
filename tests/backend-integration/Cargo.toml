@@ -25,6 +25,7 @@ tar = { version = "0.4", optional = true }
 tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
+unchained-auth = { path = "../../crates/unchained-auth" }
 server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
 reqwest = { workspace = true }

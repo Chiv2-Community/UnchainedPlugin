@@ -4,11 +4,11 @@ version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
+members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/backend-integration"]
 
 [workspace.dependencies]
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "74e9d6ab2861109c8321156f007b3fb2596d91d9" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "74e9d6ab2861109c8321156f007b3fb2596d91d9" }
 reqwest = { version = "0.12.19", features = ["blocking", "json"] }
 
 [[bin]]
