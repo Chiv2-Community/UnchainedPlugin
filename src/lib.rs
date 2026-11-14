@@ -507,7 +507,7 @@ pub fn world_init() {
                 Some(args.local_ip.as_str())
             };
             let reg = Arc::new(Registration::new(
-                "127.0.0.1",
+                std::net::Ipv4Addr::LOCALHOST.into(),
                 query_port,
                 advertised_local_ip,
                 args.use_ipv6,

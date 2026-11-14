@@ -4,9 +4,9 @@ use a2s::{
     info::Info,
     A2SClient,
 };
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
-pub(super) async fn query(address: &str) -> Result<Info> {
+pub(super) async fn query(address: SocketAddr) -> Result<Info> {
     let client = A2SClient::new().await?;
     tokio::time::timeout(Duration::from_secs(5), client.info(address))
         .await

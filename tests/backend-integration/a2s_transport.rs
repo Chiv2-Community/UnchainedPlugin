@@ -8,14 +8,14 @@ const INFO: &[u8] =
 #[tokio::test]
 async fn decodes_info_without_blocking_the_runtime() {
     let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-    let address = server.local_addr().unwrap().to_string();
+    let address = server.local_addr().unwrap();
     let responder = tokio::spawn(async move {
         let mut request = [0; 64];
         let (_, peer) = server.recv_from(&mut request).await.unwrap();
         assert!(request.starts_with(b"\xff\xff\xff\xffTSource Engine Query\0"));
         server.send_to(INFO, peer).await.unwrap();
     });
-    let info = a2s_query::query(&address).await.unwrap();
+    let info = a2s_query::query(address).await.unwrap();
     assert_eq!(info.name, "Test");
     assert_eq!(info.map, "Map");
     assert_eq!(info.players, 2);
@@ -26,7 +26,7 @@ async fn decodes_info_without_blocking_the_runtime() {
 #[tokio::test]
 async fn answers_server_challenges() {
     let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-    let address = server.local_addr().unwrap().to_string();
+    let address = server.local_addr().unwrap();
     let responder = tokio::spawn(async move {
         let mut request = [0; 64];
         let (_, peer) = server.recv_from(&mut request).await.unwrap();
@@ -38,21 +38,21 @@ async fn answers_server_challenges() {
         assert!(request[..length].ends_with(&[1, 2, 3, 4]));
         server.send_to(INFO, peer).await.unwrap();
     });
-    assert_eq!(a2s_query::query(&address).await.unwrap().name, "Test");
+    assert_eq!(a2s_query::query(address).await.unwrap().name, "Test");
     responder.await.unwrap();
 }
 
 #[tokio::test]
 async fn rejects_malformed_replies() {
     let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-    let address = server.local_addr().unwrap().to_string();
+    let address = server.local_addr().unwrap();
     let responder = tokio::spawn(async move {
         let mut request = [0; 64];
         let (_, peer) = server.recv_from(&mut request).await.unwrap();
         server.send_to(b"\xff\xff\xff\xff?", peer).await.unwrap();
     });
     assert!(matches!(
-        a2s_query::query(&address).await,
+        a2s_query::query(address).await,
         Err(Error::InvalidResponse)
     ));
     responder.await.unwrap();
@@ -61,8 +61,8 @@ async fn rejects_malformed_replies() {
 #[tokio::test]
 async fn bounds_silent_queries_to_five_seconds() {
     let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-    let address = server.local_addr().unwrap().to_string();
-    let query = tokio::spawn(async move { a2s_query::query(&address).await });
+    let address = server.local_addr().unwrap();
+    let query = tokio::spawn(a2s_query::query(address));
     let mut request = [0; 64];
     server.recv_from(&mut request).await.unwrap();
     tokio::time::pause();
