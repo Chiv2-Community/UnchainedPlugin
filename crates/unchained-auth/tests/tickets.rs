@@ -241,28 +241,58 @@ fn key_replacement_preserves_replay_and_failed_replacement_preserves_keys() {
 }
 
 #[test]
-fn bounds_untrusted_inputs_and_configuration() {
-    for issuer in [
-        "http://auth.test",
-        "https://user:pass@auth.test",
-        "https://auth.test?query",
-        "https://auth.test#fragment",
-    ] {
-        assert!(TicketVerifier::new(issuer, SERVER, &material().1, 1).is_err());
-    }
-    assert!(TicketVerifier::new(ISSUER, "invalid", &material().1, 1).is_err());
-    for capacity in [0, 65537] {
-        assert!(TicketVerifier::new(ISSUER, SERVER, &material().1, capacity).is_err());
-    }
-    assert!(TicketVerifier::new(ISSUER, SERVER, &vec![b' '; 65537], 1).is_err());
-    for ticket in ["".to_owned(), "a".repeat(4097), "not.a.ticket".to_owned()] {
-        assert_eq!(
-            verifier(1).verify_and_consume(&ticket, NOW),
-            Err(AuthError::InvalidTicket)
-        );
-    }
-    let mut jwks: Value = serde_json::from_slice(&material().1).unwrap();
+fn rejects_invalid_configuration() {
+    let keys = material().1.as_slice();
+    let oversized = vec![b' '; 65537];
+    let mut jwks: Value = serde_json::from_slice(keys).unwrap();
     let key = jwks["keys"][0].clone();
     jwks["keys"] = json!([key.clone(), key]);
-    assert!(TicketVerifier::new(ISSUER, SERVER, &serde_json::to_vec(&jwks).unwrap(), 1).is_err());
+    let duplicates = serde_json::to_vec(&jwks).unwrap();
+
+    for (name, issuer, server, capacity, jwks) in [
+        ("HTTP issuer", "http://auth.test", SERVER, 1, keys),
+        (
+            "issuer credentials",
+            "https://user:pass@auth.test",
+            SERVER,
+            1,
+            keys,
+        ),
+        ("issuer query", "https://auth.test?query", SERVER, 1, keys),
+        (
+            "issuer fragment",
+            "https://auth.test#fragment",
+            SERVER,
+            1,
+            keys,
+        ),
+        ("server ID", ISSUER, "invalid", 1, keys),
+        ("zero capacity", ISSUER, SERVER, 0, keys),
+        ("oversized capacity", ISSUER, SERVER, 65537, keys),
+        ("oversized JWKS", ISSUER, SERVER, 1, oversized.as_slice()),
+        ("duplicate key", ISSUER, SERVER, 1, duplicates.as_slice()),
+    ] {
+        assert!(
+            matches!(
+                TicketVerifier::new(issuer, server, jwks, capacity),
+                Err(AuthError::Configuration)
+            ),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn rejects_malformed_tickets() {
+    for (name, ticket) in [
+        ("empty", String::new()),
+        ("oversized", "a".repeat(4097)),
+        ("invalid encoding", "not.a.ticket".to_owned()),
+    ] {
+        assert_eq!(
+            verifier(1).verify_and_consume(&ticket, NOW),
+            Err(AuthError::InvalidTicket),
+            "{name}"
+        );
+    }
 }
