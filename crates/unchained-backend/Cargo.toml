@@ -5,7 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "0149b1a049c6d9c8101ef9eaa64ba031388787c8" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 [dev-dependencies]

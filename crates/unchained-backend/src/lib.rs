@@ -3,6 +3,7 @@ use std::{net::IpAddr, time::Duration};
 
 use apis::configuration::Configuration;
 pub use server_browser_client::{apis, models};
+pub use server_browser_client_sdk as lifecycle;
 
 #[derive(Clone)]
 pub struct BackendClient(Configuration);
@@ -36,8 +37,8 @@ impl BackendClient {
     pub fn configuration(&self) -> &Configuration {
         &self.0
     }
-}
 
-pub fn invalidates_registration<E>(error: &apis::Error<E>) -> bool {
-    matches!(error, apis::Error::ResponseError(response) if matches!(response.status.as_u16(), 401 | 403 | 404))
+    pub fn registration_transport(&self) -> lifecycle::HttpTransport {
+        lifecycle::HttpTransport::from_configuration(self.0.clone())
+    }
 }

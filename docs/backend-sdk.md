@@ -5,8 +5,14 @@ generation checks and SDK releases. This plugin consumes an exact backend Git
 revision; it does not generate or carry a second contract copy.
 
 `unchained-backend` supplies plugin transport policy: deadlines, redirect
-suppression, source-IP binding and safe debug output. Registration, update,
-heartbeat, deletion and typed ban checks use generated operations. Legacy ban
+suppression, source-IP binding and safe debug output. The backend-owned
+`server-browser-client-sdk` manages registration identity, updates, heartbeat
+scheduling, bounded retries and deletion over generated bindings. The plugin
+only collects A2S/game metadata, chooses addresses and owns the worker thread.
+It polls metadata every five seconds; updates do not bypass SDK retry backoff.
+Pausing retains the SDK manager; deregistration calls SDK cleanup. Ambiguous
+registration responses halt rather than creating duplicate registrations.
+Typed ban checks use generated operations. Legacy ban
 checks remain fail-open. Engine-owned HTTP interception remains in engine hooks.
 
 ```sh

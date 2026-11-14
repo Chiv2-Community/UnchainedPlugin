@@ -5,8 +5,10 @@ use std::{
 };
 
 use unchained_backend::{
-    apis::{self, api_v1_api},
-    invalidates_registration, BackendClient,
+    apis::api_v1_api,
+    lifecycle::{Policy, Registration, SdkError},
+    models::{Chivalry2Ports, ServerRegistrationRequest},
+    BackendClient,
 };
 
 fn serve(response: String) -> (String, thread::JoinHandle<String>) {
@@ -58,18 +60,26 @@ fn credentials_never_follow_redirects_and_debug_redacts_url() {
 }
 
 #[test]
-fn only_authentication_or_missing_registration_responses_invalidate_identity() {
-    for code in 100..=599 {
-        let error: apis::Error<()> = apis::Error::ResponseError(apis::ResponseContent {
-            status: reqwest::StatusCode::from_u16(code).unwrap(),
-            content: String::new(),
-            entity: None,
-        });
-        assert_eq!(
-            invalidates_registration(&error),
-            [401, 403, 404].contains(&code)
-        );
-    }
+fn sdk_transport_uses_plugin_policy_and_halts_ambiguous_registration() {
+    let (url, worker) = serve("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/stolen\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into());
+    let client = BackendClient::new(&url, None).unwrap();
+    let request = ServerRegistrationRequest::new(
+        Chivalry2Ports::new(7777, 7778, 7779),
+        "server".into(),
+        "test".into(),
+        "map".into(),
+        0,
+        32,
+    );
+    let mut registration =
+        Registration::new(client.registration_transport(), request, Policy::default()).unwrap();
+    assert_eq!(registration.poll(), Err(SdkError::RegistrationUncertain));
+    assert_eq!(registration.poll(), Err(SdkError::RegistrationUncertain));
+    let request = worker.join().unwrap();
+    assert!(request.starts_with("POST /api/v1/servers "));
+    assert!(request
+        .to_lowercase()
+        .contains("user-agent: unchainedplugin/server-browser-api"));
 }
 
 #[test]

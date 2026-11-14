@@ -2672,7 +2672,7 @@ dependencies = [
 [[package]]
 name = "server-browser-client"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=0149b1a049c6d9c8101ef9eaa64ba031388787c8#0149b1a049c6d9c8101ef9eaa64ba031388787c8"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=6167869b1e371ae632a079d4efc8dad36b303bd2#6167869b1e371ae632a079d4efc8dad36b303bd2"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
@@ -2682,9 +2682,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "server-browser-client-sdk"
+version = "1.0.0"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=6167869b1e371ae632a079d4efc8dad36b303bd2#6167869b1e371ae632a079d4efc8dad36b303bd2"
+dependencies = [
+ "reqwest 0.12.28",
+ "server-browser-client",
+ "server-browser-models",
+]
+
+[[package]]
 name = "server-browser-models"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=0149b1a049c6d9c8101ef9eaa64ba031388787c8#0149b1a049c6d9c8101ef9eaa64ba031388787c8"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=6167869b1e371ae632a079d4efc8dad36b303bd2#6167869b1e371ae632a079d4efc8dad36b303bd2"
 dependencies = [
  "serde",
  "serde_json",
@@ -3313,6 +3323,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde_json",
  "server-browser-client",
+ "server-browser-client-sdk",
 ]
 
 [[package]]
