@@ -42,45 +42,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pause_resume_does_not_cleanup() {
-        let mut state = TaskState::default();
-        assert!(!state.active());
-        assert!(state.apply(Command::Start).is_continue());
-        assert!(state.active());
-        assert!(state.apply(Command::Pause).is_continue());
-        assert!(!state.active());
-        assert!(state.apply(Command::Start).is_continue());
-        assert!(state.active());
-    }
+    fn command_transitions() {
+        use Command::*;
+        use TaskState::*;
 
-    #[test]
-    fn start_cannot_revive_halted_manager() {
-        let mut state = TaskState::default();
-        assert!(state.apply(Command::Start).is_continue());
-        state.halt();
-        assert!(state.apply(Command::Pause).is_continue());
-        assert!(state.apply(Command::Start).is_continue());
-        assert!(!state.active());
-        assert_eq!(state, TaskState::Halted);
-    }
-
-    #[test]
-    fn cleanup_exits_from_every_state() {
-        for mut state in [TaskState::Paused, TaskState::Running, TaskState::Halted] {
-            assert!(state.apply(Command::Cleanup).is_break());
+        assert_eq!(TaskState::default(), Paused);
+        for (mut state, command, expected, exits) in [
+            (Paused, Start, Running, false),
+            (Paused, Pause, Paused, false),
+            (Paused, Cleanup, Paused, true),
+            (Running, Start, Running, false),
+            (Running, Pause, Paused, false),
+            (Running, Cleanup, Running, true),
+            (Halted, Start, Halted, false),
+            (Halted, Pause, Halted, false),
+            (Halted, Cleanup, Halted, true),
+        ] {
+            let case = format!("{state:?} + {command:?}");
+            assert_eq!(state.apply(command).is_break(), exits, "{case}");
+            assert_eq!(state.active(), expected == Running, "{case}");
+            assert_eq!(state, expected, "{case}");
         }
     }
 
     #[test]
-    fn repeated_start_and_pause_are_idempotent() {
-        let mut state = TaskState::default();
-        assert!(state.apply(Command::Pause).is_continue());
-        assert_eq!(state, TaskState::Paused);
-        assert!(state.apply(Command::Start).is_continue());
-        assert!(state.apply(Command::Start).is_continue());
-        assert_eq!(state, TaskState::Running);
-        assert!(state.apply(Command::Pause).is_continue());
-        assert!(state.apply(Command::Pause).is_continue());
-        assert_eq!(state, TaskState::Paused);
+    fn halt_is_terminal_from_every_state() {
+        for mut state in [TaskState::Paused, TaskState::Running, TaskState::Halted] {
+            let case = format!("halt {state:?}");
+            state.halt();
+            assert!(!state.active(), "{case}");
+            assert_eq!(state, TaskState::Halted, "{case}");
+        }
     }
 }
