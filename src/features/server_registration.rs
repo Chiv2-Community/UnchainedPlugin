@@ -2,7 +2,6 @@ use crate::events::models::{GameEvent, ServerStatus};
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::Mod;
 use a2s::info::Info;
-use a2s::A2SClient;
 use get_if_addrs::{get_if_addrs, IfAddr};
 use server_browser_client::models::{
     Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
@@ -20,6 +19,8 @@ use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::globals;
 use crate::tools::hook_globals::cli_args;
 
+#[path = "a2s_query.rs"]
+mod a2s_query;
 #[path = "registration_control.rs"]
 mod registration_control;
 use registration_control::{Command, TaskState};
@@ -353,7 +354,7 @@ impl RegistrationWorker {
             if !commands.is_empty() || commands.is_closed() {
                 return None;
             }
-            match self.query_a2s().await {
+            match a2s_query::query(&self.server_addr).await {
                 Ok(info) => return Some(info),
                 Err(error) => {
                     if i == A2S_RETRIES - 1 {
@@ -365,17 +366,6 @@ impl RegistrationWorker {
             }
         }
         None
-    }
-
-    async fn query_a2s(&self) -> a2s::errors::Result<Info> {
-        let address = self.server_addr.clone();
-        // Await the bounded socket IO even on pause; never detach retry jobs.
-        tokio::task::spawn_blocking(move || {
-            let client = A2SClient::new()?;
-            client.info(&address)
-        })
-        .await
-        .map_err(std::io::Error::other)?
     }
 }
 
