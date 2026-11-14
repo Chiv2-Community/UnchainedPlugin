@@ -50,22 +50,14 @@ fn resolve_player_display_name(options: &str) -> String {
 }
 
 fn is_user_banned(addr: &str) -> bool {
-    let mut suffix = "/api/v1/check-banned/".to_string();
-    suffix.push_str(addr);
-    let url = backend_url!(suffix);
     sinfo!("Checking Unchained ban status for player");
-    let response = ureq::get(&url.to_string()).call();
-
+    let response = crate::backend::transport(
+        cli_args().server_browser_backend.as_deref().unwrap_or_default(), None,
+    ).ok().and_then(|client| server_browser_client::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
     match response {
-        Ok(res) => match res.into_body().read_to_string() {
-            Ok(body_str) => body_str.contains("true"),
-            Err(error) => {
-                swarn!("Failed to read ban-check response for player: {:?}", error);
-                false
-            }
-        },
-        Err(e) => {
-            sinfo!("Ban check failed: {:?}", e);
+        Some(result) => result.banned,
+        None => {
+            swarn!("Ban check failed (legacy banlist remains fail-open)");
             false
         }
     }

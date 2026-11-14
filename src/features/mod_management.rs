@@ -501,7 +501,7 @@ impl ModManager {
 
         if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
             let _ = self.scan_active_mod_actors();
-            reg.set_mods(self.get_active_mod_metadata());
+            reg.trigger_update();
         }
     }
 

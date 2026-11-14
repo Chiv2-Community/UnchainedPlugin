@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  backend-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
+        with:
+          cache: false
+          rustflags: -D warnings
+          build-warnings: ''
+      - name: Test backend transport and container integration
+        run: cargo test --locked -p plugin-backend-integration-tests --features container-tests
+
   validate-plugin:
     runs-on: ubuntu-latest
     permissions:

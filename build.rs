@@ -3,6 +3,10 @@ extern crate winres;
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
         let mut res = winres::WindowsResource::new();
+        println!("cargo:rerun-if-env-changed=WINRES_TOOLKIT_PATH");
+        if let Ok(toolkit) = std::env::var("WINRES_TOOLKIT_PATH") {
+            res.set_toolkit_path(&toolkit);
+        }
         
         let version = env!("CARGO_PKG_VERSION");
         let mut components = version.split('.').fuse();

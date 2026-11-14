@@ -1,0 +1,31 @@
+[package]
+name = "plugin-backend-integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Test-only harness: no adapter library and no runtime consumers.
+[[test]]
+name = "backend_transport"
+path = "backend_transport.rs"
+
+[[test]]
+name = "backend_integration"
+path = "backend_integration.rs"
+required-features = ["container-tests"]
+
+[features]
+container-tests = ["dep:testcontainers", "dep:toml", "dep:flate2", "dep:tar", "dep:tempfile"]
+
+[dependencies]
+testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
+toml = { version = "0.9", optional = true }
+flate2 = { version = "1", optional = true }
+tar = { version = "0.4", optional = true }
+tempfile = { version = "3", optional = true }
+
+[dev-dependencies]
+server-browser-client = { workspace = true }
+server-browser-client-sdk = { workspace = true }
+reqwest = { workspace = true }
+serde_json = "1"
