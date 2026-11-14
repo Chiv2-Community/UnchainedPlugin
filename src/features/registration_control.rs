@@ -6,33 +6,37 @@ pub(super) enum Command {
     Cleanup,
 }
 
-#[derive(Default)]
-pub(super) struct TaskState {
-    running: bool,
-    halted: bool,
-    cleaned: bool,
+#[derive(Default, PartialEq, Eq)]
+pub(super) enum TaskState {
+    #[default]
+    Paused,
+    Running,
+    Halted,
+    Cleaned,
 }
 
 impl TaskState {
     pub(super) fn active(&self) -> bool {
-        self.running && !self.halted && !self.cleaned
+        *self == Self::Running
     }
 
     /// Returns true exactly once when cleanup is requested.
     pub(super) fn apply(&mut self, command: Command) -> bool {
         match command {
-            Command::Start => self.running = true,
-            Command::Pause => self.running = false,
+            Command::Start if *self == Self::Paused => *self = Self::Running,
+            Command::Pause if *self == Self::Running => *self = Self::Paused,
             Command::Cleanup => {
-                self.running = false;
-                return !std::mem::replace(&mut self.cleaned, true);
+                return std::mem::replace(self, Self::Cleaned) != Self::Cleaned;
             }
+            Command::Start | Command::Pause => {}
         }
         false
     }
 
     pub(super) fn halt(&mut self) {
-        self.halted = true;
+        if *self != Self::Cleaned {
+            *self = Self::Halted;
+        }
     }
 }
 
@@ -73,5 +77,18 @@ mod tests {
         state.apply(Command::Start);
         assert!(!state.active());
         assert!(!state.apply(Command::Cleanup));
+    }
+
+    #[test]
+    fn pause_cannot_reset_terminal_states() {
+        for terminal in [TaskState::Halted, TaskState::Cleaned] {
+            let needs_cleanup = terminal != TaskState::Cleaned;
+            let mut state = terminal;
+            assert!(!state.apply(Command::Pause));
+            assert!(!state.apply(Command::Start));
+            assert!(!state.active());
+            assert_eq!(state.apply(Command::Cleanup), needs_cleanup);
+            assert!(!state.apply(Command::Cleanup));
+        }
     }
 }
