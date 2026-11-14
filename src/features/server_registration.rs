@@ -215,15 +215,44 @@ impl RegistrationWorker {
         let Some(info) = self.poll_a2s_with_retry(commands).await else {
             return Ok(None);
         };
-        let (request, status) = self.metadata(&info);
+        let status = Self::metadata(&info);
+        let update = UpdateRegisteredServer {
+            player_count: status.player_count,
+            max_players: status.max_players,
+            current_map: status.current_map.clone(),
+            mods: Some(
+                status
+                    .active_mods
+                    .iter()
+                    .map(|m| {
+                        server_browser_client::models::Mod::new(
+                            m.name.clone(),
+                            m.organization.clone(),
+                            m.version.clone(),
+                        )
+                    })
+                    .collect(),
+            ),
+        };
         if let Some(registration) = self.registration.as_mut() {
-            registration.set_update(UpdateRegisteredServer {
-                player_count: request.player_count,
-                max_players: request.max_players,
-                current_map: request.current_map,
-                mods: request.mods,
-            })?;
+            registration.set_update(update)?;
         } else {
+            let args = cli_args();
+            let request = ServerRegistrationRequest {
+                ports: Chivalry2Ports {
+                    game: i32::from(info.extended_server_info.port.unwrap_or(7777)),
+                    ping: i32::from(args.game_server_ping_port.unwrap_or(0)),
+                    a2s: i32::from(args.game_server_query_port.unwrap_or(0)),
+                },
+                name: status.name.clone(),
+                description: status.description.clone(),
+                password_protected: Some(status.password_protected),
+                current_map: update.current_map,
+                player_count: update.player_count,
+                max_players: update.max_players,
+                local_ip_address: self.local_ip_address.clone(),
+                mods: update.mods,
+            };
             self.registration = Some(SdkRegistration::new(
                 self.backend.clone(),
                 request,
@@ -261,7 +290,7 @@ impl RegistrationWorker {
         }
     }
 
-    fn metadata(&self, info: &Info) -> (ServerRegistrationRequest, ServerStatus) {
+    fn metadata(info: &Info) -> ServerStatus {
         let args = cli_args();
         let description = format!(
             "{} (build {})\n{} server",
@@ -286,63 +315,20 @@ impl RegistrationWorker {
         #[cfg(not(feature = "mod_management"))]
         let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
 
-        let server_name =
-            match args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
-                Some(name_str) => name_str,
-                _ => &info.name,
-            };
-
-        let (max_players, player_count) = Self::players_from_info(info);
-
-        let request = ServerRegistrationRequest {
-            ports: Chivalry2Ports {
-                game: info.extended_server_info.port.unwrap_or(7777) as i32,
-                ping: args.game_server_ping_port.unwrap_or(0) as i32,
-                a2s: args.game_server_query_port.unwrap_or(0) as i32,
-            },
-            name: server_name.to_owned(),
+        // The headless host is counted by A2S but is not a player.
+        let headless_host = u8::from(args.is_headless);
+        ServerStatus {
+            name: args
+                .find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
+                .unwrap_or(&info.name)
+                .to_owned(),
             description,
-            password_protected: Some(args.server_password.is_some()),
+            password_protected: args.server_password.is_some(),
             current_map: info.map.clone(),
-            player_count: player_count as i32,
-            max_players: max_players as i32,
-            local_ip_address: self.local_ip_address.clone(),
-            mods: Some(
-                mods.iter()
-                    .map(|m| {
-                        server_browser_client::models::Mod::new(
-                            m.name.clone(),
-                            m.organization.clone(),
-                            m.version.clone(),
-                        )
-                    })
-                    .collect(),
-            ),
-        };
-        let status = ServerStatus {
-            name: request.name.clone().into(),
-            description: request.description.clone().into(),
-            password_protected: request.password_protected.unwrap_or(false),
-            current_map: request.current_map.clone().into(),
-            player_count: request.player_count,
-            max_players: request.max_players,
+            player_count: i32::from(info.players.saturating_sub(headless_host)),
+            max_players: i32::from(info.max_players.saturating_sub(headless_host)),
             mods: all_mods,
             active_mods: mods,
-        };
-        (request, status)
-    }
-
-    /// Extracts player count and max players from server info, adjusting for headless mode.
-    /// When headless, the server host is still counted as a player in the game, even though
-    /// they do not exist.
-    fn players_from_info(info: &Info) -> (u8, u8) {
-        if cli_args().is_headless {
-            (
-                info.max_players.saturating_sub(1),
-                info.players.saturating_sub(1),
-            )
-        } else {
-            (info.max_players, info.players)
         }
     }
 
