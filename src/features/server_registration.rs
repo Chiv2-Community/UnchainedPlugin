@@ -151,10 +151,10 @@ impl RegistrationWorker {
             tokio::select! {
                 biased;
                 command = commands.recv() => {
-                    if state.apply(command.unwrap_or(Command::Cleanup)) {
-                        self.cleanup().await;
-                    }
-                    if command.is_none() {
+                    let Some(command) = command else {
+                        break;
+                    };
+                    if state.apply(command) {
                         break;
                     }
                     poll_at = tokio::time::Instant::now();
@@ -173,6 +173,7 @@ impl RegistrationWorker {
                 }
             }
         }
+        self.cleanup().await;
     }
 
     async fn poll(

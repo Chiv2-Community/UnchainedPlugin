@@ -16,7 +16,7 @@ awaited; no backend-specific runtime or HTTP worker threads are created.
 It polls metadata every five seconds; updates do not bypass SDK retry backoff.
 Native start/stop methods queue commands without waiting. Pausing retains the
 SDK manager; cleanup waits for in-flight requests and runs once. Cleanup is
-terminal for that manager. Dropping its owner also queues cleanup. Ambiguous
+terminal and exits the worker. Dropping its owner also requests cleanup. Ambiguous
 registration responses halt rather than creating duplicate registrations.
 Typed ban checks use generated operations. Legacy ban
 checks remain fail-open. PreLogin waits at most three seconds on a result from
