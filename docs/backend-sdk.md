@@ -18,8 +18,8 @@ Typed ban checks use generated operations. Legacy ban
 checks remain fail-open. Engine-owned HTTP interception remains in engine hooks.
 
 ```sh
-cargo test --locked -p plugin-portable-tests
-cargo test --locked -p plugin-portable-tests --features container-tests
+cargo test --locked -p plugin-backend-integration-tests
+cargo test --locked -p plugin-backend-integration-tests --features container-tests
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```
 
@@ -28,7 +28,7 @@ llvm-rc and cached xwin CRT/SDK at `XWIN_ROOT` (default
 `~/.cache/cargo-xwin/xwin`). `WINRES_TOOLKIT_PATH` selects the resource compiler;
 normal Windows builds retain SDK discovery. This does not run a game.
 
-`tests/portable` is a test-only Cargo package. It imports `src/backend.rs` directly
+`tests/backend-integration` is a test-only Cargo package. It imports `src/backend.rs` directly
 to run transport tests and container integration without Windows/game
 dependencies; it provides no library and is not a runtime dependency.
 

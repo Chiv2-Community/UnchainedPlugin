@@ -19,7 +19,7 @@ jobs:
           rustflags: -D warnings
           build-warnings: ''
       - name: Test backend transport, container integration and ticket verification
-        run: cargo test --locked -p unchained-auth -p plugin-portable-tests --features plugin-portable-tests/container-tests
+        run: cargo test --locked -p unchained-auth -p plugin-backend-integration-tests --features plugin-backend-integration-tests/container-tests
 
   validate-plugin:
     runs-on: ubuntu-latest

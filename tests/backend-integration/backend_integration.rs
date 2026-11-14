@@ -39,11 +39,29 @@ fn backend_signed_ticket_verifies_once_for_live_registration() {
     let id = registration.server_id().unwrap();
     // Exercise the backend's internal signing boundary inside its container.
     // No test-only HTTP endpoint or private key crosses into the plugin.
-    let mut issued = container.exec(ExecCommand::new([
-        "python", "-c",
-        "import json,sys,time; from pathlib import Path; from server_browser_backend.auth.signing import SigningKeys; now=int(time.time()); ticket=SigningKeys(Path('/tmp/browser-test/signing.json')).issue_join_ticket(issuer='https://local-auth.test',discord_id='123456789012345678',server_id=sys.argv[1],auth_time=now); print(json.dumps({'ticket':ticket,'now':now}))",
-        id,
-    ])).expect("issue ticket inside backend container");
+    let mut issued = container
+        .exec(ExecCommand::new([
+            "python",
+            "-c",
+            r#"
+import json
+import sys
+import time
+from pathlib import Path
+from server_browser_backend.auth.signing import SigningKeys
+
+now = int(time.time())
+ticket = SigningKeys(Path('/tmp/browser-test/signing.json')).issue_join_ticket(
+    issuer='https://local-auth.test',
+    discord_id='123456789012345678',
+    server_id=sys.argv[1],
+    auth_time=now,
+)
+print(json.dumps({'ticket': ticket, 'now': now}))
+"#,
+            id,
+        ]))
+        .expect("issue ticket inside backend container");
     let output = issued.stdout_to_vec().unwrap();
     assert_eq!(issued.exit_code().unwrap(), Some(0));
     let bundle: serde_json::Value = serde_json::from_slice(&output).expect("decode signing result");

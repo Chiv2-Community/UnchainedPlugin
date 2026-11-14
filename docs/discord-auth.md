@@ -40,8 +40,8 @@ key prefixes are no longer logged.
 ## Local validation
 
 ```sh
-cargo test --locked -p unchained-auth -p plugin-portable-tests
-cargo test --locked -p plugin-portable-tests --features container-tests
+cargo test --locked -p unchained-auth -p plugin-backend-integration-tests
+cargo test --locked -p plugin-backend-integration-tests --features container-tests
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```
 

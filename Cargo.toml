@@ -4,7 +4,7 @@ version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/portable"]
+members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/backend-integration"]
 
 [workspace.dependencies]
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "74e9d6ab2861109c8321156f007b3fb2596d91d9" }
