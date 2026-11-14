@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-server-browser-models = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "8df4820dc457fd6ae714e5efe6ad4c9beb15ab1f" }
+server-browser-models = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "74e9d6ab2861109c8321156f007b3fb2596d91d9" }
 base64 = "0.22"
 jsonwebtoken = "9.3"
 serde = { version = "1", features = ["derive"] }

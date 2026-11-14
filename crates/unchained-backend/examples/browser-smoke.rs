@@ -1,9 +1,21 @@
-//! Exercise generated operations against a backend hosted on this machine.
+//! Exercise the pinned lifecycle SDK through plugin transport against a local backend.
+use std::{
+    cell::Cell,
+    time::{Duration, Instant},
+};
 use unchained_backend::{
     apis::api_v1_api as api,
+    lifecycle::{Clock, Event, Policy, Registration},
     models::{Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer},
     BackendClient,
 };
+
+struct TestClock(Cell<Instant>);
+impl Clock for &TestClock {
+    fn now(&self) -> Instant {
+        self.0.get()
+    }
+}
 
 fn main() {
     let url = std::env::args().nth(1).expect("local backend URL required");
@@ -17,26 +29,32 @@ fn main() {
         0,
         32,
     );
-    // Do not print generated errors: they may retain credential-bearing response bodies.
-    let registration =
-        api::register(config, request).unwrap_or_else(|_| panic!("registration failed"));
-    let id = &registration.server.unique_id;
-    let key = &registration.key;
-    assert!(api::get_servers(config).is_ok());
-    assert!(api::update(
-        config,
-        key,
-        id,
-        UpdateRegisteredServer::new(2, 32, "next".into())
+    let clock = TestClock(Cell::new(Instant::now()));
+    let mut registration = Registration::with_clock(
+        client.registration_transport(),
+        request,
+        Policy::default(),
+        &clock,
     )
-    .is_ok());
-    assert!(api::heartbeat(config, key, id).is_ok());
+    .unwrap();
+    assert!(matches!(registration.poll(), Ok(Event::Registered { .. })));
+    assert!(api::get_servers(config).is_ok());
+    registration
+        .set_update(UpdateRegisteredServer::new(2, 32, "next".into()))
+        .unwrap();
+    assert_eq!(registration.poll(), Ok(Event::Updated));
+    clock.0.set(clock.0.get() + Duration::from_secs(31));
+    assert_eq!(registration.poll(), Ok(Event::Heartbeat));
     assert!(
         !api::check_banned(config, "127.0.0.1")
             .unwrap_or_else(|_| panic!("ban check failed"))
             .banned
     );
     assert!(api::jwks(config).is_ok());
-    assert!(api::delete_server(config, key, id).is_ok());
-    println!("Generated registration/list/update/heartbeat/ban/JWKS/delete operations passed");
+    registration.stop().unwrap();
+    assert!(api::get_servers(config)
+        .unwrap_or_else(|_| panic!("listing failed"))
+        .servers
+        .is_empty());
+    println!("Pinned SDK registration/update/heartbeat/cleanup and generated list/ban/JWKS operations passed");
 }
