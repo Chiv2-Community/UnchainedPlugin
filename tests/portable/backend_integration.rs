@@ -1,4 +1,5 @@
-//! Exercise the pinned lifecycle SDK through plugin transport against a local backend.
+//! Exercise the pinned lifecycle SDK against the real containerized backend.
+mod support;
 use std::{
     cell::Cell,
     time::{Duration, Instant},
@@ -18,8 +19,9 @@ impl Clock for &TestClock {
     }
 }
 
-fn main() {
-    let url = std::env::args().nth(1).expect("local backend URL required");
+#[test]
+fn registration_lifecycle_against_backend_container() {
+    let (_container, url) = support::backend();
     let client = backend::transport(&url, None).unwrap();
     let config = client.configuration();
     let request = ServerRegistrationRequest::new(
@@ -34,11 +36,16 @@ fn main() {
     let mut registration =
         Registration::with_clock(client.clone(), request, Policy::default(), &clock).unwrap();
     assert!(matches!(registration.poll(), Ok(Event::Registered { .. })));
-    assert!(api::get_servers(config).is_ok());
+    let listing = api::get_servers(config).unwrap_or_else(|_| panic!("listing failed"));
+    assert_eq!(listing.servers.len(), 1);
     registration
         .set_update(UpdateRegisteredServer::new(2, 32, "next".into()))
         .unwrap();
     assert_eq!(registration.poll(), Ok(Event::Updated));
+    let listing = api::get_servers(config).unwrap_or_else(|_| panic!("listing failed"));
+    let server = serde_json::to_value(&listing.servers[0]).unwrap();
+    assert_eq!(server["player_count"], 2);
+    assert_eq!(server["current_map"], "next");
     clock.0.set(clock.0.get() + Duration::from_secs(31));
     assert_eq!(registration.poll(), Ok(Event::Heartbeat));
     assert!(
@@ -52,5 +59,4 @@ fn main() {
         .unwrap_or_else(|_| panic!("listing failed"))
         .servers
         .is_empty());
-    println!("Pinned SDK registration/update/heartbeat/cleanup and generated list/ban/JWKS operations passed");
 }

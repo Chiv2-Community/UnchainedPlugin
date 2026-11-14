@@ -19,7 +19,7 @@ checks remain fail-open. Engine-owned HTTP interception remains in engine hooks.
 
 ```sh
 cargo test --locked -p plugin-portable-tests
-uv run --project ../C2ServerBrowserBackend-language-sdks python scripts/check-browser-backend.py
+cargo test --locked -p plugin-portable-tests --features container-tests
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```
 
@@ -29,8 +29,17 @@ llvm-rc and cached xwin CRT/SDK at `XWIN_ROOT` (default
 normal Windows builds retain SDK discovery. This does not run a game.
 
 `tests/portable` is a test-only Cargo package. It imports `src/backend.rs` directly
-to run transport tests and the local-backend example without Windows/game
+to run transport tests and container integration without Windows/game
 dependencies; it provides no library and is not a runtime dependency.
+
+Container tests require a running local Linux Docker daemon. Testcontainers
+downloads the exact backend Git revision used by the SDK dependencies and builds
+its authoritative Dockerfile. No backend checkout, Python environment, hosted
+service, or copied contract is needed. Each test starts a fresh container with
+private ephemeral state and a random loopback-only port; readiness is bounded
+and Testcontainers removes the container on drop, including assertion failures.
+Missing Docker fails the explicitly enabled tests rather than silently skipping.
+The Linux CI job runs these tests; Windows builds run the portable unit tests.
 
 Update the SDK dependency revision and lockfile to adopt backend changes. Change
 the backend OAS/templates first; never add handwritten wire DTOs or routes here.
