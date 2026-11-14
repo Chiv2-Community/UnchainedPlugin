@@ -90,7 +90,8 @@ fn rejects_signed_claim_drift_and_missing_claims() {
         assert_eq!(
             verifier(1).verify_and_consume(&token(&body), NOW),
             Err(AuthError::InvalidTicket),
-            "{name}"
+            "{name}: {}",
+            body[name]
         );
     }
     for name in claims().as_object().unwrap().keys() {
@@ -105,65 +106,77 @@ fn rejects_signed_claim_drift_and_missing_claims() {
 }
 
 #[test]
-fn enforces_time_boundaries() {
-    let mut shorter = claims();
-    shorter["exp"] = json!(NOW + 30);
-    assert!(verifier(1)
-        .verify_and_consume(&token(&shorter), NOW)
-        .is_ok());
-    let ticket = token(&claims());
-    assert!(verifier(1).verify_and_consume(&ticket, NOW - 30).is_ok());
-    assert_eq!(
-        verifier(1).verify_and_consume(&ticket, NOW - 31),
-        Err(AuthError::InvalidTicket)
-    );
-    assert!(verifier(1).verify_and_consume(&ticket, NOW + 89).is_ok());
-    assert_eq!(
-        verifier(1).verify_and_consume(&ticket, NOW + 90),
-        Err(AuthError::InvalidTicket)
-    );
-}
-
-#[test]
-fn generated_claims_support_timestamps_after_2038() {
-    let now = 4_000_000_000_u64;
-    let mut body = claims();
-    body["auth_time"] = json!(now - 100);
-    body["iat"] = json!(now);
-    body["nbf"] = json!(now);
-    body["exp"] = json!(now + 60);
-    assert!(verifier(1).verify_and_consume(&token(&body), now).is_ok());
+fn validates_ticket_times() {
+    let future = 4_000_000_000_u64;
+    for (name, issued, lifetime, now, expected) in [
+        ("short lifetime", NOW, 30, NOW, Ok(())),
+        ("nbf leeway edge", NOW, 60, NOW - 30, Ok(())),
+        (
+            "before leeway",
+            NOW,
+            60,
+            NOW - 31,
+            Err(AuthError::InvalidTicket),
+        ),
+        ("expiry leeway edge", NOW, 60, NOW + 89, Ok(())),
+        ("expired", NOW, 60, NOW + 90, Err(AuthError::InvalidTicket)),
+        ("post-2038", future, 60, future, Ok(())),
+    ] {
+        let mut body = claims();
+        body["auth_time"] = json!(issued - 100);
+        body["iat"] = json!(issued);
+        body["nbf"] = json!(issued);
+        body["exp"] = json!(issued + lifetime);
+        assert_eq!(
+            verifier(1)
+                .verify_and_consume(&token(&body), now)
+                .map(|_| ()),
+            expected,
+            "{name}"
+        );
+    }
 }
 
 #[test]
 fn rejects_untrusted_headers_and_forged_signatures() {
-    let mut wrong = header();
-    wrong.kid = Some(OTHER_JTI.into());
-    let unknown = encode(&wrong, &claims(), &material().0).unwrap();
-    assert_eq!(
-        verifier(1).verify_and_consume(&unknown, NOW),
-        Err(AuthError::UnknownKey)
-    );
-    wrong = header();
-    wrong.typ = Some("JWT".into());
-    assert_eq!(
-        verifier(1).verify_and_consume(&encode(&wrong, &claims(), &material().0).unwrap(), NOW),
-        Err(AuthError::InvalidTicket)
-    );
-    wrong = header();
-    wrong.jku = Some("https://attacker.test/keys".into());
-    assert_eq!(
-        verifier(1).verify_and_consume(&encode(&wrong, &claims(), &material().0).unwrap(), NOW),
-        Err(AuthError::InvalidTicket)
-    );
-    let mut hmac = Header::new(Algorithm::HS256);
-    hmac.typ = Some("unchained-join+jwt".into());
-    hmac.kid = Some(KID.into());
-    let forged = encode(&hmac, &claims(), &EncodingKey::from_secret(b"attacker")).unwrap();
-    assert_eq!(
-        verifier(1).verify_and_consume(&forged, NOW),
-        Err(AuthError::InvalidTicket)
-    );
+    for (name, header, expected) in [
+        (
+            "unknown key",
+            Header {
+                kid: Some(OTHER_JTI.into()),
+                ..header()
+            },
+            AuthError::UnknownKey,
+        ),
+        (
+            "wrong type",
+            Header {
+                typ: Some("JWT".into()),
+                ..header()
+            },
+            AuthError::InvalidTicket,
+        ),
+        (
+            "remote keys",
+            Header {
+                jku: Some("https://attacker.test/keys".into()),
+                ..header()
+            },
+            AuthError::InvalidTicket,
+        ),
+    ] {
+        let ticket = encode(&header, &claims(), &material().0).unwrap();
+        assert_eq!(
+            verifier(1).verify_and_consume(&ticket, NOW),
+            Err(expected),
+            "{name}"
+        );
+    }
+    let hmac = Header {
+        typ: Some("unchained-join+jwt".into()),
+        kid: Some(KID.into()),
+        ..Header::new(Algorithm::HS256)
+    };
     let mut forged = token(&claims());
     let signature = forged.rfind('.').unwrap() + 1;
     forged.replace_range(
@@ -174,10 +187,19 @@ fn rejects_untrusted_headers_and_forged_signatures() {
             "A"
         },
     );
-    assert_eq!(
-        verifier(1).verify_and_consume(&forged, NOW),
-        Err(AuthError::InvalidTicket)
-    );
+    for (name, ticket) in [
+        (
+            "algorithm substitution",
+            encode(&hmac, &claims(), &EncodingKey::from_secret(b"attacker")).unwrap(),
+        ),
+        ("tampered signature", forged),
+    ] {
+        assert_eq!(
+            verifier(1).verify_and_consume(&ticket, NOW),
+            Err(AuthError::InvalidTicket),
+            "{name}"
+        );
+    }
 }
 
 #[test]
