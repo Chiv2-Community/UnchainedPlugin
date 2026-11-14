@@ -7,9 +7,9 @@ edition = "2021"
 members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "6167869b1e371ae632a079d4efc8dad36b303bd2" }
-reqwest = { version = "0.12.19", features = ["blocking", "json"] }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
+reqwest = { version = "0.12.19", features = ["json"] }
 
 [[bin]]
 name = "mock_server"
@@ -71,7 +71,7 @@ config_overrides_verbose_hooks = [] # print (config_override) hook triggers to c
 map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
-server_registration = ["a2s", "get_if_addrs"] # register server with backend
+server_registration = ["a2s", "get_if_addrs", "tokio"] # register server with backend
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
 move-autonomous-desync = []
@@ -141,7 +141,7 @@ windows = { version = "0.52.0", features = ["Win32_Foundation",
             "Win32_System_Memory",
             "Win32_System_ProcessStatus",
             ]}
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time"], optional = true }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"], optional = true }
 serenity = { version = "0.12", optional = true, default-features = false, features = ["client", "gateway", "model", "native_tls_backend"] }
 discord-http = { package = "reqwest", version = "0.13", optional = true, default-features = false, features = ["native-tls"] }
 shlex = "1.3.0"

@@ -10,12 +10,27 @@ deadlines, redirect suppression, source-IP binding and safe debug output. No
 plugin adapter library or reexport layer is needed. The backend-owned
 `server-browser-client-sdk` manages registration identity, updates, heartbeat
 scheduling, bounded retries and deletion over generated bindings. The plugin
-only collects A2S/game metadata, chooses addresses and owns the worker thread.
+only collects A2S/game metadata, chooses addresses and owns one serialized task
+on the plugin's shared Tokio runtime. Generated HTTP and lifecycle calls are
+awaited; no backend-specific runtime or HTTP worker threads are created.
 It polls metadata every five seconds; updates do not bypass SDK retry backoff.
-Pausing retains the SDK manager; deregistration calls SDK cleanup. Ambiguous
+Native start/stop methods queue commands without waiting. Pausing retains the
+SDK manager; cleanup waits for in-flight requests and runs once. Cleanup is
+terminal for that manager. Dropping its owner also queues cleanup. Ambiguous
 registration responses halt rather than creating duplicate registrations.
 Typed ban checks use generated operations. Legacy ban
-checks remain fail-open. Engine-owned HTTP interception remains in engine hooks.
+checks remain fail-open. PreLogin waits at most three seconds on a result from
+the shared runtime, never a blocking HTTP client. Runtime-context calls skip
+the wait and fail open to avoid deadlocks, including current-thread runtimes.
+Timeout aborts only the read-only ban check. This is a legacy synchronous
+admission bridge, not asynchronous admission or required authentication.
+Engine-owned HTTP interception remains in engine hooks.
+
+A2S alone uses `spawn_blocking`: at most one query is outstanding, with three
+attempts and the external client's five-second socket timeouts. Pause/cleanup
+waits for that query to finish before proceeding; jobs are not detached and
+repeated on timeout. Metadata reads retain the existing synchronized mod-cache
+access; tasks do not dereference Unreal objects.
 
 ```sh
 cargo test --locked -p plugin-backend-integration-tests

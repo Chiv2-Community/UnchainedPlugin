@@ -51,11 +51,15 @@ fn resolve_player_display_name(options: &str) -> String {
 
 fn is_user_banned(addr: &str) -> bool {
     sinfo!("Checking Unchained ban status for player");
-    let response = crate::backend::transport(
-        cli_args().server_browser_backend.as_deref().unwrap_or_default(), None,
-    ).ok().and_then(|client| server_browser_client::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
+    let response = std::panic::catch_unwind(|| {
+        crate::backend::check_banned_sync(
+            cli_args().server_browser_backend.as_deref().unwrap_or_default(),
+            addr,
+            &crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE,
+        )
+    }).ok().flatten();
     match response {
-        Some(result) => result.banned,
+        Some(banned) => banned,
         None => {
             swarn!("Ban check failed (legacy banlist remains fail-open)");
             false
@@ -132,7 +136,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    sinfo!("User joining with options '{}'", options_string);
+    sinfo!("User joining (backend banlist enabled)");
 
     let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
