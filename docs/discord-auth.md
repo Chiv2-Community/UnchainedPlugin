@@ -41,14 +41,18 @@ key prefixes are no longer logged.
 
 ```sh
 cargo test --locked -p unchained-auth -p plugin-portable-tests
-uv run --project ../C2ServerBrowserBackend-auth-sdk python scripts/check-auth-backend.py
+cargo test --locked -p plugin-portable-tests --features container-tests
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```
 
-The interop script hosts Uvicorn on this machine's loopback interface, uses a
-temporary private signing keyring, exercises generated browser operations, and
-verifies a real backend-signed ticket through Rust with replay rejection. It uses
-no hosted backend or Discord API. This is not OAuth or native admission evidence.
+The integration tests use Testcontainers and a local Linux Docker daemon. They
+build the authoritative backend Dockerfile from the exact SDK Git revision,
+create private signing keys inside disposable containers, exercise registration
+lifecycle operations, and verify a backend-signed ticket for a live registration
+with replay and wrong-audience rejection. Keys never leave the container; tickets
+are checked for log leakage. No host Python environment, backend checkout,
+hosted service or Discord API is needed. This is not OAuth or native admission
+evidence. Linux CI enables container tests; Windows builds do not require Docker.
 
 The Windows type check needs an existing xwin CRT/SDK at `XWIN_ROOT` (defaults to
 `~/.cache/cargo-xwin/xwin`), LLVM's clang-cl/llvm-lib/llvm-rc and the installed

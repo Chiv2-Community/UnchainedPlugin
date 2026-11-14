@@ -8,6 +8,7 @@ on:
 jobs:
   backend-contracts:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -17,8 +18,8 @@ jobs:
           cache: false
           rustflags: -D warnings
           build-warnings: ''
-      - name: Test backend transport and ticket verification
-        run: cargo test --locked -p unchained-auth -p plugin-portable-tests
+      - name: Test backend transport, container integration and ticket verification
+        run: cargo test --locked -p unchained-auth -p plugin-portable-tests --features plugin-portable-tests/container-tests
 
   validate-plugin:
     runs-on: ubuntu-latest
