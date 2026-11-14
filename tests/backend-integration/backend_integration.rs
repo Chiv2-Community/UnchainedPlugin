@@ -23,7 +23,12 @@ impl Clock for &TestClock {
 fn registration_lifecycle_against_backend_container() {
     let (_container, url) = support::backend();
     // Docker/archive setup and Container drop stay outside async workers.
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    assert_eq!(
+        backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
+        Some(false)
+    );
+    runtime.block_on(async {
         let client = backend::transport(&url, None).unwrap();
         let config = client.configuration();
         let request = ServerRegistrationRequest::new(
