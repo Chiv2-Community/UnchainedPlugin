@@ -39,7 +39,7 @@ service, or copied contract is needed. Each test starts a fresh container with
 private ephemeral state and a random loopback-only port; readiness is bounded
 and Testcontainers removes the container on drop, including assertion failures.
 Missing Docker fails the explicitly enabled tests rather than silently skipping.
-The Linux CI job runs these tests; Windows builds run the portable unit tests.
+The Linux CI job runs these tests; Windows builds leave container tests disabled.
 
 Update the SDK dependency revision and lockfile to adopt backend changes. Change
 the backend OAS/templates first; never add handwritten wire DTOs or routes here.
