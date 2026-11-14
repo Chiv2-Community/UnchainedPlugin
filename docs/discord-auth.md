@@ -1,24 +1,14 @@
 # Discord authentication foundation
 
-Stacked on the SDK migration in plugin PR #42. Tracks plugin #34–#36;
+Stacked on the SDK migration in plugin PR #44. Tracks plugin #34–#36;
 admission remains disabled. See [backend-sdk.md](backend-sdk.md) for the migration.
 
 ## Generated backend integration
 
-`crates/server-browser-api` owns generated Rust routes/models and its generation
-templates. `api/server-browser.yaml` is a pinned copy of the backend's authoritative
-OAS, not an independently edited contract. OpenAPI Generator is pinned to 7.17.0.
-Java 11+ and uv are needed for generation, not runtime.
-
-```sh
-uv run --script scripts/generate-server-browser.py --backend-root ../C2ServerBrowserBackend-auth-sdk
-uv run --script scripts/generate-server-browser.py --check
-```
-
-The module's `anyOf` template preserves ordinary and diagnostic listings. Reference
-variants are tried most-specific-first, including inherited required fields.
-Generation drift checks compare every generated Rust source and the manifest.
-The snapshot preserves 64-bit claim timestamps from the backend OAS.
+The backend owns generated Rust model/client crates, templates and drift checks.
+The plugin consumes exact backend Git revisions without its own OAS snapshot or
+generator. `unchained-auth` depends only on the model crate. Backend PR #21
+declares 64-bit claim timestamps and regenerates both language contracts.
 
 Registration, updates, heartbeat, deletion and ban checks use generated operations
 and models through `unchained-backend`. The adapter centralizes deadlines,

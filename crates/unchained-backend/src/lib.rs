@@ -2,7 +2,7 @@
 use std::{net::IpAddr, time::Duration};
 
 use apis::configuration::Configuration;
-pub use server_browser_api::{apis, models};
+pub use server_browser_client::{apis, models};
 
 #[derive(Clone)]
 pub struct BackendClient(Configuration);

@@ -4,7 +4,7 @@ version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "crates/server-browser-api", "crates/unchained-backend"]
+members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "crates/unchained-backend"]
 
 [[bin]]
 name = "mock_server"

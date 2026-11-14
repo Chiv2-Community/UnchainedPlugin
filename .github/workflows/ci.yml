@@ -17,11 +17,6 @@ jobs:
           cache: false
           rustflags: -D warnings
           build-warnings: ''
-      - name: Check OAS-generated Rust SDK
-        run: |
-          python3 -m venv "$RUNNER_TEMP/backend-codegen"
-          "$RUNNER_TEMP/backend-codegen/bin/pip" install openapi-generator-cli==7.17.0 PyYAML==6.0.3
-          "$RUNNER_TEMP/backend-codegen/bin/python" scripts/generate-server-browser.py --check
       - name: Test backend transport and ticket verification
         run: cargo test --locked -p unchained-auth -p unchained-backend
 

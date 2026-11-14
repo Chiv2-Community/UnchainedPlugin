@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
-use server_browser_api::models::{join_ticket_claims::Purpose, JoinTicketClaims, JwksResponse};
+use server_browser_models::models::{join_ticket_claims::Purpose, JoinTicketClaims, JwksResponse};
 use uuid::Uuid;
 
 const MAX_TICKET_BYTES: usize = 4096;
