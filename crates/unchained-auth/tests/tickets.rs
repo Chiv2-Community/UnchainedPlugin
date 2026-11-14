@@ -14,8 +14,13 @@ const JTI: &str = "00000000-0000-4000-8000-000000000003";
 const OTHER_JTI: &str = "00000000-0000-4000-8000-000000000004";
 const NOW: u64 = 1_800_000_000;
 
-fn material() -> &'static (EncodingKey, Vec<u8>) {
-    static MATERIAL: OnceLock<(EncodingKey, Vec<u8>)> = OnceLock::new();
+struct SigningMaterial {
+    key: EncodingKey,
+    jwks: Vec<u8>,
+}
+
+fn material() -> &'static SigningMaterial {
+    static MATERIAL: OnceLock<SigningMaterial> = OnceLock::new();
     MATERIAL.get_or_init(|| {
         let private = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
         let pem = private.to_pkcs8_pem(Default::default()).unwrap();
@@ -23,10 +28,10 @@ fn material() -> &'static (EncodingKey, Vec<u8>) {
             "kty": "RSA", "alg": "RS256", "use": "sig", "kid": KID,
             "n": URL_SAFE_NO_PAD.encode(private.n().to_bytes_be()), "e": "AQAB"
         }]});
-        (
-            EncodingKey::from_rsa_pem(pem.as_bytes()).unwrap(),
-            serde_json::to_vec(&jwks).unwrap(),
-        )
+        SigningMaterial {
+            key: EncodingKey::from_rsa_pem(pem.as_bytes()).unwrap(),
+            jwks: serde_json::to_vec(&jwks).unwrap(),
+        }
     })
 }
 
@@ -46,11 +51,11 @@ fn header() -> Header {
 }
 
 fn token(claims: &Value) -> String {
-    encode(&header(), claims, &material().0).unwrap()
+    encode(&header(), claims, &material().key).unwrap()
 }
 
 fn verifier(capacity: usize) -> TicketVerifier {
-    TicketVerifier::new(ISSUER, SERVER, &material().1, capacity).unwrap()
+    TicketVerifier::new(ISSUER, SERVER, &material().jwks, capacity).unwrap()
 }
 
 #[test]
@@ -165,7 +170,7 @@ fn rejects_untrusted_headers_and_forged_signatures() {
             AuthError::InvalidTicket,
         ),
     ] {
-        let ticket = encode(&header, &claims(), &material().0).unwrap();
+        let ticket = encode(&header, &claims(), &material().key).unwrap();
         assert_eq!(
             verifier(1).verify_and_consume(&ticket, NOW),
             Err(expected),
@@ -229,7 +234,7 @@ fn key_replacement_preserves_replay_and_failed_replacement_preserves_keys() {
     let ticket = token(&claims());
     let mut verifier = verifier(2);
     verifier.verify_and_consume(&ticket, NOW).unwrap();
-    verifier.replace_keys(&material().1).unwrap();
+    verifier.replace_keys(&material().jwks).unwrap();
     assert_eq!(
         verifier.verify_and_consume(&ticket, NOW),
         Err(AuthError::Replay)
@@ -242,7 +247,7 @@ fn key_replacement_preserves_replay_and_failed_replacement_preserves_keys() {
 
 #[test]
 fn rejects_invalid_configuration() {
-    let keys = material().1.as_slice();
+    let keys = material().jwks.as_slice();
     let oversized = vec![b' '; 65537];
     let mut jwks: Value = serde_json::from_slice(keys).unwrap();
     let key = jwks["keys"][0].clone();
