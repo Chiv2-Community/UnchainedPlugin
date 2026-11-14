@@ -4,7 +4,7 @@ version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask"]
+members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "crates/server-browser-api", "crates/unchained-backend"]
 
 [[bin]]
 name = "mock_server"
@@ -74,6 +74,7 @@ loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/f
 
 
 [dependencies]
+unchained-backend = { path = "crates/unchained-backend" }
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
 patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
 anyhow = "1.0.79"

@@ -6,6 +6,25 @@ on:
   pull_request:
 
 jobs:
+  backend-contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
+        with:
+          cache: false
+          rustflags: -D warnings
+          build-warnings: ''
+      - name: Check OAS-generated Rust SDK
+        run: |
+          python3 -m venv "$RUNNER_TEMP/backend-codegen"
+          "$RUNNER_TEMP/backend-codegen/bin/pip" install openapi-generator-cli==7.17.0 PyYAML==6.0.3
+          "$RUNNER_TEMP/backend-codegen/bin/python" scripts/generate-server-browser.py --check
+      - name: Test backend transport and ticket verification
+        run: cargo test --locked -p unchained-auth -p unchained-backend
+
   validate-plugin:
     runs-on: ubuntu-latest
     permissions:

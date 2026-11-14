@@ -1,0 +1,21 @@
+{{#models}}{{#model}}{{#anyOf.isEmpty}}{{>model-default}}{{/anyOf.isEmpty}}{{^anyOf.isEmpty}}
+// Generated from OpenAPI anyOf. Do not edit; regenerate this module.
+use serde::{Deserialize, Serialize};
+use crate::models;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum {{{classname}}} {
+{{#vendorExtensions.x-rust-anyof-variants}}
+    {{{name}}}(models::{{{name}}}),
+{{/vendorExtensions.x-rust-anyof-variants}}
+}
+
+impl Default for {{{classname}}} {
+    fn default() -> Self {
+{{#vendorExtensions.x-rust-anyof-variants}}{{#-first}}
+        Self::{{{name}}}(Default::default())
+{{/-first}}{{/vendorExtensions.x-rust-anyof-variants}}
+    }
+}
+{{/anyOf.isEmpty}}{{/model}}{{/models}}

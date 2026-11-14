@@ -1,35 +1,33 @@
+use crate::events::models::{GameEvent, ServerStatus};
+use crate::features::events::EVENT_SYSTEM;
+use crate::features::Mod;
+use a2s::info::Info;
+use a2s::A2SClient;
+use get_if_addrs::{get_if_addrs, IfAddr};
+use std::net::IpAddr;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::net::IpAddr;
-use get_if_addrs::{get_if_addrs, IfAddr};
-use reqwest::{blocking::Client, StatusCode};
-use serde::{Deserialize, Serialize};
-use a2s::A2SClient;
-use a2s::info::Info;
-use crate::events::models::{ServerStatus, GameEvent};
-use crate::features::events::EVENT_SYSTEM;
-use crate::features::Mod;
+use unchained_backend::{
+    apis::api_v1_api,
+    invalidates_registration,
+    models::{Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer},
+    BackendClient,
+};
 
-use crate::tools::hook_globals::cli_args;
 use crate::globals;
+use crate::tools::hook_globals::cli_args;
 
 // --- Configuration Constants ---
 const MAX_DISCOVERY_TIMEOUT_SECS: u64 = 60; // Max time to wait for A2S on start
-const MIN_HEARTBEAT_FLOOR_SECS: u64 = 5;   // Don't heartbeat faster than this
-const MAX_HEARTBEAT_CAP_SECS: u64 = 30;     // Don't heartbeat slower than this
+const MIN_HEARTBEAT_FLOOR_SECS: u64 = 5; // Don't heartbeat faster than this
+const MAX_HEARTBEAT_CAP_SECS: u64 = 30; // Don't heartbeat slower than this
 const HEARTBEAT_GRACE_PERIOD_SECS: u64 = 5;
 const BACKOFF_INITIAL_SECS: u64 = 10;
-const BACKOFF_MAX_SECS: u64 = 300;          // 5 minutes
+const BACKOFF_MAX_SECS: u64 = 300; // 5 minutes
 const A2S_RETRIES: u8 = 3;
 
-const API_BASE_PATH: &str = "/api/v1/servers";
-const AUTH_HEADER: &str = "X-CHIV2-SERVER-BROWSER-KEY";
 const DEBUG_LOGGING: bool = true;
-
-fn invalidates_registration(status: StatusCode) -> bool {
-    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND)
-}
 
 /// Format a socket endpoint for APIs that expect `host:port`.
 ///
@@ -46,55 +44,7 @@ fn format_host_port(host: &str, port: u16) -> String {
 
 // --- Data Structures ---
 
-
-#[derive(Debug, Serialize)]
-struct RegisterRequest<'a> {
-    ports: Ports,
-    name: &'a str,
-    description: String,
-    password_protected: bool,
-    current_map: &'a str,
-    player_count: i32,
-    max_players: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    local_ip_address: Option<&'a str>,
-    mods: Vec<Mod>,
-}
-
-// #[derive(Debug, Serialize, Clone)]
-// pub struct Mod {
-//     pub name: String,
-//     pub organization: String,
-//     pub version: String,
-// }
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Ports {
-    game: u16,
-    ping: u16,
-    a2s: u16,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct RegisterResponse {
-    server: RegisteredServer,
-    key: String,
-    refresh_before: f64,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct HeartbeatResponse {
-    refresh_before: f64,
-    server: RegisteredServer,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct RegisteredServer {
-    unique_id: String,
-    is_verified: bool,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Identity {
     id: String,
     key: String,
@@ -102,12 +52,12 @@ struct Identity {
     refresh_period: u64,
 }
 
-#[derive(Debug, Serialize)]
-struct UpdatePayload<'a> {
-    player_count: i32,
-    max_players: i32,
-    #[serde(rename = "current_map")]
-    map_name: &'a str,
+impl std::fmt::Debug for Identity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Identity")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -115,27 +65,6 @@ enum WorkerState {
     Idle,
     Running,
     StopRequested,
-}
-
-// --- API Helper ---
-
-struct BackendApi;
-impl BackendApi {
-    fn base_url() -> String {
-        cli_args().server_browser_backend.clone().unwrap_or_default()
-    }
-
-    fn register() -> String {
-        format!("{}{}", Self::base_url(), API_BASE_PATH)
-    }
-
-    fn server(id: &str) -> String {
-        format!("{}/{}/{}", Self::base_url(), API_BASE_PATH, id)
-    }
-
-    fn heartbeat(id: &str) -> String {
-        format!("{}/heartbeat", Self::server(id))
-    }
 }
 
 // --- Main Implementation ---
@@ -154,7 +83,7 @@ struct RegistrationInner {
     state: Mutex<WorkerState>,
     identity: Mutex<Option<Identity>>,
     cvar: Condvar,
-    http: Client,
+    backend: BackendClient,
 }
 
 fn discover_global_ipv6() -> Option<String> {
@@ -163,10 +92,11 @@ fn discover_global_ipv6() -> Option<String> {
     // therefore supplies SERVER_ADVERTISE_IP as the preferred stable source;
     // this discovery path is the fallback for native IPv6 environments.
     get_if_addrs().ok()?.into_iter().find_map(|interface| {
-        let IfAddr::V6(address) = interface.addr else { return None; };
+        let IfAddr::V6(address) = interface.addr else {
+            return None;
+        };
         let ip = address.ip;
-        if ip.is_unicast_global()
-        {
+        if ip.is_unicast_global() {
             Some(ip.to_string())
         } else {
             None
@@ -200,9 +130,15 @@ impl Registration {
         };
 
         if let Some(address) = advertised_local_ip.as_deref() {
-            sinfo!("Advertising server-browser registration with local address {}", address);
+            sinfo!(
+                "Advertising server-browser registration with local address {}",
+                address
+            );
         } else if use_ipv6 {
-            sinfo!("Using discovered IPv6 source {} without advertising local_ip_address", selected_source_ip);
+            sinfo!(
+                "Using discovered IPv6 source {} without advertising local_ip_address",
+                selected_source_ip
+            );
         }
 
         let bind_address = if use_ipv6 {
@@ -214,15 +150,20 @@ impl Registration {
             None
         };
 
-        let mut http_builder = Client::builder()
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(5));
         if let Some(address) = bind_address {
-            sinfo!("Binding server-browser registration HTTP to IPv6 source {}", address);
-            http_builder = http_builder.local_address(Some(address));
+            sinfo!(
+                "Binding server-browser registration HTTP to IPv6 source {}",
+                address
+            );
         }
-        let http = http_builder.build()
-            .unwrap_or_default();
+        let backend = BackendClient::new(
+            cli_args()
+                .server_browser_backend
+                .as_deref()
+                .unwrap_or_default(),
+            bind_address,
+        )
+        .expect("Failed to construct bounded server-browser client");
 
         Self {
             inner: Arc::new(RegistrationInner {
@@ -231,7 +172,7 @@ impl Registration {
                 state: Mutex::new(WorkerState::Idle),
                 identity: Mutex::new(None),
                 cvar: Condvar::new(),
-                http,
+                backend,
             }),
             handle: Mutex::new(None),
         }
@@ -245,16 +186,18 @@ impl Registration {
         self.trigger_update();
     }
 
-    /// Spawns the worker thread. If an identity exists and is still valid, 
+    /// Spawns the worker thread. If an identity exists and is still valid,
     /// it resumes heartbeats immediately without the discovery delay.
     pub fn start(self: Arc<Self>) {
         let mut state_lock = self.inner.state.lock().unwrap();
-        if *state_lock == WorkerState::Running { return; }
+        if *state_lock == WorkerState::Running {
+            return;
+        }
         *state_lock = WorkerState::Running;
 
         let inner = Arc::clone(&self.inner);
         let mut handle_lock = self.handle.lock().unwrap();
-        
+
         *handle_lock = Some(thread::spawn(move || {
             inner.run_reg_worker();
         }));
@@ -282,7 +225,7 @@ impl Registration {
             let mut id_lock = self.inner.identity.lock().unwrap();
             *id_lock = None;
         }
-        
+
         let mut state = self.inner.state.lock().unwrap();
         *state = WorkerState::Idle;
     }
@@ -290,13 +233,15 @@ impl Registration {
     fn perform_deregistration(&self) {
         let ident_opt = self.inner.identity.lock().unwrap().clone();
         if let Some(ident) = ident_opt {
-            let res = self.inner.http.delete(BackendApi::server(&ident.id))
-                .header(AUTH_HEADER, &ident.key)
-                .send();
-            
+            let res = api_v1_api::delete_server(
+                self.inner.backend.configuration(),
+                &ident.key,
+                &ident.id,
+            );
+
             if DEBUG_LOGGING {
                 match res {
-                    Ok(r) if r.status().is_success() => sinfo!("Successfully deregistered: {}", ident.id),
+                    Ok(_) => sinfo!("Successfully deregistered: {}", ident.id),
                     _ => swarn!("Failed to deregister: {}", ident.id),
                 }
             }
@@ -310,7 +255,9 @@ impl RegistrationInner {
         let mut backoff_secs = BACKOFF_INITIAL_SECS;
 
         loop {
-            if self.is_stopping() { break; }
+            if self.is_stopping() {
+                break;
+            }
 
             // 1. Discovery/Ready Check (only if fresh start)
             if !self.ensure_server_ready(&a2s) {
@@ -323,9 +270,11 @@ impl RegistrationInner {
                 Some(id) => {
                     backoff_secs = BACKOFF_INITIAL_SECS; // Reset backoff on success
                     id
-                },
+                }
                 None => {
-                    if DEBUG_LOGGING { sinfo!("Registration failed. Backing off {}s", backoff_secs); }
+                    if DEBUG_LOGGING {
+                        sinfo!("Registration failed. Backing off {}s", backoff_secs);
+                    }
                     self.wait_interruptible(Duration::from_secs(backoff_secs));
                     backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                     continue;
@@ -336,7 +285,7 @@ impl RegistrationInner {
             match self.send_heartbeat_and_update(&a2s, &ident) {
                 Ok(new_expiry) => {
                     backoff_secs = BACKOFF_INITIAL_SECS;
-                    
+
                     // Update our internal Identity with the new timestamp from the backend
                     {
                         let mut lock = self.identity.lock().unwrap();
@@ -347,12 +296,14 @@ impl RegistrationInner {
 
                     self.wait_interruptible(Duration::from_secs(ident.refresh_period));
                 }
-                Err(true) => { // Rejected or missing registration
+                Err(true) => {
+                    // Rejected or missing registration
                     swarn!("Registration rejected. Clearing identity and re-registering.");
                     let mut lock = self.identity.lock().unwrap();
                     *lock = None;
                 }
-                Err(false) => { // Transient Network/Backend Error
+                Err(false) => {
+                    // Transient Network/Backend Error
                     self.wait_interruptible(Duration::from_secs(backoff_secs));
                     backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
                 }
@@ -362,30 +313,48 @@ impl RegistrationInner {
 
     /// Polls A2S until the server responds, confirming it is ready to be registered.
     fn ensure_server_ready(&self, a2s: &A2SClient) -> bool {
-        if self.identity.lock().unwrap().is_some() { return true; }
+        if self.identity.lock().unwrap().is_some() {
+            return true;
+        }
 
         let start = Instant::now();
         while start.elapsed().as_secs() < MAX_DISCOVERY_TIMEOUT_SECS {
-            if self.is_stopping() { return false; }
-            if a2s.info(&self.server_addr).is_ok() { 
-                if DEBUG_LOGGING { sinfo!("Server detected on {} after {}s", self.server_addr, start.elapsed().as_secs()); }
-                return true; 
+            if self.is_stopping() {
+                return false;
+            }
+            if a2s.info(&self.server_addr).is_ok() {
+                if DEBUG_LOGGING {
+                    sinfo!(
+                        "Server detected on {} after {}s",
+                        self.server_addr,
+                        start.elapsed().as_secs()
+                    );
+                }
+                return true;
             }
             thread::sleep(Duration::from_secs(2));
         }
-        swarn!("A2S Discovery timeout: Server not responding at {}", self.server_addr);
+        swarn!(
+            "A2S Discovery timeout: Server not responding at {}",
+            self.server_addr
+        );
         false
     }
 
     fn get_valid_identity(&self, a2s: &A2SClient) -> Option<Identity> {
         let mut lock = self.identity.lock().unwrap();
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-        
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
         if let Some(id) = lock.as_ref() {
-            if id.refresh_at > (now + HEARTBEAT_GRACE_PERIOD_SECS) { 
-                return Some(id.clone()); 
+            if id.refresh_at > (now + HEARTBEAT_GRACE_PERIOD_SECS) {
+                return Some(id.clone());
             }
-            if DEBUG_LOGGING { sinfo!("Identity expiring soon (or expired), re-registering..."); }
+            if DEBUG_LOGGING {
+                sinfo!("Identity expiring soon (or expired), re-registering...");
+            }
         }
 
         // Register fresh
@@ -393,17 +362,20 @@ impl RegistrationInner {
             Ok(new_id) => {
                 *lock = Some(new_id.clone());
                 Some(new_id)
-            },
+            }
             Err(_) => None,
         }
     }
     fn register(&self, a2s: &A2SClient) -> Result<Identity, ()> {
         let info = self.poll_a2s_with_retry(a2s)?;
         let args = &cli_args();
-        let description = format!("{} (build {})\n{} server", info.game, info.version, info.folder);
+        let description = format!(
+            "{} (build {})\n{} server",
+            info.game, info.version, info.folder
+        );
         let mods;
         let all_mods: Vec<Mod>;
-        #[cfg(feature="mod_management")]
+        #[cfg(feature = "mod_management")]
         {
             // The Asset Registry is scanned once during init (see `world_init`),
             // so the mod manager's registry is already populated here. Read the
@@ -424,66 +396,82 @@ impl RegistrationInner {
             all_mods = Vec::new();
         }
 
-        let server_name = match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")]) {
-            Some(name_str) => name_str,
-            _ => &info.name
-        };
+        let server_name =
+            match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
+            {
+                Some(name_str) => name_str,
+                _ => &info.name,
+            };
 
         let (max_players, player_count) = Self::players_from_info(&info);
 
-        let request = RegisterRequest {
-            ports: Ports {
-                game: info.extended_server_info.port.unwrap_or(7777),
-                ping: args.game_server_ping_port.unwrap_or(0),
-                a2s: args.game_server_query_port.unwrap_or(0),
+        let request = ServerRegistrationRequest {
+            ports: Chivalry2Ports {
+                game: info.extended_server_info.port.unwrap_or(7777) as i32,
+                ping: args.game_server_ping_port.unwrap_or(0) as i32,
+                a2s: args.game_server_query_port.unwrap_or(0) as i32,
             },
-            name: server_name,
+            name: server_name.to_owned(),
             description,
-            password_protected: args.server_password.is_some(),
-            current_map: &info.map,
+            password_protected: Some(args.server_password.is_some()),
+            current_map: info.map.clone(),
             player_count: player_count as i32,
             max_players: max_players as i32,
-            local_ip_address: self.local_ip_address.as_deref(),
-            mods,
+            local_ip_address: self.local_ip_address.clone(),
+            mods: Some(
+                mods.iter()
+                    .map(|m| {
+                        unchained_backend::models::Mod::new(
+                            m.name.clone(),
+                            m.organization.clone(),
+                            m.version.clone(),
+                        )
+                    })
+                    .collect(),
+            ),
         };
         //sinfo!("Request: {:#?}", request);
 
-        let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
-        if res.status().is_success() {
-            EVENT_SYSTEM.game_event_publisher.publish(GameEvent::ServerStatusEvent(ServerStatus {
+        let data =
+            api_v1_api::register(self.backend.configuration(), request.clone()).map_err(|_| ())?;
+        EVENT_SYSTEM
+            .game_event_publisher
+            .publish(GameEvent::ServerStatusEvent(ServerStatus {
                 name: request.name.into(),
                 description: request.description.into(),
-                password_protected: request.password_protected,
+                password_protected: request.password_protected.unwrap_or(false),
                 current_map: request.current_map.into(),
                 player_count: request.player_count,
                 max_players: request.max_players,
                 mods: all_mods,
-                active_mods: request.mods,
+                active_mods: mods,
             }));
-            let data: RegisterResponse = res.json().map_err(|_| ())?;
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-            let expiry = data.refresh_before as u64;
-            
-            if DEBUG_LOGGING {
-                sinfo!("Registered: {} | Verified: {} | Key: {}...",
-                    data.server.unique_id, data.server.is_verified, &data.key[..8]);
-            }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let expiry = data.refresh_before as u64;
 
-            let period = if expiry > now {
-                (expiry - now).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
-            } else {
-                MIN_HEARTBEAT_FLOOR_SECS
-            };
-
-            Ok(Identity {
-                id: data.server.unique_id,
-                key: data.key,
-                refresh_at: expiry,
-                refresh_period: period,
-            })
-        } else {
-            Err(())
+        if DEBUG_LOGGING {
+            sinfo!(
+                "Registered: {} | Verified: {}",
+                data.server.unique_id,
+                data.server.is_verified
+            );
         }
+
+        let period = if expiry > now {
+            (expiry - now).clamp(MIN_HEARTBEAT_FLOOR_SECS, MAX_HEARTBEAT_CAP_SECS)
+        } else {
+            MIN_HEARTBEAT_FLOOR_SECS
+        };
+
+        Ok(Identity {
+            id: data.server.unique_id,
+            key: data.key,
+            refresh_at: expiry,
+            refresh_period: period,
+        })
     }
 
     /// Extracts player count and max players from server info, adjusting for headless mode.
@@ -491,7 +479,10 @@ impl RegistrationInner {
     /// they do not exist.
     fn players_from_info(info: &Info) -> (u8, u8) {
         let (max_players, player_count) = if cli_args().is_headless {
-            (info.max_players.saturating_sub(1), info.players.saturating_sub(1))
+            (
+                info.max_players.saturating_sub(1),
+                info.players.saturating_sub(1),
+            )
         } else {
             (info.max_players, info.players)
         };
@@ -505,39 +496,37 @@ impl RegistrationInner {
         let (max_players, player_count) = Self::players_from_info(&info);
 
         // 1. Metadata Update (PUT)
-        let payload = UpdatePayload {
+        let payload = UpdateRegisteredServer {
             player_count: player_count as i32,
             max_players: max_players as i32,
-            map_name: &info.map,
+            current_map: info.map.clone(),
+            ..Default::default()
         };
-        let upd_res = self.http.put(BackendApi::server(&ident.id))
-            .header(AUTH_HEADER, &ident.key)
-            .json(&payload).send();
-
-        if let Ok(r) = upd_res {
-            if invalidates_registration(r.status()) { return Err(true); }
+        if let Err(error) =
+            api_v1_api::update(self.backend.configuration(), &ident.key, &ident.id, payload)
+        {
+            if invalidates_registration(&error) {
+                return Err(true);
+            }
         }
 
         // 2. Heartbeat Pulse (POST)
-        let hb_res = self.http.post(BackendApi::heartbeat(&ident.id))
-            .header(AUTH_HEADER, &ident.key)
-            .send();
+        let hb_res = api_v1_api::heartbeat(self.backend.configuration(), &ident.key, &ident.id);
 
         match hb_res {
-            Ok(r) if r.status().is_success() => {
-                // Parse the response to get the new refresh_before timestamp
-                if let Ok(data) = r.json::<HeartbeatResponse>() {
-                    if DEBUG_LOGGING { 
-                        strace!("HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
-                            ident.id, start_time.elapsed().as_millis(), data.server.is_verified, data.refresh_before); 
-                    }
-                    Ok(data.refresh_before as u64)
-                } else {
-                    // Success, but couldn't parse JSON. Return current refresh_at to keep it alive.
-                    Ok(ident.refresh_at)
+            Ok(data) => {
+                if DEBUG_LOGGING {
+                    strace!(
+                        "HB Success [id: {}, lat: {}ms, verified: {}, expiry: {}]",
+                        ident.id,
+                        start_time.elapsed().as_millis(),
+                        data.server.is_verified,
+                        data.refresh_before
+                    );
                 }
+                Ok(data.refresh_before as u64)
             }
-            Ok(r) if invalidates_registration(r.status()) => Err(true),
+            Err(error) if invalidates_registration(&error) => Err(true),
             _ => Err(false),
         }
     }
@@ -591,22 +580,5 @@ mod tests {
             format_host_port("[2a0c:d242:903b:ba00::ff99]", 7071),
             "[2a0c:d242:903b:ba00::ff99]:7071"
         );
-    }
-
-    #[test]
-    fn rejected_or_missing_registrations_require_fresh_identity() {
-        for status in [StatusCode::UNAUTHORIZED, StatusCode::FORBIDDEN, StatusCode::NOT_FOUND] {
-            assert!(invalidates_registration(status));
-        }
-    }
-
-    #[test]
-    fn other_responses_do_not_invalidate_registration() {
-        for code in 100..=599 {
-            if [401, 403, 404].contains(&code) {
-                continue;
-            }
-            assert!(!invalidates_registration(StatusCode::from_u16(code).unwrap()));
-        }
     }
 }

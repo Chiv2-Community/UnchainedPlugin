@@ -376,27 +376,6 @@ define_pattern_resolver!(ClientTravelInternal,["4C 8B DC 48 83 EC 58 33 C0 49 89
 // 		  (APlayerController *this,FString *param_1,ETravelType param_2,bool param_3,FGuid *param_4)
 CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut FGuid),{
 
-    #[derive(Debug, serde::Deserialize)]
-    #[allow(dead_code)]
-    struct ConnectionInfo {
-        Address: String,
-        PartyId: Option<String>,
-        PartySize: Option<u32>,
-        PlayFabId: Option<String>,
-        UnofficialTicket: Option<String>,
-    }
-
-    //127.0.0.1:7777&PartyId=1231231&PartySize=1&PlayFabId=123123&UnofficialTicket=12323
-    fn parse_connection_info(raw: &str) -> Result<ConnectionInfo, Box<dyn std::error::Error>> {
-        sinfo!("raw: {}", raw);
-        let query_str = raw.replace('?', "&");
-        let query_with_address = format!("Address={}", query_str);
-        let info: ConnectionInfo = serde_urlencoded::from_str(&query_with_address)?;
-        Ok(info)
-    }
-
-    let string_ref: &FString = unsafe{ &*arg1 };
-
     let previous_world = globals().world();
     globals().set_world(std::ptr::null_mut());
     match previous_world {
@@ -409,12 +388,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
         ),
     }
 
-    match parse_connection_info(string_ref.to_string().as_str()) {
-        Ok(info) => {
-            sinfo!("info: {:#?}", info);
-        }
-        Err(e) => serror!("Error: {}", e),
-    }
+    sinfo!("Client travel started (connection URL and options omitted)");
 });
 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)

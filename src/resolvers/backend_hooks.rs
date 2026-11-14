@@ -50,22 +50,14 @@ fn resolve_player_display_name(options: &str) -> String {
 }
 
 fn is_user_banned(addr: &str) -> bool {
-    let mut suffix = "/api/v1/check-banned/".to_string();
-    suffix.push_str(addr);
-    let url = backend_url!(suffix);
     sinfo!("Checking Unchained ban status for player");
-    let response = ureq::get(&url.to_string()).call();
-
+    let response = unchained_backend::BackendClient::new(
+        cli_args().server_browser_backend.as_deref().unwrap_or_default(), None,
+    ).ok().and_then(|client| unchained_backend::apis::api_v1_api::check_banned(client.configuration(), addr).ok());
     match response {
-        Ok(res) => match res.into_body().read_to_string() {
-            Ok(body_str) => body_str.contains("true"),
-            Err(error) => {
-                swarn!("Failed to read ban-check response for player: {:?}", error);
-                false
-            }
-        },
-        Err(e) => {
-            sinfo!("Ban check failed: {:?}", e);
+        Some(result) => result.banned,
+        None => {
+            swarn!("Ban check failed (legacy banlist remains fail-open)");
             false
         }
     }
@@ -140,7 +132,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    sinfo!("User joining with options '{}'", options_string);
+    sinfo!("User joining (connection options omitted)");
 
     let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
