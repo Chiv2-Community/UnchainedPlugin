@@ -16,7 +16,6 @@ use std::time::Duration;
 use crate::globals;
 use crate::tools::hook_globals::cli_args;
 
-// --- Configuration Constants ---
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_RETRIES: u8 = 3;
 
@@ -33,15 +32,11 @@ fn format_host_port(host: &str, port: u16) -> String {
     }
 }
 
-// --- Data Structures ---
-
 #[derive(Debug, Default)]
 struct WorkerState {
     stopping: bool,
     update_requested: bool,
 }
-
-// --- Main Implementation ---
 
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
@@ -152,11 +147,6 @@ impl Registration {
         }
     }
 
-    /// Wake metadata collection; the mod manager remains the source of truth.
-    pub fn set_mods(&self, _mods: Vec<Mod>) {
-        self.trigger_update();
-    }
-
     /// Spawn one worker; a paused SDK manager retains its existing identity.
     pub fn start(self: Arc<Self>) {
         let mut handle = self.handle.lock().unwrap();
@@ -255,52 +245,49 @@ impl RegistrationInner {
                         break;
                     }
                 }
-                let delay = registration.next_delay().unwrap_or(METADATA_POLL_INTERVAL);
-                self.wait_interruptible(delay.min(METADATA_POLL_INTERVAL));
-            } else {
-                self.wait_interruptible(METADATA_POLL_INTERVAL);
             }
+            let delay = registration
+                .as_ref()
+                .and_then(SdkRegistration::next_delay)
+                .unwrap_or(METADATA_POLL_INTERVAL);
+            self.wait_interruptible(delay.min(METADATA_POLL_INTERVAL));
         }
         *self.registration.lock().unwrap() = registration;
     }
 
     fn metadata(&self, info: &Info) -> (ServerRegistrationRequest, ServerStatus) {
-        let args = &cli_args();
+        let args = cli_args();
         let description = format!(
             "{} (build {})\n{} server",
             info.game, info.version, info.folder
         );
-        let mods;
-        let all_mods: Vec<Mod>;
         #[cfg(feature = "mod_management")]
-        {
+        let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = {
             // The Asset Registry is scanned once during init (see `world_init`),
             // so the mod manager's registry is already populated here. Read the
             // active and available mods straight from it instead of re-running
             // the game-thread scan (and its settle sleep) on every registration.
             if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
-                mods = mm.get_active_mod_metadata();
-                all_mods = mm.get_available().values().cloned().collect();
+                (
+                    mm.get_active_mod_metadata(),
+                    mm.get_available().values().cloned().collect(),
+                )
             } else {
-                mods = Vec::new();
-                all_mods = Vec::new();
+                (Vec::new(), Vec::new())
             }
-        }
+        };
 
         #[cfg(not(feature = "mod_management"))]
-        {
-            mods = Vec::new();
-            all_mods = Vec::new();
-        }
+        let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
 
         let server_name =
-            match cli_args().find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
+            match args.find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
             {
                 Some(name_str) => name_str,
                 _ => &info.name,
             };
 
-        let (max_players, player_count) = Self::players_from_info(&info);
+        let (max_players, player_count) = Self::players_from_info(info);
 
         let request = ServerRegistrationRequest {
             ports: Chivalry2Ports {
@@ -344,15 +331,14 @@ impl RegistrationInner {
     /// When headless, the server host is still counted as a player in the game, even though
     /// they do not exist.
     fn players_from_info(info: &Info) -> (u8, u8) {
-        let (max_players, player_count) = if cli_args().is_headless {
+        if cli_args().is_headless {
             (
                 info.max_players.saturating_sub(1),
                 info.players.saturating_sub(1),
             )
         } else {
             (info.max_players, info.players)
-        };
-        (max_players, player_count)
+        }
     }
 
     fn poll_a2s_with_retry(&self, a2s: &A2SClient) -> Result<a2s::info::Info, ()> {
