@@ -40,38 +40,40 @@ impl TaskState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use Command::*;
+    use TaskState::*;
 
     #[test]
-    fn command_transitions() {
-        use Command::*;
-        use TaskState::*;
-
+    fn starts_paused() {
         assert_eq!(TaskState::default(), Paused);
-        for (mut state, command, expected, exits) in [
-            (Paused, Start, Running, false),
-            (Paused, Pause, Paused, false),
-            (Paused, Cleanup, Paused, true),
-            (Running, Start, Running, false),
-            (Running, Pause, Paused, false),
-            (Running, Cleanup, Running, true),
-            (Halted, Start, Halted, false),
-            (Halted, Pause, Halted, false),
-            (Halted, Cleanup, Halted, true),
-        ] {
-            let case = format!("{state:?} + {command:?}");
-            assert_eq!(state.apply(command).is_break(), exits, "{case}");
-            assert_eq!(state.active(), expected == Running, "{case}");
-            assert_eq!(state, expected, "{case}");
-        }
     }
 
-    #[test]
-    fn halt_is_terminal_from_every_state() {
-        for mut state in [TaskState::Paused, TaskState::Running, TaskState::Halted] {
-            let case = format!("halt {state:?}");
-            state.halt();
-            assert!(!state.active(), "{case}");
-            assert_eq!(state, TaskState::Halted, "{case}");
-        }
+    #[test_case::test_case(Paused, Start, Running, false; "start_paused")]
+    #[test_case::test_case(Paused, Pause, Paused, false; "pause_paused")]
+    #[test_case::test_case(Paused, Cleanup, Paused, true; "cleanup_paused")]
+    #[test_case::test_case(Running, Start, Running, false; "start_running")]
+    #[test_case::test_case(Running, Pause, Paused, false; "pause_running")]
+    #[test_case::test_case(Running, Cleanup, Running, true; "cleanup_running")]
+    #[test_case::test_case(Halted, Start, Halted, false; "start_halted")]
+    #[test_case::test_case(Halted, Pause, Halted, false; "pause_halted")]
+    #[test_case::test_case(Halted, Cleanup, Halted, true; "cleanup_halted")]
+    fn command_transitions(
+        mut state: TaskState,
+        command: Command,
+        expected: TaskState,
+        exits: bool,
+    ) {
+        assert_eq!(state.apply(command).is_break(), exits);
+        assert_eq!(state.active(), expected == Running);
+        assert_eq!(state, expected);
+    }
+
+    #[test_case::test_case(Paused; "paused")]
+    #[test_case::test_case(Running; "running")]
+    #[test_case::test_case(Halted; "halted")]
+    fn halt_is_terminal(mut state: TaskState) {
+        state.halt();
+        assert!(!state.active());
+        assert_eq!(state, Halted);
     }
 }

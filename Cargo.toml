@@ -10,7 +10,8 @@ members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
 server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
-reqwest = { version = "0.12.19", features = ["json"] }
+reqwest = "0.12.19"
+test-case = "3.3"
 
 [[bin]]
 name = "mock_server"
@@ -155,7 +156,7 @@ emojis = "0.6"
 unicode-segmentation = "1.12"
 
 [dev-dependencies]
-test-case = "3.3"
+test-case = { workspace = true }
 tokio = { version = "1.0", features = ["test-util"] }
 [patch.crates-io]
 # Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.
