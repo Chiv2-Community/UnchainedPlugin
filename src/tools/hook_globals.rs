@@ -1,6 +1,8 @@
 
-#[cfg(feature="server_registration")]
-use std::sync::{Arc, Mutex};
+#[cfg(any(feature="server_registration", feature="mod_management"))]
+use std::sync::Mutex;
+#[cfg(feature="mod_management")]
+use std::sync::Arc;
 use std::{env, panic};
 use crate::game::engine::UWorld;
 
@@ -186,7 +188,7 @@ pub struct Globals {
     // pub(crate) cli_args: CLIArgs,
     pub world: RwLock<SyncPtr<UWorld>>,
     #[cfg(feature="server_registration")]
-    pub registration: Mutex<Option<Arc<Registration>>>,
+    pub registration: Mutex<Option<Registration>>,
     #[cfg(feature="mod_management")]
     pub mod_manager: Mutex<Option<Arc<ModManager>>>,
 }
