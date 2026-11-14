@@ -154,7 +154,7 @@ impl RegistrationWorker {
                     let Some(command) = command else {
                         break;
                     };
-                    if state.apply(command) {
+                    if state.apply(command).is_break() {
                         break;
                     }
                     poll_at = tokio::time::Instant::now();

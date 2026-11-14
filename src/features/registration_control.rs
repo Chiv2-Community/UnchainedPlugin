@@ -1,4 +1,6 @@
 //! Native command state only; registration lifecycle remains SDK-owned.
+use std::ops::ControlFlow;
+
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Command {
     Start,
@@ -6,13 +8,12 @@ pub(super) enum Command {
     Cleanup,
 }
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub(super) enum TaskState {
     #[default]
     Paused,
     Running,
     Halted,
-    Cleaned,
 }
 
 impl TaskState {
@@ -20,23 +21,19 @@ impl TaskState {
         *self == Self::Running
     }
 
-    /// Returns true exactly once when cleanup is requested.
-    pub(super) fn apply(&mut self, command: Command) -> bool {
+    /// Cleanup exits the worker; the SDK owns single-shot deletion.
+    pub(super) fn apply(&mut self, command: Command) -> ControlFlow<()> {
         match command {
             Command::Start if *self == Self::Paused => *self = Self::Running,
             Command::Pause if *self == Self::Running => *self = Self::Paused,
-            Command::Cleanup => {
-                return std::mem::replace(self, Self::Cleaned) != Self::Cleaned;
-            }
+            Command::Cleanup => return ControlFlow::Break(()),
             Command::Start | Command::Pause => {}
         }
-        false
+        ControlFlow::Continue(())
     }
 
     pub(super) fn halt(&mut self) {
-        if *self != Self::Cleaned {
-            *self = Self::Halted;
-        }
+        *self = Self::Halted;
     }
 }
 
@@ -48,47 +45,42 @@ mod tests {
     fn pause_resume_does_not_cleanup() {
         let mut state = TaskState::default();
         assert!(!state.active());
-        assert!(!state.apply(Command::Start));
+        assert!(state.apply(Command::Start).is_continue());
         assert!(state.active());
-        assert!(!state.apply(Command::Pause));
+        assert!(state.apply(Command::Pause).is_continue());
         assert!(!state.active());
-        assert!(!state.apply(Command::Start));
+        assert!(state.apply(Command::Start).is_continue());
         assert!(state.active());
     }
 
     #[test]
-    fn start_cannot_revive_halted_or_cleaned_manager() {
+    fn start_cannot_revive_halted_manager() {
         let mut state = TaskState::default();
-        state.apply(Command::Start);
+        assert!(state.apply(Command::Start).is_continue());
         state.halt();
-        state.apply(Command::Pause);
-        state.apply(Command::Start);
+        assert!(state.apply(Command::Pause).is_continue());
+        assert!(state.apply(Command::Start).is_continue());
         assert!(!state.active());
-        assert!(state.apply(Command::Cleanup));
-        state.apply(Command::Start);
-        assert!(!state.active());
-        assert!(!state.apply(Command::Cleanup));
+        assert_eq!(state, TaskState::Halted);
     }
 
     #[test]
-    fn cleanup_before_start_is_terminal_and_single_shot() {
-        let mut state = TaskState::default();
-        assert!(state.apply(Command::Cleanup));
-        state.apply(Command::Start);
-        assert!(!state.active());
-        assert!(!state.apply(Command::Cleanup));
-    }
-
-    #[test]
-    fn pause_cannot_reset_terminal_states() {
-        for terminal in [TaskState::Halted, TaskState::Cleaned] {
-            let needs_cleanup = terminal != TaskState::Cleaned;
-            let mut state = terminal;
-            assert!(!state.apply(Command::Pause));
-            assert!(!state.apply(Command::Start));
-            assert!(!state.active());
-            assert_eq!(state.apply(Command::Cleanup), needs_cleanup);
-            assert!(!state.apply(Command::Cleanup));
+    fn cleanup_exits_from_every_state() {
+        for mut state in [TaskState::Paused, TaskState::Running, TaskState::Halted] {
+            assert!(state.apply(Command::Cleanup).is_break());
         }
+    }
+
+    #[test]
+    fn repeated_start_and_pause_are_idempotent() {
+        let mut state = TaskState::default();
+        assert!(state.apply(Command::Pause).is_continue());
+        assert_eq!(state, TaskState::Paused);
+        assert!(state.apply(Command::Start).is_continue());
+        assert!(state.apply(Command::Start).is_continue());
+        assert_eq!(state, TaskState::Running);
+        assert!(state.apply(Command::Pause).is_continue());
+        assert!(state.apply(Command::Pause).is_continue());
+        assert_eq!(state, TaskState::Paused);
     }
 }
