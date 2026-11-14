@@ -46,20 +46,34 @@ fn serve(response: String) -> (String, thread::JoinHandle<String>) {
     (url, worker)
 }
 
+fn serve_json(body: serde_json::Value) -> (String, thread::JoinHandle<String>) {
+    let body = body.to_string();
+    serve(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
+}
+
 #[tokio::test]
 async fn generated_ban_check_uses_typed_boolean_and_encoded_ip() {
-    let body = "{\"banned\":false,\"note\":\"true\"}";
-    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-    let (url, worker) = serve(response);
-    let client = backend::transport(&url, None).unwrap();
-    assert!(
-        !api_v1_api::check_banned(client.configuration(), "2001:db8::1")
-            .await
-            .unwrap()
-            .banned
-    );
-    let request = worker.join().unwrap();
-    assert!(request.starts_with("GET /api/v1/check-banned/2001%3Adb8%3A%3A1 "));
+    for (address, encoded, banned) in [
+        ("127.0.0.1", "127.0.0.1", true),
+        ("2001:db8::1", "2001%3Adb8%3A%3A1", false),
+    ] {
+        let (url, worker) =
+            serve_json(serde_json::json!({"banned": banned, "note": (!banned).to_string()}));
+        let client = backend::transport(&url, None).unwrap();
+        assert_eq!(
+            api_v1_api::check_banned(client.configuration(), address)
+                .await
+                .unwrap()
+                .banned,
+            banned,
+            "{address}"
+        );
+        let request = worker.join().unwrap();
+        assert!(
+            request.starts_with(&format!("GET /api/v1/check-banned/{encoded} ")),
+            "{address}: {request}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -107,17 +121,19 @@ async fn sdk_transport_uses_plugin_policy_and_halts_ambiguous_registration() {
 
 #[test]
 fn native_ban_bridge_awaits_generated_operation_on_shared_runtime() {
-    let body = r#"{"banned":true}"#;
-    let (url, worker) = serve(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()));
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    assert_eq!(
-        backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
-        Some(true)
-    );
-    assert!(worker
-        .join()
-        .unwrap()
-        .starts_with("GET /api/v1/check-banned/127.0.0.1 "));
+    for banned in [false, true] {
+        let (url, worker) = serve_json(serde_json::json!({"banned": banned}));
+        assert_eq!(
+            backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
+            Some(banned),
+            "banned={banned}"
+        );
+        assert!(worker
+            .join()
+            .unwrap()
+            .starts_with("GET /api/v1/check-banned/127.0.0.1 "));
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -162,13 +178,12 @@ fn generated_listing_union_preserves_plain_and_diagnostic_shapes() {
         "password_protected": false, "is_verified": false, "name": "test", "description": "",
         "current_map": "map", "player_count": 0, "max_players": 32, "mods": [], "last_heartbeat": 1800000000.0
     });
-    let parsed: server_browser_client::models::ServerListingItem =
-        serde_json::from_value(plain.clone()).unwrap();
-    assert_eq!(serde_json::to_value(parsed).unwrap(), plain);
-    let mut diagnostic = plain;
+    let mut diagnostic = plain.clone();
     diagnostic["ip_address"] = serde_json::json!("2001:db8::1");
     diagnostic["local_ip_address"] = serde_json::Value::Null;
-    let parsed: server_browser_client::models::ServerListingItem =
-        serde_json::from_value(diagnostic.clone()).unwrap();
-    assert_eq!(serde_json::to_value(parsed).unwrap(), diagnostic);
+    for (name, value) in [("plain", plain), ("diagnostic", diagnostic)] {
+        let parsed: server_browser_client::models::ServerListingItem =
+            serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(parsed).unwrap(), value, "{name}");
+    }
 }
