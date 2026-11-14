@@ -26,11 +26,11 @@ Timeout aborts only the read-only ban check. This is a legacy synchronous
 admission bridge, not asynchronous admission or required authentication.
 Engine-owned HTTP interception remains in engine hooks.
 
-A2S alone uses `spawn_blocking`: at most one query is outstanding, with three
-attempts and the external client's five-second socket timeouts. Pause/cleanup
-waits for that query to finish before proceeding; jobs are not detached and
-repeated on timeout. Metadata reads retain the existing synchronized mod-cache
-access; tasks do not dereference Unreal objects.
+A2S uses the library's native async client, with three attempts and a five-second
+total deadline per query, including challenge exchanges. At most one query is
+outstanding; pause/cleanup waits for it to finish. No blocking jobs are created.
+Metadata reads retain the existing synchronized mod-cache access; tasks do not
+dereference Unreal objects.
 
 ```sh
 cargo test --locked -p plugin-backend-integration-tests
