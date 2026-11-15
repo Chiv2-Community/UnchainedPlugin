@@ -246,6 +246,26 @@ fn key_replacement_preserves_replay_and_failed_replacement_preserves_keys() {
 }
 
 #[test]
+fn key_replacement_preserves_verifier_policy() {
+    let issuer = "https://other-auth.test";
+    let mut verifier = TicketVerifier::new(issuer, OTHER_JTI, &material().jwks, 1).unwrap();
+    verifier.replace_keys(&material().jwks).unwrap();
+    let mut body = claims();
+    for (claim, value) in [
+        ("iss", json!(issuer)),
+        ("aud", json!(format!("urn:unchained:server:{OTHER_JTI}"))),
+    ] {
+        assert_eq!(
+            verifier.verify_and_consume(&token(&body), NOW),
+            Err(AuthError::InvalidTicket)
+        );
+        body[claim] = value;
+    }
+    let identity = verifier.verify_and_consume(&token(&body), NOW).unwrap();
+    assert_eq!(identity.server_id().to_string(), OTHER_JTI);
+}
+
+#[test]
 fn rejects_invalid_configuration() {
     let keys = material().jwks.as_slice();
     let oversized = vec![b' '; 65537];

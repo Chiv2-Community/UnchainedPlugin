@@ -64,6 +64,7 @@ impl VerifiedJoin {
 pub struct TicketVerifier {
     issuer: String,
     server_id: Uuid,
+    validation: Validation,
     keys: HashMap<String, DecodingKey>,
     consumed: HashMap<String, u64>,
     replay_capacity: usize,
@@ -127,9 +128,18 @@ impl TicketVerifier {
         {
             return Err(AuthError::Configuration);
         }
+        let server_id = canonical_uuid(server_id).ok_or(AuthError::Configuration)?;
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_required_spec_claims(&["iss", "sub", "aud", "exp", "nbf", "iat"]);
+        validation.set_issuer(&[issuer]);
+        validation.set_audience(&[format!("urn:unchained:server:{server_id}")]);
+        // Use the caller's sampled time for all time checks, including tests.
+        validation.validate_exp = false;
+        validation.validate_nbf = false;
         Ok(Self {
             issuer: issuer.to_owned(),
-            server_id: canonical_uuid(server_id).ok_or(AuthError::Configuration)?,
+            server_id,
+            validation,
             keys: parse_keys(jwks)?,
             consumed: HashMap::new(),
             replay_capacity,
@@ -165,14 +175,7 @@ impl TicketVerifier {
             return Err(AuthError::InvalidTicket);
         }
         let key = self.keys.get(&header.kid).ok_or(AuthError::UnknownKey)?;
-        let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_required_spec_claims(&["iss", "sub", "aud", "exp", "nbf", "iat"]);
-        validation.set_issuer(&[&self.issuer]);
-        validation.set_audience(&[format!("urn:unchained:server:{}", self.server_id)]);
-        // Use the caller's sampled time for all time checks, including tests.
-        validation.validate_exp = false;
-        validation.validate_nbf = false;
-        let claims = decode::<JoinTicketClaims>(ticket, key, &validation)
+        let claims = decode::<JoinTicketClaims>(ticket, key, &self.validation)
             .map_err(|_| AuthError::InvalidTicket)?
             .claims;
         let iat = u64::try_from(claims.iat).map_err(|_| AuthError::InvalidTicket)?;
