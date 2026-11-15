@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
     thread,
 };
@@ -21,15 +21,18 @@ fn serve(response: String) -> (String, thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/", listener.local_addr().unwrap());
     let worker = thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
+        let (stream, _) = listener.accept().unwrap();
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(2)))
             .unwrap();
+        let mut stream = BufReader::new(stream);
         let mut request = Vec::new();
         while !request.ends_with(b"\r\n\r\n") {
-            let mut byte = [0];
-            stream.read_exact(&mut byte).unwrap();
-            request.push(byte[0]);
+            assert_ne!(
+                stream.read_until(b'\n', &mut request).unwrap(),
+                0,
+                "incomplete HTTP headers"
+            );
         }
         let length = String::from_utf8_lossy(&request)
             .lines()
@@ -40,7 +43,7 @@ fn serve(response: String) -> (String, thread::JoinHandle<String>) {
         let mut body = vec![0; length];
         stream.read_exact(&mut body).unwrap();
         request.extend(body);
-        stream.write_all(response.as_bytes()).unwrap();
+        stream.get_mut().write_all(response.as_bytes()).unwrap();
         String::from_utf8(request).unwrap()
     });
     (url, worker)
@@ -117,6 +120,10 @@ async fn sdk_transport_uses_plugin_policy_and_halts_ambiguous_registration() {
     assert!(request
         .to_lowercase()
         .contains("user-agent: unchainedplugin/server-browser-api"));
+    let (_, body) = request.split_once("\r\n\r\n").unwrap();
+    let body: ServerRegistrationRequest = serde_json::from_str(body).unwrap();
+    assert_eq!(body.name, "server");
+    assert_eq!(body.current_map, "map");
 }
 
 #[test_case::test_case(false; "allowed")]
