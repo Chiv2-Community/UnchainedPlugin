@@ -8,7 +8,9 @@ use std::{
 mod backend;
 use server_browser_client::{
     apis::api_v1_api as api,
-    models::{Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer},
+    models::{
+        Chivalry2Ports, ServerListingItem, ServerRegistrationRequest, UpdateRegisteredServer,
+    },
 };
 use server_browser_client_sdk::{Clock, Event, Policy, Registration};
 
@@ -57,9 +59,11 @@ fn registration_lifecycle_against_backend_container() {
         let listing = api::get_servers(config)
             .await
             .unwrap_or_else(|_| panic!("listing failed"));
-        let server = serde_json::to_value(&listing.servers[0]).unwrap();
-        assert_eq!(server["player_count"], 2);
-        assert_eq!(server["current_map"], "next");
+        let [ServerListingItem::ServerResponse(server)] = listing.servers.as_slice() else {
+            panic!("expected one public listing");
+        };
+        assert_eq!(server.player_count, 2);
+        assert_eq!(server.current_map, "next");
         *clock.0.lock().unwrap() += Duration::from_secs(31);
         assert_eq!(registration.poll().await, Ok(Event::Heartbeat));
         assert!(
