@@ -14,5 +14,6 @@ url = "2"
 uuid = { version = "1", features = ["serde"] }
 
 [dev-dependencies]
+test-case = { workspace = true }
 rsa = { version = "0.9", features = ["pem"] }
 rand = "0.8"

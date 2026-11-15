@@ -110,36 +110,24 @@ fn rejects_signed_claim_drift_and_missing_claims() {
     }
 }
 
-#[test]
-fn validates_ticket_times() {
-    let future = 4_000_000_000_u64;
-    for (name, issued, lifetime, now, expected) in [
-        ("short lifetime", NOW, 30, NOW, Ok(())),
-        ("nbf leeway edge", NOW, 60, NOW - 30, Ok(())),
-        (
-            "before leeway",
-            NOW,
-            60,
-            NOW - 31,
-            Err(AuthError::InvalidTicket),
-        ),
-        ("expiry leeway edge", NOW, 60, NOW + 89, Ok(())),
-        ("expired", NOW, 60, NOW + 90, Err(AuthError::InvalidTicket)),
-        ("post-2038", future, 60, future, Ok(())),
-    ] {
-        let mut body = claims();
-        body["auth_time"] = json!(issued - 100);
-        body["iat"] = json!(issued);
-        body["nbf"] = json!(issued);
-        body["exp"] = json!(issued + lifetime);
-        assert_eq!(
-            verifier(1)
-                .verify_and_consume(&token(&body), now)
-                .map(|_| ()),
-            expected,
-            "{name}"
-        );
-    }
+#[test_case::test_case(NOW, 30, NOW, Ok(()); "short_lifetime")]
+#[test_case::test_case(NOW, 60, NOW - 30, Ok(()); "nbf_leeway_edge")]
+#[test_case::test_case(NOW, 60, NOW - 31, Err(AuthError::InvalidTicket); "before_leeway")]
+#[test_case::test_case(NOW, 60, NOW + 89, Ok(()); "expiry_leeway_edge")]
+#[test_case::test_case(NOW, 60, NOW + 90, Err(AuthError::InvalidTicket); "expired")]
+#[test_case::test_case(4_000_000_000, 60, 4_000_000_000, Ok(()); "post_2038")]
+fn validates_ticket_times(issued: u64, lifetime: u64, now: u64, expected: Result<(), AuthError>) {
+    let mut body = claims();
+    body["auth_time"] = json!(issued - 100);
+    body["iat"] = json!(issued);
+    body["nbf"] = json!(issued);
+    body["exp"] = json!(issued + lifetime);
+    assert_eq!(
+        verifier(1)
+            .verify_and_consume(&token(&body), now)
+            .map(|_| ()),
+        expected
+    );
 }
 
 #[test]
@@ -307,17 +295,12 @@ fn rejects_invalid_configuration() {
     }
 }
 
-#[test]
-fn rejects_malformed_tickets() {
-    for (name, ticket) in [
-        ("empty", String::new()),
-        ("oversized", "a".repeat(4097)),
-        ("invalid encoding", "not.a.ticket".to_owned()),
-    ] {
-        assert_eq!(
-            verifier(1).verify_and_consume(&ticket, NOW),
-            Err(AuthError::InvalidTicket),
-            "{name}"
-        );
-    }
+#[test_case::test_case(String::new(); "empty")]
+#[test_case::test_case("a".repeat(4097); "oversized")]
+#[test_case::test_case("not.a.ticket".to_owned(); "invalid_encoding")]
+fn rejects_malformed_tickets(ticket: String) {
+    assert_eq!(
+        verifier(1).verify_and_consume(&ticket, NOW),
+        Err(AuthError::InvalidTicket)
+    );
 }
