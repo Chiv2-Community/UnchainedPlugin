@@ -217,6 +217,27 @@ fn capacity_never_evicts_a_live_replay_entry() {
     assert!(verifier.verify_and_consume(&token(&next), NOW + 90).is_ok());
 }
 
+#[test_case::test_case(JTI.replace('-', ""); "unhyphenated")]
+#[test_case::test_case(format!("{{{JTI}}}"); "braced")]
+#[test_case::test_case(format!("urn:uuid:{JTI}"); "urn")]
+#[test_case::test_case("ABCDEF00-0000-4000-8000-000000000003".into(); "uppercase")]
+fn rejects_ticket_id_aliases_without_consuming(alias: String) {
+    let mut verifier = verifier(1);
+    let mut body = claims();
+    body["jti"] = json!(alias);
+    assert_eq!(
+        verifier.verify_and_consume(&token(&body), NOW),
+        Err(AuthError::InvalidTicket)
+    );
+    body["jti"] = json!(uuid::Uuid::parse_str(&alias).unwrap().to_string());
+    let ticket = token(&body);
+    verifier.verify_and_consume(&ticket, NOW).unwrap();
+    assert_eq!(
+        verifier.verify_and_consume(&ticket, NOW),
+        Err(AuthError::Replay)
+    );
+}
+
 #[test]
 fn key_replacement_preserves_replay_and_failed_replacement_preserves_keys() {
     let ticket = token(&claims());

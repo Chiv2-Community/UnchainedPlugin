@@ -66,7 +66,7 @@ pub struct TicketVerifier {
     server_id: Uuid,
     validation: Validation,
     keys: HashMap<String, DecodingKey>,
-    consumed: HashMap<String, u64>,
+    consumed: HashMap<Uuid, u64>,
     replay_capacity: usize,
 }
 
@@ -185,12 +185,12 @@ impl TicketVerifier {
             .sub
             .parse::<u64>()
             .map_err(|_| AuthError::InvalidTicket)?;
+        let ticket_id = canonical_uuid(&claims.jti).ok_or(AuthError::InvalidTicket)?;
         if claims.iss != self.issuer
             || claims.aud != format!("urn:unchained:server:{}", self.server_id)
             || discord_id == 0
             || discord_id.to_string() != claims.sub
             || claims.purpose != Purpose::UnchainedJoin
-            || canonical_uuid(&claims.jti).is_none()
             || auth_time == 0
             || auth_time > iat
             || claims.nbf != claims.iat
@@ -203,14 +203,14 @@ impl TicketVerifier {
             return Err(AuthError::InvalidTicket);
         }
         self.consumed.retain(|_, until| *until > now);
-        if self.consumed.contains_key(&claims.jti) {
+        if self.consumed.contains_key(&ticket_id) {
             return Err(AuthError::Replay);
         }
         if self.consumed.len() >= self.replay_capacity {
             return Err(AuthError::Capacity);
         }
         self.consumed
-            .insert(claims.jti, exp.saturating_add(CLOCK_SKEW));
+            .insert(ticket_id, exp.saturating_add(CLOCK_SKEW));
         Ok(VerifiedJoin {
             discord_id: claims.sub,
             auth_time,
