@@ -13,11 +13,13 @@ fn backend_revision() -> String {
     let revision = dependencies["server-browser-client"]["rev"]
         .as_str()
         .expect("SDK dependency must have an exact revision");
-    assert_eq!(
-        dependencies["server-browser-client-sdk"]["rev"].as_str(),
-        Some(revision),
-        "client and lifecycle SDK revisions must match"
-    );
+    for package in ["server-browser-client-sdk", "server-browser-models"] {
+        assert_eq!(
+            dependencies[package]["rev"].as_str(),
+            Some(revision),
+            "{package} and client revisions must match"
+        );
+    }
     assert!(
         revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
         "backend revision must be a full Git commit hash"

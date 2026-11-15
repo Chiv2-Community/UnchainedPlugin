@@ -10,6 +10,7 @@ members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/backen
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5c79f04cdd87edef06d95aee9724b6fca8fe218b" }
 server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5c79f04cdd87edef06d95aee9724b6fca8fe218b" }
+server-browser-models = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5c79f04cdd87edef06d95aee9724b6fca8fe218b" }
 reqwest = "0.12.19"
 test-case = "3.3"
 

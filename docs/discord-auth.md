@@ -9,6 +9,8 @@ The backend owns generated Rust model/client crates, templates and drift checks.
 The plugin consumes exact backend Git revisions without its own OAS snapshot or
 generator. `unchained-auth` depends only on the model crate. Backend PR #21
 declares 64-bit claim timestamps and regenerates both language contracts.
+All three backend crates are pinned in the workspace manifest; the container
+tests require matching revisions.
 
 Registration, updates, heartbeat and deletion use `server-browser-client-sdk`
 directly. Ban checks use generated bindings directly. `src/backend.rs` adds the
