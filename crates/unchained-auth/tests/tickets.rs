@@ -217,6 +217,32 @@ fn capacity_never_evicts_a_live_replay_entry() {
     assert!(verifier.verify_and_consume(&token(&next), NOW + 90).is_ok());
 }
 
+#[test_case::test_case(KID.replace('-', ""); "unhyphenated")]
+#[test_case::test_case(format!("{{{KID}}}"); "braced")]
+#[test_case::test_case(format!("urn:uuid:{KID}"); "urn")]
+#[test_case::test_case("ABCDEF00-0000-4000-8000-000000000002".into(); "uppercase")]
+fn rejects_key_id_aliases(alias: String) {
+    let mut jwks: Value = serde_json::from_slice(&material().jwks).unwrap();
+    jwks["keys"][0]["kid"] = json!(alias);
+    let jwks = serde_json::to_vec(&jwks).unwrap();
+    assert!(matches!(
+        TicketVerifier::new(ISSUER, SERVER, &jwks, 1),
+        Err(AuthError::Configuration)
+    ));
+    let mut verifier = verifier(1);
+    assert_eq!(verifier.replace_keys(&jwks), Err(AuthError::Configuration));
+    let header = Header {
+        kid: Some(alias),
+        ..header()
+    };
+    let ticket = encode(&header, &claims(), &material().key).unwrap();
+    assert_eq!(
+        verifier.verify_and_consume(&ticket, NOW),
+        Err(AuthError::InvalidTicket)
+    );
+    verifier.verify_and_consume(&token(&claims()), NOW).unwrap();
+}
+
 #[test_case::test_case(JTI.replace('-', ""); "unhyphenated")]
 #[test_case::test_case(format!("{{{JTI}}}"); "braced")]
 #[test_case::test_case(format!("urn:uuid:{JTI}"); "urn")]

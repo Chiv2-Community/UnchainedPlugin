@@ -65,7 +65,7 @@ pub struct TicketVerifier {
     issuer: String,
     server_id: Uuid,
     validation: Validation,
-    keys: HashMap<String, DecodingKey>,
+    keys: HashMap<Uuid, DecodingKey>,
     consumed: HashMap<Uuid, u64>,
     replay_capacity: usize,
 }
@@ -75,7 +75,7 @@ fn canonical_uuid(value: &str) -> Option<Uuid> {
     (parsed.to_string() == value).then_some(parsed)
 }
 
-fn parse_keys(bytes: &[u8]) -> Result<HashMap<String, DecodingKey>, AuthError> {
+fn parse_keys(bytes: &[u8]) -> Result<HashMap<Uuid, DecodingKey>, AuthError> {
     if bytes.len() > MAX_JWKS_BYTES {
         return Err(AuthError::Configuration);
     }
@@ -86,13 +86,13 @@ fn parse_keys(bytes: &[u8]) -> Result<HashMap<String, DecodingKey>, AuthError> {
     }
     let mut keys = HashMap::new();
     for key in document.keys {
+        let key_id = canonical_uuid(&key.kid).ok_or(AuthError::Configuration)?;
         let modulus = URL_SAFE_NO_PAD
             .decode(&key.n)
             .map_err(|_| AuthError::Configuration)?;
         if key.kty != "RSA"
             || key.alg != "RS256"
             || key.r#use != "sig"
-            || canonical_uuid(&key.kid).is_none()
             || !(256..=512).contains(&modulus.len())
             || modulus[0] & 0x80 == 0
             || key.e != "AQAB"
@@ -101,7 +101,7 @@ fn parse_keys(bytes: &[u8]) -> Result<HashMap<String, DecodingKey>, AuthError> {
         }
         let decoded = DecodingKey::from_rsa_components(&key.n, &key.e)
             .map_err(|_| AuthError::Configuration)?;
-        if keys.insert(key.kid, decoded).is_some() {
+        if keys.insert(key_id, decoded).is_some() {
             return Err(AuthError::Configuration);
         }
     }
@@ -168,13 +168,11 @@ impl TicketVerifier {
             .map_err(|_| AuthError::InvalidTicket)?;
         let header: TicketHeader =
             serde_json::from_slice(&header_bytes).map_err(|_| AuthError::InvalidTicket)?;
-        if header.alg != "RS256"
-            || header.typ != "unchained-join+jwt"
-            || canonical_uuid(&header.kid).is_none()
-        {
+        if header.alg != "RS256" || header.typ != "unchained-join+jwt" {
             return Err(AuthError::InvalidTicket);
         }
-        let key = self.keys.get(&header.kid).ok_or(AuthError::UnknownKey)?;
+        let key_id = canonical_uuid(&header.kid).ok_or(AuthError::InvalidTicket)?;
+        let key = self.keys.get(&key_id).ok_or(AuthError::UnknownKey)?;
         let claims = decode::<JoinTicketClaims>(ticket, key, &self.validation)
             .map_err(|_| AuthError::InvalidTicket)?
             .claims;
