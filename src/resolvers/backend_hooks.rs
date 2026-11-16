@@ -136,7 +136,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     }
 
     let addr_string = unsafe { (*address).to_string() };
-    sinfo!("User joining (backend banlist enabled)");
+    sinfo!("User joining");
 
     let original_result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
 
