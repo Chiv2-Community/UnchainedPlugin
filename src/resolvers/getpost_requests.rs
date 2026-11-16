@@ -81,10 +81,10 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-pub static STRING_TO_ROOT_FN: Lazy<RwLock<HashMap<String, u64>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 // OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 define_pattern_resolver!(CreateHttpRequest, [

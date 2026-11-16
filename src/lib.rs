@@ -20,7 +20,6 @@ pub mod modules;
 #[cfg(test)]
 pub mod test_utils;
 
-use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::{env, thread};
@@ -28,7 +27,7 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use anyhow::{Context, Result};
 use patternsleuth::resolvers::{resolvers, NamedResolver};
 use serde::{Deserialize, Serialize};
@@ -64,7 +63,7 @@ pub struct BuildInfo {
     offsets: HashMap<String, u64>,
 }
 
-static CURRENT_BUILD_INFO: Lazy<Mutex<Option<BuildInfo>>> = Lazy::new(|| Mutex::new(None));
+static CURRENT_BUILD_INFO: Mutex<Option<BuildInfo>> = Mutex::new(None);
 
 /// Offset (relative to the game image base) resolved for `name` in the current
 /// build info, if any.
@@ -89,7 +88,7 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     ))
 }
 
-static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
+static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
         "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
