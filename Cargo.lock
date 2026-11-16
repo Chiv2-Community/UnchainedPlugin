@@ -10,6 +10,7 @@ dependencies = [
  "aes",
  "anyhow",
  "async-trait",
+ "backon",
  "base64 0.22.1",
  "bitflags 2.11.0",
  "censor",
@@ -281,6 +282,16 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+]
+
+[[package]]
+name = "backon"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
+dependencies = [
+ "fastrand",
+ "tokio",
 ]
 
 [[package]]
@@ -2438,6 +2449,7 @@ name = "plugin-backend-integration-tests"
 version = "0.1.0"
 dependencies = [
  "a2s",
+ "backon",
  "reqwest 0.12.28",
  "serde_json",
  "server-browser-client",

@@ -22,6 +22,7 @@ testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true
 
 [dev-dependencies]
 unchained-auth = { path = "../../crates/unchained-auth" }
+backon = { workspace = true }
 test-case = { workspace = true }
 a2s = { workspace = true }
 server-browser-client = { workspace = true }

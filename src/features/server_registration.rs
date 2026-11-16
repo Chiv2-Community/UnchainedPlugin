@@ -10,6 +10,7 @@ use server_browser_client_sdk::{
     Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
 };
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::{sync::Notify, task::JoinHandle};
@@ -24,6 +25,7 @@ use crate::tools::hook_globals::cli_args;
 mod a2s_query;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
+const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
 // Allow the bounded in-flight HTTP request and one DELETE to finish.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(25);
 
@@ -199,14 +201,15 @@ impl RegistrationWorker {
         &mut self,
         shutdown: &CancellationToken,
     ) -> Result<Option<ServerStatus>, SdkError> {
-        let info = match a2s_query::query_with_retry(self.server_addr, shutdown).await {
-            Ok(Some(info)) => info,
-            Ok(None) => return Ok(None),
-            Err(error) => {
-                serror!("A2S failed after retries: {}", error);
-                return Ok(None);
-            }
-        };
+        let info =
+            match a2s_query::query_with_retry(self.server_addr, A2S_MAX_ATTEMPTS, shutdown).await {
+                Ok(Some(info)) => info,
+                Ok(None) => return Ok(None),
+                Err(error) => {
+                    serror!("A2S failed after retries: {}", error);
+                    return Ok(None);
+                }
+            };
         let status = Self::metadata(&info);
         let update = UpdateRegisteredServer {
             player_count: status.player_count,

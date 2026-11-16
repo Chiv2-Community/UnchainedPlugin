@@ -7,6 +7,7 @@ edition = "2021"
 members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/backend-integration"]
 
 [workspace.dependencies]
+backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
 server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
@@ -74,7 +75,7 @@ config_overrides_verbose_hooks = [] # print (config_override) hook triggers to c
 map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
-server_registration = ["a2s", "get_if_addrs", "tokio", "tokio-util"] # register server with backend
+server_registration = ["a2s", "backon", "get_if_addrs", "tokio", "tokio-util"] # register server with backend
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
 move-autonomous-desync = []
@@ -82,6 +83,7 @@ loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/f
 
 
 [dependencies]
+backon = { workspace = true, optional = true }
 server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
