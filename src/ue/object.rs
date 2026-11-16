@@ -75,7 +75,7 @@ bitflags::bitflags! {
 #[derive(Debug)]
 #[repr(C)]
 pub struct UObjectBase {
-    pub vtable: *const c_void,
+    vtable: *const UObjectVTable,
     pub object_flags: EObjectFlags,
     pub internal_index: i32,
     pub class_private: *const UClass,
@@ -93,6 +93,22 @@ pub struct UObjectBaseUtility {
 #[repr(C)]
 pub struct UObject {
     pub uobject_base_utility: UObjectBaseUtility,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+struct UObjectVTable {
+    _unused: [usize; 0x150 / 8],
+    get_world: unsafe extern "C" fn(*const UObject) -> *mut crate::game::engine::UWorld,
+}
+
+impl UObject {
+    /// # Safety
+    /// This must be a live native object with the supported GetWorld vtable ABI.
+    #[inline(always)]
+    pub unsafe fn get_world(&self) -> *mut crate::game::engine::UWorld {
+        ((*self.uobject_base_utility.uobject_base.vtable).get_world)(self)
+    }
 }
 
 #[derive(Debug)]
@@ -135,7 +151,7 @@ pub struct FFieldVariant {
 #[derive(Debug)]
 #[repr(C)]
 pub struct FField {
-    pub vtable: *const c_void,
+    vtable: *const c_void,
     pub class_private: *const FFieldClass,
     pub owner: FFieldVariant,
     pub next: *const FField,

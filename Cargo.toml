@@ -145,6 +145,7 @@ crc32c = "0.6.8"
 strum = { version = "0.26", features = ["derive"] }
 emojis = "0.6"
 unicode-segmentation = "1.12"
+tabled = { version = "0.22", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 test-case = "3.3"

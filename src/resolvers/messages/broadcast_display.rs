@@ -2,7 +2,7 @@ use std::os::raw::c_void;
 
 use crate::{
     events::broadcast_message::game_chat::broadcast_parts,
-    game::{chivalry2::EChatType, engine::{FText, UWorld}},
+    game::{chivalry2::EChatType, engine::FText},
     resolvers::admin_control::o_FText_AsCultureInvariant,
     ue::{FName, FString},
 };
@@ -61,11 +61,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     // Supported Steam/Epic ABI: APlayerController::Player +0x2d0, GetWorld slot +0x150.
     let player = unsafe { controller.byte_add(0x2d0).cast::<*mut crate::ue::UObject>().read() };
     if !object_inherits_from(player, "Player") { return None; }
-    let get_world: unsafe extern "C" fn(*mut c_void) -> *mut UWorld = unsafe {
-        let vtable = controller.cast::<*const usize>().read();
-        std::mem::transmute(*vtable.add(0x150 / std::mem::size_of::<usize>()))
-    };
-    let world = unsafe { get_world(controller).as_ref() }?;
+    let world = unsafe { (&*controller.cast::<crate::ue::UObject>()).get_world().as_ref() }?;
     let instance = world.owning_game_instance;
     if !object_inherits_from(instance.cast(), "TBLGameInstance") { return None; }
     let title = NativeText::new(title)?;

@@ -6,6 +6,12 @@ use crate::game::chivalry2::{AController, APlayerState, ATBLCharacter, FDeathDam
 use crate::tools::hook_globals::globals;
 use crate::ue::{UObject, UStruct};
 
+define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
+    "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
+]);
+CREATE_HOOK!(APlayerState_GetPlayerName, CALLED, *mut crate::ue::FString,
+    (player: *const APlayerState, output: *mut crate::ue::FString), {});
+
 fn object_class_name(ptr: *mut UObject) -> Option<String> {
     if !is_live_object(ptr) { return None; }
     let obj = unsafe { (ptr as *const UObject).as_ref() }?;
