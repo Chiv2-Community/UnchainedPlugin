@@ -1,4 +1,5 @@
-use super::a2s_query;
+#[path = "../../src/features/a2s_query.rs"]
+mod a2s_query;
 use a2s::errors::Error;
 use std::num::NonZeroUsize;
 use tokio::net::UdpSocket;
