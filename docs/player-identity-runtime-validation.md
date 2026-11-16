@@ -31,8 +31,36 @@ opted-in native path now requests signed admissions and verifies/consumes them
 synchronously without online redemption. Native base/PlayFab/platform setters
 receive wrappers constructed from verified claims. The platform RPC's server
 implementation drops client updates on opted-in hosts; normal replication stays
-unchanged. Live validation of this integration is in progress; this is not yet
-a runtime pass. Legacy backend operations remain, but are never a rejection fallback.
+unchanged. Legacy backend operations remain, but are never a rejection fallback.
+
+## Signed admission and authoritative IDs
+
+Live checks passed against the uninstrumented Steam host built from plugin commit
+`a51ac33`, using the pinned backend SDK at `c8b3ca9`:
+
+- Steam and Epic joined through the native browser, received signed admissions,
+  and completed local host verification. Host base EOS, PlayFab and platform IDs
+  matched the controlled accounts; both clients observed the network players.
+- The Epic client sent the controlled Steam player's base EOS ID through its own
+  native platform-ID RPC, repeating the previously successful spoof. Epic's base,
+  PlayFab and platform IDs stayed unchanged on the host and both clients.
+- After native logout, a fresh Epic process reconnected through the browser and
+  received the correct authoritative IDs again.
+- The backend issued three signed admissions and received no online redemptions.
+  Legacy opaque issuance/redemption was disabled in this private test backend.
+- All test games and the private backend were stopped; installed DLLs were not
+  replaced. UI/provisioning/spoof helpers remain outside the repository.
+
+Evidence: `/tmp/opencode/offline-authority/control/{result.json,run.log}` and
+`challenge-backend-evidence.json`. Host DLL SHA-256:
+`38eb49359bfed25ac589831f5b12088bd248e52882ecedaf0f11cda047772326`.
+
+This is not merge approval. PlayFab/EOS linkage remains unresolved. Live JWT
+tampering, expiry, audience, replay, rotation, server travel and same-process UI
+leave/rejoin remain untested for this signed path. Epic hosting with a Steam
+joining client is unvalidated; unavailable native ID factories fail closed.
+The checks below describe the earlier opaque-grant implementation, not a pass
+for this new JWT integration.
 
 ## Passed
 
