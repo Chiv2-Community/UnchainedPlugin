@@ -26,15 +26,12 @@ use std::marker::PhantomData;
 use std::sync::Mutex;
 use async_trait::async_trait;
 use clap::{CommandFactory, Parser};
-use once_cell::sync::Lazy;
 use crate::events::models::{ActorIdentity, ActorPermissions, CommandActor, CommandRequest, CommandSource, GameEvent, PermissionFlags};
 use crate::features::events::EVENT_SYSTEM;
 
 pub type CommandResult = anyhow::Result<()>;
 
-pub static NATIVE_COMMAND_QUEUE: Lazy<Mutex<Vec<String>>> = Lazy::new(|| {
-    Mutex::new(Vec::new())
-});
+pub static NATIVE_COMMAND_QUEUE: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Where one console (stdin) line goes.
 #[derive(Debug, Clone, PartialEq, Eq)]

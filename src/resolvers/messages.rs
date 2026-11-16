@@ -122,7 +122,7 @@ mod client_message {
     }
 
     fn system_message(line: &str) -> Option<(EChatType, Option<&str>, &str)> {
-        static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
             Regex::new(r"^(?:(?P<player>[^\r\n]*?[ \t]+))??<(?P<channel>[0-9]+)>:[ \t]*").unwrap()
         });
         let (channel, body) = if let Some(caps) = RE.captures(line) {
