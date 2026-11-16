@@ -61,7 +61,7 @@ fn is_user_banned(addr: &str) -> bool {
     match response {
         Some(banned) => banned,
         None => {
-            swarn!("Ban check failed (legacy banlist remains fail-open)");
+            swarn!("Ban check failed");
             false
         }
     }

@@ -95,10 +95,6 @@ loggers:
     level: warn
   patternsleuth:
     level: warn
-  ureq:
-    level: warn
-  ureq_proto:
-    level: warn
   rustls:
     level: warn
   "h2::codec":
