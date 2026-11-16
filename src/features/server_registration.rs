@@ -12,7 +12,8 @@ use server_browser_client_sdk::{
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Notify};
+use tokio::{sync::Notify, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
 
@@ -21,9 +22,6 @@ use crate::tools::hook_globals::cli_args;
 
 #[path = "a2s_query.rs"]
 mod a2s_query;
-#[path = "registration_control.rs"]
-mod registration_control;
-use registration_control::{Command, TaskState};
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_RETRIES: u8 = 3;
@@ -31,7 +29,8 @@ const A2S_RETRIES: u8 = 3;
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
 pub struct Registration {
-    commands: mpsc::UnboundedSender<Command>,
+    shutdown: CancellationToken,
+    task: JoinHandle<()>,
     update: Arc<Notify>,
 }
 
@@ -112,17 +111,14 @@ impl Registration {
             backend,
             registration: None,
         };
-        let (commands, receiver) = mpsc::unbounded_channel();
+        let shutdown = CancellationToken::new();
         let update = Arc::new(Notify::new());
-        // Closing the command channel drives cleanup; dropping the task handle
-        // detaches it rather than aborting an in-flight registration request.
-        drop(TOKIO_RUNTIME.spawn(worker.run(receiver, Arc::clone(&update))));
-        Self { commands, update }
-    }
-
-    /// Resume the single task, retaining the paused SDK identity.
-    pub fn start(&self) {
-        let _ = self.commands.send(Command::Start);
+        let task = TOKIO_RUNTIME.spawn(worker.run(shutdown.clone(), Arc::clone(&update)));
+        Self {
+            shutdown,
+            task,
+            update,
+        }
     }
 
     /// Forces the worker to wake up and perform an update (e.g., on map change).
@@ -130,59 +126,45 @@ impl Registration {
         self.update.notify_one();
     }
 
-    /// Queue pause/cleanup without blocking a native hook or runtime worker.
-    /// Any in-flight request completes before cleanup; cleanup is one-shot.
-    pub fn stop(&self, deregister: bool) {
-        let _ = self.commands.send(if deregister {
-            Command::Cleanup
-        } else {
-            Command::Pause
-        });
+    pub fn is_finished(&self) -> bool {
+        self.task.is_finished()
+    }
+}
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        // Let in-flight HTTP finish before cleanup; aborting could lose a new identity.
+        self.shutdown.cancel();
     }
 }
 
 impl RegistrationWorker {
-    async fn run(mut self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>) {
-        let mut state = TaskState::default();
+    async fn run(mut self, shutdown: CancellationToken, update: Arc<Notify>) {
         let mut poll_at = tokio::time::Instant::now();
         loop {
-            // One owner orders pause/resume/cleanup after in-flight HTTP. Never
-            // cancel a registration POST and risk creating a second identity.
+            // Cancellation is observed between requests, never during a registration POST.
             tokio::select! {
                 biased;
-                command = commands.recv() => {
-                    let Some(command) = command else {
-                        break;
-                    };
-                    if state.apply(command).is_break() {
-                        break;
-                    }
-                    poll_at = tokio::time::Instant::now();
-                    continue;
-                }
-                _ = update.notified(), if state.active() => {},
-                _ = tokio::time::sleep_until(poll_at), if state.active() => {},
+                _ = shutdown.cancelled() => break,
+                _ = update.notified() => {},
+                _ = tokio::time::sleep_until(poll_at) => {},
             }
 
-            match self.poll(&commands).await {
+            match self.poll(&shutdown).await {
                 Ok(delay) => poll_at = tokio::time::Instant::now() + delay,
                 Err(error) => {
                     // Preserve uncertainty instead of creating a fresh manager.
                     swarn!("Server-browser lifecycle halted: {}", error);
-                    state.halt();
+                    break;
                 }
             }
         }
         self.cleanup().await;
     }
 
-    async fn poll(
-        &mut self,
-        commands: &mpsc::UnboundedReceiver<Command>,
-    ) -> Result<Duration, SdkError> {
-        let status = self.refresh_metadata(commands).await?;
-        // A pause/cleanup arriving during A2S must precede new HTTP.
-        if !commands.is_empty() || commands.is_closed() {
+    async fn poll(&mut self, shutdown: &CancellationToken) -> Result<Duration, SdkError> {
+        let status = self.refresh_metadata(shutdown).await?;
+        if shutdown.is_cancelled() {
             return Ok(Duration::ZERO);
         }
         if let Some(registration) = self.registration.as_mut() {
@@ -198,9 +180,9 @@ impl RegistrationWorker {
 
     async fn refresh_metadata(
         &mut self,
-        commands: &mpsc::UnboundedReceiver<Command>,
+        shutdown: &CancellationToken,
     ) -> Result<Option<ServerStatus>, SdkError> {
-        let Some(info) = self.poll_a2s_with_retry(commands).await else {
+        let Some(info) = self.poll_a2s_with_retry(shutdown).await else {
             return Ok(None);
         };
         let status = Self::metadata(&info);
@@ -320,22 +302,25 @@ impl RegistrationWorker {
         }
     }
 
-    async fn poll_a2s_with_retry(
-        &self,
-        commands: &mpsc::UnboundedReceiver<Command>,
-    ) -> Option<Info> {
+    async fn poll_a2s_with_retry(&self, shutdown: &CancellationToken) -> Option<Info> {
         for i in 0..A2S_RETRIES {
-            if !commands.is_empty() || commands.is_closed() {
-                return None;
-            }
-            match a2s_query::query(self.server_addr).await {
+            let result = tokio::select! {
+                biased;
+                _ = shutdown.cancelled() => return None,
+                result = a2s_query::query(self.server_addr) => result,
+            };
+            match result {
                 Ok(info) => return Some(info),
                 Err(error) => {
                     if i == A2S_RETRIES - 1 {
                         serror!("A2S failed after {} attempts: {:?}", A2S_RETRIES, error);
                         return None;
                     }
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::select! {
+                        biased;
+                        _ = shutdown.cancelled() => return None,
+                        _ = tokio::time::sleep(Duration::from_millis(500)) => {},
+                    }
                 }
             }
         }

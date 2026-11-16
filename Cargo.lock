@@ -48,6 +48,7 @@ dependencies = [
  "strum 0.26.3",
  "test-case",
  "tokio",
+ "tokio-util",
  "tracing",
  "unicode-segmentation",
  "ureq",
@@ -3807,6 +3808,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

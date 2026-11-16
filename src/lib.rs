@@ -498,7 +498,7 @@ pub fn world_init() {
                 args.use_ipv6,
             );
             
-            globals().registration.lock().unwrap().insert(reg).start();
+            *globals().registration.lock().unwrap() = Some(reg);
             
             sinfo!("Started server registration manager");
         }
