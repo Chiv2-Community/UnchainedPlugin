@@ -189,7 +189,7 @@ impl RegistrationWorker {
                 ports: Chivalry2Ports {
                     game: i32::from(info.extended_server_info.port.unwrap_or(7777)),
                     ping: i32::from(args.game_server_ping_port.unwrap_or(0)),
-                    a2s: i32::from(args.game_server_query_port.unwrap_or(0)),
+                    a2s: i32::from(self.query_address.port()),
                 },
                 name: status.name.clone(),
                 description: status.description.clone(),
