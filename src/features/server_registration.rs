@@ -55,7 +55,7 @@ pub struct Registration {
 
 #[derive(Debug)]
 struct RegistrationWorker {
-    server_addr: SocketAddr,
+    query_address: SocketAddr,
     local_ip_address: Option<String>,
     backend: HttpTransport,
     registration: Option<SdkRegistration<HttpTransport>>,
@@ -77,7 +77,7 @@ fn discover_global_ipv6() -> Option<Ipv6Addr> {
 
 impl Registration {
     /// Initializes the registration manager.
-    pub fn new(ip: IpAddr, query_port: u16, local_ip: Option<&str>, use_ipv6: bool) -> Self {
+    pub fn new(query_address: SocketAddr, local_ip: Option<&str>, use_ipv6: bool) -> Self {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
@@ -125,7 +125,7 @@ impl Registration {
         .expect("Failed to construct bounded server-browser client");
 
         let worker = RegistrationWorker {
-            server_addr: SocketAddr::new(ip, query_port),
+            query_address,
             local_ip_address: advertised_local_ip,
             backend,
             registration: None,
@@ -202,7 +202,7 @@ impl RegistrationWorker {
         shutdown: &CancellationToken,
     ) -> Result<Option<ServerStatus>, SdkError> {
         let info =
-            match a2s_query::query_with_retry(self.server_addr, A2S_MAX_ATTEMPTS, shutdown).await {
+            match a2s_query::query_with_retry(self.query_address, A2S_MAX_ATTEMPTS, shutdown).await {
                 Ok(Some(info)) => info,
                 Ok(None) => return Ok(None),
                 Err(error) => {

@@ -4,9 +4,6 @@ use std::{
     thread,
 };
 
-#[path = "../../src/features/a2s_query.rs"]
-mod a2s_query;
-mod a2s_transport;
 #[path = "../../src/backend.rs"]
 mod backend;
 use server_browser_client::{

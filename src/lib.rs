@@ -492,8 +492,7 @@ pub fn world_init() {
                 Some(args.local_ip.as_str())
             };
             let reg = Registration::new(
-                std::net::Ipv4Addr::LOCALHOST.into(),
-                query_port,
+                (std::net::Ipv4Addr::LOCALHOST, query_port).into(),
                 advertised_local_ip,
                 args.use_ipv6,
             );

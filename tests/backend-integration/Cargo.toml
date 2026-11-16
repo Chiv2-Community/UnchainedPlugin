@@ -6,6 +6,10 @@ publish = false
 
 # Test-only harness: no adapter library and no runtime consumers.
 [[test]]
+name = "a2s_transport"
+path = "a2s_transport.rs"
+
+[[test]]
 name = "backend_transport"
 path = "backend_transport.rs"
 
