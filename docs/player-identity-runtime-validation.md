@@ -4,6 +4,23 @@
 Implementation is being committed/pushed on the feature branches; no merge or
 installed-plugin replacement is authorized by these validation results.
 
+## Persistent account pinning
+
+The backend now requires `GAME_ACCOUNT_DATABASE` for signed admissions. It pins
+the first independently validated PlayFab/EOS PUID combination and verified
+Steam ID, rejects subsequent conflicts with `409 account_mismatch` / `Account
+Mismatch`, and stores deduplicated verified mismatch attempts. Rejection never
+replaces pins or their login timestamps. Recovery is manual; first-use poisoning
+is an accepted risk, not provider-backed Epic account linkage.
+
+The plugin uses the generated typed 409 response and logs a fixed `Account
+Mismatch` support message without printing backend bodies or account IDs. It
+cancels browser travel; no native menu error dialog is implemented.
+
+Backend tests: 746 passed, 5 skipped; code generation drift and type checks pass.
+Live validation of persistent pinning is in progress. Earlier runtime results
+below do not by themselves validate this new backend policy.
+
 ## EOS Connect proof retrieval
 
 Isolated Steam and Epic runs retrieved identity-only JWTs through the public

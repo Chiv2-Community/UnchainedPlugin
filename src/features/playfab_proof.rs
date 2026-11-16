@@ -153,6 +153,19 @@ async fn issue_proof(
             )
             .await
             .ok()
+            .map(|result| {
+                if let Err(server_browser_client::apis::Error::ResponseError(response)) = &result {
+                    if response.status == reqwest::StatusCode::CONFLICT
+                        && matches!(response.entity.as_ref(),
+                            Some(api_v1_api::IssueGameAdmissionError::Status409(status))
+                                if status.status == "account_mismatch")
+                    {
+                        // Never echo an arbitrary backend body or its identifiers.
+                        swarn!("Account Mismatch: verified accounts conflict with the backend pin; contact support");
+                    }
+                }
+                result
+            })
             .and_then(Result::ok)
             .filter(|ticket| ticket.server_id == challenge.server_id)
             .filter(|ticket| protocol::admission_ticket(&ticket.ticket))
