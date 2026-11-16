@@ -6,6 +6,7 @@ pub mod logging;
 pub mod macros;
 mod resolvers;
 mod backend;
+mod backend_config;
 pub mod scan;
 pub mod tools;
 mod ue;
@@ -494,7 +495,6 @@ pub fn world_init() {
             let reg = Registration::new(
                 (std::net::Ipv4Addr::LOCALHOST, query_port).into(),
                 advertised_local_ip,
-                args.use_ipv6,
             );
             
             *globals().registration.lock().unwrap() = Some(reg);

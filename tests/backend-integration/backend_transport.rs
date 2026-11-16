@@ -16,7 +16,7 @@ fn transport_sets_plugin_user_agent() {
 async fn native_ban_bridge_fails_open_inside_runtime_without_deadlock() {
     assert_eq!(
         backend::check_banned_sync(
-            "http://127.0.0.1:1",
+            &backend::transport("http://127.0.0.1:1", None).unwrap(),
             "127.0.0.1",
             &tokio::runtime::Handle::current()
         ),
@@ -31,7 +31,11 @@ fn native_ban_bridge_fails_open_on_connection_error() {
     drop(listener);
     let runtime = tokio::runtime::Runtime::new().unwrap();
     assert_eq!(
-        backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
+        backend::check_banned_sync(
+            &backend::transport(&url, None).unwrap(),
+            "127.0.0.1",
+            runtime.handle()
+        ),
         None
     );
 }
@@ -42,7 +46,11 @@ fn native_ban_bridge_fails_open_after_runtime_shutdown() {
     let handle = runtime.handle().clone();
     drop(runtime);
     assert_eq!(
-        backend::check_banned_sync("http://127.0.0.1:1", "127.0.0.1", &handle),
+        backend::check_banned_sync(
+            &backend::transport("http://127.0.0.1:1", None).unwrap(),
+            "127.0.0.1",
+            &handle
+        ),
         None
     );
 }

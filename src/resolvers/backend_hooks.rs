@@ -53,7 +53,7 @@ fn is_user_banned(addr: &str) -> bool {
     sinfo!("Checking Unchained ban status for player");
     let response = std::panic::catch_unwind(|| {
         crate::backend::check_banned_sync(
-            cli_args().server_browser_backend.as_deref().unwrap_or_default(),
+            crate::backend_config::client(),
             addr,
             crate::features::tokio_runtime::TOKIO_RUNTIME.handle(),
         )

@@ -18,24 +18,19 @@ pub fn transport(
 
 /// Legacy native admission cannot await. Never block inside a Tokio context.
 /// Timeout/task failure/shutdown keeps the banlist fail-open, not an authentication gate.
-pub fn check_banned_sync(base_url: &str, address: &str, runtime: &Handle) -> Option<bool> {
+pub fn check_banned_sync(client: &HttpTransport, address: &str, runtime: &Handle) -> Option<bool> {
     if Handle::try_current().is_ok() {
         return None;
     }
-    let base_url = base_url.to_owned();
+    let client = client.clone();
     let address = address.to_owned();
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
     let task = runtime.spawn(async move {
-        let result = match transport(&base_url, None) {
-            Ok(client) => server_browser_client::apis::api_v1_api::check_banned(
-                client.configuration(),
-                &address,
-            )
-            .await
-            .ok()
-            .map(|response| response.banned),
-            Err(_) => None,
-        };
+        let result =
+            server_browser_client::apis::api_v1_api::check_banned(client.configuration(), &address)
+                .await
+                .ok()
+                .map(|response| response.banned);
         let _ = sender.send(result);
     });
     let result = receiver.recv_timeout(Duration::from_secs(3)).ok().flatten();

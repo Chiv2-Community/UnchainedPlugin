@@ -2,14 +2,13 @@ use crate::events::models::{GameEvent, ServerStatus};
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::Mod;
 use a2s::info::Info;
-use get_if_addrs::{get_if_addrs, IfAddr};
 use server_browser_client::models::{
     Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
 };
 use server_browser_client_sdk::{
     Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
 };
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -61,68 +60,21 @@ struct RegistrationWorker {
     registration: Option<SdkRegistration<HttpTransport>>,
 }
 
-fn discover_global_ipv6() -> Option<Ipv6Addr> {
-    // The game may run inside a container/Wine namespace where interface
-    // enumeration does not expose the host's global address. The launcher
-    // therefore supplies SERVER_ADVERTISE_IP as the preferred stable source;
-    // this discovery path is the fallback for native IPv6 environments.
-    get_if_addrs().ok()?.into_iter().find_map(|interface| {
-        let IfAddr::V6(address) = interface.addr else {
-            return None;
-        };
-        let ip = address.ip;
-        ip.is_unicast_global().then_some(ip)
-    })
-}
-
 impl Registration {
     /// Initializes the registration manager.
-    pub fn new(query_address: SocketAddr, local_ip: Option<&str>, use_ipv6: bool) -> Self {
+    pub fn new(query_address: SocketAddr, local_ip: Option<&str>) -> Self {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
-        let bind_address = if use_ipv6 {
-            match local_ip {
-                Some(address) => address.parse::<Ipv6Addr>().ok(),
-                None => std::env::var("SERVER_ADVERTISE_IP")
-                    .ok()
-                    .and_then(|configured| configured.parse::<Ipv6Addr>().ok())
-                    .or_else(discover_global_ipv6)
-                    .or_else(|| {
-                        swarn!("--use-ipv6 could not discover or obtain SERVER_ADVERTISE_IP; using the OS-selected source");
-                        None
-                    }),
-            }
-        } else {
-            None
-        };
 
         if let Some(address) = advertised_local_ip.as_deref() {
             sinfo!(
                 "Advertising server-browser registration with local address {}",
                 address
             );
-        } else if let Some(address) = bind_address {
-            sinfo!(
-                "Using discovered IPv6 source {} without advertising local_ip_address",
-                address
-            );
         }
 
-        if let Some(address) = bind_address {
-            sinfo!(
-                "Binding server-browser registration HTTP to IPv6 source {}",
-                address
-            );
-        }
-        let backend = crate::backend::transport(
-            cli_args()
-                .server_browser_backend
-                .as_deref()
-                .unwrap_or_default(),
-            bind_address.map(IpAddr::V6),
-        )
-        .expect("Failed to construct bounded server-browser client");
+        let backend = crate::backend_config::client().clone();
 
         let worker = RegistrationWorker {
             query_address,

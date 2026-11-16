@@ -9,9 +9,9 @@ use server_browser_client::{apis::api_v1_api as api, models::IpListRequest};
 fn native_ban_bridge_against_backend(banned: bool) {
     let (_container, url) = support::backend();
     let runtime = tokio::runtime::Runtime::new().unwrap();
+    let client = backend::transport(&url, None).unwrap();
     if banned {
         runtime.block_on(async {
-            let client = backend::transport(&url, None).unwrap();
             api::add_to_ban_list(
                 client.configuration(),
                 "container-test-admin",
@@ -25,7 +25,7 @@ fn native_ban_bridge_against_backend(banned: bool) {
         });
     }
     assert_eq!(
-        backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
+        backend::check_banned_sync(&client, "127.0.0.1", runtime.handle()),
         Some(banned)
     );
 }
