@@ -7,10 +7,7 @@ pub fn client() -> &'static HttpTransport {
     static CLIENT: OnceLock<HttpTransport> = OnceLock::new();
     CLIENT.get_or_init(|| {
         let args = cli_args();
-        #[cfg(feature = "server_registration")]
         let source_ip = source_ip(args);
-        #[cfg(not(feature = "server_registration"))]
-        let source_ip = None;
         crate::backend::transport(
             args.server_browser_backend.as_deref().unwrap_or_default(),
             source_ip,
@@ -19,7 +16,6 @@ pub fn client() -> &'static HttpTransport {
     })
 }
 
-#[cfg(feature = "server_registration")]
 fn source_ip(args: &crate::tools::cli_args::CLIArgs) -> Option<std::net::IpAddr> {
     use get_if_addrs::{get_if_addrs, IfAddr};
     use std::net::{IpAddr, Ipv6Addr};

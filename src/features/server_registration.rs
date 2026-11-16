@@ -7,6 +7,7 @@ use server_browser_client::models::{
 };
 use server_browser_client_sdk::{
     Event, HttpTransport, Policy, Registration as SdkRegistration, RegistrationWorker,
+    RequestFailure,
 };
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -173,6 +174,9 @@ impl MetadataCollector {
         registration.add_deletion_response_listener(|response| {
             match response {
                 Ok(()) => sinfo!("Server-browser registration deleted"),
+                Err(RequestFailure::Http(404)) => {
+                    sinfo!("Server-browser registration already absent")
+                }
                 Err(error) => swarn!("Server-browser deletion failed: {:?}", error),
             }
             Ok(())
