@@ -25,6 +25,24 @@ mod a2s_query;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_RETRIES: u8 = 3;
+// Allow the bounded in-flight HTTP request and one DELETE to finish.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(25);
+
+pub async fn shutdown() {
+    let registration = globals()
+        .registration
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    if let Some(mut registration) = registration {
+        registration.shutdown.cancel();
+        match tokio::time::timeout(SHUTDOWN_TIMEOUT, &mut registration.task).await {
+            Ok(Ok(())) => sinfo!("Server-browser registration task stopped"),
+            Ok(Err(error)) => swarn!("Server-browser registration task failed: {}", error),
+            Err(_) => swarn!("Server-browser registration shutdown timed out"),
+        }
+    }
+}
 
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
