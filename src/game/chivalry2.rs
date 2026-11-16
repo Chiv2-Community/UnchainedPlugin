@@ -4,6 +4,15 @@ use bitflags::bitflags;
 use strum::Display;
 use crate::{game::engine::FText, ue::{AsUObject, FString, FVector, TArray, UObject}};
 
+// SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
+unsafe impl crate::ue::UObjectType for AController { const CLASS_NAME: &'static str = "Controller"; }
+unsafe impl crate::ue::UObjectType for APawn { const CLASS_NAME: &'static str = "Pawn"; }
+unsafe impl crate::ue::UObjectType for ACharacter { const CLASS_NAME: &'static str = "Character"; }
+unsafe impl crate::ue::UObjectType for ATBLCharacter { const CLASS_NAME: &'static str = "TBLCharacter"; }
+unsafe impl crate::ue::UObjectType for APlayerState { const CLASS_NAME: &'static str = "PlayerState"; }
+unsafe impl crate::ue::UObjectType for ATBLPlayerState { const CLASS_NAME: &'static str = "TBLPlayerState"; }
+unsafe impl crate::ue::UObjectType for ATBLGameState { const CLASS_NAME: &'static str = "TBLGameState"; }
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct AActor {
@@ -770,7 +779,7 @@ pub struct ATBLGameState {
     pub gamemode_type: u8,                        // 0x0310
     pub padding_0: [u8; 0x7],                     // 0x0311
     pub game_mode_name_padding: [u8; 0x18],       // 0x0318 (FText)
-    pub server_name_padding: [u8; 0x18],          // 0x0330 (FText)
+    pub server_name: FText,                      // 0x0330
     pub platform: FString,                  // 0x0348
     pub victor: u8,                               // 0x0358
     pub padding_1: [u8; 0x7],                     // 0x0359
@@ -880,28 +889,99 @@ pub struct ATBLGameState {
     pub gold_reward_modifier: f32,                // 0x0994
 }
 
-// #[repr(C)]
-// pub struct FUniqueNetId {
-//     pub padding_14: [u8; 0x30],
-//     pub epicid: FString,
-//     pub productid: FString,
-//     pub rawbytes: [u8; 0x20]
-// }
+/// Partial native FUniqueNetId vtable; unused slots retain their native positions.
+#[repr(C)]
+struct FUniqueNetIdVTable {
+    _unused: [usize; 5],
+    is_valid: unsafe extern "C" fn(*const FUniqueNetId) -> bool,
+    to_string: unsafe extern "C" fn(*const FUniqueNetId, *mut FString) -> *mut FString,
+}
 
-// #[repr(C)]
-// pub struct FUniqueNetIdWrapper {
-//     pub base: FUniqueNetId
-// }
-// FIXME: What's the actual structure here?
+#[repr(C)]
+pub struct FUniqueNetId {
+    vtable: *const FUniqueNetIdVTable,
+}
+
+impl FUniqueNetId {
+    /// # Safety
+    /// This must be a live native ID with the supported vtable ABI.
+    #[inline(always)]
+    pub unsafe fn is_valid(&self) -> bool {
+        ((*self.vtable).is_valid)(self)
+    }
+
+    /// # Safety
+    /// This must be a live native ID with the supported vtable ABI.
+    #[inline(always)]
+    pub unsafe fn to_native_string(&self) -> String {
+        let mut value = FString::new();
+        ((*self.vtable).to_string)(self, &mut value);
+        value.to_string()
+    }
+}
+
 #[repr(C)]
 pub struct FUniqueNetIdRepl {
-    // pub replication_bytes: TArray<u8>, // 0x0018
-    // pub base: FUniqueNetId,
-    // pub replication_bytes: [u8; 0x10]
-    pub vtable: *const usize,           // 0x0000
-    pub internal_wrapper: [u8; 0x10],   // 0x0008 (FUniqueNetIdWrapper base)
+    vtable: *const usize,               // 0x0000
+    pub id: *const FUniqueNetId,        // 0x0008 (shared pointer)
+    pub reference_controller: *mut c_void, // 0x0010
     pub replication_bytes: TArray<u8>, // 0x0018
 } // Size: 0x28
+
+impl FUniqueNetIdRepl {
+    /// Return the native ID text, or None for a missing or invalid ID.
+    ///
+    /// # Safety
+    /// The wrapper must contain a live native FUniqueNetId with the supported
+    /// IsValid/ToString ABI. No ownership of the shared object is transferred.
+    pub unsafe fn to_native_string(&self) -> Option<String> {
+        let object = self.id.as_ref()?;
+        if !object.is_valid() {
+            return None;
+        }
+        Some(object.to_native_string())
+    }
+}
+
+#[cfg(test)]
+mod unique_net_id_tests {
+    use super::*;
+
+    fn missing_id() -> FUniqueNetIdRepl {
+        FUniqueNetIdRepl {
+            vtable: std::ptr::null(),
+            id: std::ptr::null(),
+            reference_controller: std::ptr::null_mut(),
+            replication_bytes: TArray::new(),
+        }
+    }
+
+    #[test]
+    fn missing_id_has_no_text() {
+        assert!(unsafe { missing_id().to_native_string() }.is_none());
+    }
+
+    #[test]
+    fn invalid_id_does_not_call_to_string() {
+        unsafe extern "C" fn invalid(_: *const FUniqueNetId) -> bool {
+            false
+        }
+        unsafe extern "C" fn unexpected(_: *const FUniqueNetId, _: *mut FString) -> *mut FString {
+            std::process::abort();
+        }
+        let vtable = FUniqueNetIdVTable {
+            _unused: [0; 5],
+            is_valid: invalid,
+            to_string: unexpected,
+        };
+        let object = FUniqueNetId { vtable: &vtable };
+        let mut id = missing_id();
+        id.id = &object;
+        unsafe {
+            assert!(id.to_native_string().is_none());
+        }
+    }
+}
 
 bitflags! {
     // Note: Use 'Default' or manual names for pretty printing
@@ -919,7 +999,7 @@ bitflags! {
 #[repr(C)]
 pub struct APlayerState {
     // 0x0000 -> 0x0258: Inherited from AInfo/AActor/UObject
-    pub base_padding: [u8; 0x258], 
+    pub base_padding: [u8; 0x258],
     
     pub score: f32,                     // 0x0258
     pub player_id: i32,                 // 0x025C
@@ -942,6 +1022,19 @@ pub struct APlayerState {
     pub player_name_private: FString,   // 0x0338
     pub _padding_last: [u8; 0x10],
 } // Size: 0x348 (Wait, your dump says 0x358, likely 0x10 bytes padding at end)
+
+impl APlayerState {
+    /// Call native GetPlayerName, including its custom-name handling.
+    ///
+    /// # Safety
+    /// This must be a live native player state, and the native callable must be initialized.
+    pub unsafe fn get_player_name(&self) -> String {
+        use crate::resolvers::gameplay::o_APlayerState_GetPlayerName;
+        let mut name = FString::new();
+        CALL_ORIGINAL!(APlayerState_GetPlayerName(self, &mut name));
+        name.to_string()
+    }
+}
 
 // impl APlayerState {
 //     pub fn should_update_replicated_ping(&self) -> bool {

@@ -5,7 +5,6 @@ use std::ffi::c_void;
 pub type UTBLGameInstance = c_void;
 pub type AGameMode = c_void;
 pub type UGameEngine = c_void;
-pub type APlayerController = c_void;
 pub type FGuid = c_void;
 pub type FTBLOnlineStats = c_void;
 pub type FPrimaryAssetId = c_void;

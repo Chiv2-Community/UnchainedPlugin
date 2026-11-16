@@ -560,6 +560,62 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
 
 
 
+/// Partial socket address vtable. ToString is slot 15 in the supported builds.
+#[repr(C)]
+struct FInternetAddrVTable {
+    _unused: [usize; 15],
+    to_string: unsafe extern "C" fn(*const FInternetAddr, *mut FString, bool) -> *mut FString,
+}
+
+#[repr(C)]
+pub struct FInternetAddr {
+    vtable: *const FInternetAddrVTable,
+}
+
+impl FInternetAddr {
+    /// # Safety
+    /// This must be a live native socket address with the supported vtable ABI.
+    #[inline(always)]
+    pub unsafe fn to_native_string(&self, append_port: bool) -> String {
+        let mut output = FString::new();
+        ((*self.vtable).to_string)(self, &mut output, append_port);
+        output.to_string()
+    }
+}
+
+/// Partial UNetDriver layout; fields after ServerConnection are omitted.
+#[repr(C)]
+pub struct UNetDriver {
+    pub base: UObject,
+    _padding_to_server_connection: [u8; 0x60],
+    pub server_connection: *mut UObject, // 0x0088
+}
+
+#[repr(C)]
+pub struct UIpNetDriver {
+    pub base: UNetDriver,
+    _padding_to_local_addr: [u8; 0x620],
+    pub local_addr: *const FInternetAddr, // 0x06B0 (shared pointer)
+}
+
+#[repr(C)]
+pub struct UIpConnection {
+    pub base: UObject,
+    _padding_to_remote_addr: [u8; 0xF0],
+    pub remote_addr: *const FInternetAddr, // 0x0118 (shared pointer)
+}
+
+// SAFETY: These supported native layouts have their UObject prefix at offset zero.
+unsafe impl crate::ue::UObjectType for UIpNetDriver {
+    const CLASS_NAME: &'static str = "IpNetDriver";
+}
+unsafe impl crate::ue::UObjectType for UIpConnection {
+    const CLASS_NAME: &'static str = "IpConnection";
+}
+unsafe impl crate::ue::UObjectType for UWorld {
+    const CLASS_NAME: &'static str = "World";
+}
+
 #[repr(C)]
 pub struct UWorld {
     // 0x0000 -> 0x0028: Inherited from UObject
@@ -569,7 +625,7 @@ pub struct UWorld {
     // 0x0030 (size: 0x8)
     pub persistent_level: *mut c_void, // ULevel*
     // 0x0038 (size: 0x8)
-    pub net_driver: *mut c_void, // UNetDriver*
+    pub net_driver: *mut UNetDriver,
     // 0x0040 (size: 0x8)
     pub line_batcher: *mut c_void, // ULineBatchComponent*
     // 0x0048 (size: 0x8)

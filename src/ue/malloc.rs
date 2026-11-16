@@ -45,17 +45,20 @@ pub struct FMallocHandle(NonNull<FMalloc>);
 impl FMallocHandle {
     /// Safety: The layout must be correct for the type being allocated.
     /// The allocator must be initialized and valid.
+    #[inline(always)]
     pub unsafe fn malloc(self, layout: Layout) -> *mut c_void {
         let this = self.0.as_ptr();
         ((*(*this).vtable).malloc)(this, layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator.
     /// The layout must be correct for the new allocation.
+    #[inline(always)]
     pub unsafe fn realloc(self, original: *mut c_void, layout: Layout) -> *mut c_void {
         let this = self.0.as_ptr();
         ((*(*this).vtable).realloc)(this, original, layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator and not yet freed.
+    #[inline(always)]
     pub unsafe fn free(self, original: *mut c_void) {
         if !original.is_null() {
             let this = self.0.as_ptr();
@@ -66,40 +69,40 @@ impl FMallocHandle {
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct FMallocVTable {
-    pub __vec_del_dtor: *const (),
-    pub exec: *const (),
+struct FMallocVTable {
+    __vec_del_dtor: *const (),
+    exec: *const (),
     // Native allocators mutate implementation state beyond the FMalloc prefix.
     // A Rust reference here would give the optimizer invalid aliasing guarantees.
-    pub malloc:
+    malloc:
         unsafe extern "system" fn(this: *mut FMalloc, count: usize, alignment: u32) -> *mut c_void,
-    pub try_malloc:
+    try_malloc:
         unsafe extern "system" fn(this: *mut FMalloc, count: usize, alignment: u32) -> *mut c_void,
-    pub realloc: unsafe extern "system" fn(
+    realloc: unsafe extern "system" fn(
         this: *mut FMalloc,
         original: *mut c_void,
         count: usize,
         alignment: u32,
     ) -> *mut c_void,
-    pub try_realloc: unsafe extern "system" fn(
+    try_realloc: unsafe extern "system" fn(
         this: *mut FMalloc,
         original: *mut c_void,
         count: usize,
         alignment: u32,
     ) -> *mut c_void,
-    pub free: unsafe extern "system" fn(this: *mut FMalloc, original: *mut c_void),
-    pub quantize_size: *const (),
-    pub get_allocation_size: *const (),
-    pub trim: *const (),
-    pub setup_tls_caches_on_current_thread: *const (),
-    pub clear_and_disable_tlscaches_on_current_thread: *const (),
-    pub initialize_stats_metadata: *const (),
-    pub update_stats: *const (),
-    pub get_allocator_stats: *const (),
-    pub dump_allocator_stats: *const (),
-    pub is_internally_thread_safe: *const (),
-    pub validate_heap: *const (),
-    pub get_descriptive_name: *const (),
+    free: unsafe extern "system" fn(this: *mut FMalloc, original: *mut c_void),
+    quantize_size: *const (),
+    get_allocation_size: *const (),
+    trim: *const (),
+    setup_tls_caches_on_current_thread: *const (),
+    clear_and_disable_tlscaches_on_current_thread: *const (),
+    initialize_stats_metadata: *const (),
+    update_stats: *const (),
+    get_allocator_stats: *const (),
+    dump_allocator_stats: *const (),
+    is_internally_thread_safe: *const (),
+    validate_heap: *const (),
+    get_descriptive_name: *const (),
 }
 
 #[cfg(test)]

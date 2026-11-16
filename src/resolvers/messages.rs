@@ -15,10 +15,10 @@ mod client_message {
     };
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
-    use crate::ue::APlayerController;
+    use crate::ue::{APlayerController, UObjectType};
     use crate::{
         events::models::{GameChatMessage, GameEvent, NativeChat},
-        game::chivalry2::{AActor, AController, ATBLCharacter, ATBLGameMode, ATBLPlayerState, EChatType},
+        game::chivalry2::{AActor, AController, ATBLGameMode, ATBLPlayerState, EChatType},
         ue::{FName, FString},
     };
     use regex::Regex;
@@ -55,16 +55,17 @@ mod client_message {
     });
 
     fn actor_player_state(sender: *mut AActor) -> *mut ATBLPlayerState {
-        use super::super::gameplay::object_inherits_from;
+        use crate::{game::chivalry2::APawn, ue::UObject};
         // BroadcastChat accepts either a pawn or a controller, not a PlayerState.
-        if object_inherits_from(sender.cast(), "Pawn") {
-            // Read only APawn's field; the sender need not have ATBLCharacter's full layout.
-            unsafe { std::ptr::addr_of!((*sender.cast::<ATBLCharacter>())
-                .base_tbl_character_base.base_character.base_pawn.player_state).read().cast() }
-        } else if object_inherits_from(sender.cast(), "Controller") {
-            unsafe { (*sender.cast::<AController>()).player_state.cast() }
-        } else {
-            std::ptr::null_mut()
+        unsafe {
+            let Some(object) = UObject::from_ptr(sender.cast()) else { return std::ptr::null_mut(); };
+            if let Some(pawn) = object.uobj_cast::<APawn>() {
+                pawn.player_state.cast()
+            } else if let Some(controller) = object.uobj_cast::<AController>() {
+                controller.player_state.cast()
+            } else {
+                std::ptr::null_mut()
+            }
         }
     }
 
@@ -74,7 +75,7 @@ mod client_message {
             swarn!("Invalid native chat type: {chat_type}");
             return;
         };
-        let Some(player) = (unsafe { sender.as_ref() }) else { return; };
+        let Some(player) = (unsafe { ATBLPlayerState::from_ptr(sender) }) else { return; };
         let Ok(sender) = player.base.player_name_private.copy_to_string() else { return; };
         let command = player_command_event(&sender, &message, chat_type);
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {
