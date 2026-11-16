@@ -8,8 +8,8 @@ members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
 reqwest = "0.12.19"
 test-case = "3.3"
 
