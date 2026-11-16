@@ -7,6 +7,7 @@ use crate::{
 };
 
 mod broadcast_display;
+mod chat_header;
 
 mod client_message {
     use crate::events::models::{
@@ -21,7 +22,7 @@ mod client_message {
         game::chivalry2::{AActor, AController, ATBLCharacter, ATBLGameMode, ATBLPlayerState, EChatType},
         ue::{FName, FString},
     };
-    use regex::Regex;
+    use super::chat_header::{self, Header};
 
     fn has_authority() -> bool {
         crate::globals().world().is_some_and(|world| unsafe {
@@ -122,18 +123,16 @@ mod client_message {
     }
 
     fn system_message(line: &str) -> Option<(EChatType, Option<&str>, &str)> {
-        static RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
-            Regex::new(r"^(?:(?P<player>[^\r\n]*?[ \t]+))??<(?P<channel>[0-9]+)>:[ \t]*").unwrap()
-        });
-        let (channel, body) = if let Some(caps) = RE.captures(line) {
+        let (channel, body) = match chat_header::parse(line) {
             // Native hooks own player records; don't parse their channel or body.
-            if caps.name("player").is_some() { return None; }
-            match caps["channel"].parse::<u8>().ok().and_then(|value| EChatType::try_from(value).ok()) {
-                Some(channel) => (channel, &line[caps.get(0).unwrap().end()..]),
-                None => (EChatType::ServerSay, line),
+            Some(Header::Player) => return None,
+            Some(Header::System { channel, body }) => {
+                match channel.parse::<u8>().ok().and_then(|value| EChatType::try_from(value).ok()) {
+                    Some(channel) => (channel, body),
+                    None => (EChatType::ServerSay, line),
+                }
             }
-        } else {
-            (EChatType::ServerSay, line)
+            None => (EChatType::ServerSay, line),
         };
         // Broadcast envelopes carry sender metadata only on the system-chat path.
         if matches!(channel, EChatType::AllSay | EChatType::ServerSay) {
