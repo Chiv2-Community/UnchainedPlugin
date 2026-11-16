@@ -82,6 +82,10 @@ pub mod loading_screens;
 pub mod backend_hooks;
 pub mod config_overrides;
 pub mod etc_hooks;
+#[cfg(feature = "game_identity")]
+pub mod game_identity;
+#[cfg(feature = "game_identity")]
+pub mod eos_identity;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;

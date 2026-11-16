@@ -123,6 +123,18 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         .and_then(|o| o.copy_to_string().ok())
         .unwrap_or_else(|| "<empty-string>".to_string());
 
+    #[cfg(feature = "game_identity")]
+    if cli_args().validated_player_identity
+        && (super::game_identity::configured_backend().is_none()
+            || !super::game_identity::admission_available()
+            || !crate::features::game_join_protocol::admission_options(&options_string))
+    {
+        if let Some(error) = unsafe { error_message.as_mut() } {
+            *error = FString::from("This server requires a validated browser join.");
+        }
+        return;
+    }
+
     if !cli_args().use_backend_banlist || address.is_null() {
         let result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
         if !error_message.is_null() && !(*error_message).is_empty() {

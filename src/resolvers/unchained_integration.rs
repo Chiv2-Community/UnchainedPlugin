@@ -184,7 +184,7 @@ define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 0
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
-    sinfo!["{}", url_w];
+    sinfo!("Loading map: {}", url_w.split('?').next().unwrap_or("UnknownMap"));
 
     globals().set_world(std::ptr::null_mut());
     sdebug!("Reset globals.world to nullptr; world-dependent actions are skipped until post-load");

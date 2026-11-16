@@ -82,6 +82,11 @@ pub struct CLIArgs {
     )]
     pub server_browser_backend: Option<String>,
 
+    /// Validate account control through a temporary public PlayFab user-data proof.
+    /// Uses the browser backend; the player's PlayFab credential stays client-side.
+    #[arg(long = "validated-player-identity")]
+    pub validated_player_identity: bool,
+
     // Keep localhost as the default so local test servers remain visible in
     // normal IPv4 launches; IPv6 auto mode does not publish this default
     // unless --local-ip was explicitly supplied.
@@ -202,7 +207,7 @@ impl std::fmt::Debug for CLIArgs {
             #[cfg(feature = "move-autonomous-desync")]
             tick_actor_patch,
             use_backend_banlist, is_headless, next_map, launched_profile,
-            unchained_profile_location, playable_listen, register, server_browser_backend,
+            unchained_profile_location, playable_listen, register, server_browser_backend, validated_player_identity,
             local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
             game_server_ping_port, game_server_query_port, game_port, mod_map_batch, mod_asset_registry_only,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
@@ -228,6 +233,7 @@ impl std::fmt::Debug for CLIArgs {
             .field("register", register)
             // URLs may contain credentials in userinfo, query strings or paths.
             .field("server_browser_backend", &server_browser_backend.as_ref().map(|_| "[REDACTED]"))
+            .field("validated_player_identity", validated_player_identity)
             .field("local_ip", local_ip)
             .field("local_ip_explicit", local_ip_explicit)
             .field("use_ipv6", use_ipv6)
@@ -360,6 +366,10 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
         arg == "--local-ip" || arg.starts_with("--local-ip=")
     });
     let mut cli = CLIArgs::try_parse_from(parsed)?;
+    if cli.validated_player_identity && !cfg!(feature = "game_identity") {
+        return Err(clap::Error::raw(clap::error::ErrorKind::InvalidValue,
+            "--validated-player-identity requires a build with game_identity enabled"));
+    }
     cli.local_ip_explicit = local_ip_explicit;
     cli.ini_overrides = CLIArgs::process_ini_map(&cli.extra_args);
     Ok(cli)
@@ -368,6 +378,18 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validated_identity_is_explicit_and_uses_browser_backend() {
+        assert!(!CLIArgs::try_parse_from(["app"]).unwrap().validated_player_identity);
+        let cli = CLIArgs::try_parse_from([
+            "app", "--validated-player-identity",
+            "--server-browser-backend", "https://browser.example.test",
+        ]).unwrap();
+        assert!(cli.validated_player_identity);
+        assert_eq!(cli.server_browser_backend.as_deref(), Some("https://browser.example.test"));
+        assert!(CLIArgs::command().render_long_help().to_string().contains("--validated-player-identity"));
+    }
 
     #[test]
     fn attach_stdio_is_opt_in_and_survives_game_argument_normalization() {
@@ -407,6 +429,7 @@ mod tests {
             "app", "--server-password", "PASSWORD_SENTINEL", "--discord-bot-token",
             "TOKEN_SENTINEL", "--Port", "8123", "--launched-profile", "test-profile",
             "--server-browser-backend", "https://user:BACKEND_SENTINEL@example.test/private",
+            "--validated-player-identity",
             "--", "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
             "-AUTH_PASSWORD=PASSTHROUGH_SENTINEL",
         ]).unwrap();
@@ -542,6 +565,7 @@ mod tests {
                 playable_listen: false,
                 register: false,
                 server_browser_backend: None,
+                validated_player_identity: false,
                 local_ip: "127.0.0.1".to_string(),
                 local_ip_explicit: false,
                 use_ipv6: false,

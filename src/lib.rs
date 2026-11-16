@@ -414,6 +414,13 @@ fn init_rustlib() {
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 
 fn postinit_rustlib() {
+    #[cfg(feature = "game_identity")]
+    if cli_args().validated_player_identity && !cli_args().is_server() {
+        match unsafe { resolvers::eos_identity::install() } {
+            Ok(()) => sinfo!("EOS Connect identity adapter installed"),
+            Err(error) => serror!("EOS Connect identity adapter unavailable: {}", error),
+        }
+    }
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
     // crate::features::events::init_event_system();
     unsafe { seh::install() };

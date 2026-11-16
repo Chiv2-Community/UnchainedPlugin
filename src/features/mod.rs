@@ -26,3 +26,9 @@ pub struct Mod {
 }
 unsafe impl Send for Mod {}
 unsafe impl Sync for Mod {}
+#[cfg(feature = "game_identity")]
+pub mod game_join_protocol;
+#[cfg(feature = "game_identity")]
+pub mod game_admission;
+#[cfg(feature = "game_identity")]
+pub mod playfab_proof;

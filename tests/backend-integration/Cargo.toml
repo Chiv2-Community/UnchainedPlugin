@@ -10,6 +10,14 @@ name = "backend_transport"
 path = "backend_transport.rs"
 
 [[test]]
+name = "game_join_protocol"
+path = "game_join_protocol.rs"
+
+[[test]]
+name = "game_admission"
+path = "game_admission.rs"
+
+[[test]]
 name = "backend_integration"
 path = "backend_integration.rs"
 required-features = ["container-tests"]
@@ -31,4 +39,5 @@ server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
 reqwest = { workspace = true }
 serde_json = "1"
+sha2 = "0.10"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "test-util"] }

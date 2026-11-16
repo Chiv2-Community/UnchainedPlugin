@@ -44,6 +44,7 @@ dependencies = [
  "serenity",
  "server-browser-client",
  "server-browser-client-sdk",
+ "sha2",
  "shlex",
  "strum 0.26.3",
  "test-case",
@@ -1153,8 +1154,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1755,6 +1758,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "9.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a87cc7a48537badeae96744432de36f4be2b4a34a05a5ef32e9dd8a1c169dde"
+dependencies = [
+ "base64 0.22.1",
+ "js-sys",
+ "ring",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "kqueue"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2335,6 +2351,7 @@ dependencies = [
  "serde_json",
  "server-browser-client",
  "server-browser-client-sdk",
+ "sha2",
  "tar",
  "tempfile",
  "test-case",
@@ -3119,7 +3136,7 @@ dependencies = [
 [[package]]
 name = "server-browser-client"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e#5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=c8b3ca9590b5ff9556254215a00d0f1e030e1a8c#c8b3ca9590b5ff9556254215a00d0f1e030e1a8c"
 dependencies = [
  "reqwest 0.12.28",
  "serde",
@@ -3131,9 +3148,12 @@ dependencies = [
 [[package]]
 name = "server-browser-client-sdk"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e#5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=c8b3ca9590b5ff9556254215a00d0f1e030e1a8c#c8b3ca9590b5ff9556254215a00d0f1e030e1a8c"
 dependencies = [
+ "base64 0.22.1",
+ "jsonwebtoken",
  "reqwest 0.12.28",
+ "serde_json",
  "server-browser-client",
  "server-browser-models",
  "tokio",
@@ -3142,7 +3162,7 @@ dependencies = [
 [[package]]
 name = "server-browser-models"
 version = "1.0.0"
-source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e#5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e"
+source = "git+https://github.com/Chiv2-Community/C2ServerBrowserBackend.git?rev=c8b3ca9590b5ff9556254215a00d0f1e030e1a8c#c8b3ca9590b5ff9556254215a00d0f1e030e1a8c"
 dependencies = [
  "serde",
  "serde_json",
@@ -3154,6 +3174,17 @@ name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest",
+]
+
+[[package]]
+name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",

@@ -374,7 +374,12 @@ define_pattern_resolver!(ClientTravelInternal,["4C 8B DC 48 83 EC 58 33 C0 49 89
 // void __thiscall
 // APlayerController::ClientTravelInternal
 // 		  (APlayerController *this,FString *param_1,ETravelType param_2,bool param_3,FGuid *param_4)
-CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut FGuid),{
+CREATE_HOOK!(ClientTravelInternal, ACTIVE, NONE, (), (PC: *mut APlayerController, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut FGuid),{
+
+    #[cfg(feature = "game_identity")]
+    if unsafe { super::game_identity::intercept_travel(PC, arg1, TravelType, arg3, guid) } {
+        return;
+    }
 
     #[derive(Debug, serde::Deserialize)]
     #[allow(dead_code)]
@@ -388,7 +393,6 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
 
     //127.0.0.1:7777&PartyId=1231231&PartySize=1&PlayFabId=123123&UnofficialTicket=12323
     fn parse_connection_info(raw: &str) -> Result<ConnectionInfo, Box<dyn std::error::Error>> {
-        sinfo!("raw: {}", raw);
         let query_str = raw.replace('?', "&");
         let query_with_address = format!("Address={}", query_str);
         let info: ConnectionInfo = serde_urlencoded::from_str(&query_with_address)?;
@@ -411,10 +415,13 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
 
     match parse_connection_info(string_ref.to_string().as_str()) {
         Ok(info) => {
-            sinfo!("info: {:#?}", info);
+            sinfo!("Travel options: playfab_id={} unofficial_ticket={}",
+                info.PlayFabId.as_ref().is_some_and(|v| !v.is_empty()),
+                info.UnofficialTicket.as_ref().is_some_and(|v| !v.is_empty()));
         }
-        Err(e) => serror!("Error: {}", e),
+        Err(_) => sdebug!("Travel URL has no browser connection options"),
     }
+    CALL_ORIGINAL!(ClientTravelInternal(PC, arg1, TravelType, arg3, guid))
 });
 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)

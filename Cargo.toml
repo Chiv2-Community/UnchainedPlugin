@@ -8,8 +8,8 @@ members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "5054ead4ef92b4cbab741a0c2590f2a8dfbfd24e" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "c8b3ca9590b5ff9556254215a00d0f1e030e1a8c" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "c8b3ca9590b5ff9556254215a00d0f1e030e1a8c" }
 reqwest = "0.12.19"
 test-case = "3.3"
 
@@ -53,6 +53,7 @@ default = [
         "cli_commands",
         "rcon_commands",
         "server_registration",
+        "game_identity",
         "mod_management",
         "discord_integration",
         # "request_dummy_hooks",
@@ -74,6 +75,7 @@ map_profiles = [] # ini-overrides: replace the map-indices layer with map-profil
 cli_commands = [] # process commands from plugin windows
 rcon_commands = [] # process commands from rcon
 server_registration = ["a2s", "get_if_addrs", "tokio"] # register server with backend
+game_identity = ["server_registration"] # opt-in authenticated native browser joins
 mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
 move-autonomous-desync = []
@@ -94,6 +96,7 @@ repak = { git = "https://github.com/trumank/repak" }
 aes = "0.8"
 base64 = "0.22"
 hex = "0.4"
+sha2 = "0.10"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 serde_yaml = "0.9"
