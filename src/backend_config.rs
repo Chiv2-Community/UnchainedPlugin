@@ -15,7 +15,7 @@ pub fn client() -> &'static HttpTransport {
             args.server_browser_backend.as_deref().unwrap_or_default(),
             source_ip,
         )
-        .expect("Failed to construct bounded server-browser client")
+        .expect("Failed to construct server-browser client")
     })
 }
 
