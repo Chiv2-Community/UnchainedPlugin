@@ -8,6 +8,9 @@ use crate::{
 
 mod broadcast_display;
 
+pub(super) use broadcast_display::o_FText_ToString;
+pub(super) use client_message::print_console_output;
+
 mod client_message {
     use crate::events::models::{
         ActorIdentity, ActorPermissions, ChatSource, CommandActor, CommandRequest,
@@ -102,6 +105,21 @@ mod client_message {
             }
         }
     });
+
+    pub(in crate::resolvers) unsafe fn print_console_output(controller: *mut APlayerController, output: &str) {
+        use crate::ue::ULocalPlayer;
+
+        let Some(player_controller) = APlayerController::from_ptr(controller) else { return; };
+        // Match the native Player field guard; only a local player owns a console.
+        if ULocalPlayer::from_ptr(player_controller.player).is_none() { return; }
+        for line in output.lines() {
+            let mut message = FString::from(line);
+            // Console-only output: bypass chat-event capture and never broadcast IDs.
+            if CALL_ORIGINAL_SAFE!(ClientMessage(controller, &mut message, FName::default(), 0.0)).is_err() {
+                return;
+            }
+        }
+    }
 
     fn player_command_event(sender: &str, message: &str, chat_type: EChatType) -> Option<GameEvent> {
         if chat_type != EChatType::AllSay { return None; }
