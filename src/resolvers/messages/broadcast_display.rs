@@ -58,10 +58,11 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
     if controller.is_null() { return None; }
     // Match ClientReceiveLocalizedChat's Player guard and virtual GetWorld call.
-    // Supported Steam/Epic ABI: APlayerController::Player +0x2d0, GetWorld slot +0x150.
-    let player = unsafe { controller.byte_add(0x2d0).cast::<*mut crate::ue::UObject>().read() };
-    if !object_inherits_from(player, "Player") { return None; }
-    let world = unsafe { (&*controller.cast::<crate::ue::UObject>()).get_world().as_ref() }?;
+    let controller = controller.cast::<crate::ue::APlayerController>();
+    if !object_inherits_from(controller.cast(), "PlayerController") { return None; }
+    let player = unsafe { (*controller).player };
+    if !object_inherits_from(player.cast(), "Player") { return None; }
+    let world = unsafe { (*controller).base.get_world().as_ref() }?;
     let instance = world.owning_game_instance;
     if !object_inherits_from(instance.cast(), "TBLGameInstance") { return None; }
     let title = NativeText::new(title)?;

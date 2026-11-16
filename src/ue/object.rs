@@ -111,6 +111,20 @@ impl UObject {
     }
 }
 
+/// Partial native controller layout through Player; later fields are omitted.
+#[repr(C)]
+pub struct APlayerController {
+    pub base: UObject,
+    _padding_to_player: [u8; 0x2A8],
+    pub player: *mut UPlayer, // 0x02D0
+}
+
+/// Native UPlayer prefix; sufficient for UObject class checks.
+#[repr(C)]
+pub struct UPlayer {
+    pub base: UObject,
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct FOutputDevice {

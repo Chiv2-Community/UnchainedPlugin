@@ -105,17 +105,17 @@ mod client_message {
         }
     });
 
-    pub(in crate::resolvers) unsafe fn print_console_output(controller: *mut std::ffi::c_void, output: &str) {
+    pub(in crate::resolvers) unsafe fn print_console_output(controller: *mut APlayerController, output: &str) {
         use crate::resolvers::gameplay::object_inherits_from;
 
         if !object_inherits_from(controller.cast(), "PlayerController") { return; }
         // Match the native Player field guard; only a local player owns a console.
-        let player = controller.byte_add(0x2d0).cast::<*mut crate::ue::UObject>().read();
-        if !object_inherits_from(player, "LocalPlayer") { return; }
+        let player = (*controller).player;
+        if !object_inherits_from(player.cast(), "LocalPlayer") { return; }
         for line in output.lines() {
             let mut message = FString::from(line);
             // Console-only output: bypass chat-event capture and never broadcast IDs.
-            if CALL_ORIGINAL_SAFE!(ClientMessage(controller.cast(), &mut message, FName::default(), 0.0)).is_err() {
+            if CALL_ORIGINAL_SAFE!(ClientMessage(controller, &mut message, FName::default(), 0.0)).is_err() {
                 return;
             }
         }

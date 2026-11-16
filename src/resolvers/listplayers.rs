@@ -5,9 +5,8 @@ use crate::{
         chivalry2::{ATBLPlayerState, PlayerFlags},
         engine::{UIpConnection, UIpNetDriver},
     },
-    ue::TCHAR,
+    ue::{APlayerController, TCHAR},
 };
-use std::ffi::c_void;
 use tabled::{
     builder::Builder,
     settings::{Alignment, Padding, Style},
@@ -24,7 +23,7 @@ define_pattern_resolver!(
 );
 CREATE_HOOK!(ListPlayersClipboard, CALLED, i32, (text: *const TCHAR), {});
 
-CREATE_HOOK!(ListPlayers, ACTIVE, NONE, (), (controller: *mut c_void), {
+CREATE_HOOK!(ListPlayers, ACTIVE, NONE, (), (controller: *mut APlayerController), {
     if controller.is_null() { return; }
     let output = player_output();
     super::messages::print_console_output(controller, &output);
