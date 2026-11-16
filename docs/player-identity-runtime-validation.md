@@ -18,8 +18,32 @@ Mismatch` support message without printing backend bodies or account IDs. It
 cancels browser travel; no native menu error dialog is implemented.
 
 Backend tests: 746 passed, 5 skipped; code generation drift and type checks pass.
-Live validation of persistent pinning is in progress. Earlier runtime results
-below do not by themselves validate this new backend policy.
+Plugin SDK pin and mismatch logging pass Windows checks and 41 host tests.
+
+### Live account-pinning results
+
+Against backend implementation `0077356`, controlled Steam and Epic accounts
+passed native browser joins and host-side offline admission. Two account pins
+survived a backend restart with their original UUIDs; matching joins reused them.
+
+A scratch request adapter substituted the previously verified controlled Epic
+EOS token into the controlled Steam PlayFab challenge completion. Both real
+proofs still passed production verification; no claims or verification results
+were fabricated. The backend rejected the conflicting combination, committed one
+`validated_mismatches` row and left both complete account rows unchanged. No new
+host admission occurred. A fresh Steam process then joined with the correct pair.
+
+The existing platform-ID RPC spoof remained blocked and Epic fresh-process
+reconnect passed. Four signed admissions and one account mismatch were observed;
+no online redemption occurred. All private games/backend were stopped; installed
+DLLs were not replaced.
+
+Evidence: `/tmp/opencode/account-pinning-runtime/{result.json,backend-evidence.json,run.log}`.
+The host/client DLLs are the earlier protocol-compatible production host and
+scratch browser probe recorded by hash in `result.json`, not a runtime build of
+`afaff79`. The new client mismatch log is compile-checked, not live-verified;
+no native menu dialog is implemented. This does not cover same-process UI
+leave/rejoin, Epic hosting, or the broader JWT tamper/rotation/travel matrix.
 
 ## EOS Connect proof retrieval
 
