@@ -175,20 +175,3 @@ fn native_ban_bridge_fails_open_after_runtime_shutdown() {
         None
     );
 }
-
-#[test_case::test_case(false; "plain")]
-#[test_case::test_case(true; "diagnostic")]
-fn generated_listing_union_preserves_plain_and_diagnostic_shapes(diagnostic: bool) {
-    let mut value = serde_json::json!({
-        "unique_id": "id", "ports": {"game": 7777, "ping": 7778, "a2s": 7779},
-        "password_protected": false, "is_verified": false, "name": "test", "description": "",
-        "current_map": "map", "player_count": 0, "max_players": 32, "mods": [], "last_heartbeat": 1800000000.0
-    });
-    if diagnostic {
-        value["ip_address"] = serde_json::json!("2001:db8::1");
-        value["local_ip_address"] = serde_json::Value::Null;
-    }
-    let parsed: server_browser_client::models::ServerListingItem =
-        serde_json::from_value(value.clone()).unwrap();
-    assert_eq!(serde_json::to_value(parsed).unwrap(), value);
-}

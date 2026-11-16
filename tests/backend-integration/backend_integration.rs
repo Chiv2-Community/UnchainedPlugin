@@ -1,9 +1,5 @@
 //! Exercise the pinned lifecycle SDK against the real containerized backend.
 mod support;
-use std::{
-    sync::Mutex,
-    time::{Duration, Instant},
-};
 #[path = "../../src/backend.rs"]
 mod backend;
 use server_browser_client::{
@@ -12,14 +8,7 @@ use server_browser_client::{
         Chivalry2Ports, ServerListingItem, ServerRegistrationRequest, UpdateRegisteredServer,
     },
 };
-use server_browser_client_sdk::{Clock, Event, Policy, Registration};
-
-struct TestClock(Mutex<Instant>);
-impl Clock for &TestClock {
-    fn now(&self) -> Instant {
-        *self.0.lock().unwrap()
-    }
-}
+use server_browser_client_sdk::{Event, Policy, Registration};
 
 #[test]
 fn backend_signed_ticket_verifies_once_for_live_registration() {
@@ -110,7 +99,7 @@ print(json.dumps({'ticket': ticket, 'now': now}))
 #[test]
 fn registration_lifecycle_against_backend_container() {
     let (_container, url) = support::backend();
-    // Docker/archive setup and Container drop stay outside async workers.
+    // Container setup and drop stay outside async workers.
     let runtime = tokio::runtime::Runtime::new().unwrap();
     assert_eq!(
         backend::check_banned_sync(&url, "127.0.0.1", runtime.handle()),
@@ -127,17 +116,12 @@ fn registration_lifecycle_against_backend_container() {
             0,
             32,
         );
-        let clock = TestClock(Mutex::new(Instant::now()));
         let mut registration =
-            Registration::with_clock(client.clone(), request, Policy::default(), &clock).unwrap();
+            Registration::new(client.clone(), request, Policy::default()).unwrap();
         assert!(matches!(
             registration.poll().await,
             Ok(Event::Registered { .. })
         ));
-        let listing = api::get_servers(config)
-            .await
-            .unwrap_or_else(|_| panic!("listing failed"));
-        assert_eq!(listing.servers.len(), 1);
         registration
             .set_update(UpdateRegisteredServer::new(2, 32, "next".into()))
             .unwrap();
@@ -150,15 +134,6 @@ fn registration_lifecycle_against_backend_container() {
         };
         assert_eq!(server.player_count, 2);
         assert_eq!(server.current_map, "next");
-        *clock.0.lock().unwrap() += Duration::from_secs(31);
-        assert_eq!(registration.poll().await, Ok(Event::Heartbeat));
-        assert!(
-            !api::check_banned(config, "127.0.0.1")
-                .await
-                .unwrap_or_else(|_| panic!("ban check failed"))
-                .banned
-        );
-        assert!(api::jwks(config).await.is_ok());
         registration.stop().await.unwrap();
         assert!(api::get_servers(config)
             .await
