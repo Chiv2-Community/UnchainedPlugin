@@ -15,7 +15,7 @@ fn backend_signed_ticket_verifies_once_for_live_registration() {
     use testcontainers::core::ExecCommand;
     use unchained_auth::{AuthError, TicketVerifier};
 
-    let (container, url) = support::backend();
+    let (container, url) = support::backend(true);
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let (mut registration, id, jwks) = runtime.block_on(async {
         let client = backend::transport(&url, None).unwrap();
@@ -98,7 +98,7 @@ print(json.dumps({'ticket': ticket, 'now': now}))
 
 #[test]
 fn registration_lifecycle_against_backend_container() {
-    let (_container, url) = support::backend();
+    let (_container, url) = support::backend(false);
     // Container setup and drop stay outside async workers.
     let runtime = tokio::runtime::Runtime::new().unwrap();
     assert_eq!(
