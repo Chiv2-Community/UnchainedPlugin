@@ -605,6 +605,17 @@ pub struct UIpConnection {
     pub remote_addr: *const FInternetAddr, // 0x0118 (shared pointer)
 }
 
+// SAFETY: These supported native layouts have their UObject prefix at offset zero.
+unsafe impl crate::ue::UObjectType for UIpNetDriver {
+    const CLASS_NAME: &'static str = "IpNetDriver";
+}
+unsafe impl crate::ue::UObjectType for UIpConnection {
+    const CLASS_NAME: &'static str = "IpConnection";
+}
+unsafe impl crate::ue::UObjectType for UWorld {
+    const CLASS_NAME: &'static str = "World";
+}
+
 #[repr(C)]
 pub struct UWorld {
     // 0x0000 -> 0x0028: Inherited from UObject

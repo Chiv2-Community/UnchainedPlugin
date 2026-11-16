@@ -1,10 +1,7 @@
-use std::os::raw::c_void;
-
 use crate::events::models::{CombatActor, Damage, DamageSource, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;
-use crate::game::chivalry2::{AController, APlayerState, ATBLCharacter, FDeathDamageTakenEvent, FDamageTakenEvent, PlayerFlags};
-use crate::tools::hook_globals::globals;
-use crate::ue::{UObject, UStruct};
+use crate::game::chivalry2::{ACharacter, AController, APlayerState, ATBLCharacter, FDeathDamageTakenEvent, FDamageTakenEvent, PlayerFlags};
+use crate::ue::{UObject, UObjectType};
 
 define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
     "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
@@ -12,89 +9,22 @@ define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
 CREATE_HOOK!(APlayerState_GetPlayerName, CALLED, *mut crate::ue::FString,
     (player: *const APlayerState, output: *mut crate::ue::FString), {});
 
-fn object_class_name(ptr: *mut UObject) -> Option<String> {
-    if !is_live_object(ptr) { return None; }
-    let obj = unsafe { (ptr as *const UObject).as_ref() }?;
-    let class = unsafe { obj.uobject_base_utility.uobject_base.class_private.as_ref() }?;
-    Some(class.ustruct.ufield.uobject.uobject_base_utility.uobject_base.name_private.to_string())
-}
-
-fn object_name(ptr: *mut UObject) -> Option<String> {
-    if !is_live_object(ptr) { return None; }
-    let obj = unsafe { (ptr as *const UObject).as_ref() }?;
-    Some(obj.uobject_base_utility.uobject_base.name_private.to_string())
-}
-
-fn object_display_name(ptr: *mut UObject) -> Option<String> {
-    object_name(ptr)
-        .or_else(|| object_class_name(ptr))
-        .map(|name| normalize_display_name(&name))
-        .filter(|name| !name.trim().is_empty())
-}
-
-/// Cheap pre-filter: non-null, 8-byte aligned and inside the canonical user-mode range. Not proof
-/// that an object lives there (0x100000000 passes); use is_live_object before reading through a
-/// pointer.
-fn looks_like_pointer(p: *const c_void) -> bool {
-    let v = p as usize;
-    v >= 0x10000 && v < 0x0000_7FFF_FFFF_0000 && v % 8 == 0
-}
-
-/// True when `p` is a live UObject according to GUObjectArray (FUObjectArray::is_live): catches
-/// unmapped garbage and dangling pointers to destroyed objects alike.
-fn is_live_object(p: *const UObject) -> bool {
-    looks_like_pointer(p.cast())
-        && unsafe { globals().guobject_array_unchecked() }.is_live(p.cast())
-}
-
-pub(super) fn object_inherits_from(ptr: *mut UObject, needle: &str) -> bool {
-    if !is_live_object(ptr) { return false; }
-    let mut curr = unsafe { (ptr as *const UObject).as_ref() }
-        .and_then(|o| unsafe { o.uobject_base_utility.uobject_base.class_private.as_ref() })
-        .map(|c| &c.ustruct as *const UStruct);
-
-    let mut depth = 0;
-    while let Some(s) = unsafe { curr.and_then(|p| p.as_ref()) } {
-        // Exact class-name match: a substring match would let "Character" accept classes such as
-        // CharacterDeathcam_C, which do not have the ATBLCharacter layout.
-        if s.ufield.uobject.uobject_base_utility.uobject_base.name_private.to_string() == needle {
-            return true;
-        }
-        depth += 1;
-        if depth > 32 { return false; }
-        curr = looks_like_pointer(s.super_struct.cast()).then_some(s.super_struct);
-    }
-    false
-}
-
-fn trim_instance_suffix(name: &str) -> String {
-    match name.rsplit_once('_') {
-        Some((base, suffix)) if suffix.chars().all(|c| c.is_ascii_digit()) => base.to_string(),
-        _ => name.to_string(),
-    }
-}
-
-fn normalize_display_name(name: &str) -> String {
-    let without_instance = trim_instance_suffix(name);
-    without_instance.trim_end_matches("_C").to_string()
-}
-
 fn fallback_combat_actor(ptr: *mut UObject) -> Option<CombatActor> {
-    let cls = object_class_name(ptr)?;
-    let obj = object_name(ptr).unwrap_or_else(|| cls.clone());
-    let is_bot = cls.to_lowercase().contains("bot") || obj.to_lowercase().contains("bot");
+    let object = unsafe { UObject::from_ptr(ptr) }?;
+    let cls = unsafe { object.class_name() }?;
+    let name = object.display_name();
+    let is_bot = cls.to_lowercase().contains("bot") || name.to_lowercase().contains("bot");
 
-    Some(CombatActor::new(normalize_display_name(&obj), is_bot))
+    Some(CombatActor::new(name, is_bot))
 }
 
 /// `via` names the field the pointer came from, for the warning when it is not a live object.
 fn combat_actor_from_player_state(player_state: *mut APlayerState, via: &str) -> Option<CombatActor> {
     if player_state.is_null() { return None; }
-    if !is_live_object(player_state.cast()) {
-        swarn!("ignoring PlayerState {:p} from {}: not a live object", player_state, via);
+    let Some(ps) = (unsafe { APlayerState::from_ptr(player_state) }) else {
+        swarn!("ignoring PlayerState {:p} from {}: not a live PlayerState", player_state, via);
         return None;
-    }
-    let ps = unsafe { player_state.as_ref() }?;
+    };
     let name = ps.player_name_private.copy_to_string().ok()?;
     (!name.trim().is_empty()).then(|| {
         CombatActor::new(name.trim().to_string(), ps.player_flags.contains(PlayerFlags::IS_A_BOT))
@@ -103,39 +33,32 @@ fn combat_actor_from_player_state(player_state: *mut APlayerState, via: &str) ->
 
 fn combat_actor_from_actor(ptr: *mut UObject) -> Option<CombatActor> {
     if ptr.is_null() { return None; }
-    if !is_live_object(ptr) {
+    let Some(object) = (unsafe { UObject::from_ptr(ptr) }) else {
         swarn!("ignoring combat actor {:p}: not a live object", ptr);
         return None;
-    }
+    };
 
-    let is_tbl_character = object_inherits_from(ptr, "TBLCharacter");
-    if is_tbl_character || object_inherits_from(ptr, "Character") {
-        // The APawn fields are valid on any Character; the cast to ATBLCharacter is only read
-        // further for LastPlayerState, which exists on ATBLCharacter alone and lies past the end
-        // of a plain ACharacter.
-        let char = unsafe { (ptr as *mut ATBLCharacter).as_ref() }?;
-        let pawn = &char.base_tbl_character_base.base_character.base_pawn;
+    if let Some(character) = unsafe { object.uobj_cast::<ACharacter>() } {
+        let pawn = &character.base_pawn;
 
         return combat_actor_from_player_state(pawn.player_state as *mut APlayerState, "Pawn.PlayerState")
             .or_else(|| {
-                if !is_live_object(pawn.controller.cast()) { return None; }
-                let controller = unsafe { pawn.controller.cast::<AController>().as_ref() }?;
+                let controller = unsafe { AController::from_ptr(pawn.controller) }?;
                 combat_actor_from_player_state(controller.player_state, "Pawn.Controller.PlayerState")
             })
             .or_else(|| {
-                if !is_tbl_character { return None; }
-                combat_actor_from_player_state(char.last_player_state as *mut APlayerState, "TBLCharacter.LastPlayerState")
+                let character = unsafe { object.uobj_cast::<ATBLCharacter>() }?;
+                combat_actor_from_player_state(character.last_player_state as *mut APlayerState, "TBLCharacter.LastPlayerState")
             })
             .or_else(|| fallback_combat_actor(ptr));
     }
 
-    if object_inherits_from(ptr, "Controller") || object_inherits_from(ptr, "PlayerController") || object_inherits_from(ptr, "AIController") || object_inherits_from(ptr, "TBLPlayerController") {
-        let controller = unsafe { (ptr as *mut AController).as_ref() }?;
+    if let Some(controller) = unsafe { object.uobj_cast::<AController>() } {
         return combat_actor_from_player_state(controller.player_state, "Controller.PlayerState")
             .or_else(|| fallback_combat_actor(ptr));
     }
 
-    if object_inherits_from(ptr, "PlayerState") {
+    if unsafe { object.uobj_cast::<APlayerState>() }.is_some() {
         return combat_actor_from_player_state(ptr.cast(), "PlayerState")
             .or_else(|| fallback_combat_actor(ptr));
     }
@@ -183,7 +106,9 @@ fn damage_source_name(damage_event: &FDamageTakenEvent) -> String {
         if ptr.is_null() {
             continue;
         }
-        if let Some(name) = object_display_name(ptr) {
+        if let Some(object) = unsafe { UObject::from_ptr(ptr) } {
+            let name = object.display_name();
+            if name.trim().is_empty() { continue; }
             if kind != "damage_source" {
                 strace!("Kill source resolved via {}='{}'", kind, name);
             }

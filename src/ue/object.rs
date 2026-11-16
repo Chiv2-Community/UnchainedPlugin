@@ -102,7 +102,109 @@ struct UObjectVTable {
     get_world: unsafe extern "C" fn(*const UObject) -> *mut crate::game::engine::UWorld,
 }
 
+/// Maps a Rust native-object prefix to its exact UE class name.
+///
+/// # Safety
+/// Implementors must have the supported native layout, alignment and UObject
+/// prefix at offset zero for this class and its subclasses. Never implement for
+/// an opaque alias such as c_void.
+pub unsafe trait UObjectType: Sized {
+    const CLASS_NAME: &'static str;
+
+    /// Validate a raw native pointer and borrow this class's view.
+    ///
+    /// # Safety
+    /// UObject::from_ptr's engine-thread and lifetime requirements apply, and
+    /// the engine build must match this type's native layout.
+    #[inline(always)]
+    unsafe fn from_ptr<'a, P>(object: *const P) -> Option<&'a Self> {
+        UObject::from_ptr(object.cast())?.uobj_cast::<Self>()
+    }
+}
+
+fn class_chain_matches<K, S: AsRef<str>>(
+    mut class: K,
+    name: &str,
+    mut inspect: impl FnMut(K) -> Option<(S, K)>,
+) -> bool {
+    // Bound corrupted or cyclic metadata; do not follow it indefinitely.
+    for _ in 0..32 {
+        let Some((class_name, parent)) = inspect(class) else { return false; };
+        if class_name.as_ref() == name { return true; }
+        class = parent;
+    }
+    false
+}
+
 impl UObject {
+    /// Validate a raw pointer against GUObjectArray without first dereferencing it.
+    ///
+    /// # Safety
+    /// Engine globals must be initialized. Call on the game thread while object
+    /// destruction/GC cannot race this check; this does not pin the object.
+    pub unsafe fn is_live(object: *const Self) -> bool {
+        !object.is_null() && globals().guobject_array_unchecked().is_live(object.cast())
+    }
+
+    /// Borrow a currently registered native object after a liveness check.
+    ///
+    /// # Safety
+    /// The is_live contract applies. The object must remain alive and shared
+    /// access must remain valid for the returned lifetime; validation does not
+    /// establish ownership, detect address reuse or prevent subsequent destruction.
+    pub unsafe fn from_ptr<'a>(object: *const Self) -> Option<&'a Self> {
+        if Self::is_live(object) { object.as_ref() } else { None }
+    }
+
+    pub fn name(&self) -> String {
+        self.uobject_base_utility.uobject_base.name_private.to_string()
+    }
+
+    pub fn display_name(&self) -> String {
+        Self::normalize_display_name(&self.name())
+    }
+
+    fn normalize_display_name(name: &str) -> String {
+        let name = match name.rsplit_once('_') {
+            Some((base, suffix)) if suffix.chars().all(|c| c.is_ascii_digit()) => base,
+            _ => name,
+        };
+        name.trim_end_matches("_C").to_owned()
+    }
+
+    /// # Safety
+    /// The from_ptr contract applies to this object and its class metadata.
+    pub unsafe fn class_name(&self) -> Option<String> {
+        let class = self.uobject_base_utility.uobject_base.class_private;
+        Some(Self::from_ptr(class.cast())?.name())
+    }
+
+    /// Match an exact class name anywhere in the validated native superclass chain.
+    ///
+    /// # Safety
+    /// The from_ptr contract applies to this object and its native class metadata.
+    pub unsafe fn inherits_from(&self, name: &str) -> bool {
+        if !Self::is_live(self) { return false; }
+        let class = self.uobject_base_utility.uobject_base.class_private.cast::<UStruct>();
+        class_chain_matches(class, name, |class| {
+            let object = Self::from_ptr(class.cast())?;
+            Some((object.name(), (*class).super_struct))
+        })
+    }
+
+    /// Borrow a native view only when its mapped class matches this object.
+    ///
+    /// # Safety
+    /// The from_ptr contract applies to this object and its native class metadata.
+    /// The engine build must match T's declared layout. No ownership is transferred.
+    pub unsafe fn uobj_cast<T: UObjectType>(&self) -> Option<&T> {
+        if self.inherits_from(T::CLASS_NAME) {
+            (self as *const Self).cast::<T>().as_ref()
+        } else {
+            None
+        }
+    }
+
     /// # Safety
     /// This must be a live native object with the supported GetWorld vtable ABI.
     #[inline(always)]
@@ -123,6 +225,81 @@ pub struct APlayerController {
 #[repr(C)]
 pub struct UPlayer {
     pub base: UObject,
+}
+
+#[repr(C)]
+pub struct ULocalPlayer {
+    pub base: UPlayer,
+}
+
+// SAFETY: These repr(C) prefixes begin with UObject and map to their native classes.
+unsafe impl UObjectType for UObject { const CLASS_NAME: &'static str = "Object"; }
+unsafe impl UObjectType for APlayerController { const CLASS_NAME: &'static str = "PlayerController"; }
+unsafe impl UObjectType for UPlayer { const CLASS_NAME: &'static str = "Player"; }
+unsafe impl UObjectType for ULocalPlayer { const CLASS_NAME: &'static str = "LocalPlayer"; }
+
+#[cfg(test)]
+mod cast_tests {
+    use super::*;
+
+    #[test]
+    fn display_names_strip_instance_and_blueprint_suffixes() {
+        for (native, display) in [
+            ("Sword_123", "Sword"),
+            ("Sword_C_123", "Sword"),
+            ("Sword_C", "Sword"),
+            ("Sword_Archer", "Sword_Archer"),
+            ("Sword", "Sword"),
+            ("", ""),
+        ] {
+            assert_eq!(UObject::normalize_display_name(native), display);
+        }
+    }
+
+    #[test]
+    fn null_object_is_rejected_before_accessing_engine_globals() {
+        assert!(unsafe { UObject::from_ptr(std::ptr::null()) }.is_none());
+    }
+
+    #[test]
+    fn typed_null_object_is_rejected_before_accessing_engine_globals() {
+        assert!(unsafe { ULocalPlayer::from_ptr(std::ptr::null::<UPlayer>()) }.is_none());
+    }
+
+    #[test]
+    fn matches_exact_class_or_ancestor_not_substrings() {
+        for name in ["TBLPlayerState", "PlayerState"] {
+            assert!(class_chain_matches(2, name, |class| match class {
+                2 => Some(("TBLPlayerState", 1)),
+                1 => Some(("PlayerState", 0)),
+                _ => None,
+            }));
+        }
+        assert!(!class_chain_matches(1, "Character", |class| match class {
+            1 => Some(("CharacterDeathcam_C", 0)),
+            _ => None,
+        }));
+    }
+
+    #[test]
+    fn invalid_metadata_stops_traversal() {
+        let mut inspected = Vec::new();
+        assert!(!class_chain_matches(2, "PlayerState", |class| {
+            inspected.push(class);
+            if class == 2 { Some(("Unrelated", 1)) } else { None }
+        }));
+        assert_eq!(inspected, [2, 1]);
+    }
+
+    #[test]
+    fn cyclic_metadata_is_bounded() {
+        let mut inspected = 0;
+        assert!(!class_chain_matches(1, "PlayerState", |class| {
+            inspected += 1;
+            Some(("Unrelated", class))
+        }));
+        assert!(inspected > 0 && inspected < 100);
+    }
 }
 
 #[derive(Debug)]

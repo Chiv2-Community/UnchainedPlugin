@@ -53,18 +53,18 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {
     use super::client_message::{ClientMessage_detour_fkt, o_ClientMessage};
-    use crate::resolvers::gameplay::object_inherits_from;
+    use crate::game::engine::UWorld;
+    use crate::ue::{APlayerController, UObject, UObjectType, UPlayer};
 
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
     if controller.is_null() { return None; }
     // Match ClientReceiveLocalizedChat's Player guard and virtual GetWorld call.
-    let controller = controller.cast::<crate::ue::APlayerController>();
-    if !object_inherits_from(controller.cast(), "PlayerController") { return None; }
-    let player = unsafe { (*controller).player };
-    if !object_inherits_from(player.cast(), "Player") { return None; }
-    let world = unsafe { (*controller).base.get_world().as_ref() }?;
+    let controller_ptr = controller.cast::<APlayerController>();
+    let controller = unsafe { APlayerController::from_ptr(controller) }?;
+    unsafe { UPlayer::from_ptr(controller.player) }?;
+    let world = unsafe { UWorld::from_ptr(controller.base.get_world()) }?;
     let instance = world.owning_game_instance;
-    if !object_inherits_from(instance.cast(), "TBLGameInstance") { return None; }
+    if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } { return None; }
     let title = NativeText::new(title)?;
     let body = NativeText::new(body)?;
     // Preflight both calls before producing any output; failures use the untouched native path.
@@ -75,7 +75,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     }
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
-    unsafe { ClientMessage_detour_fkt(controller, &mut console_line, FName::default(), 0.0); }
+    unsafe { ClientMessage_detour_fkt(controller_ptr, &mut console_line, FName::default(), 0.0); }
     CALL_ORIGINAL!(TBLGameInstance_AddChatLine(instance, &title.0, &body.0, channel, false, is_sender_dev, &origin_color));
     Some(())
 }

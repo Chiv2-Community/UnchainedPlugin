@@ -4,6 +4,15 @@ use bitflags::bitflags;
 use strum::Display;
 use crate::{game::engine::FText, ue::{AsUObject, FString, FVector, TArray, UObject}};
 
+// SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
+unsafe impl crate::ue::UObjectType for AController { const CLASS_NAME: &'static str = "Controller"; }
+unsafe impl crate::ue::UObjectType for APawn { const CLASS_NAME: &'static str = "Pawn"; }
+unsafe impl crate::ue::UObjectType for ACharacter { const CLASS_NAME: &'static str = "Character"; }
+unsafe impl crate::ue::UObjectType for ATBLCharacter { const CLASS_NAME: &'static str = "TBLCharacter"; }
+unsafe impl crate::ue::UObjectType for APlayerState { const CLASS_NAME: &'static str = "PlayerState"; }
+unsafe impl crate::ue::UObjectType for ATBLPlayerState { const CLASS_NAME: &'static str = "TBLPlayerState"; }
+unsafe impl crate::ue::UObjectType for ATBLGameState { const CLASS_NAME: &'static str = "TBLGameState"; }
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct AActor {

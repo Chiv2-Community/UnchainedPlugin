@@ -1,11 +1,11 @@
 //! Replace ListPlayers and send one corrected table to the console and clipboard.
-use super::{gameplay::object_inherits_from, messages::o_FText_ToString};
+use super::messages::o_FText_ToString;
 use crate::{
     game::{
-        chivalry2::{ATBLPlayerState, PlayerFlags},
-        engine::{UIpConnection, UIpNetDriver},
+        chivalry2::{ATBLGameState, ATBLPlayerState, PlayerFlags},
+        engine::{UIpConnection, UIpNetDriver, UWorld},
     },
-    ue::{APlayerController, TCHAR},
+    ue::{APlayerController, UObjectType, TCHAR},
 };
 use tabled::{
     builder::Builder,
@@ -17,25 +17,27 @@ define_pattern_resolver!(ListPlayers, [
 ]);
 
 define_pattern_resolver!(
-    ListPlayersClipboard,
-    Call,
-    ["49 8B CC E8 | ?? ?? ?? ?? 48 8B 4D D7 4C 8B B4 24 C0 00 00 00 4C 8B A4 24 D0 00 00 00"]
+    FWindowsPlatformApplicationMisc_ClipboardCopy,
+    ["48 89 4C 24 08 48 83 EC 78 FF 15 ?? ?? ?? ?? 48 8B C8 FF 15 ?? ?? ?? ?? 85 C0 0F 84 ?? ?? ?? ?? FF 15 ?? ?? ?? ?? 48 8B 84 24 80 00 00 00"]
 );
-CREATE_HOOK!(ListPlayersClipboard, CALLED, i32, (text: *const TCHAR), {});
+// Static UE platform function: no instance or vtable dispatch.
+CREATE_HOOK!(FWindowsPlatformApplicationMisc_ClipboardCopy, CALLED, (), (text: *const TCHAR), {});
 
 CREATE_HOOK!(ListPlayers, ACTIVE, NONE, (), (controller: *mut APlayerController), {
     if controller.is_null() { return; }
     let output = player_output();
     super::messages::print_console_output(controller, &output);
     let utf16: Vec<u16> = output.encode_utf16().chain(Some(0)).collect();
-    if let Err(error) = CALL_ORIGINAL_SAFE!(ListPlayersClipboard(utf16.as_ptr())) {
+    if let Err(error) = CALL_ORIGINAL_SAFE!(FWindowsPlatformApplicationMisc_ClipboardCopy(utf16.as_ptr())) {
         serror!("ListPlayers clipboard output failed: {error}");
     }
 });
 
 unsafe fn player_output() -> String {
-    let world = crate::globals().world().and_then(|world| world.as_ref());
-    let state = world.and_then(|world| world.game_state.as_ref());
+    let world = crate::globals()
+        .world()
+        .and_then(|world| UWorld::from_ptr(world));
+    let state = world.and_then(|world| ATBLGameState::from_ptr(world.game_state));
     let name = match state {
         Some(state) => {
             // Native FText::ToString rebuilds text before consulting its data vtable.
@@ -49,17 +51,11 @@ unsafe fn player_output() -> String {
     };
     let address = world
         .and_then(|world| {
-            let driver = world.net_driver.as_ref()?;
-            if !object_inherits_from(world.net_driver.cast(), "IpNetDriver") {
-                return None;
-            }
-            let address = if driver.server_connection.is_null() {
-                (*world.net_driver.cast::<UIpNetDriver>()).local_addr
+            let driver = UIpNetDriver::from_ptr(world.net_driver)?;
+            let address = if driver.base.server_connection.is_null() {
+                driver.local_addr
             } else {
-                if !object_inherits_from(driver.server_connection, "IpConnection") {
-                    return None;
-                }
-                (*driver.server_connection.cast::<UIpConnection>()).remote_addr
+                UIpConnection::from_ptr(driver.base.server_connection)?.remote_addr
             };
             Some(address.as_ref()?.to_native_string(true))
         })
@@ -68,13 +64,7 @@ unsafe fn player_output() -> String {
         .map(|state| state.player_array.as_slice())
         .unwrap_or_default()
         .iter()
-        .filter_map(|player| player.as_ref())
-        .filter(|player| {
-            object_inherits_from(
-                (*player as *const ATBLPlayerState).cast_mut().cast(),
-                "TBLPlayerState",
-            )
-        })
+        .filter_map(|player| ATBLPlayerState::from_ptr(*player))
         .filter(|player| !player.base.player_flags.contains(PlayerFlags::IS_A_BOT))
         .map(|player| {
             [
