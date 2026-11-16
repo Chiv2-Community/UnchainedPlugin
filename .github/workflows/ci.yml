@@ -79,6 +79,12 @@ jobs:
             cargo test --locked
           fi
 
+      - name: Check without registration
+        if: matrix.build_type == 'debug'
+        run: >-
+          cargo check --locked --lib --no-default-features
+          --features serde-resolvers,dev,verbose_hooks,cli_commands,rcon_commands,mod_management,discord_integration,syslog-client
+
       # Upload artifacts after build and tests succeed
       - name: Upload artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

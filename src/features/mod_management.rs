@@ -499,6 +499,7 @@ impl ModManager {
             }
         }
 
+        #[cfg(feature="server_registration")]
         if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
             let _ = self.scan_active_mod_actors();
             reg.trigger_update();

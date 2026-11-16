@@ -37,6 +37,7 @@ use serde_json::to_writer_pretty;
 use crate::commands::spawn_cli_handler;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
+#[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
 use crate::game::chivalry2::EChatType;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
