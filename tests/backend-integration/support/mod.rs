@@ -1,68 +1,17 @@
-//! Build the real backend Dockerfile from the exact SDK Git revision.
-use std::{io::Read, sync::OnceLock, time::Duration};
+use std::time::Duration;
 use testcontainers::{
     core::{IntoContainerPort, WaitFor},
-    runners::{SyncBuilder, SyncRunner},
-    Container, GenericBuildableImage, GenericImage, ImageExt,
+    runners::SyncRunner,
+    Container, GenericImage, ImageExt,
 };
 
-fn backend_revision() -> String {
-    let manifest: toml::Value =
-        toml::from_str(include_str!("../../../Cargo.toml")).expect("parse workspace manifest");
-    let dependencies = &manifest["workspace"]["dependencies"];
-    let revision = dependencies["server-browser-client"]["rev"]
-        .as_str()
-        .expect("SDK dependency must have an exact revision");
-    for package in ["server-browser-client-sdk", "server-browser-models"] {
-        assert_eq!(
-            dependencies[package]["rev"].as_str(),
-            Some(revision),
-            "{package} and client revisions must match"
-        );
-    }
-    assert!(
-        revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "backend revision must be a full Git commit hash"
-    );
-    revision.to_owned()
-}
-
-fn image() -> GenericImage {
-    static IMAGE: OnceLock<GenericImage> = OnceLock::new();
-    IMAGE
-        .get_or_init(|| {
-            let revision = backend_revision();
-            let source = tempfile::tempdir().expect("create backend build directory");
-            let url = format!(
-            "https://codeload.github.com/Chiv2-Community/C2ServerBrowserBackend/tar.gz/{revision}"
-        );
-            let archive = reqwest::blocking::Client::builder()
-                .timeout(Duration::from_secs(90))
-                .build()
-                .expect("create backend download client")
-                .get(url)
-                .send()
-                .expect("download pinned backend source")
-                .error_for_status()
-                .expect("backend source download must succeed");
-            tar::Archive::new(flate2::read::GzDecoder::new(archive.take(32 * 1024 * 1024)))
-                .unpack(source.path())
-                .expect("unpack pinned backend source");
-            let directory = source
-                .path()
-                .join(format!("C2ServerBrowserBackend-{revision}"));
-            GenericBuildableImage::new("unchained-backend-integration", &revision)
-                .with_dockerfile(directory.join("Dockerfile"))
-                .with_file(&directory, ".")
-                .build_image()
-                .expect("build authoritative backend Dockerfile")
-        })
-        .clone()
-}
-
 pub fn backend() -> (Container<GenericImage>, String) {
+    let image = GenericImage::new(
+        "ghcr.io/chiv2-community/c2serverbrowserbackend",
+        "1.3.0-alpha-2_e820a32",
+    );
     // Signing keys and registry files exist only in this disposable container.
-    let container = image()
+    let container = image
         .with_entrypoint("/bin/sh")
         .with_exposed_port(8080.tcp())
         .with_wait_for(WaitFor::message_on_stderr("Uvicorn running on"))
