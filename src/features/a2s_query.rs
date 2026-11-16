@@ -4,34 +4,23 @@ use a2s::{
     info::Info,
     A2SClient,
 };
-use std::{net::SocketAddr, time::Duration};
+use backon::{ConstantBuilder, Retryable};
+use std::{net::SocketAddr, num::NonZeroUsize, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 pub(super) async fn query_with_retry(
     address: SocketAddr,
+    max_attempts: NonZeroUsize,
     shutdown: &CancellationToken,
 ) -> Result<Option<Info>> {
-    let mut attempts = 3;
-    loop {
-        let result = tokio::select! {
-            biased;
-            _ = shutdown.cancelled() => return Ok(None),
-            result = query(address) => result,
-        };
-        match result {
-            Ok(info) => return Ok(Some(info)),
-            Err(error) => {
-                attempts -= 1;
-                if attempts == 0 {
-                    return Err(error);
-                }
-            }
-        }
-        tokio::select! {
-            biased;
-            _ = shutdown.cancelled() => return Ok(None),
-            _ = tokio::time::sleep(Duration::from_millis(500)) => {},
-        }
+    let policy = ConstantBuilder::default()
+        .with_delay(Duration::from_millis(500))
+        // Backon counts retries, not the initial call.
+        .with_max_times(max_attempts.get() - 1);
+    tokio::select! {
+        biased;
+        _ = shutdown.cancelled() => Ok(None),
+        result = (|| query(address)).retry(policy) => result.map(Some),
     }
 }
 

@@ -21,6 +21,7 @@ container-tests = ["dep:testcontainers"]
 testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
 
 [dev-dependencies]
+backon = { workspace = true }
 test-case = { workspace = true }
 a2s = { workspace = true }
 server-browser-client = { workspace = true }
