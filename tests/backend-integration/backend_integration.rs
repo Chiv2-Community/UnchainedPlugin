@@ -143,7 +143,7 @@ fn registration_lifecycle_against_backend_container() {
 #[test_case::test_case(false; "allowed")]
 #[test_case::test_case(true; "banned")]
 fn native_ban_bridge_against_backend(banned: bool) {
-    let (_container, url) = support::backend();
+    let (_container, url) = support::backend(false);
     let runtime = tokio::runtime::Runtime::new().unwrap();
     if banned {
         runtime.block_on(async {
