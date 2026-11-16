@@ -55,7 +55,7 @@ fn is_user_banned(addr: &str) -> bool {
         crate::backend::check_banned_sync(
             cli_args().server_browser_backend.as_deref().unwrap_or_default(),
             addr,
-            &crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE,
+            crate::features::tokio_runtime::TOKIO_RUNTIME.handle(),
         )
     }).ok().flatten();
     match response {
