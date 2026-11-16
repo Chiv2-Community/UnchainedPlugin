@@ -1,7 +1,7 @@
 # Discord authentication foundation
 
 Stacked on the SDK migration in plugin PR #44. Tracks plugin #34–#36;
-admission remains disabled. See [backend-sdk.md](backend-sdk.md) for the migration.
+admission remains disabled.
 
 ## Generated backend integration
 
