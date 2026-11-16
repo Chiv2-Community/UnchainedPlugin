@@ -24,5 +24,3 @@ pub struct Mod {
     pub version: String,
     pub object_path: String,
 }
-unsafe impl Send for Mod {}
-unsafe impl Sync for Mod {}
