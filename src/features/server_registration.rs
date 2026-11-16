@@ -6,11 +6,11 @@ use server_browser_client::models::{
     Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
 };
 use server_browser_client_sdk::{
-    Event, HttpTransport, Policy, Registration as SdkRegistration, SdkError,
+    Event, HttpTransport, Policy, Registration as SdkRegistration, RegistrationWorker,
 };
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::{sync::Notify, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -53,11 +53,9 @@ pub struct Registration {
 }
 
 #[derive(Debug)]
-struct RegistrationWorker {
+struct MetadataCollector {
     query_address: SocketAddr,
     local_ip_address: Option<String>,
-    backend: HttpTransport,
-    registration: Option<SdkRegistration<HttpTransport>>,
 }
 
 impl Registration {
@@ -74,17 +72,13 @@ impl Registration {
             );
         }
 
-        let backend = crate::backend_config::client().clone();
-
-        let worker = RegistrationWorker {
+        let collector = MetadataCollector {
             query_address,
             local_ip_address: advertised_local_ip,
-            backend,
-            registration: None,
         };
         let shutdown = CancellationToken::new();
         let update = Arc::new(Notify::new());
-        let task = TOKIO_RUNTIME.spawn(worker.run(shutdown.clone(), Arc::clone(&update)));
+        let task = TOKIO_RUNTIME.spawn(collector.run(shutdown.clone(), Arc::clone(&update)));
         Self {
             shutdown,
             task,
@@ -105,65 +99,126 @@ impl Drop for Registration {
     }
 }
 
-impl RegistrationWorker {
-    async fn run(mut self, shutdown: CancellationToken, update: Arc<Notify>) {
-        let mut poll_at = tokio::time::Instant::now();
-        loop {
-            // Cancellation is observed between requests, never during a registration POST.
+impl MetadataCollector {
+    async fn run(self, shutdown: CancellationToken, update: Arc<Notify>) {
+        let info = loop {
+            if let Some(info) = self.query(&shutdown).await {
+                break info;
+            }
             tokio::select! {
                 biased;
-                _ = shutdown.cancelled() => break,
+                _ = shutdown.cancelled() => return,
                 _ = update.notified() => {},
-                _ = tokio::time::sleep_until(poll_at) => {},
+                _ = tokio::time::sleep(METADATA_POLL_INTERVAL) => {},
             }
-
-            match self.poll(&shutdown).await {
-                Ok(delay) => poll_at = tokio::time::Instant::now() + delay,
-                Err(error) => {
-                    // Preserve uncertainty instead of creating a fresh manager.
-                    swarn!("Server-browser lifecycle halted: {}", error);
-                    break;
-                }
-            }
-        }
-        if let Some(registration) = self.registration.as_mut() {
-            if let Err(error) = registration.stop().await {
-                swarn!("Server-browser cleanup failed: {}", error);
-            }
-        }
-    }
-
-    async fn poll(&mut self, shutdown: &CancellationToken) -> Result<Duration, SdkError> {
-        let status = self.refresh_metadata(shutdown).await?;
+        };
         if shutdown.is_cancelled() {
-            return Ok(Duration::ZERO);
+            return;
         }
-        if let Some(registration) = self.registration.as_mut() {
-            Self::observe(registration.poll().await?, status);
+        let status = Self::metadata(&info);
+        let mut registration = match SdkRegistration::new(
+            crate::backend_config::client().clone(),
+            self.request(&info, &status),
+            Policy::default(),
+        ) {
+            Ok(registration) => registration,
+            Err(error) => {
+                swarn!("Server-browser lifecycle halted: {}", error);
+                return;
+            }
+        };
+        Self::reg_listeners(&mut registration);
+        let registration = registration.into_worker();
+        let latest = Mutex::new(status);
+        let driver = registration.run(|event| Self::observe(event, &latest));
+        tokio::pin!(driver);
+        let result = tokio::select! {
+            biased;
+            () = self.collect_updates(&registration, &latest, &shutdown, &update) => {
+                registration.cancel();
+                driver.await
+            }
+            result = &mut driver => result,
+        };
+        if let Err(error) = result {
+            swarn!("Server-browser lifecycle halted: {}", error);
         }
-        Ok(self
-            .registration
-            .as_ref()
-            .and_then(SdkRegistration::next_delay)
-            .unwrap_or(METADATA_POLL_INTERVAL)
-            .min(METADATA_POLL_INTERVAL))
     }
 
-    async fn refresh_metadata(
-        &mut self,
+    fn reg_listeners(registration: &mut SdkRegistration<HttpTransport>) {
+        registration.add_registration_response_listener(|response| {
+            match response {
+                Ok(response) => sinfo!(
+                    "Registered server-browser identity: {}",
+                    response.server.unique_id
+                ),
+                Err(error) => swarn!("Server-browser registration failed: {:?}", error),
+            }
+            Ok(())
+        });
+        registration.add_heartbeat_response_listener(|response| {
+            match response {
+                Ok(_) => sdebug!("Server-browser heartbeat succeeded"),
+                Err(error) => swarn!("Server-browser heartbeat failed: {:?}", error),
+            }
+            Ok(())
+        });
+        registration.add_update_response_listener(|response| {
+            match response {
+                Ok(_) => sdebug!("Server-browser metadata updated"),
+                Err(error) => swarn!("Server-browser update failed: {:?}", error),
+            }
+            Ok(())
+        });
+        registration.add_deletion_response_listener(|response| {
+            match response {
+                Ok(()) => sinfo!("Server-browser registration deleted"),
+                Err(error) => swarn!("Server-browser deletion failed: {:?}", error),
+            }
+            Ok(())
+        });
+    }
+
+    async fn query(&self, shutdown: &CancellationToken) -> Option<Info> {
+        match a2s_query::query_with_retry(self.query_address, A2S_MAX_ATTEMPTS, shutdown).await {
+            Ok(info) => info,
+            Err(error) => {
+                serror!("A2S failed after retries: {}", error);
+                None
+            }
+        }
+    }
+
+    async fn collect_updates(
+        &self,
+        registration: &RegistrationWorker<HttpTransport>,
+        latest: &Mutex<ServerStatus>,
         shutdown: &CancellationToken,
-    ) -> Result<Option<ServerStatus>, SdkError> {
-        let info =
-            match a2s_query::query_with_retry(self.query_address, A2S_MAX_ATTEMPTS, shutdown).await {
-                Ok(Some(info)) => info,
-                Ok(None) => return Ok(None),
-                Err(error) => {
-                    serror!("A2S failed after retries: {}", error);
-                    return Ok(None);
-                }
+        update: &Notify,
+    ) {
+        loop {
+            tokio::select! {
+                biased;
+                _ = shutdown.cancelled() => return,
+                _ = update.notified() => {},
+                _ = tokio::time::sleep(METADATA_POLL_INTERVAL) => {},
+            }
+            let Some(info) = self.query(shutdown).await else {
+                continue;
             };
-        let status = Self::metadata(&info);
-        let update = UpdateRegisteredServer {
+            let status = Self::metadata(&info);
+            let update = Self::update(&status);
+            *latest
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
+            if !registration.set_update(update) {
+                return;
+            }
+        }
+    }
+
+    fn update(status: &ServerStatus) -> UpdateRegisteredServer {
+        UpdateRegisteredServer {
             player_count: status.player_count,
             max_players: status.max_players,
             current_map: status.current_map.clone(),
@@ -180,44 +235,39 @@ impl RegistrationWorker {
                     })
                     .collect(),
             ),
-        };
-        if let Some(registration) = self.registration.as_mut() {
-            registration.set_update(update)?;
-        } else {
-            let args = cli_args();
-            let request = ServerRegistrationRequest {
-                ports: Chivalry2Ports {
-                    game: i32::from(info.extended_server_info.port.unwrap_or(7777)),
-                    ping: i32::from(args.game_server_ping_port.unwrap_or(0)),
-                    a2s: i32::from(self.query_address.port()),
-                },
-                name: status.name.clone(),
-                description: status.description.clone(),
-                password_protected: Some(status.password_protected),
-                current_map: update.current_map,
-                player_count: update.player_count,
-                max_players: update.max_players,
-                local_ip_address: self.local_ip_address.clone(),
-                mods: update.mods,
-            };
-            self.registration = Some(SdkRegistration::new(
-                self.backend.clone(),
-                request,
-                Policy::default(),
-            )?);
         }
-        Ok(Some(status))
     }
 
-    fn observe(event: Event, status: Option<ServerStatus>) {
+    fn request(&self, info: &Info, status: &ServerStatus) -> ServerRegistrationRequest {
+        let args = cli_args();
+        let update = Self::update(status);
+        ServerRegistrationRequest {
+            ports: Chivalry2Ports {
+                game: i32::from(info.extended_server_info.port.unwrap_or(7777)),
+                ping: i32::from(args.game_server_ping_port.unwrap_or(0)),
+                a2s: i32::from(self.query_address.port()),
+            },
+            name: status.name.clone(),
+            description: status.description.clone(),
+            password_protected: Some(status.password_protected),
+            current_map: update.current_map,
+            player_count: update.player_count,
+            max_players: update.max_players,
+            local_ip_address: self.local_ip_address.clone(),
+            mods: update.mods,
+        }
+    }
+
+    fn observe(event: &Event, latest: &Mutex<ServerStatus>) {
         match event {
-            Event::Registered { server_id } => {
-                sinfo!("Registered server-browser identity: {}", server_id);
-                if let Some(status) = status {
-                    EVENT_SYSTEM
-                        .game_event_publisher
-                        .publish(GameEvent::ServerStatusEvent(status));
-                }
+            Event::Registered { .. } => {
+                let status = latest
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                EVENT_SYSTEM
+                    .game_event_publisher
+                    .publish(GameEvent::ServerStatusEvent(status));
             }
             Event::RegistrationLost => {
                 swarn!("Server-browser registration expired; SDK will re-register")
