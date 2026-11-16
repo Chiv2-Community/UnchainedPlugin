@@ -1,6 +1,6 @@
 use std::time::Duration;
 use testcontainers::{
-    core::{IntoContainerPort, WaitFor},
+    core::{IntoContainerPort, Mount, WaitFor},
     runners::SyncRunner,
     Container, GenericImage, ImageExt,
 };
@@ -15,6 +15,7 @@ pub fn backend() -> (Container<GenericImage>, String) {
         .with_exposed_port(8080.tcp())
         .with_wait_for(WaitFor::message_on_stderr("Uvicorn running on"))
         .with_env_var("CONFIG_DIR", "/tmp/browser-test")
+        .with_mount(Mount::tmpfs_mount("/tmp/browser-test"))
         .with_env_var("ADMIN_KEY", "container-test-admin")
         .with_env_var("TRUSTED_PROXY_CIDRS", "")
         .with_env_var("DEBUG_MODE", "false")
