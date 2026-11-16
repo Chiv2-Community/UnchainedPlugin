@@ -1,6 +1,7 @@
 use super::a2s_query;
 use a2s::errors::Error;
 use tokio::net::UdpSocket;
+use tokio_util::sync::CancellationToken;
 
 const INFO: &[u8] =
     b"\xff\xff\xff\xffI\x11Test\0Map\0folder\0Game\0\x00\x00\x02\x20\x00dl\x00\x001.0\0";
@@ -60,4 +61,61 @@ async fn bounds_silent_queries_to_five_seconds() {
     tokio::time::pause();
     tokio::time::advance(std::time::Duration::from_secs(5)).await;
     assert!(matches!(query.await.unwrap(), Err(Error::ErrTimeout)));
+}
+
+#[test_case::test_case(0; "first_attempt")]
+#[test_case::test_case(1; "second_attempt")]
+#[test_case::test_case(2; "third_attempt")]
+#[test_case::test_case(3; "exhausted")]
+#[tokio::test]
+async fn retries_failed_queries(failures: usize) {
+    let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let address = server.local_addr().unwrap();
+    let responder = tokio::spawn(async move {
+        let mut request = [0; 64];
+        for attempt in 0..=failures.min(2) {
+            let (_, peer) = server.recv_from(&mut request).await.unwrap();
+            let reply = if attempt < failures {
+                b"\xff\xff\xff\xff?".as_slice()
+            } else {
+                INFO
+            };
+            server.send_to(reply, peer).await.unwrap();
+        }
+        server
+    });
+    let result = a2s_query::query_with_retry(address, &CancellationToken::new()).await;
+    if failures == 3 {
+        assert!(matches!(result, Err(Error::InvalidResponse)));
+    } else {
+        assert_eq!(result.unwrap().unwrap().players, 2);
+    }
+    let server = responder.await.unwrap();
+    assert_eq!(
+        server.try_recv_from(&mut [0; 64]).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+#[test_case::test_case(false; "before_query")]
+#[test_case::test_case(true; "during_query")]
+#[tokio::test]
+async fn cancellation_stops_metadata_lookup(in_flight: bool) {
+    let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let address = server.local_addr().unwrap();
+    let shutdown = CancellationToken::new();
+    if !in_flight {
+        shutdown.cancel();
+    }
+    let cancel = shutdown.clone();
+    let query = tokio::spawn(async move { a2s_query::query_with_retry(address, &shutdown).await });
+    if in_flight {
+        server.recv_from(&mut [0; 64]).await.unwrap();
+        cancel.cancel();
+    }
+    assert!(query.await.unwrap().unwrap().is_none());
+    assert_eq!(
+        server.try_recv_from(&mut [0; 64]).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
 }

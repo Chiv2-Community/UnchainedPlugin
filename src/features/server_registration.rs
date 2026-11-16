@@ -24,7 +24,6 @@ use crate::tools::hook_globals::cli_args;
 mod a2s_query;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
-const A2S_RETRIES: u8 = 3;
 // Allow the bounded in-flight HTTP request and one DELETE to finish.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(25);
 
@@ -143,10 +142,6 @@ impl Registration {
     pub fn trigger_update(&self) {
         self.update.notify_one();
     }
-
-    pub fn is_finished(&self) -> bool {
-        self.task.is_finished()
-    }
 }
 
 impl Drop for Registration {
@@ -177,7 +172,11 @@ impl RegistrationWorker {
                 }
             }
         }
-        self.cleanup().await;
+        if let Some(registration) = self.registration.as_mut() {
+            if let Err(error) = registration.stop().await {
+                swarn!("Server-browser cleanup failed: {}", error);
+            }
+        }
     }
 
     async fn poll(&mut self, shutdown: &CancellationToken) -> Result<Duration, SdkError> {
@@ -200,8 +199,13 @@ impl RegistrationWorker {
         &mut self,
         shutdown: &CancellationToken,
     ) -> Result<Option<ServerStatus>, SdkError> {
-        let Some(info) = self.poll_a2s_with_retry(shutdown).await else {
-            return Ok(None);
+        let info = match a2s_query::query_with_retry(self.server_addr, shutdown).await {
+            Ok(Some(info)) => info,
+            Ok(None) => return Ok(None),
+            Err(error) => {
+                serror!("A2S failed after retries: {}", error);
+                return Ok(None);
+            }
         };
         let status = Self::metadata(&info);
         let update = UpdateRegisteredServer {
@@ -270,14 +274,6 @@ impl RegistrationWorker {
         }
     }
 
-    async fn cleanup(&mut self) {
-        if let Some(registration) = self.registration.as_mut() {
-            if let Err(error) = registration.stop().await {
-                swarn!("Server-browser cleanup failed: {}", error);
-            }
-        }
-    }
-
     fn metadata(info: &Info) -> ServerStatus {
         let args = cli_args();
         let description = format!(
@@ -318,30 +314,5 @@ impl RegistrationWorker {
             mods: all_mods,
             active_mods: mods,
         }
-    }
-
-    async fn poll_a2s_with_retry(&self, shutdown: &CancellationToken) -> Option<Info> {
-        for i in 0..A2S_RETRIES {
-            let result = tokio::select! {
-                biased;
-                _ = shutdown.cancelled() => return None,
-                result = a2s_query::query(self.server_addr) => result,
-            };
-            match result {
-                Ok(info) => return Some(info),
-                Err(error) => {
-                    if i == A2S_RETRIES - 1 {
-                        serror!("A2S failed after {} attempts: {:?}", A2S_RETRIES, error);
-                        return None;
-                    }
-                    tokio::select! {
-                        biased;
-                        _ = shutdown.cancelled() => return None,
-                        _ = tokio::time::sleep(Duration::from_millis(500)) => {},
-                    }
-                }
-            }
-        }
-        None
     }
 }

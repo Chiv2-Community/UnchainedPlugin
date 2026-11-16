@@ -2338,6 +2338,7 @@ dependencies = [
  "test-case",
  "testcontainers",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
