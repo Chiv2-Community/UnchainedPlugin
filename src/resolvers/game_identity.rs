@@ -5,17 +5,14 @@ use crate::{
     tools::hook_globals::cli_args,
     ue::{APlayerController, FGuid, FName, FString, FWeakObjectPtr, UObjectBase},
 };
-use server_browser_client::models::GameJoinRedemptionRequest;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     ffi::c_void,
     sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
 };
 
 static TRAVEL_EPOCH: AtomicU64 = AtomicU64::new(0);
-static CALLBACK_ID: AtomicU64 = AtomicU64::new(0);
 static CLIENT_SLOT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 
 pub fn configured_backend() -> Option<String> {
@@ -31,6 +28,7 @@ pub fn admission_available() -> bool {
         && o_IdentityRequireFreshJoin.is_enabled()
         && o_IdentityClearSharedId.is_enabled()
         && o_IdentityRejectPlayer.is_enabled()
+        && super::identity_authority::available()
 }
 
 define_pattern_resolver!(IdentityRequireFreshJoin, [
@@ -181,8 +179,6 @@ unsafe fn slot(object: *const c_void, index: usize) -> usize {
 }
 
 thread_local! {
-    // Only the game thread owns/destroys native delegates. Workers carry IDs.
-    static COMPLETIONS: RefCell<HashMap<u64, PendingAdmission>> = RefCell::new(HashMap::new());
     static INITIALIZING: Cell<Option<AdmissionContext>> = const { Cell::new(None) };
     static VERIFIED_CONNECTIONS: RefCell<HashMap<*const UObjectBase, FWeakObjectPtr>> = RefCell::new(HashMap::new());
 }
@@ -241,34 +237,28 @@ CREATE_HOOK!(ValidatedConfirmJoin, ACTIVE, NONE, bool, (
         Some(context.witness)
     });
     let mut delegate = PendingAdmission { delegate, witness };
-    if COMPLETIONS.with(|pending| pending.borrow().len() >= 64) {
-        unsafe { delegate.complete(false) };
-        return true;
-    }
-    let request = protocol::decode_ticket(&raw).and_then(|(server, credential)| {
-        let playfab = unsafe { playfab.as_ref() }?.copy_to_string().ok()?;
-        Some((server.to_owned(), GameJoinRedemptionRequest::new(credential.to_owned(), playfab)))
-    });
-    let receiver = configured_backend().and_then(|_| request).and_then(|(server, request)| {
+    // This path never redeems opaque grants, including after JWT rejection.
+    let claims = configured_backend().and_then(|_| {
+        if !admission_available() || !protocol::admission_ticket(&raw) { return None; }
         let registration = crate::globals().registration.lock().ok()?;
-        registration.as_ref()?.redeem(server, request)
+        registration.as_ref()?.consume_admission(&raw).ok()
+    }).filter(|claims| {
+        unsafe { playfab.as_ref() }.and_then(|value| value.copy_to_string().ok())
+            .is_some_and(|claimed| claimed == claims.sub)
     });
-    let Some(receiver) = receiver else {
-        unsafe { delegate.complete(false) };
-        return true;
+    let ids = claims.as_ref().and_then(|claims| unsafe { super::identity_authority::VerifiedIds::prepare(claims) });
+    let ready = match (delegate.witness, ids.as_ref()) {
+        (Some(witness), Some(ids)) if unsafe { witness.current() } => {
+            let array = unsafe { crate::globals().guobject_array_unchecked() };
+            if let Some(state) = unsafe { witness.state.get(array) } {
+                unsafe { ids.assign(state as *const UObjectBase as *mut u8) };
+                unsafe { witness.current() }
+            } else { false }
+        }
+        _ => false,
     };
-    let id = CALLBACK_ID.fetch_add(1, Ordering::Relaxed);
-    COMPLETIONS.with(|pending| pending.borrow_mut().insert(id, delegate));
-    drop(TOKIO_RUNTIME.spawn(async move {
-        let accepted = tokio::time::timeout(Duration::from_secs(12), receiver).await.ok().and_then(Result::ok).unwrap_or(false);
-        run_on_game_thread(move || {
-            let delegate = COMPLETIONS.with(|pending| pending.borrow_mut().remove(&id));
-            if let Some(mut delegate) = delegate {
-                let applied = unsafe { delegate.complete(accepted) };
-                sinfo!("Game join validation completed: accepted={}", applied);
-            }
-        });
-    }));
+    let applied = unsafe { delegate.complete(ready) };
+    sinfo!("Offline game join validation completed: accepted={}", applied);
     true
 });
 
@@ -317,12 +307,16 @@ pub unsafe fn intercept_travel(
         swarn!("Native game credential unavailable; browser travel cancelled");
         return true;
     };
+    let Some(eos_id_token) = (unsafe { super::eos_identity::copy_local_id_token() }) else {
+        swarn!("EOS Connect identity token unavailable; browser travel cancelled");
+        return true;
+    };
     let world = crate::globals()
         .world()
         .map(|world| FWeakObjectPtr::new(unsafe { &*world.cast::<UObjectBase>() }));
     drop(TOKIO_RUNTIME.spawn(async move {
         let ticket =
-            crate::features::playfab_proof::issue(&backend, target, &claimed, credential).await;
+            crate::features::playfab_proof::issue_admission(&backend, target, &claimed, credential, eos_id_token).await;
         run_on_game_thread(move || {
             let _permit = permit;
             if TRAVEL_EPOCH.load(Ordering::Relaxed) != epoch {

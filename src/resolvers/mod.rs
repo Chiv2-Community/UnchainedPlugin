@@ -86,6 +86,8 @@ pub mod etc_hooks;
 pub mod game_identity;
 #[cfg(feature = "game_identity")]
 pub mod eos_identity;
+#[cfg(feature = "game_identity")]
+pub mod identity_authority;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;

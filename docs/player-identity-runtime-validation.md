@@ -25,10 +25,14 @@ identity used its EOS PUID. No raw JWTs or reusable credentials were saved.
   The `EOS` subsystem name does not expose the required interface. These tests
   construct wrappers only; they do not establish authoritative field assignment.
 
-Registration-bound cached-JWKS state and conservative lease deadlines now compile
-for Windows. Host-state tests pass, including preservation of the verifier across
-pause/expiry/renewal. Native login still uses the legacy opaque-grant path; signed
-issuance is a separate, unconnected function and never falls back after rejection.
+Registration-bound cached-JWKS state and conservative lease deadlines compile for
+Windows. Host-state tests cover preservation across pause/expiry/renewal. The
+opted-in native path now requests signed admissions and verifies/consumes them
+synchronously without online redemption. Native base/PlayFab/platform setters
+receive wrappers constructed from verified claims. The platform RPC's server
+implementation drops client updates on opted-in hosts; normal replication stays
+unchanged. Live validation of this integration is in progress; this is not yet
+a runtime pass. Legacy backend operations remain, but are never a rejection fallback.
 
 ## Passed
 
