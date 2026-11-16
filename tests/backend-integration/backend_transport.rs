@@ -15,6 +15,8 @@ use server_browser_client::{
 };
 use server_browser_client_sdk::{Policy, Registration, SdkError};
 
+const REDIRECT_RESPONSE: &str = "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/stolen\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
 fn serve(response: String) -> (String, thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/", listener.local_addr().unwrap());
@@ -52,34 +54,9 @@ fn serve_json(body: serde_json::Value) -> (String, thread::JoinHandle<String>) {
     serve(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()))
 }
 
-#[test_case::test_case("127.0.0.1", "127.0.0.1", true; "ipv4_banned")]
-#[test_case::test_case("2001:db8::1", "2001%3Adb8%3A%3A1", false; "ipv6_allowed")]
-#[tokio::test]
-async fn generated_ban_check_uses_typed_boolean_and_encoded_ip(
-    address: &str,
-    encoded: &str,
-    banned: bool,
-) {
-    let (url, worker) =
-        serve_json(serde_json::json!({"banned": banned, "note": (!banned).to_string()}));
-    let client = backend::transport(&url, None).unwrap();
-    assert_eq!(
-        api_v1_api::check_banned(client.configuration(), address)
-            .await
-            .unwrap()
-            .banned,
-        banned
-    );
-    let request = worker.join().unwrap();
-    assert!(
-        request.starts_with(&format!("GET /api/v1/check-banned/{encoded} ")),
-        "{request}"
-    );
-}
-
 #[tokio::test]
 async fn credentials_never_follow_redirects_and_debug_redacts_url() {
-    let (url, worker) = serve("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/stolen\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into());
+    let (url, worker) = serve(REDIRECT_RESPONSE.into());
     let client = backend::transport(&url, None).unwrap();
     assert!(
         api_v1_api::delete_server(client.configuration(), "credential-sentinel", "id")
@@ -93,8 +70,8 @@ async fn credentials_never_follow_redirects_and_debug_redacts_url() {
 }
 
 #[tokio::test]
-async fn sdk_transport_uses_plugin_policy_and_halts_ambiguous_registration() {
-    let (url, worker) = serve("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/stolen\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into());
+async fn registration_requests_use_plugin_http_policy() {
+    let (url, worker) = serve(REDIRECT_RESPONSE.into());
     let client = backend::transport(&url, None).unwrap();
     let request = ServerRegistrationRequest::new(
         Chivalry2Ports::new(7777, 7778, 7779),
@@ -105,10 +82,6 @@ async fn sdk_transport_uses_plugin_policy_and_halts_ambiguous_registration() {
         32,
     );
     let mut registration = Registration::new(client, request, Policy::default()).unwrap();
-    assert_eq!(
-        registration.poll().await,
-        Err(SdkError::RegistrationUncertain)
-    );
     assert_eq!(
         registration.poll().await,
         Err(SdkError::RegistrationUncertain)

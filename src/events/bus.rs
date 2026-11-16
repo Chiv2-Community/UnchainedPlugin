@@ -115,7 +115,7 @@ impl<E> EventBus<E>
         let bus = Arc::clone(&self);
 
         let handle = tokio::runtime::Handle::try_current()
-            .unwrap_or_else(|_| crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE.clone());
+            .unwrap_or_else(|_| crate::features::tokio_runtime::TOKIO_RUNTIME.handle().clone());
         
         // Event processing task
         handle.spawn(async move {

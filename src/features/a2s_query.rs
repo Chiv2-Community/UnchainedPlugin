@@ -15,7 +15,6 @@ pub(super) async fn query_with_retry(
 ) -> Result<Option<Info>> {
     let policy = ConstantBuilder::default()
         .with_delay(Duration::from_millis(500))
-        // Backon counts retries, not the initial call.
         .with_max_times(max_attempts.get() - 1);
     tokio::select! {
         biased;
