@@ -4,14 +4,13 @@ version = "1.0.0-RC3"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask", "crates/unchained-auth", "tests/backend-integration"]
+members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
 server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
-server-browser-models = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha-2+e820a32" }
 reqwest = "0.12.19"
 test-case = "3.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }

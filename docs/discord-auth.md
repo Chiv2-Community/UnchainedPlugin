@@ -3,58 +3,28 @@
 Stacked on the SDK migration in plugin PR #44. Tracks plugin #34–#36;
 admission remains disabled.
 
-## Generated backend integration
+Ticket verification and signer/verifier compatibility tests live in the backend's
+`server-browser-auth-sdk` package (backend PR #21), not this repository.
+Native admission does not yet call the verifier; add the published SDK dependency
+when that integration is implemented.
 
-The backend owns generated Rust model/client crates, templates and drift checks.
-The plugin consumes exact backend Git revisions without its own OAS snapshot or
-generator. `unchained-auth` depends only on the model crate. Backend PR #21
-declares 64-bit claim timestamps and regenerates both language contracts.
-All three backend crates are pinned in the workspace manifest; the container
-tests require matching revisions.
-
-Registration, updates, heartbeat and deletion use `server-browser-client-sdk`
-directly. Ban checks use generated bindings directly. `src/backend.rs` adds the
-plugin user-agent to the SDK transport; deadlines, redirect suppression,
-source-IP binding and safe debug output remain SDK-owned. Legacy ban checks
-remain fail-open; that behavior must not be used for required authentication.
-Existing engine-owned HTTP redirects remain engine hooks, not replacement HTTP
-clients. The generated SDK includes their compatibility endpoints as well.
-
-Define OAuth/session/ticket HTTP operations in the backend OAS before adding any
-client calls. Do not introduce handwritten OAuth URLs or wire DTOs.
-
-## Ticket verification
-
-`unchained-auth` uses generated `JoinTicketClaims`/JWKS models. It verifies fixed
-RS256/type/issuer/registration audience, canonical Discord IDs/UUIDs, required
-claims, original authentication time, maximum 60-second lifetime and 30-second skew.
-Header-supplied key URLs/embedded keys are rejected. Unknown keys cause no fetch.
-Token/JWKS sizes, key counts and replay history are bounded. Full replay capacity
-rejects admission without evicting live entries. Key replacement preserves replay
-history and failed replacement leaves the old keys intact.
-
-One verifier belongs to one live registration. Serialize verification/consumption
-with admission. Trusted key retrieval, cache expiry/rate limits and connection
-binding still need game integration. The crate is intentionally not linked into
-the native admission hooks yet. Raw travel/connection options and registration
-key prefixes are no longer logged.
+The plugin must own one verifier per live registration and serialize ticket
+consumption with admission. Trusted key retrieval, cache expiry/rate limits and
+connection/player binding still need game integration. Raw travel/connection
+options and registration key prefixes are no longer logged. Legacy ban checks
+remain fail-open and must not be used as required authentication.
 
 ## Local validation
 
 ```sh
-cargo test --locked -p unchained-auth -p plugin-backend-integration-tests
+cargo test --locked -p plugin-backend-integration-tests
 cargo test --locked -p plugin-backend-integration-tests --features container-tests
 TMPDIR=/tmp/opencode bash scripts/check-windows.sh
 ```
 
-The integration tests use Testcontainers and a local Linux Docker daemon. They
-build the authoritative backend Dockerfile from the exact SDK Git revision,
-create private signing keys inside disposable containers, exercise registration
-lifecycle operations, and verify a backend-signed ticket for a live registration
-with replay and wrong-audience rejection. Keys never leave the container; tickets
-are checked for log leakage. No host Python environment, backend checkout,
-hosted service or Discord API is needed. This is not OAuth or native admission
-evidence. Linux CI enables container tests; Windows builds do not require Docker.
+Container tests use Testcontainers, a local Linux Docker daemon and the published
+backend image to check the plugin's ban-check bridge. Linux CI enables them;
+Windows builds do not require Docker. These are not native admission evidence.
 
 The Windows type check needs an existing xwin CRT/SDK at `XWIN_ROOT` (defaults to
 `~/.cache/cargo-xwin/xwin`), LLVM's clang-cl/llvm-lib/llvm-rc and the installed

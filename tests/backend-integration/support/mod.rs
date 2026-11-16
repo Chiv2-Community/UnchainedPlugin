@@ -5,16 +5,13 @@ use testcontainers::{
     Container, GenericImage, ImageExt,
 };
 
-pub fn backend(signing: bool) -> (Container<GenericImage>, String) {
-    let mut image = GenericImage::new(
+pub fn backend() -> (Container<GenericImage>, String) {
+    let image = GenericImage::new(
         "ghcr.io/chiv2-community/c2serverbrowserbackend",
         "1.3.0-alpha-2_e820a32",
     );
-    if signing {
-        image = image.with_entrypoint("/bin/sh");
-    }
     // Registry files exist only in this disposable container.
-    let mut request = image
+    let container = image
         .with_exposed_port(8080.tcp())
         .with_wait_for(WaitFor::message_on_stderr("Uvicorn running on"))
         .with_env_var("CONFIG_DIR", "/tmp/browser-test")
@@ -30,18 +27,7 @@ pub fn backend(signing: bool) -> (Container<GenericImage>, String) {
                 }
             }
         })
-        .with_startup_timeout(Duration::from_secs(30));
-    if signing {
-        request = request
-            .with_env_var("DISCORD_SIGNING_KEYRING", "/tmp/browser-test/signing.json")
-            .with_cmd([
-                "-ec",
-                "mkdir -p /tmp/browser-test\n\
-                 python -m server_browser_backend.auth.signing init /tmp/browser-test/signing.json\n\
-                 exec /usr/local/bin/server-browser-entrypoint --no-access-log",
-            ]);
-    }
-    let container = request
+        .with_startup_timeout(Duration::from_secs(30))
         .start()
         .expect("start backend container (Docker is required)");
     let url = format!(
