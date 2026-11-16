@@ -33,6 +33,9 @@ impl VoteType<RestartServerVoteArgs> for RestartServerVote {
         spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
+            #[cfg(feature = "server_registration")]
+            crate::features::server_registration::shutdown().await;
+
             // Exit code -67 tells the launcher to restart
             std::process::exit(-67);
         });

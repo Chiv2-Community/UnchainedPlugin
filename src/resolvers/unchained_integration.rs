@@ -99,6 +99,23 @@ pub fn in_game_thread_job() -> bool {
     IN_TICK.with(|f| f.get())
 }
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
+// UTBLEngine::PreExit, before normal engine teardown (not DLL_PROCESS_DETACH).
+#[cfg(feature = "server_registration")]
+define_pattern_resolver!(UTBLEnginePreExit, [
+    "40 55 53 41 54 41 55 48 8D 6C 24 A8 48 81 EC 58 01 00 00 4C 8B E9"
+]);
+#[cfg(feature = "server_registration")]
+CREATE_HOOK!(UTBLEnginePreExit, (engine: *mut UGameEngine), {
+    let result = std::panic::catch_unwind(|| {
+        crate::features::tokio_runtime::TOKIO_RUNTIME.block_on(
+            crate::features::server_registration::shutdown(),
+        );
+    });
+    if result.is_err() {
+        swarn!("Server-browser shutdown failed; continuing engine teardown");
+    }
+});
+
 CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:f32, state:u8), {
 
     // FIXME: Just a bunch of bullshit
