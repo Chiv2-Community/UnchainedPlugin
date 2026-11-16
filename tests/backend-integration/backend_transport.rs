@@ -9,8 +9,6 @@ mod a2s_query;
 mod a2s_transport;
 #[path = "../../src/backend.rs"]
 mod backend;
-#[path = "../../src/features/registration_control.rs"]
-mod registration_control;
 use server_browser_client::{
     apis::api_v1_api,
     models::{Chivalry2Ports, ServerRegistrationRequest},
