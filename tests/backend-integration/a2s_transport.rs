@@ -2,11 +2,80 @@
 mod a2s_query;
 use a2s::errors::Error;
 use std::num::NonZeroUsize;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio_util::sync::CancellationToken;
 
 const INFO: &[u8] =
     b"\xff\xff\xff\xffI\x11Test\0Map\0folder\0Game\0\x00\x00\x02\x20\x00dl\x00\x001.0\0";
+
+#[derive(Debug)]
+enum RefreshSignal {
+    Timer,
+    Notification,
+    Cancellation,
+    CancellationAndNotification,
+    CancellationAndTimer,
+}
+
+#[test_case::test_case(RefreshSignal::Timer, true; "poll_interval")]
+#[test_case::test_case(RefreshSignal::Notification, true; "pending_refresh")]
+#[test_case::test_case(RefreshSignal::Cancellation, false; "cancelled")]
+#[test_case::test_case(RefreshSignal::CancellationAndNotification, false; "cancellation_wins_over_refresh")]
+#[test_case::test_case(RefreshSignal::CancellationAndTimer, false; "cancellation_wins_over_timer")]
+#[tokio::test(start_paused = true)]
+async fn metadata_refresh_wait(signal: RefreshSignal, expected: bool) {
+    let shutdown = CancellationToken::new();
+    let refresh = tokio::sync::Notify::new();
+    let mut interval = Duration::from_secs(5);
+    match signal {
+        RefreshSignal::Timer => {}
+        RefreshSignal::Notification => refresh.notify_one(),
+        RefreshSignal::Cancellation => shutdown.cancel(),
+        RefreshSignal::CancellationAndNotification => {
+            shutdown.cancel();
+            refresh.notify_one();
+        }
+        RefreshSignal::CancellationAndTimer => {
+            shutdown.cancel();
+            interval = Duration::ZERO;
+        }
+    }
+    let started = tokio::time::Instant::now();
+    assert_eq!(
+        a2s_query::wait_for_refresh(&shutdown, &refresh, interval).await,
+        expected
+    );
+    let elapsed = if matches!(signal, RefreshSignal::Timer) {
+        interval
+    } else {
+        Duration::ZERO
+    };
+    assert_eq!(started.elapsed(), elapsed);
+}
+
+#[test_case::test_case(false; "notification_during_wait")]
+#[test_case::test_case(true; "cancellation_during_wait")]
+#[tokio::test(start_paused = true)]
+async fn metadata_refresh_wakes_without_waiting_for_timer(cancel: bool) {
+    let shutdown = CancellationToken::new();
+    let refresh = tokio::sync::Notify::new();
+    let started = tokio::time::Instant::now();
+    let signal = async {
+        tokio::task::yield_now().await;
+        if cancel {
+            shutdown.cancel();
+        } else {
+            refresh.notify_one();
+        }
+    };
+    let (ready, ()) = tokio::join!(
+        a2s_query::wait_for_refresh(&shutdown, &refresh, Duration::from_secs(5)),
+        signal,
+    );
+    assert_eq!(ready, !cancel);
+    assert_eq!(started.elapsed(), Duration::ZERO);
+}
 
 #[test_case::test_case(false; "direct")]
 #[test_case::test_case(true; "challenge")]
