@@ -209,7 +209,7 @@ impl MetadataCollector {
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
-            if !registration.set_update(update) {
+            if registration.set_update(update).is_err() {
                 return;
             }
         }
