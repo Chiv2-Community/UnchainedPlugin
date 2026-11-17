@@ -14,9 +14,9 @@ pub enum CensorArg {
     Zealous
 }
 
-impl Into<Censor> for CensorArg {
-    fn into(self) -> Censor {
-        match self {
+impl From<CensorArg> for Censor {
+    fn from(arg: CensorArg) -> Self {
+        match arg {
             CensorArg::None => Censor::Custom(HashSet::new()),
             CensorArg::Standard => Censor::Standard,
             CensorArg::Sex => Censor::Sex,
