@@ -89,7 +89,7 @@ define_pattern_resolver!(FText_ToString, [
 // FText::ToString returns a borrowed FString owned by the text data.
 CREATE_HOOK!(FText_ToString, CALLED, *const FString, (text: *const FText), {});
 
-fn native_string(text: *const FText) -> Option<String> {
+pub(crate) fn native_string(text: *const FText) -> Option<String> {
     if text.is_null() { return None; }
     let string = CALL_ORIGINAL_SAFE!(FText_ToString(text)).ok()?;
     unsafe { string.as_ref() }?.copy_to_string().ok()

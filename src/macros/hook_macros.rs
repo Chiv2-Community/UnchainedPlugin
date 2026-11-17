@@ -57,6 +57,21 @@ macro_rules! CREATE_HOOK {
     };
 }
 
+// Future optional convenience wrapper for hooks whose target comes from Unreal's RegisterNatives
+// table rather than BuildInfo's image-relative offset map. Keep the active Kismet hooks explicit:
+// their copied-FFrame and out-result behavior is security-sensitive and clearer at each call site.
+//
+// CREATE_KISMET_NATIVE_HOOK!(
+//     ExecPrintString, "PrintString", ACTIVE, PRE, (),
+//     (context: *mut UObject, stack: *mut FFrame, result: *mut c_void),
+//     { /* inspect a COPY of stack, then call the original */ }
+// );
+//
+// A future implementation would mirror __create_hook_impl!, except attach_<name> resolves:
+// globals().kismet_system_library_native("PrintString")
+// rather than offsets.get("ExecPrintString"). It must emit exactly one `static_detour!` item per
+// invocation; combining several declarations can exceed retour's macro recursion limit.
+
 #[macro_export]
 macro_rules! __create_hook_inner {
     // 1. Basic Shorthand: Name, (args), {body}

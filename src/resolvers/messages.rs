@@ -6,7 +6,7 @@ use crate::{
     ue::{FConsoleOutputDevice, TCHAR},
 };
 
-mod broadcast_display;
+pub(crate) mod broadcast_display;
 
 mod client_message {
     use crate::events::models::{
@@ -273,7 +273,8 @@ pub mod blueprint_printstring {
     use retour::static_detour;
 
     use crate::{
-        resolvers::HookRegistration,
+        game::engine::FText,
+        resolvers::messages::broadcast_display::native_string,
         tools::hook_globals::globals,
         ue::{kismet::FFrame, FString, UObject},
     };
@@ -283,9 +284,11 @@ pub mod blueprint_printstring {
     // this exec-wrapper ABI, not the direct native PrintString ABI.
     type ExecPrintString = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void);
 
-    static_detour! {
-        static OriginalExecPrintString: ExecPrintString;
-    }
+    // Keep one static_detour! declaration per hook. retour's macro recursion grows rapidly when
+    // multiple declarations are placed in one invocation.
+    static_detour! { static OriginalExecPrintString: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
+    static_detour! { static OriginalExecPrintWarning: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
+    static_detour! { static OriginalExecPrintText: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
 
     unsafe extern "system" fn exec_print_string_detour(
         context: *mut UObject,
@@ -304,6 +307,36 @@ pub mod blueprint_printstring {
         }
 
         unsafe { OriginalExecPrintString.call(context, stack, result) };
+    }
+
+    unsafe extern "system" fn exec_print_warning_detour(
+        context: *mut UObject,
+        stack: *mut FFrame,
+        result: *mut c_void,
+    ) {
+        if !stack.is_null() {
+            let mut frame = unsafe { std::ptr::read(stack) };
+            let message: FString = unsafe { frame.arg() };
+            if let Ok(message) = message.copy_to_string() {
+                swarn!("[Blueprint PrintWarning] {message}");
+            }
+        }
+        unsafe { OriginalExecPrintWarning.call(context, stack, result) };
+    }
+
+    unsafe extern "system" fn exec_print_text_detour(
+        context: *mut UObject,
+        stack: *mut FFrame,
+        result: *mut c_void,
+    ) {
+        if !stack.is_null() {
+            let mut frame = unsafe { std::ptr::read(stack) };
+            let text: FText = unsafe { frame.arg() };
+            if let Some(message) = native_string(&text) {
+                sinfo!("[Blueprint PrintText] {message}");
+            }
+        }
+        unsafe { OriginalExecPrintText.call(context, stack, result) };
     }
 
     unsafe fn attach_exec_print_string(
@@ -328,11 +361,130 @@ pub mod blueprint_printstring {
         Ok(Some(target as usize))
     }
 
-    inventory::submit! {
-        HookRegistration {
-            name: "ExecPrintString",
-            hook_fn: attach_exec_print_string,
-            condition: || true,
+    unsafe fn attach_exec_print_warning(
+        _offsets: std::collections::HashMap<String, u64>,
+        auto_activate: bool,
+    ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+        let target = globals().kismet_system_library_native("PrintWarning")
+            .ok_or("KismetSystemLibrary native PrintWarning was not resolved")?;
+        let target: ExecPrintString = unsafe { std::mem::transmute(target) };
+        unsafe {
+            OriginalExecPrintWarning.initialize(target, |context, stack, result| {
+                exec_print_warning_detour(context, stack, result)
+            })?;
+            if auto_activate { OriginalExecPrintWarning.enable()?; }
+        }
+        Ok(Some(target as usize))
+    }
+
+    unsafe fn attach_exec_print_text(
+        _offsets: std::collections::HashMap<String, u64>,
+        auto_activate: bool,
+    ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+        let target = globals().kismet_system_library_native("PrintText")
+            .ok_or("KismetSystemLibrary native PrintText was not resolved")?;
+        let target: ExecPrintString = unsafe { std::mem::transmute(target) };
+        unsafe {
+            OriginalExecPrintText.initialize(target, |context, stack, result| {
+                exec_print_text_detour(context, stack, result)
+            })?;
+            if auto_activate { OriginalExecPrintText.enable()?; }
+        }
+        Ok(Some(target as usize))
+    }
+
+    /// Attach the Blueprint print diagnostics. Called from postinit_rustlib(), after init_globals()
+    /// has populated the KismetSystemLibrary native table; attaching during preinit would panic on
+    /// globals(). These must not be registered in the inventory, which attach_hooks() drains during
+    /// preinit (before globals exist).
+    pub fn attach_all() {
+        let offsets = std::collections::HashMap::new();
+        attach_one("ExecPrintString", offsets.clone(), attach_exec_print_string);
+        attach_one("ExecPrintWarning", offsets.clone(), attach_exec_print_warning);
+        attach_one("ExecPrintText", offsets, attach_exec_print_text);
+    }
+
+    type AttachFn = unsafe fn(std::collections::HashMap<String, u64>, bool)
+        -> Result<Option<usize>, Box<dyn std::error::Error>>;
+
+    fn attach_one(name: &str, offsets: std::collections::HashMap<String, u64>, attach: AttachFn) {
+        match unsafe { attach(offsets.clone(), true) } {
+            Ok(_) => sinfo!("☑ {} (Kismet native)", name),
+            Err(e) => serror!("☐ {}: {}", name.to_uppercase(), e),
+        }
+    }
+}
+
+// The reflected predicates use exec wrappers with an out-result pointer, not native bool-return
+// functions. With only `kismet_server_identity_hooks`, all three hooks simply preserve the engine
+// result. The individual `force_kismet_*` features are intentionally separate so a build cannot
+// accidentally force mutually inconsistent dedicated/server/standalone answers.
+#[cfg(feature="kismet_server_identity_hooks")]
+pub mod kismet_server_identity {
+    use std::ffi::c_void;
+
+    use retour::static_detour;
+
+    use crate::{tools::hook_globals::globals, ue::{kismet::FFrame, UObject}};
+
+    type ExecKismetBool = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void);
+
+    static_detour! { static OriginalExecIsDedicatedServer: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
+    static_detour! { static OriginalExecIsServer: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
+    static_detour! { static OriginalExecIsStandalone: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
+
+    unsafe extern "system" fn exec_is_dedicated_server_detour(context: *mut UObject, stack: *mut FFrame, result: *mut c_void) {
+        unsafe { OriginalExecIsDedicatedServer.call(context, stack, result) };
+        #[cfg(feature="force_kismet_is_dedicated_server")]
+        if !result.is_null() { unsafe { *result.cast::<bool>() = true; } }
+    }
+    unsafe extern "system" fn exec_is_server_detour(context: *mut UObject, stack: *mut FFrame, result: *mut c_void) {
+        unsafe { OriginalExecIsServer.call(context, stack, result) };
+        #[cfg(feature="force_kismet_is_server")]
+        if !result.is_null() { unsafe { *result.cast::<bool>() = true; } }
+    }
+    unsafe extern "system" fn exec_is_standalone_detour(context: *mut UObject, stack: *mut FFrame, result: *mut c_void) {
+        unsafe { OriginalExecIsStandalone.call(context, stack, result) };
+        #[cfg(feature="force_kismet_is_standalone")]
+        if !result.is_null() { unsafe { *result.cast::<bool>() = true; } }
+    }
+
+    macro_rules! attach_identity_hook {
+        ($attach:ident, $original:ident, $detour:ident, $native:literal) => {
+            unsafe fn $attach(_offsets: std::collections::HashMap<String, u64>, auto_activate: bool)
+                -> Result<Option<usize>, Box<dyn std::error::Error>> {
+                let target = globals().kismet_system_library_native($native)
+                    .ok_or(concat!("KismetSystemLibrary native ", $native, " was not resolved"))?;
+                let target: ExecKismetBool = unsafe { std::mem::transmute(target) };
+                unsafe {
+                    $original.initialize(target, |context, stack, result| $detour(context, stack, result))?;
+                    if auto_activate { $original.enable()?; }
+                }
+                Ok(Some(target as usize))
+            }
+        };
+    }
+    attach_identity_hook!(attach_exec_is_dedicated_server, OriginalExecIsDedicatedServer, exec_is_dedicated_server_detour, "IsDedicatedServer");
+    attach_identity_hook!(attach_exec_is_server, OriginalExecIsServer, exec_is_server_detour, "IsServer");
+    attach_identity_hook!(attach_exec_is_standalone, OriginalExecIsStandalone, exec_is_standalone_detour, "IsStandalone");
+
+    /// Attach the Blueprint server-identity wrappers. Called from postinit_rustlib(), after
+    /// init_globals() has populated the KismetSystemLibrary native table. Not registered in the
+    /// inventory because attach_hooks() runs during preinit (before globals exist).
+    pub fn attach_all() {
+        let offsets = std::collections::HashMap::new();
+        attach_one("ExecIsDedicatedServer", offsets.clone(), attach_exec_is_dedicated_server);
+        attach_one("ExecIsServer", offsets.clone(), attach_exec_is_server);
+        attach_one("ExecIsStandalone", offsets, attach_exec_is_standalone);
+    }
+
+    type AttachFn = unsafe fn(std::collections::HashMap<String, u64>, bool)
+        -> Result<Option<usize>, Box<dyn std::error::Error>>;
+
+    fn attach_one(name: &str, offsets: std::collections::HashMap<String, u64>, attach: AttachFn) {
+        match unsafe { attach(offsets.clone(), true) } {
+            Ok(_) => sinfo!("☑ {} (Kismet native)", name),
+            Err(e) => serror!("☐ {}: {}", name.to_uppercase(), e),
         }
     }
 }

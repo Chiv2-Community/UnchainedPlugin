@@ -416,6 +416,14 @@ fn postinit_rustlib() {
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
     // crate::features::events::init_event_system();
     unsafe { seh::install() };
+
+    // Kismet native-registry hooks attach here, after init_rustlib() has run init_globals().
+    // They resolve addresses from the KismetSystemLibrary RegisterNatives table, which lives in
+    // Globals; attaching during preinit (attach_hooks) would panic on uninitialized globals().
+    #[cfg(feature="blueprint_printstring_log")]
+    resolvers::messages::blueprint_printstring::attach_all();
+    #[cfg(feature="kismet_server_identity_hooks")]
+    resolvers::messages::kismet_server_identity::attach_all();
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
     // #[cfg(feature="rcon_commands")]
@@ -527,13 +535,13 @@ pub fn world_init() {
 
     if let Some(motd) = cli_args().motd.clone() {
         sinfo!("Starting MOTD broadcast loop");
-        thread::spawn(move || {
-            loop {
-                sinfo!("Broadcasting MOTD: {}", motd);
-                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
-                thread::sleep(Duration::from_secs(30 * 60));
-            }
-        });
+        // thread::spawn(move || {
+        //     loop {
+        //         sinfo!("Broadcasting MOTD: {}", motd);
+        //         game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
+        //         thread::sleep(Duration::from_secs(30 * 60));
+        //     }
+        // });
     }
 
     {
