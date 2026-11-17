@@ -21,8 +21,8 @@ use crate::tools::hook_globals::cli_args;
 
 #[path = "a2s_query.rs"]
 mod a2s_query;
-#[path = "registration_ports.rs"]
-mod registration_ports;
+#[path = "registration_metadata.rs"]
+mod registration_metadata;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
@@ -249,7 +249,7 @@ impl MetadataCollector {
         let args = cli_args();
         let update = Self::update(status);
         ServerRegistrationRequest {
-            ports: registration_ports::resolve(
+            ports: registration_metadata::ports(
                 info.extended_server_info.port,
                 args.game_port,
                 args.game_server_ping_port,
@@ -312,8 +312,8 @@ impl MetadataCollector {
         #[cfg(not(feature = "mod_management"))]
         let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
 
-        // The headless host is counted by A2S but is not a player.
-        let headless_host = u8::from(args.is_headless);
+        let (player_count, max_players) =
+            registration_metadata::player_counts(info.players, info.max_players, args.is_headless);
         ServerStatus {
             name: args
                 .find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])
@@ -322,8 +322,8 @@ impl MetadataCollector {
             description,
             password_protected: args.server_password.is_some(),
             current_map: info.map.clone(),
-            player_count: i32::from(info.players.saturating_sub(headless_host)),
-            max_players: i32::from(info.max_players.saturating_sub(headless_host)),
+            player_count,
+            max_players,
             mods: all_mods,
             active_mods: mods,
         }
