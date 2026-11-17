@@ -7,12 +7,11 @@ use std::os::raw::c_void;
 use widestring::U16CString;
 
 use crate::game::chivalry2::ATBLGameState;
-use crate::resolvers::asset_registry::{FAssetData, TScriptInterface};
+use crate::resolvers::asset_registry::FAssetData;
 use crate::ue::{EFindName, EObjectFlags, FArchive, FName, FLargeMemoryReader, FString, TArray, UObject};
 use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
 // use crate::resolvers::asset_registry::o_StaticLoadObject;
-// use crate::resolvers::asset_registry::o_GetAssetRegistry_Helper;
 
 #[repr(C)]
 pub enum ENetMode {
@@ -339,9 +338,8 @@ fn classify_registry_load(errored: bool, consumed: i64, total: i64) -> Result<()
 unsafe fn registry_load_outcome(reader: *mut FLargeMemoryReader) -> Result<(), String> {
     let base = reader.cast::<u8>();
     let errored = *base.add(AR_IS_ERROR_BYTE) & AR_IS_ERROR_BIT != 0;
-    let consumed = FArchive::tell(reader.cast());
-    let total = FArchive::total_size(reader.cast());
-    classify_registry_load(errored, consumed, total)
+    let archive = reader.cast::<FArchive>();
+    classify_registry_load(errored, archive.tell(), archive.total_size())
 }
 
 /// Deserialize a cooked `ModAssetRegistry.bin` into the live registry.
@@ -361,7 +359,7 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
     let size = i64::try_from(bytes.len())
         .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
 
-    let registry = asset_registry_interface()?;
+    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
     let mut storage = std::mem::MaybeUninit::<FLargeMemoryReaderStorage>::zeroed();
     let reader = CALL_ORIGINAL_SAFE!(FLargeMemoryReaderCtor(
@@ -375,7 +373,7 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
         return Err("FLargeMemoryReader constructor returned null".into());
     }
 
-    crate::ue::IAssetRegistry::serialize(registry, reader.cast::<FArchive>());
+    registry.serialize(reader.cast::<FArchive>());
     // `UAssetRegistryImpl::Serialize` is void and swallows the engine's success
     // bool, so inspect the reader's end state while it is still alive: a rejected
     // header/version leaves the cursor unadvanced, corruption sets the error flag.
@@ -411,13 +409,12 @@ pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut U
 }
 
 pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetData>, String> {
-    let registry = asset_registry_interface()?;
+    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
     let name_res = FName::with_type(class_name.as_str(), crate::ue::EFindName::Find);
 
     let mut asset_data = TArray::<FAssetData>::default();
-    let out = crate::ue::IAssetRegistry::get_assets_by_class(
-        registry,
+    let out = registry.get_assets_by_class(
         name_res,
         &mut asset_data as *mut TArray<FAssetData>,
         true
@@ -431,14 +428,13 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
 
 /// Queries the registry interface on the game thread.
 pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<TArray<FAssetData>, String> {
-    let registry = asset_registry_interface()?;
+    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
     let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
 
     let mut asset_data = TArray::<FAssetData>::default();
     // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
-    let out = crate::ue::IAssetRegistry::get_assets_by_path(
-        registry,
+    let out = registry.get_assets_by_path(
         name_res,
         &mut asset_data as *mut TArray<FAssetData>,
         recursive,
@@ -454,7 +450,7 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
 /// Calls the registry's public files-only scan wrapper (skips the
 /// Intermediates `AssetRegistryCache` write). Must run on the game thread.
 pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
-    let registry = asset_registry_interface()?;
+    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
     let Some(allocator) = crate::ue::try_gmalloc() else {
         return Err("engine allocator (GMalloc) is not available; run on the game thread after globals init".into());
@@ -465,23 +461,10 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
         files_array.push_in(FString::from(file.as_str()), allocator);
     }
 
-    crate::ue::IAssetRegistry::scan_files_synchronous(registry, &files_array, false);
+    registry.scan_files_synchronous(&files_array, false);
 
     Ok(())
 }
-
-/// Obtain the native secondary-base pointer; an object pointer is not a fallback.
-///
-/// # Safety
-/// Call on the game thread after native registry initialization.
-unsafe fn asset_registry_interface() -> Result<*mut crate::ue::IAssetRegistry, String> {
-    let mut registry = TScriptInterface::new();
-    CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(&mut registry))?;
-    registry.asset_registry()
-}
-
-
-
 
 /// Partial socket address vtable. ToString is slot 15 in the supported builds.
 #[rust_ctables::cpp_struct]

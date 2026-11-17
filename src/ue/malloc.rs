@@ -43,39 +43,39 @@ pub struct FMalloc {
         /// # Safety
         /// Destroys the allocator even with flags == 0. Never call on borrowed GMalloc.
         /// Flags must match native ownership/allocation mode; the returned pointer is not live.
-        deleting_destructor(this: *mut Self, flags: u32) -> *mut c_void;
+        deleting_destructor(self: *mut Self, flags: u32) -> *mut c_void;
         /// # Safety
         /// Output must point to a live FOutputDevice; command must be NUL-terminated.
-        exec(this: *mut Self, world: *mut UWorld, command: *const TCHAR, output: *mut FOutputDevice) -> bool;
-        malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
-        try_malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
-        realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
-        try_realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
-        free(this: *mut Self, original: *mut c_void);
-        quantize_size(this: *mut Self, count: usize, alignment: u32) -> usize;
+        exec(self: *mut Self, world: *mut UWorld, command: *const TCHAR, output: *mut FOutputDevice) -> bool;
+        malloc(self: *mut Self, count: usize, alignment: u32) -> *mut c_void;
+        try_malloc(self: *mut Self, count: usize, alignment: u32) -> *mut c_void;
+        realloc(self: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
+        try_realloc(self: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
+        free(self: *mut Self, original: *mut c_void);
+        quantize_size(self: *mut Self, count: usize, alignment: u32) -> usize;
         /// # Safety
         /// Original must belong to this allocator; size_out must be writable and non-null.
         /// SizeOut is meaningful only when this returns true.
-        get_allocation_size(this: *mut Self, original: *mut c_void, size_out: *mut usize) -> bool;
+        get_allocation_size(self: *mut Self, original: *mut c_void, size_out: *mut usize) -> bool;
         /// # Safety
         /// Must run on the main thread, per FMalloc's native contract.
-        trim(this: *mut Self, trim_thread_caches: bool);
-        setup_tls_caches_on_current_thread(this: *mut Self);
-        clear_and_disable_tls_caches_on_current_thread(this: *mut Self);
+        trim(self: *mut Self, trim_thread_caches: bool);
+        setup_tls_caches_on_current_thread(self: *mut Self);
+        clear_and_disable_tls_caches_on_current_thread(self: *mut Self);
         /// # Safety
         /// Requires native stats/name initialization; not safe during arbitrary preinit.
-        initialize_stats_metadata(this: *mut Self);
-        update_stats(this: *mut Self);
+        initialize_stats_metadata(self: *mut Self);
+        update_stats(self: *mut Self);
         /// # Safety
         /// Stats must point to a live engine-constructed FGenericMemoryStats map.
-        get_allocator_stats(this: *mut Self, stats: *mut FGenericMemoryStats);
+        get_allocator_stats(self: *mut Self, stats: *mut FGenericMemoryStats);
         /// # Safety
         /// Output must point to a live engine-constructed FOutputDevice.
-        dump_allocator_stats(this: *mut Self, output: *mut FOutputDevice);
-        is_internally_thread_safe(this: *const Self) -> bool;
-        validate_heap(this: *mut Self) -> bool;
+        dump_allocator_stats(self: *mut Self, output: *mut FOutputDevice);
+        is_internally_thread_safe(self: *const Self) -> bool;
+        validate_heap(self: *mut Self) -> bool;
         /// Returns borrowed NUL-terminated native text; do not free or mutate it.
-        get_descriptive_name(this: *mut Self) -> *const TCHAR;
+        get_descriptive_name(self: *mut Self) -> *const TCHAR;
     )]
     vtable: *const (),
 }
@@ -91,22 +91,19 @@ impl FMallocHandle {
     /// The allocator must be initialized and valid.
     #[inline(always)]
     pub unsafe fn malloc(self, layout: Layout) -> *mut c_void {
-        let this = self.0.as_ptr();
-        FMalloc::malloc(this, layout.size(), layout.align() as u32)
+        self.0.as_ptr().malloc(layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator.
     /// The layout must be correct for the new allocation.
     #[inline(always)]
     pub unsafe fn realloc(self, original: *mut c_void, layout: Layout) -> *mut c_void {
-        let this = self.0.as_ptr();
-        FMalloc::realloc(this, original, layout.size(), layout.align() as u32)
+        self.0.as_ptr().realloc(original, layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator and not yet freed.
     #[inline(always)]
     pub unsafe fn free(self, original: *mut c_void) {
         if !original.is_null() {
-            let this = self.0.as_ptr();
-            FMalloc::free(this, original)
+            self.0.as_ptr().free(original)
         }
     }
 }

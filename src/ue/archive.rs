@@ -7,10 +7,10 @@ pub struct FArchive {
         offset(0x20);
         /// # Safety
         /// Requires a live native archive, on its owning thread, without concurrent access.
-        tell(this: *mut Self) -> i64;
+        tell(self: *mut Self) -> i64;
         /// # Safety
         /// Requires a live native archive, on its owning thread, without concurrent access.
-        total_size(this: *mut Self) -> i64;
+        total_size(self: *mut Self) -> i64;
     )]
     vtable: *const (),
 }

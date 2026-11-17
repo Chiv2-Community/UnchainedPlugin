@@ -304,14 +304,14 @@ pub struct FOutputDevice {
         /// # Safety
         /// Text must be NUL-terminated and category live. Obey the device's thread contract.
         /// Verbosity is the native uint8 level/flag mask; fatal levels may terminate the process.
-        serialize_with_time(this: *mut Self, text: *const TCHAR, verbosity: u8, category: *const FName, time: f64);
+        serialize_with_time(self: *mut Self, text: *const TCHAR, verbosity: u8, category: *const FName, time: f64);
         /// # Safety
         /// Text must be NUL-terminated and category live. Obey the device's thread contract.
         /// Verbosity is the native uint8 level/flag mask; fatal levels may terminate the process.
-        serialize(this: *mut Self, text: *const TCHAR, verbosity: u8, category: *const FName);
+        serialize(self: *mut Self, text: *const TCHAR, verbosity: u8, category: *const FName);
         /// # Safety
         /// Requires a live device and its permitted thread; no concurrent teardown.
-        flush(this: *mut Self);
+        flush(self: *mut Self);
     )]
     vtable: *const (),
     b_suppress_event_tag: bool,

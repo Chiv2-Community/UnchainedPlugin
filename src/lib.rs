@@ -1,4 +1,5 @@
 #![feature(ip)]
+#![feature(arbitrary_self_types_pointers)]
 
 #[macro_use]
 pub mod logging;
