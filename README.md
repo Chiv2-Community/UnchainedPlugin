@@ -41,6 +41,53 @@ was explicitly supplied.
         - **Install Task**: The **Install UnchainedPlugin** run configuration uses `cargo xtask install` which handles `.env` internally.
 
 
+### Building the Windows DLL on Linux
+
+`scripts/build-windows.sh` cross-compiles the Windows DLL with
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin), which downloads and
+configures the Windows SDK and CRT. Wine is not used for compilation.
+
+1. Install the native C/C++ build tools and LLVM. On Debian/Ubuntu:
+
+   ```sh
+   sudo apt update
+   sudo apt install build-essential clang llvm lld
+   ```
+
+   On other distributions, install the equivalent packages. Ensure `clang-cl`,
+   `llvm-lib`, `llvm-rc`, and `lld-link` are available on `PATH`.
+
+2. Install Rust using [rustup](https://rustup.rs/), then open a new shell so
+   `cargo` and `rustup` are available. Run the remaining commands from the
+   repository root; `rust-toolchain.toml` selects the required nightly toolchain
+   and installs the Windows target automatically.
+
+3. Install cargo-xwin. This revision includes the unreleased
+   fix for SDK cache paths containing spaces:
+
+   ```sh
+   cargo install cargo-xwin --locked \
+     --git https://github.com/rust-cross/cargo-xwin.git \
+     --rev 046254898add819f57f584feb4ddabdf2f321b6a
+   ```
+
+4. Build the DLL. The first build needs network access for the SDK and Cargo
+   dependencies:
+
+   ```sh
+   bash scripts/build-windows.sh --release
+   ```
+
+Additional arguments go to `cargo xwin build`. Without `--release`, it builds the
+debug DLL. Output is
+`target/x86_64-pc-windows-msvc/release/UnchainedPlugin.dll` (or `debug`).
+
+Or build manually without the script:
+
+```sh
+XWIN_ARCH=x86_64 cargo xwin build --locked --target x86_64-pc-windows-msvc --lib --release
+```
+
 ## Discord delivery
 
 See [Discord delivery](docs/discord-delivery.md) for queueing, batching, ordering,
