@@ -6,6 +6,10 @@ publish = false
 
 # Test-only harness: no adapter library and no runtime consumers.
 [[test]]
+name = "cli_args"
+path = "../../src/tools/cli_args.rs"
+
+[[test]]
 name = "a2s_transport"
 path = "a2s_transport.rs"
 
@@ -24,11 +28,16 @@ required-features = ["container-tests"]
 
 [features]
 container-tests = ["dep:testcontainers"]
+# Exercise the CLI field enabled by the corresponding plugin feature.
+move-autonomous-desync = []
 
 [dependencies]
 testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
 
 [dev-dependencies]
+clap = { workspace = true }
+censor = { workspace = true }
+serde = { workspace = true }
 backon = { workspace = true }
 test-case = { workspace = true }
 a2s = { workspace = true }

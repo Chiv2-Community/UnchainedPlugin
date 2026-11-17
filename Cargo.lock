@@ -2231,7 +2231,10 @@ version = "0.1.0"
 dependencies = [
  "a2s",
  "backon",
+ "censor",
+ "clap",
  "reqwest 0.12.28",
+ "serde",
  "server-browser-client",
  "server-browser-client-sdk",
  "test-case",
