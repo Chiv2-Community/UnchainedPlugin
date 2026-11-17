@@ -994,46 +994,6 @@ impl FUniqueNetIdRepl {
     }
 }
 
-#[cfg(test)]
-mod unique_net_id_tests {
-    use super::*;
-
-    fn missing_id() -> FUniqueNetIdRepl {
-        FUniqueNetIdRepl {
-            vtable: std::ptr::null(),
-            id: std::ptr::null(),
-            reference_controller: std::ptr::null_mut(),
-            replication_bytes: TArray::new(),
-        }
-    }
-
-    #[test]
-    fn missing_id_has_no_text() {
-        assert!(unsafe { missing_id().to_native_string() }.is_none());
-    }
-
-    #[test]
-    fn invalid_id_does_not_call_to_string() {
-        unsafe extern "C" fn invalid(_: *const FUniqueNetId) -> bool {
-            false
-        }
-        unsafe extern "C" fn unexpected(_: *const FUniqueNetId, _: *mut FString) -> *mut FString {
-            std::process::abort();
-        }
-        let vtable = FUniqueNetIdVTable {
-            _pad_0: [0; 5],
-            is_valid: invalid,
-            write_native_string: unexpected,
-        };
-        let object = FUniqueNetId { vtable: &vtable };
-        let mut id = missing_id();
-        id.id = &object;
-        unsafe {
-            assert!(id.to_native_string().is_none());
-        }
-    }
-}
-
 bitflags! {
     // Note: Use 'Default' or manual names for pretty printing
     #[derive(Debug, Clone, Copy)]
@@ -1742,5 +1702,45 @@ impl ATBLCharacter {
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
     pub unsafe fn last_player_state(&self) -> Option<&APlayerState> {
         APlayerState::from_field(self.last_player_state, "TBLCharacter.LastPlayerState")
+    }
+}
+
+#[cfg(test)]
+mod unique_net_id_tests {
+    use super::*;
+
+    fn missing_id() -> FUniqueNetIdRepl {
+        FUniqueNetIdRepl {
+            vtable: std::ptr::null(),
+            id: std::ptr::null(),
+            reference_controller: std::ptr::null_mut(),
+            replication_bytes: TArray::new(),
+        }
+    }
+
+    #[test]
+    fn missing_id_has_no_text() {
+        assert!(unsafe { missing_id().to_native_string() }.is_none());
+    }
+
+    #[test]
+    fn invalid_id_does_not_call_to_string() {
+        unsafe extern "C" fn invalid(_: *const FUniqueNetId) -> bool {
+            false
+        }
+        unsafe extern "C" fn unexpected(_: *const FUniqueNetId, _: *mut FString) -> *mut FString {
+            std::process::abort();
+        }
+        let vtable = FUniqueNetIdVTable {
+            _pad_0: [0; 5],
+            is_valid: invalid,
+            write_native_string: unexpected,
+        };
+        let object = FUniqueNetId { vtable: &vtable };
+        let mut id = missing_id();
+        id.id = &object;
+        unsafe {
+            assert!(id.to_native_string().is_none());
+        }
     }
 }

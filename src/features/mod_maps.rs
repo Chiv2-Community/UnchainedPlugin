@@ -468,7 +468,7 @@ fn log_registered_markers() {
         .iter()
         .map(|class_name| {
             // A failed query means the registry has no asset of that class.
-            let count = unsafe { crate::game::engine::get_assets_by_class(class_name.to_string()) }
+            let count = unsafe { crate::game::engine::get_assets_by_class(class_name) }
                 .map(|assets| assets.len())
                 .unwrap_or(0);
             format!("{count} {class_name}")

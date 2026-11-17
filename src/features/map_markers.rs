@@ -136,7 +136,7 @@ pub fn map_marker_cache() -> &'static MapMarkerCache {
 /// Must run on the game thread, after mod assets were registered.
 pub unsafe fn scan_map_markers() -> usize {
     // A failed query means no map marker is installed.
-    let marker_paths: Vec<String> = match crate::game::engine::get_assets_by_class(MAP_MARKER_V2_CLASS.into()) {
+    let marker_paths: Vec<String> = match crate::game::engine::get_assets_by_class(MAP_MARKER_V2_CLASS) {
         Ok(assets) => assets
             .as_slice()
             .iter()

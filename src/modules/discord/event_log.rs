@@ -315,7 +315,7 @@ mod tests {
             damage: DamageSource {
                 amount: 42.5,
                 source: "Longsword".into(),
-                attack_type: "Backstab".into(),
+                attack_type: "Backstab",
             },
         };
         let text = description(

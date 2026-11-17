@@ -7,11 +7,10 @@ use std::os::raw::c_void;
 use widestring::U16CString;
 
 use crate::game::chivalry2::ATBLGameState;
-use crate::resolvers::asset_registry::FAssetData;
-use crate::ue::{EFindName, EObjectFlags, FArchive, FName, FLargeMemoryReader, FString, TArray, UObject};
-use crate::resolvers::asset_registry::*;
-// use crate::resolvers::asset_registry::o_StaticFindObject;
-// use crate::resolvers::asset_registry::o_StaticLoadObject;
+use crate::ue::{EFindName, EObjectFlags, FArchive, FAssetData, FName, FLargeMemoryReader, FString, TArray, UObject};
+use crate::resolvers::asset_registry::{
+    o_FLargeMemoryReaderCtor, o_FLargeMemoryReaderDtor, o_StaticFindObject, o_StaticLoadObject,
+};
 
 #[repr(C)]
 pub enum ENetMode {
@@ -164,16 +163,14 @@ pub struct TSoftClassPtr<T = c_void> {
 
 impl FName {
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
-        let wide_path = widestring::U16CString::from_str(path).unwrap();
+        let wide_path = U16CString::from_str(path).unwrap();
         let mut name = FName::default();
-		// sinfo!("Constructing fname for {}", path);
 
 		// Called at the function entry, not through the detour trampoline;
 		// see `fname_ctor_wchar`.
 		unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), find_type) }
 			.expect("Failed to construct FName");
 		if name.comparison_index.value == 0 {
-			// sinfo!("1. Name is invalid for {}", wide_path.to_string_lossy());
 			unsafe { crate::ue::fname_ctor_wchar(&mut name, wide_path.as_ptr(), EFindName::Add) }
 				.expect("Failed to construct FName");
 		}
@@ -271,7 +268,6 @@ impl FActorSpawnParameters {
         self
     }
     pub fn remote_owned(&self) -> bool { (self.bitfield & (1 << 0)) != 0 }
-    // pub fn no_fail(&self) -> bool { (self.bitfield & (1 << 1)) != 0 }
     pub fn defer_construction(&self) -> bool { (self.bitfield & (1 << 2)) != 0 }
     pub fn allow_during_construction(&self) -> bool { (self.bitfield & (1 << 3)) != 0 }
 }
@@ -408,21 +404,16 @@ pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut U
     )).expect("Failed to find object")
 }
 
-pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetData>, String> {
+pub unsafe fn get_assets_by_class(class_name: &str) -> Result<TArray<FAssetData>, String> {
     let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
-    let name_res = FName::with_type(class_name.as_str(), crate::ue::EFindName::Find);
+    let name_res = FName::with_type(class_name, crate::ue::EFindName::Find);
 
     let mut asset_data = TArray::<FAssetData>::default();
-    let out = registry.get_assets_by_class(
-        name_res,
-        &mut asset_data as *mut TArray<FAssetData>,
-        true
-    );
-
-    match out {
-        true => Ok(asset_data),
-        false => Err("".into()),
+    if registry.get_assets_by_class(name_res, &mut asset_data, true) {
+        Ok(asset_data)
+    } else {
+        Err(format!("GetAssetsByClass returned false for {class_name}"))
     }
 }
 
@@ -434,16 +425,10 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
 
     let mut asset_data = TArray::<FAssetData>::default();
     // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
-    let out = registry.get_assets_by_path(
-        name_res,
-        &mut asset_data as *mut TArray<FAssetData>,
-        recursive,
-        false
-    );
-
-    match out {
-        true => Ok(asset_data),
-        false => Err(format!("GetAssetsByPath returned false for {}", package_path)),
+    if registry.get_assets_by_path(name_res, &mut asset_data, recursive, false) {
+        Ok(asset_data)
+    } else {
+        Err(format!("GetAssetsByPath returned false for {package_path}"))
     }
 }
 

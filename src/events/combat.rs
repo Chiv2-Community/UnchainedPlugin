@@ -21,7 +21,7 @@ pub struct DamageSource {
     /// Item, projectile, or damage-source name; otherwise `UnknownDamageSource`.
     pub source: String,
     /// `Suicide`, `Backstab`, `KillVolume`, or `Damage`, in precedence order.
-    pub attack_type: String,
+    pub attack_type: &'static str,
 }
 
 impl fmt::Display for CombatActor {
@@ -39,11 +39,15 @@ impl CombatActor {
     }
 
     /// Use the UObject display name and bot-name heuristic.
-    pub fn from_uobject(ptr: *mut UObject) -> Option<Self> {
-        Self::from_object(unsafe { UObject::from_ptr(ptr) }?)
+    ///
+    /// # Safety
+    /// UObject::from_ptr's game-thread, initialization and lifetime requirements apply.
+    /// Null inputs require no engine state.
+    pub unsafe fn from_uobject(ptr: *mut UObject) -> Option<Self> {
+        unsafe { Self::from_object(UObject::from_ptr(ptr)?) }
     }
 
-    fn from_object(object: &UObject) -> Option<Self> {
+    unsafe fn from_object(object: &UObject) -> Option<Self> {
         let cls = unsafe { object.class_name() }?;
         let name = object.display_name();
         let is_bot = cls.to_lowercase().contains("bot") || name.to_lowercase().contains("bot");
@@ -51,22 +55,30 @@ impl CombatActor {
     }
 
     /// `via` identifies the source field when an invalid PlayerState is logged.
-    pub fn from_player_state(player_state: *mut APlayerState, via: &str) -> Option<Self> {
-        let ps = unsafe { APlayerState::from_field(player_state, via) }?;
-        Self::from_player_state_view(ps)
+    ///
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread, lifetime and native-layout requirements apply.
+    /// Null inputs require no engine state.
+    pub unsafe fn from_player_state(player_state: *mut APlayerState, via: &str) -> Option<Self> {
+        unsafe { Self::from_player_state_view(APlayerState::from_field(player_state, via)?) }
     }
 
-    fn from_player_state_view(ps: &APlayerState) -> Option<Self> {
+    unsafe fn from_player_state_view(ps: &APlayerState) -> Option<Self> {
         let name = ps.player_name_private.copy_to_string().ok()?;
         (!name.trim().is_empty()).then(|| Self::new(name.trim().to_string(), ps.is_bot()))
     }
 
     /// Resolve PlayerState identity, falling back to the UObject display name.
-    pub fn from_actor(ptr: *mut UObject) -> Option<Self> {
+    ///
+    /// # Safety
+    /// Call on the game thread after globals initialization. Registered objects,
+    /// relationship pointers and class metadata must remain valid for the lookup;
+    /// native layouts must match the supported build. Liveness checks do not pin objects.
+    /// Null inputs require no engine state.
+    pub unsafe fn from_actor(ptr: *mut UObject) -> Option<Self> {
         if ptr.is_null() {
             return None;
         }
-        // Native combat callbacks run on the game thread; each pointer is checked before access.
         unsafe {
             let Some(object) = UObject::from_ptr(ptr) else {
                 swarn!("ignoring combat actor {:p}: not a live object", ptr);
@@ -75,66 +87,80 @@ impl CombatActor {
             let actor = if let Some(character) = object.uobj_cast::<ACharacter>() {
                 let pawn = &character.base_pawn;
                 pawn.player_state()
-                    .and_then(Self::from_player_state_view)
+                    .and_then(|ps| Self::from_player_state_view(ps))
                     .or_else(|| {
                         pawn.controller()?
                             .player_state()
-                            .and_then(Self::from_player_state_view)
+                            .and_then(|ps| Self::from_player_state_view(ps))
                     })
                     .or_else(|| {
                         object
                             .uobj_cast::<ATBLCharacter>()?
                             .last_player_state()
-                            .and_then(Self::from_player_state_view)
+                            .and_then(|ps| Self::from_player_state_view(ps))
                     })
             } else if let Some(controller) = object.uobj_cast::<AController>() {
                 controller
                     .player_state()
-                    .and_then(Self::from_player_state_view)
+                    .and_then(|ps| Self::from_player_state_view(ps))
             } else {
                 object
                     .uobj_cast::<APlayerState>()
-                    .and_then(Self::from_player_state_view)
+                    .and_then(|ps| Self::from_player_state_view(ps))
             };
             actor.or_else(|| Self::from_object(object))
         }
     }
 
-    pub fn killer_from_damage_event(event: &FDamageTakenEvent) -> Option<Self> {
-        Self::from_actor(event.damage_instigator.cast())
-            .or_else(|| Self::from_actor(event.damage_causer.cast()))
-    }
-
-    pub fn killers_from_death_event(event: &FDeathDamageTakenEvent) -> Vec<Self> {
-        let mut resolved: Vec<_> = event
-            .killers
-            .as_slice()
-            .iter()
-            .filter_map(|&ptr| Self::from_actor(ptr.cast()))
-            .collect();
-        if resolved.is_empty() {
-            if let Some(actor) = Self::killer_from_damage_event(&event.damage_taken) {
-                resolved.push(actor);
-            }
+    /// # Safety
+    /// The event must be live; from_actor's contract applies to its native pointers.
+    pub unsafe fn killer_from_damage_event(event: &FDamageTakenEvent) -> Option<Self> {
+        unsafe {
+            Self::from_actor(event.damage_instigator.cast())
+                .or_else(|| Self::from_actor(event.damage_causer.cast()))
         }
-        resolved
     }
 
-    pub fn victim_from_damage_event(event: &FDamageTakenEvent) -> Option<Self> {
-        Self::from_actor(event.damage_taker.cast())
+    /// # Safety
+    /// The event and killers array must be live and readable; from_actor's contract
+    /// applies to their native pointers.
+    pub unsafe fn killers_from_death_event(event: &FDeathDamageTakenEvent) -> Vec<Self> {
+        unsafe {
+            let mut resolved: Vec<_> = event
+                .killers
+                .as_slice()
+                .iter()
+                .filter_map(|&ptr| Self::from_actor(ptr.cast()))
+                .collect();
+            if resolved.is_empty() {
+                if let Some(actor) = Self::killer_from_damage_event(&event.damage_taken) {
+                    resolved.push(actor);
+                }
+            }
+            resolved
+        }
+    }
+
+    /// # Safety
+    /// The event must be live; from_actor's contract applies to its native pointers.
+    pub unsafe fn victim_from_damage_event(event: &FDamageTakenEvent) -> Option<Self> {
+        unsafe { Self::from_actor(event.damage_taker.cast()) }
     }
 }
 
 impl DamageSource {
-    pub fn from_damage_event(event: &FDamageTakenEvent) -> Self {
+    /// # Safety
+    /// The event must be live; CombatActor::from_actor's engine-thread, lifetime
+    /// and layout requirements apply to its native source pointers.
+    pub unsafe fn from_damage_event(event: &FDamageTakenEvent) -> Self {
         Self {
             amount: event.damage,
-            source: Self::name_from_damage_event(event),
+            source: unsafe { Self::name_from_damage_event(event) },
             attack_type: Self::attack_type_from_damage_event(event),
         }
     }
 
-    fn name_from_damage_event(event: &FDamageTakenEvent) -> String {
+    unsafe fn name_from_damage_event(event: &FDamageTakenEvent) -> String {
         // Prefer concrete weapon/projectile identity over abstract UDamageSource.
         [
             ("inventory_item", event.inventory_item.cast::<UObject>()),
@@ -155,8 +181,8 @@ impl DamageSource {
         .unwrap_or_else(|| "UnknownDamageSource".to_string())
     }
 
-    fn attack_type_from_damage_event(event: &FDamageTakenEvent) -> String {
-        let attack_type = if event.b_suicide {
+    fn attack_type_from_damage_event(event: &FDamageTakenEvent) -> &'static str {
+        if event.b_suicide {
             "Suicide"
         } else if event.b_back_stab {
             "Backstab"
@@ -164,8 +190,7 @@ impl DamageSource {
             "KillVolume"
         } else {
             "Damage"
-        };
-        attack_type.into()
+        }
     }
 }
 
@@ -184,36 +209,46 @@ mod tests {
 
     #[test]
     fn null_actor_inputs_have_no_identity() {
-        assert_eq!(CombatActor::from_uobject(std::ptr::null_mut()), None);
-        assert_eq!(
-            CombatActor::from_player_state(std::ptr::null_mut(), "test"),
-            None
-        );
-        assert_eq!(CombatActor::from_actor(std::ptr::null_mut()), None);
+        // Null inputs return before accessing engine globals or native objects.
+        unsafe {
+            assert_eq!(CombatActor::from_uobject(std::ptr::null_mut()), None);
+            assert_eq!(
+                CombatActor::from_player_state(std::ptr::null_mut(), "test"),
+                None
+            );
+            assert_eq!(CombatActor::from_actor(std::ptr::null_mut()), None);
+        }
     }
 
-    #[test]
-    fn missing_actors_and_sources_preserve_damage_and_attack_priority() {
+    #[test_case::test_case(false, false, false, "Damage"; "plain damage")]
+    #[test_case::test_case(false, false, true, "KillVolume"; "kill volume")]
+    #[test_case::test_case(false, true, false, "Backstab"; "backstab")]
+    #[test_case::test_case(false, true, true, "Backstab"; "backstab beats kill volume")]
+    #[test_case::test_case(true, false, false, "Suicide"; "suicide")]
+    #[test_case::test_case(true, false, true, "Suicide"; "suicide beats kill volume")]
+    #[test_case::test_case(true, true, false, "Suicide"; "suicide beats backstab")]
+    #[test_case::test_case(true, true, true, "Suicide"; "suicide beats both")]
+    fn missing_actors_and_sources_preserve_damage_and_attack_priority(
+        suicide: bool,
+        backstab: bool,
+        kill_volume: bool,
+        expected: &str,
+    ) {
         // All fields permit zero: null pointers, numeric/name fields, false flags,
         // and EKillReason::Damage. No engine objects are dereferenced.
         let mut event: FDamageTakenEvent = unsafe { std::mem::zeroed() };
         event.damage = 42.5;
-        assert_eq!(CombatActor::killer_from_damage_event(&event), None);
-        assert_eq!(CombatActor::victim_from_damage_event(&event), None);
-
-        for (suicide, backstab, kill_volume, expected) in [
-            (false, false, false, "Damage"),
-            (false, false, true, "KillVolume"),
-            (false, true, true, "Backstab"),
-            (true, true, true, "Suicide"),
-        ] {
-            event.b_suicide = suicide;
-            event.b_back_stab = backstab;
-            event.b_entered_kill_volume = kill_volume;
-            let source = DamageSource::from_damage_event(&event);
-            assert_eq!(source.amount, event.damage);
-            assert_eq!(source.source, "UnknownDamageSource");
-            assert_eq!(source.attack_type, expected);
+        event.b_suicide = suicide;
+        event.b_back_stab = backstab;
+        event.b_entered_kill_volume = kill_volume;
+        unsafe {
+            assert_eq!(CombatActor::killer_from_damage_event(&event), None);
+            assert_eq!(CombatActor::victim_from_damage_event(&event), None);
         }
+
+        let source = unsafe { DamageSource::from_damage_event(&event) };
+        assert_eq!(source.amount, event.damage);
+        assert_eq!(source.source, "UnknownDamageSource");
+        assert_eq!(source.attack_type, expected);
     }
 }

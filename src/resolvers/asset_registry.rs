@@ -1,8 +1,7 @@
 use crate::ue::{
     EFindName, FName, FString, FUObjectSerializeContext, IAssetRegistry, TArray, UAssetManager,
-    UClass, UObject, UPackageMap, TCHAR,
+    TScriptInterface, UClass, UObject, UPackageMap, TCHAR,
 };
-use std::fmt;
 use widestring::U16CStr;
 
 // Signature source: owner-provided target-build bytes for
@@ -38,11 +37,6 @@ CREATE_HOOK!(FLargeMemoryReaderDtor, CALLED, NONE, (), (
     CALL_ORIGINAL!(FLargeMemoryReaderDtor(this_ptr))
 });
 
-// Signature source: owner-provided target-build bytes for
-// `UAssetRegistryImpl::Serialize(FArchive&)`. It reads State at this+0x30 and
-// SerializationOptions at this+0x2a0, calls FAssetRegistryState::Serialize,
-// then tail-calls CachePathsFromState. Wildcard only the two rel32 calls.
-
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
@@ -50,62 +44,6 @@ define_pattern_resolver!(GetAssetRegistry,[
 CREATE_HOOK!(GetAssetRegistry, CALLED, *mut IAssetRegistry, (asset_manager: *mut UAssetManager),{
     // sinfo!["Triggered!"];
 });
-
-
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-#[allow(non_snake_case)]
-pub struct FAssetData {
-    pub ObjectPath: FName,
-    pub PackageName: FName,
-    pub PackagePath: FName,
-    pub AssetName: FName,
-    pub AssetClass: FName,
-    pub TagsAndValues: [u8; 0x10], // TSharedPtr<FAssetDataTagMap,0>
-    pub ChunkIDs: [u8; 0x10], // TArray<int> ?
-    pub PackageFlags: u32,
-    pub padding: [u8; 4], // for alignment to 0x50
-}
-
-impl fmt::Display for FAssetData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ObjectPath {}\n PackageName: {}\n PackagePath: {}\n AssetName: {}\n AssetClass: {}", 
-        self.ObjectPath,
-        self.PackageName,
-        self.PackagePath,
-        self.AssetName,
-        self.AssetClass)
-        // write!(f, "ObjectPath {}", 
-        // self.ObjectPath)
-    }
-}
-
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TScriptInterface {
-    pub object: *mut UObject,
-    pub interface: *mut IAssetRegistry,
-}
-
-impl TScriptInterface {
-    /// Return the borrowed interface, never the enclosing UObject address.
-    pub fn asset_registry(&self) -> Result<*mut IAssetRegistry, String> {
-        if self.interface.is_null() {
-            return Err("Asset Registry singleton has no native interface pointer".into());
-        }
-        Ok(self.interface)
-    }
-
-    pub fn new() -> Self {
-        Self {
-            // padding: [0u8; 0x28],
-            object: std::ptr::null_mut(),
-            interface: std::ptr::null_mut(),
-        }
-    }
-}
 
 define_pattern_resolver!(GetAssetRegistry_Helper,[
     "48 89 5C 24 ?? 57 48 83 EC 20 48 8B F9 48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 ?? 41 B8 01 00 00 00 E8 ?? ?? ?? ?? 48 8B 18 E8 ?? ?? ?? ?? 48 8B D3 48 8B C8 E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 85 C0"
@@ -239,25 +177,5 @@ mod tests {
             GetAssetRegistry_detour_fkt;
         let _: fn(*mut UAssetManager) -> *mut IAssetRegistry =
             |asset_manager| CALL_ORIGINAL!(GetAssetRegistry(asset_manager));
-    }
-
-    #[test]
-    fn missing_interface_never_falls_back_to_object() {
-        let mut object_marker = 0u8;
-        let mut registry = TScriptInterface::new();
-        assert!(registry.asset_registry().is_err());
-        registry.object = std::ptr::addr_of_mut!(object_marker).cast();
-        assert!(registry.asset_registry().is_err());
-    }
-
-    #[test]
-    fn registry_uses_interface_address_independently_of_object() {
-        let mut object_marker = 0u8;
-        let mut interface_marker = 0u8;
-        let mut registry = TScriptInterface::new();
-        registry.interface = std::ptr::addr_of_mut!(interface_marker).cast();
-        assert_eq!(registry.asset_registry().unwrap(), registry.interface);
-        registry.object = std::ptr::addr_of_mut!(object_marker).cast();
-        assert_eq!(registry.asset_registry().unwrap(), registry.interface);
     }
 }

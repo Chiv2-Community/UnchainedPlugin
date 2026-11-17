@@ -155,7 +155,7 @@ const MOD_MARKER_V2_CLASS: &str = "DA_ModMarker_V2_C";
 /// Object paths of every asset of `class_name` in the Asset Registry. A failed
 /// query means no marker of that class is installed, which is not an error.
 unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
-    let Ok(assets) = get_assets_by_class(class_name.into()) else {
+    let Ok(assets) = get_assets_by_class(class_name) else {
         return Vec::new();
     };
     assets

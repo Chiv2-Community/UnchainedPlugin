@@ -23,13 +23,17 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     let death_event = unsafe { &*damage_event };
     let damage_taken = &death_event.damage_taken;
 
-    let victim = CombatActor::victim_from_damage_event(damage_taken)
-        .unwrap_or_else(|| CombatActor::new("UnknownVictim".into(), false));
-
-    let killers = CombatActor::killers_from_death_event(death_event);
+    // Native callbacks provide live events and objects on the game thread.
+    let (victim, killers, source) = unsafe {
+        (
+            CombatActor::victim_from_damage_event(damage_taken)
+                .unwrap_or_else(|| CombatActor::new("UnknownVictim".into(), false)),
+            CombatActor::killers_from_death_event(death_event),
+            DamageSource::from_damage_event(damage_taken),
+        )
+    };
     let killer = killers.first().cloned().unwrap_or_else(|| CombatActor::new("UnknownKiller".into(), false));
 
-    let source = DamageSource::from_damage_event(damage_taken);
     let kill_reason = death_event.kill_reason.as_str().to_string();
 
     strace!("Kill: {} -> {} [{}] via {} ({:.2} dmg)", killer.name, victim.name, kill_reason, source.source, source.amount);
@@ -68,13 +72,17 @@ CREATE_HOOK!(ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
     }
 
     let damage_taken = unsafe { &*damage_event };
-    let attacker = CombatActor::killer_from_damage_event(damage_taken)
-        .unwrap_or_else(|| CombatActor::new("UnknownAttacker".into(), false));
-    let victim = CombatActor::victim_from_damage_event(damage_taken)
-        .or_else(|| CombatActor::from_actor(this_ptr.cast()))
-        .unwrap_or_else(|| CombatActor::new("UnknownVictim".into(), false));
-
-    let source = DamageSource::from_damage_event(damage_taken);
+    // Native callbacks provide live events and objects on the game thread.
+    let (attacker, victim, source) = unsafe {
+        (
+            CombatActor::killer_from_damage_event(damage_taken)
+                .unwrap_or_else(|| CombatActor::new("UnknownAttacker".into(), false)),
+            CombatActor::victim_from_damage_event(damage_taken)
+                .or_else(|| CombatActor::from_actor(this_ptr.cast()))
+                .unwrap_or_else(|| CombatActor::new("UnknownVictim".into(), false)),
+            DamageSource::from_damage_event(damage_taken),
+        )
+    };
 
     strace!(
         "Damage: {} -> {} via {} ({:.2} dmg, type={})",

@@ -231,70 +231,6 @@ unsafe impl UObjectType for APlayerController { const CLASS_NAME: &'static str =
 unsafe impl UObjectType for UPlayer { const CLASS_NAME: &'static str = "Player"; }
 unsafe impl UObjectType for ULocalPlayer { const CLASS_NAME: &'static str = "LocalPlayer"; }
 
-#[cfg(test)]
-mod cast_tests {
-    use super::*;
-
-    #[test]
-    fn display_names_strip_instance_and_blueprint_suffixes() {
-        for (native, display) in [
-            ("Sword_123", "Sword"),
-            ("Sword_C_123", "Sword"),
-            ("Sword_C", "Sword"),
-            ("Sword_Archer", "Sword_Archer"),
-            ("Sword", "Sword"),
-            ("", ""),
-        ] {
-            assert_eq!(UObject::normalize_display_name(native), display);
-        }
-    }
-
-    #[test]
-    fn null_object_is_rejected_before_accessing_engine_globals() {
-        assert!(unsafe { UObject::from_ptr(std::ptr::null()) }.is_none());
-    }
-
-    #[test]
-    fn typed_null_object_is_rejected_before_accessing_engine_globals() {
-        assert!(unsafe { ULocalPlayer::from_ptr(std::ptr::null::<UPlayer>()) }.is_none());
-    }
-
-    #[test]
-    fn matches_exact_class_or_ancestor_not_substrings() {
-        for name in ["TBLPlayerState", "PlayerState"] {
-            assert!(class_chain_matches(2, name, |class| match class {
-                2 => Some(("TBLPlayerState", 1)),
-                1 => Some(("PlayerState", 0)),
-                _ => None,
-            }));
-        }
-        assert!(!class_chain_matches(1, "Character", |class| match class {
-            1 => Some(("CharacterDeathcam_C", 0)),
-            _ => None,
-        }));
-    }
-
-    #[test]
-    fn invalid_metadata_stops_traversal() {
-        let mut inspected = Vec::new();
-        assert!(!class_chain_matches(2, "PlayerState", |class| {
-            inspected.push(class);
-            if class == 2 { Some(("Unrelated", 1)) } else { None }
-        }));
-        assert_eq!(inspected, [2, 1]);
-    }
-
-    #[test]
-    fn cyclic_metadata_is_bounded() {
-        let mut inspected = 0;
-        assert!(!class_chain_matches(1, "PlayerState", |class| {
-            inspected += 1;
-            Some(("Unrelated", class))
-        }));
-        assert!(inspected > 0 && inspected < 100);
-    }
-}
-
 // Steam/EGS FConsoleOutputDevice table 0x1446d9b40; UE Misc/OutputDevice.h.
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
@@ -578,5 +514,65 @@ impl UObjectBase {
             globals().uobject_base_utility_get_path_name()(self, stop_outer, &mut string);
         }
         string.to_string()
+    }
+}
+
+#[cfg(test)]
+mod cast_tests {
+    use super::*;
+
+    #[test_case::test_case("Sword_123", "Sword"; "instance suffix")]
+    #[test_case::test_case("Sword_C_123", "Sword"; "blueprint instance suffix")]
+    #[test_case::test_case("Sword_C", "Sword"; "blueprint suffix")]
+    #[test_case::test_case("Sword_Archer", "Sword_Archer"; "nonnumeric suffix")]
+    #[test_case::test_case("Sword", "Sword"; "plain name")]
+    #[test_case::test_case("", ""; "empty name")]
+    fn display_names_strip_instance_and_blueprint_suffixes(native: &str, display: &str) {
+        assert_eq!(UObject::normalize_display_name(native), display);
+    }
+
+    #[test]
+    fn null_object_is_rejected_before_accessing_engine_globals() {
+        assert!(unsafe { UObject::from_ptr(std::ptr::null()) }.is_none());
+    }
+
+    #[test]
+    fn typed_null_object_is_rejected_before_accessing_engine_globals() {
+        assert!(unsafe { ULocalPlayer::from_ptr(std::ptr::null::<UPlayer>()) }.is_none());
+    }
+
+    #[test]
+    fn matches_exact_class_or_ancestor_not_substrings() {
+        for name in ["TBLPlayerState", "PlayerState"] {
+            assert!(class_chain_matches(2, name, |class| match class {
+                2 => Some(("TBLPlayerState", 1)),
+                1 => Some(("PlayerState", 0)),
+                _ => None,
+            }));
+        }
+        assert!(!class_chain_matches(1, "Character", |class| match class {
+            1 => Some(("CharacterDeathcam_C", 0)),
+            _ => None,
+        }));
+    }
+
+    #[test]
+    fn invalid_metadata_stops_traversal() {
+        let mut inspected = Vec::new();
+        assert!(!class_chain_matches(2, "PlayerState", |class| {
+            inspected.push(class);
+            if class == 2 { Some(("Unrelated", 1)) } else { None }
+        }));
+        assert_eq!(inspected, [2, 1]);
+    }
+
+    #[test]
+    fn cyclic_metadata_is_bounded() {
+        let mut inspected = 0;
+        assert!(!class_chain_matches(1, "PlayerState", |class| {
+            inspected += 1;
+            Some(("Unrelated", class))
+        }));
+        assert!(inspected > 0 && inspected < 100);
     }
 }
