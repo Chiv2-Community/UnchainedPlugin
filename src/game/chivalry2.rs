@@ -2,6 +2,7 @@
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
 use strum::Display;
+use tokio_util::sync::CancellationToken;
 use crate::{game::engine::{FText, UWorld}, ue::{AsUObject, FString, FVector, TArray, UObject}};
 
 #[repr(C)]
@@ -284,7 +285,7 @@ pub(crate) fn send_ingame_message_with_world(
     message: String,
     chat_type: Option<EChatType>,
     world_accessor: UWorldAccessor,
-    cancellation: Option<tokio_util::sync::CancellationToken>,
+    cancellation: Option<CancellationToken>,
 ) {
     use crate::resolvers::messages::o_BroadcastLocalizedChat;
     use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
@@ -292,7 +293,7 @@ pub(crate) fn send_ingame_message_with_world(
     
     // Cancellation, world resolution and native work must share one game-thread job.
     crate::resolvers::unchained_integration::run_on_game_thread(move || {
-        if cancellation.as_ref().is_some_and(|token| token.is_cancelled()) {
+        if cancellation.as_ref().is_some_and(CancellationToken::is_cancelled) {
             return;
         }
         let Some(world) = world_accessor().filter(|world| !world.is_null()) else { return; };

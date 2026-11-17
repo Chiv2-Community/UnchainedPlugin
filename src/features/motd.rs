@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 const BROADCAST_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug)]
-pub(crate) struct MotdBroadcaster {
+struct MotdBroadcaster {
     message: String,
     world_accessor: UWorldAccessor,
     task: Option<JoinHandle<()>>,
@@ -17,7 +17,7 @@ pub(crate) struct MotdBroadcaster {
 }
 
 impl MotdBroadcaster {
-    pub(crate) fn new(message: String, world_accessor: UWorldAccessor) -> Self {
+    fn new(message: String, world_accessor: UWorldAccessor) -> Self {
         Self {
             message,
             world_accessor,
@@ -26,7 +26,7 @@ impl MotdBroadcaster {
         }
     }
 
-    pub(crate) fn start(&mut self) {
+    fn start(&mut self) {
         if self.task.as_ref().is_some_and(|task| !task.is_finished()) {
             return;
         }
@@ -54,7 +54,7 @@ impl MotdBroadcaster {
         self.task = Some(TOKIO_RUNTIME.spawn(future));
     }
 
-    pub(crate) fn stop(&mut self) {
+    fn stop(&mut self) {
         self.cancellation.cancel();
         self.task = None;
     }
@@ -69,8 +69,8 @@ impl Drop for MotdBroadcaster {
 thread_local! {
     static BROADCASTER: RefCell<Option<MotdBroadcaster>> = RefCell::new({
         let args = crate::cli_args();
-        args.motd.clone().filter(|_| args.should_broadcast_motd())
-            .map(|message| MotdBroadcaster::new(message, || crate::globals().world()))
+        args.motd.as_ref().filter(|_| args.should_broadcast_motd())
+            .map(|message| MotdBroadcaster::new(message.clone(), || crate::globals().world()))
     });
 }
 
