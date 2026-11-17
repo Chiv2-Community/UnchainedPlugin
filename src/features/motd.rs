@@ -1,20 +1,26 @@
 //! Game-thread MOTD scheduling, active only during a live server match.
 
-mod schedule;
-
-use schedule::Schedule;
-use std::{cell::RefCell, time::Instant};
+use std::{
+    cell::Cell,
+    time::{Duration, Instant},
+};
 
 thread_local! {
-    static SCHEDULE: RefCell<Schedule> = RefCell::new(Schedule::default());
+    static NEXT_BROADCAST: Cell<Option<Instant>> = const { Cell::new(None) };
 }
 
 pub(crate) fn reset() {
-    SCHEDULE.with(|schedule| *schedule.borrow_mut() = Schedule::default());
+    NEXT_BROADCAST.with(|next| next.set(None));
 }
 
 pub(crate) fn set_match_state(state: &str) {
-    SCHEDULE.with(|schedule| schedule.borrow_mut().set_match_state(state));
+    NEXT_BROADCAST.with(|next| {
+        if state != "InProgress" {
+            next.set(None);
+        } else if next.get().is_none() {
+            next.set(Some(Instant::now()));
+        }
+    });
 }
 
 pub(crate) fn tick() {
@@ -28,17 +34,20 @@ pub(crate) fn tick() {
     let is_world_ready = crate::globals()
         .world()
         .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() });
-    let should_broadcast = SCHEDULE.with(|schedule| {
-        schedule
-            .borrow_mut()
-            .should_broadcast(Instant::now(), is_world_ready)
-    });
-    if should_broadcast {
+    if !is_world_ready {
+        return;
+    }
+    NEXT_BROADCAST.with(|next| {
+        let now = Instant::now();
+        if next.get().is_none_or(|deadline| now < deadline) {
+            return;
+        }
+        next.set(Some(now + Duration::from_secs(30 * 60)));
         sinfo!("Broadcasting MOTD");
         // Send synchronously here so map travel cannot intervene after the readiness check.
         crate::game::chivalry2::send_ingame_message_on_game_thread(
             message,
             Some(crate::game::chivalry2::EChatType::ServerSay),
         );
-    }
+    });
 }
