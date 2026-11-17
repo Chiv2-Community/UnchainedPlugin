@@ -39,7 +39,11 @@ macro_rules! CREATE_REQUEST_HOOK {
                 };
                 let old_url = unsafe { std::ptr::read(&this.url_base) };
                 let old_token = unsafe { std::ptr::read(&req.token) };
-                let backend_url = $crate::backend_url!("/api/tbio");
+                let backend_url = $crate::ue::FString::from(
+                    server_browser_client_sdk::compatibility::tbio_base_url(
+                        $crate::backend_config::base_url(),
+                    ).as_str(),
+                );
                 let new_fstring = $crate::ue::FString::from("");
                 unsafe {
                     std::ptr::write(&mut this.url_base, backend_url);

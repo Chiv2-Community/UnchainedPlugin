@@ -3,7 +3,6 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::game::chivalry2::{AController, ATBLGameMode, FUniqueNetIdRepl, PlayerFlags};
 use crate::tools::hook_globals::globals;
 use crate::{
-    backend_url,
     tools::hook_globals::cli_args,
     ue::{FString, FStringCopyError, FTBLOnlineStats, TSharedRefIHttpRequest, TCHAR},
 };
@@ -234,7 +233,9 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
     // sinfo!["{}", url_w];
 
     let (target_url, mut target_auth) = if url_w == "https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version" {
-        (Some(FString::from(backend_url!("/api/playfab/Client/Matchmake"))), Some(FString::from("")))
+        (Some(FString::from(server_browser_client_sdk::compatibility::playfab_matchmake_url(
+            crate::backend_config::base_url(),
+        ).as_str())), Some(FString::from("")))
     } else if ["https://EBF8D.playfabapi.com/Match/GetMatchmakingTicket?sdk=Chiv2_Version"].iter().any(|&u| u == url_w) {
         (Some(FString::from("http://localhost")), None)
     } else {
