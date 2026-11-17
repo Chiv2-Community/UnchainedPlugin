@@ -33,23 +33,22 @@ impl MotdBroadcaster {
         let cancellation = self.cancellation.clone();
         let message = self.message.clone();
         let world_accessor = self.world_accessor;
-        self.task = Some(
-            crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
-                cancellation
-                    .run_until_cancelled(async {
-                        loop {
-                            send_ingame_message_with_world(
-                                message.clone(),
-                                Some(EChatType::ServerSay),
-                                world_accessor,
-                                Some(cancellation.clone()),
-                            );
-                            tokio::time::sleep(Duration::from_secs(30 * 60)).await;
-                        }
-                    })
-                    .await;
-            }),
-        );
+        let future = async move {
+            cancellation
+                .run_until_cancelled(async {
+                    loop {
+                        send_ingame_message_with_world(
+                            message.clone(),
+                            Some(EChatType::ServerSay),
+                            world_accessor,
+                            Some(cancellation.clone()),
+                        );
+                        tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+                    }
+                })
+                .await;
+        };
+        self.task = Some(crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(future));
     }
 
     pub(crate) fn stop(&mut self) {
