@@ -1,20 +1,25 @@
 //! Task-owned MOTD broadcasts, active only during a live server match.
 
+use crate::game::engine::UWorld;
 use std::{cell::RefCell, time::Duration};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+pub(crate) type UWorldAccessor = fn() -> Option<*mut UWorld>;
+
 #[derive(Debug)]
 pub(crate) struct MotdBroadcaster {
     message: String,
+    world_accessor: UWorldAccessor,
     task: Option<JoinHandle<()>>,
     cancellation: CancellationToken,
 }
 
 impl MotdBroadcaster {
-    pub(crate) fn new(message: String) -> Self {
+    pub(crate) fn new(message: String, world_accessor: UWorldAccessor) -> Self {
         Self {
             message,
+            world_accessor,
             task: None,
             cancellation: CancellationToken::new(),
         }
@@ -29,6 +34,7 @@ impl MotdBroadcaster {
         self.cancellation = CancellationToken::new();
         let cancellation = self.cancellation.clone();
         let message = self.message.clone();
+        let world_accessor = self.world_accessor;
         self.task = Some(
             crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
                 loop {
@@ -38,15 +44,18 @@ impl MotdBroadcaster {
                         if cancellation.is_cancelled() {
                             return;
                         }
-                        let is_world_ready = crate::globals().world()
-                            .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() });
-                        if is_world_ready {
-                            sinfo!("Broadcasting MOTD");
-                            crate::game::chivalry2::send_ingame_message_on_game_thread(
-                                &message,
-                                Some(crate::game::chivalry2::EChatType::ServerSay),
-                            );
+                        let Some(world) = world_accessor() else {
+                            return;
+                        };
+                        if world.is_null() || unsafe { (*world).authority_game_mode.is_null() } {
+                            return;
                         }
+                        sinfo!("Broadcasting MOTD");
+                        crate::game::chivalry2::send_ingame_message_on_game_thread(
+                            world,
+                            &message,
+                            Some(crate::game::chivalry2::EChatType::ServerSay),
+                        );
                     });
                     tokio::time::sleep(Duration::from_secs(30 * 60)).await;
                 }
@@ -71,7 +80,8 @@ impl Drop for MotdBroadcaster {
 thread_local! {
     static BROADCASTER: RefCell<Option<MotdBroadcaster>> = RefCell::new({
         let args = crate::cli_args();
-        args.motd.clone().filter(|_| args.should_broadcast_motd()).map(MotdBroadcaster::new)
+        args.motd.clone().filter(|_| args.should_broadcast_motd())
+            .map(|message| MotdBroadcaster::new(message, || crate::globals().world()))
     });
 }
 
@@ -101,7 +111,7 @@ mod tests {
 
     #[test]
     fn repeated_start_keeps_one_task() {
-        let mut broadcaster = MotdBroadcaster::new("Welcome".into());
+        let mut broadcaster = MotdBroadcaster::new("Welcome".into(), || None);
         assert!(broadcaster.task.is_none());
         broadcaster.start();
         let id = broadcaster.task.as_ref().unwrap().id();
@@ -111,7 +121,7 @@ mod tests {
 
     #[test]
     fn restart_keeps_previous_run_cancelled() {
-        let mut broadcaster = MotdBroadcaster::new("Welcome".into());
+        let mut broadcaster = MotdBroadcaster::new("Welcome".into(), || None);
         broadcaster.start();
         let old_run = broadcaster.cancellation.clone();
         broadcaster.stop();
@@ -123,7 +133,7 @@ mod tests {
 
     #[test]
     fn drop_cancels_current_run() {
-        let mut broadcaster = MotdBroadcaster::new("Welcome".into());
+        let mut broadcaster = MotdBroadcaster::new("Welcome".into(), || None);
         broadcaster.start();
         let cancellation = broadcaster.cancellation.clone();
         drop(broadcaster);
