@@ -1,5 +1,5 @@
 use super::{FArchive, FName, FString, TArray, UObject};
-use crate::resolvers::asset_registry::o_GetAssetRegistry_Helper;
+use crate::resolvers::asset_registry::o_UAssetRegistryHelpers__GetAssetRegistry;
 use std::fmt;
 
 #[repr(C)]
@@ -89,7 +89,7 @@ impl IAssetRegistry {
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = TScriptInterface::new();
-        CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(&mut registry))?;
+        CALL_ORIGINAL_SAFE!(UAssetRegistryHelpers__GetAssetRegistry(&mut registry))?;
         registry.asset_registry()
     }
 }
