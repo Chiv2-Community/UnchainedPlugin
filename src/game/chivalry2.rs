@@ -889,33 +889,23 @@ pub struct ATBLGameState {
     pub gold_reward_modifier: f32,                // 0x0994
 }
 
-/// Partial native FUniqueNetId vtable; unused slots retain their native positions.
-#[repr(C)]
-struct FUniqueNetIdVTable {
-    _unused: [usize; 5],
-    is_valid: unsafe extern "C" fn(*const FUniqueNetId) -> bool,
-    to_string: unsafe extern "C" fn(*const FUniqueNetId, *mut FString) -> *mut FString,
-}
-
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct FUniqueNetId {
-    vtable: *const FUniqueNetIdVTable,
+    #[vtable(
+        offset(0x28);
+        is_valid(&self) -> bool;
+        write_native_string(&self, output: *mut FString) -> *mut FString;
+    )]
+    vtable: *const (),
 }
 
 impl FUniqueNetId {
     /// # Safety
     /// This must be a live native ID with the supported vtable ABI.
     #[inline(always)]
-    pub unsafe fn is_valid(&self) -> bool {
-        ((*self.vtable).is_valid)(self)
-    }
-
-    /// # Safety
-    /// This must be a live native ID with the supported vtable ABI.
-    #[inline(always)]
     pub unsafe fn to_native_string(&self) -> String {
         let mut value = FString::new();
-        ((*self.vtable).to_string)(self, &mut value);
+        self.write_native_string(&mut value);
         value.to_string()
     }
 }
@@ -970,9 +960,9 @@ mod unique_net_id_tests {
             std::process::abort();
         }
         let vtable = FUniqueNetIdVTable {
-            _unused: [0; 5],
+            _pad_0: [0; 5],
             is_valid: invalid,
-            to_string: unexpected,
+            write_native_string: unexpected,
         };
         let object = FUniqueNetId { vtable: &vtable };
         let mut id = missing_id();
