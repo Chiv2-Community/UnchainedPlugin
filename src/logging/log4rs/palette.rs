@@ -7,7 +7,7 @@ use log4rs::encode::{writer::simple::SimpleWriter, Color, Encode, Style, Write};
 use super::pattern::PatternEncoder;
 use crate::logging::inline::{ColorChange, COLORS_KEY};
 
-pub(crate) const DEFAULT_PATTERN: &str = "{palette(timestamp)}{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:<5}{palette(trace)} | {palette(module)}{fn:<16}{palette(timestamp)} - {palette({l}_body)}{m}{n}";
+pub(crate) const DEFAULT_PATTERN: &str = "{d(%H:%M:%S)}{palette(trace)} | {palette({l})}{l:<5}{palette(trace)} | {palette()}{fn:<16} - {palette({l}_body)}{m}{n}";
 
 // Built-in chat patterns select these names from structured channel/faction fields.
 inventory::submit! { crate::logging::inline::PaletteReference("team_agatha") }
@@ -117,26 +117,12 @@ impl PaletteEncoderConfig {
     }
 
     fn default_palette() -> BTreeMap<String, Option<PaletteColor>> {
-        let mut palette: BTreeMap<_, _> = [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
+        [("error", Some([242, 139, 130])), ("warn", Some([242, 204, 120])),
             ("info", Some([140, 180, 225])), ("debug", Some([128, 128, 128])),
             ("trace", Some([92, 92, 92])), ("error_body", Some([238, 238, 238])), ("warn_body", Some([238, 238, 238])),
             ("info_body", Some([238, 238, 238])), ("debug_body", Some([128, 128, 128])),
-            ("trace_body", Some([92, 92, 92])), ("timestamp", Some([144, 144, 144])),
-            ("module", Some([190, 157, 92])),
-            ("team_discord", Some([181, 140, 255])), ("team_system", Some([140, 216, 225])),
-            ("team_agatha", Some([140, 180, 225])), ("team_mason", Some([242, 139, 130])),
-            ("team_tenosia", Some([208, 145, 40])),
-            ("team_ffa", Some([168, 213, 162])), ("team_unknown", Some([215, 160, 223])),
-            ("team_none", Some([255, 255, 255])), ("team_max", Some([215, 160, 223])),
-            ("team_all", Some([168, 213, 162])), ("team_spectator", Some([255, 255, 255]))]
-            .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect();
-        for name in ["title", "subtitle"] {
-            palette.insert(name.to_owned(), Some(PaletteColor::Channels(Channels {
-                foreground: Some(Channel::Rgb([208, 145, 40])),
-                background: Some(Channel::Rgb([47, 47, 47])),
-            })));
-        }
-        palette
+            ("trace_body", Some([92, 92, 92]))]
+            .into_iter().map(|(name, rgb)| (name.to_owned(), rgb.map(|rgb| PaletteColor::Foreground(Channel::Rgb(rgb))))).collect()
     }
 
     pub(crate) fn build(self) -> anyhow::Result<PaletteEncoder> {
@@ -501,6 +487,26 @@ mod tests {
 
     fn encoder(name: &str) -> PaletteEncoder {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
+    }
+
+
+    #[test]
+    fn dirty_build_color_covers_padding_and_resets_after_message() {
+        let mut config = fixtures::encoder("plain");
+        let yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
+        config["palette"] = yaml["appenders"]["console"]["encoder"]["palette"].clone();
+        let mut encoder = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
+        encoder.enabled = true;
+        encoder.truecolor = true;
+        let message = crate::logging::inline::Message::new(&[
+            crate::logging::inline::Segment::Palette("dirty_build"),
+            crate::logging::inline::Segment::Text(format_args!("   \r\n test \r\n   ")),
+        ]);
+        let values = [(COLORS_KEY, message.colors.as_str())];
+        let mut bytes = Vec::new();
+        encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
+            &Record::builder().args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
+        assert_eq!(bytes, b"\x1b[0m\x1b[0;38;2;242;139;130;48;2;0;0;0m   \r\n test \r\n   \x1b[0m");
     }
 
     #[test_case::test_case(Some("MASON"), Some(Color::Red); "case_insensitive_name")]

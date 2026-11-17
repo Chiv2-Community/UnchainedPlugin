@@ -45,7 +45,7 @@ was explicitly supplied.
 
 `scripts/build-windows.sh` cross-compiles the Windows DLL with
 [cargo-xwin](https://github.com/rust-cross/cargo-xwin), which downloads and
-configures the Windows SDK and CRT. Wine is not used for compilation.
+configures the Windows SDK and CRT.
 
 1. Install the native C/C++ build tools and LLVM. On Debian/Ubuntu:
 
