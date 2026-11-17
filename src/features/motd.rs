@@ -38,9 +38,8 @@ impl MotdBroadcaster {
                         if cancellation.is_cancelled() {
                             return;
                         }
-                        let is_world_ready = crate::globals().world().is_some_and(|world| unsafe {
-                            !(*world).authority_game_mode.is_null()
-                        });
+                        let is_world_ready = crate::globals().world()
+                            .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() });
                         if is_world_ready {
                             sinfo!("Broadcasting MOTD");
                             crate::game::chivalry2::send_ingame_message_on_game_thread(
