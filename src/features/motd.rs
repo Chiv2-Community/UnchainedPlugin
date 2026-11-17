@@ -54,7 +54,7 @@ impl MotdBroadcaster {
 
     pub(crate) fn stop(&mut self) {
         self.cancellation.cancel();
-        drop(self.task.take());
+        self.task = None;
     }
 }
 
