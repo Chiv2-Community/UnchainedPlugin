@@ -9,8 +9,8 @@ members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
 [workspace.dependencies]
 backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "043e9876e60ec836af1672fa1c99fc9885bcbeea" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "043e9876e60ec836af1672fa1c99fc9885bcbeea" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "175ad91374006e1566ba5aa7b0d1c364773d3a9e" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "175ad91374006e1566ba5aa7b0d1c364773d3a9e" }
 reqwest = "0.12.19"
 test-case = "3.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
