@@ -69,7 +69,8 @@ impl Drop for MotdBroadcaster {
 thread_local! {
     static BROADCASTER: RefCell<Option<MotdBroadcaster>> = RefCell::new({
         let args = crate::cli_args();
-        args.motd.as_ref().filter(|_| args.should_broadcast_motd())
+        args.motd.as_ref()
+            .filter(|_| args.should_broadcast_motd())
             .map(|message| MotdBroadcaster::new(message.clone(), || crate::globals().world()))
     });
 }
