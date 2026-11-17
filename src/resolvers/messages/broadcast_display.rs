@@ -101,6 +101,14 @@ define_pattern_resolver!(FText_Release, [
 // Native thread-safe shared-reference destructor; FText's control block is at +8.
 CREATE_HOOK!(FText_Release, CALLED, (), (text: *mut FText), {});
 
+/// Release one shared reference on an `FText` we took ownership of — e.g. one stepped out of a
+/// Blueprint VM frame. `FText` has no Rust `Drop`, so callers that own an `FText` by value (rather
+/// than borrowing one from the engine) must call this, mirroring the destructor the native exec
+/// thunk runs on its stepped `InText`. No-op if the `FText_Release` resolver has not attached.
+pub(crate) fn release_text(text: &mut FText) {
+    let _ = CALL_ORIGINAL_SAFE!(FText_Release(text as *mut FText));
+}
+
 struct NativeText(FText);
 
 impl NativeText {

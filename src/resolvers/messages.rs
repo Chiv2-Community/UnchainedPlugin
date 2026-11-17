@@ -264,8 +264,14 @@ pub mod kismet_log {
 // that entry points at `execPrintString`, not the folded C++ implementation. This deliberately
 // attaches from that runtime address rather than a BuildInfo offset or a fragile byte signature.
 //
-// This is opt-in because decoding a copy of a bytecode FFrame can evaluate an argument expression
-// a second time on uncommon paths.
+// This is opt-in. Each detour replicates its exec thunk's P_GET sequence EXACTLY: it steps the
+// REAL frame once per declared parameter, in order and with the right-sized destination, runs
+// P_FINISH, then returns WITHOUT calling the original. Shipping PrintString/PrintWarning/PrintText
+// are folded no-ops, so skipping the callee changes nothing observable, and consuming the frame
+// ourselves guarantees each argument expression is evaluated exactly once (calling the original
+// after stepping would re-evaluate every argument on the live VM — the earlier crash). Never copy
+// the FFrame and never read a single argument out of order: in PrintString/PrintText the string is
+// argument 1, behind WorldContextObject. See docs/blueprint-vm-arg-reading.md for the full model.
 #[cfg(feature="blueprint_printstring_log")]
 pub mod blueprint_printstring {
     use std::ffi::c_void;
@@ -274,7 +280,7 @@ pub mod blueprint_printstring {
 
     use crate::{
         game::engine::FText,
-        resolvers::messages::broadcast_display::native_string,
+        resolvers::messages::broadcast_display::{native_string, release_text},
         tools::hook_globals::globals,
         ue::{kismet::FFrame, FString, UObject},
     };
@@ -290,53 +296,74 @@ pub mod blueprint_printstring {
     static_detour! { static OriginalExecPrintWarning: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
     static_detour! { static OriginalExecPrintText: unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void); }
 
+    // UKismetSystemLibrary::execPrintString(UObject* WorldContextObject, FString InString,
+    //   bool bPrintToScreen, bool bPrintToLog, FLinearColor TextColor, float Duration)  [UE 4.25]
+    // Verified against the decompiled thunk: 6 P_GET steps, no Key parameter (Key is 4.26+).
     unsafe extern "system" fn exec_print_string_detour(
-        context: *mut UObject,
+        _context: *mut UObject,
         stack: *mut FFrame,
-        result: *mut c_void,
+        _result: *mut c_void,
     ) {
-        // Never call FFrame::arg on `stack`: it advances the real VM frame and would corrupt the
-        // original exec handler's input. FFrame is raw-pointer state with no ownership/Drop, so a
-        // bitwise local copy isolates the cursor and property-chain updates.
-        if !stack.is_null() {
-            let mut frame = unsafe { std::ptr::read(stack) };
-            let message: FString = unsafe { frame.arg() };
+        let Some(frame) = (unsafe { stack.as_mut() }) else { return };
+        unsafe {
+            let _world_context: *mut UObject = frame.arg(); // 0: WorldContextObject
+            let message: FString = frame.arg(); //              1: InString  (owned; Drop frees via GMalloc)
+            let _print_to_screen: u32 = frame.arg(); //         2: bPrintToScreen
+            let _print_to_log: u32 = frame.arg(); //            3: bPrintToLog
+            let _text_color: [f32; 4] = frame.arg(); //         4: TextColor (FLinearColor)
+            let _duration: f32 = frame.arg(); //                5: Duration
+            frame.finish(); //                                  P_FINISH
+
             if let Ok(message) = message.copy_to_string() {
                 sinfo!("[Blueprint PrintString] {message}");
             }
+            // Do NOT call OriginalExecPrintString: the shipping callee is a folded no-op and
+            // `message` frees its engine buffer on drop here.
         }
-
-        unsafe { OriginalExecPrintString.call(context, stack, result) };
     }
 
+    // UKismetSystemLibrary::execPrintWarning(FString InString)  [UE 4.25]
+    // Verified against the decompiled thunk: a single P_GET; there is NO WorldContextObject here.
     unsafe extern "system" fn exec_print_warning_detour(
-        context: *mut UObject,
+        _context: *mut UObject,
         stack: *mut FFrame,
-        result: *mut c_void,
+        _result: *mut c_void,
     ) {
-        if !stack.is_null() {
-            let mut frame = unsafe { std::ptr::read(stack) };
-            let message: FString = unsafe { frame.arg() };
+        let Some(frame) = (unsafe { stack.as_mut() }) else { return };
+        unsafe {
+            let message: FString = frame.arg(); // 0: InString
+            frame.finish(); //                     P_FINISH
+
             if let Ok(message) = message.copy_to_string() {
                 swarn!("[Blueprint PrintWarning] {message}");
             }
         }
-        unsafe { OriginalExecPrintWarning.call(context, stack, result) };
     }
 
+    // UKismetSystemLibrary::execPrintText(UObject* WorldContextObject, FText InText,
+    //   bool bPrintToScreen, bool bPrintToLog, FLinearColor TextColor, float Duration)  [UE 4.25]
+    // Verified against the decompiled thunk: 6 P_GET steps, InText at index 1.
     unsafe extern "system" fn exec_print_text_detour(
-        context: *mut UObject,
+        _context: *mut UObject,
         stack: *mut FFrame,
-        result: *mut c_void,
+        _result: *mut c_void,
     ) {
-        if !stack.is_null() {
-            let mut frame = unsafe { std::ptr::read(stack) };
-            let text: FText = unsafe { frame.arg() };
+        let Some(frame) = (unsafe { stack.as_mut() }) else { return };
+        unsafe {
+            let _world_context: *mut UObject = frame.arg(); // 0: WorldContextObject
+            let mut text: FText = frame.arg(); //              1: InText (owned shared-ref)
+            let _print_to_screen: u32 = frame.arg(); //        2: bPrintToScreen
+            let _print_to_log: u32 = frame.arg(); //           3: bPrintToLog
+            let _text_color: [f32; 4] = frame.arg(); //        4: TextColor (FLinearColor)
+            let _duration: f32 = frame.arg(); //               5: Duration
+            frame.finish(); //                                 P_FINISH
+
             if let Some(message) = native_string(&text) {
                 sinfo!("[Blueprint PrintText] {message}");
             }
+            // FText has no Drop: release the shared reference we stepped out, mirroring the thunk.
+            release_text(&mut text);
         }
-        unsafe { OriginalExecPrintText.call(context, stack, result) };
     }
 
     unsafe fn attach_exec_print_string(

@@ -35,4 +35,14 @@ impl FFrame {
 
         value.assume_init()
     }
+
+    /// Advance the instruction pointer past `EX_EndFunctionParms`, mirroring the engine's
+    /// `P_FINISH` macro (`Stack->Code += (Stack->Code != 0)`). This is a no-op on the
+    /// compiled-in/native path where `Code` is null. Call it exactly once, after stepping every
+    /// declared parameter of the function, so the VM resumes from the correct bytecode position.
+    pub unsafe fn finish(self: &mut FFrame) {
+        if !self.code.is_null() {
+            self.code = (self.code as *const u8).add(1) as *const c_void;
+        }
+    }
 }
