@@ -35,24 +35,26 @@ impl MotdBroadcaster {
         let world_accessor = self.world_accessor;
         self.task = Some(
             crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
-                loop {
-                    send_ingame_message_with_world(
-                        message.clone(),
-                        Some(EChatType::ServerSay),
-                        world_accessor,
-                        Some(cancellation.clone()),
-                    );
-                    tokio::time::sleep(Duration::from_secs(30 * 60)).await;
-                }
+                cancellation
+                    .run_until_cancelled(async {
+                        loop {
+                            send_ingame_message_with_world(
+                                message.clone(),
+                                Some(EChatType::ServerSay),
+                                world_accessor,
+                                Some(cancellation.clone()),
+                            );
+                            tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+                        }
+                    })
+                    .await;
             }),
         );
     }
 
     pub(crate) fn stop(&mut self) {
         self.cancellation.cancel();
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
+        drop(self.task.take());
     }
 }
 
@@ -114,6 +116,20 @@ mod tests {
         broadcaster.start();
         assert!(old_run.is_cancelled());
         assert!(!broadcaster.cancellation.is_cancelled());
+    }
+
+    #[test]
+    fn cancellation_finishes_the_task_without_aborting_it() {
+        let mut broadcaster = MotdBroadcaster::new("Welcome".into(), || None);
+        broadcaster.start();
+        let task = broadcaster.task.take().unwrap();
+        broadcaster.stop();
+        crate::features::tokio_runtime::TOKIO_RUNTIME.block_on(async {
+            tokio::time::timeout(Duration::from_secs(1), task)
+                .await
+                .unwrap()
+                .unwrap();
+        });
     }
 
     #[test]
