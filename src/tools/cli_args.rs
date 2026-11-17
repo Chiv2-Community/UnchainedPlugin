@@ -286,6 +286,10 @@ impl CLIArgs {
         self.rcon_port.is_some()
     }
 
+    pub fn should_broadcast_motd(&self) -> bool {
+        self.is_server() && self.motd.is_some()
+    }
+
     pub fn find_ini_value(&self, paths: &[(&str, &str, &str)]) -> Option<&str> {
         paths.iter().find_map(|(file, section, key)| {
             self.ini_overrides
@@ -368,6 +372,17 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_case::test_case(false, false, false; "client_without_motd")]
+    #[test_case::test_case(false, true, false; "client_with_motd")]
+    #[test_case::test_case(true, false, false; "server_without_motd")]
+    #[test_case::test_case(true, true, true; "server_with_motd")]
+    fn motd_requires_a_server_and_message(is_server: bool, has_motd: bool, expected: bool) {
+        let mut args = CLIArgs::try_parse_from(["app"]).unwrap();
+        args.rcon_port = is_server.then_some(9001);
+        args.motd = has_motd.then(|| "Welcome".to_owned());
+        assert_eq!(args.should_broadcast_motd(), expected);
+    }
 
     #[test]
     fn attach_stdio_is_opt_in_and_survives_game_argument_normalization() {

@@ -25,10 +25,7 @@ pub(crate) fn set_match_state(state: &str) {
 
 pub(crate) fn tick() {
     let args = crate::cli_args();
-    if !args.is_server() {
-        return;
-    }
-    let Some(message) = args.motd.as_deref() else {
+    let Some(message) = args.motd.as_deref().filter(|_| args.should_broadcast_motd()) else {
         return;
     };
     let is_world_ready = crate::globals()
