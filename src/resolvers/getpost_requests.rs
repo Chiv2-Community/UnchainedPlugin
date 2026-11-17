@@ -37,24 +37,18 @@ macro_rules! CREATE_REQUEST_HOOK {
                     (None, _) => { $crate::serror!("GCGObj was null"); return std::ptr::null_mut(); }
                     (_, None) => { $crate::serror!("Request was null"); return std::ptr::null_mut(); }
                 };
-                let old_url = unsafe { std::ptr::read(&this.url_base) };
-                let old_token = unsafe { std::ptr::read(&req.token) };
                 let url = server_browser_client_sdk::compatibility::tbio_base_url(
                     $crate::backend_config::base_url(),
                 );
                 let backend_url = $crate::ue::FString::from(url.as_str());
                 let empty_token = $crate::ue::FString::from("");
-                unsafe {
-                    std::ptr::write(&mut this.url_base, backend_url);
-                    std::ptr::write(&mut req.token, empty_token);
-                }
+                let old_url = std::mem::replace(&mut this.url_base, backend_url);
+                let old_token = std::mem::replace(&mut req.token, empty_token);
                 let result = std::panic::catch_unwind(|| {
                     $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
                 });
-                unsafe {
-                    std::ptr::write(&mut this.url_base, old_url);
-                    std::ptr::write(&mut req.token, old_token);
-                }
+                this.url_base = old_url;
+                req.token = old_token;
                 match result {
                     Ok(response) => response,
                     Err(panic) => std::panic::resume_unwind(panic),

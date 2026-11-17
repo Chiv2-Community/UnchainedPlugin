@@ -238,15 +238,19 @@ CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
         _ => return CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, a_val)),
     };
 
-    let original_url = unsafe { std::ptr::read(u_ptr) };
-    unsafe { std::ptr::write(u_ptr, target_url); }
+    let original_url = unsafe { std::mem::replace(&mut *u_ptr, target_url) };
     let auth_ptr = match target_auth {
         Some(ref mut auth) => auth as *mut FString,
         None => a_val,
     };
-    let result = CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, auth_ptr));
-    unsafe { std::ptr::write(u_ptr, original_url); }
-    result
+    let result = std::panic::catch_unwind(|| {
+        CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, auth_ptr))
+    });
+    unsafe { *u_ptr = original_url; }
+    match result {
+        Ok(response) => response,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
 });
 
 // Disable stat increase to prevent stutters in offline play (and server mode?)
