@@ -12,8 +12,8 @@ censor = "0.3.0"
 serde = { version = "1.0.195", features = ["derive"] }
 backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
-server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "4ea7113f6849da00cad3b011204b6db1403681f3" }
-server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "4ea7113f6849da00cad3b011204b6db1403681f3" }
+server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "2983f720be01c0cceed877d5f17c5e64dacb5271" }
+server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", rev = "2983f720be01c0cceed877d5f17c5e64dacb5271" }
 reqwest = "0.12.19"
 test-case = "3.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
