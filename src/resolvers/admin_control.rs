@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
 
-use crate::{game::engine::FText, ue::FString};
+use crate::ue::FString;
 
 // Console command permissions
 define_pattern_resolver![UTBLLocalPlayer_Exec, {
@@ -41,8 +41,6 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 
 }];
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
-CREATE_HOOK!(FText_AsCultureInvariant, CALLED, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
-});
 
 // ,|ctx, patterns| {
 //     let futures = ::patternsleuth::resolvers::futures::future::join_all(

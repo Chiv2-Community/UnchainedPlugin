@@ -101,7 +101,7 @@ macro_rules! __create_patch_impl {
                 match offsets.get(stringify!($name)) {
                     None => Err(format!("Offset for {} not found", stringify!($name)).into()),
                     Some(offset) => {
-                        let base_address = * $crate::resolvers::BASE_ADDR;
+                        let base_address = * crate::resolvers::BASE_ADDR;
                         let addr = (base_address + (*offset as usize) + ($extra as usize)) as *mut u8;
                         // Map to existing ops (memtools)
                         $crate::__apply_patch_op!($op, addr, $val);
@@ -111,7 +111,7 @@ macro_rules! __create_patch_impl {
             }
 
             inventory::submit! {
-                $crate::resolvers::PatchRegistration {
+                crate::resolvers::PatchRegistration {
                     name: stringify!($name),
                     tag: stringify!($suffix),
                     patch_fn: [<apply_patch_ $name _ $suffix>],
@@ -124,9 +124,9 @@ macro_rules! __create_patch_impl {
 
 #[macro_export]
 macro_rules! __apply_patch_op {
-    (BYTES, $addr:expr, $val:expr) => { $crate::tools::memtools::patch($addr, $val) };
-    (NOP, $addr:expr, $val:expr) => { $crate::tools::memtools::nop($addr, $val) };
-    (WRITE, $addr:expr, $val:expr) => { $crate::tools::memtools::write_ptr($addr as *mut _, $val) };
+    (BYTES, $addr:expr, $val:expr) => { crate::tools::memtools::patch($addr, $val) };
+    (NOP, $addr:expr, $val:expr) => { crate::tools::memtools::nop($addr, $val) };
+    (WRITE, $addr:expr, $val:expr) => { crate::tools::memtools::write_ptr($addr as *mut _, $val) };
 }
 
 /// A macro for registering platform-specific memory patches with support for offsets, tags and conditions.
@@ -181,8 +181,8 @@ macro_rules! CREATE_PATCH_PLATFORM {
 #[macro_export]
 macro_rules! __platform_check {
     ($platform:ident) => {
-        match $crate::tools::hook_globals::globals_initialized() {
-            true => $crate::globals().get_platform() == $crate::resolvers::PlatformType::$platform,
+        match crate::tools::hook_globals::globals_initialized() {
+            true => crate::globals().get_platform() == crate::resolvers::PlatformType::$platform,
             _ => false,
         }
     };

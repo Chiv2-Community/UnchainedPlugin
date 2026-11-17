@@ -18,6 +18,32 @@ pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
 
 mod platforms;
 pub use platforms::{supports_platform, ResolverPlatform};
+pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
+
+pub fn initialize_function_bindings(offsets: &std::collections::HashMap<String, u64>) -> Result<(), String> {
+    for registration in inventory::iter::<FunctionBindingRegistration> {
+        let binding = registration.binding;
+        let offset = offsets.get(binding.name())
+            .ok_or_else(|| format!("No address found for native binding {}", binding.name()))?;
+        binding.initialize(*BASE_ADDR, *offset)?;
+    }
+    Ok(())
+}
+
+pub fn function_is_bound(name: &str) -> bool {
+    inventory::iter::<FunctionBindingRegistration>.into_iter()
+        .any(|registration| registration.binding.name() == name && registration.binding.address().is_some())
+}
+
+/// Preserve fallible helper behavior before native binding initialization.
+pub fn require_function_bindings(names: &[&str]) -> Result<(), String> {
+    for name in names {
+        if !function_is_bound(name) {
+            return Err(format!("Native binding {name} is not initialized"));
+        }
+    }
+    Ok(())
+}
 
 pub fn current_platform() -> PlatformType {
     *PLATFORM.get().expect("Platform not initialized")
@@ -99,3 +125,48 @@ pub mod pak_mount;
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
 inventory::collect!(OffsetRegisty);
+
+#[cfg(test)]
+mod binding_tests {
+    use super::*;
+
+    #[test]
+    fn call_only_resolvers_are_bindings_not_detours() {
+        let expected = [
+            "APlayerState_GetPlayerName", "BroadcastLocalizedChat",
+            "FLargeMemoryReaderCtor", "FLargeMemoryReaderDtor", "FNameCtorWchar",
+            "FString_AppendChars", "FText_AsCultureInvariant", "FText_Release",
+            "FText_ToString", "GetAllActorsOfClass", "GetAssetRegistry",
+            "GetDefaultObject", "GetTBLGameMode", "InternalGetNetMode",
+            "SpawnActor", "StaticFindObject", "StaticLoadObject",
+            "TBLGameInstance_AddChatLine", "UAssetRegistryHelpers__GetAssetRegistry",
+            "UWorld__GetMapName",
+        ];
+        let bindings: std::collections::HashSet<_> =
+            inventory::iter::<FunctionBindingRegistration>.into_iter()
+                .map(|registration| registration.binding.name()).collect();
+        let hooks: std::collections::HashSet<_> =
+            inventory::iter::<HookRegistration>.into_iter()
+                .map(|registration| registration.name).collect();
+        for name in expected {
+            assert!(bindings.contains(name), "Missing binding {name}");
+            assert!(!hooks.contains(name), "Call-only resolver {name} still detours");
+        }
+        assert_eq!(bindings.len(), expected.len());
+        for name in ["DedicatedServerInit", "ClientMessage", "UGameEngineTick",
+            "ATBLCharacter__OnKilled", "ATBLCharacter__OnDamageTaken"] {
+            assert!(hooks.contains(name), "Active hook {name} was removed");
+        }
+    }
+
+    #[test]
+    fn borrowed_binding_signatures_preserve_return_ownership() {
+        use crate::ue::{APlayerState, FString, FText, TScriptInterface, UWorld};
+        let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::to_native_string;
+        let _: for<'a> unsafe fn(*const APlayerState, &'a mut FString) -> &'a mut FString =
+            APlayerState::get_player_name_native;
+        let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::get_map_name;
+        let _: for<'a> unsafe fn(&'a mut TScriptInterface) -> &'a mut TScriptInterface =
+            crate::ue::UAssetRegistryHelpers::get_asset_registry;
+    }
+}

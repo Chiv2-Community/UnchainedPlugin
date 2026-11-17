@@ -1,0 +1,11 @@
+[package]
+name = "unchained-macros"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+unchained-macros-impl = { path = "impl" }
+inventory = "0.3.14"
+
+[dev-dependencies]
+test-case = "3.3"

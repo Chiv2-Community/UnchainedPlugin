@@ -8,7 +8,7 @@ use crate::{
     commands::NATIVE_COMMAND_QUEUE,
     events::models::{GameEvent, MapChange},
     features::events::EVENT_SYSTEM,
-    game::engine::{ENetMode, UWorld},
+    game::engine::UWorld,
     tools::hook_globals::{cli_args, globals},
     ue::{AGameMode, FName, FString, UGameEngine, UTBLGameInstance},
     ENGINE_READY,
@@ -64,7 +64,6 @@ define_pattern_resolver!(InternalGetNetMode, {
         "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
         ], // STEAM
 });
-CREATE_HOOK!(InternalGetNetMode, CALLED, ENetMode, (world: *mut UWorld), {});
 
 // Disable message on startup
 define_pattern_resolver!(EACAntiCheatMesssage, Simple,  [
@@ -146,7 +145,7 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
         }
 
     }
-    if !o_UGameEngineTick.is_enabled() {
+    if !o_UGameEngineTick.get().is_some_and(|hook| hook.is_enabled()) {
         serror!("Disabled UGameEngineTick");
         return;
     }
@@ -188,10 +187,12 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
 
 // class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
 define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]);
-CREATE_HOOK!(UWorld__GetMapName, INACTIVE, bool, (this_ptr: *mut UWorld, return_value: *mut FString), {});
 pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
+    if uworld.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
+        return None;
+    }
     let mut map_name = FString::default();
-    CALL_ORIGINAL!(UWorld__GetMapName(uworld, &mut map_name));
+    unsafe { uworld.get_map_name(&mut map_name); }
     map_name.copy_to_string().ok()
 }
 

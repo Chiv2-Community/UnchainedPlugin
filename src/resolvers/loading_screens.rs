@@ -69,18 +69,18 @@ impl FTextRaw {
     /// # Safety
     /// Must run on the game thread after the engine allocator is available.
     unsafe fn from_str(text: &str) -> Result<Self, String> {
-        use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
+        crate::resolvers::require_function_bindings(&["FText_AsCultureInvariant"])?;
 
         let mut raw = Self([0; 0x18]);
         let mut string = FString::from(text);
-        let result = CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(
+        FText::as_culture_invariant(
             std::ptr::from_mut(&mut raw).cast::<FText>(),
             &mut string
-        ));
+        );
         // The callee takes its by-value FString and destroys/moves it, so ours
         // must not be dropped again.
         std::mem::forget(string);
-        result.map(|_| raw)
+        Ok(raw)
     }
 }
 

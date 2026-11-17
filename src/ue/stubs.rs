@@ -2,25 +2,16 @@ use std::ffi::c_void;
 
 // Native types used only behind pointers; these aliases do not describe layouts
 // or provide distinct type identities or thread-safety guarantees.
-pub type UTBLGameInstance = c_void;
 pub type AGameMode = c_void;
 pub type UGameEngine = c_void;
 pub type FGuid = c_void;
 pub type FTBLOnlineStats = c_void;
 pub type FPrimaryAssetId = c_void;
-pub type UAssetManager = c_void;
 pub type UAssetRegistryImpl = c_void;
 /// Opaque native memory-statistics map (HAL/MemoryMisc.h). Pass only a live
 /// engine-constructed instance; Rust must not allocate or initialize this view.
 #[repr(C)]
 pub struct FGenericMemoryStats {
-    _opaque: [u8; 0],
-}
-/// Opaque `FLargeMemoryReader`/`FMemoryReader` implementation. This is kept
-/// distinct from `FArchive` so future verified construction code cannot pass a
-/// base pointer where an owning reader is required.
-#[repr(C)]
-pub struct FLargeMemoryReader {
     _opaque: [u8; 0],
 }
 /// Opaque, engine-owned Asset Registry state. It contains UE containers and
