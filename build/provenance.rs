@@ -75,14 +75,8 @@ fn uncommitted_changes(statuses: &Statuses<'_>) -> Vec<String> {
     changes
 }
 
-// Watch tracked sources and worktree-aware Git state, not build outputs.
+// Keep revision, tag and staging changes fresh across linked worktrees.
 fn track_repository(repo: &Repository) {
-    if let (Some(workdir), Ok(index)) = (repo.workdir(), repo.index()) {
-        for entry in index.iter() {
-            let file = workdir.join(String::from_utf8_lossy(&entry.path).as_ref());
-            println!("cargo:rerun-if-changed={}", file.display());
-        }
-    }
     for path in [
         repo.path().join("HEAD"),
         repo.path().join("index"),
@@ -96,6 +90,20 @@ fn track_repository(repo: &Repository) {
 }
 
 pub(super) fn generate() -> (String, String) {
+    // Source trees trigger rebuilds (including additions/removals); each run snapshots
+    // the full Git status, including unrelated staged, unstaged and untracked files.
+    for path in [
+        "src",
+        "build",
+        "resources",
+        "sleuth_macros/src",
+        "build.rs",
+        "Cargo.toml",
+        "Cargo.lock",
+        "sleuth_macros/Cargo.toml",
+    ] {
+        println!("cargo:rerun-if-changed={path}");
+    }
     let provenance = provenance().unwrap_or_default();
     let commit = provenance
         .commit
