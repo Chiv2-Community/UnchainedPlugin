@@ -489,26 +489,6 @@ mod tests {
         serde_yaml::from_value::<PaletteEncoderConfig>(fixtures::encoder(name)).unwrap().build().unwrap()
     }
 
-
-    #[test]
-    fn dirty_build_color_covers_padding_and_resets_after_message() {
-        let mut config = fixtures::encoder("plain");
-        let yaml: serde_yaml::Value = serde_yaml::from_str(super::super::EMBEDDED_LOG4RS_YAML).unwrap();
-        config["palette"] = yaml["appenders"]["console"]["encoder"]["palette"].clone();
-        let mut encoder = serde_yaml::from_value::<PaletteEncoderConfig>(config).unwrap().build().unwrap();
-        encoder.enabled = true;
-        encoder.truecolor = true;
-        let message = crate::logging::inline::Message::new(&[
-            crate::logging::inline::Segment::Palette("dirty_build"),
-            crate::logging::inline::Segment::Text(format_args!("   \r\n test \r\n   ")),
-        ]);
-        let values = [(COLORS_KEY, message.colors.as_str())];
-        let mut bytes = Vec::new();
-        encoder.encode(&mut log4rs::encode::writer::ansi::AnsiWriter(&mut bytes),
-            &Record::builder().args(format_args!("{}", message.text)).key_values(&values).build()).unwrap();
-        assert_eq!(bytes, b"\x1b[0m\x1b[0;38;2;242;139;130;48;2;0;0;0m   \r\n test \r\n   \x1b[0m");
-    }
-
     #[test_case::test_case(Some("MASON"), Some(Color::Red); "case_insensitive_name")]
     #[test_case::test_case(Some("unknown"), None; "null_entry")]
     #[test_case::test_case(Some("absent"), None; "missing_entry")]

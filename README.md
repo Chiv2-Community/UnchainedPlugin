@@ -58,9 +58,7 @@ configures the Windows SDK and CRT.
    `llvm-lib`, `llvm-rc`, and `lld-link` are available on `PATH`.
 
 2. Install Rust using [rustup](https://rustup.rs/), then open a new shell so
-   `cargo` and `rustup` are available. Run the remaining commands from the
-   repository root; `rust-toolchain.toml` selects the required nightly toolchain
-   and installs the Windows target automatically.
+   `cargo` and `rustup` are available on the path.
 
 3. Install cargo-xwin. This revision includes the unreleased
    fix for SDK cache paths containing spaces:

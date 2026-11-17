@@ -1,4 +1,4 @@
-use git2::{Delta, DescribeOptions, Oid, Repository, StatusOptions};
+use git2::{Delta, DescribeOptions, Oid, Repository, StatusOptions, Statuses};
 
 #[derive(Default)]
 struct Provenance {
@@ -14,26 +14,14 @@ fn provenance() -> Option<Provenance> {
     track_repository(&repo);
 
     let statuses = repo
-        .statuses(Some(StatusOptions::new().include_untracked(true).recurse_untracked_dirs(true)
-            .renames_head_to_index(true).renames_index_to_workdir(true)))
+        .statuses(Some(
+            StatusOptions::new()
+                .include_untracked(true)
+                .recurse_untracked_dirs(true)
+                .renames_head_to_index(true)
+                .renames_index_to_workdir(true),
+        ))
         .ok();
-    let mut changes = Vec::new();
-    for entry in statuses.iter().flat_map(|statuses| statuses.iter()) {
-        if entry.status().is_conflicted() {
-            changes.push(format!("Conflicted: {}", String::from_utf8_lossy(entry.path_bytes()).escape_debug()));
-            continue;
-        }
-        for (area, delta) in [("Staged", entry.head_to_index()), ("Unstaged", entry.index_to_workdir())] {
-            let Some(delta) = delta else { continue };
-            let path = delta.new_file().path_bytes().or_else(|| delta.old_file().path_bytes()).unwrap_or(entry.path_bytes());
-            let status = if delta.status() == Delta::Untracked {
-                "Untracked".to_owned()
-            } else {
-                format!("{area} {:?}", delta.status())
-            };
-            changes.push(format!("{status}: {}", String::from_utf8_lossy(path).escape_debug()));
-        }
-    }
     // Zero candidates restricts describe to tags pointing at HEAD.
     let tag = repo
         .describe(
@@ -47,8 +35,45 @@ fn provenance() -> Option<Provenance> {
         commit: Some(commit),
         tag,
         dirty: statuses.as_ref().map(|statuses| !statuses.is_empty()),
-        changes,
+        changes: statuses
+            .as_ref()
+            .map(uncommitted_changes)
+            .unwrap_or_default(),
     })
+}
+
+fn uncommitted_changes(statuses: &Statuses<'_>) -> Vec<String> {
+    let mut changes = Vec::new();
+    for entry in statuses.iter() {
+        if entry.status().is_conflicted() {
+            changes.push(format!(
+                "Conflicted: {}",
+                String::from_utf8_lossy(entry.path_bytes()).escape_debug()
+            ));
+            continue;
+        }
+        for (area, delta) in [
+            ("Staged", entry.head_to_index()),
+            ("Unstaged", entry.index_to_workdir()),
+        ] {
+            let Some(delta) = delta else { continue };
+            let path = delta
+                .new_file()
+                .path_bytes()
+                .or_else(|| delta.old_file().path_bytes())
+                .unwrap_or(entry.path_bytes());
+            let status = if delta.status() == Delta::Untracked {
+                "Untracked".to_owned()
+            } else {
+                format!("{area} {:?}", delta.status())
+            };
+            changes.push(format!(
+                "{status}: {}",
+                String::from_utf8_lossy(path).escape_debug()
+            ));
+        }
+    }
+    changes
 }
 
 // Watch tracked sources and worktree-aware Git state, not build outputs.
@@ -82,19 +107,34 @@ fn main() {
         .dirty
         .map(|dirty| dirty.to_string())
         .unwrap_or_else(|| "unknown".into());
-    let revision = match provenance.tag {
+    write_provenance(&provenance, &commit);
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
+        compile_resources(&commit, &dirty);
+    }
+}
+
+fn write_provenance(provenance: &Provenance, commit: &str) {
+    let revision = match &provenance.tag {
         Some(tag) => format!("Revision: {tag} ({commit})"),
         None => format!("Revision: {commit}"),
     };
     let output = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    std::fs::write(output.join("provenance.rs"), format!(
-        "pub(super) const COMMIT: &str = {commit:?};\npub(super) const REVISION: &str = {revision:?};\npub(super) const DIRTY: bool = {};\npub(super) const UNCOMMITTED_CHANGES: &[&str] = &{:?};\n",
-        provenance.dirty == Some(true), provenance.changes,
-    )).expect("Failed to write build provenance");
-    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() != "windows" {
-        return;
-    }
+    let source = format!(
+        concat!(
+            "pub(super) const COMMIT: &str = {commit:?};\n",
+            "pub(super) const REVISION: &str = {revision:?};\n",
+            "pub(super) const DIRTY: bool = {dirty};\n",
+            "pub(super) const UNCOMMITTED_CHANGES: &[&str] = &{changes:?};\n",
+        ),
+        commit = commit,
+        revision = revision,
+        dirty = provenance.dirty == Some(true),
+        changes = provenance.changes,
+    );
+    std::fs::write(output.join("provenance.rs"), source).expect("Failed to write build provenance");
+}
 
+fn compile_resources(commit: &str, dirty: &str) {
     let [major, minor, patch] = [
         env!("CARGO_PKG_VERSION_MAJOR"),
         env!("CARGO_PKG_VERSION_MINOR"),
