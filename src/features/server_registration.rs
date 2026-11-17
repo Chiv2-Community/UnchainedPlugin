@@ -50,7 +50,7 @@ pub async fn shutdown() {
 pub struct Registration {
     shutdown: CancellationToken,
     task: JoinHandle<()>,
-    update: Arc<Notify>,
+    refresh: Arc<Notify>,
 }
 
 #[derive(Debug)]
@@ -78,18 +78,18 @@ impl Registration {
             local_ip_address: advertised_local_ip,
         };
         let shutdown = CancellationToken::new();
-        let update = Arc::new(Notify::new());
-        let task = TOKIO_RUNTIME.spawn(collector.run(shutdown.clone(), Arc::clone(&update)));
+        let refresh = Arc::new(Notify::new());
+        let task = TOKIO_RUNTIME.spawn(collector.run(shutdown.clone(), Arc::clone(&refresh)));
         Self {
             shutdown,
             task,
-            update,
+            refresh,
         }
     }
 
-    /// Forces the worker to wake up and perform an update (e.g., on map change).
+    /// Refresh A2S metadata; the SDK decides whether an HTTP update is needed.
     pub fn trigger_update(&self) {
-        self.update.notify_one();
+        self.refresh.notify_one();
     }
 }
 
@@ -101,16 +101,13 @@ impl Drop for Registration {
 }
 
 impl MetadataCollector {
-    async fn run(self, shutdown: CancellationToken, update: Arc<Notify>) {
+    async fn run(self, shutdown: CancellationToken, refresh: Arc<Notify>) {
         let info = loop {
             if let Some(info) = self.query(&shutdown).await {
                 break info;
             }
-            tokio::select! {
-                biased;
-                _ = shutdown.cancelled() => return,
-                _ = update.notified() => {},
-                _ = tokio::time::sleep(METADATA_POLL_INTERVAL) => {},
+            if !a2s_query::wait_for_refresh(&shutdown, &refresh, METADATA_POLL_INTERVAL).await {
+                return;
             }
         };
         if shutdown.is_cancelled() {
@@ -134,7 +131,7 @@ impl MetadataCollector {
         tokio::pin!(driver);
         let result = tokio::select! {
             biased;
-            () = self.collect_updates(&registration, &latest, &shutdown, &update) => {
+            () = self.collect_updates(&registration, &latest, &shutdown, &refresh) => {
                 registration.cancel();
                 driver.await
             }
@@ -201,15 +198,9 @@ impl MetadataCollector {
         registration: &RegistrationWorker<HttpTransport>,
         latest: &Mutex<ServerStatus>,
         shutdown: &CancellationToken,
-        update: &Notify,
+        refresh: &Notify,
     ) {
-        loop {
-            tokio::select! {
-                biased;
-                _ = shutdown.cancelled() => return,
-                _ = update.notified() => {},
-                _ = tokio::time::sleep(METADATA_POLL_INTERVAL) => {},
-            }
+        while a2s_query::wait_for_refresh(shutdown, refresh, METADATA_POLL_INTERVAL).await {
             let Some(info) = self.query(shutdown).await else {
                 continue;
             };

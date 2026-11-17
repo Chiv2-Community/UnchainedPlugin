@@ -6,7 +6,22 @@ use a2s::{
 };
 use backon::{ConstantBuilder, Retryable};
 use std::{net::SocketAddr, num::NonZeroUsize, time::Duration};
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+
+/// Wait for a metadata refresh; cancellation takes priority over ready wakeups.
+pub(super) async fn wait_for_refresh(
+    shutdown: &CancellationToken,
+    refresh: &Notify,
+    interval: Duration,
+) -> bool {
+    tokio::select! {
+        biased;
+        _ = shutdown.cancelled() => false,
+        _ = refresh.notified() => true,
+        _ = tokio::time::sleep(interval) => true,
+    }
+}
 
 pub(super) async fn query_with_retry(
     address: SocketAddr,
