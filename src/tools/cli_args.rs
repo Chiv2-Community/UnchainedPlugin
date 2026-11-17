@@ -80,7 +80,7 @@ pub struct CLIArgs {
         long = "server-browser-backend",
         default_value = "https://servers.polehammer.net"
     )]
-    pub server_browser_backend: Option<String>,
+    pub server_browser_backend: String,
 
     // Keep localhost as the default so local test servers remain visible in
     // normal IPv4 launches; IPv6 auto mode does not publish this default
@@ -202,7 +202,7 @@ impl std::fmt::Debug for CLIArgs {
             #[cfg(feature = "move-autonomous-desync")]
             tick_actor_patch,
             use_backend_banlist, is_headless, next_map, launched_profile,
-            unchained_profile_location, playable_listen, register, server_browser_backend,
+            unchained_profile_location, playable_listen, register, server_browser_backend: _,
             local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
             game_server_ping_port, game_server_query_port, game_port, mod_map_batch, mod_asset_registry_only,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
@@ -227,7 +227,7 @@ impl std::fmt::Debug for CLIArgs {
             .field("playable_listen", playable_listen)
             .field("register", register)
             // URLs may contain credentials in userinfo, query strings or paths.
-            .field("server_browser_backend", &server_browser_backend.as_ref().map(|_| "[REDACTED]"))
+            .field("server_browser_backend", &"[REDACTED]")
             .field("local_ip", local_ip)
             .field("local_ip_explicit", local_ip_explicit)
             .field("use_ipv6", use_ipv6)
@@ -401,6 +401,13 @@ mod tests {
         assert!(CLIArgs::command().render_long_help().to_string().contains("--no-spawn-console"));
     }
 
+    #[test_case::test_case(vec!["app"], "https://servers.polehammer.net"; "backend_url_default")]
+    #[test_case::test_case(vec!["app", "--server-browser-backend", "http://localhost:8080/browser/"], "http://localhost:8080/browser/"; "backend_url_override")]
+    fn backend_url_configuration(args: Vec<&str>, expected: &str) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(cli.server_browser_backend, expected);
+    }
+
     #[test]
     fn debug_redacts_credentials_and_opaque_fields_without_changing_values() {
         let mut cli = CLIArgs::try_parse_from([
@@ -423,12 +430,13 @@ mod tests {
             assert!(rendered.contains("[REDACTED; 2 arguments]"));
         }
         let rendered = format!("{cli:?}");
-        for field in ["server_password", "discord_bot_token", "server_browser_backend"] {
+        for field in ["server_password", "discord_bot_token"] {
             assert!(rendered.contains(&format!("{field}: Some(\"[REDACTED]\")")));
         }
+        assert!(rendered.contains("server_browser_backend: \"[REDACTED]\""));
         assert_eq!(cli.server_password.as_deref(), Some("PASSWORD_SENTINEL"));
         assert_eq!(cli.discord_bot_token.as_deref(), Some("TOKEN_SENTINEL"));
-        assert_eq!(cli.server_browser_backend.as_deref(), Some("https://user:BACKEND_SENTINEL@example.test/private"));
+        assert_eq!(cli.server_browser_backend, "https://user:BACKEND_SENTINEL@example.test/private");
         assert_eq!(cli.find_ini_value(&[("FILE_SENTINEL", "SECTION_SENTINEL", "KEY_SENTINEL")]), Some("INI_SENTINEL"));
         assert_eq!(cli.extra_args, [
             "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
@@ -541,7 +549,7 @@ mod tests {
                 unchained_profile_location: None,
                 playable_listen: false,
                 register: false,
-                server_browser_backend: None,
+                server_browser_backend: "https://servers.polehammer.net".to_owned(),
                 local_ip: "127.0.0.1".to_string(),
                 local_ip_explicit: false,
                 use_ipv6: false,
