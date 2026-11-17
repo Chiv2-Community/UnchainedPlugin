@@ -20,6 +20,22 @@ pub struct FFrame {
     pub b_array_context_failed: bool,
 }
 
+/// The ABI of every UFunction native exec thunk:
+/// `void exec(UObject* Context, FFrame& Stack, void* Result)`.
+pub type FNativeExec = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void);
+
+/// A reflected UClass whose native UFunction thunks can be resolved by name at runtime.
+///
+/// Resolution reads the class's `RegisterNatives` table (a `{ name -> address }` map built during
+/// `init_globals`), i.e. Unreal's own reflection data — not a byte signature. Each class has its
+/// own table, so each needs its own `globals()` resolver method; `kismet_native_class!` only wraps
+/// an existing one.
+pub trait KismetNativeClass {
+    const CLASS_NAME: &'static str;
+    /// Absolute address of the named native's exec thunk, or `None` if it was not resolved.
+    unsafe fn resolve(native: &str) -> Option<usize>;
+}
+
 impl FFrame {
     pub unsafe fn arg<T: Sized>(self: &mut FFrame) -> T {
         let mut value: MaybeUninit<T> = MaybeUninit::zeroed();

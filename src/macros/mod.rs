@@ -7,3 +7,5 @@ pub mod hook_macros;
 pub mod sig_macros;
 #[macro_use]
 pub mod thread_macros;
+#[macro_use]
+pub mod kismet_exec;

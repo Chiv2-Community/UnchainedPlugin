@@ -109,6 +109,23 @@ pub(crate) fn release_text(text: &mut FText) {
     let _ = CALL_ORIGINAL_SAFE!(FText_Release(text as *mut FText));
 }
 
+/// RAII owner of an `FText` stepped out of a Blueprint VM frame: releases its shared reference on
+/// drop (`FText` has no `Drop`). `kismet_exec_observe!` binds `FText` args to this. Read the text
+/// with `.to_string()`.
+pub(crate) struct OwnedText(pub(crate) FText);
+
+impl OwnedText {
+    pub(crate) fn to_string(&self) -> Option<String> {
+        native_string(&self.0)
+    }
+}
+
+impl Drop for OwnedText {
+    fn drop(&mut self) {
+        release_text(&mut self.0);
+    }
+}
+
 struct NativeText(FText);
 
 impl NativeText {

@@ -418,12 +418,15 @@ fn postinit_rustlib() {
     unsafe { seh::install() };
 
     // Kismet native-registry hooks attach here, after init_rustlib() has run init_globals().
-    // They resolve addresses from the KismetSystemLibrary RegisterNatives table, which lives in
-    // Globals; attaching during preinit (attach_hooks) would panic on uninitialized globals().
-    #[cfg(feature="blueprint_printstring_log")]
-    resolvers::messages::blueprint_printstring::attach_all();
-    #[cfg(feature="kismet_server_identity_hooks")]
-    resolvers::messages::kismet_server_identity::attach_all();
+    // They resolve addresses from a class's RegisterNatives table, which lives in Globals;
+    // attaching during preinit (attach_hooks) would panic on uninitialized globals(). Every
+    // kismet_exec_observe!/kismet_exec_forward! submits a LateHookRegistration; drain them all here.
+    for hook in inventory::iter::<resolvers::LateHookRegistration> {
+        match unsafe { (hook.attach)() } {
+            Ok(()) => sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
+            Err(e) => serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+        }
+    }
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
     // #[cfg(feature="rcon_commands")]

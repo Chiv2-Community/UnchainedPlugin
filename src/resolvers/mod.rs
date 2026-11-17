@@ -59,6 +59,20 @@ pub struct HookRegistration {
     // pub auto_activate: bool,
 }
 
+/// Attach a native-registry hook. Takes no offsets: it resolves its target from a class's
+/// RegisterNatives table at call time.
+pub type LateHookAttachFn = unsafe fn() -> Result<(), Box<dyn std::error::Error>>;
+
+/// A UFunction native-thunk hook that resolves its target from a reflected class's RegisterNatives
+/// table, so it must attach LATE (postinit, after `init_globals`) rather than through the preinit
+/// `HookRegistration` inventory. Submitted by `kismet_exec_observe!` / `kismet_exec_forward!` and
+/// drained once in `postinit_rustlib`.
+pub struct LateHookRegistration {
+    pub class: &'static str,
+    pub native: &'static str,
+    pub attach: LateHookAttachFn,
+}
+
 pub type RegistrationPredicate = fn() -> bool;
 pub type CreatePatchFn = unsafe fn(std::collections::HashMap<String, u64>) -> Result<(), Box<dyn std::error::Error>>;
 
@@ -99,5 +113,6 @@ pub mod gameplay;
 pub mod pak_mount;
 
 inventory::collect!(HookRegistration);
+inventory::collect!(LateHookRegistration);
 inventory::collect!(PatchRegistration);
 inventory::collect!(OffsetRegisty);
