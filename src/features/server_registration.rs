@@ -2,9 +2,7 @@ use crate::events::models::{GameEvent, ServerStatus};
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::Mod;
 use a2s::info::Info;
-use server_browser_client::models::{
-    Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
-};
+use server_browser_client::models::{ServerRegistrationRequest, UpdateRegisteredServer};
 use server_browser_client_sdk::{
     Event, HttpEvent, HttpTransport, LifecycleEvent, ObserverResult, Policy,
     Registration as SdkRegistration, RegistrationWorker, RequestFailure,
@@ -23,6 +21,8 @@ use crate::tools::hook_globals::cli_args;
 
 #[path = "a2s_query.rs"]
 mod a2s_query;
+#[path = "registration_ports.rs"]
+mod registration_ports;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
@@ -249,11 +249,12 @@ impl MetadataCollector {
         let args = cli_args();
         let update = Self::update(status);
         ServerRegistrationRequest {
-            ports: Chivalry2Ports {
-                game: i32::from(info.extended_server_info.port.unwrap_or(7777)),
-                ping: i32::from(args.game_server_ping_port.unwrap_or(0)),
-                a2s: i32::from(self.query_address.port()),
-            },
+            ports: registration_ports::resolve(
+                info.extended_server_info.port,
+                args.game_port,
+                args.game_server_ping_port,
+                self.query_address.port(),
+            ),
             name: status.name.clone(),
             description: status.description.clone(),
             password_protected: Some(status.password_protected),

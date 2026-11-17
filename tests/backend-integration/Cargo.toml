@@ -14,6 +14,10 @@ name = "backend_transport"
 path = "backend_transport.rs"
 
 [[test]]
+name = "registration_ports"
+path = "registration_ports.rs"
+
+[[test]]
 name = "backend_integration"
 path = "backend_integration.rs"
 required-features = ["container-tests"]
