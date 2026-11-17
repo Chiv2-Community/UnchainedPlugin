@@ -252,17 +252,7 @@ pub struct CommandRejected {
     pub rejection_reason: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct ServerStatus {
-    pub name: String,
-    pub description: String,
-    pub password_protected: bool,
-    pub current_map: String,
-    pub player_count: i32,
-    pub max_players: i32,
-    pub mods: Vec<crate::features::Mod>,
-    pub active_mods: Vec<crate::features::Mod>
-}
+pub use crate::server_metadata::ServerStatus;
 
 /// Triggered when a player uses !admin in-game
 #[derive(Debug, Clone)]
