@@ -1,5 +1,26 @@
 use crate::server_metadata::ServerStatus;
-use server_browser_client::models::{Chivalry2Ports, Mod, UpdateRegisteredServer};
+use server_browser_client::models::{
+    Chivalry2Ports, Mod, ServerRegistrationRequest, UpdateRegisteredServer,
+};
+
+pub(super) fn request(
+    status: &ServerStatus,
+    ports: Chivalry2Ports,
+    local_ip_address: Option<String>,
+) -> ServerRegistrationRequest {
+    let update = update(status);
+    ServerRegistrationRequest {
+        ports,
+        name: status.name.clone(),
+        description: status.description.clone(),
+        password_protected: Some(status.password_protected),
+        current_map: update.current_map,
+        player_count: update.player_count,
+        max_players: update.max_players,
+        local_ip_address,
+        mods: update.mods,
+    }
+}
 
 pub(super) fn update(status: &ServerStatus) -> UpdateRegisteredServer {
     UpdateRegisteredServer {

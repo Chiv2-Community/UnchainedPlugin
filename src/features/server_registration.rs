@@ -226,23 +226,13 @@ impl MetadataCollector {
 
     fn request(&self, info: &Info, status: &ServerStatus) -> ServerRegistrationRequest {
         let args = cli_args();
-        let update = registration_metadata::update(status);
-        ServerRegistrationRequest {
-            ports: registration_metadata::ports(
-                info.extended_server_info.port,
-                args.game_port,
-                args.game_server_ping_port,
-                self.query_address.port(),
-            ),
-            name: status.name.clone(),
-            description: status.description.clone(),
-            password_protected: Some(status.password_protected),
-            current_map: update.current_map,
-            player_count: update.player_count,
-            max_players: update.max_players,
-            local_ip_address: self.local_ip_address.clone(),
-            mods: update.mods,
-        }
+        let ports = registration_metadata::ports(
+            info.extended_server_info.port,
+            args.game_port,
+            args.game_server_ping_port,
+            self.query_address.port(),
+        );
+        registration_metadata::request(status, ports, self.local_ip_address.clone())
     }
 
     fn observe(event: &LifecycleEvent, latest: &Mutex<ServerStatus>) {
