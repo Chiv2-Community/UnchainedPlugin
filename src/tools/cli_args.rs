@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use censor::Censor;
 use clap::{CommandFactory, Parser};
 use serde::Serialize;
@@ -17,7 +17,7 @@ pub enum CensorArg {
 impl From<CensorArg> for Censor {
     fn from(arg: CensorArg) -> Self {
         match arg {
-            CensorArg::None => Censor::Custom(HashSet::new()),
+            CensorArg::None => Censor::Custom(Default::default()),
             CensorArg::Standard => Censor::Standard,
             CensorArg::Sex => Censor::Sex,
             CensorArg::Zealous => Censor::Zealous,
@@ -368,6 +368,18 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_case::test_case(vec!["app"], Censor::Custom(Default::default()); "default_censor_disabled")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "none"], Censor::Custom(Default::default()); "censor_disabled")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "standard"], Censor::Standard; "standard_censor")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "sex"], Censor::Sex; "sex_censor")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "zealous"], Censor::Zealous; "zealous_censor")]
+    fn censor_configuration(args: Vec<&str>, expected: Censor) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(Censor::from(cli.censor_mode), expected);
+        let converted: Censor = cli.censor_mode.into();
+        assert_eq!(converted, expected);
+    }
 
     #[test]
     fn attach_stdio_is_opt_in_and_survives_game_argument_normalization() {
