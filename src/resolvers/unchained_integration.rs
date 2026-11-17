@@ -165,7 +165,6 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
         }
     }
 
-    crate::features::motd::tick();
     IN_TICK.with(|f| f.set(false));
 });
 
