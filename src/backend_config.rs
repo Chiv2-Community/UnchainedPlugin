@@ -13,13 +13,8 @@ pub fn base_url() -> &'static str {
 pub fn client() -> &'static HttpTransport {
     static CLIENT: OnceLock<HttpTransport> = OnceLock::new();
     CLIENT.get_or_init(|| {
-        let args = cli_args();
-        let source_ip = source_ip(args);
-        crate::backend::transport(
-            args.server_browser_backend.as_deref().unwrap_or_default(),
-            source_ip,
-        )
-        .expect("Failed to construct server-browser client")
+        crate::backend::transport(base_url(), source_ip(cli_args()))
+            .expect("Failed to construct server-browser client")
     })
 }
 
