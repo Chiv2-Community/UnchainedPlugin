@@ -1,9 +1,12 @@
 //! Task-owned MOTD broadcasts, active only during a live server match.
 
+use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::game::chivalry2::{send_ingame_message_with_world, EChatType, UWorldAccessor};
 use std::{cell::RefCell, time::Duration};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+
+const BROADCAST_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug)]
 pub(crate) struct MotdBroadcaster {
@@ -43,12 +46,12 @@ impl MotdBroadcaster {
                             world_accessor,
                             Some(cancellation.clone()),
                         );
-                        tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+                        tokio::time::sleep(BROADCAST_INTERVAL).await;
                     }
                 })
                 .await;
         };
-        self.task = Some(crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(future));
+        self.task = Some(TOKIO_RUNTIME.spawn(future));
     }
 
     pub(crate) fn stop(&mut self) {
@@ -71,18 +74,10 @@ thread_local! {
     });
 }
 
-pub(crate) fn reset() {
+pub(crate) fn set_match_active(is_active: bool) {
     BROADCASTER.with(|broadcaster| {
         if let Some(broadcaster) = broadcaster.borrow_mut().as_mut() {
-            broadcaster.stop();
-        }
-    });
-}
-
-pub(crate) fn set_match_state(state: &str) {
-    BROADCASTER.with(|broadcaster| {
-        if let Some(broadcaster) = broadcaster.borrow_mut().as_mut() {
-            if state == "InProgress" {
+            if is_active {
                 broadcaster.start();
             } else {
                 broadcaster.stop();
@@ -123,7 +118,7 @@ mod tests {
         broadcaster.start();
         let task = broadcaster.task.take().unwrap();
         broadcaster.stop();
-        crate::features::tokio_runtime::TOKIO_RUNTIME.block_on(async {
+        TOKIO_RUNTIME.block_on(async {
             tokio::time::timeout(Duration::from_secs(1), task)
                 .await
                 .unwrap()
