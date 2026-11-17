@@ -119,13 +119,13 @@ pub struct CLIArgs {
     pub no_spawn_console: bool,
 
     #[arg(long = "GameServerPingPort", default_value = "3075")]
-    pub game_server_ping_port: Option<u16>,
+    pub game_server_ping_port: u16,
 
     #[arg(long = "GameServerQueryPort", default_value = "7071")]
-    pub game_server_query_port: Option<u16>,
+    pub game_server_query_port: u16,
 
     #[arg(long = "Port", default_value = "7777")]
-    pub game_port: Option<u16>,
+    pub game_port: u16,
 
     /// Number of mod package files handed to the Asset Registry per engine
     /// call during the startup registration (default 128).
@@ -408,6 +408,17 @@ mod tests {
         assert_eq!(cli.server_browser_backend, expected);
     }
 
+    #[test_case::test_case(vec!["app"], [7777, 3075, 7071]; "port_defaults")]
+    #[test_case::test_case(vec!["app", "--Port", "9000", "--GameServerPingPort", "3000", "--GameServerQueryPort", "7000"], [9000, 3000, 7000]; "port_overrides")]
+    #[test_case::test_case(vec!["app", "--Port", "0", "--GameServerPingPort", "0", "--GameServerQueryPort", "0"], [0, 0, 0]; "explicit_zero_ports")]
+    fn port_configuration(args: Vec<&str>, expected: [u16; 3]) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(
+            [cli.game_port, cli.game_server_ping_port, cli.game_server_query_port],
+            expected,
+        );
+    }
+
     #[test]
     fn debug_redacts_credentials_and_opaque_fields_without_changing_values() {
         let mut cli = CLIArgs::try_parse_from([
@@ -442,7 +453,7 @@ mod tests {
             "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
             "-AUTH_PASSWORD=PASSTHROUGH_SENTINEL",
         ]);
-        assert_eq!(cli.game_port, Some(8123));
+        assert_eq!(cli.game_port, 8123);
         assert_eq!(cli.launched_profile.as_deref(), Some("test-profile"));
     }
 
@@ -559,9 +570,9 @@ mod tests {
                 log4rs_yaml: None,
                 attach_stdio: false,
                 no_spawn_console: false,
-                game_server_ping_port: None,
-                game_server_query_port: None,
-                game_port: None,
+                game_server_ping_port: 3075,
+                game_server_query_port: 7071,
+                game_port: 7777,
                 mod_map_batch: 128,
                 mod_asset_registry_only: false,
                 discord_admin_channel_id: None,
