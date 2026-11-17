@@ -6,8 +6,8 @@ use server_browser_client::models::{
     Chivalry2Ports, ServerRegistrationRequest, UpdateRegisteredServer,
 };
 use server_browser_client_sdk::{
-    Event, HttpTransport, Policy, Registration as SdkRegistration, RegistrationWorker,
-    RequestFailure,
+    Event, HttpEvent, HttpTransport, LifecycleEvent, ObserverResult, Policy,
+    Registration as SdkRegistration, RegistrationWorker, RequestFailure,
 };
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -117,7 +117,7 @@ impl MetadataCollector {
             return;
         }
         let status = Self::metadata(&info);
-        let mut registration = match SdkRegistration::new(
+        let registration = match SdkRegistration::new(
             crate::backend_config::client().clone(),
             self.request(&info, &status),
             Policy::default(),
@@ -128,10 +128,9 @@ impl MetadataCollector {
                 return;
             }
         };
-        Self::reg_listeners(&mut registration);
         let registration = registration.into_worker();
         let latest = Mutex::new(status);
-        let driver = registration.run(|event| Self::observe(event, &latest));
+        let driver = registration.run(|event| Self::reg_listeners(event, &latest));
         tokio::pin!(driver);
         let result = tokio::select! {
             biased;
@@ -146,41 +145,45 @@ impl MetadataCollector {
         }
     }
 
-    fn reg_listeners(registration: &mut SdkRegistration<HttpTransport>) {
-        registration.add_registration_response_listener(|response| {
-            match response {
+    fn reg_listeners(event: &Event<'_>, latest: &Mutex<ServerStatus>) -> ObserverResult {
+        match event {
+            Event::Lifecycle(event) => Self::observe(event, latest),
+            Event::Http(HttpEvent::Register(response)) => match response {
                 Ok(response) => sinfo!(
                     "Registered server-browser identity: {}",
                     response.server.unique_id
                 ),
-                Err(error) => swarn!("Server-browser registration failed: {:?}", error),
-            }
-            Ok(())
-        });
-        registration.add_heartbeat_response_listener(|response| {
-            match response {
+                Err(error) => swarn!(
+                    "Server-browser registration failed: {:?}",
+                    RequestFailure::from_error(error)
+                ),
+            },
+            Event::Http(HttpEvent::Heartbeat(response)) => match response {
                 Ok(_) => sdebug!("Server-browser heartbeat succeeded"),
-                Err(error) => swarn!("Server-browser heartbeat failed: {:?}", error),
-            }
-            Ok(())
-        });
-        registration.add_update_response_listener(|response| {
-            match response {
+                Err(error) => swarn!(
+                    "Server-browser heartbeat failed: {:?}",
+                    RequestFailure::from_error(error)
+                ),
+            },
+            Event::Http(HttpEvent::Update(response)) => match response {
                 Ok(_) => sdebug!("Server-browser metadata updated"),
-                Err(error) => swarn!("Server-browser update failed: {:?}", error),
-            }
-            Ok(())
-        });
-        registration.add_deletion_response_listener(|response| {
-            match response {
-                Ok(()) => sinfo!("Server-browser registration deleted"),
-                Err(RequestFailure::Http(404)) => {
+                Err(error) => swarn!(
+                    "Server-browser update failed: {:?}",
+                    RequestFailure::from_error(error)
+                ),
+            },
+            Event::Http(HttpEvent::Delete(response)) => match response {
+                Ok(_) => sinfo!("Server-browser registration deleted"),
+                Err(error) if RequestFailure::from_error(error) == RequestFailure::Http(404) => {
                     sinfo!("Server-browser registration already absent")
                 }
-                Err(error) => swarn!("Server-browser deletion failed: {:?}", error),
-            }
-            Ok(())
-        });
+                Err(error) => swarn!(
+                    "Server-browser deletion failed: {:?}",
+                    RequestFailure::from_error(error)
+                ),
+            },
+        }
+        Ok(())
     }
 
     async fn query(&self, shutdown: &CancellationToken) -> Option<Info> {
@@ -262,9 +265,9 @@ impl MetadataCollector {
         }
     }
 
-    fn observe(event: &Event, latest: &Mutex<ServerStatus>) {
+    fn observe(event: &LifecycleEvent, latest: &Mutex<ServerStatus>) {
         match event {
-            Event::Registered { .. } => {
+            LifecycleEvent::Registered { .. } => {
                 let status = latest
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -273,10 +276,10 @@ impl MetadataCollector {
                     .game_event_publisher
                     .publish(GameEvent::ServerStatusEvent(status));
             }
-            Event::RegistrationLost => {
+            LifecycleEvent::RegistrationLost => {
                 swarn!("Server-browser registration expired; SDK will re-register")
             }
-            Event::RetryScheduled(delay) => {
+            LifecycleEvent::RetryScheduled(delay) => {
                 swarn!("Server-browser retry in {}s", delay.as_secs())
             }
             _ => {}
