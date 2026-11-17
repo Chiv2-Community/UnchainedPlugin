@@ -119,22 +119,26 @@ enum WorkerState {
 
 // --- API Helper ---
 
-struct BackendApi;
+struct BackendApi {
+    base_url: String,
+}
 impl BackendApi {
-    fn base_url() -> String {
-        cli_args().server_browser_backend.clone().unwrap_or_default()
+    fn from_cli() -> Self {
+        Self {
+            base_url: cli_args().server_browser_backend.clone().unwrap_or_default(),
+        }
     }
 
-    fn register() -> String {
-        format!("{}{}", Self::base_url(), API_BASE_PATH)
+    fn register(&self) -> String {
+        format!("{}{}", self.base_url.trim_end_matches('/'), API_BASE_PATH)
     }
 
-    fn server(id: &str) -> String {
-        format!("{}/{}/{}", Self::base_url(), API_BASE_PATH, id)
+    fn server(&self, id: &str) -> String {
+        format!("{}/{}", self.register(), id)
     }
 
-    fn heartbeat(id: &str) -> String {
-        format!("{}/heartbeat", Self::server(id))
+    fn heartbeat(&self, id: &str) -> String {
+        format!("{}/heartbeat", self.server(id))
     }
 }
 
@@ -290,7 +294,7 @@ impl Registration {
     fn perform_deregistration(&self) {
         let ident_opt = self.inner.identity.lock().unwrap().clone();
         if let Some(ident) = ident_opt {
-            let res = self.inner.http.delete(BackendApi::server(&ident.id))
+            let res = self.inner.http.delete(BackendApi::from_cli().server(&ident.id))
                 .header(AUTH_HEADER, &ident.key)
                 .send();
             
@@ -448,7 +452,7 @@ impl RegistrationInner {
         };
         //sinfo!("Request: {:#?}", request);
 
-        let res = self.http.post(BackendApi::register()).json(&request).send().map_err(|_| ())?;
+        let res = self.http.post(BackendApi::from_cli().register()).json(&request).send().map_err(|_| ())?;
         if res.status().is_success() {
             EVENT_SYSTEM.game_event_publisher.publish(GameEvent::ServerStatusEvent(ServerStatus {
                 name: request.name.into(),
@@ -510,7 +514,7 @@ impl RegistrationInner {
             max_players: max_players as i32,
             map_name: &info.map,
         };
-        let upd_res = self.http.put(BackendApi::server(&ident.id))
+        let upd_res = self.http.put(BackendApi::from_cli().server(&ident.id))
             .header(AUTH_HEADER, &ident.key)
             .json(&payload).send();
 
@@ -519,7 +523,7 @@ impl RegistrationInner {
         }
 
         // 2. Heartbeat Pulse (POST)
-        let hb_res = self.http.post(BackendApi::heartbeat(&ident.id))
+        let hb_res = self.http.post(BackendApi::from_cli().heartbeat(&ident.id))
             .header(AUTH_HEADER, &ident.key)
             .send();
 
@@ -571,6 +575,16 @@ impl RegistrationInner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_case::test_case("http://127.0.0.1:18147", "http://127.0.0.1:18147/api/v1/servers"; "no trailing slash")]
+    #[test_case::test_case("http://127.0.0.1:18147/", "http://127.0.0.1:18147/api/v1/servers"; "trailing slash")]
+    #[test_case::test_case("https://example.test/browser/", "https://example.test/browser/api/v1/servers"; "path prefix")]
+    fn registration_endpoints_share_one_collection_path(base_url: &str, collection: &str) {
+        let api = BackendApi { base_url: base_url.into() };
+        assert_eq!(api.register(), collection);
+        assert_eq!(api.server("test-server"), format!("{collection}/test-server"));
+        assert_eq!(api.heartbeat("test-server"), format!("{collection}/test-server/heartbeat"));
+    }
 
     #[test]
     fn formats_ipv4_endpoint_without_brackets() {

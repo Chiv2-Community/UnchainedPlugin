@@ -241,7 +241,7 @@ CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NON
         let mode = unsafe { o_InternalGetNetMode.call(world) };
         if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
             #[cfg(feature="verbose_hooks")]
-            sinfo!("Overriding dedicated server status");
+            strace!("Overriding dedicated server status");
             return true;
         }
     }
