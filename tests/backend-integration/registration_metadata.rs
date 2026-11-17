@@ -6,16 +6,14 @@ pub mod server_metadata;
 
 use test_case::test_case;
 
-#[test_case(false; "explicit_empty_mod_list_clears_published_mods")]
-#[test_case(true; "only_active_mods_are_published")]
-fn update_maps_public_metadata(has_active_mod: bool) {
+fn status(has_active_mod: bool) -> server_metadata::ServerStatus {
     let active_mod = server_metadata::Mod {
         name: "Active mod".into(),
         organization: "Community".into(),
         version: "1.2.3".into(),
         object_path: "/Game/Private/ActiveMod".into(),
     };
-    let status = server_metadata::ServerStatus {
+    server_metadata::ServerStatus {
         name: "Server".into(),
         description: "Description".into(),
         password_protected: true,
@@ -31,7 +29,13 @@ fn update_maps_public_metadata(has_active_mod: bool) {
         } else {
             Vec::new()
         },
-    };
+    }
+}
+
+#[test_case(false; "explicit_empty_mod_list_clears_published_mods")]
+#[test_case(true; "only_active_mods_are_published")]
+fn update_maps_public_metadata(has_active_mod: bool) {
+    let status = status(has_active_mod);
     let expected_mods = if has_active_mod {
         vec![server_browser_client::models::Mod::new(
             "Active mod".into(),
@@ -48,6 +52,39 @@ fn update_maps_public_metadata(has_active_mod: bool) {
             max_players: 64,
             current_map: "FFA_Courtyard".into(),
             mods: Some(expected_mods),
+        }
+    );
+}
+
+#[test_case(None, false; "no_local_address_or_password")]
+#[test_case(Some("127.0.0.1"), true; "ipv4_address_and_password")]
+#[test_case(Some("2001:db8::1"), false; "ipv6_address_without_password")]
+fn request_maps_registration_metadata(local_ip: Option<&str>, password_protected: bool) {
+    use server_browser_client::models::{Chivalry2Ports, Mod, ServerRegistrationRequest};
+
+    let mut status = status(true);
+    status.password_protected = password_protected;
+    let request = registration_metadata::request(
+        &status,
+        Chivalry2Ports::new(9000, 3000, 7000),
+        local_ip.map(str::to_owned),
+    );
+    assert_eq!(
+        request,
+        ServerRegistrationRequest {
+            ports: Chivalry2Ports::new(9000, 3000, 7000),
+            name: "Server".into(),
+            description: "Description".into(),
+            password_protected: Some(password_protected),
+            current_map: "FFA_Courtyard".into(),
+            player_count: 12,
+            max_players: 64,
+            local_ip_address: local_ip.map(str::to_owned),
+            mods: Some(vec![Mod::new(
+                "Active mod".into(),
+                "Community".into(),
+                "1.2.3".into()
+            )]),
         }
     );
 }
