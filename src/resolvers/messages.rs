@@ -258,6 +258,85 @@ pub mod kismet_log {
     });
 }
 
+// Shipping builds fold UKismetSystemLibrary::PrintString itself into a shared no-op. Hook the
+// uniquely registered Blueprint VM exec wrapper instead. The existing KismetSystemLibrary
+// resolver locates Unreal's RegisterNatives table and looks up its reflected `"PrintString"` name;
+// that entry points at `execPrintString`, not the folded C++ implementation. This deliberately
+// attaches from that runtime address rather than a BuildInfo offset or a fragile byte signature.
+//
+// This is opt-in because decoding a copy of a bytecode FFrame can evaluate an argument expression
+// a second time on uncommon paths.
+#[cfg(feature="blueprint_printstring_log")]
+pub mod blueprint_printstring {
+    use std::ffi::c_void;
+
+    use retour::static_detour;
+
+    use crate::{
+        resolvers::HookRegistration,
+        tools::hook_globals::globals,
+        ue::{kismet::FFrame, FString, UObject},
+    };
+
+    // Win64 uses the unified platform ABI; `system` matches the plugin's existing FFrame callback
+    // declarations. The reflected function is registered under "PrintString" but its target has
+    // this exec-wrapper ABI, not the direct native PrintString ABI.
+    type ExecPrintString = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut c_void);
+
+    static_detour! {
+        static OriginalExecPrintString: ExecPrintString;
+    }
+
+    unsafe extern "system" fn exec_print_string_detour(
+        context: *mut UObject,
+        stack: *mut FFrame,
+        result: *mut c_void,
+    ) {
+        // Never call FFrame::arg on `stack`: it advances the real VM frame and would corrupt the
+        // original exec handler's input. FFrame is raw-pointer state with no ownership/Drop, so a
+        // bitwise local copy isolates the cursor and property-chain updates.
+        if !stack.is_null() {
+            let mut frame = unsafe { std::ptr::read(stack) };
+            let message: FString = unsafe { frame.arg() };
+            if let Ok(message) = message.copy_to_string() {
+                sinfo!("[Blueprint PrintString] {message}");
+            }
+        }
+
+        unsafe { OriginalExecPrintString.call(context, stack, result) };
+    }
+
+    unsafe fn attach_exec_print_string(
+        _offsets: std::collections::HashMap<String, u64>,
+        auto_activate: bool,
+    ) -> Result<Option<usize>, Box<dyn std::error::Error>> {
+        // This pointer is absolute because RegisterNatives stores runtime function addresses.
+        // CREATE_HOOK! cannot be used directly: it expects an image-relative named BuildInfo
+        // offset, whereas this lookup intentionally avoids a build-specific signature/offset.
+        let target = globals().kismet_system_library_native("PrintString")
+            .ok_or("KismetSystemLibrary native PrintString was not resolved")?;
+        let target: ExecPrintString = unsafe { std::mem::transmute(target) };
+
+        unsafe {
+            OriginalExecPrintString.initialize(target, |context, stack, result| {
+                exec_print_string_detour(context, stack, result)
+            })?;
+            if auto_activate {
+                OriginalExecPrintString.enable()?;
+            }
+        }
+        Ok(Some(target as usize))
+    }
+
+    inventory::submit! {
+        HookRegistration {
+            name: "ExecPrintString",
+            hook_fn: attach_exec_print_string,
+            condition: || true,
+        }
+    }
+}
+
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
 CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{

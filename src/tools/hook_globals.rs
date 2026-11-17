@@ -209,6 +209,18 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
+	/// Native function registered on UKismetSystemLibrary (for example, the Blueprint VM
+	/// wrapper registered under "PrintString").
+	///
+	/// Unreal's RegisterNatives table stores Blueprint/reflection names rather than C++ exec
+	/// wrapper names: `"PrintString"` maps to `UKismetSystemLibrary::execPrintString`. The
+	/// KismetSystemLibrary resolver finds that table from the class's registration code and reads
+	/// its `{ name, function_pointer }` entries. These are already absolute image addresses, unlike
+	/// BuildInfo's persisted relative offsets.
+	pub fn kismet_system_library_native(&self, name: &str) -> Option<usize> {
+		self.resolution.kismet_system_library.0.get(name).copied()
+	}
+
     pub fn gmalloc(&self) -> ue::FMallocHandle {
         ue::try_gmalloc().expect("Critical: GMalloc is unresolved or uninitialized. Memory allocation is required for plugin operation.")
     }
