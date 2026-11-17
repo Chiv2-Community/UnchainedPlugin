@@ -43,17 +43,22 @@ macro_rules! CREATE_REQUEST_HOOK {
                     $crate::backend_config::base_url(),
                 );
                 let backend_url = $crate::ue::FString::from(url.as_str());
-                let new_fstring = $crate::ue::FString::from("");
+                let empty_token = $crate::ue::FString::from("");
                 unsafe {
                     std::ptr::write(&mut this.url_base, backend_url);
-                    std::ptr::write(&mut req.token, new_fstring);
+                    std::ptr::write(&mut req.token, empty_token);
                 }
-                let result = match std::panic::catch_unwind(|| $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))) {
-                    Ok(r) => r,
-                    Err(e) => { unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); } std::panic::resume_unwind(e) }
-                };
-                unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); }
-                result
+                let result = std::panic::catch_unwind(|| {
+                    $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
+                });
+                unsafe {
+                    std::ptr::write(&mut this.url_base, old_url);
+                    std::ptr::write(&mut req.token, old_token);
+                }
+                match result {
+                    Ok(response) => response,
+                    Err(panic) => std::panic::resume_unwind(panic),
+                }
             }
         );
     };
