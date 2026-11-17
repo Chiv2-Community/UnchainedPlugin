@@ -183,12 +183,12 @@ thread_local! {
     static VERIFIED_CONNECTIONS: RefCell<HashMap<*const UObjectBase, FWeakObjectPtr>> = RefCell::new(HashMap::new());
 }
 
-struct PendingAdmission {
+struct AdmissionCompletion {
     delegate: NativeDelegate,
     witness: Option<ConnectionWitness>,
 }
 
-impl PendingAdmission {
+impl AdmissionCompletion {
     unsafe fn complete(&mut self, mut accepted: bool) -> bool {
         if self
             .witness
@@ -236,7 +236,7 @@ CREATE_HOOK!(ValidatedConfirmJoin, ACTIVE, NONE, bool, (
         current.set(Some(context));
         Some(context.witness)
     });
-    let mut delegate = PendingAdmission { delegate, witness };
+    let mut delegate = AdmissionCompletion { delegate, witness };
     // This path never redeems opaque grants, including after JWT rejection.
     let claims = configured_backend().and_then(|_| {
         if !admission_available() || !protocol::admission_ticket(&raw) { return None; }

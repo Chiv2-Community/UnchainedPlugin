@@ -4,6 +4,16 @@
 Implementation is being committed/pushed on the feature branches; no merge or
 installed-plugin replacement is authorized by these validation results.
 
+Current cleanup removes unused plugin opaque issuance/online-redemption plumbing;
+the native path remains signed-only. Backend compatibility endpoints are retained.
+The live results below predate this cleanup; Windows/host checks do not constitute
+a new runtime pass. All owned test games/backend were stopped after the latest run.
+
+Before public deployment, resolve the backend's privacy review at
+`docs/player-identity-privacy.md`: linked IDs, timestamps and mismatch records are
+personal-data processing. Retention/rights handling remains an operational and
+engineering gap, not something the short JWT lifetime solves.
+
 ## Persistent account pinning
 
 The backend now requires `GAME_ACCOUNT_DATABASE` for signed admissions. It pins
@@ -103,7 +113,13 @@ joining client is unvalidated; unavailable native ID factories fail closed.
 The checks below describe the earlier opaque-grant implementation, not a pass
 for this new JWT integration.
 
-## Passed
+## Historical opaque-grant checks
+
+The remaining sections are an investigation ledger, not the current signed-path
+acceptance checklist. Statements about pending UI checks, running processes and
+missing fixes below describe those earlier runs, not current deployment state.
+
+### Passed
 
 - Native Steam and Heroic EGS browser joins with opposite-storefront independent
   verifier accounts (earlier challenge-flow run).
@@ -177,9 +193,9 @@ count fresh-process recovery as proof that same-process retry works.
 
 Evidence: `/tmp/opencode/playfab-investigation/negative-browser-evidence.json`;
 initial same-process retry evidence is `retry-limitation-negative-browser-evidence.json`
-in that directory. Both clients/server/backend were then left running, with
-tampering disabled, pending user-operated UI leave/rejoin; this supersedes the
-stopped-process state recorded for the earlier run below.
+in that directory. Both clients/server/backend were temporarily left running,
+with tampering disabled, for user-operated UI leave/rejoin. They were subsequently
+stopped; no private test game is intentionally left running now.
 
 ## User-operated UI rejoin
 
@@ -195,7 +211,8 @@ still pending. Earlier menu-label observations do not establish that returning
 to Frontend is impossible. Exact user menu actions were not captured.
 
 Evidence: `/tmp/opencode/playfab-investigation/manual-rejoin-log-snapshot.json`.
-Games/backend remain running pending the remaining user-operated check.
+At that checkpoint games/backend remained running for the remaining user check;
+they were subsequently stopped.
 
 ## Native ListPlayers formatting defect
 
@@ -277,15 +294,16 @@ base EOS ID through its own platform-ID RPC.
   for the previous connection's native logout. An earlier reconnect attempted
   before logout timed out after issuance without redemption.
 
-This proves the platform update is client-controlled despite validated PlayFab
-admission. It does **not** prove the base EOS admission ID is spoofable, nor that
+This proved the platform update was client-controlled despite validated PlayFab
+admission in the opaque-grant implementation. The signed path now blocks this RPC
+as recorded above. This test did **not** prove the base EOS admission ID is spoofable, nor that
 the PlayFab proof was bypassed. Server-to-client replication itself is not the
 trust-boundary defect; accepting client-provided identity updates is.
 
 The final run used private Wine prefixes, source/build outputs, backend ports
 18093/18094 and game port 7787. Private test processes were stopped; other agents'
 processes and caches were not changed during that run. No production fix was
-applied. Join-ticket redemption currently returns only PlayFab validation, not
+applied in that reproduction. Opaque join-ticket redemption returns only PlayFab validation, not
 an independently verified EOS/platform identity; server-authoritative platform
 assignment requires additional verified identity data, not a signed client claim.
 

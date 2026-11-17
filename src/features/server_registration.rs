@@ -34,16 +34,7 @@ pub struct Registration {
     commands: mpsc::UnboundedSender<Command>,
     update: Arc<Notify>,
     #[cfg(feature = "game_identity")]
-    redemptions: mpsc::Sender<JoinRedemption>,
-    #[cfg(feature = "game_identity")]
     admissions: Arc<super::game_admission::HostAdmissions>,
-}
-
-#[cfg(feature = "game_identity")]
-struct JoinRedemption {
-    server_id: String,
-    request: server_browser_client::models::GameJoinRedemptionRequest,
-    reply: tokio::sync::oneshot::Sender<bool>,
 }
 
 #[derive(Debug)]
@@ -139,14 +130,15 @@ impl Registration {
         };
         let (commands, receiver) = mpsc::unbounded_channel();
         let update = Arc::new(Notify::new());
-        #[cfg(feature = "game_identity")]
-        let (redemptions, redemption_receiver) = mpsc::channel(64);
         // Closing the command channel drives cleanup; dropping the task handle
         // detaches it rather than aborting an in-flight registration request.
-        drop(TOKIO_RUNTIME.spawn(worker.run(receiver, Arc::clone(&update),
-            #[cfg(feature = "game_identity")] redemption_receiver)));
-        Self { commands, update, #[cfg(feature = "game_identity")] redemptions,
-            #[cfg(feature = "game_identity")] admissions }
+        drop(TOKIO_RUNTIME.spawn(worker.run(receiver, Arc::clone(&update))));
+        Self {
+            commands,
+            update,
+            #[cfg(feature = "game_identity")]
+            admissions,
+        }
     }
 
     /// Resume the single task, retaining the paused SDK identity.
@@ -155,14 +147,13 @@ impl Registration {
     }
 
     #[cfg(feature = "game_identity")]
-    pub fn redeem(&self, server_id: String, request: server_browser_client::models::GameJoinRedemptionRequest) -> Option<tokio::sync::oneshot::Receiver<bool>> {
-        let (reply, receiver) = tokio::sync::oneshot::channel();
-        self.redemptions.try_send(JoinRedemption { server_id, request, reply }).ok()?;
-        Some(receiver)
-    }
-
-    #[cfg(feature = "game_identity")]
-    pub fn consume_admission(&self, token: &str) -> Result<server_browser_client::models::GameAdmissionClaims, server_browser_client_sdk::admission::AdmissionError> {
+    pub fn consume_admission(
+        &self,
+        token: &str,
+    ) -> Result<
+        server_browser_client::models::GameAdmissionClaims,
+        server_browser_client_sdk::admission::AdmissionError,
+    > {
         self.admissions.consume(token)
     }
 
@@ -185,8 +176,7 @@ impl Registration {
 }
 
 impl RegistrationWorker {
-    async fn run(mut self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>,
-        #[cfg(feature = "game_identity")] mut redemptions: mpsc::Receiver<JoinRedemption>) {
+    async fn run(mut self, mut commands: mpsc::UnboundedReceiver<Command>, update: Arc<Notify>) {
         let mut state = TaskState::default();
         let mut poll_at = tokio::time::Instant::now();
         loop {
@@ -205,25 +195,6 @@ impl RegistrationWorker {
                     if !state.active() { self.admissions.pause(); }
                     poll_at = tokio::time::Instant::now();
                     continue;
-                }
-                redemption = async {
-                    #[cfg(feature = "game_identity")]
-                    { redemptions.recv().await }
-                    #[cfg(not(feature = "game_identity"))]
-                    { std::future::pending::<Option<()>>().await }
-                } => {
-                    #[cfg(feature = "game_identity")]
-                    if let Some(redemption) = redemption {
-                        if redemption.reply.is_closed() { continue; }
-                        let accepted = if state.active() {
-                            if let Some(registration) = self.registration.as_ref() {
-                                let expected = redemption.request.playfab_id.clone();
-                                registration.redeem_game_join_ticket(&redemption.server_id, redemption.request).await
-                                    .is_ok_and(|identity| identity.playfab_id.eq_ignore_ascii_case(&expected))
-                            } else { false }
-                        } else { false };
-                        let _ = redemption.reply.send(accepted);
-                    }
                 }
                 _ = update.notified(), if state.active() => {},
                 _ = tokio::time::sleep_until(poll_at), if state.active() => {},
@@ -258,9 +229,16 @@ impl RegistrationWorker {
             if cli_args().validated_player_identity {
                 let deadline = if commands.is_empty() && !commands.is_closed() {
                     registration.live_lease().map(|(_, deadline)| deadline)
-                } else { None };
-                self.admissions.publish(&self.backend.configuration().base_path,
-                    registration.server_id(), deadline).map_err(|_| SdkError::InvalidLease)?;
+                } else {
+                    None
+                };
+                self.admissions
+                    .publish(
+                        &self.backend.configuration().base_path,
+                        registration.server_id(),
+                        deadline,
+                    )
+                    .map_err(|_| SdkError::InvalidLease)?;
             }
             Self::observe(event?, status);
         }
@@ -278,15 +256,31 @@ impl RegistrationWorker {
 
     #[cfg(feature = "game_identity")]
     async fn refresh_admission_keys(&mut self) {
-        let Some(verifier) = self.admissions.verifier_for_refresh() else { return; };
-        let same = self.refreshed_verifier.as_ref().is_some_and(|old| Arc::ptr_eq(old, &verifier));
-        if same && std::time::Instant::now() < self.refresh_keys_at { return; }
-        let keys = tokio::time::timeout(Duration::from_secs(5),
-            server_browser_client::apis::api_v1_api::game_join_jwks(self.backend.configuration())).await;
-        let refreshed = keys.ok().and_then(Result::ok).is_some_and(|keys| verifier.replace_keys(keys).is_ok());
+        let Some(verifier) = self.admissions.verifier_for_refresh() else {
+            return;
+        };
+        let same = self
+            .refreshed_verifier
+            .as_ref()
+            .is_some_and(|old| Arc::ptr_eq(old, &verifier));
+        if same && std::time::Instant::now() < self.refresh_keys_at {
+            return;
+        }
+        let keys = tokio::time::timeout(
+            Duration::from_secs(5),
+            server_browser_client::apis::api_v1_api::game_join_jwks(self.backend.configuration()),
+        )
+        .await;
+        let refreshed = keys
+            .ok()
+            .and_then(Result::ok)
+            .is_some_and(|keys| verifier.replace_keys(keys).is_ok());
         self.refreshed_verifier = Some(verifier);
-        self.refresh_keys_at = std::time::Instant::now() + Duration::from_secs(if refreshed { 60 } else { 5 });
-        if !refreshed { swarn!("Admission key refresh unavailable; missing or stale keys fail closed"); }
+        self.refresh_keys_at =
+            std::time::Instant::now() + Duration::from_secs(if refreshed { 60 } else { 5 });
+        if !refreshed {
+            swarn!("Admission key refresh unavailable; missing or stale keys fail closed");
+        }
     }
 
     async fn refresh_metadata(

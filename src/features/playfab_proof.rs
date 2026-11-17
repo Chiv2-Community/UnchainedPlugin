@@ -5,7 +5,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::{json, Value};
 use server_browser_client::{
     apis::api_v1_api,
-    models::{GameAdmissionRequest, GameJoinChallengeRequest, GameJoinTicketRequest},
+    models::{GameAdmissionRequest, GameJoinChallengeRequest},
 };
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, time::Duration};
@@ -50,35 +50,15 @@ impl PlayFab {
     }
 }
 
-/// All calls are individually bounded. Do not cancel the future after publication:
-/// cleanup must run even when verification or ticket issuance fails.
-pub async fn issue(
-    backend: &str,
-    target: SocketAddr,
-    claimed: &str,
-    session: String,
-) -> Option<String> {
-    issue_proof(backend, target, claimed, session, None).await
-}
-
-/// Signed admissions remain separate from legacy issuance; rejection must never
-/// retry through the legacy route.
+/// Issue only signed admissions; rejection never retries the legacy route.
+/// Calls are individually bounded. After publication, let cleanup finish even
+/// when proof verification or admission issuance fails.
 pub async fn issue_admission(
     backend: &str,
     target: SocketAddr,
     claimed: &str,
     session: String,
     eos_id_token: String,
-) -> Option<String> {
-    issue_proof(backend, target, claimed, session, Some(eos_id_token)).await
-}
-
-async fn issue_proof(
-    backend: &str,
-    target: SocketAddr,
-    claimed: &str,
-    session: String,
-    eos_id_token: Option<String>,
 ) -> Option<String> {
     let playfab = PlayFab {
         client: reqwest::Client::builder()
@@ -143,47 +123,31 @@ async fn issue_proof(
         .await
         .is_some();
     let ticket = if published {
-        if let Some(eos_id_token) = eos_id_token {
-            tokio::time::timeout(
-                Duration::from_secs(7),
-                api_v1_api::issue_game_admission(
-                    transport.configuration(),
-                    GameAdmissionRequest::new(challenge.challenge_id, secret, eos_id_token),
-                ),
-            )
-            .await
-            .ok()
-            .map(|result| {
-                if let Err(server_browser_client::apis::Error::ResponseError(response)) = &result {
-                    if response.status == reqwest::StatusCode::CONFLICT
-                        && matches!(response.entity.as_ref(),
-                            Some(api_v1_api::IssueGameAdmissionError::Status409(status))
-                                if status.status == "account_mismatch")
-                    {
-                        // Never echo an arbitrary backend body or its identifiers.
-                        swarn!("Account Mismatch: verified accounts conflict with the backend pin; contact support");
-                    }
+        tokio::time::timeout(
+            Duration::from_secs(7),
+            api_v1_api::issue_game_admission(
+                transport.configuration(),
+                GameAdmissionRequest::new(challenge.challenge_id, secret, eos_id_token),
+            ),
+        )
+        .await
+        .ok()
+        .inspect(|result| {
+            if let Err(server_browser_client::apis::Error::ResponseError(response)) = result {
+                if response.status == reqwest::StatusCode::CONFLICT
+                    && matches!(response.entity.as_ref(),
+                        Some(api_v1_api::IssueGameAdmissionError::Status409(status))
+                            if status.status == "account_mismatch")
+                {
+                    // Never echo an arbitrary backend body or its identifiers.
+                    swarn!("Account Mismatch: verified accounts conflict with the backend pin; contact support");
                 }
-                result
-            })
-            .and_then(Result::ok)
-            .filter(|ticket| ticket.server_id == challenge.server_id)
-            .filter(|ticket| protocol::admission_ticket(&ticket.ticket))
-            .map(|ticket| ticket.ticket)
-        } else {
-            tokio::time::timeout(
-                Duration::from_secs(7),
-                api_v1_api::issue_game_join_ticket(
-                    transport.configuration(),
-                    GameJoinTicketRequest::new(challenge.challenge_id, secret),
-                ),
-            )
-            .await
-            .ok()
-            .and_then(Result::ok)
-            .filter(|ticket| ticket.server_id == challenge.server_id)
-            .and_then(|ticket| protocol::encode_ticket(&ticket.server_id, &ticket.ticket))
-        }
+            }
+        })
+        .and_then(Result::ok)
+        .filter(|ticket| ticket.server_id == challenge.server_id)
+        .filter(|ticket| protocol::admission_ticket(&ticket.ticket))
+        .map(|ticket| ticket.ticket)
     } else {
         None
     };

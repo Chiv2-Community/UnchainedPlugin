@@ -246,7 +246,13 @@ do not supply that Torn Banner credential. No supported public issuance path
 for it has been established; no attempt was made to obtain title secrets or
 impersonate an official host. Restoring native confirmation remains unproven.
 
-## Recommendation and evidence
+## Historical recommendation and evidence
+
+This section records the earlier opaque-grant investigation. The current plugin
+uses signed offline admissions and persistent first-use account pinning; see
+[current runtime status](player-identity-runtime-validation.md). Microsoft Store
+support is outside the current scope. The plugin no longer issues or redeems
+opaque grants; backend compatibility endpoints remain available separately.
 
 The primary design must use PlayFab and cover Epic Games Store and potentially
 Microsoft, not depend on Steam ownership. The public-data challenge now satisfies
@@ -273,10 +279,10 @@ An uninstrumented release artifact is saved at
 `/tmp/opencode/playfab-investigation/UnchainedPlugin-credential-free.dll`, with
 SHA-256 and scope in `challenge-production-artifact.json`. It was not installed;
 a subsequent Steam client/server smoke test used this exact uninstrumented
-artifact. Epic's runtime evidence still uses the diagnostic build. Games/backend
-were stopped and the prior scratch DLL restored. Changes
-remain uncommitted; local Cargo SDK overrides are still required until the backend
-revision is committed and pinned.
+artifact. Epic's runtime evidence for that run uses the diagnostic build.
+Games/backend were stopped and the prior scratch DLL restored. Implementation
+is now committed and pushed on both feature branches, with an immutable SDK
+revision in `Cargo.toml`; local SDK overrides are no longer required.
 
 [specs]: https://github.com/PlayFab/API_Specs/tree/80e104aaec1278bd184843809d40344fb129db20/Swagger/PlayFab
 [spec-readme]: https://github.com/PlayFab/API_Specs/blob/80e104aaec1278bd184843809d40344fb129db20/README.md
