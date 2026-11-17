@@ -1,8 +1,8 @@
 use crate::ue::{
     EFindName, FName, FString, FUObjectSerializeContext, IAssetRegistry, TArray, UAssetManager,
-    UAssetRegistryImpl, UClass, UObject, UPackageMap, TCHAR,
+    UClass, UObject, UPackageMap, TCHAR,
 };
-use std::{fmt, os::raw::c_void};
+use std::fmt;
 use widestring::U16CStr;
 
 // Signature source: owner-provided target-build bytes for
@@ -42,16 +42,6 @@ CREATE_HOOK!(FLargeMemoryReaderDtor, CALLED, NONE, (), (
 // `UAssetRegistryImpl::Serialize(FArchive&)`. It reads State at this+0x30 and
 // SerializationOptions at this+0x2a0, calls FAssetRegistryState::Serialize,
 // then tail-calls CachePathsFromState. Wildcard only the two rel32 calls.
-define_pattern_resolver!(SerializeAssetRegistry, [
-    "48 89 5C 24 08 57 48 83 EC 20 48 8B F9 4C 8D 81 A0 02 00 00 48 83 C1 30 E8 ?? ?? ?? ?? 48 8D 57 30 48 8B CF 48 8B 5C 24 30 48 83 C4 20 5F E9 ?? ?? ?? ??"
-]);
-// void UAssetRegistryImpl::Serialize(FArchive&)
-CREATE_HOOK!(SerializeAssetRegistry, CALLED, NONE, (), (
-    registry: *mut UAssetRegistryImpl,
-    archive: *mut crate::ue::FArchive
-), {
-    CALL_ORIGINAL!(SerializeAssetRegistry(registry, archive))
-});
 
 define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
@@ -61,20 +51,6 @@ CREATE_HOOK!(GetAssetRegistry, CALLED, *mut IAssetRegistry, (asset_manager: *mut
     // sinfo!["Triggered!"];
 });
 
-#[cfg(test)]
-mod hook_signature_tests {
-    use super::*;
-
-    #[test]
-    fn get_asset_registry_preserves_pointer_return_signature() {
-        // Both the detour entry point and original trampoline must return the
-        // native IAssetRegistry pointer, even when the hook body ignores it.
-        let _: unsafe extern "C" fn(*mut UAssetManager) -> *mut IAssetRegistry =
-            GetAssetRegistry_detour_fkt;
-        let _: fn(*mut UAssetManager) -> *mut IAssetRegistry =
-            |asset_manager| CALL_ORIGINAL!(GetAssetRegistry(asset_manager));
-    }
-}
 
 
 #[repr(C)]
@@ -105,76 +81,23 @@ impl fmt::Display for FAssetData {
     }
 }
 
-define_pattern_resolver!(GetAssetsByClass,[
-    "48 89 5C 24 ?? 55 56 57 41 56 41 57 48 8D 6C 24 ?? 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 45 33 FF C7 45 ?? 80 00 00 00 0F 57 C0 4C 89 7C 24 ?? 48 8B DA 4C 89 7C 24 ??"
-    ]);
-
-// bool __thiscall UAssetRegistryImpl::GetAssetsByClass(UAssetRegistryImpl *this,FName param_1,TArray<> *param_2,bool param_3)
-CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
-    // Debug code
-    sdebug!["Triggered! {}", ClassPathName];
-    let res: bool;
-    unsafe {
-        res = CALL_ORIGINAL!(GetAssetsByClass(this_ptr, ClassPathName, OutAssetData, bSearchSubClasses));
-        if res && ClassPathName.to_string() == "DA_ModMarker_C" {
-            swarn!("this_ptr: {:#?}", this_ptr);
-            swarn!("ClassPathName: {}", ClassPathName);
-            // sinfo!("ClassPathName D: {:#?}", ClassPathName);
-            swarn!("OutAssetData: {:#?}", &*OutAssetData);
-            swarn!("bSearchSubClasses: {}", bSearchSubClasses);
-            // let asdf = &*OutAssetData;
-            let asdf = &*OutAssetData;
-            let test_cp = asdf.clone();
-            sinfo!["Length res: {}", test_cp.len()];
-
-            for (cnt, a) in test_cp.as_slice().iter().enumerate() {
-                sinfo!("{}: {}", cnt, a.PackagePath);
-            }
-        }
-    }
-    res
-});
-
-// Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::GetAssetsByPath` (function start). The RIP-relative
-// displacement in the `48 8B 05` stack-cookie load (immediately followed by
-// the `48 33 C4` xor with rsp) is wildcarded so the pattern survives
-// rebuilds that relocate the cookie global.
-define_pattern_resolver!(GetAssetsByPath,[
-    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 10 45"
-]);
-// bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
-// virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
-CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
-    // CALLED hooks are never enabled on attach; this body only runs if someone
-    // explicitly enables the detour after a real signature is populated.
-    CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
-});
-
-// Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start). The
-// RIP-relative displacement in the `48 8B 05` load is wildcarded so the
-// pattern survives rebuilds that relocate the pointed-to global.
-define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
-    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
-]);
-// void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
-// Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.
-CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, InPaths: *const TArray<FString>, InSpecificFiles: *const TArray<FString>, bForceRescan: bool, AssetDataCacheMode: u8, OutFoundAssets: *mut TArray<FName>, OutFoundPaths: *mut TArray<FName>), {
-    // CALLED hooks are never enabled on attach; this body only runs if someone
-    // explicitly enables the detour after a real signature is populated.
-    CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
-});
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct TScriptInterface {
-    // padding: [u8; 0x28], // can be found in cxxheaderfiles
     pub object: *mut UObject,
-    pub interface: *mut c_void,
+    pub interface: *mut IAssetRegistry,
 }
 
 impl TScriptInterface {
+    /// Return the borrowed interface, never the enclosing UObject address.
+    pub fn asset_registry(&self) -> Result<*mut IAssetRegistry, String> {
+        if self.interface.is_null() {
+            return Err("Asset Registry singleton has no native interface pointer".into());
+        }
+        Ok(self.interface)
+    }
+
     pub fn new() -> Self {
         Self {
             // padding: [0u8; 0x28],
@@ -305,3 +228,36 @@ CREATE_HOOK!(StaticLoadObject, CALLED, *mut UObject, (
 //     //     // sinfo!["Triggered! {}", &*asset_data];
 //     // }
 // });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_asset_registry_preserves_pointer_return_signature() {
+        let _: unsafe extern "C" fn(*mut UAssetManager) -> *mut IAssetRegistry =
+            GetAssetRegistry_detour_fkt;
+        let _: fn(*mut UAssetManager) -> *mut IAssetRegistry =
+            |asset_manager| CALL_ORIGINAL!(GetAssetRegistry(asset_manager));
+    }
+
+    #[test]
+    fn missing_interface_never_falls_back_to_object() {
+        let mut object_marker = 0u8;
+        let mut registry = TScriptInterface::new();
+        assert!(registry.asset_registry().is_err());
+        registry.object = std::ptr::addr_of_mut!(object_marker).cast();
+        assert!(registry.asset_registry().is_err());
+    }
+
+    #[test]
+    fn registry_uses_interface_address_independently_of_object() {
+        let mut object_marker = 0u8;
+        let mut interface_marker = 0u8;
+        let mut registry = TScriptInterface::new();
+        registry.interface = std::ptr::addr_of_mut!(interface_marker).cast();
+        assert_eq!(registry.asset_registry().unwrap(), registry.interface);
+        registry.object = std::ptr::addr_of_mut!(object_marker).cast();
+        assert_eq!(registry.asset_registry().unwrap(), registry.interface);
+    }
+}

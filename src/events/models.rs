@@ -5,6 +5,8 @@ use strum::{Display, IntoStaticStr};
 use itertools::Itertools;
 use std::fmt;
 
+use super::combat::{CombatActor, DamageSource};
+
 /// Triggered when a player joins the game server
 #[derive(Debug, Clone)]
 pub struct Join {
@@ -33,34 +35,6 @@ pub struct Kill {
     pub dead_character_id: u8,
     pub attach_to_projectile: bool,
     pub source: Damage,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CombatActor {
-    pub name: String,
-    pub is_bot: bool,
-}
-
-impl CombatActor {
-    pub fn new(name: String, is_bot: bool) -> Self {
-        Self { name, is_bot }
-    }
-}
-
-impl fmt::Display for CombatActor {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_bot {
-            f.write_str("(bot) ")?;
-        }
-        f.write_str(&self.name)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DamageSource {
-    pub amount: f32,
-    pub source: String, // weapon or throwable name
-    pub attack_type: String // slash/overhead/throw/stab/etc;
 }
 
 /// Triggered when the server changes maps
@@ -309,12 +283,6 @@ pub enum GameEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test_case::test_case(false, "Knight"; "human")]
-    #[test_case::test_case(true, "(bot) Knight"; "bot")]
-    fn combat_actor_display_marks_bots(is_bot: bool, expected: &str) {
-        assert_eq!(CombatActor::new("Knight".into(), is_bot).to_string(), expected);
-    }
 
     #[test_case::test_case(&[], "<none>"; "no_arguments")]
     #[test_case::test_case(&[""], ""; "empty_argument")]

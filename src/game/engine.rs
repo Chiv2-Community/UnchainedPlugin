@@ -13,7 +13,6 @@ use crate::resolvers::asset_registry::*;
 // use crate::resolvers::asset_registry::o_StaticFindObject;
 // use crate::resolvers::asset_registry::o_StaticLoadObject;
 // use crate::resolvers::asset_registry::o_GetAssetRegistry_Helper;
-// use crate::resolvers::asset_registry::o_GetAssetsByClass;
 
 #[repr(C)]
 pub enum ENetMode {
@@ -292,14 +291,11 @@ struct FLargeMemoryReaderStorage {
 /// `FArchiveState` is 0x90 bytes here: the shipped game is `WITH_EDITORONLY_DATA=0`,
 /// so `DEVIRTUALIZE_FLinkerLoad_Serialize` is on and the `ActiveFPLB`/`InlineFPLB`
 /// members are present, pushing the `ArIsXxx` bitfields to 0x28 (`ArIsError` is the
-/// 9th bit -> byte 0x29, bit 0). `FMemoryArchive::Offset` (the read cursor) follows
-/// the archive base at 0x90, and the reader's `NumBytes` at 0xa8. Cross-checked
+/// 9th bit -> byte 0x29, bit 0). Cross-checked
 /// against the resolved ctor/dtor byte patterns (`bFreeOnClose` at 0x98, `Data` at
 /// 0xa0, total object size 0xb8).
 const AR_IS_ERROR_BYTE: usize = 0x29;
 const AR_IS_ERROR_BIT: u8 = 0x01;
-const ARCHIVE_TELL_OFFSET: usize = 0x90; // FMemoryArchive::Offset (bytes read so far)
-const READER_TOTAL_SIZE_OFFSET: usize = 0xa8; // FLargeMemoryReader::NumBytes
 
 /// Bytes the registry loader consumes for its header before it reads any asset
 /// data: `FGuid` (16) + version `int32` (4). `UAssetRegistryImpl::Serialize` is
@@ -340,11 +336,11 @@ fn classify_registry_load(errored: bool, consumed: i64, total: i64) -> Result<()
 ///
 /// # Safety
 /// `reader` must be a live `FLargeMemoryReader` of this build's layout.
-unsafe fn registry_load_outcome(reader: *const FLargeMemoryReader) -> Result<(), String> {
+unsafe fn registry_load_outcome(reader: *mut FLargeMemoryReader) -> Result<(), String> {
     let base = reader.cast::<u8>();
     let errored = *base.add(AR_IS_ERROR_BYTE) & AR_IS_ERROR_BIT != 0;
-    let consumed = base.add(ARCHIVE_TELL_OFFSET).cast::<i64>().read();
-    let total = base.add(READER_TOTAL_SIZE_OFFSET).cast::<i64>().read();
+    let consumed = FArchive::tell(reader.cast());
+    let total = FArchive::total_size(reader.cast());
     classify_registry_load(errored, consumed, total)
 }
 
@@ -365,18 +361,7 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
     let size = i64::try_from(bytes.len())
         .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
 
-    let mut asset_registry = TScriptInterface::new();
-    CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
-        &mut asset_registry as *mut TScriptInterface
-    ))?;
-    let registry = if asset_registry.object.is_null() {
-        asset_registry.interface
-    } else {
-        asset_registry.object as *mut c_void
-    };
-    if registry.is_null() {
-        return Err("Asset Registry singleton has no object/interface pointer".into());
-    }
+    let registry = asset_registry_interface()?;
 
     let mut storage = std::mem::MaybeUninit::<FLargeMemoryReaderStorage>::zeroed();
     let reader = CALL_ORIGINAL_SAFE!(FLargeMemoryReaderCtor(
@@ -390,22 +375,14 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
         return Err("FLargeMemoryReader constructor returned null".into());
     }
 
-    let serialize_result = CALL_ORIGINAL_SAFE!(SerializeAssetRegistry(
-        registry,
-        reader.cast::<FArchive>()
-    ));
+    crate::ue::IAssetRegistry::serialize(registry, reader.cast::<FArchive>());
     // `UAssetRegistryImpl::Serialize` is void and swallows the engine's success
     // bool, so inspect the reader's end state while it is still alive: a rejected
     // header/version leaves the cursor unadvanced, corruption sets the error flag.
-    // Only meaningful when the hooked call itself succeeded.
-    let load_outcome = serialize_result
-        .as_ref()
-        .ok()
-        .map(|_| registry_load_outcome(reader));
+    let load_outcome = registry_load_outcome(reader);
     let destroy_result = CALL_ORIGINAL_SAFE!(FLargeMemoryReaderDtor(reader));
-    serialize_result?;
     destroy_result?;
-    load_outcome.unwrap_or(Ok(()))
+    load_outcome
 }
 
 pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut UObject {
@@ -434,31 +411,17 @@ pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut U
 }
 
 pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetData>, String> {
-    let mut asset_registry = TScriptInterface::new();
-    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
-        &mut asset_registry as *mut TScriptInterface
-    ))?;
+    let registry = asset_registry_interface()?;
 
     let name_res = FName::with_type(class_name.as_str(), crate::ue::EFindName::Find);
 
-    let asset_registry_interface = {
-        if asset_registry.interface.is_null() {
-            // Fallback: If the interface pointer isn't set,
-            // sometimes the Object itself IS the interface.
-            serror!("interface is null");
-            asset_registry.object as *mut c_void
-        } else {
-            asset_registry.interface as *mut c_void
-        }
-    };
-
     let mut asset_data = TArray::<FAssetData>::default();
-    let out = CALL_ORIGINAL_SAFE!(GetAssetsByClass(
-        asset_registry_interface,
+    let out = crate::ue::IAssetRegistry::get_assets_by_class(
+        registry,
         name_res,
         &mut asset_data as *mut TArray<FAssetData>,
         true
-    ))?;
+    );
 
     match out {
         true => Ok(asset_data),
@@ -466,38 +429,21 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
     }
 }
 
-/// Queries `UAssetRegistryImpl::GetAssetsByPath` on the registry singleton.
-///
-/// Must run on the game thread. Returns `Err` (without panicking) while the
-/// `GetAssetsByPath` signature is a placeholder and the detour is not
-/// attached — see `src/resolvers/asset_registry.rs`.
+/// Queries the registry interface on the game thread.
 pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<TArray<FAssetData>, String> {
-    let mut asset_registry = TScriptInterface::new();
-    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
-        &mut asset_registry as *mut TScriptInterface
-    ))?;
+    let registry = asset_registry_interface()?;
 
     let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
 
-    let asset_registry_interface = {
-        // GetAssetsByPath is virtual, but `this` still wants the impl object for
-        // member access; prefer object, fall back to the interface pointer.
-        if asset_registry.object.is_null() {
-            asset_registry.interface
-        } else {
-            asset_registry.object as *mut c_void
-        }
-    };
-
     let mut asset_data = TArray::<FAssetData>::default();
     // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
-    let out = CALL_ORIGINAL_SAFE!(GetAssetsByPath(
-        asset_registry_interface,
+    let out = crate::ue::IAssetRegistry::get_assets_by_path(
+        registry,
         name_res,
         &mut asset_data as *mut TArray<FAssetData>,
         recursive,
         false
-    ))?;
+    );
 
     match out {
         true => Ok(asset_data),
@@ -505,56 +451,33 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
     }
 }
 
-/// Drives the `ScanPathsAndFilesSynchronous` implementation on the registry
-/// singleton with an explicit file list (files-only scans skip the
+/// Calls the registry's public files-only scan wrapper (skips the
 /// Intermediates `AssetRegistryCache` write). Must run on the game thread.
-///
-/// Returns `Err` (without panicking) while the signature is a placeholder and
-/// the detour is not attached — see `src/resolvers/asset_registry.rs`.
 pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
-    let mut asset_registry = TScriptInterface::new();
-    let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
-        &mut asset_registry as *mut TScriptInterface
-    ))?;
-
-    let registry = {
-        // ScanPathsAndFilesSynchronous is a non-virtual __thiscall on
-        // UAssetRegistryImpl, so `this` must be the real object pointer, not
-        // the IAssetRegistry interface pointer (which may be object+offset for
-        // a multiple-inheritance interface). Prefer object; fall back to the
-        // interface only if the object is unset.
-        if asset_registry.object.is_null() {
-            asset_registry.interface
-        } else {
-            asset_registry.object as *mut c_void
-        }
-    };
-
-    // EAssetDataCacheMode::UseModularCache — the value the public wrappers pass.
-    const USE_MODULAR_CACHE: u8 = 2;
+    let registry = asset_registry_interface()?;
 
     let Some(allocator) = crate::ue::try_gmalloc() else {
         return Err("engine allocator (GMalloc) is not available; run on the game thread after globals init".into());
     };
 
-    let paths = TArray::<FString>::default();
     let mut files_array = TArray::<FString>::default();
     for file in files {
         files_array.push_in(FString::from(file.as_str()), allocator);
     }
 
-    // void ScanPathsAndFilesSynchronous(const TArray<FString>& InPaths, const TArray<FString>& InSpecificFiles, bool bForceRescan, EAssetDataCacheMode, TArray<FName>*, TArray<FName>*)
-    CALL_ORIGINAL_SAFE!(ScanPathsAndFilesSynchronous(
-        registry,
-        &paths,
-        &files_array,
-        false,
-        USE_MODULAR_CACHE,
-        std::ptr::null_mut(),
-        std::ptr::null_mut()
-    ))?;
+    crate::ue::IAssetRegistry::scan_files_synchronous(registry, &files_array, false);
 
     Ok(())
+}
+
+/// Obtain the native secondary-base pointer; an object pointer is not a fallback.
+///
+/// # Safety
+/// Call on the game thread after native registry initialization.
+unsafe fn asset_registry_interface() -> Result<*mut crate::ue::IAssetRegistry, String> {
+    let mut registry = TScriptInterface::new();
+    CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(&mut registry))?;
+    registry.asset_registry()
 }
 
 

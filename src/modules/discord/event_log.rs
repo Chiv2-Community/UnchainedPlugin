@@ -303,7 +303,8 @@ mod tests {
 
     #[test]
     fn combat_embeds_include_damage_and_kill_information() {
-        use crate::events::models::{CombatActor, Damage, DamageSource, Kill};
+        use crate::events::models::{Damage, Kill};
+        use crate::events::combat::{CombatActor, DamageSource};
         let killer = CombatActor::new("Knight".into(), false);
         let victim = CombatActor::new("Training Bot".into(), true);
         let damage = Damage {

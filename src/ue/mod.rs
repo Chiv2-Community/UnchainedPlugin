@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 mod array;
+mod archive;
+mod asset_registry;
 pub mod kismet;
 mod malloc;
 mod map;
@@ -13,6 +15,8 @@ pub mod stubs;
 pub mod sync;
 
 pub use array::*;
+pub use archive::*;
+pub use asset_registry::*;
 pub use malloc::*;
 pub use map::*;
 pub use memory::*;

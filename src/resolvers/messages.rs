@@ -266,8 +266,8 @@ CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text:
 
 // Console output (e.g. "Command not recognized: ...")
 define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
-// void FConsoleOutputDevice::Serialize(longlong param_1,short *param_2,byte param_3,undefined8 param_4)
-CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut FConsoleOutputDevice, arg1: *const TCHAR, arg2: *const u16, arg3: *const u16),{
+// void FConsoleOutputDevice::Serialize(const TCHAR*, ELogVerbosity::Type, const FName&)
+CREATE_HOOK!(ConsoleOutputDevice__Serialize,(arg0: *mut FConsoleOutputDevice, arg1: *const TCHAR, arg2: u8, arg3: *const crate::ue::FName),{
     unsafe {
         if !arg1.is_null() {
             // get a rust string
