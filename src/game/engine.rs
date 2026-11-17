@@ -561,15 +561,13 @@ pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
 
 
 /// Partial socket address vtable. ToString is slot 15 in the supported builds.
-#[repr(C)]
-struct FInternetAddrVTable {
-    _unused: [usize; 15],
-    to_string: unsafe extern "C" fn(*const FInternetAddr, *mut FString, bool) -> *mut FString,
-}
-
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct FInternetAddr {
-    vtable: *const FInternetAddrVTable,
+    #[vtable(
+        offset(0x78);
+        write_native_string(&self, output: *mut FString, append_port: bool) -> *mut FString;
+    )]
+    vtable: *const (),
 }
 
 impl FInternetAddr {
@@ -578,7 +576,7 @@ impl FInternetAddr {
     #[inline(always)]
     pub unsafe fn to_native_string(&self, append_port: bool) -> String {
         let mut output = FString::new();
-        ((*self.vtable).to_string)(self, &mut output, append_port);
+        self.write_native_string(&mut output, append_port);
         output.to_string()
     }
 }

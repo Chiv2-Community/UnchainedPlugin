@@ -30,10 +30,24 @@ unsafe fn gmalloc_from_slot(slot: *const *mut FMalloc) -> Option<FMallocHandle> 
     }
 }
 
+#[rust_ctables::cpp_struct]
 #[derive(Debug)]
-#[repr(C)]
 pub struct FMalloc {
-    vtable: *const FMallocVTable,
+    #[vtable(
+        // 0: deleting destructor; 1: Exec.
+        pad(2);
+        malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
+        try_malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
+        realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
+        try_realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
+        free(this: *mut Self, original: *mut c_void);
+        // 7..18: QuantizeSize, GetAllocationSize, Trim,
+        // SetupTLSCachesOnCurrentThread, ClearAndDisableTLSCachesOnCurrentThread,
+        // InitializeStatsMetadata, UpdateStats, GetAllocatorStats,
+        // DumpAllocatorStats, IsInternallyThreadSafe, ValidateHeap, GetDescriptiveName.
+        pad(12);
+    )]
+    vtable: *const (),
 }
 unsafe impl Sync for FMalloc {}
 unsafe impl Send for FMalloc {}
@@ -48,61 +62,23 @@ impl FMallocHandle {
     #[inline(always)]
     pub unsafe fn malloc(self, layout: Layout) -> *mut c_void {
         let this = self.0.as_ptr();
-        ((*(*this).vtable).malloc)(this, layout.size(), layout.align() as u32)
+        FMalloc::malloc(this, layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator.
     /// The layout must be correct for the new allocation.
     #[inline(always)]
     pub unsafe fn realloc(self, original: *mut c_void, layout: Layout) -> *mut c_void {
         let this = self.0.as_ptr();
-        ((*(*this).vtable).realloc)(this, original, layout.size(), layout.align() as u32)
+        FMalloc::realloc(this, original, layout.size(), layout.align() as u32)
     }
     /// Safety: `original` must have been allocated by this allocator and not yet freed.
     #[inline(always)]
     pub unsafe fn free(self, original: *mut c_void) {
         if !original.is_null() {
             let this = self.0.as_ptr();
-            ((*(*this).vtable).free)(this, original)
+            FMalloc::free(this, original)
         }
     }
-}
-
-#[derive(Debug)]
-#[repr(C)]
-struct FMallocVTable {
-    __vec_del_dtor: *const (),
-    exec: *const (),
-    // Native allocators mutate implementation state beyond the FMalloc prefix.
-    // A Rust reference here would give the optimizer invalid aliasing guarantees.
-    malloc:
-        unsafe extern "system" fn(this: *mut FMalloc, count: usize, alignment: u32) -> *mut c_void,
-    try_malloc:
-        unsafe extern "system" fn(this: *mut FMalloc, count: usize, alignment: u32) -> *mut c_void,
-    realloc: unsafe extern "system" fn(
-        this: *mut FMalloc,
-        original: *mut c_void,
-        count: usize,
-        alignment: u32,
-    ) -> *mut c_void,
-    try_realloc: unsafe extern "system" fn(
-        this: *mut FMalloc,
-        original: *mut c_void,
-        count: usize,
-        alignment: u32,
-    ) -> *mut c_void,
-    free: unsafe extern "system" fn(this: *mut FMalloc, original: *mut c_void),
-    quantize_size: *const (),
-    get_allocation_size: *const (),
-    trim: *const (),
-    setup_tls_caches_on_current_thread: *const (),
-    clear_and_disable_tlscaches_on_current_thread: *const (),
-    initialize_stats_metadata: *const (),
-    update_stats: *const (),
-    get_allocator_stats: *const (),
-    dump_allocator_stats: *const (),
-    is_internally_thread_safe: *const (),
-    validate_heap: *const (),
-    get_descriptive_name: *const (),
 }
 
 #[cfg(test)]
@@ -141,13 +117,13 @@ mod tests {
         fn free(ptr: *mut c_void);
     }
 
-    unsafe extern "system" fn allocate(this: *mut FMalloc, size: usize, _: u32) -> *mut c_void {
+    unsafe extern "C" fn allocate(this: *mut FMalloc, size: usize, _: u32) -> *mut c_void {
         let state = &*this.cast::<TestAllocator>();
         state.allocations.set(state.allocations.get() + 1);
         malloc(size)
     }
 
-    unsafe extern "system" fn reallocate(
+    unsafe extern "C" fn reallocate(
         this: *mut FMalloc,
         ptr: *mut c_void,
         size: usize,
@@ -158,7 +134,7 @@ mod tests {
         realloc(ptr, size)
     }
 
-    unsafe extern "system" fn deallocate(this: *mut FMalloc, ptr: *mut c_void) {
+    unsafe extern "C" fn deallocate(this: *mut FMalloc, ptr: *mut c_void) {
         let state = &*this.cast::<TestAllocator>();
         state.frees.set(state.frees.get() + 1);
         free(ptr);
@@ -166,25 +142,13 @@ mod tests {
 
     fn test_vtable() -> FMallocVTable {
         FMallocVTable {
-            __vec_del_dtor: std::ptr::null(),
-            exec: std::ptr::null(),
+            _pad_0: [0; 2],
             malloc: allocate,
             try_malloc: allocate,
             realloc: reallocate,
             try_realloc: reallocate,
             free: deallocate,
-            quantize_size: std::ptr::null(),
-            get_allocation_size: std::ptr::null(),
-            trim: std::ptr::null(),
-            setup_tls_caches_on_current_thread: std::ptr::null(),
-            clear_and_disable_tlscaches_on_current_thread: std::ptr::null(),
-            initialize_stats_metadata: std::ptr::null(),
-            update_stats: std::ptr::null(),
-            get_allocator_stats: std::ptr::null(),
-            dump_allocator_stats: std::ptr::null(),
-            is_internally_thread_safe: std::ptr::null(),
-            validate_heap: std::ptr::null(),
-            get_descriptive_name: std::ptr::null(),
+            _pad_6: [0; 12],
         }
     }
 

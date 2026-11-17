@@ -37,6 +37,7 @@ dependencies = [
  "reqwest 0.12.28",
  "reqwest 0.13.2",
  "retour",
+ "rust-ctables",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -2181,6 +2182,16 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rust-ctables"
+version = "0.1.0"
+source = "git+https://github.com/Chiv2-Community/rust-ctables.git?rev=e01695529eeb663d407672c1b2f961113f128dc2#e01695529eeb663d407672c1b2f961113f128dc2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
