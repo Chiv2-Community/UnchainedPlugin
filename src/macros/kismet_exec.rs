@@ -23,6 +23,8 @@
 /// (it is what locates that class's `RegisterNatives` table during `init_globals`).
 #[macro_export]
 macro_rules! kismet_native_class {
+    // Table-backed: resolve by name via an existing globals() RegisterNatives map (rare — only for
+    // classes patternsleuth resolves a whole native table for, e.g. UKismetSystemLibrary).
     ($class:ident => globals.$method:ident) => {
         #[allow(non_camel_case_types, dead_code)]
         pub struct $class;
@@ -30,6 +32,19 @@ macro_rules! kismet_native_class {
             const CLASS_NAME: &'static str = stringify!($class);
             unsafe fn resolve(native: &str) -> ::core::option::Option<usize> {
                 $crate::tools::hook_globals::globals().$method(native)
+            }
+        }
+    };
+
+    // Reflection-backed (general): resolve by name via StaticFindObject(class path) ->
+    // FindFunctionByName -> UFunction::func. Works for any reflected class by its /Script/... path.
+    ($class:ident => path $path:literal) => {
+        #[allow(non_camel_case_types, dead_code)]
+        pub struct $class;
+        impl $crate::ue::kismet::KismetNativeClass for $class {
+            const CLASS_NAME: &'static str = stringify!($class);
+            unsafe fn resolve(native: &str) -> ::core::option::Option<usize> {
+                $crate::ue::find_native($path, native)
             }
         }
     };

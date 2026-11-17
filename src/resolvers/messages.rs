@@ -272,7 +272,10 @@ pub mod kismet_natives {
     #[allow(unused_imports)]
     use crate::ue::{FString, UObject};
 
-    kismet_native_class!(UKismetSystemLibrary => globals.kismet_system_library_native);
+    // Reflection-backed resolution (StaticFindObject -> FindFunctionByName -> UFunction::func).
+    // The patternsleuth RegisterNatives table (globals.kismet_system_library_native) still works
+    // and can be used as a fallback, but the path form generalizes to any class.
+    kismet_native_class!(UKismetSystemLibrary => path "/Script/Engine.KismetSystemLibrary");
 
     // UKismetSystemLibrary::PrintString(UObject* WorldContextObject, FString InString,
     //   bool bPrintToScreen, bool bPrintToLog, FLinearColor TextColor, float Duration)  [UE 4.25]
