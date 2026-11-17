@@ -3,6 +3,13 @@ use std::sync::OnceLock;
 
 use crate::tools::hook_globals::cli_args;
 
+pub fn base_url() -> &'static str {
+    cli_args()
+        .server_browser_backend
+        .as_deref()
+        .expect("Missing server_browser_backend")
+}
+
 pub fn client() -> &'static HttpTransport {
     static CLIENT: OnceLock<HttpTransport> = OnceLock::new();
     CLIENT.get_or_init(|| {
