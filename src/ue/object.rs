@@ -206,10 +206,11 @@ impl UObject {
 }
 
 /// Partial native controller layout through Player; later fields are omitted.
-#[repr(C)]
+#[rust_ctables::cpp_struct]
+#[derive(Debug)]
 pub struct APlayerController {
-    pub base: UObject,
-    _padding_to_player: [u8; 0x2A8],
+    #[inherit]
+    pub base: crate::game::chivalry2::AController,
     pub player: *mut UPlayer, // 0x02D0
 }
 
@@ -458,9 +459,10 @@ pub struct UFunction {
     pub func: unsafe extern "system" fn(*mut UObject, *mut kismet::FFrame, *mut c_void),
 }
 
-#[repr(C, packed(8))]
+#[rust_ctables::cpp_struct]
 pub struct UBlueprintCore {
-    pub base: UObject,                             // 0x0000 (0x28)
+    #[inherit]
+    pub base: UObject,
     pub skeleton_generated_class: *mut UClass,     // 0x0028 (0x08)
     pub generated_class: *mut UClass,              // 0x0030 (0x08)
     
@@ -468,9 +470,10 @@ pub struct UBlueprintCore {
     pub padding_metadata: [u8; 0x18],              // 0x0038 (0x18)
 }
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct UBlueprint {
-    pub base: UBlueprintCore,                      // 0x0000 (0x50)
+    #[inherit]
+    pub base: UBlueprintCore,
     pub parent_class: *mut UClass,                 // 0x0050 (0x08)
     pub blueprint_type: u8,                        // 0x0058 (0x01)
     pub b_recompile_on_load: u8,                   // 0x0059 (0x01)

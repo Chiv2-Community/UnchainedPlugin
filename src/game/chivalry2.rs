@@ -2,10 +2,16 @@
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
 use strum::Display;
-use crate::{game::engine::FText, ue::{AsUObject, FString, FVector, TArray, UObject}};
+use crate::{game::engine::FText, ue::{AsUObject, FString, FVector, TArray, UObjectType}};
 
 // SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
 unsafe impl crate::ue::UObjectType for AController { const CLASS_NAME: &'static str = "Controller"; }
+unsafe impl crate::ue::UObjectType for AActor { const CLASS_NAME: &'static str = "Actor"; }
+unsafe impl crate::ue::UObjectType for AInfo { const CLASS_NAME: &'static str = "Info"; }
+unsafe impl crate::ue::UObjectType for ATBLPlayerController { const CLASS_NAME: &'static str = "TBLPlayerController"; }
+unsafe impl crate::ue::UObjectType for ATBLCharacterBase { const CLASS_NAME: &'static str = "TBLCharacterBase"; }
+unsafe impl crate::ue::UObjectType for UAssemblyBlueprint { const CLASS_NAME: &'static str = "AssemblyBlueprint"; }
+unsafe impl crate::ue::UObjectType for UDamageSource { const CLASS_NAME: &'static str = "DamageSource"; }
 unsafe impl crate::ue::UObjectType for APawn { const CLASS_NAME: &'static str = "Pawn"; }
 unsafe impl crate::ue::UObjectType for ACharacter { const CLASS_NAME: &'static str = "Character"; }
 unsafe impl crate::ue::UObjectType for ATBLCharacter { const CLASS_NAME: &'static str = "TBLCharacter"; }
@@ -13,27 +19,82 @@ unsafe impl crate::ue::UObjectType for APlayerState { const CLASS_NAME: &'static
 unsafe impl crate::ue::UObjectType for ATBLPlayerState { const CLASS_NAME: &'static str = "TBLPlayerState"; }
 unsafe impl crate::ue::UObjectType for ATBLGameState { const CLASS_NAME: &'static str = "TBLGameState"; }
 
-#[repr(C)]
+// Native PDB: AActor 0x258; APawn/AController add INavAgentInterface at +0x258.
+#[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct AActor {
-    _private: [u8; 0],
+    #[inherit]
+    pub base: crate::ue::UObject,
+    _private: [u8; 0x230],
 }
 
+#[rust_ctables::cpp_struct]
+pub struct AInfo {
+    #[inherit]
+    pub base: AActor,
+}
+
+/// Secondary navigation interface; no callable slots exposed yet.
 #[repr(C)]
 #[derive(Debug)]
+pub struct INavAgentInterface {
+    vtable: *const (),
+}
+
+#[rust_ctables::cpp_struct]
+pub struct UAssemblyBlueprint {
+    #[inherit]
+    pub base: crate::ue::UBlueprint,
+    // IPropertyChangedMulticast is an empty base at +0xa0; it adds no storage.
+    pub is_macro: bool,
+    _padding: [u8; 7],
+}
+
+/// Native damage-source prefix through Name; later fields are omitted.
+#[rust_ctables::cpp_struct]
+pub struct UDamageSource {
+    #[inherit]
+    pub base: UAssemblyBlueprint,
+    pub name: FString, // 0x00a8
+}
+
+#[rust_ctables::cpp_struct]
+#[derive(Debug)]
 pub struct ATBLPlayerController { 
-    _private: [u8; 0x1348],
+    #[inherit]
+    pub base: crate::ue::APlayerController,
+    _private: [u8; 0x1070],
 	pub bOnlineInventoryInitialized: bool,
 	pub bPlayerCustomizationReceived: bool,
 }
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct AController {
-    // 0x0000 -> 0x0260: inherited AActor data (layout simplified as padding)
-    pub _base_actor_padding: [u8; 0x260],
+    #[inherit]
+    pub base: AActor,
+    pub nav_agent: INavAgentInterface,
     // 0x0260: APlayerState* PlayerState (UE4 Controller.h)
     pub player_state: *mut APlayerState,
+    _padding_to_pawn: [u8; 0x20],
+    pub pawn: *mut APawn, // 0x0288
+    _old_pawn: [u8; 8],
+    pub character: *mut ACharacter, // 0x0298
+    _remaining: [u8; 0x30],
+}
+
+impl AController {
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn player_state(&self) -> Option<&APlayerState> {
+        APlayerState::from_field(self.player_state, "Controller.PlayerState")
+    }
+
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn pawn(&self) -> Option<&APawn> {
+        APawn::from_ptr(self.pawn)
+    }
 }
 
 #[repr(u8)]
@@ -94,7 +155,7 @@ impl TryFrom<u8> for EKillReason {
 pub struct FDamageTakenEvent {
     pub damage: f32,
     pub new_stat_value: f32,
-    pub damage_source: *mut UObject,  // UDamageSource*
+    pub damage_source: *mut UDamageSource,
     pub damage_causer: *mut AActor,   // AActor*
     pub damage_taker: *mut AActor,    // AActor*
     pub damage_instigator: *mut AActor, // AActor*
@@ -986,10 +1047,10 @@ bitflags! {
     }
 }
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct APlayerState {
-    // 0x0000 -> 0x0258: Inherited from AInfo/AActor/UObject
-    pub base_padding: [u8; 0x258],
+    #[inherit]
+    pub base: AInfo,
     
     pub score: f32,                     // 0x0258
     pub player_id: i32,                 // 0x025C
@@ -1007,13 +1068,34 @@ pub struct APlayerState {
     pub saved_network_address: FString, // 0x0278
     pub unique_id: FUniqueNetIdRepl,    // 0x0288 (Size: 0x28)
     pub _padding_3: [u8; 0x8],          // 0x02B0
-    pub pawn_private: *mut c_void,      // 0x02B8 (APawn*)
+    pub pawn_private: *mut APawn,       // 0x02B8
     pub _padding_4: [u8; 0x78],         // 0x02C0
     pub player_name_private: FString,   // 0x0338
     pub _padding_last: [u8; 0x10],
-} // Size: 0x348 (Wait, your dump says 0x358, likely 0x10 bytes padding at end)
+}
 
 impl APlayerState {
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub(crate) unsafe fn from_field<'a, P>(ptr: *const P, via: &str) -> Option<&'a Self> {
+        if ptr.is_null() { return None; }
+        let state = Self::from_ptr(ptr);
+        if state.is_none() {
+            swarn!("ignoring PlayerState {:p} from {}: not a live PlayerState", ptr, via);
+        }
+        state
+    }
+
+    pub fn is_bot(&self) -> bool {
+        self.player_flags.contains(PlayerFlags::IS_A_BOT)
+    }
+
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn pawn(&self) -> Option<&APawn> {
+        APawn::from_ptr(self.pawn_private)
+    }
+
     /// Call native GetPlayerName, including its custom-name handling.
     ///
     /// # Safety
@@ -1052,8 +1134,9 @@ impl APlayerState {
 //     }
 // }
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct ATBLPlayerState {
+    #[inherit]
     pub base: APlayerState,             // 0x0000 (Size: 0x358 approx)
     pub _align_to_stats: [u8; 0x8],     // 0x0358 -> 0x0360 (alignment)
 
@@ -1203,10 +1286,11 @@ pub struct ATBLPlayerState {
 
 /// Character
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct APawn {
-    // 0x0000 - 0x0260: Inherited from AActor
-    pub base_actor: [u8; 0x260], 
+    #[inherit]
+    pub base_actor: AActor,
+    pub nav_agent: INavAgentInterface,
 
     // 0x0260: Bitfields (3 bits used)
     // C++: uint8 bUseControllerRotationPitch : 1;
@@ -1238,8 +1322,8 @@ pub struct APawn {
     
     pub padding_4: [u8; 0x8],          // 0x0378
     
-    pub last_hit_by: *mut c_void,      // 0x0380 (AController*)
-    pub controller: *mut c_void,        // 0x0388 (AController*)
+    pub last_hit_by: *mut AController, // 0x0380
+    pub controller: *mut AController,  // 0x0388
     
     pub padding_5: [u8; 0x4],          // 0x0390
     
@@ -1248,6 +1332,18 @@ pub struct APawn {
 } // Size: 0x3B0
 
 impl APawn {
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn player_state(&self) -> Option<&APlayerState> {
+        APlayerState::from_field(self.player_state, "Pawn.PlayerState")
+    }
+
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn controller(&self) -> Option<&AController> {
+        AController::from_ptr(self.controller)
+    }
+
     /// Helper to check bUseControllerRotationPitch (Bit 0)
     pub fn use_controller_rotation_pitch(&self) -> bool {
         (self.controller_rotation_bits & (1 << 0)) != 0
@@ -1291,10 +1387,10 @@ bitflags! {
     }
 }
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct ACharacter {
-    // 0x0000 - 0x03B0: Inherited from APawn
-    pub base_pawn: APawn, 
+    #[inherit]
+    pub base_pawn: APawn,
 
     pub mesh: *mut c_void,               // 0x03B0 (USkeletalMeshComponent*)
     pub character_movement: *mut c_void, // 0x03B8 (UCharacterMovementComponent*)
@@ -1360,9 +1456,9 @@ impl ACharacter {
 }
 
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct ATBLCharacterBase {
-    // 0x0000 - 0x05F0: Inherited from ACharacter
+    #[inherit]
     pub base_character: ACharacter,
 
     pub significance_state: [u8; 0x28],       // 0x05F0 (FCharacterSignificanceState)
@@ -1398,7 +1494,7 @@ pub struct ATBLCharacterBase {
     // Fall Damage Logic
     pub fall_damage_starting_speed: f32,     // 0x0660
     pub padding_6: [u8; 0x4],                // 0x0664
-    pub fall_damage_source: *mut c_void,     // 0x0668 (UDamageSource*)
+    pub fall_damage_source: *mut UDamageSource, // 0x0668
     pub falling_damage_phys_mat_multipliers: [u8; 0x10], // 0x0670 (TArray)
     
     pub skip_client_optimizations: bool,     // 0x0680
@@ -1415,230 +1511,236 @@ pub struct ATBLCharacterBase {
 } // Size: 0x6B0
 
 
-#[repr(C)]
+#[rust_ctables::cpp_struct]
 pub struct ATBLCharacter {
-    // 0x0000 - 0x06B0: Inherited from ATBLCharacterBase
+    #[inherit]
     pub base_tbl_character_base: ATBLCharacterBase,
 
-    pub display_info: [u8; 0x78],           // 0x06E0
-    pub audio_class_type: u8,               // 0x0758
-    pub pawn_class_type: u8,                // 0x0759
-    pub padding_0: [u8; 0x2],               // 0x075A
-    pub online_xp_stat_name: [u8; 0x8],     // 0x075C (FName)
-    pub padding_1: [u8; 0x4],               // 0x0764
-    pub class_progression_spec: *mut c_void, // 0x0768
-    pub abilities: *mut c_void,             // 0x0770
-    pub stats: *mut c_void,                 // 0x0778
-    pub headlook_component: *mut c_void,    // 0x0780
-    pub replicated_server_frame: u8,        // 0x0788
-    pub padding_2: [u8; 0x7],               // 0x0789
-    pub last_replicated_based_movement: [u8; 0x30], // 0x0790
-    pub padding_3: [u8; 0x14],              // 0x07C0
-    pub random_seed: i32,                   // 0x07D4
-    pub lock_mesh_rotation_state: [u8; 0x18], // 0x07D8
-    pub previous_blend_in_time: f32,        // 0x07F0
-    pub remote_view_yaw: u8,                // 0x07F4
-    pub b_use_remote_view_yaw: bool,        // 0x07F5
-    pub b_cinematic_restricted_control: u8, // 0x07F6
-    pub padding_4: [u8; 0x1],               // 0x07F7
-    pub cinematic_lock_angle: f32,          // 0x07F8
-    pub cinematic_lock_id: i32,             // 0x07FC
-    pub special_item_replicated: [u8; 0x2], // 0x0800
-    pub b_should_character_be_hidden: bool, // 0x0802
-    pub padding_5: [u8; 0x5],               // 0x0803
-    pub being_revived_by: *mut c_void,      // 0x0808 (ATBLPlayerState*)
-    pub on_being_revived_delegate: [u8; 0x10], // 0x0810
-    pub mesh_1p: *mut c_void,               // 0x0820
-    pub follow_mesh_component: *mut c_void, // 0x0828
-    pub pushing_component: *mut c_void,      // 0x0830
-    pub customization_component: *mut c_void, // 0x0838
-    pub padding_6: [u8; 0x8],               // 0x0840
-    pub camera_1p: *mut c_void,             // 0x0848
-    pub camera_3p: *mut c_void,             // 0x0850
-    pub camera_1p_socket: [u8; 0x8],        // 0x0858 (FName)
-    pub camera_3p_socket: [u8; 0x8],        // 0x0860 (FName)
-    pub camera_offset_1p: FVector,          // 0x0868
-    pub camera_1p_blend_params: [u8; 0x3C], // 0x0874
-    pub prediction_state: [u8; 0x70],       // 0x08B0
-    pub character_subclasses: [u8; 0x10],   // 0x0920 (TArray)
-    pub loadout_selection: *mut c_void,     // 0x0930
-    pub override_loadout_selection: *mut c_void, // 0x0938
-    pub equipped_carryable_on_spawn: *mut c_void, // 0x0940
-    pub chicken_class: [u8; 0x28],          // 0x0948 (TSoftClassPtr)
-    pub base_turn_rate: f32,                // 0x0970
-    pub base_look_up_rate: f32,             // 0x0974
-    pub attack_from_behind_angle: f32,      // 0x0978
-    pub object_highlight_max_distance: f32, // 0x097C
-    pub combat_state_component: *mut c_void, // 0x0980
-    pub combat_state_synchronization: *mut c_void, // 0x0988
-    pub combat_state_queue: *mut c_void,     // 0x0990
-    pub combat_state_set: *mut c_void,       // 0x0998
-    pub conditions_component: *mut c_void,  // 0x09A0
-    pub interactable_component: *mut c_void, // 0x09A8
-    pub movement_modifiers: *mut c_void,    // 0x09B0
-    pub perks_component: *mut c_void,       // 0x09B8
-    pub last_weapon_hit_by: u32,            // 0x09C0 (TWeakObjectPtr handle)
-    pub last_character_hit_by: u32,         // 0x09C8 (TWeakObjectPtr handle)
-    pub weapon_applied_bleed: u32,          // 0x09D0 (TWeakObjectPtr handle)
+    _secondary_interfaces: [u8; 0x30],
+    pub display_info: [u8; 0x78],
+    pub audio_class_type: u8,
+    pub pawn_class_type: u8,
+    pub padding_0: [u8; 0x2],
+    pub online_xp_stat_name: [u8; 0x8],
+    pub padding_1: [u8; 0x4],
+    pub class_progression_spec: *mut c_void,
+    pub abilities: *mut c_void,
+    pub stats: *mut c_void,
+    pub headlook_component: *mut c_void,
+    pub replicated_server_frame: u8,
+    pub padding_2: [u8; 0x7],
+    pub last_replicated_based_movement: [u8; 0x30],
+    pub padding_3: [u8; 0x14],
+    pub random_seed: i32,
+    pub lock_mesh_rotation_state: [u8; 0x18],
+    pub previous_blend_in_time: f32,
+    pub remote_view_yaw: u8,
+    pub b_use_remote_view_yaw: bool,
+    pub b_cinematic_restricted_control: u8,
+    pub padding_4: [u8; 0x1],
+    pub cinematic_lock_angle: f32,
+    pub cinematic_lock_id: i32,
+    pub special_item_replicated: [u8; 0x2],
+    pub b_should_character_be_hidden: bool,
+    pub padding_5: [u8; 0x5],
+    pub being_revived_by: *mut ATBLPlayerState,
+    pub on_being_revived_delegate: [u8; 0x10],
+    pub mesh_1p: *mut c_void,
+    pub follow_mesh_component: *mut c_void,
+    pub pushing_component: *mut c_void,
+    pub customization_component: *mut c_void,
+    pub padding_6: [u8; 0x8],
+    pub camera_1p: *mut c_void,
+    pub camera_3p: *mut c_void,
+    pub camera_1p_socket: [u8; 0x8],
+    pub camera_3p_socket: [u8; 0x8],
+    pub camera_offset_1p: FVector,
+    pub camera_1p_blend_params: [u8; 0x3C],
+    pub prediction_state: [u8; 0x70],
+    pub character_subclasses: [u8; 0x10],
+    pub loadout_selection: *mut c_void,
+    pub override_loadout_selection: *mut c_void,
+    pub equipped_carryable_on_spawn: *mut c_void,
+    pub chicken_class: [u8; 0x28],
+    pub base_turn_rate: f32,
+    pub base_look_up_rate: f32,
+    pub attack_from_behind_angle: f32,
+    pub object_highlight_max_distance: f32,
+    pub combat_state_component: *mut c_void,
+    pub combat_state_synchronization: *mut c_void,
+    pub combat_state_queue: *mut c_void,
+    pub combat_state_set: *mut c_void,
+    pub conditions_component: *mut c_void,
+    pub interactable_component: *mut c_void,
+    pub movement_modifiers: *mut c_void,
+    pub perks_component: *mut c_void,
+    pub last_weapon_hit_by: [u8; 8],
+    pub last_character_hit_by: [u8; 8],
+    pub weapon_applied_bleed: [u8; 8],
+    pub delegates: [u8; 0x2E0],
+    pub hit_actor_with_weapon_infos: [u8; 0x10],
+    pub head_shot_actors: [u8; 0x10],
+    pub arm_hits: [u8; 0x50],
+    pub client_tracer_hit_count: i32,
+    pub padding_7: [u8; 0x4],
+    pub client_tracer_hit_bones: [u8; 0x10],
+    pub client_tracer_hit_components: [u8; 0x10],
+    pub spectating_pawn: *mut c_void,
+    pub b_has_alt_attack: bool,
+    pub padding_8: [u8; 0x3],
+    pub third_person_camera_params: [u8; 0x60],
+    pub current_camera_params: [u8; 0x60],
+    pub mount_camera_interp_speed: f32,
+    pub movement_debugger: *mut c_void,
+    pub sk_mesh_3p: *mut c_void,
+    pub sight_cache_map: [u8; 0x50],
+    pub padding_9: [u8; 0x10],
+    pub gore_head_rotation_offset: [f32; 3],
+    pub bitfield_0e9c: u8,
+    pub b_customization_components_spawned: u8,
+    pub padding_10: [u8; 0x2],
+    pub customization_context: [u8; 0x58],
+    pub default_mesh_1p: *mut c_void,
+    pub mesh_1p_location: FVector,
+    pub mesh_1p_rotation: [f32; 3],
+    pub first_possessed_time: f32,
+    pub b_has_attacked_successfully: bool,
+    pub padding_11: [u8; 0x3],
+    pub gamepad_use_start_time: f32,
+    pub gamepad_use_pressed_count: i32,
+    pub debug_projectile: *mut c_void,
+    pub debug_fake_client_projectile: *mut c_void,
+    pub debug_dropped_item: *mut c_void,
+    pub b_debug_ignore_ai: bool,
+    pub b_is_cinematics_relevant: bool,
+    pub padding_12: [u8; 0x6],
+    pub spawned_at_spawner: *mut c_void,
+    pub spawned_at_spawn_comp: *mut c_void,
+    pub spawner_position: i32,
+    pub b_prevent_forward_spawn: bool,
+    pub padding_13: [u8; 0x3],
+    pub attached_items: [u8; 0x10],
+    pub lock_mesh_blend_in_params: [u8; 0x54],
+    pub lock_mesh_blend_out_params: [u8; 0x54],
+    pub cinematic_control_delegates: [u8; 0x20],
+    pub mount_root_blend_params: [u8; 0x68],
+    pub mount_control_blend_params: [u8; 0x24],
+    pub padding_14: [u8; 0x4],
+    pub vo_friendly_damage_sources: [u8; 0x10],
+    pub auto_vo_negative_damage_sources: [u8; 0x10],
+    pub b_helmet_knocked_off: bool,
+    pub dead_character_id: u8,
+    pub padding_15: [u8; 0x6],
+    pub auto_vo_probability: [u8; 0x50],
+    pub tutorial_loc_blend_params: [u8; 0x3C],
+    pub padding_16: [u8; 0x4],
+    pub tutorial_look_at_params: [u8; 0x20],
+    pub horse_look_at_params: [u8; 0x18],
+    pub horse_bump_camera_params: [u8; 0x18],
+    pub attached_ragdoll: [u8; 0x30],
+    pub attach_ragdoll_blend_params: [u8; 0x3C],
+    pub padding_17: [u8; 0x4],
+    pub special_item_ability: *mut c_void,
+    pub on_special_ability_set: [u8; 0x10],
+    pub last_parry_event: [u8; 0x70],
+    pub last_fired_projectile: *mut c_void,
+    pub debug_movement_replication: [u8; 0x1C],
+    pub padding_18: [u8; 0x4],
+    pub knockdown_off_horse: *mut c_void,
+    pub pickup_cooldown: f32,
+    pub padding_19: [u8; 0x4],
+    pub time_to_vo_expiry: f32,
+    pub allowed_vos_within_expiry: i32,
+    pub vo_cooldown: f32,
+    pub battle_cry_vo_cooldown: f32,
+    pub vo_queue_emote_window: f32,
+    pub padding_20: [u8; 0x4],
+    pub cached_parry_components: [u8; 0x10],
+    pub closest_interactable: *mut c_void,
+    pub closest_stats_component: *mut c_void,
+    pub closest_fire_source: *mut c_void,
+    pub useable_actor_interactable: *mut c_void,
+    pub interactable_settings: [u8; 0x20],
+    pub gamepad_dismount_start_time: f32,
+    pub padding_21: [u8; 0x4],
+    pub inventory: *mut c_void,
+    pub b_is_dying: u8,
+    pub padding_22: [u8; 0x3],
+    pub death_time: f32,
+    pub death_anim_length: f32,
+    pub death_anim_impulse: f32,
+    pub b_should_crouch_override_recovery: bool,
+    pub b_should_play_death_anim: bool,
+    pub padding_23: [u8; 0x2],
+    pub death_montage_name: [u8; 0x8],
+    pub death_section_1p: [u8; 0x8],
+    pub death_section_3p: [u8; 0x8],
+    pub padding_24: [u8; 0x4],
+    pub audio_component: *mut c_void,
+    pub camera_3p_rotation: [u8; 0x30],
+    pub ragdoll_start_time: f32,
+    pub b_ragdoll_triggered: bool,
+    pub b_ragdoll_custom_tick: bool,
+    pub padding_25: [u8; 0x7],
+    pub b_is_character_paused: bool,
+    pub padding_26: [u8; 0x2],
+    pub paused_components: [u8; 0x10],
+    pub paused_actors: [u8; 0x10],
+    pub paused_actor_lifespans: [u8; 0x10],
+    pub paused_timer_handles: [u8; 0x10],
+    pub paused_physics: [u8; 0x10],
+    pub b_has_random_seed: bool,
+    pub b_did_push_respawn_state: bool,
+    pub b_tap_out_held: bool,
+    pub padding_27: [u8; 0x1],
+    pub attached_smoothing: [u8; 0xC],
+    pub prev_is_playing_root_motion: bool,
+    pub auto_possess_ai_faction: u8,
+    pub padding_28: [u8; 0x6],
+    pub ai_behavior_tree: *mut c_void,
+    pub ai_flags: [u8; 0x6],
+    pub padding_29: [u8; 0x2],
+    pub fell_out_of_world_time: f32,
+    pub b_count_kills: bool,
+    pub padding_30: [u8; 0x3],
+    pub constructable_actors: [u8; 0x10],
+    pub padding_31: [u8; 0x8],
+    pub last_controller: *mut AController, // 0x1488
+    pub last_player_controller: *mut ATBLPlayerController, // 0x1490
+    pub last_player_state: *mut ATBLPlayerState, // 0x1498
+    pub vo_tracker: [u8; 0x30],
+    pub lip_sync_curve: *mut c_void,
+    pub current_auto_vo: u8,
+    pub padding_32: [u8; 0x7],
+    pub death_friendly_vo: [u8; 0x10],
+    pub alive_friendly_vo: [u8; 0x10],
+    pub padding_33: [u8; 0x60],
+    pub cached_interactable_held: *mut c_void,
+    pub conditions_applied_map: [u8; 0x50],
+    pub padding_34: [u8; 0x38],
+    pub auto_vo_distance_map: [u8; 0x50],
+    pub capture_point: [u8; 8],
+    pub padding_35: [u8; 0x18],
+    pub wait_for_attach_time: f32,
+    pub padding_36: [u8; 0x4],
+    pub previous_team: *mut c_void,
+    pub b_is_initial_autorun: bool,
+    pub padding_37: [u8; 0x7],
+    pub particle_prepopulate_map: [u8; 0x50],
+    pub b_player_needs_healing: bool,
+    pub padding_38: [u8; 0x7],
+    pub healing_item_types: [u8; 0x10],
+    pub healing_special_item_types: [u8; 0x10],
+    pub b_last_able_to_heal_check: bool,
+    pub padding_39: [u8; 0x3],
+    pub needs_healing_threshold: f32,
+    pub final_padding: [u8; 0x18],
+}
 
-    // Delegates 0x09D8 - 0x0CA8 (Approx 46 delegates * 0x10)
-    pub delegates: [u8; 0x2E0],             // 0x09D8
-
-    pub hit_actor_with_weapon_infos: [u8; 0x10], // 0x0CB8
-    pub head_shot_actors: [u8; 0x10],            // 0x0CC8
-    pub arm_hits: [u8; 0x50],                    // 0x0CD8 (TMap)
-    pub client_tracer_hit_count: i32,            // 0x0D28
-    pub padding_7: [u8; 0x4],                    // 0x0D2C
-    pub client_tracer_hit_bones: [u8; 0x10],     // 0x0D30
-    pub client_tracer_hit_components: [u8; 0x10], // 0x0D40
-    pub spectating_pawn: *mut c_void,            // 0x0D50
-    pub b_has_alt_attack: bool,                  // 0x0D58
-    pub padding_8: [u8; 0x3],                    // 0x0D59
-    pub third_person_camera_params: [u8; 0x60],  // 0x0D5C
-    pub current_camera_params: [u8; 0x60],       // 0x0DBC
-    pub mount_camera_interp_speed: f32,          // 0x0E1C
-    pub movement_debugger: *mut c_void,          // 0x0E20
-    pub sk_mesh_3p: *mut c_void,                 // 0x0E28
-    pub sight_cache_map: [u8; 0x50],             // 0x0E30
-    pub padding_9: [u8; 0x10],                   // 0x0E80
-    pub gore_head_rotation_offset: [f32; 3],     // 0x0E90 (FRotator)
-    pub bitfield_0e9c: u8,                       // 0x0E9C (bSpawnedGoreHead, bIsForCustomizationMenu)
-    pub b_customization_components_spawned: u8,  // 0x0E9D
-    pub padding_10: [u8; 0x2],                   // 0x0E9E
-    pub customization_context: [u8; 0x58],       // 0x0EA0
-    pub default_mesh_1p: *mut c_void,            // 0x0EF8
-    pub mesh_1p_location: FVector,               // 0x0F00
-    pub mesh_1p_rotation: [f32; 3],              // 0x0F0C (FRotator)
-    pub first_possessed_time: f32,               // 0x0F18
-    pub b_has_attacked_successfully: bool,       // 0x0F1C
-    pub padding_11: [u8; 0x3],                   // 0x0F1D
-    pub gamepad_use_start_time: f32,             // 0x0F20
-    pub gamepad_use_pressed_count: i32,          // 0x0F24
-    pub debug_projectile: *mut c_void,           // 0x0F28
-    pub debug_fake_client_projectile: *mut c_void, // 0x0F30
-    pub debug_dropped_item: *mut c_void,         // 0x0F38
-    pub b_debug_ignore_ai: bool,                 // 0x0F40
-    pub b_is_cinematics_relevant: bool,          // 0x0F41
-    pub padding_12: [u8; 0x6],                   // 0x0F42
-    pub spawned_at_spawner: *mut c_void,         // 0x0F48
-    pub spawned_at_spawn_comp: *mut c_void,      // 0x0F50
-    pub spawner_position: i32,                   // 0x0F58
-    pub b_prevent_forward_spawn: bool,           // 0x0F5C
-    pub padding_13: [u8; 0x3],                   // 0x0F5D
-    pub attached_items: [u8; 0x10],              // 0x0F60 (TArray)
-    pub lock_mesh_blend_in_params: [u8; 0x54],   // 0x0F70
-    pub lock_mesh_blend_out_params: [u8; 0x54],  // 0x0FC4
-    pub cinematic_control_delegates: [u8; 0x20], // 0x1018
-    pub mount_root_blend_params: [u8; 0x68],     // 0x1038
-    pub mount_control_blend_params: [u8; 0x24],  // 0x10A0
-    pub padding_14: [u8; 0x4],                   // 0x10C4
-    pub vo_friendly_damage_sources: [u8; 0x10],  // 0x10C8
-    pub auto_vo_negative_damage_sources: [u8; 0x10], // 0x10D8
-    pub b_helmet_knocked_off: bool,              // 0x10E8
-    pub dead_character_id: u8,                   // 0x10E9
-    pub padding_15: [u8; 0x6],                   // 0x10EA
-    pub auto_vo_probability: [u8; 0x50],         // 0x10F0 (TMap)
-    pub tutorial_loc_blend_params: [u8; 0x3C],   // 0x1140
-    pub padding_16: [u8; 0x4],                   // 0x117C
-    pub tutorial_look_at_params: [u8; 0x20],     // 0x1180
-    pub horse_look_at_params: [u8; 0x18],        // 0x11A0
-    pub horse_bump_camera_params: [u8; 0x18],    // 0x11B8
-    pub attached_ragdoll: [u8; 0x30],            // 0x11D0
-    pub attach_ragdoll_blend_params: [u8; 0x3C], // 0x1200
-    pub padding_17: [u8; 0x4],                   // 0x123C
-    pub special_item_ability: *mut c_void,       // 0x1240
-    pub on_special_ability_set: [u8; 0x10],      // 0x1248
-    pub last_parry_event: [u8; 0x70],            // 0x1258
-    pub last_fired_projectile: *mut c_void,      // 0x12C8
-    pub debug_movement_replication: [u8; 0x1C],  // 0x12D0
-    pub padding_18: [u8; 0x4],                   // 0x12EC
-    pub knockdown_off_horse: *mut c_void,        // 0x12F0
-    pub pickup_cooldown: f32,                    // 0x12F8
-    pub padding_19: [u8; 0x4],                   // 0x12FC
-    pub time_to_vo_expiry: f32,                  // 0x1300
-    pub allowed_vos_within_expiry: i32,          // 0x1304
-    pub vo_cooldown: f32,                        // 0x1308
-    pub battle_cry_vo_cooldown: f32,             // 0x130C
-    pub vo_queue_emote_window: f32,              // 0x1310
-    pub padding_20: [u8; 0x4],                   // 0x1314
-    pub cached_parry_components: [u8; 0x10],     // 0x1318
-    pub closest_interactable: *mut c_void,       // 0x1328
-    pub closest_stats_component: *mut c_void,     // 0x1330
-    pub closest_fire_source: *mut c_void,        // 0x1338
-    pub useable_actor_interactable: *mut c_void, // 0x1340
-    pub interactable_settings: [u8; 0x20],       // 0x1348
-    pub gamepad_dismount_start_time: f32,        // 0x1368
-    pub padding_21: [u8; 0x4],                   // 0x136C
-    pub inventory: *mut c_void,                  // 0x1370
-    pub b_is_dying: u8,                          // 0x1378
-    pub padding_22: [u8; 0x3],                   // 0x1379
-    pub death_time: f32,                         // 0x137C
-    pub death_anim_length: f32,                  // 0x1380
-    pub death_anim_impulse: f32,                 // 0x1384
-    pub b_should_crouch_override_recovery: bool, // 0x1388
-    pub b_should_play_death_anim: bool,          // 0x1389
-    pub padding_23: [u8; 0x2],                   // 0x138A
-    pub death_montage_name: [u8; 0x8],           // 0x138C
-    pub death_section_1p: [u8; 0x8],             // 0x1394
-    pub death_section_3p: [u8; 0x8],             // 0x139C
-    pub padding_24: [u8; 0x4],                   // 0x13A4
-    pub audio_component: *mut c_void,            // 0x13A8
-    pub camera_3p_rotation: [u8; 0x30],          // 0x13B0 (FTransform)
-    pub ragdoll_start_time: f32,                 // 0x13E0
-    pub b_ragdoll_triggered: bool,               // 0x13E4
-    pub b_ragdoll_custom_tick: bool,             // 0x13E5
-    pub padding_25: [u8; 0x7],                   // 0x13E6
-    pub b_is_character_paused: bool,             // 0x13ED
-    pub padding_26: [u8; 0x2],                   // 0x13EE
-    pub paused_components: [u8; 0x10],           // 0x13F0
-    pub paused_actors: [u8; 0x10],               // 0x1400
-    pub paused_actor_lifespans: [u8; 0x10],      // 0x1410
-    pub paused_timer_handles: [u8; 0x10],        // 0x1420
-    pub paused_physics: [u8; 0x10],              // 0x1430
-    pub b_has_random_seed: bool,                 // 0x1440
-    pub b_did_push_respawn_state: bool,          // 0x1441
-    pub b_tap_out_held: bool,                    // 0x1442
-    pub padding_27: [u8; 0x1],                   // 0x1443
-    pub attached_smoothing: [u8; 0xC],           // 0x1444
-    pub prev_is_playing_root_motion: bool,       // 0x1450
-    pub auto_possess_ai_faction: u8,             // 0x1451
-    pub padding_28: [u8; 0x6],                   // 0x1452
-    pub ai_behavior_tree: *mut c_void,           // 0x1458
-    pub ai_flags: [u8; 0x6],                     // 0x1460 (6 booleans)
-    pub padding_29: [u8; 0x2],                   // 0x1466
-    pub fell_out_of_world_time: f32,             // 0x1468
-    pub b_count_kills: bool,                     // 0x146C
-    pub padding_30: [u8; 0x3],                   // 0x146D
-    pub constructable_actors: [u8; 0x10],        // 0x1470
-    pub padding_31: [u8; 0x8],                   // 0x1480
-    pub last_controller: *mut c_void,            // 0x1488
-    pub last_player_controller: *mut c_void,     // 0x1490
-    pub last_player_state: *mut c_void,          // 0x1498
-    pub vo_tracker: [u8; 0x30],                  // 0x14A0
-    pub lip_sync_curve: *mut c_void,             // 0x14D0
-    pub current_auto_vo: u8,                     // 0x14D8
-    pub padding_32: [u8; 0x7],                   // 0x14D9
-    pub death_friendly_vo: [u8; 0x10],           // 0x14E0
-    pub alive_friendly_vo: [u8; 0x10],           // 0x14F0
-    pub padding_33: [u8; 0x60],                  // 0x1500
-    pub cached_interactable_held: *mut c_void,   // 0x1560
-    pub conditions_applied_map: [u8; 0x50],      // 0x1568
-    pub padding_34: [u8; 0x38],                  // 0x15B8
-    pub auto_vo_distance_map: [u8; 0x50],        // 0x15F0
-    pub capture_point: u32,                      // 0x1640 (TWeakObjectPtr)
-    pub padding_35: [u8; 0x18],                  // 0x1648
-    pub wait_for_attach_time: f32,               // 0x1660
-    pub padding_36: [u8; 0x4],                   // 0x1664
-    pub previous_team: *mut c_void,              // 0x1668
-    pub b_is_initial_autorun: bool,              // 0x1670
-    pub padding_37: [u8; 0x7],                   // 0x1671
-    pub particle_prepopulate_map: [u8; 0x50],    // 0x1678
-    pub b_player_needs_healing: bool,            // 0x16C8
-    pub padding_38: [u8; 0x7],                   // 0x16C9
-    pub healing_item_types: [u8; 0x10],          // 0x16D0
-    pub healing_special_item_types: [u8; 0x10],  // 0x16E0
-    pub b_last_able_to_heal_check: bool,         // 0x16F0
-    pub padding_39: [u8; 0x3],                   // 0x16F1
-    pub needs_healing_threshold: f32,            // 0x16F4
-    pub final_padding: [u8; 0x18],               // Aligns to 0x1710
-} // Size: 0x1710
+impl ATBLCharacter {
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
+    pub unsafe fn last_player_state(&self) -> Option<&APlayerState> {
+        APlayerState::from_field(self.last_player_state, "TBLCharacter.LastPlayerState")
+    }
+}

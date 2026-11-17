@@ -1,10 +1,9 @@
 //! Combat event snapshots. Resolve native objects on the game thread.
 
 use crate::game::chivalry2::{
-    ACharacter, AController, APlayerState, ATBLCharacter, FDamageTakenEvent,
-    FDeathDamageTakenEvent, PlayerFlags,
+    ACharacter, AController, APlayerState, ATBLCharacter, FDamageTakenEvent, FDeathDamageTakenEvent,
 };
-use crate::ue::{UObject, UObjectType};
+use crate::ue::UObject;
 use std::fmt;
 
 /// Combat participant's display name and bot status.
@@ -41,7 +40,10 @@ impl CombatActor {
 
     /// Use the UObject display name and bot-name heuristic.
     pub fn from_uobject(ptr: *mut UObject) -> Option<Self> {
-        let object = unsafe { UObject::from_ptr(ptr) }?;
+        Self::from_object(unsafe { UObject::from_ptr(ptr) }?)
+    }
+
+    fn from_object(object: &UObject) -> Option<Self> {
         let cls = unsafe { object.class_name() }?;
         let name = object.display_name();
         let is_bot = cls.to_lowercase().contains("bot") || name.to_lowercase().contains("bot");
@@ -50,24 +52,13 @@ impl CombatActor {
 
     /// `via` identifies the source field when an invalid PlayerState is logged.
     pub fn from_player_state(player_state: *mut APlayerState, via: &str) -> Option<Self> {
-        if player_state.is_null() {
-            return None;
-        }
-        let Some(ps) = (unsafe { APlayerState::from_ptr(player_state) }) else {
-            swarn!(
-                "ignoring PlayerState {:p} from {}: not a live PlayerState",
-                player_state,
-                via
-            );
-            return None;
-        };
+        let ps = unsafe { APlayerState::from_field(player_state, via) }?;
+        Self::from_player_state_view(ps)
+    }
+
+    fn from_player_state_view(ps: &APlayerState) -> Option<Self> {
         let name = ps.player_name_private.copy_to_string().ok()?;
-        (!name.trim().is_empty()).then(|| {
-            Self::new(
-                name.trim().to_string(),
-                ps.player_flags.contains(PlayerFlags::IS_A_BOT),
-            )
-        })
+        (!name.trim().is_empty()).then(|| Self::new(name.trim().to_string(), ps.is_bot()))
     }
 
     /// Resolve PlayerState identity, falling back to the UObject display name.
@@ -75,38 +66,38 @@ impl CombatActor {
         if ptr.is_null() {
             return None;
         }
-        let Some(object) = (unsafe { UObject::from_ptr(ptr) }) else {
-            swarn!("ignoring combat actor {:p}: not a live object", ptr);
-            return None;
-        };
-        if let Some(character) = unsafe { object.uobj_cast::<ACharacter>() } {
-            let pawn = &character.base_pawn;
-            return Self::from_player_state(
-                pawn.player_state as *mut APlayerState,
-                "Pawn.PlayerState",
-            )
-            .or_else(|| {
-                let controller = unsafe { AController::from_ptr(pawn.controller) }?;
-                Self::from_player_state(controller.player_state, "Pawn.Controller.PlayerState")
-            })
-            .or_else(|| {
-                let character = unsafe { object.uobj_cast::<ATBLCharacter>() }?;
-                Self::from_player_state(
-                    character.last_player_state as *mut APlayerState,
-                    "TBLCharacter.LastPlayerState",
-                )
-            })
-            .or_else(|| Self::from_uobject(ptr));
+        // Native combat callbacks run on the game thread; each pointer is checked before access.
+        unsafe {
+            let Some(object) = UObject::from_ptr(ptr) else {
+                swarn!("ignoring combat actor {:p}: not a live object", ptr);
+                return None;
+            };
+            let actor = if let Some(character) = object.uobj_cast::<ACharacter>() {
+                let pawn = &character.base_pawn;
+                pawn.player_state()
+                    .and_then(Self::from_player_state_view)
+                    .or_else(|| {
+                        pawn.controller()?
+                            .player_state()
+                            .and_then(Self::from_player_state_view)
+                    })
+                    .or_else(|| {
+                        object
+                            .uobj_cast::<ATBLCharacter>()?
+                            .last_player_state()
+                            .and_then(Self::from_player_state_view)
+                    })
+            } else if let Some(controller) = object.uobj_cast::<AController>() {
+                controller
+                    .player_state()
+                    .and_then(Self::from_player_state_view)
+            } else {
+                object
+                    .uobj_cast::<APlayerState>()
+                    .and_then(Self::from_player_state_view)
+            };
+            actor.or_else(|| Self::from_object(object))
         }
-        if let Some(controller) = unsafe { object.uobj_cast::<AController>() } {
-            return Self::from_player_state(controller.player_state, "Controller.PlayerState")
-                .or_else(|| Self::from_uobject(ptr));
-        }
-        if unsafe { object.uobj_cast::<APlayerState>() }.is_some() {
-            return Self::from_player_state(ptr.cast(), "PlayerState")
-                .or_else(|| Self::from_uobject(ptr));
-        }
-        Self::from_uobject(ptr)
     }
 
     pub fn killer_from_damage_event(event: &FDamageTakenEvent) -> Option<Self> {
@@ -145,40 +136,36 @@ impl DamageSource {
 
     fn name_from_damage_event(event: &FDamageTakenEvent) -> String {
         // Prefer concrete weapon/projectile identity over abstract UDamageSource.
-        let candidates = [
+        [
             ("inventory_item", event.inventory_item.cast::<UObject>()),
             ("projectile", event.projectile.cast::<UObject>()),
             ("damage_source", event.damage_source.cast::<UObject>()),
-        ];
-        for (kind, ptr) in candidates {
-            if ptr.is_null() {
-                continue;
+        ]
+        .into_iter()
+        .find_map(|(kind, ptr)| {
+            let name = unsafe { UObject::from_ptr(ptr) }?.display_name();
+            if name.trim().is_empty() {
+                return None;
             }
-            if let Some(object) = unsafe { UObject::from_ptr(ptr) } {
-                let name = object.display_name();
-                if name.trim().is_empty() {
-                    continue;
-                }
-                if kind != "damage_source" {
-                    strace!("Kill source resolved via {}='{}'", kind, name);
-                }
-                return name;
+            if kind != "damage_source" {
+                strace!("Kill source resolved via {}='{}'", kind, name);
             }
-        }
-        "UnknownDamageSource".to_string()
+            Some(name)
+        })
+        .unwrap_or_else(|| "UnknownDamageSource".to_string())
     }
 
     fn attack_type_from_damage_event(event: &FDamageTakenEvent) -> String {
-        if event.b_suicide {
-            return "Suicide".into();
-        }
-        if event.b_back_stab {
-            return "Backstab".into();
-        }
-        if event.b_entered_kill_volume {
-            return "KillVolume".into();
-        }
-        "Damage".into()
+        let attack_type = if event.b_suicide {
+            "Suicide"
+        } else if event.b_back_stab {
+            "Backstab"
+        } else if event.b_entered_kill_volume {
+            "KillVolume"
+        } else {
+            "Damage"
+        };
+        attack_type.into()
     }
 }
 
