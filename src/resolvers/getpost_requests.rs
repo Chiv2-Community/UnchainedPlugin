@@ -53,7 +53,6 @@ macro_rules! CREATE_REQUEST_HOOK {
                     Err(e) => { unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); } std::panic::resume_unwind(e) }
                 };
                 unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); }
-                // $crate::sinfo!("{} Hooked: url_base={} token={}, result={:?}", stringify!($name), this.url_base, req.token, result);
                 result
             }
         );

@@ -221,42 +221,32 @@ define_pattern_resolver!(ApproveLogin, [
 define_pattern_resolver!(SendRequest, [
     "48 89 5C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 55 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 40 48 8B D9 49 8B F9"
 ]);
-// TODO: check if some copying can be avoided
 // PlayFab::PlayFabRequestHandler::SendRequest returns TSharedRef<IHttpRequest, 0>
 // through caller-provided storage; this_ptr is that storage, not a handler.
 CREATE_HOOK!(SendRequest, ACTIVE, NONE, *mut TSharedRefIHttpRequest, (
     this_ptr: *mut TSharedRefIHttpRequest, u_ptr: *mut FString, body: *mut FString, a_key: *mut FString, a_val: *mut FString
 ), {
-    // let original_url = unsafe { ManuallyDrop::new(std::ptr::read(u_ptr)) };
-    let original_ptr = u_ptr;
-    let url_w = unsafe { (*u_ptr).to_string() };
-    // #[cfg(feature="verbose_hooks")]
-    // sinfo!["{}", url_w];
-
-    let (target_url, mut target_auth) = if url_w == "https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version" {
-        let url = playfab_matchmake_url(crate::backend_config::base_url());
-        (Some(FString::from(url.as_str())), Some(FString::from("")))
-    } else if ["https://EBF8D.playfabapi.com/Match/GetMatchmakingTicket?sdk=Chiv2_Version"].iter().any(|&u| u == url_w) {
-        (Some(FString::from("http://localhost")), None)
-    } else {
-        (None, None)
+    let url = unsafe { (*u_ptr).to_string() };
+    let (target_url, mut target_auth) = match url.as_str() {
+        "https://EBF8D.playfabapi.com/Client/Matchmake?sdk=Chiv2_Version" => {
+            let url = playfab_matchmake_url(crate::backend_config::base_url());
+            (FString::from(url.as_str()), Some(FString::from("")))
+        }
+        "https://EBF8D.playfabapi.com/Match/GetMatchmakingTicket?sdk=Chiv2_Version" => {
+            (FString::from("http://localhost"), None)
+        }
+        _ => return CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, a_val)),
     };
 
-    if let Some(new_url) = target_url {
-            let original_bytes = unsafe { std::ptr::read(original_ptr) };
-            unsafe { std::ptr::write(u_ptr, new_url); }
-            let auth_ptr = match target_auth {
-                Some(ref mut a) => a as *mut FString,
-                None => a_val,
-            };
-
-            let res = CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, auth_ptr));
-            unsafe { std::ptr::write(u_ptr, original_bytes); }
-
-            return res;
-    }
-
-    CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, a_val))
+    let original_url = unsafe { std::ptr::read(u_ptr) };
+    unsafe { std::ptr::write(u_ptr, target_url); }
+    let auth_ptr = match target_auth {
+        Some(ref mut auth) => auth as *mut FString,
+        None => a_val,
+    };
+    let result = CALL_ORIGINAL!(SendRequest(this_ptr, u_ptr, body, a_key, auth_ptr));
+    unsafe { std::ptr::write(u_ptr, original_url); }
+    result
 });
 
 // Disable stat increase to prevent stutters in offline play (and server mode?)
