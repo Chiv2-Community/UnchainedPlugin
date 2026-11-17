@@ -1,4 +1,26 @@
-use server_browser_client::models::Chivalry2Ports;
+use crate::server_metadata::ServerStatus;
+use server_browser_client::models::{Chivalry2Ports, Mod, UpdateRegisteredServer};
+
+pub(super) fn update(status: &ServerStatus) -> UpdateRegisteredServer {
+    UpdateRegisteredServer {
+        player_count: status.player_count,
+        max_players: status.max_players,
+        current_map: status.current_map.clone(),
+        mods: Some(
+            status
+                .active_mods
+                .iter()
+                .map(|metadata| {
+                    Mod::new(
+                        metadata.name.clone(),
+                        metadata.organization.clone(),
+                        metadata.version.clone(),
+                    )
+                })
+                .collect(),
+        ),
+    }
+}
 
 pub(super) fn ports(
     a2s_game_port: Option<u16>,

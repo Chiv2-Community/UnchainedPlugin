@@ -1,7 +1,56 @@
 #[path = "../../src/features/registration_metadata.rs"]
 mod registration_metadata;
 
+#[path = "../../src/server_metadata.rs"]
+pub mod server_metadata;
+
 use test_case::test_case;
+
+#[test_case(false; "explicit_empty_mod_list_clears_published_mods")]
+#[test_case(true; "only_active_mods_are_published")]
+fn update_maps_public_metadata(has_active_mod: bool) {
+    let active_mod = server_metadata::Mod {
+        name: "Active mod".into(),
+        organization: "Community".into(),
+        version: "1.2.3".into(),
+        object_path: "/Game/Private/ActiveMod".into(),
+    };
+    let status = server_metadata::ServerStatus {
+        name: "Server".into(),
+        description: "Description".into(),
+        password_protected: true,
+        current_map: "FFA_Courtyard".into(),
+        player_count: 12,
+        max_players: 64,
+        mods: vec![server_metadata::Mod {
+            name: "Inactive mod".into(),
+            ..active_mod.clone()
+        }],
+        active_mods: if has_active_mod {
+            vec![active_mod]
+        } else {
+            Vec::new()
+        },
+    };
+    let expected_mods = if has_active_mod {
+        vec![server_browser_client::models::Mod::new(
+            "Active mod".into(),
+            "Community".into(),
+            "1.2.3".into(),
+        )]
+    } else {
+        Vec::new()
+    };
+    assert_eq!(
+        registration_metadata::update(&status),
+        server_browser_client::models::UpdateRegisteredServer {
+            player_count: 12,
+            max_players: 64,
+            current_map: "FFA_Courtyard".into(),
+            mods: Some(expected_mods),
+        }
+    );
+}
 
 #[test_case(Some(8000), 9000, 3000, 7000, [8000, 3000, 7000]; "a2s_port_wins")]
 #[test_case(None, 9000, 3000, 7000, [9000, 3000, 7000]; "configured_port_fallback")]

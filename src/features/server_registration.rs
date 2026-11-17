@@ -2,7 +2,7 @@ use crate::events::models::{GameEvent, ServerStatus};
 use crate::features::events::EVENT_SYSTEM;
 use crate::features::Mod;
 use a2s::info::Info;
-use server_browser_client::models::{ServerRegistrationRequest, UpdateRegisteredServer};
+use server_browser_client::models::ServerRegistrationRequest;
 use server_browser_client_sdk::{
     Event, HttpEvent, HttpTransport, LifecycleEvent, ObserverResult, Policy,
     Registration as SdkRegistration, RegistrationWorker, RequestFailure,
@@ -214,7 +214,7 @@ impl MetadataCollector {
                 continue;
             };
             let status = Self::metadata(&info);
-            let update = Self::update(&status);
+            let update = registration_metadata::update(&status);
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
@@ -224,30 +224,9 @@ impl MetadataCollector {
         }
     }
 
-    fn update(status: &ServerStatus) -> UpdateRegisteredServer {
-        UpdateRegisteredServer {
-            player_count: status.player_count,
-            max_players: status.max_players,
-            current_map: status.current_map.clone(),
-            mods: Some(
-                status
-                    .active_mods
-                    .iter()
-                    .map(|m| {
-                        server_browser_client::models::Mod::new(
-                            m.name.clone(),
-                            m.organization.clone(),
-                            m.version.clone(),
-                        )
-                    })
-                    .collect(),
-            ),
-        }
-    }
-
     fn request(&self, info: &Info, status: &ServerStatus) -> ServerRegistrationRequest {
         let args = cli_args();
-        let update = Self::update(status);
+        let update = registration_metadata::update(status);
         ServerRegistrationRequest {
             ports: registration_metadata::ports(
                 info.extended_server_info.port,

@@ -7,6 +7,7 @@ pub mod macros;
 mod resolvers;
 mod backend;
 mod backend_config;
+mod server_metadata;
 pub mod scan;
 pub mod tools;
 mod ue;
