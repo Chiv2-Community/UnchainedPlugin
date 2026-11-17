@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn debug_distinguishes_missing_and_empty_credentials() {
-        let mut cli = CLIArgs::default();
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
         let rendered = format!("{cli:?}");
         assert!(rendered.contains("server_password: None"));
         assert!(rendered.contains("discord_bot_token: None"));
@@ -543,52 +543,6 @@ mod tests {
         );
     }
 
-    impl Default for CLIArgs {
-        fn default() -> Self {
-            Self {
-                server_mods: None,
-                ini_overrides: HashMap::new(),
-                is_unchained: false,
-                rcon_port: None,
-                apply_desync_patch: false,
-                #[cfg(feature="move-autonomous-desync")]
-                tick_actor_patch: false,
-                use_backend_banlist: false,
-                is_headless: false,
-                next_map: None,
-                launched_profile: None,
-                unchained_profile_location: None,
-                playable_listen: false,
-                register: false,
-                server_browser_backend: "https://servers.polehammer.net".to_owned(),
-                local_ip: "127.0.0.1".to_string(),
-                local_ip_explicit: false,
-                use_ipv6: false,
-                server_password: None,
-                platform: None,
-                saved_dir_suffix: None,
-                log4rs_yaml: None,
-                attach_stdio: false,
-                no_spawn_console: false,
-                game_server_ping_port: 3075,
-                game_server_query_port: 7071,
-                game_port: 7777,
-                mod_map_batch: 128,
-                mod_asset_registry_only: false,
-                discord_admin_channel_id: None,
-                discord_general_channel_id: None,
-                discord_dashboard_channel_id: None,
-                discord_event_log_channel_id: None,
-                discord_admin_role_id: None,
-                discord_bot_token: None,
-                discord_mention_admins: false,
-                censor_mode: CensorArg::None,
-                motd: None,
-                extra_args: vec![],
-            }
-        }
-    }
-
     #[test]
     fn test_find_ini_value() {
         let mut ini_overrides = HashMap::new();
@@ -598,10 +552,8 @@ mod tests {
         engine_map.insert("[Core.Log]".to_string(), log_map);
         ini_overrides.insert("Engine".to_string(), engine_map);
 
-        let cli = CLIArgs {
-            ini_overrides,
-            ..Default::default()
-        };
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
+        cli.ini_overrides = ini_overrides;
 
         let paths = [
             ("Engine", "[Core.Log]", "LogHttp"),
@@ -618,9 +570,7 @@ mod tests {
 
     #[test]
     fn test_is_server() {
-        let mut cli = CLIArgs {
-            ..Default::default()
-        };
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
 
         assert!(!cli.is_server());
         cli.rcon_port = Some(9001);
