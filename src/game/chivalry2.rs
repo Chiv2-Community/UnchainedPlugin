@@ -278,22 +278,26 @@ pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
     use crate::resolvers::messages::o_BroadcastLocalizedChat;
     use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
     use crate::resolvers::etc_hooks::o_GetTBLGameMode;
+    use crate::resolvers::unchained_integration::run_on_game_thread;
     
-    let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
-    if let Some(world) = crate::globals().world() {
-        let mut settings_fstring = FString::from(message.as_str());
-        let mut txt = FText::default();
+    // Native chat broadcasts mutate Unreal's network state; resolve it only on the game thread.
+    run_on_game_thread(move || {
+        let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
+        if let Some(world) = crate::globals().world() {
+            let mut settings_fstring = FString::from(message.as_str());
+            let mut txt = FText::default();
 
-        let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
+            let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
 
-        let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
+            let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
 
-        if !game_mode.is_null() {
-            TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
+            if !game_mode.is_null() {
+                TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
+            }
+        } else {
+            swarn!("globals.world was None; skipping chat broadcast");
         }
-    } else {
-        swarn!("globals.world was None; skipping chat broadcast");
-    }
+    });
 }
 
 #[repr(C)]
