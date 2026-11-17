@@ -1,20 +1,14 @@
 //! Task-owned MOTD broadcasts, active only during a live server match.
 
-use std::{
-    cell::RefCell,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{cell::RefCell, time::Duration};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub(crate) struct MotdBroadcaster {
     message: String,
     task: Option<JoinHandle<()>>,
-    is_active: Arc<AtomicBool>,
+    cancellation: CancellationToken,
 }
 
 impl MotdBroadcaster {
@@ -22,7 +16,7 @@ impl MotdBroadcaster {
         Self {
             message,
             task: None,
-            is_active: Arc::new(AtomicBool::new(false)),
+            cancellation: CancellationToken::new(),
         }
     }
 
@@ -31,17 +25,17 @@ impl MotdBroadcaster {
             return;
         }
         self.stop();
-        // Each run has its own flag so restarting cannot revive an old queued send.
-        self.is_active = Arc::new(AtomicBool::new(true));
-        let is_active = self.is_active.clone();
+        // Each run has its own token so restarting cannot revive an old queued send.
+        self.cancellation = CancellationToken::new();
+        let cancellation = self.cancellation.clone();
         let message = self.message.clone();
         self.task = Some(
             crate::features::tokio_runtime::TOKIO_RUNTIME.spawn(async move {
                 loop {
-                    let is_active = is_active.clone();
+                    let cancellation = cancellation.clone();
                     let message = message.clone();
                     crate::resolvers::unchained_integration::run_on_game_thread(move || {
-                        if !is_active.load(Ordering::Acquire) {
+                        if cancellation.is_cancelled() {
                             return;
                         }
                         let is_world_ready = crate::globals().world().is_some_and(|world| unsafe {
@@ -62,7 +56,7 @@ impl MotdBroadcaster {
     }
 
     pub(crate) fn stop(&mut self) {
-        self.is_active.store(false, Ordering::Release);
+        self.cancellation.cancel();
         if let Some(task) = self.task.take() {
             task.abort();
         }
@@ -117,23 +111,23 @@ mod tests {
     }
 
     #[test]
-    fn restart_keeps_previous_run_inactive() {
+    fn restart_keeps_previous_run_cancelled() {
         let mut broadcaster = MotdBroadcaster::new("Welcome".into());
         broadcaster.start();
-        let old_run = broadcaster.is_active.clone();
+        let old_run = broadcaster.cancellation.clone();
         broadcaster.stop();
         assert!(broadcaster.task.is_none());
         broadcaster.start();
-        assert!(!old_run.load(Ordering::Acquire));
-        assert!(broadcaster.is_active.load(Ordering::Acquire));
+        assert!(old_run.is_cancelled());
+        assert!(!broadcaster.cancellation.is_cancelled());
     }
 
     #[test]
-    fn drop_deactivates_current_run() {
+    fn drop_cancels_current_run() {
         let mut broadcaster = MotdBroadcaster::new("Welcome".into());
         broadcaster.start();
-        let is_active = broadcaster.is_active.clone();
+        let cancellation = broadcaster.cancellation.clone();
         drop(broadcaster);
-        assert!(!is_active.load(Ordering::Acquire));
+        assert!(cancellation.is_cancelled());
     }
 }
