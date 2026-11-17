@@ -52,6 +52,9 @@ bld/
 [Ll]og/
 [Ll]ogs/
 [Bb]uild/
+!/build/
+/build/*
+!/build/*.rs
 [Bb]uild[Ff]iles/
 
 # Removed sleuth directory structure
