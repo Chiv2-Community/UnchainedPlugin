@@ -20,7 +20,11 @@ impl FunctionBinding {
 
     /// Initialize once from the loaded module and its resolved relative offset.
     /// Repeating the same address is harmless; rebinding is rejected.
-    pub fn initialize(&self, base: usize, offset: u64) -> Result<(), String> {
+    ///
+    /// # Safety
+    /// For bindings used by native callers, the resolved address must identify
+    /// process-lifetime code with their exact ABI and behavioral contract.
+    pub unsafe fn initialize(&self, base: usize, offset: u64) -> Result<(), String> {
         let address = usize::try_from(offset).ok()
             .and_then(|offset| base.checked_add(offset))
             .filter(|address| base != 0 && *address != 0)
@@ -39,3 +43,71 @@ pub struct FunctionBindingRegistration {
 }
 
 inventory::collect!(FunctionBindingRegistration);
+
+/// Required native data address. Binding failures are fatal; accessors read
+/// slot contents or return an inline object's address without copying it.
+pub struct ValueBinding(FunctionBinding);
+
+impl ValueBinding {
+    pub const fn new(name: &'static str) -> Self { Self(FunctionBinding::new(name)) }
+
+    pub fn name(&self) -> &'static str { self.0.name() }
+
+    pub fn address(&self) -> usize {
+        self.0.address().unwrap_or_else(|| {
+            panic!("Required native value {} is not bound; startup must resolve it before access", self.name())
+        }).get()
+    }
+
+    /// Bind the data address without dereferencing it. Repeating it is harmless.
+    ///
+    /// # Safety
+    /// The resolved slot must remain readable with the declared value's layout
+    /// for every accessor call; native writes must be synchronized with reads.
+    pub unsafe fn initialize(&self, base: usize, offset: u64) {
+        unsafe { self.0.initialize(base, offset) }.unwrap_or_else(|error| {
+            panic!("Failed to bind required native value {}: {error}", self.name())
+        });
+    }
+}
+
+pub struct ValueBindingRegistration {
+    pub binding: &'static ValueBinding,
+}
+
+inventory::collect!(ValueBindingRegistration);
+
+/// Bind every required native value from cached or scanned module-relative offsets.
+///
+/// # Safety
+/// Each resolved slot must satisfy its generated accessor's type/lifetime and
+/// synchronization contract. This binds addresses, not their current contents.
+pub unsafe fn initialize_value_bindings(base: usize, offsets: &std::collections::HashMap<String, u64>) {
+    for registration in inventory::iter::<ValueBindingRegistration> {
+        let binding = registration.binding;
+        let offset = offsets.get(binding.name()).unwrap_or_else(|| {
+            panic!("Required native value {} could not be resolved; no offset is available", binding.name())
+        });
+        unsafe { binding.initialize(base, *offset); }
+    }
+}
+
+/// Bind one required value from an absolute address, for standalone resolution.
+///
+/// # Safety
+/// The address must satisfy the registered accessor's native-slot contract.
+pub unsafe fn initialize_value_binding(name: &str, address: usize) {
+    let mut found = false;
+    for registration in inventory::iter::<ValueBindingRegistration>.into_iter()
+        .filter(|registration| registration.binding.name() == name)
+    {
+        unsafe { registration.binding.initialize(address, 0); }
+        found = true;
+    }
+    assert!(found, "Required native value {name} has no binding declaration");
+}
+
+pub fn is_required_value(name: &str) -> bool {
+    inventory::iter::<ValueBindingRegistration>.into_iter()
+        .any(|registration| registration.binding.name() == name)
+}

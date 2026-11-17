@@ -4,7 +4,7 @@ use widestring::U16CString;
 use crate::features::Mod;
 use crate::ue::tbl::UTBLSystemLibrary;
 use crate::game::chivalry2::EChatType;
-use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
+use crate::game::engine::{FActorSpawnParameters, FRotator, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
@@ -508,27 +508,18 @@ impl ModManager {
             return;
         };
         if let Err(error) = crate::resolvers::require_function_bindings(&[
-            "FText_AsCultureInvariant", "GetTBLGameMode", "BroadcastLocalizedChat",
+            "GetTBLGameMode", "BroadcastLocalizedChat",
         ]) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
             return;
         }
-        let mut txt = FText::default();
-        let mut message = FString::from("Spawned new Mod from console");
-        let text = unsafe { FText::as_culture_invariant(&mut txt, &mut message) };
-        // The engine may take ownership of the string (by-value overload), so
-        // don't free it a second time; at worst this leaks a short string.
-        std::mem::forget(message);
-        if text.is_null() {
-            swarn!("FText conversion unavailable; skipping spawn confirmation chat");
-            return;
-        }
+        let text = crate::ue::InvariantText::new("Spawned new Mod from console");
         let game_mode = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
         if game_mode.is_null() {
             swarn!("No game mode; skipping spawn confirmation chat");
             return;
         }
-        unsafe { game_mode.broadcast_localized_chat(text, EChatType::Admin); }
+        unsafe { game_mode.broadcast_localized_chat(text.as_ptr(), EChatType::Admin); }
     }
 
     pub fn destroy_mod_actor(&self, _actor_ptr: *mut UObject) {

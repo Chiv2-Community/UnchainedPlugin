@@ -357,14 +357,14 @@ pub(crate) fn send_ingame_message_with_world(
     cancellation: Option<CancellationToken>,
 ) {
     use crate::ue::tbl::UTBLSystemLibrary;
-    
+
     // Cancellation, world resolution and native work must share one game-thread job.
     crate::resolvers::unchained_integration::run_on_game_thread(move || {
         if cancellation.as_ref().is_some_and(CancellationToken::is_cancelled) {
             return;
         }
         if let Err(error) = crate::resolvers::require_function_bindings(&[
-            "FText_AsCultureInvariant", "GetTBLGameMode", "BroadcastLocalizedChat",
+            "GetTBLGameMode", "BroadcastLocalizedChat",
         ]) {
             serror!("Cannot send chat: {}", error);
             return;
@@ -375,10 +375,8 @@ pub(crate) fn send_ingame_message_with_world(
             return;
         }
         let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
-        let mut settings_fstring = FString::from(message.as_str());
-        let mut txt = FText::default();
-        let res = unsafe { FText::as_culture_invariant(&mut txt, &mut settings_fstring) };
-        unsafe { game_mode.broadcast_localized_chat(res, chat_type_actual); }
+        let text = crate::ue::InvariantText::new(&message);
+        unsafe { game_mode.broadcast_localized_chat(text.as_ptr(), chat_type_actual); }
     });
 }
 

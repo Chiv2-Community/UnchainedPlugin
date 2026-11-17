@@ -18,14 +18,20 @@ pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
 
 mod platforms;
 pub use platforms::{supports_platform, ResolverPlatform};
-pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
+pub use unchained_macros::{
+    FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration,
+    initialize_value_binding, initialize_value_bindings, is_required_value,
+};
 
-pub fn initialize_function_bindings(offsets: &std::collections::HashMap<String, u64>) -> Result<(), String> {
+/// # Safety
+/// RVAs must resolve each registered binding to process-lifetime native code
+/// with the declared ABI and behavioral contract for the installed build.
+pub unsafe fn initialize_function_bindings(offsets: &std::collections::HashMap<String, u64>) -> Result<(), String> {
     for registration in inventory::iter::<FunctionBindingRegistration> {
         let binding = registration.binding;
         let offset = offsets.get(binding.name())
             .ok_or_else(|| format!("No address found for native binding {}", binding.name()))?;
-        binding.initialize(*BASE_ADDR, *offset)?;
+        unsafe { binding.initialize(*BASE_ADDR, *offset)?; }
     }
     Ok(())
 }
@@ -135,7 +141,7 @@ mod binding_tests {
         let expected = [
             "APlayerState_GetPlayerName", "BroadcastLocalizedChat",
             "FLargeMemoryReaderCtor", "FLargeMemoryReaderDtor", "FNameCtorWchar",
-            "FString_AppendChars", "FText_AsCultureInvariant", "FText_Release",
+            "FString_AppendChars", "FText_AsCultureInvariantCopy", "FText_Release",
             "FText_ToString", "GetAllActorsOfClass", "GetAssetRegistry",
             "GetDefaultObject", "GetTBLGameMode", "InternalGetNetMode",
             "SpawnActor", "StaticFindObject", "StaticLoadObject",
@@ -161,12 +167,26 @@ mod binding_tests {
 
     #[test]
     fn borrowed_binding_signatures_preserve_return_ownership() {
-        use crate::ue::{APlayerState, FString, FText, TScriptInterface, UWorld};
+        use crate::ue::{APlayerState, FString, FText, AssetRegistryScriptInterface, UWorld};
         let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::to_native_string;
         let _: for<'a> unsafe fn(*const APlayerState, &'a mut FString) -> &'a mut FString =
             APlayerState::get_player_name_native;
         let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::get_map_name;
-        let _: for<'a> unsafe fn(&'a mut TScriptInterface) -> &'a mut TScriptInterface =
+        let _: for<'a> unsafe fn(&'a mut AssetRegistryScriptInterface) -> &'a mut AssetRegistryScriptInterface =
             crate::ue::UAssetRegistryHelpers::get_asset_registry;
+    }
+
+    #[test]
+    fn required_values_are_bindings_not_functions_or_hooks() {
+        let values: std::collections::HashSet<_> = inventory::iter::<ValueBindingRegistration>.into_iter()
+            .map(|registration| registration.binding.name()).collect();
+        assert_eq!(values, std::collections::HashSet::from(["GMalloc", "GUObjectArray"]));
+        for name in values {
+            assert!(!inventory::iter::<FunctionBindingRegistration>.into_iter()
+                .any(|registration| registration.binding.name() == name));
+            assert!(!inventory::iter::<HookRegistration>.into_iter()
+                .any(|registration| registration.name == name));
+            assert!(crate::resolvers().any(|resolver| resolver.name == name), "Missing resolver {name}");
+        }
     }
 }

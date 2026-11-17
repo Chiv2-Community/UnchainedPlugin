@@ -71,7 +71,7 @@ fn initialize() {
             "ReturnStorage" => return_storage as *const () as usize,
             name => panic!("Unexpected binding {name}"),
         };
-        registration.binding.initialize(1, (address - 1) as u64).unwrap();
+        unsafe { registration.binding.initialize(1, (address - 1) as u64).unwrap(); }
     }
 }
 
@@ -102,10 +102,11 @@ fn uninitialized_binding_fails_before_native_call() {
 fn binding_initialization_is_idempotent_but_not_rebindable() {
     let binding = resolvers::FunctionBinding::new("example");
     assert!(binding.address().is_none());
-    binding.initialize(10, 20).unwrap();
-    binding.initialize(10, 20).unwrap();
+    // This local, unregistered binding is never invoked as native code.
+    unsafe { binding.initialize(10, 20).unwrap(); }
+    unsafe { binding.initialize(10, 20).unwrap(); }
     assert_eq!(binding.address().unwrap().get(), 30);
-    assert!(binding.initialize(10, 21).is_err());
+    assert!(unsafe { binding.initialize(10, 21) }.is_err());
     assert_eq!(binding.address().unwrap().get(), 30);
 }
 
@@ -127,6 +128,6 @@ fn generated_bindings_preserve_receiver_and_return_storage_lifetimes() {
 #[test_case::test_case(usize::MAX, 1; "address overflow")]
 fn invalid_initialization_leaves_binding_uninitialized(base: usize, offset: u64) {
     let binding = resolvers::FunctionBinding::new("invalid");
-    assert!(binding.initialize(base, offset).is_err());
+    assert!(unsafe { binding.initialize(base, offset) }.is_err());
     assert!(binding.address().is_none());
 }

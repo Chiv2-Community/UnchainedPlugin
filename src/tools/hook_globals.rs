@@ -74,8 +74,6 @@ impl_resolver_singleton!(ElfImage, GEngine, |_ctx| async {
 patternsleuth::_impl_try_collector! {
     #[derive(Debug, PartialEq, Clone)]
     struct DllHookResolution {
-        gmalloc: GMalloc,
-        guobject_array: GUObjectArray,
         fnametostring: FNameToString,
         allocate_uobject: FUObjectArrayAllocateUObjectIndex,
         free_uobject: FUObjectArrayFreeUObjectIndex,
@@ -212,7 +210,7 @@ pub fn globals_initialized() -> bool {
 
 impl Globals {
     pub fn gmalloc(&self) -> ue::FMallocHandle {
-        ue::try_gmalloc().expect("Critical: GMalloc is unresolved or uninitialized. Memory allocation is required for plugin operation.")
+        ue::gmalloc()
     }
 
     resolution_fn!(fframe_step, fframe_step, ue::FnFFrameStep);
@@ -259,6 +257,14 @@ pub fn init_globals() -> Result<(), String> {
 
     // Load CLI ARGS
     sinfo!("Running resolvers");
+    // Required values are fatal on resolution failure, including standalone
+    // initialization that has not run the cached preinit binding pass.
+    let gmalloc = exe.resolve(GMalloc::resolver())
+        .unwrap_or_else(|error| panic!("Required native value GMalloc could not be resolved: {error}"));
+    unsafe { crate::resolvers::initialize_value_binding("GMalloc", gmalloc.0); }
+    let guobject_array = exe.resolve(GUObjectArray::resolver())
+        .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
+    unsafe { crate::resolvers::initialize_value_binding("GUObjectArray", guobject_array.0); }
     // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
@@ -275,12 +281,9 @@ pub fn init_globals() -> Result<(), String> {
         }
     };
 
-    // Standalone callers may initialize Globals without running preinit.
-    unsafe { ue::set_gmalloc_slot(resolution.gmalloc.0) };
-
     // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =
-        unsafe { &*(resolution.guobject_array.0 as *const FUObjectArray) };
+        unsafe { &*ue::object_array::native_guobject_array() };
 
     let globals_instance = Globals {
         // Wrap the reference in our Sync-promising struct

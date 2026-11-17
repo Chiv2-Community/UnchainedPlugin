@@ -1,36 +1,47 @@
-use crate::ue::FString;
+use crate::ue::{FString, TCHAR};
+use std::{ffi::c_void, mem::{ManuallyDrop, MaybeUninit}};
 use unchained_macros::bind_resolver_func;
 
+/// Opaque native text storage. Borrow native values through `from_ptr`;
+/// construct owned culture-invariant values with `InvariantText::new`.
+/// No zero-filled/default value represents a live UE FText.
 #[repr(C, align(8))]
 pub struct FText {
-    pub text_data: [u8; 0x10],
-    pub flags: u32,
-}
-
-impl Default for FText {
-    fn default() -> Self {
-        Self { text_data: [0u8; 0x10], flags: 0 }
-    }
+    text_data: *mut c_void,
+    shared_reference: *mut c_void,
+    flags: u32,
 }
 
 impl FText {
+    /// Borrow native text without acquiring a shared reference.
+    ///
+    /// # Safety
+    /// Non-null pointers must identify aligned, live UE-constructed FText
+    /// storage for the returned lifetime. Its native shared reference must stay
+    /// alive, and the inline storage must not be concurrently modified.
+    pub unsafe fn from_ptr<'a>(text: *const Self) -> Option<&'a Self> {
+        unsafe { text.as_ref() }
+    }
+
     /// Native FText::ToString; the returned FString is borrowed from the text data.
     ///
     /// # Safety
-    /// Self must be a live native FText on the engine thread. Do not free the
-    /// result or mutate/invalidate the text data (including through native
-    /// aliases or culture changes) while the returned borrow is live.
+    /// Self must be a live native FText. Access localized/history-driven text
+    /// on the engine thread; unshared invariant text may use its owning thread.
+    /// Do not free the result or mutate/invalidate its data (including through
+    /// native aliases or culture changes) while the returned borrow is live.
+    /// Synchronize native history access for the call, including invariant text.
     #[bind_resolver_func(crate::resolvers::messages::broadcast_display::FText_ToString)]
     pub unsafe fn to_native_string<'a>(&'a self) -> &'a FString {}
 
-    /// FText::AsCultureInvariant, with explicit hidden return storage.
+    /// FText::AsCultureInvariant(const FString&), with hidden return storage.
     ///
     /// # Safety
-    /// Output must be writable native FText storage. Call on the engine thread
-    /// with an initialized allocator. The resolved moving-string overload may
-    /// consume string: callers must not drop its backing buffer again.
-    #[bind_resolver_func(crate::resolvers::admin_control::FText_AsCultureInvariant)]
-    pub unsafe fn as_culture_invariant(output: *mut Self, string: *mut FString) -> *mut Self {}
+    /// Output must be uninitialized writable native FText storage. String must
+    /// be a valid native string, with the engine allocator/runtime initialized.
+    /// The input is copied, not consumed. Output acquires one native reference.
+    #[bind_resolver_func(crate::resolvers::admin_control::FText_AsCultureInvariantCopy)]
+    unsafe fn as_culture_invariant(output: *mut Self, string: &FString) -> *mut Self {}
 
     /// Release the native thread-safe shared reference (control block at +8).
     ///
@@ -38,4 +49,91 @@ impl FText {
     /// Self must own a live native shared reference, released exactly once.
     #[bind_resolver_func(crate::resolvers::messages::broadcast_display::FText_Release)]
     pub unsafe fn release(self: *mut Self) {}
+}
+
+/// One owned culture-invariant native text reference. Its display string is
+/// independent of localization updates and cannot be mutated through safe Rust.
+/// Native text and its owner are deliberately neither Send nor Sync.
+pub struct InvariantText {
+    text: FText,
+}
+
+impl InvariantText {
+    /// Construct native text after engine globals and allocator initialization.
+    pub fn new(text: &str) -> Self {
+        let string = FString::from(text);
+        let mut output = MaybeUninit::<FText>::uninit();
+        // The verified const-reference overload copies the input and fully
+        // initializes output; no zero-filled FText or ownership transfer occurs.
+        unsafe {
+            FText::as_culture_invariant(output.as_mut_ptr(), &string);
+            Self { text: output.assume_init() }
+        }
+    }
+
+    /// Borrow UTF-16 text without the trailing native terminator.
+    pub fn as_utf16(&self) -> &[TCHAR] {
+        // Only this type's constructor creates its text. Base text history never
+        // rebuilds the display contents; persistence copies rather than moves
+        // the old display buffer. Both remain alive until our reference drops.
+        let string = unsafe { self.text.to_native_string() };
+        let units = string.as_slice();
+        units.strip_suffix(&[0]).unwrap_or(units)
+    }
+
+    pub fn to_string_lossy(&self) -> String {
+        String::from_utf16_lossy(self.as_utf16())
+    }
+
+    /// Borrow a native argument. Native uses must preserve this owner's
+    /// reference and immutable display contents, and synchronize history access
+    /// with this owner. Dereferencing or passing this pointer to UE is unsafe.
+    pub fn as_ptr(&self) -> *const FText {
+        &self.text
+    }
+
+    /// Transfer the owned reference into native storage. FText has no Rust
+    /// destructor; the recipient must release it or intentionally retain it.
+    pub fn into_raw(self) -> FText {
+        let owner = ManuallyDrop::new(self);
+        unsafe { std::ptr::read(&owner.text) }
+    }
+}
+
+impl Drop for InvariantText {
+    fn drop(&mut self) {
+        // Startup initializes the process-lifetime bindings. This owner holds
+        // exactly one reference; borrowed native FText values never run this.
+        unsafe { (&raw mut self.text).release(); }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn null_native_text_import_is_absent() {
+        assert!(unsafe { FText::from_ptr(std::ptr::null()) }.is_none());
+    }
+
+    #[test]
+    fn safe_text_api_preserves_borrows_without_default_clone_or_thread_transfer() {
+        let _: fn(&str) -> InvariantText = InvariantText::new;
+        let _: for<'a> fn(&'a InvariantText) -> &'a [TCHAR] = InvariantText::as_utf16;
+
+        // Inference becomes ambiguous if any forbidden implementation is added.
+        trait AmbiguousIfImplemented<A> { fn check() {} }
+        impl<T: ?Sized> AmbiguousIfImplemented<()> for T {}
+        struct IsSend;
+        struct IsSync;
+        struct IsClone;
+        struct IsDefault;
+        impl<T: ?Sized + Send> AmbiguousIfImplemented<IsSend> for T {}
+        impl<T: ?Sized + Sync> AmbiguousIfImplemented<IsSync> for T {}
+        impl<T: ?Sized + Clone> AmbiguousIfImplemented<IsClone> for T {}
+        impl<T: ?Sized + Default> AmbiguousIfImplemented<IsDefault> for T {}
+        let _ = <FText as AmbiguousIfImplemented<_>>::check;
+        let _ = <InvariantText as AmbiguousIfImplemented<_>>::check;
+    }
 }

@@ -3,7 +3,7 @@ use std::os::raw::c_void;
 use crate::{
     events::broadcast_message::game_chat::broadcast_parts,
     game::{chivalry2::EChatType, engine::FText},
-    ue::{FLinearColor, FName, FString, UTBLGameInstance},
+    ue::{FLinearColor, FName, FString, InvariantText, UTBLGameInstance},
 };
 
 define_pattern_resolver!(ClientReceiveLocalizedChat, [
@@ -59,8 +59,8 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let world = unsafe { UWorld::from_ptr(controller.base.get_world()) }?;
     let instance = world.owning_game_instance;
     if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } { return None; }
-    let title = NativeText::new(title)?;
-    let body = NativeText::new(body)?;
+    let title = InvariantText::new(title);
+    let body = InvariantText::new(body);
     // Preflight both calls before producing any output; failures use the untouched native path.
     if !crate::resolvers::function_is_bound("TBLGameInstance_AddChatLine")
         || o_ClientMessage.get().is_none()
@@ -72,7 +72,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     unsafe { ClientMessage_detour_fkt(controller_ptr, &mut console_line, FName::default(), 0.0); }
     let [r, g, b, a] = origin_color;
     let origin_color = FLinearColor { r, g, b, a };
-    unsafe { instance.cast::<UTBLGameInstance>().add_chat_line(&title.0, &body.0, channel, false, is_sender_dev, &origin_color); }
+    unsafe { instance.cast::<UTBLGameInstance>().add_chat_line(title.as_ptr(), body.as_ptr(), channel, false, is_sender_dev, &origin_color); }
     Some(())
 }
 
@@ -82,7 +82,7 @@ define_pattern_resolver!(FText_ToString, [
 
 fn native_string(text: *const FText) -> Option<String> {
     if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") { return None; }
-    let string = unsafe { text.as_ref()?.to_native_string() };
+    let string = unsafe { FText::from_ptr(text)?.to_native_string() };
     string.copy_to_string().ok()
 }
 
@@ -90,37 +90,9 @@ define_pattern_resolver!(FText_Release, [
     "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
 ]);
 
-struct NativeText(FText);
-
-impl NativeText {
-    fn new(text: &str) -> Option<Self> {
-        if crate::resolvers::require_function_bindings(&["FText_Release", "FText_AsCultureInvariant"]).is_err() {
-            return None;
-        }
-        let mut result = Self(FText::default());
-        let mut string = FString::from(text);
-        unsafe { FText::as_culture_invariant(&mut result.0, &mut string); }
-        Some(result)
-    }
-}
-
-impl Drop for NativeText {
-    fn drop(&mut self) {
-        // Construction preflights the binding and creates one owned reference.
-        unsafe { (&raw mut self.0).release(); }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn native_text_layout_matches_windows_abi() {
-        assert_eq!(std::mem::size_of::<FText>(), 24);
-        assert_eq!(std::mem::align_of::<FText>(), 8);
-        assert_eq!(std::mem::offset_of!(FText, flags), 16);
-    }
 
     #[test]
     fn display_override_accepts_only_global_channels() {

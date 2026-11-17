@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::quote;
-use syn::{FnArg, GenericParam, ItemFn, Pat, Path, Type};
+use syn::{FnArg, GenericParam, ItemFn, Pat, Path, ReturnType, Type};
 
 /// Bind an unsafe Rust method/function to a separately declared named resolver.
 ///
@@ -13,10 +13,7 @@ pub fn bind_resolver_func(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    let resolver: Path = syn::parse2(args)?;
-    if resolver.segments.iter().any(|segment| !segment.arguments.is_empty()) {
-        return Err(syn::Error::new_spanned(&resolver, "resolver paths cannot have generic arguments"));
-    }
+    let resolver = resolver_path(args)?;
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let mut function: ItemFn = syn::parse2(item)?;
     let signature = &function.sig;
@@ -88,6 +85,92 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     Ok(quote!(#function))
 }
 
+fn resolver_path(args: Tokens) -> syn::Result<Path> {
+    let resolver: Path = syn::parse2(args)?;
+    if resolver.segments.iter().any(|segment| !segment.arguments.is_empty()) {
+        return Err(syn::Error::new_spanned(&resolver, "resolver paths cannot have generic arguments"));
+    }
+    Ok(resolver)
+}
+
+/// Bind a required native global to a zero-argument unsafe accessor.
+/// `Value` reads a Copy value from its slot; `Address` returns an inline object's
+/// raw address without copying it. An explicit mode is required. Pointers must be non-null.
+#[proc_macro_attribute]
+pub fn bind_resolver_value(args: TokenStream, item: TokenStream) -> TokenStream {
+    expand_value(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    use syn::parse::Parser;
+    let args = syn::punctuated::Punctuated::<Path, syn::Token![,]>::parse_terminated.parse2(args)?;
+    let mut args = args.into_iter();
+    let resolver = args.next().ok_or_else(|| syn::Error::new(Span::call_site(), "expected resolver path"))?;
+    let resolver = resolver_path(quote!(#resolver))?;
+    let address = match args.next() {
+        Some(mode) if mode.is_ident("Value") => false,
+        Some(mode) if mode.is_ident("Address") => true,
+        Some(mode) => return Err(syn::Error::new_spanned(mode, "expected Value or Address binding mode")),
+        None => return Err(syn::Error::new(Span::call_site(), "explicit Value or Address binding mode is required")),
+    };
+    if args.next().is_some() {
+        return Err(syn::Error::new(Span::call_site(), "unexpected native value binding arguments"));
+    }
+    let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+    let mut function: ItemFn = syn::parse2(item)?;
+    let signature = &function.sig;
+    if signature.unsafety.is_none() {
+        return Err(syn::Error::new_spanned(signature, "native value bindings require unsafe fn"));
+    }
+    if !signature.inputs.is_empty() || !signature.generics.params.is_empty()
+        || signature.generics.where_clause.is_some() || signature.asyncness.is_some()
+        || signature.constness.is_some() || signature.abi.is_some() || signature.variadic.is_some()
+    {
+        return Err(syn::Error::new_spanned(signature, "native value bindings require a non-generic, non-async zero-argument Rust accessor"));
+    }
+    if !function.block.stmts.is_empty() {
+        return Err(syn::Error::new_spanned(&function.block, "native binding bodies must be empty"));
+    }
+    let ReturnType::Type(_, ty) = &signature.output else {
+        return Err(syn::Error::new_spanned(signature, "native value bindings require an explicit Copy value return type"));
+    };
+    if matches!(ty.as_ref(), Type::Reference(_))
+        || matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option" || segment.ident == "Result"))
+    {
+        return Err(syn::Error::new_spanned(ty, "return the native Copy value directly, not a reference, Option or Result"));
+    }
+    if address && !matches!(ty.as_ref(), Type::Ptr(_)) {
+        return Err(syn::Error::new_spanned(ty, "Address bindings require a raw pointer return type"));
+    }
+    let binding = syn::Ident::new("__UNCHAINED_VALUE_BINDING", Span::mixed_site());
+    let value = syn::Ident::new("__unchained_value", Span::mixed_site());
+    let check_pointer = matches!(ty.as_ref(), Type::Ptr(_)).then(|| quote! {
+        assert!(!#value.is_null(), concat!("Required native value ", #resolver_name, " is null; the engine must initialize it before access"));
+    });
+    let read = if address {
+        quote!(#binding.address() as #ty)
+    } else {
+        quote!(unsafe { (#binding.address() as *const #ty).read() })
+    };
+    function.block = Box::new(syn::parse2(quote!({
+        let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
+        static #binding: crate::resolvers::ValueBinding =
+            crate::resolvers::ValueBinding::new(#resolver_name);
+        ::inventory::submit! {
+            crate::resolvers::ValueBindingRegistration { binding: &#binding }
+        }
+        fn __require_copy<T: ::core::marker::Copy>() {}
+        __require_copy::<#ty>();
+        let #value: #ty = #read;
+        #check_pointer
+        #value
+    }))?);
+    if !function.attrs.iter().any(|attribute| attribute.path().is_ident("inline")) {
+        function.attrs.push(syn::parse_quote!(#[inline(always)]));
+    }
+    Ok(quote!(#function))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,5 +188,35 @@ mod tests {
     #[test]
     fn rejects_generic_resolver_paths() {
         assert!(expand(quote!(Release<u8>), quote!(unsafe fn release() {})).is_err());
+        assert!(expand_value(quote!(NativeValue<u8>, Value), quote!(unsafe fn value() -> u32 {})).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_value_binding_modes() {
+        assert!(expand_value(quote!(Objects, Address), quote!(unsafe fn objects() -> u32 {}))
+            .unwrap_err().to_string().contains("raw pointer return type"));
+        assert!(expand_value(quote!(Objects, unknown), quote!(unsafe fn objects() -> *const u32 {})).is_err());
+        assert!(expand_value(quote!(Objects, Address, Address), quote!(unsafe fn objects() -> *const u32 {})).is_err());
+        assert!(expand_value(quote!(Objects), quote!(unsafe fn objects() -> *const u32 {}))
+            .unwrap_err().to_string().contains("explicit Value or Address"));
+        assert!(expand_value(quote!(Objects, address), quote!(unsafe fn objects() -> *const u32 {}))
+            .unwrap_err().to_string().contains("expected Value or Address"));
+    }
+
+    #[test_case::test_case(quote!(fn value() -> u32 {}), "require unsafe"; "safe accessor")]
+    #[test_case::test_case(quote!(unsafe fn value(arg: u32) -> u32 {}), "zero-argument"; "argument")]
+    #[test_case::test_case(quote!(unsafe fn value(&self) -> u32 {}), "zero-argument"; "receiver")]
+    #[test_case::test_case(quote!(unsafe fn value<T>() -> T {}), "non-generic"; "generic value")]
+    #[test_case::test_case(quote!(unsafe fn value<'a>() -> u32 {}), "non-generic"; "generic lifetime")]
+    #[test_case::test_case(quote!(async unsafe fn value() -> u32 {}), "non-async"; "async value")]
+    #[test_case::test_case(quote!(const unsafe fn value() -> u32 {}), "zero-argument Rust accessor"; "const value")]
+    #[test_case::test_case(quote!(unsafe extern "C" fn value() -> u32 {}), "Rust accessor"; "explicit ABI")]
+    #[test_case::test_case(quote!(unsafe fn value() -> u32 { 0 }), "must be empty"; "nonempty value body")]
+    #[test_case::test_case(quote!(unsafe fn value() {}), "explicit Copy value"; "implicit return")]
+    #[test_case::test_case(quote!(unsafe fn value() -> &'static u32 {}), "not a reference"; "reference")]
+    #[test_case::test_case(quote!(unsafe fn value() -> Option<u32> {}), "Option or Result"; "optional value")]
+    #[test_case::test_case(quote!(unsafe fn value() -> Result<u32, ()> {}), "Option or Result"; "fallible value")]
+    fn rejects_unsupported_native_value_declarations(item: Tokens, message: &str) {
+        assert!(expand_value(quote!(NativeValue, Value), item).unwrap_err().to_string().contains(message));
     }
 }

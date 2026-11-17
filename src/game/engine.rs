@@ -400,9 +400,7 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
 pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
     let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
 
-    let Some(allocator) = crate::ue::try_gmalloc() else {
-        return Err("engine allocator (GMalloc) is not available; run on the game thread after globals init".into());
-    };
+    let allocator = crate::ue::gmalloc();
 
     let mut files_array = TArray::<FString>::default();
     for file in files {

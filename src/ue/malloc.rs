@@ -1,35 +1,19 @@
 use std::alloc::Layout;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use super::{FGenericMemoryStats, FOutputDevice, TCHAR};
 use crate::game::engine::UWorld;
 
-// Cache the slot, not the allocator: preinit can precede engine initialization.
-static GMALLOC_SLOT: AtomicUsize = AtomicUsize::new(0);
-
+// UE global FMalloc* GMalloc. Cache its slot, not the current allocator pointer.
 /// # Safety
-/// `slot` must be zero or the engine's process-lifetime GMalloc slot address.
-/// Non-null slot values must point to process-lifetime allocators.
-/// Slot contents must only change when no accessor reads them concurrently.
-pub(crate) unsafe fn set_gmalloc_slot(slot: usize) {
-    GMALLOC_SLOT.store(slot, Ordering::Release);
-}
+/// Startup must bind UE's process-lifetime allocator slot. Slot changes must not
+/// race with reads; the allocator must remain live for all returned handles.
+#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
+unsafe fn native_gmalloc() -> *mut FMalloc {}
 
-pub(crate) fn try_gmalloc() -> Option<FMallocHandle> {
-    unsafe { gmalloc_from_slot(GMALLOC_SLOT.load(Ordering::Acquire) as *const *mut FMalloc) }
-}
-
-/// # Safety
-/// A non-null slot must be readable and contain null or an allocator that remains
-/// valid for every use of the returned handle.
-/// The engine must not mutate the slot concurrently with this read.
-unsafe fn gmalloc_from_slot(slot: *const *mut FMalloc) -> Option<FMallocHandle> {
-    if slot.is_null() {
-        None
-    } else {
-        NonNull::new(*slot).map(FMallocHandle)
-    }
+pub(crate) fn gmalloc() -> FMallocHandle {
+    // The value binding panics on an unresolved slot or null allocator pointer.
+    FMallocHandle(unsafe { NonNull::new_unchecked(native_gmalloc()) })
 }
 
 // UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
@@ -126,19 +110,9 @@ mod tests {
     }
 
     #[test]
-    fn shared_accessor_reads_late_initialization_without_globals() {
-        let mut allocator = FMalloc { vtable: std::ptr::null() };
-        let pointer = NonNull::from(&mut allocator);
-        let mut value: *mut FMalloc = std::ptr::null_mut();
-        let slot = std::ptr::addr_of_mut!(value);
-        unsafe {
-            assert!(gmalloc_from_slot(std::ptr::null()).is_none());
-            assert!(gmalloc_from_slot(slot).is_none());
-            slot.write(pointer.as_ptr());
-            assert_eq!(gmalloc_from_slot(slot).unwrap().0, pointer);
-            slot.write(std::ptr::null_mut());
-            assert!(gmalloc_from_slot(slot).is_none());
-        }
+    #[should_panic(expected = "Required native value GMalloc is not bound")]
+    fn allocator_access_before_binding_is_fatal() {
+        let _ = gmalloc();
     }
 
     #[test]
@@ -154,19 +128,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "GMalloc is not initialized")]
+    #[should_panic(expected = "Required native value GMalloc is not bound")]
     fn array_capacity_uses_early_allocator_accessor() {
         let _ = TArray::<u16>::with_capacity(1);
     }
 
     #[test]
-    #[should_panic(expected = "GMalloc is not initialized")]
+    #[should_panic(expected = "Required native value GMalloc is not bound")]
     fn string_conversion_uses_early_allocator_accessor() {
         let _ = crate::ue::FString::from("pak directory");
     }
 
     #[test]
-    #[should_panic(expected = "GMalloc is not initialized")]
+    #[should_panic(expected = "Required native value GMalloc is not bound")]
     fn array_push_uses_early_allocator_accessor() {
         TArray::<u16>::new().push(1);
     }

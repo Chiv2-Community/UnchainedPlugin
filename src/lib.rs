@@ -346,10 +346,8 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
-                if let Some(offset) = offsets.get("GMalloc") {
-                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
-                }
-                if let Err(error) = resolvers::initialize_function_bindings(&offsets) {
+                unsafe { resolvers::initialize_value_bindings(*resolvers::BASE_ADDR, &offsets); }
+                if let Err(error) = unsafe { resolvers::initialize_function_bindings(&offsets) } {
                     serror!("Failed to bind native functions: {}", error);
                     std::process::exit(-67);
                 }

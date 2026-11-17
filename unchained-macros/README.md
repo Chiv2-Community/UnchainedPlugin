@@ -13,6 +13,28 @@ Logging, rich text, gameplay-specific macros and the procedural attributes in
 signatures and lifetime-aware attachment against local fixture functions,
 not game functions.
 
+## Required native values
+
+```rust,ignore
+#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
+unsafe fn native_gmalloc() -> *mut FMalloc {}
+
+// GUObjectArray is an inline object, not a pointer slot.
+#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
+unsafe fn native_guobject_array() -> *const FUObjectArray {}
+```
+
+- A zero-argument unsafe accessor requires an explicit mode:
+  - `Value` reads a `Copy` value from the resolved slot (GMalloc's pointer).
+  - `Address` returns the resolved address as a raw pointer to an inline global,
+    without reading or copying the object's storage.
+- Startup calls `initialize_value_bindings(base, offsets)` before access.
+- Binding caches the slot address, not its current contents; binding before
+  the engine populates a pointer is permitted.
+- Missing/invalid bindings and null pointer values panic with the resolver name.
+  Zero scalar values remain valid. Access never returns `Option` or `Result`.
+- The caller must uphold native layout, lifetime and synchronization requirements.
+
 ## Direct method bindings
 
 Keep the resolver declaration separate, then bind a method to its type:
