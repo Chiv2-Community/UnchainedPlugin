@@ -11,6 +11,12 @@ pub type FPrimaryAssetId = c_void;
 pub type UAssetManager = c_void;
 pub type IAssetRegistry = c_void;
 pub type UAssetRegistryImpl = c_void;
+/// Opaque native memory-statistics map (HAL/MemoryMisc.h). Pass only a live
+/// engine-constructed instance; Rust must not allocate or initialize this view.
+#[repr(C)]
+pub struct FGenericMemoryStats {
+    _opaque: [u8; 0],
+}
 /// Opaque UE archive base. Its layout/vtable is target-build-specific; Rust
 /// must not construct or dereference it until the reader constructor boundary
 /// is resolved and verified.

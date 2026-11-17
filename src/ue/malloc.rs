@@ -2,6 +2,8 @@ use std::alloc::Layout;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use super::{FGenericMemoryStats, FOutputDevice, TCHAR};
+use crate::game::engine::UWorld;
 
 // Cache the slot, not the allocator: preinit can precede engine initialization.
 static GMALLOC_SLOT: AtomicUsize = AtomicUsize::new(0);
@@ -30,22 +32,42 @@ unsafe fn gmalloc_from_slot(slot: *const *mut FMalloc) -> Option<FMallocHandle> 
     }
 }
 
+// UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
+// Confirmed against symbolized Binned2 and Steam/EGS vtable 0x144982A90.
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FMalloc {
     #[vtable(
-        // 0: deleting destructor; 1: Exec.
-        pad(2);
+        /// MSVC deleting-destructor thunk, not a plain C++ destructor.
+        /// Destroys the allocator even with flags == 0. Never call on borrowed GMalloc.
+        /// Flags must match native ownership/allocation mode; the returned pointer is not live.
+        deleting_destructor(this: *mut Self, flags: u32) -> *mut c_void;
+        /// Output must point to a live FOutputDevice; command must be NUL-terminated.
+        exec(this: *mut Self, world: *mut UWorld, command: *const TCHAR, output: *mut FOutputDevice) -> bool;
         malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
         try_malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
         realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
         try_realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
         free(this: *mut Self, original: *mut c_void);
-        // 7..18: QuantizeSize, GetAllocationSize, Trim,
-        // SetupTLSCachesOnCurrentThread, ClearAndDisableTLSCachesOnCurrentThread,
-        // InitializeStatsMetadata, UpdateStats, GetAllocatorStats,
-        // DumpAllocatorStats, IsInternallyThreadSafe, ValidateHeap, GetDescriptiveName.
-        pad(12);
+        quantize_size(this: *mut Self, count: usize, alignment: u32) -> usize;
+        /// Original must belong to this allocator; size_out must be writable and non-null.
+        /// SizeOut is meaningful only when this returns true.
+        get_allocation_size(this: *mut Self, original: *mut c_void, size_out: *mut usize) -> bool;
+        /// Must run on the main thread, per FMalloc's native contract.
+        trim(this: *mut Self, trim_thread_caches: bool);
+        setup_tls_caches_on_current_thread(this: *mut Self);
+        clear_and_disable_tls_caches_on_current_thread(this: *mut Self);
+        /// Requires native stats/name initialization; not safe during arbitrary preinit.
+        initialize_stats_metadata(this: *mut Self);
+        update_stats(this: *mut Self);
+        /// Stats must point to a live engine-constructed FGenericMemoryStats map.
+        get_allocator_stats(this: *mut Self, stats: *mut FGenericMemoryStats);
+        /// Output must point to a live engine-constructed FOutputDevice.
+        dump_allocator_stats(this: *mut Self, output: *mut FOutputDevice);
+        is_internally_thread_safe(this: *const Self) -> bool;
+        validate_heap(this: *mut Self) -> bool;
+        /// Returns borrowed NUL-terminated native text; do not free or mutate it.
+        get_descriptive_name(this: *mut Self) -> *const TCHAR;
     )]
     vtable: *const (),
 }
@@ -141,14 +163,45 @@ mod tests {
     }
 
     fn test_vtable() -> FMallocVTable {
+        // Preserve allocation-behavior tests without exercising unrelated native slots.
+        macro_rules! uncalled {
+            ($name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?) => {
+                unsafe extern "C" fn $name($($arg: $ty),*) $(-> $ret)? {
+                    std::process::abort()
+                }
+            };
+        }
+        uncalled!(destroy(_this: *mut FMalloc, _flags: u32) -> *mut c_void);
+        uncalled!(exec(_this: *mut FMalloc, _world: *mut UWorld, _cmd: *const TCHAR, _out: *mut FOutputDevice) -> bool);
+        uncalled!(quantize(_this: *mut FMalloc, _count: usize, _alignment: u32) -> usize);
+        uncalled!(allocation_size(_this: *mut FMalloc, _ptr: *mut c_void, _out: *mut usize) -> bool);
+        uncalled!(trim(_this: *mut FMalloc, _caches: bool));
+        uncalled!(update(_this: *mut FMalloc));
+        uncalled!(stats(_this: *mut FMalloc, _stats: *mut FGenericMemoryStats));
+        uncalled!(dump(_this: *mut FMalloc, _out: *mut FOutputDevice));
+        uncalled!(thread_safe(_this: *const FMalloc) -> bool);
+        uncalled!(validate(_this: *mut FMalloc) -> bool);
+        uncalled!(name(_this: *mut FMalloc) -> *const TCHAR);
         FMallocVTable {
-            _pad_0: [0; 2],
+            deleting_destructor: destroy,
+            exec,
             malloc: allocate,
             try_malloc: allocate,
             realloc: reallocate,
             try_realloc: reallocate,
             free: deallocate,
-            _pad_6: [0; 12],
+            quantize_size: quantize,
+            get_allocation_size: allocation_size,
+            trim,
+            setup_tls_caches_on_current_thread: update,
+            clear_and_disable_tls_caches_on_current_thread: update,
+            initialize_stats_metadata: update,
+            update_stats: update,
+            get_allocator_stats: stats,
+            dump_allocator_stats: dump,
+            is_internally_thread_safe: thread_safe,
+            validate_heap: validate,
+            get_descriptive_name: name,
         }
     }
 
