@@ -14,8 +14,8 @@ name = "backend_transport"
 path = "backend_transport.rs"
 
 [[test]]
-name = "registration_ports"
-path = "registration_ports.rs"
+name = "registration_metadata"
+path = "registration_metadata.rs"
 
 [[test]]
 name = "backend_integration"
