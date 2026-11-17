@@ -39,9 +39,12 @@ unsafe fn gmalloc_from_slot(slot: *const *mut FMalloc) -> Option<FMallocHandle> 
 pub struct FMalloc {
     #[vtable(
         /// MSVC deleting-destructor thunk, not a plain C++ destructor.
+        ///
+        /// # Safety
         /// Destroys the allocator even with flags == 0. Never call on borrowed GMalloc.
         /// Flags must match native ownership/allocation mode; the returned pointer is not live.
         deleting_destructor(this: *mut Self, flags: u32) -> *mut c_void;
+        /// # Safety
         /// Output must point to a live FOutputDevice; command must be NUL-terminated.
         exec(this: *mut Self, world: *mut UWorld, command: *const TCHAR, output: *mut FOutputDevice) -> bool;
         malloc(this: *mut Self, count: usize, alignment: u32) -> *mut c_void;
@@ -50,18 +53,23 @@ pub struct FMalloc {
         try_realloc(this: *mut Self, original: *mut c_void, count: usize, alignment: u32) -> *mut c_void;
         free(this: *mut Self, original: *mut c_void);
         quantize_size(this: *mut Self, count: usize, alignment: u32) -> usize;
+        /// # Safety
         /// Original must belong to this allocator; size_out must be writable and non-null.
         /// SizeOut is meaningful only when this returns true.
         get_allocation_size(this: *mut Self, original: *mut c_void, size_out: *mut usize) -> bool;
+        /// # Safety
         /// Must run on the main thread, per FMalloc's native contract.
         trim(this: *mut Self, trim_thread_caches: bool);
         setup_tls_caches_on_current_thread(this: *mut Self);
         clear_and_disable_tls_caches_on_current_thread(this: *mut Self);
+        /// # Safety
         /// Requires native stats/name initialization; not safe during arbitrary preinit.
         initialize_stats_metadata(this: *mut Self);
         update_stats(this: *mut Self);
+        /// # Safety
         /// Stats must point to a live engine-constructed FGenericMemoryStats map.
         get_allocator_stats(this: *mut Self, stats: *mut FGenericMemoryStats);
+        /// # Safety
         /// Output must point to a live engine-constructed FOutputDevice.
         dump_allocator_stats(this: *mut Self, output: *mut FOutputDevice);
         is_internally_thread_safe(this: *const Self) -> bool;

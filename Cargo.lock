@@ -2187,7 +2187,7 @@ dependencies = [
 [[package]]
 name = "rust-ctables"
 version = "0.1.0"
-source = "git+https://github.com/Chiv2-Community/rust-ctables.git?rev=e01695529eeb663d407672c1b2f961113f128dc2#e01695529eeb663d407672c1b2f961113f128dc2"
+source = "git+https://github.com/Chiv2-Community/rust-ctables.git?rev=c72ae3fc074974ee1b78e313c87992593ff19265#c72ae3fc074974ee1b78e313c87992593ff19265"
 dependencies = [
  "proc-macro2",
  "quote",

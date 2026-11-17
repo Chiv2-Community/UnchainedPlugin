@@ -74,7 +74,7 @@ loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/f
 
 
 [dependencies]
-rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "e01695529eeb663d407672c1b2f961113f128dc2" }
+rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "c72ae3fc074974ee1b78e313c87992593ff19265" }
 # patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
 patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
 anyhow = "1.0.79"
