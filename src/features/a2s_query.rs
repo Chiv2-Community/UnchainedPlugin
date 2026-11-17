@@ -9,8 +9,8 @@ use std::{net::SocketAddr, num::NonZeroUsize, time::Duration};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
-/// Wait for a metadata refresh; cancellation takes priority over ready wakeups.
-pub(super) async fn wait_for_refresh(
+/// Wait until metadata should refresh; return false on cancellation, which takes priority.
+pub(super) async fn should_refresh(
     shutdown: &CancellationToken,
     refresh: &Notify,
     interval: Duration,

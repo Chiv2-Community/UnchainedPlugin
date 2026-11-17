@@ -43,7 +43,7 @@ async fn metadata_refresh_wait(signal: RefreshSignal, expected: bool) {
     }
     let started = tokio::time::Instant::now();
     assert_eq!(
-        a2s_query::wait_for_refresh(&shutdown, &refresh, interval).await,
+        a2s_query::should_refresh(&shutdown, &refresh, interval).await,
         expected
     );
     let elapsed = if matches!(signal, RefreshSignal::Timer) {
@@ -70,7 +70,7 @@ async fn metadata_refresh_wakes_without_waiting_for_timer(cancel: bool) {
         }
     };
     let (ready, ()) = tokio::join!(
-        a2s_query::wait_for_refresh(&shutdown, &refresh, Duration::from_secs(5)),
+        a2s_query::should_refresh(&shutdown, &refresh, Duration::from_secs(5)),
         signal,
     );
     assert_eq!(ready, !cancel);

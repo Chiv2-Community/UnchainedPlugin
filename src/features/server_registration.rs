@@ -106,7 +106,7 @@ impl MetadataCollector {
             if let Some(info) = self.query(&shutdown).await {
                 break info;
             }
-            if !a2s_query::wait_for_refresh(&shutdown, &refresh, METADATA_POLL_INTERVAL).await {
+            if !a2s_query::should_refresh(&shutdown, &refresh, METADATA_POLL_INTERVAL).await {
                 return;
             }
         };
@@ -200,7 +200,7 @@ impl MetadataCollector {
         shutdown: &CancellationToken,
         refresh: &Notify,
     ) {
-        while a2s_query::wait_for_refresh(shutdown, refresh, METADATA_POLL_INTERVAL).await {
+        while a2s_query::should_refresh(shutdown, refresh, METADATA_POLL_INTERVAL).await {
             let Some(info) = self.query(shutdown).await else {
                 continue;
             };
