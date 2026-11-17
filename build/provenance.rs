@@ -1,4 +1,5 @@
 use git2::{Delta, DescribeOptions, Oid, Repository, StatusOptions, Statuses};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[derive(Default)]
 struct Provenance {
@@ -6,6 +7,7 @@ struct Provenance {
     tag: Option<String>,
     dirty: Option<bool>,
     changes: Vec<String>,
+    banner_seed: u64,
 }
 
 fn provenance() -> Option<Provenance> {
@@ -33,11 +35,24 @@ fn provenance() -> Option<Provenance> {
         )
         .and_then(|description| description.format(None))
         .ok();
+    let mut seed = DefaultHasher::new();
+    commit.hash(&mut seed);
+    tag.hash(&mut seed);
+    if let Ok(diff) =
+        repo.diff_index_to_workdir(None, Some(git2::DiffOptions::new().show_binary(true)))
+    {
+        let _ = diff.print(git2::DiffFormat::Patch, |_, _, line| {
+            line.origin().hash(&mut seed);
+            line.content().hash(&mut seed);
+            true
+        });
+    }
     Some(Provenance {
         commit: Some(commit),
         tag,
         dirty,
         changes,
+        banner_seed: seed.finish(),
     })
 }
 
@@ -127,8 +142,10 @@ fn write_provenance(provenance: &Provenance, commit: &str) {
         "pub(super) const COMMIT: &str = {commit:?};\n\
          pub(super) const REVISION: &str = {revision:?};\n\
          pub(super) const DIRTY: bool = {dirty};\n\
+         pub(super) const BANNER_SEED: u64 = {banner_seed};\n\
          pub(super) const UNCOMMITTED_CHANGES: &[&str] = &{changes:?};\n",
         dirty = provenance.dirty == Some(true),
+        banner_seed = provenance.banner_seed,
         changes = provenance.changes,
     );
     std::fs::write(output.join("provenance.rs"), source).expect("Failed to write build provenance");

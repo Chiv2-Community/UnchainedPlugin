@@ -1,3 +1,6 @@
+use std::{borrow::Cow, io::IsTerminal};
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+
 mod provenance {
     include!(concat!(env!("OUT_DIR"), "/provenance.rs"));
 }
@@ -40,12 +43,40 @@ const DIRTY_BUILD: &str = concat!(
 pub(crate) fn print_banner() {
     sinfo!(("\r\n"), palette("title"), "{TITLE}", palette("subtitle"), "{SUBTITLE}");
     if provenance::DIRTY {
-        swarn!(("\r\n"), palette("dirty_build"), "{DIRTY_BUILD}");
+        let emoji_supported = std::io::stdout().is_terminal()
+            && !super::should_strip_console_emojis(log4rs::append::console::Target::Stdout);
+        let dirty_build = dirty_banner(provenance::BANNER_SEED, emoji_supported);
+        swarn!(("\r\n"), palette("dirty_build"), "{dirty_build}");
         swarn!("Revision: {}", provenance::COMMIT);
         print_modifications();
     } else {
         sinfo!("{}", provenance::REVISION);
     }
+}
+
+fn dirty_banner(seed: u64, emoji_supported: bool) -> Cow<'static, str> {
+    if !emoji_supported {
+        return Cow::Borrowed(DIRTY_BUILD);
+    }
+    // Replace two terminal cells per fly, keeping space around the artwork and edges.
+    let bytes = DIRTY_BUILD.as_bytes();
+    let mut gaps: Vec<_> = DIRTY_BUILD.match_indices("  ")
+        .map(|(offset, _)| offset)
+        .filter(|&offset| offset > 0 && bytes[offset - 1] == b' '
+            && bytes.get(offset + 2) == Some(&b' '))
+        .collect();
+    gaps.shuffle(&mut StdRng::seed_from_u64(seed));
+    gaps.truncate(10);
+    gaps.sort_unstable();
+    let mut decorated = String::with_capacity(DIRTY_BUILD.len() + gaps.len() * 2);
+    let mut start = 0;
+    for offset in gaps {
+        decorated.push_str(&DIRTY_BUILD[start..offset]);
+        decorated.push('🪰');
+        start = offset + 2;
+    }
+    decorated.push_str(&DIRTY_BUILD[start..]);
+    Cow::Owned(decorated)
 }
 
 fn print_modifications() {
@@ -62,6 +93,21 @@ fn print_modifications() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flies_are_seeded_and_replace_only_whitespace() {
+        let banner = dirty_banner(1, true);
+        assert_eq!(banner, dirty_banner(1, true));
+        assert_ne!(banner, dirty_banner(2, true));
+        assert_eq!(banner.matches('🪰').count(), 10);
+        assert_eq!(banner.replace('🪰', "  "), DIRTY_BUILD);
+        assert!(banner.lines().all(|line| line.starts_with(' ') && line.ends_with(' ')));
+    }
+
+    #[test]
+    fn unsupported_terminals_keep_the_plain_banner() {
+        assert_eq!(dirty_banner(1, false), DIRTY_BUILD);
+    }
 
     #[test]
     fn banner_has_uniform_width_matching_padding_and_indented_artwork() {
