@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use censor::Censor;
 use clap::{CommandFactory, Parser};
 use serde::Serialize;
@@ -14,10 +14,10 @@ pub enum CensorArg {
     Zealous
 }
 
-impl Into<Censor> for CensorArg {
-    fn into(self) -> Censor {
-        match self {
-            CensorArg::None => Censor::Custom(HashSet::new()),
+impl From<CensorArg> for Censor {
+    fn from(arg: CensorArg) -> Self {
+        match arg {
+            CensorArg::None => Censor::Custom(Default::default()),
             CensorArg::Standard => Censor::Standard,
             CensorArg::Sex => Censor::Sex,
             CensorArg::Zealous => Censor::Zealous,
@@ -80,7 +80,7 @@ pub struct CLIArgs {
         long = "server-browser-backend",
         default_value = "https://servers.polehammer.net"
     )]
-    pub server_browser_backend: Option<String>,
+    pub server_browser_backend: String,
 
     // Keep localhost as the default so local test servers remain visible in
     // normal IPv4 launches; IPv6 auto mode does not publish this default
@@ -119,13 +119,13 @@ pub struct CLIArgs {
     pub no_spawn_console: bool,
 
     #[arg(long = "GameServerPingPort", default_value = "3075")]
-    pub game_server_ping_port: Option<u16>,
+    pub game_server_ping_port: u16,
 
     #[arg(long = "GameServerQueryPort", default_value = "7071")]
-    pub game_server_query_port: Option<u16>,
+    pub game_server_query_port: u16,
 
     #[arg(long = "Port", default_value = "7777")]
-    pub game_port: Option<u16>,
+    pub game_port: u16,
 
     /// Number of mod package files handed to the Asset Registry per engine
     /// call during the startup registration (default 128).
@@ -202,7 +202,7 @@ impl std::fmt::Debug for CLIArgs {
             #[cfg(feature = "move-autonomous-desync")]
             tick_actor_patch,
             use_backend_banlist, is_headless, next_map, launched_profile,
-            unchained_profile_location, playable_listen, register, server_browser_backend,
+            unchained_profile_location, playable_listen, register, server_browser_backend: _,
             local_ip, server_password, platform, saved_dir_suffix, log4rs_yaml, attach_stdio, no_spawn_console,
             game_server_ping_port, game_server_query_port, game_port, mod_map_batch, mod_asset_registry_only,
             discord_admin_channel_id, discord_general_channel_id, discord_dashboard_channel_id,
@@ -227,7 +227,7 @@ impl std::fmt::Debug for CLIArgs {
             .field("playable_listen", playable_listen)
             .field("register", register)
             // URLs may contain credentials in userinfo, query strings or paths.
-            .field("server_browser_backend", &server_browser_backend.as_ref().map(|_| "[REDACTED]"))
+            .field("server_browser_backend", &"[REDACTED]")
             .field("local_ip", local_ip)
             .field("local_ip_explicit", local_ip_explicit)
             .field("use_ipv6", use_ipv6)
@@ -373,6 +373,18 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 mod tests {
     use super::*;
 
+    #[test_case::test_case(vec!["app"], Censor::Custom(Default::default()); "default_censor_disabled")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "none"], Censor::Custom(Default::default()); "censor_disabled")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "standard"], Censor::Standard; "standard_censor")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "sex"], Censor::Sex; "sex_censor")]
+    #[test_case::test_case(vec!["app", "--censor-mode", "zealous"], Censor::Zealous; "zealous_censor")]
+    fn censor_configuration(args: Vec<&str>, expected: Censor) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(Censor::from(cli.censor_mode), expected);
+        let converted: Censor = cli.censor_mode.into();
+        assert_eq!(converted, expected);
+    }
+
     #[test_case::test_case(false, None, false; "client_without_motd")]
     #[test_case::test_case(false, Some("Welcome"), false; "client_with_motd")]
     #[test_case::test_case(true, None, false; "server_without_motd")]
@@ -418,6 +430,24 @@ mod tests {
         assert!(CLIArgs::command().render_long_help().to_string().contains("--no-spawn-console"));
     }
 
+    #[test_case::test_case(vec!["app"], "https://servers.polehammer.net"; "backend_url_default")]
+    #[test_case::test_case(vec!["app", "--server-browser-backend", "http://localhost:8080/browser/"], "http://localhost:8080/browser/"; "backend_url_override")]
+    fn backend_url_configuration(args: Vec<&str>, expected: &str) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(cli.server_browser_backend, expected);
+    }
+
+    #[test_case::test_case(vec!["app"], [7777, 3075, 7071]; "port_defaults")]
+    #[test_case::test_case(vec!["app", "--Port", "9000", "--GameServerPingPort", "3000", "--GameServerQueryPort", "7000"], [9000, 3000, 7000]; "port_overrides")]
+    #[test_case::test_case(vec!["app", "--Port", "0", "--GameServerPingPort", "0", "--GameServerQueryPort", "0"], [0, 0, 0]; "explicit_zero_ports")]
+    fn port_configuration(args: Vec<&str>, expected: [u16; 3]) {
+        let cli = CLIArgs::try_parse_from(args).unwrap();
+        assert_eq!(
+            [cli.game_port, cli.game_server_ping_port, cli.game_server_query_port],
+            expected,
+        );
+    }
+
     #[test]
     fn debug_redacts_credentials_and_opaque_fields_without_changing_values() {
         let mut cli = CLIArgs::try_parse_from([
@@ -440,24 +470,25 @@ mod tests {
             assert!(rendered.contains("[REDACTED; 2 arguments]"));
         }
         let rendered = format!("{cli:?}");
-        for field in ["server_password", "discord_bot_token", "server_browser_backend"] {
+        for field in ["server_password", "discord_bot_token"] {
             assert!(rendered.contains(&format!("{field}: Some(\"[REDACTED]\")")));
         }
+        assert!(rendered.contains("server_browser_backend: \"[REDACTED]\""));
         assert_eq!(cli.server_password.as_deref(), Some("PASSWORD_SENTINEL"));
         assert_eq!(cli.discord_bot_token.as_deref(), Some("TOKEN_SENTINEL"));
-        assert_eq!(cli.server_browser_backend.as_deref(), Some("https://user:BACKEND_SENTINEL@example.test/private"));
+        assert_eq!(cli.server_browser_backend, "https://user:BACKEND_SENTINEL@example.test/private");
         assert_eq!(cli.find_ini_value(&[("FILE_SENTINEL", "SECTION_SENTINEL", "KEY_SENTINEL")]), Some("INI_SENTINEL"));
         assert_eq!(cli.extra_args, [
             "-ini:FILE_SENTINEL:SECTION_SENTINEL:KEY_SENTINEL=INI_SENTINEL",
             "-AUTH_PASSWORD=PASSTHROUGH_SENTINEL",
         ]);
-        assert_eq!(cli.game_port, Some(8123));
+        assert_eq!(cli.game_port, 8123);
         assert_eq!(cli.launched_profile.as_deref(), Some("test-profile"));
     }
 
     #[test]
     fn debug_distinguishes_missing_and_empty_credentials() {
-        let mut cli = CLIArgs::default();
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
         let rendered = format!("{cli:?}");
         assert!(rendered.contains("server_password: None"));
         assert!(rendered.contains("discord_bot_token: None"));
@@ -541,52 +572,6 @@ mod tests {
         );
     }
 
-    impl Default for CLIArgs {
-        fn default() -> Self {
-            Self {
-                server_mods: None,
-                ini_overrides: HashMap::new(),
-                is_unchained: false,
-                rcon_port: None,
-                apply_desync_patch: false,
-                #[cfg(feature="move-autonomous-desync")]
-                tick_actor_patch: false,
-                use_backend_banlist: false,
-                is_headless: false,
-                next_map: None,
-                launched_profile: None,
-                unchained_profile_location: None,
-                playable_listen: false,
-                register: false,
-                server_browser_backend: None,
-                local_ip: "127.0.0.1".to_string(),
-                local_ip_explicit: false,
-                use_ipv6: false,
-                server_password: None,
-                platform: None,
-                saved_dir_suffix: None,
-                log4rs_yaml: None,
-                attach_stdio: false,
-                no_spawn_console: false,
-                game_server_ping_port: None,
-                game_server_query_port: None,
-                game_port: None,
-                mod_map_batch: 128,
-                mod_asset_registry_only: false,
-                discord_admin_channel_id: None,
-                discord_general_channel_id: None,
-                discord_dashboard_channel_id: None,
-                discord_event_log_channel_id: None,
-                discord_admin_role_id: None,
-                discord_bot_token: None,
-                discord_mention_admins: false,
-                censor_mode: CensorArg::None,
-                motd: None,
-                extra_args: vec![],
-            }
-        }
-    }
-
     #[test]
     fn test_find_ini_value() {
         let mut ini_overrides = HashMap::new();
@@ -596,10 +581,8 @@ mod tests {
         engine_map.insert("[Core.Log]".to_string(), log_map);
         ini_overrides.insert("Engine".to_string(), engine_map);
 
-        let cli = CLIArgs {
-            ini_overrides,
-            ..Default::default()
-        };
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
+        cli.ini_overrides = ini_overrides;
 
         let paths = [
             ("Engine", "[Core.Log]", "LogHttp"),
@@ -616,9 +599,7 @@ mod tests {
 
     #[test]
     fn test_is_server() {
-        let mut cli = CLIArgs {
-            ..Default::default()
-        };
+        let mut cli = CLIArgs::try_parse_from(["app"]).unwrap();
 
         assert!(!cli.is_server());
         cli.rcon_port = Some(9001);

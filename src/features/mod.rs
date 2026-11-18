@@ -1,8 +1,8 @@
-use serde::Serialize;
+mod mod_metadata;
+pub use mod_metadata::Mod;
 
 pub mod rcon;
-#[cfg(feature="server_registration")]
-pub mod server_registration;
+pub(crate) mod server_browser;
 #[cfg(feature="mod_management")]
 #[macro_use]
 pub mod mod_management;
@@ -17,13 +17,3 @@ pub mod mod_maps;
 pub mod discord;
 pub use discord::DiscordConfig;
 pub use discord::initialize_discord_system;
-
-#[derive(Debug, Serialize, Clone, PartialEq)]
-pub struct Mod {
-    pub name: String,
-    pub organization: String,
-    pub version: String,
-    pub object_path: String,
-}
-unsafe impl Send for Mod {}
-unsafe impl Sync for Mod {}

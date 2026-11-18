@@ -37,21 +37,22 @@ macro_rules! CREATE_REQUEST_HOOK {
                     (None, _) => { $crate::serror!("GCGObj was null"); return std::ptr::null_mut(); }
                     (_, None) => { $crate::serror!("Request was null"); return std::ptr::null_mut(); }
                 };
-                let old_url = unsafe { std::ptr::read(&this.url_base) };
-                let old_token = unsafe { std::ptr::read(&req.token) };
-                let backend_url = $crate::backend_url!("/api/tbio");
-                let new_fstring = $crate::ue::FString::from("");
-                unsafe {
-                    std::ptr::write(&mut this.url_base, backend_url);
-                    std::ptr::write(&mut req.token, new_fstring);
+                let url = $crate::features::server_browser::urls::tbio_base_url(
+                    &$crate::tools::hook_globals::cli_args().server_browser_backend,
+                );
+                let backend_url = $crate::ue::FString::from(url.as_str());
+                let empty_token = $crate::ue::FString::from("");
+                let old_url = std::mem::replace(&mut this.url_base, backend_url);
+                let old_token = std::mem::replace(&mut req.token, empty_token);
+                let result = std::panic::catch_unwind(|| {
+                    $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))
+                });
+                this.url_base = old_url;
+                req.token = old_token;
+                match result {
+                    Ok(response) => response,
+                    Err(panic) => std::panic::resume_unwind(panic),
                 }
-                let result = match std::panic::catch_unwind(|| $crate::CALL_ORIGINAL!($name(this_ptr, a2, request, a4))) {
-                    Ok(r) => r,
-                    Err(e) => { unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); } std::panic::resume_unwind(e) }
-                };
-                unsafe { std::ptr::write(&mut this.url_base, old_url); std::ptr::write(&mut req.token, old_token); }
-                // $crate::sinfo!("{} Hooked: url_base={} token={}, result={:?}", stringify!($name), this.url_base, req.token, result);
-                result
             }
         );
     };
@@ -81,10 +82,10 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-pub static STRING_TO_ROOT_FN: Lazy<RwLock<HashMap<String, u64>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 // OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 define_pattern_resolver!(CreateHttpRequest, [

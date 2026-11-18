@@ -147,6 +147,7 @@ impl EventLogSubscriber {
                 },
                 0xE74C3C,
             ),
+            #[cfg(feature = "server_registration")]
             GameEvent::ServerStatusEvent(status) => (
                 "📊",
                 "Server Status",
