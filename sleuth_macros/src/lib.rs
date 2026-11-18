@@ -275,3 +275,126 @@ pub fn custom_resolver(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
     })
 }
+
+/* -- DETOURS (ergonomic attribute wrappers over the plugin's CREATE_HOOK! / CALL_ORIGINAL!) -- */
+//
+// These transform an annotated function into a `crate::CREATE_HOOK!` invocation (NONE mode), so
+// they reuse the existing retour/define_pattern_resolver!/HookRegistration pipeline. They are for
+// ORDINARY functions resolved by a `define_pattern_resolver!` whose name is `Resolver`; they are
+// NOT for Blueprint-VM exec thunks (use kismet_exec_observe!/kismet_exec_forward! for those).
+//
+//   #[detour_add_listener(Resolver)]            // observe AFTER the call; returns the original value
+//   fn foo(a: A, b: B) -> R { /* `result: &R` and the args are in scope */ }
+//
+//   #[detour_around(Resolver)]                  // you drive; `foo_original(args)` is the un-hooked path
+//   fn foo(a: A, b: B) -> R { /* ...; */ foo_original(a, b) }
+//
+// Caller contract: calling the hooked function runs the MODIFIED behavior for everyone; the
+// generated `*_original` (retour trampoline) is the UNMODIFIED path. `detour_replace` is an alias
+// of `detour_around`.
+
+enum DetourMode {
+    Around,
+    AddListener,
+}
+
+fn detour_impl(args: TokenStream, input: TokenStream, mode: DetourMode) -> TokenStream {
+    use quote::{format_ident, quote};
+    use syn::{FnArg, Ident, ItemFn, Pat, ReturnType, Type};
+
+    let resolver = match syn::parse::<Ident>(args) {
+        Ok(id) => id,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let func = match syn::parse::<ItemFn>(input) {
+        Ok(f) => f,
+        Err(e) => return e.to_compile_error().into(),
+    };
+
+    let fn_name = &func.sig.ident;
+    let body = &func.block;
+    let ret: Type = match &func.sig.output {
+        ReturnType::Type(_, ty) => (**ty).clone(),
+        ReturnType::Default => syn::parse_quote!(()),
+    };
+
+    let mut decls = Vec::new();
+    let mut names = Vec::new();
+    for arg in &func.sig.inputs {
+        match arg {
+            FnArg::Typed(pt) => {
+                let ty = &pt.ty;
+                let name = match &*pt.pat {
+                    Pat::Ident(pi) => pi.ident.clone(),
+                    other => {
+                        return syn::Error::new_spanned(other, "detour args must be simple identifiers")
+                            .to_compile_error()
+                            .into()
+                    }
+                };
+                decls.push(quote!(#name: #ty));
+                names.push(name);
+            }
+            FnArg::Receiver(r) => {
+                return syn::Error::new_spanned(r, "detour fns cannot take `self`")
+                    .to_compile_error()
+                    .into()
+            }
+        }
+    }
+    if decls.is_empty() {
+        return syn::Error::new_spanned(
+            &func.sig,
+            "detour fns need at least one argument (CREATE_HOOK! requires args)",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let generated = match mode {
+        DetourMode::Around => {
+            let original = format_ident!("{}_original", fn_name);
+            quote! {
+                crate::CREATE_HOOK!(#resolver, ACTIVE, NONE, #ret, ( #(#decls),* ), {
+                    // The un-hooked path (retour trampoline), named `<fn>_original`.
+                    #[allow(unused)]
+                    let #original = | #(#decls),* | -> #ret {
+                        crate::CALL_ORIGINAL!(#resolver( #(#names),* ))
+                    };
+                    #body
+                });
+            }
+        }
+        DetourMode::AddListener => {
+            quote! {
+                crate::CREATE_HOOK!(#resolver, ACTIVE, NONE, #ret, ( #(#decls),* ), {
+                    let __detour_ret: #ret = crate::CALL_ORIGINAL!(#resolver( #(#names),* ));
+                    {
+                        // Observe the original's result without modifying it.
+                        #[allow(unused)]
+                        let result = &__detour_ret;
+                        #body
+                    };
+                    __detour_ret
+                });
+            }
+        }
+    };
+    generated.into()
+}
+
+#[proc_macro_attribute]
+pub fn detour_around(args: TokenStream, input: TokenStream) -> TokenStream {
+    detour_impl(args, input, DetourMode::Around)
+}
+
+/// Alias of [`detour_around`].
+#[proc_macro_attribute]
+pub fn detour_replace(args: TokenStream, input: TokenStream) -> TokenStream {
+    detour_impl(args, input, DetourMode::Around)
+}
+
+#[proc_macro_attribute]
+pub fn detour_add_listener(args: TokenStream, input: TokenStream) -> TokenStream {
+    detour_impl(args, input, DetourMode::AddListener)
+}
