@@ -156,7 +156,7 @@ macro_rules! __create_hook_impl {
 
         paste::paste! {
             #[allow(non_snake_case)]
-            pub unsafe fn [<attach_ $name>]() -> Result<(), Box<dyn std::error::Error>> {
+            pub unsafe fn [<attach_ $name>]() -> Result<bool, Box<dyn std::error::Error>> {
                 let auto_activate = true; // the status condition still gates enable (see @finish_attach)
                 let class_name = <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME;
                 let thunk = <$class as $crate::ue::kismet::KismetNativeClass>::resolve($native)
@@ -164,13 +164,13 @@ macro_rules! __create_hook_impl {
                 // UFunction::func is the exec thunk; hook the inner C++ function it calls (real ABI).
                 let target_addr = <$class as $crate::ue::kismet::KismetNativeClass>::resolve_hook_target(thunk)
                     .ok_or_else(|| format!("{}::{} inner callee not found (thunk {:#x})", class_name, $native, thunk))?;
-                $crate::sdebug!("{}::{} -> thunk {:#x}, inner {:#x}", class_name, $native, thunk, target_addr);
                 $crate::__create_hook_impl!(@finish_attach $name, $out_type, $status, target_addr, auto_activate, ( $( $arg: $ty ),+ ));
-                Ok(())
+                Ok([<o_ $name>].is_enabled())
             }
 
             ::inventory::submit! {
                 $crate::resolvers::LateHookRegistration {
+                    name: stringify!($name),
                     class: <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME,
                     native: $native,
                     attach: [<attach_ $name>],

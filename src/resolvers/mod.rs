@@ -61,13 +61,15 @@ pub struct HookRegistration {
 
 /// Attach a native-registry hook. Takes no offsets: it resolves its target from a class's
 /// RegisterNatives table at call time.
-pub type LateHookAttachFn = unsafe fn() -> Result<(), Box<dyn std::error::Error>>;
+/// Returns whether the attached detour was enabled.
+pub type LateHookAttachFn = unsafe fn() -> Result<bool, Box<dyn std::error::Error>>;
 
 /// A UFunction native-thunk hook that resolves its target from a reflected class's RegisterNatives
 /// table, so it must attach LATE (postinit, after `init_globals`) rather than through the preinit
 /// `HookRegistration` inventory. Submitted by `kismet_exec_observe!` / `kismet_exec_forward!` and
 /// drained once in `postinit_rustlib`.
 pub struct LateHookRegistration {
+    pub name: &'static str,
     pub class: &'static str,
     pub native: &'static str,
     pub attach: LateHookAttachFn,
@@ -136,7 +138,7 @@ pub fn attach_late_hooks() {
         // crate::sinfo!("IsDedicatedServer reflected RVA {reflected:x?}, signature RVA {signature:x?}");
         for hook in inventory::iter::<LateHookRegistration> {
             match unsafe { (hook.attach)() } {
-                Ok(()) => crate::sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
+                Ok(enabled) => crate::sinfo!("☑ {} {}", hook.name, if enabled { "attached" } else { "attached (passive)" }),
                 Err(e) => crate::serror!("☐ {}::{}: {}", hook.class, hook.native, e),
             }
         }

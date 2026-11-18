@@ -104,7 +104,7 @@ macro_rules! kismet_exec_observe {
             }
 
             #[allow(non_snake_case)]
-            unsafe fn [<attach_ $detour>]() -> ::core::result::Result<(), ::std::boxed::Box<dyn ::std::error::Error>> {
+            unsafe fn [<attach_ $detour>]() -> ::core::result::Result<bool, ::std::boxed::Box<dyn ::std::error::Error>> {
                 let addr = <$class as $crate::ue::kismet::KismetNativeClass>::resolve(stringify!($native))
                     .ok_or_else(|| ::std::format!(
                         "{}::{} not resolved",
@@ -116,11 +116,12 @@ macro_rules! kismet_exec_observe {
                     [<ORIG_ $detour>].initialize(target, |c, s, r| $detour(c, s, r))?;
                     [<ORIG_ $detour>].enable()?;
                 }
-                ::core::result::Result::Ok(())
+                ::core::result::Result::Ok(true)
             }
 
             ::inventory::submit! {
                 $crate::resolvers::LateHookRegistration {
+                    name: stringify!($native),
                     class: <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME,
                     native: stringify!($native),
                     attach: [<attach_ $detour>],
@@ -155,7 +156,7 @@ macro_rules! kismet_exec_forward {
             }
 
             #[allow(non_snake_case)]
-            unsafe fn [<attach_ $detour>]() -> ::core::result::Result<(), ::std::boxed::Box<dyn ::std::error::Error>> {
+            unsafe fn [<attach_ $detour>]() -> ::core::result::Result<bool, ::std::boxed::Box<dyn ::std::error::Error>> {
                 let addr = <$class as $crate::ue::kismet::KismetNativeClass>::resolve(stringify!($native))
                     .ok_or_else(|| ::std::format!(
                         "{}::{} not resolved",
@@ -167,11 +168,12 @@ macro_rules! kismet_exec_forward {
                     [<ORIG_ $detour>].initialize(target, |c, s, r| $detour(c, s, r))?;
                     [<ORIG_ $detour>].enable()?;
                 }
-                ::core::result::Result::Ok(())
+                ::core::result::Result::Ok(true)
             }
 
             ::inventory::submit! {
                 $crate::resolvers::LateHookRegistration {
+                    name: stringify!($native),
                     class: <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME,
                     native: stringify!($native),
                     attach: [<attach_ $detour>],
