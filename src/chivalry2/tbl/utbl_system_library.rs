@@ -10,6 +10,7 @@ use unchained_macros::bind_resolved_func;
 define_pattern_resolver!(AuthenticateConsoleCommandCaller, [
     "74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"
 ]);
+
 CREATE_PATCH!(AuthenticateConsoleCommandCaller, BYTES, &[0xEB]);
 
 define_pattern_resolver!(GetGameInfo, {

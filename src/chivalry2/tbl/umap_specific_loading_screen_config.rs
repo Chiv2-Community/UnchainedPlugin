@@ -138,6 +138,7 @@ define_pattern_resolver!(
     GetDataForMap,
     ["48 89 4C 24 08 55 53 57 41 56 48 8D 6C 24 C1 48 81 EC F8 00 00 00 49 8B F8 4C 8B F2"]
 );
+
 // void UMapSpecificLoadingScreenConfig::GetDataForMap(longlong param_1,FString *param_2,void **param_3)
 //
 // NONE: the callee consumes (frees) its by-value FString arg, so the original

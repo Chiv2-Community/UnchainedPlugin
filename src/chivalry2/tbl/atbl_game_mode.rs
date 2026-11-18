@@ -8,6 +8,7 @@ use unchained_macros::bind_resolved_func;
 define_pattern_resolver!(ATBLGameMode__PreLogin, [
     "4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"
 ]);
+
 define_pattern_resolver!(ATBLGameMode__Logout, ["48 8B C4 55 56 41 54 41 57 48 8B EC"]);
 
 // Retained unused resolver; no native signature is established.

@@ -7,6 +7,7 @@ use crate::chivalry2::engine::{FString, TArray, TCHAR};
 define_pattern_resolver!(FStringFind, [
     "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 50 45 8B E1 48 8B FA 4C 8B F1"
 ]);
+
 define_pattern_resolver!(
     FStringParseIntoArray,
     ["44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"]

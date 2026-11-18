@@ -26,6 +26,7 @@ pub(crate) mod client_message {
         ClientReceiveChat,
         ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
     );
+
     #[unchained_macros::runtime_bindings]
     impl APlayerController {
         #[bind_resolved_func_detour(ClientReceiveChat)]
