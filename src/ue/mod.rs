@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 mod array;
+pub mod exec_thunk;
 pub mod kismet;
 mod malloc;
 mod map;
