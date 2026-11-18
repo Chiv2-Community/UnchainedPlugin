@@ -438,6 +438,8 @@ impl ModManager {
             let mut active = self.active_paths.lock().map_err(|_| "Mutex poisoned")?;
             *active = active_mods_local.clone();
         }
+        #[cfg(feature="server_registration")]
+        self.publish_active_mods();
         
         Ok(active_mods_local)
     }
@@ -499,11 +501,7 @@ impl ModManager {
             }
         }
 
-        #[cfg(feature="server_registration")]
-        if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
-            let _ = self.scan_active_mod_actors();
-            reg.trigger_update();
-        }
+        let _ = self.scan_active_mod_actors();
     }
 
     /// Best-effort admin chat after a spawn; every step may be unavailable
@@ -670,8 +668,21 @@ impl ModManager {
 
     pub fn reset_active_mods(&self, rescan: bool) {
         self.active_paths.lock().unwrap().clear();
-        if rescan {
-            let _ = self.scan_active_mod_actors();
+        if rescan && self.scan_active_mod_actors().is_ok() {
+            return;
+        }
+        #[cfg(feature="server_registration")]
+        self.publish_active_mods();
+    }
+
+    #[cfg(feature="server_registration")]
+    fn publish_active_mods(&self) {
+        if !crate::tools::hook_globals::globals_initialized() {
+            return;
+        }
+        let mods = self.get_active_mod_metadata();
+        if let Some(reg) = globals().registration.lock().unwrap().as_ref() {
+            reg.set_active_mods(mods);
         }
     }
 

@@ -46,19 +46,26 @@ pub(crate) async fn shutdown() {
 pub(crate) struct Registration {
     shutdown: CancellationToken,
     task: JoinHandle<()>,
-    #[cfg(feature = "mod_management")]
     refresh: Arc<Notify>,
+    active_mods: Arc<Mutex<Vec<Mod>>>,
 }
 
 #[derive(Debug)]
 struct MetadataCollector {
     query_address: SocketAddr,
     local_ip_address: Option<String>,
+    all_mods: Vec<Mod>,
+    active_mods: Arc<Mutex<Vec<Mod>>>,
 }
 
 impl Registration {
-    /// Initializes the registration manager.
-    pub(crate) fn new(query_address: SocketAddr, local_ip: Option<&str>) -> Self {
+    /// Initializes registration with a fixed available-mod list.
+    pub(crate) fn new(
+        query_address: SocketAddr,
+        local_ip: Option<&str>,
+        all_mods: Vec<Mod>,
+        active_mods: Vec<Mod>,
+    ) -> Self {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
@@ -70,9 +77,12 @@ impl Registration {
             );
         }
 
+        let active_mods = Arc::new(Mutex::new(active_mods));
         let collector = MetadataCollector {
             query_address,
             local_ip_address: advertised_local_ip,
+            all_mods,
+            active_mods: Arc::clone(&active_mods),
         };
         let shutdown = CancellationToken::new();
         let refresh = Arc::new(Notify::new());
@@ -80,14 +90,16 @@ impl Registration {
         Self {
             shutdown,
             task,
-            #[cfg(feature = "mod_management")]
             refresh,
+            active_mods,
         }
     }
 
-    /// Refresh A2S metadata; the SDK decides whether an HTTP update is needed.
-    #[cfg(feature = "mod_management")]
-    pub(crate) fn trigger_update(&self) {
+    /// Replace advertised active mods without waiting for an A2S refresh.
+    pub(crate) fn set_active_mods(&self, mods: Vec<Mod>) {
+        *self.active_mods
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = mods;
         self.refresh.notify_one();
     }
 }
@@ -112,7 +124,7 @@ impl MetadataCollector {
         if shutdown.is_cancelled() {
             return;
         }
-        let status = Self::metadata(&info);
+        let status = self.metadata(&info);
         let mut registration = match SdkRegistration::new(
             super::http::client().clone(),
             self.request(&info, &status),
@@ -163,17 +175,40 @@ impl MetadataCollector {
         shutdown: &CancellationToken,
         refresh: &Notify,
     ) {
-        while a2s_query::should_refresh(shutdown, refresh, METADATA_POLL_INTERVAL).await {
-            let Some(info) = self.query(shutdown).await else {
-                continue;
+        let next_info = self.next_info(shutdown);
+        tokio::pin!(next_info);
+        loop {
+            let mut status = tokio::select! {
+                biased;
+                _ = shutdown.cancelled() => return,
+                _ = refresh.notified() => latest
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+                info = &mut next_info => {
+                    next_info.set(self.next_info(shutdown));
+                    self.metadata(&info)
+                }
             };
-            let status = Self::metadata(&info);
+            status.active_mods = self.active_mods
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
             let update = status.update_request();
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
             if !control.publish(update) {
                 return;
+            }
+        }
+    }
+
+    async fn next_info(&self, shutdown: &CancellationToken) -> Info {
+        loop {
+            tokio::time::sleep(METADATA_POLL_INTERVAL).await;
+            if let Some(info) = self.query(shutdown).await {
+                return info;
             }
         }
     }
@@ -213,31 +248,12 @@ impl MetadataCollector {
         }
     }
 
-    fn metadata(info: &Info) -> ServerStatus {
+    fn metadata(&self, info: &Info) -> ServerStatus {
         let args = cli_args();
         let description = format!(
             "{} (build {})\n{} server",
             info.game, info.version, info.folder
         );
-        #[cfg(feature = "mod_management")]
-        let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = {
-            // The Asset Registry is scanned once during init (see `world_init`),
-            // so the mod manager's registry is already populated here. Read the
-            // active and available mods straight from it instead of re-running
-            // the game-thread scan (and its settle sleep) on every registration.
-            if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
-                (
-                    mm.get_active_mod_metadata(),
-                    mm.get_available().values().cloned().collect(),
-                )
-            } else {
-                (Vec::new(), Vec::new())
-            }
-        };
-
-        #[cfg(not(feature = "mod_management"))]
-        let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
-
         let (player_count, max_players) =
             server_metadata::player_counts(info.players, info.max_players, args.is_headless);
         ServerStatus {
@@ -250,8 +266,81 @@ impl MetadataCollector {
             current_map: info.map.clone(),
             player_count,
             max_players,
-            mods: all_mods,
-            active_mods: mods,
+            mods: self.all_mods.clone(),
+            active_mods: self.active_mods
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn active_mod_updates_preserve_available_mods_without_a2s() {
+        let available = Mod {
+            name: "Available mod".into(),
+            organization: "Community".into(),
+            version: "1.0".into(),
+            object_path: "/Game/Mod".into(),
+        };
+        let active_mods = Arc::new(Mutex::new(Vec::new()));
+        let refresh = Arc::new(Notify::new());
+        let shutdown = CancellationToken::new();
+        let registration = Registration {
+            shutdown: shutdown.clone(),
+            task: tokio::spawn(std::future::pending()),
+            refresh: Arc::clone(&refresh),
+            active_mods: Arc::clone(&active_mods),
+        };
+        let collector = MetadataCollector {
+            query_address: "127.0.0.1:0".parse().unwrap(),
+            local_ip_address: None,
+            all_mods: vec![available.clone()],
+            active_mods,
+        };
+        let latest = Mutex::new(ServerStatus {
+            name: "Server".into(),
+            description: String::new(),
+            password_protected: false,
+            current_map: "Map".into(),
+            player_count: 0,
+            max_players: 64,
+            mods: vec![available.clone()],
+            active_mods: Vec::new(),
+        });
+        let control = RegistrationControl::default();
+        let updates = collector.collect_updates(&control, &latest, &shutdown, &refresh);
+        tokio::pin!(updates);
+        let assertions = async {
+            for mods in [vec![available.clone()], Vec::new()] {
+                registration.set_active_mods(mods.clone());
+                tokio::time::timeout(Duration::from_secs(1), async {
+                    loop {
+                        {
+                            let status = latest.lock().unwrap();
+                            if status.active_mods == mods {
+                                assert_eq!(status.mods, vec![available.clone()]);
+                                break;
+                            }
+                        }
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .expect("Mod updates must not wait for A2S");
+            }
+        };
+        tokio::select! {
+            () = &mut updates => panic!("Collector stopped before receiving mod updates"),
+            () = assertions => {}
+        }
+        shutdown.cancel();
+        updates.await;
+        registration.task.abort();
+        assert_eq!(collector.all_mods, vec![available]);
     }
 }

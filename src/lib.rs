@@ -471,6 +471,27 @@ fn postinit_rustlib() {
     }
 }
 
+#[cfg(feature="server_registration")]
+fn start_server_registration(all_mods: Vec<features::Mod>, active_mods: Vec<features::Mod>) {
+    let args = cli_args();
+    if !args.is_server() || !args.register {
+        return;
+    }
+    let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
+        None
+    } else {
+        Some(args.local_ip.as_str())
+    };
+    let reg = Registration::new(
+        (std::net::Ipv4Addr::LOCALHOST, args.game_server_query_port).into(),
+        advertised_local_ip,
+        all_mods,
+        active_mods,
+    );
+    *globals().registration.lock().unwrap() = Some(reg);
+    sinfo!("Started server registration manager");
+}
+
 pub fn world_init() {
     #[cfg(feature="rcon_commands")]
     thread::spawn(|| {
@@ -480,25 +501,8 @@ pub fn world_init() {
     let args = &cli_args();
     sinfo!("Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
 
-    #[cfg(feature="server_registration")]
-    {
-        if args.is_server() && args.register {
-            let query_port = args.game_server_query_port;
-            let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
-                None
-            } else {
-                Some(args.local_ip.as_str())
-            };
-            let reg = Registration::new(
-                (std::net::Ipv4Addr::LOCALHOST, query_port).into(),
-                advertised_local_ip,
-            );
-            
-            *globals().registration.lock().unwrap() = Some(reg);
-            
-            sinfo!("Started server registration manager");
-        }
-    }
+    #[cfg(all(feature="server_registration", not(feature="mod_management")))]
+    start_server_registration(Vec::new(), Vec::new());
 
     // Mod manager requires world
     while globals().world().is_none() {
@@ -563,6 +567,11 @@ pub fn world_init() {
             mm.scan_asset_registry();
             mm.update_save_game();
             sinfo!("Started mod manager");
+            #[cfg(feature="server_registration")]
+            start_server_registration(
+                mm.get_available().into_values().collect(),
+                mm.get_active_mod_metadata(),
+            );
         });
     }
 }
