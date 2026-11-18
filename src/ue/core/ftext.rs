@@ -2,6 +2,29 @@ use crate::ue::{FString, TCHAR};
 use std::{ffi::c_void, mem::{ManuallyDrop, MaybeUninit}};
 use unchained_macros::bind_resolver_func;
 
+define_pattern_resolver!(FText_ToString, [
+    "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"
+]);
+
+// FText::AsCultureInvariant(const FString&): select the copying overload.
+// The old prologue also matched FromString; the flags-2 epilogue distinguishes
+// culture-invariant text from FromString's flags-0x12 result. A new cache key
+// prevents reuse of the old resolver's potentially moving-overload address.
+define_pattern_resolver!(FText_AsCultureInvariantCopy, [
+    "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
+], |ctx, patterns| {
+    let matches = ::patternsleuth::resolvers::futures::future::join_all(
+        patterns.iter().map(|pattern| ctx.scan(::patternsleuth::scanner::Pattern::new(pattern).unwrap()))
+    ).await;
+    let addresses: Vec<_> = matches.into_iter().flatten().collect();
+    let roots = ::patternsleuth::resolvers::unreal::util::root_functions(ctx, &addresses)?;
+    ::patternsleuth::resolvers::ensure_one(roots)
+});
+
+define_pattern_resolver!(FText_Release, [
+    "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
+]);
+
 /// Opaque native text storage. Borrow native values through `from_ptr`;
 /// construct owned culture-invariant values with `InvariantText::new`.
 /// No zero-filled/default value represents a live UE FText.
@@ -31,7 +54,7 @@ impl FText {
     /// Do not free the result or mutate/invalidate its data (including through
     /// native aliases or culture changes) while the returned borrow is live.
     /// Synchronize native history access for the call, including invariant text.
-    #[bind_resolver_func(crate::resolvers::messages::broadcast_display::FText_ToString)]
+    #[bind_resolver_func(self::FText_ToString)]
     pub unsafe fn to_native_string<'a>(&'a self) -> &'a FString {}
 
     /// FText::AsCultureInvariant(const FString&), with hidden return storage.
@@ -40,14 +63,14 @@ impl FText {
     /// Output must be uninitialized writable native FText storage. String must
     /// be a valid native string, with the engine allocator/runtime initialized.
     /// The input is copied, not consumed. Output acquires one native reference.
-    #[bind_resolver_func(crate::resolvers::admin_control::FText_AsCultureInvariantCopy)]
+    #[bind_resolver_func(self::FText_AsCultureInvariantCopy)]
     unsafe fn as_culture_invariant(output: *mut Self, string: &FString) -> *mut Self {}
 
     /// Release the native thread-safe shared reference (control block at +8).
     ///
     /// # Safety
     /// Self must own a live native shared reference, released exactly once.
-    #[bind_resolver_func(crate::resolvers::messages::broadcast_display::FText_Release)]
+    #[bind_resolver_func(self::FText_Release)]
     pub unsafe fn release(self: *mut Self) {}
 }
 

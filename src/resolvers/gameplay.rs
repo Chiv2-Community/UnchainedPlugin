@@ -3,10 +3,6 @@ use crate::events::combat::{CombatActor, DamageSource};
 use crate::features::events::EVENT_SYSTEM;
 use crate::game::chivalry2::{ATBLCharacter, FDeathDamageTakenEvent, FDamageTakenEvent};
 
-define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
-    "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
-]);
-
 define_pattern_resolver!(ATBLCharacter__OnKilled, [
     "4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"
 ]);

@@ -3,6 +3,9 @@ use crate::ue::{FString, FText, TArray};
 use std::ffi::c_void;
 use unchained_macros::bind_resolver_func;
 
+// void ATBLGameMode::BroadcastLocalizedChat(const FText&, EChatType)
+define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ATBLGameMode {
@@ -312,6 +315,6 @@ impl ATBLGameMode {
     /// # Safety
     /// Self must be a live native game mode, text a live FText. Call on the
     /// engine thread; neither pointer is owned by this call.
-    #[bind_resolver_func(crate::resolvers::messages::BroadcastLocalizedChat)]
+    #[bind_resolver_func(self::BroadcastLocalizedChat)]
     pub unsafe fn broadcast_localized_chat(self: *mut Self, text: *const FText, chat_type: EChatType) {}
 }

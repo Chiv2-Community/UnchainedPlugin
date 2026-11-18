@@ -32,21 +32,6 @@ define_pattern_resolver!(AuthenticateConsoleCommandCaller, [
 ]);
 CREATE_PATCH!(AuthenticateConsoleCommandCaller, BYTES, &[0xEB]);
 
-// FText::AsCultureInvariant(const FString&): select the copying overload.
-// The old prologue also matched FromString; the flags-2 epilogue distinguishes
-// culture-invariant text from FromString's flags-0x12 result. A new cache key
-// prevents reuse of the old resolver's potentially moving-overload address.
-define_pattern_resolver!(FText_AsCultureInvariantCopy, [
-    "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
-], |ctx, patterns| {
-    let matches = ::patternsleuth::resolvers::futures::future::join_all(
-        patterns.iter().map(|pattern| ctx.scan(::patternsleuth::scanner::Pattern::new(pattern).unwrap()))
-    ).await;
-    let addresses: Vec<_> = matches.into_iter().flatten().collect();
-    let roots = ::patternsleuth::resolvers::unreal::util::root_functions(ctx, &addresses)?;
-    ::patternsleuth::resolvers::ensure_one(roots)
-});
-
 // Unused
 define_pattern_resolver![GetTBLGameMode, {
     EGS : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"], // EGS

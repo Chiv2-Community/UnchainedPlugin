@@ -2,6 +2,8 @@ use crate::ue::{FName, TArray, UObject, UStruct};
 use std::ffi::c_void;
 use unchained_macros::bind_resolver_func;
 
+define_pattern_resolver!(GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
+
 #[repr(C)]
 pub struct UClass {
     // pub _padding_base: [u8; 0xB0],                // 0x0000
@@ -45,6 +47,6 @@ impl UClass {
     ///
     /// # Safety
     /// Self must be a live native class; call on the engine thread.
-    #[bind_resolver_func(crate::resolvers::asset_registry::GetDefaultObject)]
+    #[bind_resolver_func(self::GetDefaultObject)]
     pub unsafe fn get_default_object(self: *const Self, create_if_needed: bool) -> *mut UObject {}
 }

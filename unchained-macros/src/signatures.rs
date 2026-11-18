@@ -197,13 +197,13 @@ macro_rules! define_pattern_resolver {
         define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let platform = super::current_platform();
+            let platform = crate::resolvers::current_platform();
             let mut patterns: Vec<_> = Vec::new();
-            for var in [platform, super::PlatformType::OTHER] {
+            for var in [platform, crate::resolvers::PlatformType::OTHER] {
                 // println!("Testing {}", stringify!($name));
                 let pattern_part: &[_] = match var {
                     $(
-                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
+                        crate::resolvers::PlatformType::$platform => &[ $( $pattern ),+ ],
                     )+
                     _ => &[],
                 };
@@ -221,13 +221,13 @@ macro_rules! define_pattern_resolver {
         define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
-            let platform = super::current_platform();
+            let platform = crate::resolvers::current_platform();
             let mut $patterns: Vec<_> = Vec::new();
-            for var in [platform, super::PlatformType::OTHER] {
+            for var in [platform, crate::resolvers::PlatformType::OTHER] {
                 // println!("Testing {}", stringify!($name));
                 let pattern_part: &[_] = match var {
                     $(
-                        super::PlatformType::$platform => &[ $( $pattern ),+ ],
+                        crate::resolvers::PlatformType::$platform => &[ $( $pattern ),+ ],
                     )+
                     _ => &[],
                 };

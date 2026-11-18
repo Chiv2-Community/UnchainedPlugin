@@ -30,6 +30,24 @@ mod tests {
     });
     define_pattern_resolver!(TestShared, ["11 22"]);
 
+    mod nested {
+        define_pattern_resolver!(TestNestedPlatform, {
+            STEAM: ["AA BB"],
+            OTHER: ["CC DD"]
+        });
+        define_pattern_resolver!(TestNestedSimplePlatform, Simple, {
+            EGS: ["11 22"],
+            OTHER: ["33 44"]
+        });
+    }
+
+    #[test]
+    fn platform_resolvers_register_from_nested_modules() {
+        for name in ["TestNestedPlatform", "TestNestedSimplePlatform"] {
+            assert!(crate::resolvers().any(|resolver| resolver.name == name));
+        }
+    }
+
     #[test]
     fn single_platform_resolver_is_skipped_on_other_platforms() {
         assert!(supports_platform("TestSteamOnly", PlatformType::STEAM));

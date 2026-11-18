@@ -107,7 +107,6 @@ pub struct OffsetRegisty {
     pub map: fn() -> std::collections::HashMap<String, u64>,
 }
 
-pub mod asset_registry;
 pub mod admin_control;
 pub mod asset_loading;
 pub mod loading_screens;
@@ -157,6 +156,7 @@ mod binding_tests {
         for name in expected {
             assert!(bindings.contains(name), "Missing binding {name}");
             assert!(!hooks.contains(name), "Call-only resolver {name} still detours");
+            assert!(crate::resolvers().any(|resolver| resolver.name == name), "Missing resolver {name}");
         }
         assert_eq!(bindings.len(), expected.len());
         for name in ["DedicatedServerInit", "ClientMessage", "UGameEngineTick",

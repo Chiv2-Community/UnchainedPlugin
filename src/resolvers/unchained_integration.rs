@@ -56,15 +56,6 @@ CREATE_HOOK!(LoadFrontEndMap, ACTIVE, NONE, bool, (this_ptr: *mut UTBLGameInstan
 });
 
 
-// Used to set World reference
-define_pattern_resolver!(InternalGetNetMode, {
-    EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
-    STEAM: [
-        "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B",
-        "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
-        ], // STEAM
-});
-
 // Disable message on startup
 define_pattern_resolver!(EACAntiCheatMesssage, Simple,  [
     "4c 8d 05 ?? ?? ?? ?? 48 8b cf 48 8d ?? ?? ?? ?? ?? fe ff 48 85 db 74 08"
@@ -185,8 +176,6 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
 });
 
 
-// class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
-define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]);
 pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
     if uworld.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
         return None;

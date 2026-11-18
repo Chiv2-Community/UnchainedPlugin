@@ -21,10 +21,6 @@ CREATE_HOOK!(ClientReceiveLocalizedChat, ACTIVE, NONE, (), (
     CALL_ORIGINAL!(ClientReceiveLocalizedChat(controller, message, channel));
 });
 
-define_pattern_resolver!(TBLGameInstance_AddChatLine, [
-    "48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"
-]);
-
 fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32; 4])> {
     if channel != EChatType::AllSay as u32 && channel != EChatType::ServerSay as u32 {
         return None;
@@ -76,19 +72,11 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     Some(())
 }
 
-define_pattern_resolver!(FText_ToString, [
-    "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"
-]);
-
 fn native_string(text: *const FText) -> Option<String> {
     if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") { return None; }
     let string = unsafe { FText::from_ptr(text)?.to_native_string() };
     string.copy_to_string().ok()
 }
-
-define_pattern_resolver!(FText_Release, [
-    "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
-]);
 
 #[cfg(test)]
 mod tests {

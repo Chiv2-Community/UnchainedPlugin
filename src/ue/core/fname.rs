@@ -3,6 +3,8 @@ use crate::ue::UEHash;
 use unchained_macros::bind_resolver_func;
 use widestring::U16CString;
 
+define_pattern_resolver!(FNameCtorWchar, Simple, ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]);
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u32)]
 pub enum EFindName {
@@ -25,7 +27,7 @@ impl FName {
     /// # Safety
     /// Self must be writable native FName storage, text NUL-terminated UTF-16,
     /// and the engine name table initialized.
-    #[bind_resolver_func(crate::resolvers::asset_registry::FNameCtorWchar)]
+    #[bind_resolver_func(self::FNameCtorWchar)]
     pub unsafe fn construct_wchar(self: *mut Self, text: *const crate::ue::TCHAR, find_type: EFindName) -> *mut Self {}
 
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
