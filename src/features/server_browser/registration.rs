@@ -111,7 +111,7 @@ impl MetadataCollector {
         }
         let status = Self::metadata(&info);
         let mut registration = match SdkRegistration::new(
-            super::client().clone(),
+            super::http::client().clone(),
             self.request(&info, &status),
             Policy::default(),
         ) {

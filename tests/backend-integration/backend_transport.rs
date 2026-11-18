@@ -14,20 +14,11 @@ fn native_compatibility_urls(base: &str, prefix: &str) {
     assert_eq!(urls::playfab_matchmake_url(base), format!("{prefix}/api/playfab/Client/Matchmake"));
 }
 
-#[test]
-fn transport_sets_plugin_user_agent() {
-    let client = http::transport("http://127.0.0.1:18080", None).unwrap();
-    assert_eq!(
-        client.configuration().user_agent.as_deref(),
-        Some("UnchainedPlugin/server-browser-api")
-    );
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn native_ban_bridge_fails_open_inside_runtime_without_deadlock() {
     assert_eq!(
         http::check_banned_sync(
-            &http::transport("http://127.0.0.1:1", None).unwrap(),
+            &server_browser_client_sdk::HttpTransport::new("http://127.0.0.1:1", None).unwrap(),
             "127.0.0.1",
             &tokio::runtime::Handle::current()
         ),
@@ -43,7 +34,7 @@ fn native_ban_bridge_fails_open_on_connection_error() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     assert_eq!(
         http::check_banned_sync(
-            &http::transport(&url, None).unwrap(),
+            &server_browser_client_sdk::HttpTransport::new(&url, None).unwrap(),
             "127.0.0.1",
             runtime.handle()
         ),
@@ -58,7 +49,7 @@ fn native_ban_bridge_fails_open_after_runtime_shutdown() {
     drop(runtime);
     assert_eq!(
         http::check_banned_sync(
-            &http::transport("http://127.0.0.1:1", None).unwrap(),
+            &server_browser_client_sdk::HttpTransport::new("http://127.0.0.1:1", None).unwrap(),
             "127.0.0.1",
             &handle
         ),

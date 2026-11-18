@@ -38,7 +38,7 @@ macro_rules! CREATE_REQUEST_HOOK {
                     (_, None) => { $crate::serror!("Request was null"); return std::ptr::null_mut(); }
                 };
                 let url = $crate::features::server_browser::urls::tbio_base_url(
-                    $crate::features::server_browser::base_url(),
+                    $crate::features::server_browser::http::base_url(),
                 );
                 let backend_url = $crate::ue::FString::from(url.as_str());
                 let empty_token = $crate::ue::FString::from("");
