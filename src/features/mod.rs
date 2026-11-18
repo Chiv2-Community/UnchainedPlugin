@@ -7,6 +7,7 @@ pub mod server_registration;
 #[macro_use]
 pub mod mod_management;
 pub mod events;
+pub mod motd;
 pub mod tokio_runtime;
 pub mod cooked_header;
 pub mod map_markers;

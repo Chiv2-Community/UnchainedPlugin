@@ -286,6 +286,10 @@ impl CLIArgs {
         self.rcon_port.is_some()
     }
 
+    pub fn should_broadcast_motd(&self) -> bool {
+        self.is_server() && self.motd.as_deref().is_some_and(|message| !message.trim().is_empty())
+    }
+
     pub fn find_ini_value(&self, paths: &[(&str, &str, &str)]) -> Option<&str> {
         paths.iter().find_map(|(file, section, key)| {
             self.ini_overrides
@@ -368,6 +372,19 @@ pub fn load_cli() -> Result<CLIArgs, clap::error::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_case::test_case(false, None, false; "client_without_motd")]
+    #[test_case::test_case(false, Some("Welcome"), false; "client_with_motd")]
+    #[test_case::test_case(true, None, false; "server_without_motd")]
+    #[test_case::test_case(true, Some(""), false; "server_with_empty_motd")]
+    #[test_case::test_case(true, Some(" \t\n"), false; "server_with_blank_motd")]
+    #[test_case::test_case(true, Some("Welcome"), true; "server_with_motd")]
+    fn motd_requires_a_server_and_message(is_server: bool, motd: Option<&str>, expected: bool) {
+        let mut args = CLIArgs::try_parse_from(["app"]).unwrap();
+        args.rcon_port = is_server.then_some(9001);
+        args.motd = motd.map(str::to_owned);
+        assert_eq!(args.should_broadcast_motd(), expected);
+    }
 
     #[test]
     fn attach_stdio_is_opt_in_and_survives_game_argument_normalization() {
