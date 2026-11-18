@@ -295,22 +295,22 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
-| `UnchainedPlugin::game::utbl_system_library` | Native administration commands and game-info calls. |
-| `UnchainedPlugin::engine::engine::ugameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
-| `UnchainedPlugin::engine::asset_registry` | Asset Registry helpers. |
-| `UnchainedPlugin::engine::core_uobject::uobject_globals` | Native object lookups. |
-| `UnchainedPlugin::game::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
-| `UnchainedPlugin::engine::object::config::overrides` | Profile selection in verbose builds. |
-| `UnchainedPlugin::engine::object::process_event` | Blocked events and recursion limits. |
-| `UnchainedPlugin::engine::engine::aplayer_controller::travel` | Native travel. |
-| `UnchainedPlugin::game::atbl_character` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::engine::extensions::open_api_client_api` | Backend request handling. |
-| `UnchainedPlugin::engine::core::fconsole_output_device` | Native console output. |
-| `UnchainedPlugin::engine::engine::aplayer_controller::chat` | Native chat capture and invalid channels. |
-| `UnchainedPlugin::engine::kismet::log` | Blueprint execution messages in `kismet_log` builds. |
-| `UnchainedPlugin::engine::engine::ugame_engine` | Engine tick and game-thread jobs. |
-| `UnchainedPlugin::game::utbl_game_instance` | Startup and map changes. |
-| `UnchainedPlugin::engine::engine::agame_mode` | Match state. |
+| `UnchainedPlugin::chivalry2::tbl::utbl_system_library` | Native administration commands and game-info calls. |
+| `UnchainedPlugin::chivalry2::engine::engine::ugameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
+| `UnchainedPlugin::chivalry2::engine::asset_registry` | Asset Registry helpers. |
+| `UnchainedPlugin::chivalry2::engine::core_uobject::uobject_globals` | Native object lookups. |
+| `UnchainedPlugin::chivalry2::tbl::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
+| `UnchainedPlugin::chivalry2::engine::object::config::overrides` | Profile selection in verbose builds. |
+| `UnchainedPlugin::chivalry2::engine::object::process_event` | Blocked events and recursion limits. |
+| `UnchainedPlugin::chivalry2::engine::engine::aplayer_controller::travel` | Native travel. |
+| `UnchainedPlugin::chivalry2::tbl::atbl_character` | Combat validation and damage/kill TRACE details. |
+| `UnchainedPlugin::chivalry2::engine::extensions::open_api_client_api` | Backend request handling. |
+| `UnchainedPlugin::chivalry2::engine::core::fconsole_output_device` | Native console output. |
+| `UnchainedPlugin::chivalry2::engine::engine::aplayer_controller::chat` | Native chat capture and invalid channels. |
+| `UnchainedPlugin::chivalry2::engine::kismet::log` | Blueprint execution messages in `kismet_log` builds. |
+| `UnchainedPlugin::chivalry2::engine::engine::ugame_engine` | Engine tick and game-thread jobs. |
+| `UnchainedPlugin::chivalry2::tbl::utbl_game_instance` | Startup and map changes. |
+| `UnchainedPlugin::chivalry2::engine::engine::agame_mode` | Match state. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

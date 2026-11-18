@@ -11,9 +11,10 @@ pub mod macros;
 mod resolvers;
 pub mod scan;
 pub mod tools;
-pub mod engine;
+pub mod chivalry2;
+// Compatibility paths for callers outside the native source tree.
+pub use chivalry2::{engine, tbl as game};
 pub(crate) use engine as ue;
-pub mod game;
 pub mod features;
 pub mod commands;
 #[cfg(windows)]

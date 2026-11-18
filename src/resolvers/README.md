@@ -2,9 +2,9 @@
 # Chiv 2 Resolvers
 
 Resolver definitions, detours, and patches live beside their native owners under
-`src/game` (ArgonSDK TBL files) or `src/engine` (UE 4.25-plus modules).
+`src/chivalry2/tbl` (ArgonSDK TBL files) or `src/chivalry2/engine` (UE 4.25-plus modules).
 Game model files each identify one corresponding ArgonSDK source file.
-Private/custom engine integrations live under `src/engine/extensions`.
+Private/custom engine integrations live under `src/chivalry2/engine/extensions`.
 This directory contains only shared registration, platform filtering,
 and tests. Keep detour bodies and supporting state with the native implementation;
 do not add forwarding handlers here.
@@ -14,9 +14,9 @@ do not add forwarding handlers here.
 - The generated unsafe `name(...)` calls the trampoline.
 - Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
 - Native owners that are not established remain free functions, not guessed receivers.
-- Examples: [`UGameEngine`](../engine/engine/ugame_engine.rs),
-  [`UObject::LoadConfig`](../engine/object/config.rs), and
-  [`UNetDriver` patches](../engine/engine/unet_driver.rs).
+- Examples: [`UGameEngine`](../chivalry2/engine/engine/ugame_engine.rs),
+  [`UObject::LoadConfig`](../chivalry2/engine/object/config.rs), and
+  [`UNetDriver` patches](../chivalry2/engine/engine/unet_driver.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.
