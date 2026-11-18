@@ -228,9 +228,16 @@ CREATE_HOOK!(GetDefaultObject, CALLED, *mut UObject, (this_ptr: *mut UClass, cre
     sdebug!["Triggered!"];
 });
 
-define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
-// static void GetAllActorsOfClass(const UObject* WorldContextObject, TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
-CREATE_HOOK!(GetAllActorsOfClass, CALLED, (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>),{
+// UGameplayStatics native library — reflection-resolved (shared with asset_loading.rs save/load).
+kismet_native_class!(UGameplayStatics => path "/Script/Engine.GameplayStatics");
+
+// static void UGameplayStatics::GetAllActorsOfClass(const UObject* WorldContextObject,
+//   TSubclassOf<AActor> ActorClass, TArray<AActor*>& OutActors);
+// Reflection-resolved (exec thunk -> inner C++ fn); attaches at FEngineLoop::Init (see
+// unchained_integration), not by byte signature at preinit. o_GetAllActorsOfClass unchanged, so the
+// CALL_ORIGINAL_SAFE! trampoline caller in mod_management is unaffected.
+CREATE_HOOK_KISMET!(UGameplayStatics, "GetAllActorsOfClass", GetAllActorsOfClass, CALLED,
+    (WorldContextObject: *const UObject, ActorClass: *mut UClass, OutActors: *mut TArray<*mut UObject>), {
     sdebug!["Triggered!"];
 });
 
