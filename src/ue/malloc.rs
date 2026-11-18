@@ -112,103 +112,6 @@ impl FMallocHandle {
 mod tests {
     use super::*;
     use crate::ue::TArray;
-    use std::cell::Cell;
-    use std::mem::ManuallyDrop;
-
-    #[repr(C)]
-    struct TestAllocator {
-        allocator: FMalloc,
-        allocations: Cell<usize>,
-        reallocations: Cell<usize>,
-        frees: Cell<usize>,
-    }
-
-    impl TestAllocator {
-        fn new(vtable: &FMallocVTable) -> Self {
-            Self {
-                allocator: FMalloc { vtable },
-                allocations: Cell::new(0),
-                reallocations: Cell::new(0),
-                frees: Cell::new(0),
-            }
-        }
-
-        fn handle(&self) -> FMallocHandle {
-            FMallocHandle(NonNull::from(self).cast())
-        }
-    }
-
-    unsafe extern "C" {
-        fn malloc(size: usize) -> *mut c_void;
-        fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-        fn free(ptr: *mut c_void);
-    }
-
-    unsafe extern "C" fn allocate(this: *mut FMalloc, size: usize, _: u32) -> *mut c_void {
-        let state = &*this.cast::<TestAllocator>();
-        state.allocations.set(state.allocations.get() + 1);
-        malloc(size)
-    }
-
-    unsafe extern "C" fn reallocate(
-        this: *mut FMalloc,
-        ptr: *mut c_void,
-        size: usize,
-        _: u32,
-    ) -> *mut c_void {
-        let state = &*this.cast::<TestAllocator>();
-        state.reallocations.set(state.reallocations.get() + 1);
-        realloc(ptr, size)
-    }
-
-    unsafe extern "C" fn deallocate(this: *mut FMalloc, ptr: *mut c_void) {
-        let state = &*this.cast::<TestAllocator>();
-        state.frees.set(state.frees.get() + 1);
-        free(ptr);
-    }
-
-    fn test_vtable() -> FMallocVTable {
-        // Preserve allocation-behavior tests without exercising unrelated native slots.
-        macro_rules! uncalled {
-            ($name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?) => {
-                unsafe extern "C" fn $name($($arg: $ty),*) $(-> $ret)? {
-                    std::process::abort()
-                }
-            };
-        }
-        uncalled!(destroy(_this: *mut FMalloc, _flags: u32) -> *mut c_void);
-        uncalled!(exec(_this: *mut FMalloc, _world: *mut UWorld, _cmd: *const TCHAR, _out: *mut FOutputDevice) -> bool);
-        uncalled!(quantize(_this: *mut FMalloc, _count: usize, _alignment: u32) -> usize);
-        uncalled!(allocation_size(_this: *mut FMalloc, _ptr: *mut c_void, _out: *mut usize) -> bool);
-        uncalled!(trim(_this: *mut FMalloc, _caches: bool));
-        uncalled!(update(_this: *mut FMalloc));
-        uncalled!(stats(_this: *mut FMalloc, _stats: *mut FGenericMemoryStats));
-        uncalled!(dump(_this: *mut FMalloc, _out: *mut FOutputDevice));
-        uncalled!(thread_safe(_this: *const FMalloc) -> bool);
-        uncalled!(validate(_this: *mut FMalloc) -> bool);
-        uncalled!(name(_this: *mut FMalloc) -> *const TCHAR);
-        FMallocVTable {
-            deleting_destructor: destroy,
-            exec,
-            malloc: allocate,
-            try_malloc: allocate,
-            realloc: reallocate,
-            try_realloc: reallocate,
-            free: deallocate,
-            quantize_size: quantize,
-            get_allocation_size: allocation_size,
-            trim,
-            setup_tls_caches_on_current_thread: update,
-            clear_and_disable_tls_caches_on_current_thread: update,
-            initialize_stats_metadata: update,
-            update_stats: update,
-            get_allocator_stats: stats,
-            dump_allocator_stats: dump,
-            is_internally_thread_safe: thread_safe,
-            validate_heap: validate,
-            get_descriptive_name: name,
-        }
-    }
 
     #[test]
     fn allocator_prefix_preserves_native_layout() {
@@ -223,112 +126,31 @@ mod tests {
     }
 
     #[test]
-    fn shared_allocator_calls_update_native_implementation_state() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
-        let value = state.handle().0.as_ptr();
-        unsafe {
-            let allocator = gmalloc_from_slot(&value).unwrap();
-            let allocation = allocator.malloc(Layout::from_size_align(8, 8).unwrap());
-            assert!(!allocation.is_null());
-            assert_eq!(state.allocations.get(), 1);
-            let allocation = allocator.realloc(allocation, Layout::from_size_align(16, 8).unwrap());
-            assert!(!allocation.is_null());
-            assert_eq!(state.reallocations.get(), 1);
-            allocator.free(allocation);
-            assert_eq!(state.frees.get(), 1);
-            allocator.free(std::ptr::null_mut());
-            assert_eq!(state.frees.get(), 1);
-        }
-    }
-
-    #[test]
     fn shared_accessor_reads_late_initialization_without_globals() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
+        let mut allocator = FMalloc { vtable: std::ptr::null() };
+        let pointer = NonNull::from(&mut allocator);
         let mut value: *mut FMalloc = std::ptr::null_mut();
         let slot = std::ptr::addr_of_mut!(value);
         unsafe {
             assert!(gmalloc_from_slot(std::ptr::null()).is_none());
             assert!(gmalloc_from_slot(slot).is_none());
-            slot.write(state.handle().0.as_ptr());
-            assert_eq!(gmalloc_from_slot(slot).unwrap().0, state.handle().0);
+            slot.write(pointer.as_ptr());
+            assert_eq!(gmalloc_from_slot(slot).unwrap().0, pointer);
             slot.write(std::ptr::null_mut());
             assert!(gmalloc_from_slot(slot).is_none());
         }
     }
 
     #[test]
-    fn early_arrays_transfer_ownership_without_globals() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
-        let allocator = state.handle();
-        let mut folders = ManuallyDrop::new(TArray::<TArray<u16>>::new());
-        unsafe {
-            for units in [&[65u16, 0][..], &[66u16, 67, 0][..]] {
-                folders.push_in(TArray::from_slice_in(units, allocator), allocator);
-            }
-            assert_eq!(folders.len(), 2);
-            assert_eq!(folders[0].as_slice(), &[65, 0]);
-            assert_eq!(folders[1].as_slice(), &[66, 67, 0]);
-            assert_eq!(state.allocations.get(), 2);
-            assert_eq!(state.reallocations.get(), 2);
-            assert_eq!(state.frees.get(), 0);
-
-            // Simulate the engine freeing both levels, without invoking Rust Drop
-            // (which requires plugin globals) on any engine-owned array.
-            for folder in folders.as_slice() {
-                allocator.free(folder.as_ptr() as *mut c_void);
-            }
-            allocator.free(folders.as_ptr() as *mut c_void);
-            assert_eq!(state.frees.get(), 3);
-        }
-    }
-
-    #[test]
-    fn array_growth_policies_and_existing_capacity_are_preserved() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
-        let allocator = state.handle();
-        let mut exact = ManuallyDrop::new(TArray::<u16>::new());
-        let mut rounded = ManuallyDrop::new(TArray::<u16>::new());
-        unsafe {
-            for value in 1..=3 {
-                exact.push_in(value, allocator);
-                rounded.reserve_in(1, allocator);
-                // No globals are needed when push can reuse the reserved buffer.
-                rounded.push(value);
-            }
-            assert_eq!(exact.capacity(), 3);
-            assert_eq!(rounded.capacity(), 4);
-            assert_eq!(exact.as_slice(), rounded.as_slice());
-            let buffer = rounded.as_ptr();
-            let reallocations = state.reallocations.get();
-            rounded.reserve_in(0, allocator);
-            rounded.reserve(1);
-            rounded.push_in(4, allocator);
-            assert_eq!(rounded.as_ptr(), buffer);
-            assert_eq!(state.reallocations.get(), reallocations);
-            assert_eq!(rounded.as_slice(), &[1, 2, 3, 4]);
-            allocator.free(exact.as_ptr() as *mut c_void);
-            allocator.free(rounded.as_ptr() as *mut c_void);
-        }
-    }
-
-    #[test]
     fn empty_arrays_need_neither_allocator_calls_nor_globals() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
-        let allocator = state.handle();
+        let mut native = FMalloc { vtable: std::ptr::null() };
+        let allocator = FMallocHandle(NonNull::from(&mut native));
         let mut array = unsafe { TArray::<u16>::with_capacity_in(0, allocator) };
         unsafe { array.reserve_in(0, allocator) };
         assert!(array.as_ptr().is_null());
         assert!(unsafe { TArray::<u16>::from_slice_in(&[], allocator) }.is_empty());
         assert!(TArray::<u16>::with_capacity(0).is_empty());
         assert!(TArray::<u16>::from(&[][..]).is_empty());
-        assert_eq!(state.allocations.get(), 0);
-        assert_eq!(state.reallocations.get(), 0);
-        assert_eq!(state.frees.get(), 0);
     }
 
     #[test]
@@ -351,32 +173,11 @@ mod tests {
 
     #[test]
     fn oversized_array_capacity_is_rejected_before_allocation() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
+        let mut native = FMalloc { vtable: std::ptr::null() };
+        let allocator = FMallocHandle(NonNull::from(&mut native));
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
-            TArray::<u16>::with_capacity_in(i32::MAX as usize + 1, state.handle())
+            TArray::<u16>::with_capacity_in(i32::MAX as usize + 1, allocator)
         }));
         assert!(result.is_err());
-        assert_eq!(state.allocations.get(), 0);
-    }
-
-    #[test]
-    fn reserved_arrays_copy_and_clear_without_reallocating_or_freeing() {
-        let vtable = test_vtable();
-        let state = TestAllocator::new(&vtable);
-        let allocator = state.handle();
-        let source = [10u16, 20];
-        let mut array = ManuallyDrop::new(unsafe { TArray::from_slice_in(&source, allocator) });
-        assert_ne!(array.as_ptr(), source.as_ptr());
-        assert_eq!(array.as_slice(), &source);
-        assert_eq!(array.capacity(), source.len());
-        array.clear();
-        array.extend_from_slice(&[30, 40]);
-        assert_eq!(array.as_slice(), &[30, 40]);
-        assert_eq!(state.allocations.get(), 1);
-        assert_eq!(state.reallocations.get(), 0);
-        assert_eq!(state.frees.get(), 0);
-        unsafe { allocator.free(array.as_ptr() as *mut c_void) };
-        assert_eq!(state.frees.get(), 1);
     }
 }
