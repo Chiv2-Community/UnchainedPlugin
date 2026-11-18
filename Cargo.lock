@@ -12,6 +12,7 @@ dependencies = [
  "async-trait",
  "backon",
  "base64 0.22.1",
+ "binary_bloodhound",
  "bitflags 2.11.0",
  "censor",
  "clap",
@@ -305,6 +306,16 @@ name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
+name = "binary_bloodhound"
+version = "0.1.0"
+source = "git+https://github.com/Jacoby6000/binarybloodhound?rev=4f188fd5dec3d8310351b3dab33d29c74e0ac799#4f188fd5dec3d8310351b3dab33d29c74e0ac799"
+dependencies = [
+ "futures",
+ "iced-x86",
+ "patternsleuth",
+]
 
 [[package]]
 name = "bitflags"
@@ -2180,7 +2191,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "patternsleuth"
 version = "0.1.0"
-source = "git+https://github.com/Knutschbert/patternsleuth.git?rev=644f980#644f9804e5247fe40e4d7a1e470639601254cd70"
+source = "git+https://github.com/Jacoby6000/patternsleuth?branch=feature%2Fmemory-testkit#3de6cfae694a95db619eddb989f0e2a9c0891ac6"
 dependencies = [
  "anyhow",
  "futures",
@@ -2204,7 +2215,7 @@ dependencies = [
 [[package]]
 name = "patternsleuth_scanner"
 version = "0.1.0"
-source = "git+https://github.com/Knutschbert/patternsleuth.git?rev=644f980#644f9804e5247fe40e4d7a1e470639601254cd70"
+source = "git+https://github.com/Jacoby6000/patternsleuth?branch=feature%2Fmemory-testkit#3de6cfae694a95db619eddb989f0e2a9c0891ac6"
 dependencies = [
  "anyhow",
  "memchr",
@@ -3861,7 +3872,11 @@ dependencies = [
 name = "unchained-macros"
 version = "0.1.0"
 dependencies = [
+ "binary_bloodhound",
  "inventory",
+ "object",
+ "patternsleuth",
+ "serde",
  "test-case",
  "unchained-macros-impl",
 ]

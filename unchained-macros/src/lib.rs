@@ -8,3 +8,9 @@ mod binding;
 mod patch;
 mod hooks;
 mod signatures;
+mod custom_resolver;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::custom_resolver::single_address;
+}

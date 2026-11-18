@@ -7,6 +7,9 @@ edition = "2021"
 members = [".", "sleuth_macros", "unchained-macros", "unchained-macros/impl", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
+binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
+# Share Bloodhound's scan context; Cargo.lock pins this branch to a commit.
+patternsleuth = { git = "https://github.com/Jacoby6000/patternsleuth", branch = "feature/memory-testkit", features = ["process-internal", "serde-resolvers", "image-pe"] }
 clap = { version = "4.5.0", features = ["derive"] }
 censor = "0.3.0"
 serde = { version = "1.0.195", features = ["derive"] }
@@ -93,8 +96,8 @@ rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", re
 backon = { workspace = true, optional = true }
 server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
-# patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
-patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
+binary_bloodhound = { workspace = true }
+patternsleuth = { workspace = true }
 anyhow = "1.0.79"
 # Pak index reads for off-thread mod-map discovery. The crates.io `repak`
 # crate is an unrelated name-squatter; use trumank/repak.

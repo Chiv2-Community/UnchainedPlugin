@@ -4,7 +4,7 @@ use patternsleuth::resolvers::{AsyncContext, ResolveError};
 define_pattern_resolver!(@emit_header DefaultResult);
 
 impl DefaultResult {
-    pub fn offset(&self) -> usize {
+    pub fn offset(&self) -> u64 {
         self.0
     }
 }

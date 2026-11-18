@@ -92,8 +92,12 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
 static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
-        "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
-        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory",
+        "EngineVersionStrings", "EngineVersion",
+        "ConsoleManagerSingleton", "UGameplayStaticsSaveGameToMemory",
+        // Metadata is not an address cache entry. Its unused custom-version
+        // dependency is also excluded from startup scanning.
+        "StaticCustomVersions", "BuildChangeList", "InternalProjectName",
+        "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry",
         // (sigs populated in the resolver file as of this build; nothing pending)
     ])
 );
@@ -200,6 +204,21 @@ impl BuildInfo {
 #[cfg(test)]
 mod build_info_tests {
     use super::*;
+
+    #[test]
+    fn metadata_resolvers_do_not_require_address_cache_entries() {
+        let info = BuildInfo {
+            plugin_version: String::new(), build: 0, file_hash: 0,
+            name: String::new(), platform: PlatformType::STEAM, path: String::new(),
+            offsets: HashMap::new(),
+        };
+        let unresolved = info.get_unresolved(resolvers().collect());
+        for name in ["StaticCustomVersions", "BuildChangeList", "InternalProjectName",
+            "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry"] {
+            assert!(!unresolved.iter().any(|resolver| resolver.name == name));
+        }
+        assert!(unresolved.iter().any(|resolver| resolver.name == "FText_AsCultureInvariantCopy"));
+    }
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {

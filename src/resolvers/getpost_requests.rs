@@ -96,12 +96,12 @@ define_pattern_resolver!(CreateHttpRequest, [
     ).await;
 
     let addr = futures.into_iter().flatten().next().ok_or_else(|| {
-        ::patternsleuth::resolvers::ResolveError::Msg(
-            format!("Failed to find match for CreateHttpRequest with patterns: {patterns:?}", patterns = patterns).into()
+        ::patternsleuth::resolvers::ResolveError::new_msg(
+            format!("Failed to find match for CreateHttpRequest with patterns: {patterns:?}", patterns = patterns)
         )
     })?;
 
-    let base_addr = *crate::resolvers::BASE_ADDR;
+    let base_addr = *crate::resolvers::BASE_ADDR as u64;
     let mem = &ctx.image().memory;
     let str_offset = 0x49 + 0x3; // offset to LEA call + string addr
 
@@ -123,7 +123,7 @@ define_pattern_resolver!(CreateHttpRequest, [
         let mut map = STRING_TO_ROOT_FN.write().expect("STRING_TO_ROOT_FN poisoned");
         for (s, root) in strings.into_iter().zip(roots.into_iter()) {
             // sinfo!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
-            if root >= base_addr { map.insert(s, (root - base_addr) as u64); }
+            if root >= base_addr { map.insert(s, root - base_addr); }
         }
     }
 

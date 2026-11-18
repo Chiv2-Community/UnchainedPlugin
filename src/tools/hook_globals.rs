@@ -29,27 +29,27 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
     feature = "serde-resolvers",
     derive(serde::Serialize, serde::Deserialize)
 )]
-pub struct GEngine(pub usize);
+pub struct GEngine(pub u64);
 impl_resolver_singleton!(collect, GEngine);
 impl_resolver_singleton!(PEImage, GEngine, |ctx| async {
     let strings = ctx.scan(util::utf16_pattern("rhi.DumpMemory\0")).await;
     let refs = util::scan_xrefs(ctx, &strings).await;
 
-    fn for_each(img: &Image<'_>, addr: usize) -> std::result::Result<Option<usize>, ResolveError> {
+    fn for_each(img: &Image<'_>, addr: u64) -> std::result::Result<Option<u64>, ResolveError> {
         let Some(root) = img.get_root_function(addr)? else { return Ok(None); };
-        let f = root.range().start;
+        let f = root.range.start;
 
         let mut gengine_ptr = None;
 
         // Disassemble the whole function context
         disassemble(img, f, |inst| {
-            let cur = inst.ip() as usize;
+            let cur = inst.ip();
             if cur > addr + 0x50 { return Ok(Control::Break); } // Don't scan too far past string
 
             // Look for ANY IP-relative load that looks like it's pointing to a global
             // Instead of forcing RCX, let's just find the most likely GEngine xref in this block
             if inst.is_ip_rel_memory_operand() {
-                let target = inst.ip_rel_memory_address() as usize;
+                let target = inst.ip_rel_memory_address();
                 
                 // Optional: Add a check here to see if 'target' is in the GEngine address range
                 // For now, we assume the last global load before the string is our target
@@ -159,7 +159,8 @@ macro_rules! global_ptr {
 macro_rules! resolution_fn {
     ($name:ident, $res_field:ident, $ty:ty) => {
         pub fn $name(&self) -> $ty {
-            let ptr = self.resolution.$res_field.0;
+            let ptr = usize::try_from(self.resolution.$res_field.0)
+                .expect("Resolved native address does not fit a pointer");
             if ptr == 0 {
                 panic!("Critical: Global resolver '{}' failed to find its target address. Check memory patterns.", stringify!($res_field));
             }
@@ -258,10 +259,12 @@ pub fn init_globals() -> Result<(), String> {
     // initialization that has not run the cached preinit binding pass.
     let gmalloc = exe.resolve(GMalloc::resolver())
         .unwrap_or_else(|error| panic!("Required native value GMalloc could not be resolved: {error}"));
-    unsafe { crate::resolvers::initialize_value_binding("GMalloc", gmalloc.0); }
+    unsafe { crate::resolvers::initialize_value_binding("GMalloc",
+        usize::try_from(gmalloc.0).expect("GMalloc address does not fit a pointer")); }
     let guobject_array = exe.resolve(GUObjectArray::resolver())
         .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
-    unsafe { crate::resolvers::initialize_value_binding("GUObjectArray", guobject_array.0); }
+    unsafe { crate::resolvers::initialize_value_binding("GUObjectArray",
+        usize::try_from(guobject_array.0).expect("GUObjectArray address does not fit a pointer")); }
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
             .expect("Critical: Could not resolve DLL symbols"); // This panic is caught

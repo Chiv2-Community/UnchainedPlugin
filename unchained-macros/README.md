@@ -13,6 +13,34 @@ Logging, rich text, gameplay-specific macros and the procedural attributes in
 signatures and lifetime-aware attachment against local fixture functions,
 not game functions.
 
+## Custom resolvers
+
+Place the resolver beside its native binding:
+
+```rust,ignore
+use binary_bloodhound::BinaryMatcher;
+use unchained_macros::define_custom_resolver;
+
+define_custom_resolver!(FText_AsCultureInvariantCopy, {
+    BinaryMatcher::patterns([
+        "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
+    ])?
+    .root_functions()
+    .addresses()
+    .ensure_one()
+});
+```
+
+- Accepts any no-input `Matcher` resolving to `ExactlyOne` `u64` address.
+- Use `.addresses()` for typed address values and `.ensure_one()` to require
+  one unique result. Missing or conflicting addresses are errors.
+- Matcher construction may use `?`; construction and evaluation errors retain
+  the resolver name through patternsleuth's normal error context.
+- Uses the existing resolver inventory, per-context cache and native binding
+  initialization. Only the final address is stored, not the matcher's provenance.
+- The plugin and BinaryBloodhound share one patternsleuth Git source.
+  `Cargo.lock` pins it to `3de6cfae`; use locked builds.
+
 ## Required native values
 
 ```rust,ignore

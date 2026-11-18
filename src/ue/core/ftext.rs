@@ -1,6 +1,7 @@
 use crate::ue::{FString, TCHAR};
 use std::{ffi::c_void, mem::{ManuallyDrop, MaybeUninit}};
 use unchained_macros::bind_resolver_func;
+use binary_bloodhound::BinaryMatcher;
 
 define_pattern_resolver!(FText_ToString, [
     "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"
@@ -10,15 +11,13 @@ define_pattern_resolver!(FText_ToString, [
 // The old prologue also matched FromString; the flags-2 epilogue distinguishes
 // culture-invariant text from FromString's flags-0x12 result. A new cache key
 // prevents reuse of the old resolver's potentially moving-overload address.
-define_pattern_resolver!(FText_AsCultureInvariantCopy, [
-    "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
-], |ctx, patterns| {
-    let matches = ::patternsleuth::resolvers::futures::future::join_all(
-        patterns.iter().map(|pattern| ctx.scan(::patternsleuth::scanner::Pattern::new(pattern).unwrap()))
-    ).await;
-    let addresses: Vec<_> = matches.into_iter().flatten().collect();
-    let roots = ::patternsleuth::resolvers::unreal::util::root_functions(ctx, &addresses)?;
-    ::patternsleuth::resolvers::ensure_one(roots)
+define_custom_resolver!(FText_AsCultureInvariantCopy, {
+    BinaryMatcher::patterns([
+        "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
+    ])?
+    .root_functions()
+    .addresses()
+    .ensure_one()
 });
 
 define_pattern_resolver!(FText_Release, [

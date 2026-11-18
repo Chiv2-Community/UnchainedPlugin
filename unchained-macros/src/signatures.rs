@@ -43,10 +43,10 @@ macro_rules! define_pocess {
                 .flatten()
                 .next()
                 .ok_or_else(||
-                    ::patternsleuth::resolvers::ResolveError::Msg(format!(
+                    ::patternsleuth::resolvers::ResolveError::new_msg(format!(
                         "Failed to find match for {name} with one of the patterns: {patterns:?}",
                         name = stringify!($name), patterns = $patterns
-                    ).into())
+                    ))
             )
         })
     }};
@@ -61,7 +61,7 @@ macro_rules! define_pocess {
             patternsleuth::resolvers::try_ensure_one(
                 res.iter()
                     .flatten()
-                    .map(|a| -> patternsleuth::resolvers::Result<usize> { Ok($ctx.image().memory.rip4(*a)?) }))
+                    .map(|a| -> patternsleuth::resolvers::Result<u64> { Ok($ctx.image().memory.rip4(*a)?) }))
         })
     }};
 
@@ -93,12 +93,12 @@ macro_rules! define_pocess {
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
             let [first_pat, ..] = $patterns.as_slice() else {
-                return Err(ResolveError::Msg(format!("expected at least one pattern for {}", stringify!($name)).into()));
+                return Err(ResolveError::new_msg(format!("expected at least one pattern for {}", stringify!($name))));
             };
             let strings = $ctx.scan(first_pat.clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            let [.., last_fn] = fns.as_slice() else { return Err(ResolveError::Msg(format!("expected at least one pattern to have matched for {}", stringify!($name)).into())) };
+            let [.., last_fn] = fns.as_slice() else { return Err(ResolveError::new_msg(format!("expected at least one pattern to have matched for {}", stringify!($name)))) };
             let last_fn = last_fn.clone();
             fns.clear();
             fns.push(last_fn);
@@ -112,12 +112,12 @@ macro_rules! define_pocess {
         define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
             let [first_pat, ..] = $patterns.as_slice() else {
-                return Err(ResolveError::Msg(format!("expected at least one pattern for {}", stringify!($name)).into()));
+                return Err(ResolveError::new_msg(format!("expected at least one pattern for {}", stringify!($name))));
             };
             let strings = $ctx.scan(first_pat.clone()).await;
             let refs = util::scan_xrefs($ctx, &strings).await;
             let mut fns = util::root_functions($ctx, &refs)?;
-            let [first_fn, ..] = fns.as_slice() else { return Err(ResolveError::Msg(format!("expected at least one pattern to have matched for {}", stringify!($name)).into())) };
+            let [first_fn, ..] = fns.as_slice() else { return Err(ResolveError::new_msg(format!("expected at least one pattern to have matched for {}", stringify!($name)))) };
             let first_fn = first_fn.clone();
             fns.clear();
             fns.push(first_fn);
@@ -164,7 +164,7 @@ macro_rules! define_pattern_resolver {
     (@emit_header $name:ident) => {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)]
-        pub struct $name(pub usize);
+        pub struct $name(pub u64);
     };
 
     // Called with Mode (Process) specified
