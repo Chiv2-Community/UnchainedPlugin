@@ -116,9 +116,15 @@ of our kismet additions exist there, so when it lands:
   (as the branch's `CALL_ORIGINAL!` now does).
 - **Add `LateHookRegistration` + the `ENGINE_READY` drain** to the branch (`resolvers/mod.rs` +
   `postinit_rustlib` don't have them).
-- **Relocate UE types** into the branch's modular layout: `FFrame` (a `ue` kismet module),
-  `exec_thunk`, and `find_function/find_native/inner_native_of/cdo_of_path` into `src/ue/object.rs` /
-  `core_uobject`; reuse the branch's `static_find_object` binding instead of `get_uobject_from_path`.
+- **Relocate UE types** into the branch's modular layout. These are now **standalone files** (split
+  out precisely to make this a copy, not a re-apply): `src/ue/reflection.rs`
+  (`find_function/find_native/cdo_of_path`), `src/ue/exec_thunk.rs` (`inner_native_of` etc.), and
+  `FFrame` in `src/ue/kismet.rs`. Only the resolution source changes: swap `get_uobject_from_path`
+  for the branch's `static_find_object` binding. (`FFrameStep` is already resolved on the branch.)
+- **Blueprint hooks module** is a standalone file too: `src/resolvers/kismet_natives.rs`
+  (print/identity hooks + `log_blueprint_print` + spam filter) — carry the file, fix import paths
+  (`FString`/`FText`), and adapt `PrintText` to the branch's `FText` API. The late-drain is
+  `resolvers::attach_late_hooks()` (own fn); `postinit_rustlib` only waits on `ENGINE_READY` + calls it.
 - **GetTBLGameMode:** the branch binds it via `bind_resolver_func` on its **signature** (deterministic,
   early). Recommended: keep that and **do not** carry the `CREATE_HOOK_KISMET!` conversion across —
   reflection here is inlining-risky. Reserve `CREATE_HOOK_KISMET!` for reflected natives with no
