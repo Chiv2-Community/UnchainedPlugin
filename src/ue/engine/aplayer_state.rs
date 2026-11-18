@@ -1,7 +1,7 @@
 use crate::game::chivalry2::{APawn, FUniqueNetIdRepl, PlayerFlags};
 use crate::ue::{FString, UObjectType};
 use std::ffi::c_void;
-use unchained_macros::bind_resolver_func;
+use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
     "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
@@ -74,6 +74,6 @@ impl APlayerState {
     /// # Safety
     /// Self must be live on the engine thread; output must be writable native
     /// FString return storage, whose result the caller owns.
-    #[bind_resolver_func(self::APlayerState_GetPlayerName)]
+    #[bind_resolved_func(self::APlayerState_GetPlayerName)]
     pub unsafe fn get_player_name_native<'a>(self: *const Self, output: &'a mut FString) -> &'a mut FString {}
 }

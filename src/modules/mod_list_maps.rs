@@ -18,7 +18,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
     // listen server / in-game chat, not just a dedicated server console.
     fn required_source(&self) -> Option<CommandSource> { None }
     async fn execute(&self, _args: ListModMapsArgs, _command: &CommandRequest) {
-        use crate::resolvers::unchained_integration::run_on_game_thread;
+        use crate::ue::engine::ugame_engine::run_on_game_thread;
         // Await the game-thread result with a tokio oneshot instead of a blocking
         // mpsc recv: execute() runs on a tokio worker, and a blocking recv() pins
         // that worker (an anti-pattern on a tokio runtime).

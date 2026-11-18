@@ -4,12 +4,12 @@
 #[derive(Debug)]
 #[allow(non_snake_case)]
 pub struct FOwnershipResponse {
-	owned: bool,
-	crowns: i32,
-	gold: i32,
-	usdCents: i32,
-	levelType: u8,
-	level: i32
+    owned: bool,
+    crowns: i32,
+    gold: i32,
+    usdCents: i32,
+    levelType: u8,
+    level: i32,
 }
 
 define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, {
@@ -21,15 +21,33 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
     OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
 });
 
-CREATE_HOOK!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, ACTIVE, POST,
-    *mut FOwnershipResponse, (result: *mut FOwnershipResponse, PlayerController: *mut ATBLPlayerController, PlayerState: *mut ATBLPlayerState, AssetIdToCheck: *mut FPrimaryAssetId, BaseOnly: bool),
-    | response: *mut FOwnershipResponse | {
+#[unchained_macros::runtime_bindings]
+impl ATBLPlayerController {
+    #[bind_resolved_func_detour(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState)]
+    pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
+        result: *mut FOwnershipResponse,
+        PlayerController: *mut ATBLPlayerController,
+        PlayerState: *mut ATBLPlayerState,
+        AssetIdToCheck: *mut FPrimaryAssetId,
+        BaseOnly: bool,
+    ) -> *mut FOwnershipResponse {
+        // Caller-provided result storage precedes the controller in the native ABI.
+        let response = unsafe {
+            Self::get_ownership_from_player_controller_and_state(
+                result,
+                PlayerController,
+                PlayerState,
+                AssetIdToCheck,
+                BaseOnly,
+            )
+        };
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
             resp.owned = true;
         }
         response
-});
+    }
+}
 
 define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
     EGS: ["48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00"], // EGS
@@ -42,9 +60,16 @@ define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
         ], // STEAM
 });
 
-CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
-    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, InLoadOutSelection: *mut TSubclassOfULoadoutSelection, InItem: *mut TSubclassOfAInventoryItem),
-    | response: *mut FOwnershipResponse | {
+#[unchained_macros::runtime_bindings]
+impl ATBLPlayerController {
+    #[bind_resolved_func_detour(ATBLPlayerController__CanUseLoadoutItem)]
+    pub(crate) unsafe fn can_use_loadout_item_detour(
+        self: *mut Self,
+        result: *mut FOwnershipResponse,
+        InLoadOutSelection: *mut TSubclassOfULoadoutSelection,
+        InItem: *mut TSubclassOfAInventoryItem,
+    ) -> *mut FOwnershipResponse {
+        let response = unsafe { self.can_use_loadout_item(result, InLoadOutSelection, InItem) };
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
             resp.owned = true;
@@ -53,7 +78,8 @@ CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
             res.owned = true;
         }
         response
-});
+    }
+}
 
 define_pattern_resolver!(
     ATBLPlayerController__CanUseCharacter,
@@ -62,16 +88,22 @@ define_pattern_resolver!(
     ]
 );
 
-CREATE_HOOK!(ATBLPlayerController__CanUseCharacter, ACTIVE, POST,
-    *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, CharacterSubclass: *mut TSubclassOfATBLCharacter),
-    | response: *mut FOwnershipResponse | {
+#[unchained_macros::runtime_bindings]
+impl ATBLPlayerController {
+    #[bind_resolved_func_detour(ATBLPlayerController__CanUseCharacter)]
+    pub(crate) unsafe fn can_use_character_detour(
+        self: *mut Self,
+        result: *mut FOwnershipResponse,
+        CharacterSubclass: *mut TSubclassOfATBLCharacter,
+    ) -> *mut FOwnershipResponse {
+        let response = unsafe { self.can_use_character(result, CharacterSubclass) };
         if let Some(resp) = unsafe { response.as_mut() } {
             resp.level = 0;
             resp.owned = true;
         }
         response
-});
-
+    }
+}
 
 define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, {
     EGS: ["48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6"], // EGS
@@ -80,7 +112,6 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
     // Did the function change?
     OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
 });
-
 
 use std::os::raw::c_void;
 
@@ -92,10 +123,18 @@ use crate::{
     },
 };
 // The extra legacy player_state argument is not established by the native signature.
-CREATE_HOOK!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, ACTIVE, PRE,
-    c_void, (this: *mut ATBLPlayerController, player_state: *mut c_void), {
+#[unchained_macros::runtime_bindings]
+impl ATBLPlayerController {
+    #[bind_resolved_func_detour(ATBLPlayerController__ConditionalInitializeCustomizationOnServer)]
+    pub(crate) unsafe fn conditional_initialize_customization_on_server_detour(
+        self: *mut Self,
+        player_state: *mut c_void,
+    ) -> c_void {
+        let this = self;
         if let Some(pc) = unsafe { this.as_mut() } {
             pc.bOnlineInventoryInitialized = true;
             pc.bPlayerCustomizationReceived = true;
         }
-});
+        unsafe { self.conditional_initialize_customization_on_server(player_state) }
+    }
+}

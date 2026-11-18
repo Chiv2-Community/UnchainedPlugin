@@ -19,7 +19,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
-        use crate::{resolvers::unchained_integration::run_on_game_thread};
+        use crate::ue::engine::ugame_engine::run_on_game_thread;
 
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {

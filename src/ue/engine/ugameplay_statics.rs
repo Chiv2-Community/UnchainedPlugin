@@ -1,5 +1,5 @@
-use crate::ue::{TArray, UClass, UObject};
-use unchained_macros::bind_resolver_func;
+use crate::ue::{TArray, UClass, UObject, USaveGame, FString};
+use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
 
@@ -10,6 +10,43 @@ impl UGameplayStatics {
     /// # Safety
     /// Call on the engine thread with live context/class pointers and writable
     /// engine-compatible array storage. Entries are borrowed native actors.
-    #[bind_resolver_func(self::GetAllActorsOfClass)]
+    #[bind_resolved_func(self::GetAllActorsOfClass)]
     pub unsafe fn get_all_actors_of_class(context: *const UObject, actor_class: *mut UClass, output: *mut TArray<*mut UObject>) {}
+}
+
+define_pattern_resolver!(LoadGameFromSlot,["48 8B C4 55 57 48 8D A8 E8 FE FF FF 48 81 EC 08 02 00 00 48 89 58 08 33 FF 48 89 70"]);
+define_pattern_resolver!(SaveGameToSlot,["48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 48 8B DA 33 F6 48 8D 54 24 30 48 89 74 24 30 48 89 74 24 38 41"]);
+
+define_pattern_resolver!(UGameplay_IsDedicatedServer, [
+    "48 83 EC 28 48 85 C9 ?? ?? BA 01 00 00 00 ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 83 F8 01 0F 94 C0 48",
+]);
+
+#[unchained_macros::runtime_bindings]
+impl UGameplayStatics {
+    #[bind_resolved_func_detour(UGameplay_IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
+    pub(crate) unsafe fn is_dedicated_server_detour(context: u64) -> bool {
+        use crate::game::engine::ENetMode;
+        if let Some(world) = crate::tools::hook_globals::globals().world() {
+            let mode = unsafe { world.internal_get_net_mode() };
+            if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
+                #[cfg(feature = "verbose_hooks")]
+                strace!("Overriding dedicated server status");
+                return true;
+            }
+        }
+        unsafe { Self::is_dedicated_server(context) }
+    }
+    #[bind_resolved_func_detour(LoadGameFromSlot)]
+    pub(crate) unsafe fn load_game_from_slot_detour<'a>(slot: &'a FString, index: i32) -> *mut USaveGame {
+        sdebug!("Triggered! {}", slot);
+        unsafe { Self::load_game_from_slot(slot, index) }
+    }
+
+    #[bind_resolved_func_detour(SaveGameToSlot)]
+    pub(crate) unsafe fn save_game_to_slot_detour<'a>(
+        game: *mut USaveGame, slot: &'a FString, index: i32,
+    ) -> bool {
+        sdebug!("Triggered! {}", slot);
+        unsafe { Self::save_game_to_slot(game, slot, index) }
+    }
 }

@@ -5,32 +5,14 @@ use std::{
 };
 
 use crate::{
-    game::engine::ENetMode,
-    tools::hook_globals::{cli_args, globals},
-    ue::{APlayerController, UFunction, UObject, UStruct},
+    tools::hook_globals::cli_args,
+    ue::{UFunction, UObject, UStruct},
 };
-
-// Desync patch
-// FIXME: Add conditionals to CREATE_HOOK?
-define_pattern_resolver!(UNetDriver_GetNetMode, [
-    "48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4",
-]);
-CREATE_PATCH!(UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch });  // mov eax, 1; ret
-
-
-// APlayerController::DedicatedServerInit(undefined8 param_1)
-define_pattern_resolver!(DedicatedServerInit, [
-   "41 56 48 83 EC 30 48 89 6C 24 48 48 89 74 24 50 48 89 7C 24 28 4C 89 7C 24 20 4C 8B F9 ?? ?? ?? ?? ?? 48 8B C8 4C 8B F0"
-]);
-CREATE_HOOK!(DedicatedServerInit, ACTIVE, NONE, (), (this_ptr: *mut APlayerController), {});
-
 
 // PROCESSEVENT FILTERING
 
 // Always block these functions in PRocessEvent
-const BLOCKED_PROCESS_EVENT_NAMES: &[&str] = &[
-    "ClientSetCameraMode",
-];
+const BLOCKED_PROCESS_EVENT_NAMES: &[&str] = &["ClientSetCameraMode"];
 
 // Limit recursion depth
 const PROCESS_EVENT_MAX_DEPTH: u32 = 120; // TODO: Nihi: check if this has false positives
@@ -66,10 +48,7 @@ fn process_event_function_index(function: *mut UFunction) -> u32 {
     }
 }
 
-fn process_event_names(
-    object: *mut UObject,
-    function: *mut UFunction,
-) -> (String, String) {
+fn process_event_names(object: *mut UObject, function: *mut UFunction) -> (String, String) {
     let func_name = unsafe {
         (*function)
             .ustruct
@@ -84,12 +63,8 @@ fn process_event_names(
     let mut class_name = String::new();
 
     if !object.is_null() {
-        let current_class = unsafe {
-            (*object)
-                .uobject_base_utility
-                .uobject_base
-                .class_private as *const UStruct
-        };
+        let current_class =
+            unsafe { (*object).uobject_base_utility.uobject_base.class_private as *const UStruct };
 
         if !current_class.is_null() {
             class_name = unsafe {
@@ -108,10 +83,7 @@ fn process_event_names(
 }
 
 #[inline]
-fn process_event_is_blocked(
-    function: *mut UFunction,
-    index: u32,
-) -> bool {
+fn process_event_is_blocked(function: *mut UFunction, index: u32) -> bool {
     PROCESS_EVENT_BLOCK_CACHE.with(|cache| {
         if let Some(&blocked) = cache.borrow().get(&index) {
             return blocked;
@@ -129,8 +101,7 @@ fn process_event_is_blocked(
                 .to_string()
         };
 
-        let blocked = BLOCKED_PROCESS_EVENT_NAMES
-            .contains(&func_name.as_str());
+        let blocked = BLOCKED_PROCESS_EVENT_NAMES.contains(&func_name.as_str());
 
         cache.borrow_mut().insert(index, blocked);
         blocked
@@ -154,38 +125,33 @@ impl Drop for ProcessEventDepthGuard {
     }
 }
 
-
 define_pattern_resolver!(
     ProcessEvent,
     ["40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC F0 00 00 00 48 8D 6C 24 30 48 89 9D 18 01"]
 );
 
-CREATE_HOOK!(
-    ProcessEvent,
-    { || cli_args().apply_desync_patch },
-    NONE,
-    (),
-    (
-        object: *mut UObject,
+#[unchained_macros::runtime_bindings]
+impl UObject {
+    #[bind_resolved_func_detour(ProcessEvent, || cli_args().apply_desync_patch)]
+    pub(crate) unsafe fn process_event_detour(
+        self: *mut Self,
         function: *mut UFunction,
-        params: *mut c_void
-    ),
-    {
+        params: *mut c_void,
+    ) {
+        let object = self;
         if function.is_null() {
-            return CALL_ORIGINAL!(ProcessEvent(object, function, params));
+            return unsafe { self.process_event(function, params) };
         }
 
         let index = process_event_function_index(function);
 
         // handle known problematic functions
         if process_event_is_blocked(function, index) {
-            let should_log = PROCESS_EVENT_BLOCK_LOGGED.with(|logged| {
-                logged.borrow_mut().insert(index)
-            });
+            let should_log =
+                PROCESS_EVENT_BLOCK_LOGGED.with(|logged| logged.borrow_mut().insert(index));
 
             if should_log {
-                let (_, func_name) =
-                    process_event_names(std::ptr::null_mut(), function);
+                let (_, func_name) = process_event_names(std::ptr::null_mut(), function);
 
                 swarn!("Blocked ProcessEvent: {}", func_name);
             }
@@ -208,8 +174,7 @@ CREATE_HOOK!(
 
             // log this once (per thread)
             if should_log {
-                let (class_name, func_name) =
-                    process_event_names(object, function);
+                let (class_name, func_name) = process_event_names(object, function);
 
                 serror!(
                     "Depth limit {} reached at {}::{}; dropping event",
@@ -226,24 +191,6 @@ CREATE_HOOK!(
         PROCESS_EVENT_DEPTH.with(|d| d.set(depth + 1));
         let _depth_guard = ProcessEventDepthGuard;
 
-        CALL_ORIGINAL!(ProcessEvent(object, function, params))
+        unsafe { self.process_event(function, params) }
     }
-);
-
-// Desync for listen server
-// FIXME: This may break map objectives, but fixes(?) desync
-define_pattern_resolver!(UGameplay_IsDedicatedServer, [
-    "48 83 EC 28 48 85 C9 ?? ?? BA 01 00 00 00 ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 83 F8 01 0F 94 C0 48",
-]);
-CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NONE, bool, (param_1: u64),{
-    if let Some(world) = globals().world() {
-        let mode = unsafe { world.internal_get_net_mode() };
-        if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
-            #[cfg(feature="verbose_hooks")]
-            strace!("Overriding dedicated server status");
-            return true;
-        }
-    }
-
-    CALL_ORIGINAL!(UGameplay_IsDedicatedServer(param_1))
-});
+}

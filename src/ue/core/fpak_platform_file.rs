@@ -11,9 +11,18 @@
 //! goes through. (`GetMountedPakFilenames` exists but is `FORCEINLINE`, so it has
 //! no standalone symbol to resolve.)
 
-use crate::ue::{FPakPlatformFile, TCHAR};
+use crate::ue::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
+
+/// Opaque engine-owned platform-file implementation; no Rust layout is assumed.
+#[repr(C)]
+pub struct FPakPlatformFile {
+    _opaque: [u8; 0],
+}
+
+#[cfg(feature = "loose_assets")]
+mod loose_assets;
 
 /// Paks the game has successfully mounted (recorded by the `Mount` detour on the
 /// game thread during engine init, before our startup discovery runs).
@@ -32,28 +41,32 @@ pub fn mounted_pak_filenames() -> Vec<String> {
 define_pattern_resolver!(PakPlatformFileMount, [
     "4C 8B DC 55 57 49 8D AB 78 FE FF FF 48 81 EC 78 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 30 01 00 00 0F B6 BD B0 01 00 00 33 C0"
 ]);
-CREATE_HOOK!(PakPlatformFileMount, ACTIVE, NONE, bool, (
-    this_ptr: *mut FPakPlatformFile,
-    InPakFilename: *const TCHAR,
-    PakOrder: u32,
-    InPath: *const TCHAR,
-    bLoadIndex: bool
-), {
-    let ret = CALL_ORIGINAL!(PakPlatformFileMount(this_ptr, InPakFilename, PakOrder, InPath, bLoadIndex));
-    let path = if InPakFilename.is_null() {
-        String::new()
-    } else {
-        unsafe { U16CStr::from_ptr_str(InPakFilename) }.to_string_lossy()
-    };
-    if ret {
-        if !path.is_empty() {
-            let mut paks = MOUNTED_PAKS.lock().unwrap();
-            if !paks.contains(&path) {
-                paks.push(path);
+#[unchained_macros::runtime_bindings]
+impl FPakPlatformFile {
+    #[bind_resolved_func_detour(PakPlatformFileMount)]
+    pub(crate) unsafe fn mount_detour(
+        self: *mut Self,
+        InPakFilename: *const TCHAR,
+        PakOrder: u32,
+        InPath: *const TCHAR,
+        bLoadIndex: bool,
+    ) -> bool {
+        let ret = unsafe { self.mount(InPakFilename, PakOrder, InPath, bLoadIndex) };
+        let path = if InPakFilename.is_null() {
+            String::new()
+        } else {
+            unsafe { U16CStr::from_ptr_str(InPakFilename) }.to_string_lossy()
+        };
+        if ret {
+            if !path.is_empty() {
+                let mut paks = MOUNTED_PAKS.lock().unwrap();
+                if !paks.contains(&path) {
+                    paks.push(path);
+                }
             }
+        } else if !path.is_empty() {
+            sdebug!("[modmaps] mount failed (excluded): {}", path);
         }
-    } else if !path.is_empty() {
-        sdebug!("[modmaps] mount failed (excluded): {}", path);
+        ret
     }
-    ret
-});
+}

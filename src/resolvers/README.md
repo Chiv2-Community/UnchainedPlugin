@@ -1,6 +1,20 @@
 
 # Chiv 2 Resolvers
 
+Resolver definitions, detours, and patches live beside their native owners under
+`src/ue`. This directory contains only shared registration, platform filtering,
+and tests. Keep detour bodies and supporting state with the native implementation;
+do not add forwarding handlers here.
+
+- Methods use `#[runtime_bindings] impl Type` and
+  `#[bind_resolved_func_detour(Resolver)] fn name_detour(...)`.
+- The generated unsafe `name(...)` calls the trampoline.
+- Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
+- Native owners that are not established remain free functions, not guessed receivers.
+- Examples: [`UGameEngine`](../ue/engine/ugame_engine.rs),
+  [`UObject::LoadConfig`](../ue/object/config.rs), and
+  [`UNetDriver` patches](../ue/engine/unet_driver.rs).
+
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.
 
@@ -8,7 +22,7 @@ Without the macro, a resolver that scans for a certain pattern and returns a sin
 
 ```rust
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct FString_AppendChars(pub usize);
+pub struct FString_AppendChars(pub u64);
 impl_resolver_singleton!(all, FString_AppendChars, |ctx| async {
     let patterns = [
         "45 85 C0 0F " // Universal

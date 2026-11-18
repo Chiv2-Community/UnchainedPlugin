@@ -1,11 +1,16 @@
 use std::ffi::c_void;
 
+// Compatibility names for opaque native types defined beside their bindings.
+pub type AGameMode = crate::ue::engine::agame_mode::AGameMode;
+pub type UGameEngine = crate::ue::engine::ugame_engine::UGameEngine;
+pub type FPakPlatformFile = crate::ue::core::fpak_platform_file::FPakPlatformFile;
+pub type FConsoleOutputDevice = crate::ue::core::fconsole_output_device::FConsoleOutputDevice;
+pub type FTBLOnlineStats = crate::ue::tbl::ftbl_online_stats::FTBLOnlineStats;
+pub type FOnlineSessionPlayFab = crate::ue::tbl::fonline_session_playfab::FOnlineSessionPlayFab;
+
 // Native types used only behind pointers; these aliases do not describe layouts
 // or provide distinct type identities or thread-safety guarantees.
-pub type AGameMode = c_void;
-pub type UGameEngine = c_void;
 pub type FGuid = c_void;
-pub type FTBLOnlineStats = c_void;
 pub type FPrimaryAssetId = c_void;
 pub type UAssetRegistryImpl = c_void;
 /// Opaque native memory-statistics map (HAL/MemoryMisc.h). Pass only a live
@@ -29,13 +34,10 @@ pub struct FAssetRegistrySerializationOptions {
 pub type UPackageMap = c_void;
 pub type FUObjectSerializeContext = c_void;
 pub type USaveGame = c_void;
-pub type FPakPlatformFile = c_void;
 pub type FPakFile = c_void;
 pub type FPakEntry = c_void;
 // FPakPlatformFile::FPakListEntry.
 pub type FPakListEntry = c_void;
-pub type FConsoleOutputDevice = c_void;
-pub type FOnlineSessionPlayFab = c_void;
 // OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse.
 pub type GetCurrentGamesPostResponse = c_void;
 // Template specializations, not pointers to the wrapped UClass/IHttpRequest.

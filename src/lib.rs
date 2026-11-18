@@ -94,6 +94,8 @@ static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
         "EngineVersionStrings", "EngineVersion",
         "ConsoleManagerSingleton", "UGameplayStaticsSaveGameToMemory",
+        // No binding or globals-collector consumer needs the engine pointer.
+        "GEngine",
         // Metadata is not an address cache entry. Its unused custom-version
         // dependency is also excluded from startup scanning.
         "StaticCustomVersions", "BuildChangeList", "InternalProjectName",
@@ -206,7 +208,7 @@ mod build_info_tests {
     use super::*;
 
     #[test]
-    fn metadata_resolvers_do_not_require_address_cache_entries() {
+    fn unused_and_metadata_resolvers_do_not_require_address_cache_entries() {
         let info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
@@ -214,7 +216,7 @@ mod build_info_tests {
         };
         let unresolved = info.get_unresolved(resolvers().collect());
         for name in ["StaticCustomVersions", "BuildChangeList", "InternalProjectName",
-            "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry"] {
+            "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry", "GEngine"] {
             assert!(!unresolved.iter().any(|resolver| resolver.name == name));
         }
         assert!(unresolved.iter().any(|resolver| resolver.name == "FText_AsCultureInvariantCopy"));
@@ -583,11 +585,11 @@ pub fn world_init() {
         // idempotent regardless of which site fires first.
         // Jobs run in queue order, so this is queued before the mod scan below:
         // the scan must see the markers this registers.
-        crate::resolvers::unchained_integration::run_on_game_thread(|| {
+        crate::ue::engine::ugame_engine::run_on_game_thread(|| {
             crate::features::mod_maps::auto_register_all_assets();
         });
 
-        resolvers::unchained_integration::run_on_game_thread(move || {
+        crate::ue::engine::ugame_engine::run_on_game_thread(move || {
             sinfo!("Mod scans in progress");
             mm.scan_asset_registry();
             mm.update_save_game();

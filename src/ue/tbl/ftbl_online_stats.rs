@@ -1,0 +1,16 @@
+/// Opaque native statistics object. Do not construct in Rust.
+#[repr(C)]
+pub struct FTBLOnlineStats {
+    _opaque: [u8; 0],
+}
+
+define_pattern_resolver!(SetStatInner, [
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 48 8B F9 48 63 F2 48 8D 4C 24 20 41 8B E8"
+]);
+
+#[unchained_macros::runtime_bindings]
+impl FTBLOnlineStats {
+    // Preserve the existing ABI and suppression of the native call.
+    #[bind_resolved_func_detour(SetStatInner)]
+    pub(crate) unsafe fn set_stat_inner_detour(self: *mut Self, _p1: i32, _p2: i32) {}
+}

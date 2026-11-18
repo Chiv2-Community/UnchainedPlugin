@@ -19,10 +19,8 @@ define_pattern_resolver!(PlayFabEndAuthentication, [
 ]);
 // Shutdown clears SessionInterface before the auth destructor revokes tickets.
 // EndAuthentication assumes that interface exists; the remaining destructor cleanup still runs.
-CREATE_HOOK!(PlayFabEndAuthentication, ACTIVE, NONE, (), (
-    auth: *const c_void, user_id: *const c_void
-), {
-    // retour requires a lifetime-erased pointer at the detour boundary.
+#[unchained_macros::bind_resolved_func_detour(PlayFabEndAuthentication)]
+unsafe fn end_authentication_detour(auth: *const c_void, user_id: *const c_void) {
     // SAFETY: The native caller keeps the auth object and its referenced subsystem
     // valid for this call, using the verified layouts above.
     let context = unsafe { &*auth.cast::<AuthContext<'_>>() };
@@ -30,8 +28,10 @@ CREATE_HOOK!(PlayFabEndAuthentication, ACTIVE, NONE, (), (
         sdebug!("Skipping PlayFab logout cleanup after session teardown");
         return;
     }
-    CALL_ORIGINAL!(PlayFabEndAuthentication(auth, user_id));
-});
+    unsafe {
+        end_authentication(auth, user_id);
+    }
+}
 
 #[cfg(test)]
 mod tests {

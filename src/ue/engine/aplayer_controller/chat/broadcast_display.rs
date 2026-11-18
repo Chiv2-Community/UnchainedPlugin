@@ -10,16 +10,25 @@ define_pattern_resolver!(ClientReceiveLocalizedChat, [
     "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
 ]);
 // ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
-CREATE_HOOK!(ClientReceiveLocalizedChat, ACTIVE, NONE, (), (
-    controller: *mut c_void, message: *const FText, channel: u32
-), {
-    if let Some(raw) = native_string(message) {
-        if display_broadcast(controller, channel, &raw).is_some() {
-            return;
+#[unchained_macros::runtime_bindings]
+impl crate::game::chivalry2::ATBLPlayerController {
+    #[bind_resolved_func_detour(ClientReceiveLocalizedChat)]
+    unsafe fn client_receive_localized_chat_detour(
+        self: *mut Self,
+        message: *const FText,
+        channel: u32,
+    ) {
+        let controller = self.cast::<c_void>();
+        if let Some(raw) = native_string(message) {
+            if display_broadcast(controller, channel, &raw).is_some() {
+                return;
+            }
+        }
+        unsafe {
+            self.client_receive_localized_chat(message, channel);
         }
     }
-    CALL_ORIGINAL!(ClientReceiveLocalizedChat(controller, message, channel));
-});
+}
 
 fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32; 4])> {
     if channel != EChatType::AllSay as u32 && channel != EChatType::ServerSay as u32 {
@@ -29,7 +38,11 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
     let (title, body, color) = broadcast_parts(message)?;
     // Presentation only: this hook receives localized system chat, not player commands.
     let is_sender_dev = title == "Server Console";
-    let rgb = if is_sender_dev { 0x00FFFF } else { color.unwrap_or(0xFFFFFF) };
+    let rgb = if is_sender_dev {
+        0x00FFFF
+    } else {
+        color.unwrap_or(0xFFFFFF)
+    };
     let [r, g, b] = [16, 8, 0].map(|shift| {
         let srgb = ((rgb >> shift) & 0xFF) as f32 / 255.0;
         if srgb <= 0.04045 {
@@ -42,38 +55,54 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
 }
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {
-    use super::client_message::{ClientMessage_detour_fkt, o_ClientMessage};
     use crate::game::engine::UWorld;
     use crate::ue::{APlayerController, UObject, UObjectType, UPlayer};
 
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
-    if controller.is_null() { return None; }
+    if controller.is_null() {
+        return None;
+    }
     // Match ClientReceiveLocalizedChat's Player guard and virtual GetWorld call.
     let controller_ptr = controller.cast::<APlayerController>();
     let controller = unsafe { APlayerController::from_ptr(controller) }?;
     unsafe { UPlayer::from_ptr(controller.player) }?;
     let world = unsafe { UWorld::from_ptr(controller.base.get_world()) }?;
     let instance = world.owning_game_instance;
-    if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } { return None; }
+    if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } {
+        return None;
+    }
     let title = InvariantText::new(title);
     let body = InvariantText::new(body);
     // Preflight both calls before producing any output; failures use the untouched native path.
     if !crate::resolvers::function_is_bound("TBLGameInstance_AddChatLine")
-        || o_ClientMessage.get().is_none()
+        || !unchained_macros::detour_is_initialized("ClientMessage")
     {
         return None;
     }
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
-    unsafe { ClientMessage_detour_fkt(controller_ptr, &mut console_line, FName::default(), 0.0); }
+    unsafe {
+        controller_ptr.client_message_detour(&mut console_line, FName::default(), 0.0);
+    }
     let [r, g, b, a] = origin_color;
     let origin_color = FLinearColor { r, g, b, a };
-    unsafe { instance.cast::<UTBLGameInstance>().add_chat_line(title.as_ptr(), body.as_ptr(), channel, false, is_sender_dev, &origin_color); }
+    unsafe {
+        instance.cast::<UTBLGameInstance>().add_chat_line(
+            title.as_ptr(),
+            body.as_ptr(),
+            channel,
+            false,
+            is_sender_dev,
+            &origin_color,
+        );
+    }
     Some(())
 }
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") { return None; }
+    if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") {
+        return None;
+    }
     let string = unsafe { FText::from_ptr(text)?.to_native_string() };
     string.copy_to_string().ok()
 }
@@ -86,8 +115,12 @@ mod tests {
     fn display_override_accepts_only_global_channels() {
         let message = "{$Map Change}\nStarting match on Wardenglade.";
         for channel in EChatType::ALL {
-            let expected = matches!(channel, EChatType::AllSay | EChatType::ServerSay)
-                .then_some(("Map Change", "Starting match on Wardenglade.", false, [1.0; 4]));
+            let expected = matches!(channel, EChatType::AllSay | EChatType::ServerSay).then_some((
+                "Map Change",
+                "Starting match on Wardenglade.",
+                false,
+                [1.0; 4],
+            ));
             assert_eq!(display_parts(channel as u32, message), expected);
         }
         assert!(display_parts(u32::MAX, message).is_none());
@@ -95,7 +128,12 @@ mod tests {
 
     #[test]
     fn null_controller_skips_native_display() {
-        assert!(display_broadcast(std::ptr::null_mut(), EChatType::AllSay as u32, "{$Title}\nHello").is_none());
+        assert!(display_broadcast(
+            std::ptr::null_mut(),
+            EChatType::AllSay as u32,
+            "{$Title}\nHello"
+        )
+        .is_none());
     }
 
     #[test]
@@ -107,21 +145,23 @@ mod tests {
     #[test_case::test_case(EChatType::ServerSay, "{$Server Console}\nHello"; "server")]
     #[test_case::test_case(EChatType::AllSay, "{$Server Console|#FF0000}\nHello"; "conflicting_color")]
     fn server_console_presentation_is_always_developer_cyan(channel: EChatType, message: &str) {
-        assert_eq!(display_parts(channel as u32, message),
-            Some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0])));
+        assert_eq!(
+            display_parts(channel as u32, message),
+            Some(("Server Console", "Hello", true, [0.0, 1.0, 1.0, 1.0]))
+        );
     }
 
     #[test]
     fn black_broadcast_color_is_not_replaced_by_default_white() {
-        let (_, _, _, color) = display_parts(EChatType::AllSay as u32, "{$Title|#000000}\nHello").unwrap();
+        let (_, _, _, color) =
+            display_parts(EChatType::AllSay as u32, "{$Title|#000000}\nHello").unwrap();
         assert_eq!(color, [0.0, 0.0, 0.0, 1.0]);
     }
 
     #[test]
     fn broadcast_rgb_becomes_linear_origin_color_with_opaque_alpha() {
-        let (_, body, is_sender_dev, color) = display_parts(
-            EChatType::AllSay as u32, "{$Announcement|#FF8000}\nHello",
-        ).unwrap();
+        let (_, body, is_sender_dev, color) =
+            display_parts(EChatType::AllSay as u32, "{$Announcement|#FF8000}\nHello").unwrap();
         assert_eq!(body, "Hello");
         assert!(!is_sender_dev);
         assert_eq!([color[0], color[2], color[3]], [1.0, 0.0, 1.0]);

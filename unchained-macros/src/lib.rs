@@ -5,9 +5,6 @@ pub use detour::{DetourBindingRegistration, detour_is_initialized, detour_is_ena
 pub use unchained_macros_impl::{
     bind_resolved_func, bind_resolved_func_detour, bind_resolver_value, runtime_bindings,
 };
-// Retained until the native consumer migration lands.
-#[doc(hidden)]
-pub use unchained_macros_impl::bind_resolved_func as bind_resolver_func;
 pub use binding::{FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
 pub use binding::{initialize_value_binding, initialize_value_bindings, is_required_value};
 

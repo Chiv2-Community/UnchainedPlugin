@@ -1,4 +1,5 @@
 use crate::ue::TArray;
+mod native_hooks;
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows::Win32::System::Threading::GetCurrentProcess;
 
@@ -48,7 +49,7 @@ impl TArray<TCHAR> {
     /// # Safety
     /// Self must be a live writable native string with exclusive access. Text
     /// must contain count readable UTF-16 units; count must be nonnegative.
-    #[unchained_macros::bind_resolver_func(self::FString_AppendChars)]
+    #[unchained_macros::bind_resolved_func(self::FString_AppendChars)]
     pub unsafe fn append_chars(self: *mut Self, text: *const TCHAR, count: i32) {}
 
     /// Using direct to_string on TArray<TCHAR> (or the FString type) binds a reference to a string

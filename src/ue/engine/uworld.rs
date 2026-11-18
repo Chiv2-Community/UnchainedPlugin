@@ -2,7 +2,16 @@ use crate::game::chivalry2::{AActor, ATBLGameState};
 use crate::game::engine::{ENetMode, FActorSpawnParameters, FRotator, UNetDriver};
 use crate::ue::{FString, FVector, TArray, UClass, UObject};
 use std::ffi::c_void;
-use unchained_macros::bind_resolver_func;
+use unchained_macros::bind_resolved_func;
+
+pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
+    if world.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
+        return None;
+    }
+    let mut name = crate::ue::FString::default();
+    unsafe { world.get_map_name(&mut name); }
+    name.copy_to_string().ok()
+}
 
 // Used to set World reference
 define_pattern_resolver!(InternalGetNetMode, {
@@ -136,7 +145,7 @@ pub struct UWorld {
 impl UWorld {
     /// # Safety
     /// Self must be a live native world on the engine thread.
-    #[bind_resolver_func(self::InternalGetNetMode)]
+    #[bind_resolved_func(self::InternalGetNetMode)]
     pub unsafe fn internal_get_net_mode(self: *const Self) -> ENetMode {}
 
     /// UWorld::GetMapName() const, with explicit hidden FString return storage.
@@ -144,7 +153,7 @@ impl UWorld {
     /// # Safety
     /// Self must be a live native world on the engine thread and output writable
     /// native FString storage. The caller owns the resulting string.
-    #[bind_resolver_func(self::UWorld__GetMapName)]
+    #[bind_resolved_func(self::UWorld__GetMapName)]
     pub unsafe fn get_map_name<'a>(self: *const Self, output: &'a mut FString) -> &'a mut FString {}
 
     /// UWorld::SpawnActor(UClass*, FVector const*, FRotator const*, ...).
@@ -152,6 +161,6 @@ impl UWorld {
     /// # Safety
     /// Call on the engine thread with a live world, compatible actor class and
     /// valid native parameter storage. The world owns any returned actor.
-    #[bind_resolver_func(self::SpawnActor)]
+    #[bind_resolved_func(self::SpawnActor)]
     pub unsafe fn spawn_actor(self: *mut Self, class: *mut UClass, position: *const FVector, rotation: *const FRotator, parameters: *const FActorSpawnParameters) -> *mut AActor {}
 }

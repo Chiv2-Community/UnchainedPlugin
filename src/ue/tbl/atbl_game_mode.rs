@@ -1,7 +1,21 @@
 use crate::game::chivalry2::EChatType;
 use crate::ue::{FString, FText, TArray};
 use std::ffi::c_void;
-use unchained_macros::bind_resolver_func;
+use unchained_macros::bind_resolved_func;
+
+define_pattern_resolver!(ATBLGameMode__PreLogin, [
+    "4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"
+]);
+define_pattern_resolver!(ATBLGameMode__Logout, ["48 8B C4 55 56 41 54 41 57 48 8B EC"]);
+
+// Retained unused resolver; no native signature is established.
+define_pattern_resolver!(ApproveLogin, [
+    "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 55 41 56 48 8D 6C 24 C9 48 81 EC A0 00 00 00 8B", // EGS
+    "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 8B", // STEAM
+]);
+
+mod backend;
+mod chat;
 
 // void ATBLGameMode::BroadcastLocalizedChat(const FText&, EChatType)
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
@@ -315,6 +329,6 @@ impl ATBLGameMode {
     /// # Safety
     /// Self must be a live native game mode, text a live FText. Call on the
     /// engine thread; neither pointer is owned by this call.
-    #[bind_resolver_func(self::BroadcastLocalizedChat)]
+    #[bind_resolved_func(self::BroadcastLocalizedChat)]
     pub unsafe fn broadcast_localized_chat(self: *mut Self, text: *const FText, chat_type: EChatType) {}
 }

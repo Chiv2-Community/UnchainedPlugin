@@ -1,3 +1,4 @@
+//! Redpoint Steam token-check patch.
 // Patch out Redpoint's nonempty-token check and its unused ticket allocation.
 // Steam login is still checked by GetLoginStatus(), which calls BLoggedOn().
 define_single_platform_pattern_resolver!(STEAM, RedpointSteamSkipTokenCheck, [

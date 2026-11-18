@@ -1,9 +1,7 @@
+//! Profile override policy for UObject::LoadConfig.
 use std::cell::Cell;
 
-use crate::{
-    game::chivalry2::ATBLGameMode,
-    tools::hook_globals::globals,
-};
+use crate::{game::chivalry2::ATBLGameMode, tools::hook_globals::globals};
 
 // Lowercased, normalized form of /Game/Mods/AgMods/ for case-insensitive matching.
 const MOD_ROOT_LOWER: &str = "/game/mods/agmods/";
@@ -75,7 +73,12 @@ pub fn object_path_is_mod_root(object_path: &str) -> bool {
     is_under_mod_root(&lowered)
 }
 
-pub fn build_profile_override_path(profile_root: &str, layer: OverrideLayer, slot: &str, config_name: &str) -> String {
+pub fn build_profile_override_path(
+    profile_root: &str,
+    layer: OverrideLayer,
+    slot: &str,
+    config_name: &str,
+) -> String {
     // This function builds the override path under the unchained profile directory. The directory
     // layout is: <profile>/ini-overrides/<maps|map-indices|map-profiles>/<slot>/<Config>.ini.
     // We normalize both separators and trimming so the generated path matches what the engine expects.
@@ -83,10 +86,15 @@ pub fn build_profile_override_path(profile_root: &str, layer: OverrideLayer, slo
     let layer_dir = layer.dir();
     let clean_slot = slot.trim_matches(['/', '\\']);
     let clean_name = config_name.trim_matches(['/', '\\']);
-    format!("{clean_root}/{INI_OVERRIDES_DIR}/{layer_dir}/{clean_slot}/{clean_name}").replace('\\', "/")
+    format!("{clean_root}/{INI_OVERRIDES_DIR}/{layer_dir}/{clean_slot}/{clean_name}")
+        .replace('\\', "/")
 }
 
-pub fn build_override_paths(profile_root: &str, candidates: &[String], layers: &[(OverrideLayer, String)]) -> Vec<String> {
+pub fn build_override_paths(
+    profile_root: &str,
+    candidates: &[String],
+    layers: &[(OverrideLayer, String)],
+) -> Vec<String> {
     // Iterate layer-major so every path of an earlier layer is loaded before any path of a later
     // layer, regardless of how many config candidates there are. The base config is not part of
     // this list; resolve_profile_override_paths_for_config prepends it.
@@ -110,7 +118,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
     // We strip the full asset path down to the map's leaf name so that the override directory can be
     // keyed by a readable map identifier like TDM_QuarryKP.
     if let Some(world) = globals().world() {
-        let map_name = crate::resolvers::unchained_integration::get_current_map_name(world)?;
+        let map_name = crate::ue::engine::uworld::get_current_map_name(world)?;
         let last = map_name.rsplit('/').next().unwrap_or(&map_name);
         let cleaned = last.trim_matches(['/', '\\']);
         if !cleaned.is_empty() {
@@ -168,7 +176,11 @@ fn server_settings(profile_root: &str) -> &'static ServerSettings {
         match settings {
             Ok(settings) => {
                 #[cfg(feature = "config_overrides_verbose_hooks")]
-                sinfo!("Loaded {} map profile(s) from {}", settings.map_profiles.len(), path);
+                sinfo!(
+                    "Loaded {} map profile(s) from {}",
+                    settings.map_profiles.len(),
+                    path
+                );
                 settings
             }
             Err(_e) => {
@@ -190,7 +202,10 @@ pub fn current_map_profile_name(profile_root: &str) -> Option<String> {
     (!cleaned.is_empty()).then(|| cleaned.to_string())
 }
 
-pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, object_path: Option<&str>) -> Vec<String> {
+pub fn resolve_profile_override_paths_for_config(
+    original_name: Option<&str>,
+    object_path: Option<&str>,
+) -> Vec<String> {
     // This is the main override resolver: take the current config load request, decide whether it is
     // a mod-owned config, and then return the profile override files to load afterwards. The pattern is
     // deliberate: first the normal engine load, then profile overrides on top. That preserves UE's
@@ -198,8 +213,7 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
     let original_path = original_name.filter(|value| !value.trim().is_empty());
     let object_path = object_path.filter(|value| !value.trim().is_empty());
 
-    let has_mod_context = original_path
-        .is_some_and(|name| is_mod_config_path(name))
+    let has_mod_context = original_path.is_some_and(|name| is_mod_config_path(name))
         || object_path.is_some_and(|path| object_path_is_mod_root(path));
 
     // Non-mod assets are the common case; skip them silently.
@@ -207,7 +221,10 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
         return vec![];
     }
 
-    let profile_root = match crate::tools::hook_globals::CLI_ARGS.get().and_then(|cli| cli.unchained_profile_location.as_deref()) {
+    let profile_root = match crate::tools::hook_globals::CLI_ARGS
+        .get()
+        .and_then(|cli| cli.unchained_profile_location.as_deref())
+    {
         Some(root) => root,
         None => {
             #[cfg(feature = "config_overrides_verbose_hooks")]
@@ -252,12 +269,22 @@ pub fn resolve_profile_override_paths_for_config(original_name: Option<&str>, ob
     let override_paths = build_override_paths(profile_root, &candidates, &layers);
 
     #[cfg(feature = "config_overrides_verbose_hooks")]
-    log_override_summary(profile_root, original_path, object_path, &layers, &override_paths);
+    log_override_summary(
+        profile_root,
+        original_path,
+        object_path,
+        &layers,
+        &override_paths,
+    );
 
     let mut paths = Vec::new();
     // Always load the base ini (resolved via GetConfigName, e.g. Saved_Unchained/.../Engine.ini) explicitly first.
     // The hook's initial LoadConfig call often has a null filename and does not resolve to the same file.
-    paths.push(original_path.map(|name| name.replace('\\', "/")).unwrap_or_default());
+    paths.push(
+        original_path
+            .map(|name| name.replace('\\', "/"))
+            .unwrap_or_default(),
+    );
     paths.extend(override_paths);
     paths
 }
@@ -277,15 +304,26 @@ fn log_override_summary(
 
     if original_path.is_none() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        swarn!("⚠️ {}: no base config name (filename and GetConfigName empty)", object);
+        swarn!(
+            "⚠️ {}: no base config name (filename and GetConfigName empty)",
+            object
+        );
     }
     if layers.is_empty() {
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        swarn!("⚠️ {}: no map name or rotation slot available, no overrides resolved", object);
+        swarn!(
+            "⚠️ {}: no map name or rotation slot available, no overrides resolved",
+            object
+        );
         return;
     }
 
-    let overrides_root = format!("{}/{INI_OVERRIDES_DIR}/", profile_root.trim_end_matches(['/', '\\']).replace('\\', "/"));
+    let overrides_root = format!(
+        "{}/{INI_OVERRIDES_DIR}/",
+        profile_root
+            .trim_end_matches(['/', '\\'])
+            .replace('\\', "/")
+    );
     let existing = override_paths
         .iter()
         .filter(|path| std::path::Path::new(path.as_str()).is_file())
@@ -293,10 +331,18 @@ fn log_override_summary(
         .collect::<Vec<_>>();
 
     if !existing.is_empty() {
-        let slots = layers.iter().map(|(layer, slot)| format!("{}={slot}", layer.dir())).collect::<Vec<_>>();
-        
+        let slots = layers
+            .iter()
+            .map(|(layer, slot)| format!("{}={slot}", layer.dir()))
+            .collect::<Vec<_>>();
+
         #[cfg(feature = "config_overrides_verbose_hooks")]
-        sdebug!("🔀 {} [{}] -> {}", object, slots.join(", "), existing.join(", "));
+        sdebug!(
+            "🔀 {} [{}] -> {}",
+            object,
+            slots.join(", "),
+            existing.join(", ")
+        );
     }
 }
 
@@ -306,14 +352,30 @@ mod tests {
 
     #[test]
     fn builds_per_map_override_path_for_engine_ini() {
-        let path = build_profile_override_path(r"C:\Profiles\Server", OverrideLayer::Map, "TDM_QuarryKP", "Engine.ini");
-        assert_eq!(path, "C:/Profiles/Server/ini-overrides/maps/TDM_QuarryKP/Engine.ini");
+        let path = build_profile_override_path(
+            r"C:\Profiles\Server",
+            OverrideLayer::Map,
+            "TDM_QuarryKP",
+            "Engine.ini",
+        );
+        assert_eq!(
+            path,
+            "C:/Profiles/Server/ini-overrides/maps/TDM_QuarryKP/Engine.ini"
+        );
     }
 
     #[test]
     fn builds_map_index_override_path_for_game_ini() {
-        let path = build_profile_override_path(r"C:/Profiles/Server/", OverrideLayer::MapIndex, "2", "Game.ini");
-        assert_eq!(path, "C:/Profiles/Server/ini-overrides/map-indices/2/Game.ini");
+        let path = build_profile_override_path(
+            r"C:/Profiles/Server/",
+            OverrideLayer::MapIndex,
+            "2",
+            "Game.ini",
+        );
+        assert_eq!(
+            path,
+            "C:/Profiles/Server/ini-overrides/map-indices/2/Game.ini"
+        );
     }
 
     #[test]
@@ -324,43 +386,66 @@ mod tests {
             (OverrideLayer::MapIndex, "1".to_string()),
         ];
         let paths = build_override_paths("C:/P", &candidates, &layers);
-        assert_eq!(paths, vec![
-            "C:/P/ini-overrides/maps/TDM_QuarryKP/Engine.ini",
-            "C:/P/ini-overrides/maps/TDM_QuarryKP/Game.ini",
-            "C:/P/ini-overrides/map-indices/1/Engine.ini",
-            "C:/P/ini-overrides/map-indices/1/Game.ini",
-        ]);
+        assert_eq!(
+            paths,
+            vec![
+                "C:/P/ini-overrides/maps/TDM_QuarryKP/Engine.ini",
+                "C:/P/ini-overrides/maps/TDM_QuarryKP/Game.ini",
+                "C:/P/ini-overrides/map-indices/1/Engine.ini",
+                "C:/P/ini-overrides/map-indices/1/Game.ini",
+            ]
+        );
     }
 
     #[test]
     fn duplicate_map_path_does_not_skip_index_layer() {
-        let candidates = vec!["Engine.ini".to_string(), "engine.ini".to_string(), "Engine.ini".to_string()];
+        let candidates = vec![
+            "Engine.ini".to_string(),
+            "engine.ini".to_string(),
+            "Engine.ini".to_string(),
+        ];
         let layers = vec![
             (OverrideLayer::Map, "TDM_QuarryKP".to_string()),
             (OverrideLayer::MapIndex, "1".to_string()),
         ];
         let paths = build_override_paths("C:/P", &candidates, &layers);
-        assert_eq!(paths, vec![
-            "C:/P/ini-overrides/maps/TDM_QuarryKP/Engine.ini",
-            "C:/P/ini-overrides/maps/TDM_QuarryKP/engine.ini",
-            "C:/P/ini-overrides/map-indices/1/Engine.ini",
-            "C:/P/ini-overrides/map-indices/1/engine.ini",
-        ]);
+        assert_eq!(
+            paths,
+            vec![
+                "C:/P/ini-overrides/maps/TDM_QuarryKP/Engine.ini",
+                "C:/P/ini-overrides/maps/TDM_QuarryKP/engine.ini",
+                "C:/P/ini-overrides/map-indices/1/Engine.ini",
+                "C:/P/ini-overrides/map-indices/1/engine.ini",
+            ]
+        );
     }
 
     #[cfg(feature = "map_profiles")]
     #[test]
     fn builds_map_profile_override_path() {
-        let path = build_profile_override_path("C:/P", OverrideLayer::MapProfile, "night_tdm", "Engine.ini");
+        let path = build_profile_override_path(
+            "C:/P",
+            OverrideLayer::MapProfile,
+            "night_tdm",
+            "Engine.ini",
+        );
         assert_eq!(path, "C:/P/ini-overrides/map-profiles/night_tdm/Engine.ini");
     }
 
     #[cfg(feature = "map_profiles")]
     #[test]
     fn parses_server_settings_map_profiles() {
-        let settings = super::parse_server_settings("map_profiles:\n  0: night_tdm\n  3: duel_rules\n").unwrap();
-        assert_eq!(settings.map_profiles.get(&0).map(String::as_str), Some("night_tdm"));
-        assert_eq!(settings.map_profiles.get(&3).map(String::as_str), Some("duel_rules"));
+        let settings =
+            super::parse_server_settings("map_profiles:\n  0: night_tdm\n  3: duel_rules\n")
+                .unwrap();
+        assert_eq!(
+            settings.map_profiles.get(&0).map(String::as_str),
+            Some("night_tdm")
+        );
+        assert_eq!(
+            settings.map_profiles.get(&3).map(String::as_str),
+            Some("duel_rules")
+        );
         assert!(!settings.map_profiles.contains_key(&1));
     }
 
@@ -372,16 +457,30 @@ mod tests {
         let yaml = std::fs::read_to_string(format!("{root}/ini-overrides/unchained.yaml")).unwrap();
         let settings = super::parse_server_settings(&yaml).unwrap();
         let profile = settings.map_profiles.get(&1).expect("fixture maps index 1");
-        let paths = build_override_paths(root, &["Engine.ini".to_string()], &[(OverrideLayer::MapProfile, profile.clone())]);
+        let paths = build_override_paths(
+            root,
+            &["Engine.ini".to_string()],
+            &[(OverrideLayer::MapProfile, profile.clone())],
+        );
         assert_eq!(paths.len(), 1);
-        assert!(std::path::Path::new(&paths[0]).is_file(), "missing {}", paths[0]);
+        assert!(
+            std::path::Path::new(&paths[0]).is_file(),
+            "missing {}",
+            paths[0]
+        );
     }
 
     #[cfg(feature = "map_profiles")]
     #[test]
     fn parses_empty_or_unrelated_server_settings() {
-        assert!(super::parse_server_settings("").unwrap().map_profiles.is_empty());
-        assert!(super::parse_server_settings("other_setting: 5\n").unwrap().map_profiles.is_empty());
+        assert!(super::parse_server_settings("")
+            .unwrap()
+            .map_profiles
+            .is_empty());
+        assert!(super::parse_server_settings("other_setting: 5\n")
+            .unwrap()
+            .map_profiles
+            .is_empty());
     }
 
     #[test]
@@ -398,14 +497,22 @@ mod tests {
 
     #[test]
     fn detects_nested_mod_subfolders() {
-        assert!(super::object_path_is_mod_root("/Game/Mods/AgMods/A/B/C/Deep.Deep_C"));
-        assert!(super::object_path_is_mod_root("/game/mods/agmods/SomeMod/Default__SomeMod_C"));
+        assert!(super::object_path_is_mod_root(
+            "/Game/Mods/AgMods/A/B/C/Deep.Deep_C"
+        ));
+        assert!(super::object_path_is_mod_root(
+            "/game/mods/agmods/SomeMod/Default__SomeMod_C"
+        ));
     }
 
     #[test]
     fn ignores_sibling_and_other_mod_folders() {
-        assert!(!super::object_path_is_mod_root("/Game/Mods/AgModsOther/SomeActor.SomeActor_C"));
-        assert!(!super::object_path_is_mod_root("/Game/Mods/OtherMod/SomeActor.SomeActor_C"));
+        assert!(!super::object_path_is_mod_root(
+            "/Game/Mods/AgModsOther/SomeActor.SomeActor_C"
+        ));
+        assert!(!super::object_path_is_mod_root(
+            "/Game/Mods/OtherMod/SomeActor.SomeActor_C"
+        ));
     }
 
     #[test]

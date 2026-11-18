@@ -1,5 +1,5 @@
 use crate::ue::FName;
-use unchained_macros::bind_resolver_func;
+use unchained_macros::bind_resolved_func;
 
 // Signature source: owner-provided target-build bytes for
 // `FLargeMemoryReader::FLargeMemoryReader`. The constructor is used with
@@ -28,7 +28,7 @@ impl FLargeMemoryReader {
     /// # Safety
     /// Self must be writable, aligned storage of the verified native size. Data
     /// must remain valid until destruction. Use the engine thread/allocator.
-    #[bind_resolver_func(self::FLargeMemoryReaderCtor)]
+    #[bind_resolved_func(self::FLargeMemoryReaderCtor)]
     pub unsafe fn construct(self: *mut Self, data: *const u8, size: i64, flags: u8, archive_name: FName) -> *mut Self {}
 
     /// Native non-deleting destructor; does not free the object's storage.
@@ -36,6 +36,6 @@ impl FLargeMemoryReader {
     /// # Safety
     /// Self must be a constructed reader, destroyed exactly once before its
     /// borrowed data expires, on the engine thread.
-    #[bind_resolver_func(self::FLargeMemoryReaderDtor)]
+    #[bind_resolved_func(self::FLargeMemoryReaderDtor)]
     pub unsafe fn destruct(self: *mut Self) {}
 }

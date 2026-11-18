@@ -36,3 +36,5 @@ impl FFrame {
         value.assume_init()
     }
 }
+#[cfg(feature = "kismet_log")]
+mod log;

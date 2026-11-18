@@ -107,25 +107,7 @@ pub struct OffsetRegisty {
     pub map: fn() -> std::collections::HashMap<String, u64>,
 }
 
-pub mod admin_control;
-pub mod asset_loading;
-pub mod loading_screens;
-pub mod backend_hooks;
-pub mod config_overrides;
-pub mod etc_hooks;
-pub mod ownership_overrides;
-pub mod unchained_integration;
-pub mod messages;
-pub mod desync;
-pub(crate) mod steam_auth;
-mod playfab_auth;
-#[cfg(feature="move-autonomous-desync")]
-pub mod desync_tests;
 
-#[macro_use]
-pub mod getpost_requests;
-pub mod gameplay;
-pub mod pak_mount;
 
 inventory::collect!(HookRegistration);
 inventory::collect!(PatchRegistration);
@@ -134,6 +116,51 @@ inventory::collect!(OffsetRegisty);
 #[cfg(test)]
 mod binding_tests {
     use super::*;
+
+    #[test]
+    fn native_detours_keep_their_registered_names_and_state_access() {
+        let expected = [
+            "LoadFrontEndMap", "UGameEngineTick", "OnPreLoadMap", "OnPostLoadMap",
+            "SetMatchState", "ExecuteConsoleCommand", "PakPlatformFileMount",
+            "ClientReceiveChat", "BroadcastChat", "ClientMessage",
+            "ClientReceiveLocalizedChat", "ConsoleOutputDevice__Serialize", "GetDataForMap",
+            "ATBLPlayerController__GetOwnershipFromPlayerControllerAndState",
+            "ATBLPlayerController__CanUseLoadoutItem", "ATBLPlayerController__CanUseCharacter",
+            "ATBLPlayerController__ConditionalInitializeCustomizationOnServer",
+            "DedicatedServerInit", "ProcessEvent", "UGameplay_IsDedicatedServer",
+            "PlayFabEndAuthentication", "LoadGameFromSlot", "SaveGameToSlot",
+            "ATBLGameMode__PreLogin", "ATBLGameMode__Logout", "SendRequest", "SetStatInner",
+            "OnGetCurrentGames_", "PingSomeServers", "FStringFind", "UDPEcho",
+            "FStringParseIntoArray", "GetConfigName", "LoadConfig", "GetGameInfo",
+            "GetPost_GetMotd", "GetPost_GetCurrentGames", "ClientTravelInternal",
+        ];
+        for name in expected {
+            assert_eq!(inventory::iter::<HookRegistration>.into_iter()
+                .filter(|hook| hook.name == name).count(), 1, "Hook {name}");
+            assert_eq!(inventory::iter::<unchained_macros::DetourBindingRegistration>.into_iter()
+                .filter(|hook| hook.name == name).count(), 1, "State access for {name}");
+        }
+        assert_eq!(crate::resolvers().filter(|resolver| resolver.name == "GetTBLGameMode").count(), 1);
+    }
+
+    #[test]
+    fn colocated_patches_keep_their_resolvers_and_registration() {
+        let expected = [
+            "UTBLLocalPlayer_Exec", "AuthenticateConsoleCommandCaller",
+            "AllowAlternateBackend", "EACAntiCheatMesssage", "UNetDriver_GetNetMode",
+            "RedpointSteamSkipTokenCheck",
+            #[cfg(feature = "move-autonomous-desync")]
+            "MoveAutonomous",
+            #[cfg(feature = "move-autonomous-desync")]
+            "TickActor",
+        ];
+        for name in expected {
+            assert_eq!(inventory::iter::<PatchRegistration>.into_iter()
+                .filter(|patch| patch.name == name).count(), 1, "Patch {name}");
+            assert_eq!(crate::resolvers().filter(|resolver| resolver.name == name).count(),
+                1, "Resolver for patch {name}");
+        }
+    }
 
     #[test]
     fn call_only_resolvers_are_bindings_not_detours() {

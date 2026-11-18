@@ -10,7 +10,6 @@ use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
 use crate::ue::{AsUObject, FString, FVector, TArray, UClass, UObject, UGameplayStatics};
-use crate::resolvers::asset_loading::*;
 #[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
@@ -71,7 +70,7 @@ use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
 //     {},
 //     false,
 //     |args| {
-//         use crate::{resolvers::unchained_integration::run_on_game_thread};
+//         use crate::ue::engine::ugame_engine::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
@@ -449,7 +448,7 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::resolvers::unchained_integration::{in_game_thread_job, run_on_game_thread};
+        use crate::ue::engine::ugame_engine::{in_game_thread_job, run_on_game_thread};
 
         if mod_class.is_null() {
             serror!("mod class was null; skipping actor spawn");
@@ -540,8 +539,12 @@ impl ModManager {
     pub fn update_save_game(&self) {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
-        let mut settings_fstring = FString::from(settings_file);
-        let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;
+        let settings_fstring = FString::from(settings_file);
+        if !unchained_macros::detour_is_initialized("LoadGameFromSlot") {
+            swarn!("Detour LoadGameFromSlot is not initialized. Skipping.");
+            return;
+        }
+        let save_game_ptr = unsafe { UGameplayStatics::load_game_from_slot(&settings_fstring, 0) };
         if save_game_ptr.is_null() {
             serror!("save game is null");
             return;
@@ -588,7 +591,11 @@ impl ModManager {
         // live-world actor scan is unreliable at init (world may be None and
         // the mod actors are not spawned yet).
         self.set_active_paths(enabled);
-        let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
+        if !unchained_macros::detour_is_initialized("SaveGameToSlot") {
+            swarn!("Detour SaveGameToSlot is not initialized. Skipping.");
+            return;
+        }
+        let res = unsafe { UGameplayStatics::save_game_to_slot(save_game_ptr, &settings_fstring, 0) };
         if res {
             sinfo!("Modloader settings saved: {res}");
         }

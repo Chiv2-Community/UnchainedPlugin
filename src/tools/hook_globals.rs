@@ -12,9 +12,7 @@ use crate::features::mod_management::ModManager;
 use crate::features::server_browser::registration::Registration;
 use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs, ue};
 use ue::object_array::FUObjectArray;
-use itertools::Itertools;
 use parking_lot::RwLock;
-use patternsleuth::{disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
 use patternsleuth::resolvers::unreal::{
     UObjectBaseUtilityGetPathName,
     fname::FNameToString,
@@ -23,59 +21,6 @@ use patternsleuth::resolvers::unreal::{
     kismet::{FFrameStep, FFrameStepExplicitProperty},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(
-    feature = "serde-resolvers",
-    derive(serde::Serialize, serde::Deserialize)
-)]
-pub struct GEngine(pub u64);
-impl_resolver_singleton!(collect, GEngine);
-impl_resolver_singleton!(PEImage, GEngine, |ctx| async {
-    let strings = ctx.scan(util::utf16_pattern("rhi.DumpMemory\0")).await;
-    let refs = util::scan_xrefs(ctx, &strings).await;
-
-    fn for_each(img: &Image<'_>, addr: u64) -> std::result::Result<Option<u64>, ResolveError> {
-        let Some(root) = img.get_root_function(addr)? else { return Ok(None); };
-        let f = root.range.start;
-
-        let mut gengine_ptr = None;
-
-        // Disassemble the whole function context
-        disassemble(img, f, |inst| {
-            let cur = inst.ip();
-            if cur > addr + 0x50 { return Ok(Control::Break); } // Don't scan too far past string
-
-            // Look for ANY IP-relative load that looks like it's pointing to a global
-            // Instead of forcing RCX, let's just find the most likely GEngine xref in this block
-            if inst.is_ip_rel_memory_operand() {
-                let target = inst.ip_rel_memory_address();
-                
-                // Optional: Add a check here to see if 'target' is in the GEngine address range
-                // For now, we assume the last global load before the string is our target
-                gengine_ptr = Some(target);
-            }
-
-            // If we hit our string xref, we stop and take whatever global we found last
-            if cur == addr {
-                return Ok(Control::Break);
-            }
-
-            Ok(Control::Continue)
-        })?;
-
-        Ok(gengine_ptr)
-    }
-
-    Ok(Self(try_ensure_one(
-        refs.into_iter()
-            .map(|addr| for_each(ctx.image(), addr))
-            .flatten_ok(),
-    )?))
-});
-impl_resolver_singleton!(ElfImage, GEngine, |_ctx| async {
-    super::bail_out!("ElfImage unimplemented");
-});
 
 patternsleuth::_impl_try_collector! {
     #[derive(Debug, PartialEq, Clone)]
@@ -315,7 +260,7 @@ mod tests {
         let _: fn(&Globals, *mut UWorld) = Globals::set_world;
         let _: fn(&Globals) -> &RwLock<SyncPtr<UWorld>> = |globals| &globals.world;
         let _: fn(*mut UWorld) -> Option<String> =
-            crate::resolvers::unchained_integration::get_current_map_name;
+            crate::ue::engine::uworld::get_current_map_name;
     }
 
     #[test]

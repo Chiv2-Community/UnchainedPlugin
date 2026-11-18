@@ -30,7 +30,11 @@ impl LoadingScreen {
     /// texts: its map name as the title (falling back to the map's short name)
     /// and its description as the subtitle.
     fn from_marker(info: &crate::features::map_markers::MapMarkerInfo) -> Option<Self> {
-        let title = if info.title.is_empty() { info.map_name.clone() } else { info.title.clone() };
+        let title = if info.title.is_empty() {
+            info.map_name.clone()
+        } else {
+            info.title.clone()
+        };
         Some(Self {
             map: info.map_name.clone(),
             texture: info.loading_screen.clone()?,
@@ -95,7 +99,8 @@ pub struct UMapSpecificLoadingScreenConfig {
     default_screen: FMapSpecificLoadingScreenConfigData,  // 0x38
 }
 const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, configs) == 0x28);
-const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
+const _: () =
+    assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
 
 impl UMapSpecificLoadingScreenConfig {
     fn has_entry(&self, key: &str) -> bool {
@@ -121,7 +126,11 @@ impl UMapSpecificLoadingScreenConfig {
             extra: [0; 0x10],
         };
         self.configs.push(entry);
-        sinfo!["Added extra loading screen config for {} ({} entries)", extra.map, self.configs.len()];
+        sinfo![
+            "Added extra loading screen config for {} ({} entries)",
+            extra.map,
+            self.configs.len()
+        ];
     }
 }
 
@@ -151,30 +160,44 @@ unsafe fn apply_texture_fallback(
     sinfo!["Using fallback loading screen texture {}", extra.texture];
 }
 
-define_pattern_resolver!(GetDataForMap, [
-    "48 89 4C 24 08 55 53 57 41 56 48 8D 6C 24 C1 48 81 EC F8 00 00 00 49 8B F8 4C 8B F2"
-]);
+define_pattern_resolver!(
+    GetDataForMap,
+    ["48 89 4C 24 08 55 53 57 41 56 48 8D 6C 24 C1 48 81 EC F8 00 00 00 49 8B F8 4C 8B F2"]
+);
 // void UMapSpecificLoadingScreenConfig::GetDataForMap(longlong param_1,FString *param_2,void **param_3)
 //
 // NONE: the callee consumes (frees) its by-value FString arg, so the original
 // must be called exactly once.
-CREATE_HOOK!(GetDataForMap, ACTIVE, NONE, (), (
-    this_ptr: *mut UMapSpecificLoadingScreenConfig,
-    map_name: *mut FString,
-    data: *mut FMapSpecificLoadingScreenConfigData,
-), {
-    // The key must be read before the call: the callee mutates and frees `map_name`.
-    let extra = LoadingScreen::lookup(&(*map_name).to_string());
-    if let Some(extra) = &extra {
-        add_entry_guarded(this_ptr, extra);
-        swarn!["Extra loading screen config for {} is now present", extra.map];
+#[unchained_macros::runtime_bindings]
+impl UMapSpecificLoadingScreenConfig {
+    #[bind_resolved_func_detour(GetDataForMap)]
+    pub(crate) unsafe fn get_data_for_map_detour(
+        self: *mut Self,
+        map_name: *mut FString,
+        data: *mut FMapSpecificLoadingScreenConfigData,
+    ) {
+        let this_ptr = self;
+        // The key must be read before the call: the callee mutates and frees `map_name`.
+        let extra = LoadingScreen::lookup(&(*map_name).to_string());
+        if let Some(extra) = &extra {
+            add_entry_guarded(this_ptr, extra);
+            swarn![
+                "Extra loading screen config for {} is now present",
+                extra.map
+            ];
+        }
+        unsafe {
+            self.get_data_for_map(map_name, data);
+        }
+        if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
+            apply_texture_fallback(&*this_ptr, &mut *data, extra);
+            swarn![
+                "Extra loading screen texture for {} is now applied",
+                extra.map
+            ];
+        }
     }
-    CALL_ORIGINAL!(GetDataForMap(this_ptr, map_name, data));
-    if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
-        apply_texture_fallback(&*this_ptr, &mut *data, extra);
-        swarn!["Extra loading screen texture for {} is now applied", extra.map];
-    }
-});
+}
 
 #[cfg(test)]
 mod tests {
@@ -184,7 +207,10 @@ mod tests {
     fn native_key_strips_path_and_options() {
         assert_eq!(native_key("TDM_QuarryKP"), "TDM_QuarryKP");
         assert_eq!(native_key("/Game/Maps/Frontend/Frontend"), "Frontend");
-        assert_eq!(native_key("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM"), "TDM_QuarryKP");
+        assert_eq!(
+            native_key("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM"),
+            "TDM_QuarryKP"
+        );
         assert_eq!(native_key("TDM_QuarryKP?listen"), "TDM_QuarryKP");
         assert_eq!(native_key(""), "");
         assert_eq!(native_key("/Game/Maps/"), "");
