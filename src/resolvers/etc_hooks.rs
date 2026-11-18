@@ -423,17 +423,13 @@ define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 
 CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
     sdebug!["Triggered!"];
 });
-/*
-ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
-*/
-define_pattern_resolver![GetTBLGameMode, {
-    EGS : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"], // EGS
-    OTHER : [
-        "40 53 48 83 EC 20 48 8B D9 48 85 C9 74 60 48 8B 01 FF 90 ?? ?? ?? ?? 48 85 C0 75 23 0F 1F 40 00 48 8B 5B 20 48 85 DB 74 11 48 8B 03 48 8B CB FF 90 ?? ?? ?? ?? 48 85 C0 74 E6 48 85 C0 74 2F 48 8B 98 28",
-        "40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51" // EGS 2.11.4
-        ]
-}];
+// ATBLGameMode* UTBLSystemLibrary::GetTBLGameMode(UObject* WorldContextObject)
+// Resolved by reflection (UTBLSystemLibrary::GetTBLGameMode exec thunk -> inner C++ fn) instead of a
+// per-build byte signature, and attached late (after the UObject system is up). Still INACTIVE: the
+// detour is never enabled; callers use it only as a trampoline via CALL_ORIGINAL!(GetTBLGameMode(..)).
+kismet_native_class!(UTBLSystemLibrary => path "/Script/TBL.TBLSystemLibrary");
 
-CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject),{
+CREATE_HOOK_KISMET!(GetTBLGameMode, UTBLSystemLibrary, "GetTBLGameMode", INACTIVE,
+    *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject), {
     sdebug!["Triggered!"];
 });

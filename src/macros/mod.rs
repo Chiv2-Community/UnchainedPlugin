@@ -9,3 +9,5 @@ pub mod sig_macros;
 pub mod thread_macros;
 #[macro_use]
 pub mod kismet_exec;
+#[macro_use]
+pub mod kismet_native_hook;
