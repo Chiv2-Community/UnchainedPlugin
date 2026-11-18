@@ -49,6 +49,24 @@ no-op, so we hook the **exec thunks** (`execPrintString`, …) and read the args
 - `logging::log4rs::plugin_log_dir()` exposes the log dir for sidecar files.
 - Feature gate: `blueprint_printstring_log` (pulled in by the `kismet_diagnostics` dev default).
 
+### 5. `CREATE_HOOK_KISMET!` — reflection-resolved, late-attached native hooks (commit `0797bde`)
+For hooking a *real* native (normal `CREATE_HOOK!` ABI) but resolving it by **reflection** instead of
+a byte signature: `CREATE_HOOK_KISMET!(Class, "Native", Name, …)` (`src/macros/kismet_hook.rs`).
+- Resolves `KismetNativeClass::resolve(native)` → exec thunk → `exec_thunk::inner_native_of` → the
+  inner C++ fn, then attaches **late** (`LateHookRegistration`, after `ENGINE_READY`).
+- Full `CREATE_HOOK!` parity (void/`ACTIVE` defaults, `{cond}`, Status/HookType); `o_<Name>` /
+  `CALL_ORIGINAL!` identical. It is a **thin surface**: the detour (`@emit_core`) and initialize/enable
+  (`@finish_attach`) live once in `__create_hook_impl` (`hook_macros.rs`), shared with the default
+  `CREATE_HOOK!` arm — no duplication. Kept a separate macro (not a `CREATE_HOOK!` flag) to match the
+  branch's "separate macro per concern" convention (`bind_resolver_func`).
+- Example: `GetTBLGameMode` (`etc_hooks.rs`) switched off its byte signatures to
+  `CREATE_HOOK_KISMET!(UTBLSystemLibrary, "GetTBLGameMode", GetTBLGameMode, INACTIVE, *mut ATBLGameMode, (object: *mut UObject), {…})`.
+- **When to use:** only reflected (`UFUNCTION`) functions, inner callee not inlined, late attach OK.
+  Otherwise use plain `CREATE_HOOK!` (signature/offset, preinit); for *dummied* functions use
+  `kismet_exec_observe!/forward!`.
+- **Caveat (GetTBLGameMode):** small getters may be inlined into the thunk → `inner_native_of` finds
+  no distinct inner call and the hook logs `☐`; if so, revert it to the signature.
+
 ## Timing (important)
 Reflection (`find_native` → `StaticFindObject`/`FindFunctionByName`) queries the **live UObject
 system**, which is **not** populated at `postinit_rustlib`. Attaching there returns null for every
@@ -82,6 +100,38 @@ still exist are hookable.
 - **`UObjectBaseUtility::GetPathName` / `FName::ToString`** (already resolved) — identify objects.
 - **`UGameplayStatics::*`** (spawn actor, get player controller/pawn, etc.) — resolve by path.
 - Print family (done): `PrintString` / `PrintWarning` / `PrintText`.
+
+## Post-merge migration — `refactor/unchained-macros`
+That branch moves the hook macro into the `unchained-macros` crate, switches the detour to
+`retour::lifetime_detour!` + a `OnceLock`-stored `Detour_<Name>`, and adds `bind_resolver_func` /
+`bind_resolver_value` attributes (binding natives to **signature** resolvers for direct calls). None
+of our kismet additions exist there, so when it lands:
+- **Hook macro moved** `src/macros/hook_macros.rs` → `unchained-macros/src/hooks.rs`. Re-apply the
+  shared `@emit_core`/`@finish_attach`/`@kismet` impl against the new detour: the tail becomes
+  `Detour_<Name>::new(target, detour_fkt)?` → `o_<Name>.set(..)` → `o_<Name>.get().expect(..).enable()`
+  (not `static_detour!`/`.initialize`/`.enable`). `CREATE_HOOK_KISMET!` stays a thin surface over it.
+- **Port the kismet macros** (`kismet_exec_observe!/forward!`, `kismet_native_class!`,
+  `CREATE_HOOK_KISMET!`) into `unchained-macros`, converting old `static_detour!` +
+  `.initialize/.enable/.call` to the branch's `OnceLock` + `o_<Name>.get().expect(..).call(..)` form
+  (as the branch's `CALL_ORIGINAL!` now does).
+- **Add `LateHookRegistration` + the `ENGINE_READY` drain** to the branch (`resolvers/mod.rs` +
+  `postinit_rustlib` don't have them).
+- **Relocate UE types** into the branch's modular layout: `FFrame` (a `ue` kismet module),
+  `exec_thunk`, and `find_function/find_native/inner_native_of/cdo_of_path` into `src/ue/object.rs` /
+  `core_uobject`; reuse the branch's `static_find_object` binding instead of `get_uobject_from_path`.
+- **GetTBLGameMode:** the branch binds it via `bind_resolver_func` on its **signature** (deterministic,
+  early). Recommended: keep that and **do not** carry the `CREATE_HOOK_KISMET!` conversion across —
+  reflection here is inlining-risky. Reserve `CREATE_HOOK_KISMET!` for reflected natives with no
+  usable signature.
+- **Blueprint logging + spam filter + `plugin_log_dir()`** are additive; port as-is (relocate moved types).
+
+## Future: runtime-resolver abstraction (Option 3, post-merge)
+Long-term, make resolution **data** instead of macro arms: a `RuntimeResolver` enum/trait
+`resolve(&offsets) -> Result<usize>` + a `needs_engine` flag, consumed by one `attach`, with a single
+registration carrying resolver + timing (preinit vs late follows from `needs_engine`). Why it beats
+the `CREATE_HOOK_KISMET!` surface: new resolver kinds (signature, reflection, …) stop touching the
+hook macro; it composes with the branch's `bind_resolver_*` model; and the preinit/late split becomes
+automatic. Deferred until after `refactor/unchained-macros` merges.
 
 ## Open / next steps
 - Write any of the above "useful functions" as real hooks if wanted (observe or forward).
