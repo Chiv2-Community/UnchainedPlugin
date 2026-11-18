@@ -39,10 +39,17 @@ macro_rules! kismet_native_class {
     // Reflection-backed (general): resolve by name via StaticFindObject(class path) ->
     // FindFunctionByName -> UFunction::func. Works for any reflected class by its /Script/... path.
     ($class:ident => path $path:literal) => {
+        $crate::kismet_native_class!(@path $class, $path, None);
+    };
+    ($class:ident => virtual $path:literal) => {
+        $crate::kismet_native_class!(@path $class, $path, Some($path));
+    };
+    (@path $class:ident, $path:literal, $virtual_path:expr) => {
         #[allow(non_camel_case_types, dead_code)]
         pub struct $class;
         impl $crate::ue::kismet::KismetNativeClass for $class {
             const CLASS_NAME: &'static str = stringify!($class);
+            const VIRTUAL_DISPATCH_PATH: Option<&'static str> = $virtual_path;
             unsafe fn resolve(native: &str) -> ::core::option::Option<usize> {
                 $crate::ue::find_native($path, native)
             }

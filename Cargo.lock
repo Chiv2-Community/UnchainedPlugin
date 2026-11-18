@@ -20,6 +20,7 @@ dependencies = [
  "futures",
  "get_if_addrs",
  "hex",
+ "iced-x86",
  "inventory",
  "itertools 0.14.0",
  "log",

@@ -32,6 +32,7 @@ pub type FNativeExec = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut
 /// an existing one.
 pub trait KismetNativeClass {
     const CLASS_NAME: &'static str;
+    const VIRTUAL_DISPATCH_PATH: Option<&'static str> = None;
     /// Absolute address of the named native's exec thunk, or `None` if it was not resolved.
     unsafe fn resolve(native: &str) -> Option<usize>;
 }

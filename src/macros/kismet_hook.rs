@@ -6,9 +6,9 @@
 //! The target is resolved through the live UObject reflection system:
 //! `KismetNativeClass::resolve(native)` → the function's exec thunk → `exec_thunk::inner_native_of`
 //! → the inner C++ function (real ABI). Because reflection needs the live object system, the hook
-//! registers as a `LateHookRegistration` and attaches after `ENGINE_READY` — not at preinit. Use the
-//! plain `CREATE_HOOK!` (signature/offset, preinit) for non-reflected functions or anything needed
-//! early; see `docs/kismet-handoff.md`.
+//! registers as a `LateHookRegistration` and attaches at `FEngineLoop::Init` entry, with
+//! `ENGINE_READY` as a fallback. Classes declared with `=> virtual` opt in to resolving
+//! context-vtable calls through the class default object.
 //!
 //! Surface mirrors `CREATE_HOOK!`, prefixed with the class + reflected name:
 //! ```ignore
