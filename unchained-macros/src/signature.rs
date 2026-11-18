@@ -1,7 +1,10 @@
+//! Typed signatures for composing resolver scan modes.
+
 use std::{future::Future, pin::Pin};
 use patternsleuth::resolvers::{AsyncContext, ResolveError};
 
-define_pattern_resolver!(@emit_header DefaultResult);
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DefaultResult(pub u64);
 
 impl DefaultResult {
     pub fn offset(&self) -> u64 {
@@ -40,8 +43,8 @@ impl<'a> Clone for Signature<'a> {
     }
 }
 
-wrap_process_macro!(Simple);
-wrap_process_macro!(Call);
-wrap_process_macro!(First);
-wrap_process_macro!(XrefLast);
-wrap_process_macro!(XrefFirst);
+crate::wrap_process_macro!(Simple);
+crate::wrap_process_macro!(Call);
+crate::wrap_process_macro!(First);
+crate::wrap_process_macro!(XrefLast);
+crate::wrap_process_macro!(XrefFirst);

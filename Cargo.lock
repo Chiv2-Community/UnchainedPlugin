@@ -3874,8 +3874,11 @@ version = "0.1.0"
 dependencies = [
  "binary_bloodhound",
  "inventory",
+ "log",
  "object",
+ "paste",
  "patternsleuth",
+ "retour",
  "serde",
  "test-case",
  "unchained-macros-impl",

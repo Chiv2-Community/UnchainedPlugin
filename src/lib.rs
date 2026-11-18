@@ -6,8 +6,6 @@ pub use unchained_macros::*;
 
 #[macro_use]
 pub mod logging;
-#[macro_use]
-pub mod macros;
 mod resolvers;
 pub mod scan;
 pub mod tools;

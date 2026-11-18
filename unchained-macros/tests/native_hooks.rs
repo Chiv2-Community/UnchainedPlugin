@@ -1,3 +1,26 @@
+#![cfg(windows)]
+#![feature(arbitrary_self_types_pointers)]
+#![allow(non_snake_case)]
+
+#[macro_use]
+extern crate unchained_macros;
+
+// The macro consumer supplies startup registration. A synthetic nonzero base
+// keeps these tests independent of the plugin and exercises address overflow.
+mod resolvers {
+    pub static BASE_ADDR: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 1);
+
+    pub struct HookRegistration {
+        pub name: &'static str,
+        pub hook_fn: unsafe fn(
+            std::collections::HashMap<String, u64>, bool,
+        ) -> Result<Option<usize>, Box<dyn std::error::Error>>,
+        pub condition: fn() -> bool,
+    }
+
+    inventory::collect!(HookRegistration);
+}
+
 CREATE_HOOK!(TestVoidBasic, (value: i32), {});
 
 mod resolved_detours {

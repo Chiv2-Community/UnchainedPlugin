@@ -9,6 +9,14 @@ This directory contains only shared registration, platform filtering,
 and tests. Keep detour bodies and supporting state with the native implementation;
 do not add forwarding handlers here.
 
+What remains here:
+
+- `mod.rs`: process image base, function-binding initialization/readiness checks,
+  hook/patch/offset inventories, and plugin registration invariants.
+- `platforms.rs`: platform restrictions and filtering tests.
+- Reusable macros, typed signatures, and native hook tests:
+  [`unchained-macros`](../../unchained-macros).
+
 - Methods use `#[runtime_bindings] impl Type` and
   `#[bind_resolved_func_detour(Resolver)] fn name_detour(...)`.
 - The generated unsafe `name(...)` calls the trampoline.
@@ -121,9 +129,9 @@ define_pattern_resolver!(GetMotd3, {
 
 
 ### Relevant files
-- [macros.rs](./macros.rs)
-    - scan functions implementation
-    - `define_pattern_resolver`
+- [Resolver macros](../../unchained-macros/src/signatures.rs)
+- [Typed signatures](../../unchained-macros/src/signature.rs)
+- [Native hook tests](../../unchained-macros/tests/native_hooks.rs)
 
 ### Notes
 - platforms atm can be STEAM or EGS (read from cli arguments)

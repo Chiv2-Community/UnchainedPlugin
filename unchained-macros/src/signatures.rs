@@ -21,7 +21,7 @@ macro_rules! define_pocess {
 
     // Simple sig pattern lookup (returns start address)
     (@emit_body $name:ident, Simple, $ctx:ident, $patterns:ident) => {{
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let futures = ::patternsleuth::resolvers::futures::future::join_all(
                 $patterns.iter()
                     .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
@@ -32,7 +32,7 @@ macro_rules! define_pocess {
     }};
 
     (@emit_body $name:ident, First, $ctx:ident, $patterns:ident) => {{
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let futures = ::patternsleuth::resolvers::futures::future::join_all(
                 $patterns.iter()
                     .map(|p| $ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
@@ -55,7 +55,7 @@ macro_rules! define_pocess {
     // e.g. "E8 | ?? ?? ?? ?? 4C 39 ?8 74 3?" returns address of the function after |
     (@emit_body $name:ident, Call, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::MemoryTrait;
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let res = futures::future::join_all($patterns.iter().map(|p| $ctx.scan(patternsleuth::scanner::Pattern::new(p).unwrap()))).await;
 
             patternsleuth::resolvers::try_ensure_one(
@@ -67,7 +67,7 @@ macro_rules! define_pocess {
 
     (@emit_body $name:ident, MultiCall, $ctx:ident, $patterns:ident) => {{
         // use patternsleuth::MemoryTrait;
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             let mut results = Vec::new();
             // FIXME: group sigs by type, run Signature func on multiple
             for pat in $patterns {
@@ -90,7 +90,7 @@ macro_rules! define_pocess {
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
         use patternsleuth::resolvers::ResolveError;
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
             let [first_pat, ..] = $patterns.as_slice() else {
                 return Err(ResolveError::new_msg(format!("expected at least one pattern for {}", stringify!($name))));
@@ -109,7 +109,7 @@ macro_rules! define_pocess {
         use patternsleuth::resolvers::unreal::util;
         use patternsleuth::resolvers::ensure_one;
         use patternsleuth::resolvers::ResolveError;
-        define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
+        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
             // let strings = futures::future::join_all(patterns.iter().map(|p| ctx.scan(p.clone()))).await;
             let [first_pat, ..] = $patterns.as_slice() else {
                 return Err(ResolveError::new_msg(format!("expected at least one pattern for {}", stringify!($name))));
@@ -130,7 +130,7 @@ macro_rules! define_pocess {
         let result = $body.map($name);
 
         if let Err(msg) = &result {
-            crate::serror!("Failed to resolve {}: {:?}", stringify!($name), msg);
+            $crate::__private::log::error!("Failed to resolve {}: {:?}", stringify!($name), msg);
         }
 
         result
@@ -366,13 +366,9 @@ macro_rules! define_signature_fn {
     ) => {
         #[allow(non_snake_case)]
 
-        pub fn $fn_name<'a>(s: &'a str) -> crate::macros::sig_macros::Signature<'a> {
-            let calc: std::sync::Arc<
-                dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>
-                    + Send
-                    + Sync
-                    + 'a,
-            > = std::sync::Arc::new(move |ctx: &AsyncContext<'a>| {
+        pub fn $fn_name<'a>(s: &'a str) -> $crate::signature::Signature<'a> {
+            let calc: $crate::signature::OffsetCalculator<'a> =
+                std::sync::Arc::new(move |ctx| {
                 let sig = s.to_string();
                 let ctx = ctx.clone();
                 let fut = async move {
@@ -384,7 +380,7 @@ macro_rules! define_signature_fn {
                 Box::pin(fut)
             });
 
-            crate::macros::sig_macros::Signature {
+            $crate::signature::Signature {
                 // kind: $kind,
                 offset_calculator: calc,
                 signature_string: s.to_string(),
@@ -399,12 +395,13 @@ macro_rules! define_signature_fn {
 #[macro_export]
 macro_rules! wrap_process_macro {
     ($fn_name:ident) => {
-        paste::paste! {
-            define_signature_fn!(
+        $crate::__private::paste::paste! {
+            $crate::define_signature_fn!(
                 [<$fn_name _signature>],
                 // SignatureKind::Function,
                 |ctx, patterns| {
-                    define_pocess!(@emit_body DefaultResult, Simple, ctx, patterns)
+                    use $crate::signature::DefaultResult;
+                    $crate::define_pocess!(@emit_body DefaultResult, Simple, ctx, patterns)
                 }
             );
         }

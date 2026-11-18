@@ -19,15 +19,19 @@ pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::macros::sig_macros::Call_signature;
+    use unchained_macros::signature::Call_signature;
     use patternsleuth::resolvers::ensure_one;
     define_single_platform_pattern_resolver!(STEAM, TestSteamOnly, ["AA BB"]);
+
     define_single_platform_pattern_resolver!(EGS, TestEpicOnly, Simple, ["CC DD"]);
+
     define_single_platform_pattern_resolver!(STEAM, TestSteamCall, [Call_signature("E8 | ?? ?? ?? ??")]);
+
     define_single_platform_pattern_resolver!(STEAM, TestInlineSteamOnly, ["EE FF"], |ctx, patterns| {
         let matches = ctx.scan(patternsleuth::scanner::Pattern::new(patterns[0]).unwrap()).await;
         ensure_one(matches)
     });
+
     define_pattern_resolver!(TestShared, ["11 22"]);
 
     mod nested {
@@ -35,10 +39,12 @@ mod tests {
             STEAM: ["AA BB"],
             OTHER: ["CC DD"]
         });
+
         define_pattern_resolver!(TestNestedSimplePlatform, Simple, {
             EGS: ["11 22"],
             OTHER: ["33 44"]
         });
+
     }
 
     #[test]

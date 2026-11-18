@@ -74,9 +74,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --locked --release
+            cargo test --locked --release -p UnchainedPlugin -p unchained-macros -p unchained-macros-impl
           else
-            cargo test --locked
+            cargo test --locked -p UnchainedPlugin -p unchained-macros -p unchained-macros-impl
           fi
 
       - name: Check without registration

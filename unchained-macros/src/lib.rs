@@ -12,9 +12,12 @@ mod binding;
 mod patch;
 mod hooks;
 mod signatures;
+pub mod signature;
 mod custom_resolver;
 
 #[doc(hidden)]
 pub mod __private {
     pub use crate::custom_resolver::single_address;
+    pub use log;
+    pub use paste;
 }
