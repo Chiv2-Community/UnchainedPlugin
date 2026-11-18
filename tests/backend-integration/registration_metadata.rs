@@ -43,7 +43,7 @@ fn update_maps_public_metadata(has_active_mod: bool) {
         Vec::new()
     };
     assert_eq!(
-        server_metadata::update(&status),
+        status.update_request(),
         server_browser_client::models::UpdateRegisteredServer {
             player_count: 12,
             max_players: 64,
@@ -61,8 +61,7 @@ fn request_maps_registration_metadata(local_ip: Option<&str>, password_protected
 
     let mut status = status(true);
     status.password_protected = password_protected;
-    let request = server_metadata::request(
-        &status,
+    let request = status.registration_request(
         Chivalry2Ports::new(9000, 3000, 7000),
         local_ip.map(str::to_owned),
     );

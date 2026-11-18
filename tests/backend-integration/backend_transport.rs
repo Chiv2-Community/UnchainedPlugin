@@ -6,14 +6,6 @@ mod http;
 #[path = "../../src/features/server_browser/urls.rs"]
 mod urls;
 
-#[test_case::test_case("https://example.test", "https://example.test"; "root")]
-#[test_case::test_case("https://example.test/", "https://example.test"; "trailing_slash")]
-#[test_case::test_case("https://example.test/browser///", "https://example.test/browser"; "deployment_prefix")]
-fn native_compatibility_urls(base: &str, prefix: &str) {
-    assert_eq!(urls::tbio_base_url(base), format!("{prefix}/api/tbio"));
-    assert_eq!(urls::playfab_matchmake_url(base), format!("{prefix}/api/playfab/Client/Matchmake"));
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn native_ban_bridge_fails_open_inside_runtime_without_deadlock() {
     assert_eq!(

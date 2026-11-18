@@ -6,12 +6,12 @@ use tokio::runtime::Handle;
 
 // Runtime initialization depends on the Windows plugin globals.
 #[cfg(windows)]
-pub fn base_url() -> &'static str {
+pub(crate) fn base_url() -> &'static str {
     &crate::tools::hook_globals::cli_args().server_browser_backend
 }
 
 #[cfg(windows)]
-pub fn client() -> &'static HttpTransport {
+pub(crate) fn client() -> &'static HttpTransport {
     use crate::tools::hook_globals::cli_args;
     use std::sync::OnceLock;
 
@@ -68,7 +68,7 @@ fn transport(
 
 /// Legacy native admission cannot await. Never block inside a Tokio context.
 /// Timeout/task failure/shutdown keeps the banlist fail-open, not an authentication gate.
-pub fn check_banned_sync(client: &HttpTransport, address: &str, runtime: &Handle) -> Option<bool> {
+pub(crate) fn check_banned_sync(client: &HttpTransport, address: &str, runtime: &Handle) -> Option<bool> {
     if Handle::try_current().is_ok() {
         return None;
     }

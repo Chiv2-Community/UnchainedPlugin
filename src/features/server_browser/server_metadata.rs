@@ -23,43 +23,44 @@ pub struct ServerStatus {
     pub active_mods: Vec<Mod>,
 }
 
-pub fn request(
-    status: &ServerStatus,
-    ports: Chivalry2Ports,
-    local_ip_address: Option<String>,
-) -> ServerRegistrationRequest {
-    let update = update(status);
-    ServerRegistrationRequest {
-        ports,
-        name: status.name.clone(),
-        description: status.description.clone(),
-        password_protected: Some(status.password_protected),
-        current_map: update.current_map,
-        player_count: update.player_count,
-        max_players: update.max_players,
-        local_ip_address,
-        mods: update.mods,
+impl ServerStatus {
+    pub fn registration_request(
+        &self,
+        ports: Chivalry2Ports,
+        local_ip_address: Option<String>,
+    ) -> ServerRegistrationRequest {
+        let update = self.update_request();
+        ServerRegistrationRequest {
+            ports,
+            name: self.name.clone(),
+            description: self.description.clone(),
+            password_protected: Some(self.password_protected),
+            current_map: update.current_map,
+            player_count: update.player_count,
+            max_players: update.max_players,
+            local_ip_address,
+            mods: update.mods,
+        }
     }
-}
 
-pub fn update(status: &ServerStatus) -> UpdateRegisteredServer {
-    UpdateRegisteredServer {
-        player_count: status.player_count,
-        max_players: status.max_players,
-        current_map: status.current_map.clone(),
-        mods: Some(
-            status
-                .active_mods
-                .iter()
-                .map(|metadata| {
-                    BrowserMod::new(
-                        metadata.name.clone(),
-                        metadata.organization.clone(),
-                        metadata.version.clone(),
-                    )
-                })
-                .collect(),
-        ),
+    pub fn update_request(&self) -> UpdateRegisteredServer {
+        UpdateRegisteredServer {
+            player_count: self.player_count,
+            max_players: self.max_players,
+            current_map: self.current_map.clone(),
+            mods: Some(
+                self.active_mods
+                    .iter()
+                    .map(|metadata| {
+                        BrowserMod::new(
+                            metadata.name.clone(),
+                            metadata.organization.clone(),
+                            metadata.version.clone(),
+                        )
+                    })
+                    .collect(),
+            ),
+        }
     }
 }
 

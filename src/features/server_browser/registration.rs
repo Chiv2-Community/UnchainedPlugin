@@ -1,6 +1,5 @@
-use crate::events::models::{GameEvent, ServerStatus};
+use crate::events::models::GameEvent;
 use crate::features::events::EVENT_SYSTEM;
-use crate::features::Mod;
 use a2s::info::Info;
 use server_browser_client::models::ServerRegistrationRequest;
 use server_browser_client_sdk::{
@@ -19,6 +18,7 @@ use crate::globals;
 use crate::tools::hook_globals::cli_args;
 
 use super::{a2s_query, server_metadata};
+use super::server_metadata::{Mod, ServerStatus};
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
@@ -165,7 +165,7 @@ impl MetadataCollector {
                 continue;
             };
             let status = Self::metadata(&info);
-            let update = server_metadata::update(&status);
+            let update = status.update_request();
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
@@ -183,7 +183,7 @@ impl MetadataCollector {
             args.game_server_ping_port,
             self.query_address.port(),
         );
-        server_metadata::request(status, ports, self.local_ip_address.clone())
+        status.registration_request(ports, self.local_ip_address.clone())
     }
 
     fn observe(event: &Event, latest: &Mutex<ServerStatus>) {
