@@ -11,6 +11,20 @@ const BASE: u64 = 0x1_4000_0000;
 const TEXT: u64 = BASE + 0x1000;
 static EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 
+mod resolvers {
+    #[derive(Clone, Copy)]
+    pub enum PlatformType { Steam, Egs, Other }
+
+    thread_local! {
+        pub static PLATFORM: std::cell::Cell<PlatformType> =
+            const { std::cell::Cell::new(PlatformType::Other) };
+    }
+
+    pub fn current_platform() -> PlatformType {
+        PLATFORM.get()
+    }
+}
+
 define_custom_resolver!(RootAddress, {
     BinaryMatcher::patterns(["AA BB"])?
         .root_functions()
@@ -29,8 +43,18 @@ define_custom_resolver!(CachedAddress, {
 
 define_custom_resolver!(InvalidPattern, BinaryMatcher::patterns(["not hex"])?.ensure_one());
 
+define_custom_resolver!(PlatformAddress, |platform| {
+    let pattern = match platform {
+        resolvers::PlatformType::Steam => "AA BB",
+        resolvers::PlatformType::Egs => "11 22",
+        resolvers::PlatformType::Other => "not hex",
+    };
+    BinaryMatcher::patterns([pattern])?.ensure_one()
+});
+
 fn image(matches: &[usize]) -> Image<'static> {
     let mut text = vec![0x90; 0x80];
+    text[..2].copy_from_slice(&[0x11, 0x22]);
     for &offset in matches {
         text[offset..offset + 2].copy_from_slice(&[0xAA, 0xBB]);
     }
@@ -82,9 +106,24 @@ fn arbitrary_matchers_share_the_resolver_cache_and_preserve_u64_addresses() {
     assert_eq!(EVALUATIONS.load(Ordering::SeqCst), 1);
 }
 
+#[test_case::test_case(resolvers::PlatformType::Steam, TEXT + 0x10; "steam")]
+#[test_case::test_case(resolvers::PlatformType::Egs, TEXT; "egs")]
+fn platform_factory_selects_the_matching_signature(platform: resolvers::PlatformType, expected: u64) {
+    resolvers::PLATFORM.set(platform);
+    assert_eq!(image(&[0x10]).resolve(PlatformAddress::resolver()).unwrap().0, expected);
+}
+
+#[test]
+fn platform_factory_construction_errors_keep_resolver_context() {
+    resolvers::PLATFORM.set(resolvers::PlatformType::Other);
+    let error = image(&[]).resolve(PlatformAddress::resolver()).unwrap_err().to_string();
+    assert!(error.contains("PlatformAddress"), "{error}");
+    assert!(error.contains("invalid pattern"), "{error}");
+}
+
 #[test]
 fn custom_resolvers_register_with_the_standard_inventory() {
-    for name in ["RootAddress", "CachedAddress", "InvalidPattern"] {
+    for name in ["RootAddress", "CachedAddress", "InvalidPattern", "PlatformAddress"] {
         assert!(patternsleuth::resolvers::resolvers().any(|resolver| resolver.name == name));
     }
 }

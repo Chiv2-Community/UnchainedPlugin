@@ -41,6 +41,23 @@ define_custom_resolver!(FText_AsCultureInvariantCopy, {
 - The plugin and BinaryBloodhound share one patternsleuth Git source.
   `Cargo.lock` pins it to `3de6cfae`; use locked builds.
 
+Use the platform-aware form to select a matcher at resolution time:
+
+```rust,ignore
+define_custom_resolver!(PlatformFunction, |platform| {
+    let pattern = match platform {
+        crate::resolvers::PlatformType::STEAM => "AA BB",
+        crate::resolvers::PlatformType::EGS => "CC DD",
+        _ => return Err(patternsleuth::resolvers::ResolveError::new_msg("Unsupported platform")),
+    };
+    BinaryMatcher::patterns([pattern])?.ensure_one()
+});
+```
+
+The body receives `crate::resolvers::current_platform()` and may use `?`.
+It still must produce one `u64` address. This selects matcher behavior; it
+does not register a platform restriction for hooks or patches.
+
 ## Required native values
 
 ```rust,ignore
