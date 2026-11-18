@@ -38,7 +38,9 @@ mod client_message {
     ), {
         // Hosts capture once at BroadcastChat, not once per local recipient.
         if !has_authority() {
-            capture_chat(sender, message, chat_type);
+            if let Some(player) = unsafe { ATBLPlayerState::from_ptr(sender) } {
+                capture_chat(player, message, chat_type);
+            }
         }
     });
 
@@ -49,33 +51,37 @@ mod client_message {
         gamemode: *mut ATBLGameMode, sender: *mut AActor,
         message: *const FString, chat_type: u32, override_color: u32
     ), {
-        if !sender.is_null() {
-            capture_chat(actor_player_state(sender), message, chat_type);
+        if let Some(player) = unsafe {
+            AActor::from_ptr(sender).and_then(|actor| actor_player_state(actor))
+        } {
+            capture_chat(player, message, chat_type);
         }
     });
 
-    fn actor_player_state(sender: *mut AActor) -> *mut ATBLPlayerState {
-        use crate::{game::chivalry2::APawn, ue::UObject};
+    /// # Safety
+    /// UObjectType::from_ptr's game-thread, lifetime and layout requirements apply.
+    unsafe fn actor_player_state(sender: &AActor) -> Option<&ATBLPlayerState> {
+        use crate::game::chivalry2::APawn;
         // BroadcastChat accepts either a pawn or a controller, not a PlayerState.
         unsafe {
-            let Some(object) = UObject::from_ptr(sender.cast()) else { return std::ptr::null_mut(); };
-            if let Some(pawn) = object.uobj_cast::<APawn>() {
-                pawn.player_state.cast()
+            let object = &sender.base;
+            let player = if let Some(pawn) = object.uobj_cast::<APawn>() {
+                pawn.player_state()?
             } else if let Some(controller) = object.uobj_cast::<AController>() {
-                controller.player_state.cast()
+                controller.player_state()?
             } else {
-                std::ptr::null_mut()
-            }
+                return None;
+            };
+            player.base.base.base.uobj_cast::<ATBLPlayerState>()
         }
     }
 
-    fn capture_chat(sender: *mut ATBLPlayerState, message: *const FString, chat_type: u32) {
+    fn capture_chat(player: &ATBLPlayerState, message: *const FString, chat_type: u32) {
         let Some(message) = (unsafe { message.as_ref() }).and_then(|s| s.copy_to_string().ok()) else { return; };
         let Some(chat_type) = u8::try_from(chat_type).ok().and_then(|value| EChatType::try_from(value).ok()) else {
             swarn!("Invalid native chat type: {chat_type}");
             return;
         };
-        let Some(player) = (unsafe { ATBLPlayerState::from_ptr(sender) }) else { return; };
         let Ok(sender) = player.base.player_name_private.copy_to_string() else { return; };
         let command = player_command_event(&sender, &message, chat_type);
         EVENT_SYSTEM.game_event_publisher.publish(GameEvent::GameChatMessageEvent(GameChatMessage {

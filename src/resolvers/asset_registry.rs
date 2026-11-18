@@ -1,6 +1,6 @@
 use crate::ue::{
     EFindName, FName, FString, FUObjectSerializeContext, IAssetRegistry, TArray, UAssetManager,
-    TScriptInterface, UClass, UObject, UPackageMap, TCHAR,
+    AssetRegistryScriptInterface, UClass, UObject, UPackageMap, TCHAR,
 };
 use widestring::U16CStr;
 
@@ -49,7 +49,7 @@ define_pattern_resolver!(UAssetRegistryHelpers__GetAssetRegistry,[
     "48 89 5C 24 ?? 57 48 83 EC 20 48 8B F9 48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 ?? 41 B8 01 00 00 00 E8 ?? ?? ?? ?? 48 8B 18 E8 ?? ?? ?? ?? 48 8B D3 48 8B C8 E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 85 C0"
     ]);
 // TScriptInterface<> * __cdecl UAssetRegistryHelpers::GetAssetRegistry(TScriptInterface<> *__return_storage_ptr__)
-CREATE_HOOK!(UAssetRegistryHelpers__GetAssetRegistry, CALLED,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
+CREATE_HOOK!(UAssetRegistryHelpers__GetAssetRegistry, CALLED,  *mut AssetRegistryScriptInterface, (ret_val_tscr:  *mut AssetRegistryScriptInterface),{
     sdebug!["Triggered!"];
 });
 

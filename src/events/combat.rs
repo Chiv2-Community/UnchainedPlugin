@@ -38,29 +38,11 @@ impl CombatActor {
         Self { name, is_bot }
     }
 
-    /// Use the UObject display name and bot-name heuristic.
-    ///
-    /// # Safety
-    /// UObject::from_ptr's game-thread, initialization and lifetime requirements apply.
-    /// Null inputs require no engine state.
-    pub unsafe fn from_uobject(ptr: *mut UObject) -> Option<Self> {
-        unsafe { Self::from_object(UObject::from_ptr(ptr)?) }
-    }
-
     unsafe fn from_object(object: &UObject) -> Option<Self> {
         let cls = unsafe { object.class_name() }?;
         let name = object.display_name();
         let is_bot = cls.to_lowercase().contains("bot") || name.to_lowercase().contains("bot");
         Some(Self::new(name, is_bot))
-    }
-
-    /// `via` identifies the source field when an invalid PlayerState is logged.
-    ///
-    /// # Safety
-    /// UObjectType::from_ptr's game-thread, lifetime and native-layout requirements apply.
-    /// Null inputs require no engine state.
-    pub unsafe fn from_player_state(player_state: *mut APlayerState, via: &str) -> Option<Self> {
-        unsafe { Self::from_player_state_view(APlayerState::from_field(player_state, via)?) }
     }
 
     unsafe fn from_player_state_view(ps: &APlayerState) -> Option<Self> {
@@ -211,11 +193,6 @@ mod tests {
     fn null_actor_inputs_have_no_identity() {
         // Null inputs return before accessing engine globals or native objects.
         unsafe {
-            assert_eq!(CombatActor::from_uobject(std::ptr::null_mut()), None);
-            assert_eq!(
-                CombatActor::from_player_state(std::ptr::null_mut(), "test"),
-                None
-            );
             assert_eq!(CombatActor::from_actor(std::ptr::null_mut()), None);
         }
     }

@@ -30,12 +30,12 @@ impl fmt::Display for FAssetData {
 /// Native TScriptInterface<IAssetRegistry> return storage; owns neither pointer.
 #[repr(C)]
 #[derive(Debug)]
-pub struct TScriptInterface {
+pub struct AssetRegistryScriptInterface {
     pub object: *mut UObject,
     pub interface: *mut IAssetRegistry,
 }
 
-impl TScriptInterface {
+impl AssetRegistryScriptInterface {
     /// Return the borrowed interface, never the enclosing UObject address.
     pub fn asset_registry(&self) -> Result<*mut IAssetRegistry, String> {
         if self.interface.is_null() {
@@ -88,7 +88,7 @@ impl IAssetRegistry {
     /// # Safety
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
-        let mut registry = TScriptInterface::new();
+        let mut registry = AssetRegistryScriptInterface::new();
         CALL_ORIGINAL_SAFE!(UAssetRegistryHelpers__GetAssetRegistry(&mut registry))?;
         registry.asset_registry()
     }
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn missing_interface_never_falls_back_to_object() {
         let mut object_marker = 0u8;
-        let mut registry = TScriptInterface::new();
+        let mut registry = AssetRegistryScriptInterface::new();
         assert!(registry.asset_registry().is_err());
         registry.object = std::ptr::addr_of_mut!(object_marker).cast();
         assert!(registry.asset_registry().is_err());
@@ -111,7 +111,7 @@ mod tests {
     fn registry_uses_interface_address_independently_of_object() {
         let mut object_marker = 0u8;
         let mut interface_marker = 0u8;
-        let mut registry = TScriptInterface::new();
+        let mut registry = AssetRegistryScriptInterface::new();
         registry.interface = std::ptr::addr_of_mut!(interface_marker).cast();
         assert_eq!(registry.asset_registry().unwrap(), registry.interface);
         registry.object = std::ptr::addr_of_mut!(object_marker).cast();
