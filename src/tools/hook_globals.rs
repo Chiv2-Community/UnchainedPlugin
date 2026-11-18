@@ -15,7 +15,13 @@ use ue::object_array::FUObjectArray;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use patternsleuth::{disassemble::{Control, disassemble}, image::Image, resolvers::{ResolveError, impl_resolver_singleton, try_ensure_one, unreal::util}};
-use patternsleuth::{ resolvers::unreal::{KismetSystemLibrary, UObjectBaseUtilityGetPathName, blueprint_library::UFunctionBind, fname::FNameToString, game_loop::{FEngineLoopInit, UGameEngineTick}, gmalloc::GMalloc, guobject_array::{FUObjectArrayAllocateUObjectIndex, FUObjectArrayFreeUObjectIndex, GUObjectArray}, kismet::{FFrameStep, FFrameStepExplicitProperty, FFrameStepViaExec}}};
+use patternsleuth::resolvers::unreal::{
+    UObjectBaseUtilityGetPathName,
+    fname::FNameToString,
+    gmalloc::GMalloc,
+    guobject_array::GUObjectArray,
+    kismet::{FFrameStep, FFrameStepExplicitProperty},
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, PartialEq)]
@@ -75,18 +81,9 @@ patternsleuth::_impl_try_collector! {
     #[derive(Debug, PartialEq, Clone)]
     struct DllHookResolution {
         fnametostring: FNameToString,
-        allocate_uobject: FUObjectArrayAllocateUObjectIndex,
-        free_uobject: FUObjectArrayFreeUObjectIndex,
-        game_tick: UGameEngineTick,
-        engine_loop_init: FEngineLoopInit,
-        kismet_system_library: KismetSystemLibrary,
-        fframe_step_via_exec: FFrameStepViaExec,
         fframe_step: FFrameStep,
         fframe_step_explicit_property: FFrameStepExplicitProperty,
-        // fframe_kismet_execution_message: FFrameKismetExecutionMessage,
-        ufunction_bind: UFunctionBind,
         uobject_base_utility_get_path_name: UObjectBaseUtilityGetPathName,
-        // g_engine: GEngine,
     }
 }
 
@@ -265,7 +262,6 @@ pub fn init_globals() -> Result<(), String> {
     let guobject_array = exe.resolve(GUObjectArray::resolver())
         .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
     unsafe { crate::resolvers::initialize_value_binding("GUObjectArray", guobject_array.0); }
-    // let resolution = exe.resolve(DllHookResolution::resolver()).unwrap();
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())
             .expect("Critical: Could not resolve DLL symbols"); // This panic is caught
@@ -281,7 +277,6 @@ pub fn init_globals() -> Result<(), String> {
         }
     };
 
-    // println!("results: {:?}", resolution);
     let guobject_array: &'static FUObjectArray =
         unsafe { &*ue::object_array::native_guobject_array() };
 
