@@ -3,12 +3,15 @@ use std::net::TcpListener;
 #[path = "../../src/backend.rs"]
 mod backend;
 
+#[path = "../../src/backend_urls.rs"]
+mod backend_urls;
+
 #[test_case::test_case("https://example.test", "https://example.test"; "root")]
 #[test_case::test_case("https://example.test/", "https://example.test"; "trailing_slash")]
 #[test_case::test_case("https://example.test/browser///", "https://example.test/browser"; "deployment_prefix")]
 fn native_compatibility_urls(base: &str, prefix: &str) {
-    assert_eq!(backend::tbio_base_url(base), format!("{prefix}/api/tbio"));
-    assert_eq!(backend::playfab_matchmake_url(base), format!("{prefix}/api/playfab/Client/Matchmake"));
+    assert_eq!(backend_urls::tbio_base_url(base), format!("{prefix}/api/tbio"));
+    assert_eq!(backend_urls::playfab_matchmake_url(base), format!("{prefix}/api/playfab/Client/Matchmake"));
 }
 
 #[test]

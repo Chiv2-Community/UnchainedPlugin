@@ -37,7 +37,7 @@ macro_rules! CREATE_REQUEST_HOOK {
                     (None, _) => { $crate::serror!("GCGObj was null"); return std::ptr::null_mut(); }
                     (_, None) => { $crate::serror!("Request was null"); return std::ptr::null_mut(); }
                 };
-                let url = $crate::backend::tbio_base_url(
+                let url = $crate::backend_urls::tbio_base_url(
                     $crate::backend_config::base_url(),
                 );
                 let backend_url = $crate::ue::FString::from(url.as_str());
