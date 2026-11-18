@@ -1,5 +1,6 @@
 use crate::events::models::GameEvent;
 use crate::features::events::EVENT_SYSTEM;
+use crate::features::Mod;
 use a2s::info::Info;
 use server_browser_client::models::{Chivalry2Ports, ServerRegistrationRequest};
 use server_browser_client_sdk::{
@@ -18,7 +19,7 @@ use crate::globals;
 use crate::tools::hook_globals::cli_args;
 
 use super::{a2s_query, server_metadata};
-use super::server_metadata::{Mod, ServerStatus};
+use super::server_metadata::ServerStatus;
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();

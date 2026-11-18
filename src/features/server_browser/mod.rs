@@ -1,4 +1,5 @@
 pub(crate) mod http;
+#[cfg(feature = "server_registration")]
 pub(crate) mod server_metadata;
 pub(crate) mod urls;
 #[cfg(feature = "server_registration")]

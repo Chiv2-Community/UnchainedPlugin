@@ -1,16 +1,7 @@
-use serde::Serialize;
-#[cfg(any(feature = "server_registration", test))]
+use crate::features::Mod;
 use server_browser_client::models::{
     Chivalry2Ports, Mod as BrowserMod, ServerRegistrationRequest, UpdateRegisteredServer,
 };
-
-#[derive(Debug, Serialize, Clone, PartialEq)]
-pub struct Mod {
-    pub name: String,
-    pub organization: String,
-    pub version: String,
-    pub object_path: String,
-}
 
 #[derive(Clone, Debug)]
 pub struct ServerStatus {
@@ -24,7 +15,6 @@ pub struct ServerStatus {
     pub active_mods: Vec<Mod>,
 }
 
-#[cfg(any(feature = "server_registration", test))]
 impl ServerStatus {
     pub(super) fn registration_request(
         &self,
@@ -66,7 +56,6 @@ impl ServerStatus {
     }
 }
 
-#[cfg(any(feature = "server_registration", test))]
 pub(super) fn ports(
     a2s_game_port: Option<u16>,
     configured_game_port: u16,
@@ -80,7 +69,6 @@ pub(super) fn ports(
     }
 }
 
-#[cfg(any(feature = "server_registration", test))]
 pub(super) fn player_counts(players: u8, max_players: u8, headless: bool) -> (i32, i32) {
     // A2S counts the headless host as a player and an occupied slot.
     let host = u8::from(headless);

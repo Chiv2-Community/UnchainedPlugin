@@ -1,10 +1,13 @@
+#[path = "../../src/features/mod_metadata.rs"]
+pub mod features;
+
 #[path = "../../src/features/server_browser/server_metadata.rs"]
 pub mod server_metadata;
 
 use test_case::test_case;
 
 fn status(has_active_mod: bool) -> server_metadata::ServerStatus {
-    let active_mod = server_metadata::Mod {
+    let active_mod = features::Mod {
         name: "Active mod".into(),
         organization: "Community".into(),
         version: "1.2.3".into(),
@@ -17,7 +20,7 @@ fn status(has_active_mod: bool) -> server_metadata::ServerStatus {
         current_map: "FFA_Courtyard".into(),
         player_count: 12,
         max_players: 64,
-        all_mods: vec![server_metadata::Mod {
+        all_mods: vec![features::Mod {
             name: "Inactive mod".into(),
             ..active_mod.clone()
         }],

@@ -1,5 +1,6 @@
 use crate::events::bus::Subscriber;
 use crate::events::models::GameEvent;
+#[cfg(feature = "server_registration")]
 use crate::features::server_browser::server_metadata::ServerStatus;
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 use async_trait::async_trait;
@@ -18,6 +19,7 @@ pub struct DashboardSubscriber {
     discord_config: SharedDiscordConfig,
     needs_refresh: bool,
 
+    #[cfg(feature = "server_registration")]
     status: Option<ServerStatus>,
 }
 
@@ -32,12 +34,13 @@ impl DashboardSubscriber {
             outbox,
             discord_config,
             needs_refresh: true,
+            #[cfg(feature = "server_registration")]
             status: None,
         }
     }
 
     fn build_embed(&self) -> serenity::all::CreateEmbed {
-        let mut embed = serenity::all::CreateEmbed::new()
+        let embed = serenity::all::CreateEmbed::new()
             .title(format!("🛡️ {}", self.server_name))
             .color(0x2B2D31)
             .field("Map", &self.current_map, true)
@@ -51,8 +54,9 @@ impl DashboardSubscriber {
                 self.last_update.elapsed()
             )));
 
-        if let Some(status) = &self.status {
-            embed = embed.description(&status.description);
+        #[cfg(feature = "server_registration")]
+        let embed = if let Some(status) = &self.status {
+            let embed = embed.description(&status.description);
 
             let active_mods = if status.active_mods.is_empty() {
                 "None".to_string()
@@ -64,8 +68,10 @@ impl DashboardSubscriber {
                     .collect::<Vec<_>>()
                     .join("\n- ")
             };
-            embed = embed.field("Active Mods", active_mods, false);
-        }
+            embed.field("Active Mods", active_mods, false)
+        } else {
+            embed
+        };
 
         embed
     }
@@ -87,6 +93,7 @@ impl Subscriber<GameEvent> for DashboardSubscriber {
                 self.player_count = self.player_count.saturating_sub(1);
                 self.needs_refresh = true;
             }
+            #[cfg(feature = "server_registration")]
             GameEvent::ServerStatusEvent(new_status) => {
                 self.status = Some(new_status.clone());
                 self.player_count = new_status.player_count as u32;

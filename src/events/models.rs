@@ -252,6 +252,7 @@ pub struct CommandRejected {
     pub rejection_reason: String,
 }
 
+#[cfg(feature = "server_registration")]
 use crate::features::server_browser::server_metadata::ServerStatus;
 
 /// Triggered when a player uses !admin in-game
@@ -288,6 +289,7 @@ pub enum GameEvent {
     CommandRequestEvent(CommandRequest),
     CommandExecutedEvent(CommandExecuted),
     CommandRejectedEvent(CommandRejected),
+    #[cfg(feature = "server_registration")]
     ServerStatusEvent(ServerStatus),
     AdminAlertEvent(AdminAlert),
     DuelStartEvent(DuelStart), // Never dispatched

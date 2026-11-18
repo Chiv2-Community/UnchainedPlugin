@@ -1,4 +1,5 @@
-pub use server_browser::server_metadata::Mod;
+mod mod_metadata;
+pub use mod_metadata::Mod;
 
 pub mod rcon;
 pub(crate) mod server_browser;
