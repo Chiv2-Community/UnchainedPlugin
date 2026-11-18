@@ -2,7 +2,8 @@
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;
 use strum::Display;
-use crate::{game::engine::FText, ue::{AsUObject, FString, FVector, TArray, UObjectType}};
+use tokio_util::sync::CancellationToken;
+use crate::{game::engine::{FText, UWorld}, ue::{AsUObject, FString, FVector, TArray, UObjectType}};
 
 // SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
 unsafe impl crate::ue::UObjectType for AController { const CLASS_NAME: &'static str = "Controller"; }
@@ -344,26 +345,38 @@ impl EChatType {
 }
 
 // Helper functions
+pub(crate) type UWorldAccessor = fn() -> Option<*mut UWorld>;
+
 pub fn send_ingame_message(message: String, chat_type: Option<EChatType>) {
+    send_ingame_message_with_world(message, chat_type, || crate::globals().world(), None);
+}
+
+pub(crate) fn send_ingame_message_with_world(
+    message: String,
+    chat_type: Option<EChatType>,
+    world_accessor: UWorldAccessor,
+    cancellation: Option<CancellationToken>,
+) {
     use crate::resolvers::messages::o_BroadcastLocalizedChat;
     use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
     use crate::resolvers::etc_hooks::o_GetTBLGameMode;
     
-    let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
-    if let Some(world) = crate::globals().world() {
+    // Cancellation, world resolution and native work must share one game-thread job.
+    crate::resolvers::unchained_integration::run_on_game_thread(move || {
+        if cancellation.as_ref().is_some_and(CancellationToken::is_cancelled) {
+            return;
+        }
+        let Some(world) = world_accessor().filter(|world| !world.is_null()) else { return; };
+        let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
+        if game_mode.is_null() {
+            return;
+        }
+        let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
         let mut settings_fstring = FString::from(message.as_str());
         let mut txt = FText::default();
-
         let res = TRY_CALL_ORIGINAL!(FText_AsCultureInvariant(&mut txt, &mut settings_fstring));
-
-        let game_mode = TRY_CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
-
-        if !game_mode.is_null() {
-            TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
-        }
-    } else {
-        swarn!("globals.world was None; skipping chat broadcast");
-    }
+        TRY_CALL_ORIGINAL!(BroadcastLocalizedChat(game_mode, res, chat_type_actual));
+    });
 }
 
 #[repr(C)]

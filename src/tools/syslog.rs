@@ -55,10 +55,6 @@ thread_local! {
         RefCell::new(Cursor::new(Vec::with_capacity(DEFAULT_BUF_SIZE)));
 }
 
-// Optional: for some kind of global shared output string
-// pub static SYSLOG_BUF: Lazy<Arc<Mutex<Option<String>>>> =
-//     Lazy::new(|| Arc::new(Mutex::new(None)));
-
 pub struct BufWriter;
 
 impl BufWriter {

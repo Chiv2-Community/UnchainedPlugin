@@ -106,7 +106,7 @@ impl DiscordOutbox {
                 );
                 let http = http.clone();
                 let handle = tokio::runtime::Handle::try_current().unwrap_or_else(|_| {
-                    crate::features::tokio_runtime::TOKIO_RUNTIME_HANDLE.clone()
+                    crate::features::tokio_runtime::TOKIO_RUNTIME.handle().clone()
                 });
                 handle.spawn(run(receiver, move |delivery| {
                     let http = http.clone();

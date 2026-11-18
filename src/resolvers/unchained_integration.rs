@@ -99,6 +99,23 @@ pub fn in_game_thread_job() -> bool {
     IN_TICK.with(|f| f.get())
 }
 use crate::resolvers::admin_control::o_ExecuteConsoleCommand;
+// UTBLEngine::PreExit, before normal engine teardown (not DLL_PROCESS_DETACH).
+#[cfg(feature = "server_registration")]
+define_pattern_resolver!(UTBLEnginePreExit, [
+    "40 55 53 41 54 41 55 48 8D 6C 24 A8 48 81 EC 58 01 00 00 4C 8B E9"
+]);
+#[cfg(feature = "server_registration")]
+CREATE_HOOK!(UTBLEnginePreExit, (engine: *mut UGameEngine), {
+    let result = std::panic::catch_unwind(|| {
+        crate::features::tokio_runtime::TOKIO_RUNTIME.block_on(
+            crate::features::server_browser::registration::shutdown(),
+        );
+    });
+    if result.is_err() {
+        swarn!("Server-browser shutdown failed; continuing engine teardown");
+    }
+});
+
 CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:f32, state:u8), {
 
     // FIXME: Just a bunch of bullshit
@@ -183,6 +200,7 @@ pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut FString),{
+    crate::features::motd::set_match_active(false);
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     sinfo!["{}", url_w];
 
@@ -201,6 +219,8 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut F
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UWorld),{
+    // Pre-load is not guaranteed; never carry the old match's MOTD state forward.
+    crate::features::motd::set_match_active(false);
     sdebug!["Triggered"];
     match globals().world() {
         Some(current_world) => {
@@ -234,7 +254,9 @@ define_pattern_resolver!(SetMatchState,[
     ]);
 // void AGameMode::SetMatchState(FName NewState)
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut AGameMode, new_state: FName),{
-    sinfo!["Match state: {}", new_state];
+    let state = new_state.to_string();
+    sinfo!["Match state: {}", state];
+    crate::features::motd::set_match_active(state == "InProgress");
 });
 
 // TODO: FViewport unused

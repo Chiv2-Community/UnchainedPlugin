@@ -1,7 +1,7 @@
 // #[macro_use]
 // pub mod macros;
 
-use once_cell::sync::{Lazy, OnceCell};
+use std::sync::{LazyLock, OnceLock};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -14,7 +14,7 @@ pub enum PlatformType {
     OTHER,
 }
 
-pub static PLATFORM: OnceCell<PlatformType> = OnceCell::new();
+pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
 
 mod platforms;
 pub use platforms::{supports_platform, ResolverPlatform};
@@ -43,7 +43,7 @@ impl std::str::FromStr for PlatformType {
     }
 }
 
-pub static BASE_ADDR: Lazy<usize> = Lazy::new(|| unsafe {
+pub static BASE_ADDR: LazyLock<usize> = LazyLock::new(|| unsafe {
     windows::Win32::System::LibraryLoader::GetModuleHandleW(None)
         .expect("Failed to get module handle")
         .0 as usize
@@ -91,8 +91,6 @@ mod playfab_auth;
 #[cfg(feature="move-autonomous-desync")]
 pub mod desync_tests;
 
-#[macro_use]
-pub mod chiv2_macros;
 #[macro_use]
 pub mod getpost_requests;
 pub mod gameplay;

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use tokio::sync::Mutex;
 use crate::events::models::GameEvent;
 use crate::events::broadcast::BroadcastMessage;
@@ -44,7 +44,7 @@ pub struct UnchainedEventSystem {
     pub command_subscriber: Arc<Mutex<CommandSubscriber>>,
 }
 
-pub static EVENT_SYSTEM: Lazy<UnchainedEventSystem> = Lazy::new(init_event_system);
+pub static EVENT_SYSTEM: LazyLock<UnchainedEventSystem> = LazyLock::new(init_event_system);
 
 pub fn init_event_system() -> UnchainedEventSystem {
     let chat_relay_subscriber = ChatRelaySubscriber::new(vec![

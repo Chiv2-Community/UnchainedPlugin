@@ -1,4 +1,4 @@
-#![feature(ip)]
+#![cfg_attr(feature = "server_registration", feature(ip))]
 #![feature(arbitrary_self_types_pointers)]
 
 #[macro_use]
@@ -19,7 +19,6 @@ pub mod modules;
 #[cfg(test)]
 pub mod test_utils;
 
-use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use std::{env, thread};
@@ -27,7 +26,7 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use anyhow::{Context, Result};
 use patternsleuth::resolvers::{resolvers, NamedResolver};
 use serde::{Deserialize, Serialize};
@@ -36,8 +35,8 @@ use serde_json::to_writer_pretty;
 use crate::commands::spawn_cli_handler;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
-use crate::features::server_registration::Registration;
-use crate::game::chivalry2::EChatType;
+#[cfg(feature="server_registration")]
+use crate::features::server_browser::registration::Registration;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
 use self::resolvers::PlatformType;
@@ -62,7 +61,7 @@ pub struct BuildInfo {
     offsets: HashMap<String, u64>,
 }
 
-static CURRENT_BUILD_INFO: Lazy<Mutex<Option<BuildInfo>>> = Lazy::new(|| Mutex::new(None));
+static CURRENT_BUILD_INFO: Mutex<Option<BuildInfo>> = Mutex::new(None);
 
 /// Offset (relative to the game image base) resolved for `name` in the current
 /// build info, if any.
@@ -87,7 +86,7 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     ))
 }
 
-static RESOLVERS_TO_IGNORE: Lazy<HashSet<&'static str>> = Lazy::new(||
+static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
         "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
@@ -424,21 +423,6 @@ fn postinit_rustlib() {
     //     handle_rcon();
     // });
 
-    // #[cfg(feature="server_registration")]
-    // {
-    //     let args = &cli_args();
-    //     if args.is_server() || args.register {
-    //         let query_port = args.game_server_query_port.unwrap_or(7071);
-    //         let reg = Arc::new(Registration::new("127.0.0.1", query_port));
-            
-    //         let mut global_reg = globals().registration.lock().unwrap();
-    //         *global_reg = Some(Arc::clone(&reg));
-            
-    //         sinfo!("Started server registration manager");
-    //         reg.start();
-    //     }
-    // }
-    
     // #[cfg(feature="mod_management")]
     // {
     //     use crate::features::mod_management::ModManager;
@@ -488,6 +472,27 @@ fn postinit_rustlib() {
     }
 }
 
+#[cfg(feature="server_registration")]
+fn start_server_registration(all_mods: Vec<features::Mod>, active_mods: Vec<features::Mod>) {
+    let args = cli_args();
+    if !args.is_server() || !args.register {
+        return;
+    }
+    let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
+        None
+    } else {
+        Some(args.local_ip.as_str())
+    };
+    let reg = Registration::new(
+        (std::net::Ipv4Addr::LOCALHOST, args.game_server_query_port).into(),
+        advertised_local_ip,
+        all_mods,
+        active_mods,
+    );
+    *globals().registration.lock().unwrap() = Some(reg);
+    sinfo!("Started server registration manager");
+}
+
 pub fn world_init() {
     #[cfg(feature="rcon_commands")]
     thread::spawn(|| {
@@ -497,44 +502,12 @@ pub fn world_init() {
     let args = &cli_args();
     sinfo!("Server: {}, Discord: {}", args.is_server(), args.discord_enabled());
 
-    #[cfg(feature="server_registration")]
-    {
-        if args.is_server() && args.register {
-            let query_port = args.game_server_query_port.unwrap_or(7071);
-            let advertised_local_ip = if args.use_ipv6 && !args.local_ip_explicit {
-                None
-            } else {
-                Some(args.local_ip.as_str())
-            };
-            let reg = Arc::new(Registration::new(
-                "127.0.0.1",
-                query_port,
-                advertised_local_ip,
-                args.use_ipv6,
-            ));
-            
-            let mut global_reg = globals().registration.lock().unwrap();
-            *global_reg = Some(Arc::clone(&reg));
-            
-            sinfo!("Started server registration manager");
-            reg.start();
-        }
-    }
+    #[cfg(all(feature="server_registration", not(feature="mod_management")))]
+    start_server_registration(Vec::new(), Vec::new());
 
     // Mod manager requires world
     while globals().world().is_none() {
         thread::sleep(Duration::from_millis(500));
-    }
-
-    if let Some(motd) = cli_args().motd.clone() {
-        sinfo!("Starting MOTD broadcast loop");
-        thread::spawn(move || {
-            loop {
-                sinfo!("Broadcasting MOTD: {}", motd);
-                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
-                thread::sleep(Duration::from_secs(30 * 60));
-            }
-        });
     }
 
     {
@@ -595,6 +568,11 @@ pub fn world_init() {
             mm.scan_asset_registry();
             mm.update_save_game();
             sinfo!("Started mod manager");
+            #[cfg(feature="server_registration")]
+            start_server_registration(
+                mm.get_available().into_values().collect(),
+                mm.get_active_mod_metadata(),
+            );
         });
     }
 }

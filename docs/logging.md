@@ -245,7 +245,7 @@ Merge entries into the existing `loggers` mapping:
 
 ```yaml
 loggers:
-  "UnchainedPlugin::features::server_registration":
+  "UnchainedPlugin::features::server_browser":
     level: info
   "UnchainedPlugin::modules::vote":
     level: warn
@@ -284,7 +284,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::features::discord` | Discord connections, HTTP delivery, rate limits, and outbound queues. |
 | `UnchainedPlugin::features::mod_management` | Mod discovery, spawning, and settings. |
 | `UnchainedPlugin::features::rcon` | RCON listener, commands, and connection failures. |
-| `UnchainedPlugin::features::server_registration` | Server discovery, registration, authentication, and heartbeats. |
+| `UnchainedPlugin::features::server_browser` | Server discovery, registration, authentication, and heartbeats. |
 | `UnchainedPlugin::game` | Game-state access and engine helpers. |
 | `UnchainedPlugin::logging::console` | Console attachment failures. |
 | `UnchainedPlugin::logging::log4rs` | Configuration errors, palette warnings, panics, and console drop warnings. |
