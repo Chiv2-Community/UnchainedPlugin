@@ -4,8 +4,7 @@ use crate::features::Mod;
 use a2s::info::Info;
 use server_browser_client::models::ServerRegistrationRequest;
 use server_browser_client_sdk::{
-    Event, HttpEvent, HttpTransport, LifecycleEvent, ObserverResult, Policy,
-    Registration as SdkRegistration, RegistrationWorker, RequestFailure,
+    Event, Policy, Registration as SdkRegistration, RegistrationControl,
 };
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
@@ -114,7 +113,7 @@ impl MetadataCollector {
             return;
         }
         let status = Self::metadata(&info);
-        let registration = match SdkRegistration::new(
+        let mut registration = match SdkRegistration::new(
             crate::backend_config::client().clone(),
             self.request(&info, &status),
             Policy::default(),
@@ -125,62 +124,26 @@ impl MetadataCollector {
                 return;
             }
         };
-        let registration = registration.into_worker();
+        let control = RegistrationControl::default();
         let latest = Mutex::new(status);
-        let driver = registration.run(|event| Self::reg_listeners(event, &latest));
-        tokio::pin!(driver);
-        let result = tokio::select! {
-            biased;
-            () = self.collect_updates(&registration, &latest, &shutdown, &refresh) => {
-                registration.cancel();
-                driver.await
+        let result = {
+            let driver = registration.run(&control, |event| Self::observe(event, &latest));
+            tokio::pin!(driver);
+            tokio::select! {
+                biased;
+                () = self.collect_updates(&control, &latest, &shutdown, &refresh) => {
+                    control.cancel();
+                    driver.await
+                }
+                result = &mut driver => result,
             }
-            result = &mut driver => result,
         };
         if let Err(error) = result {
             swarn!("Server-browser lifecycle halted: {}", error);
+            if let Err(error) = registration.stop().await {
+                swarn!("Server-browser cleanup failed: {}", error);
+            }
         }
-    }
-
-    fn reg_listeners(event: &Event<'_>, latest: &Mutex<ServerStatus>) -> ObserverResult {
-        match event {
-            Event::Lifecycle(event) => Self::observe(event, latest),
-            Event::Http(HttpEvent::Register(response)) => match response {
-                Ok(response) => sinfo!(
-                    "Registered server-browser identity: {}",
-                    response.server.unique_id
-                ),
-                Err(error) => swarn!(
-                    "Server-browser registration failed: {:?}",
-                    RequestFailure::from_error(error)
-                ),
-            },
-            Event::Http(HttpEvent::Heartbeat(response)) => match response {
-                Ok(_) => sdebug!("Server-browser heartbeat succeeded"),
-                Err(error) => swarn!(
-                    "Server-browser heartbeat failed: {:?}",
-                    RequestFailure::from_error(error)
-                ),
-            },
-            Event::Http(HttpEvent::Update(response)) => match response {
-                Ok(_) => sdebug!("Server-browser metadata updated"),
-                Err(error) => swarn!(
-                    "Server-browser update failed: {:?}",
-                    RequestFailure::from_error(error)
-                ),
-            },
-            Event::Http(HttpEvent::Delete(response)) => match response {
-                Ok(_) => sinfo!("Server-browser registration deleted"),
-                Err(error) if RequestFailure::from_error(error) == RequestFailure::Http(404) => {
-                    sinfo!("Server-browser registration already absent")
-                }
-                Err(error) => swarn!(
-                    "Server-browser deletion failed: {:?}",
-                    RequestFailure::from_error(error)
-                ),
-            },
-        }
-        Ok(())
     }
 
     async fn query(&self, shutdown: &CancellationToken) -> Option<Info> {
@@ -195,7 +158,7 @@ impl MetadataCollector {
 
     async fn collect_updates(
         &self,
-        registration: &RegistrationWorker<HttpTransport>,
+        control: &RegistrationControl,
         latest: &Mutex<ServerStatus>,
         shutdown: &CancellationToken,
         refresh: &Notify,
@@ -209,7 +172,7 @@ impl MetadataCollector {
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
-            if registration.set_update(update).is_err() {
+            if !control.publish(update) {
                 return;
             }
         }
@@ -226,9 +189,10 @@ impl MetadataCollector {
         registration_metadata::request(status, ports, self.local_ip_address.clone())
     }
 
-    fn observe(event: &LifecycleEvent, latest: &Mutex<ServerStatus>) {
+    fn observe(event: &Event, latest: &Mutex<ServerStatus>) {
         match event {
-            LifecycleEvent::Registered { .. } => {
+            Event::Registered { server_id } => {
+                sinfo!("Registered server-browser identity: {}", server_id);
                 let status = latest
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -237,10 +201,12 @@ impl MetadataCollector {
                     .game_event_publisher
                     .publish(GameEvent::ServerStatusEvent(status));
             }
-            LifecycleEvent::RegistrationLost => {
+            Event::Heartbeat => sdebug!("Server-browser heartbeat succeeded"),
+            Event::Updated => sdebug!("Server-browser metadata updated"),
+            Event::RegistrationLost => {
                 swarn!("Server-browser registration expired; SDK will re-register")
             }
-            LifecycleEvent::RetryScheduled(delay) => {
+            Event::RetryScheduled(delay) => {
                 swarn!("Server-browser retry in {}s", delay.as_secs())
             }
             _ => {}

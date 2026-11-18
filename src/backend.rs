@@ -8,8 +8,19 @@ pub fn transport(
     base_url: &str,
     source_ip: Option<IpAddr>,
 ) -> Result<HttpTransport, reqwest::Error> {
-    Ok(HttpTransport::new(base_url, source_ip)?
-        .with_user_agent("UnchainedPlugin/server-browser-api"))
+    let mut configuration = HttpTransport::new(base_url, source_ip)?
+        .configuration()
+        .clone();
+    configuration.user_agent = Some("UnchainedPlugin/server-browser-api".into());
+    Ok(HttpTransport::from_configuration(configuration))
+}
+
+pub fn tbio_base_url(base_url: &str) -> String {
+    format!("{}/api/tbio", base_url.trim_end_matches('/'))
+}
+
+pub fn playfab_matchmake_url(base_url: &str) -> String {
+    format!("{}/api/playfab/Client/Matchmake", base_url.trim_end_matches('/'))
 }
 
 /// Legacy native admission cannot await. Never block inside a Tokio context.

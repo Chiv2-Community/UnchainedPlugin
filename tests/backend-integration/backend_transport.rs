@@ -3,6 +3,14 @@ use std::net::TcpListener;
 #[path = "../../src/backend.rs"]
 mod backend;
 
+#[test_case::test_case("https://example.test", "https://example.test"; "root")]
+#[test_case::test_case("https://example.test/", "https://example.test"; "trailing_slash")]
+#[test_case::test_case("https://example.test/browser///", "https://example.test/browser"; "deployment_prefix")]
+fn native_compatibility_urls(base: &str, prefix: &str) {
+    assert_eq!(backend::tbio_base_url(base), format!("{prefix}/api/tbio"));
+    assert_eq!(backend::playfab_matchmake_url(base), format!("{prefix}/api/playfab/Client/Matchmake"));
+}
+
 #[test]
 fn transport_sets_plugin_user_agent() {
     let client = backend::transport("http://127.0.0.1:18080", None).unwrap();
