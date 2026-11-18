@@ -19,6 +19,7 @@ const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
 const UNCHAINED_LOG_PATH_PLACEHOLDER: &str = "__UNCHAINED_LOG_PATH__";
 const KISMET_LOG_PATH_PLACEHOLDER: &str = "__KISMET_LOG_PATH__";
 const CHAT_LOG_PATH_PLACEHOLDER: &str = "__CHAT_LOG_PATH__";
+const BLUEPRINT_LOG_PATH_PLACEHOLDER: &str = "__BLUEPRINT_LOG_PATH__";
 
 pub fn setup_panic_logger() {
     panic::set_hook(Box::new(|info| {
@@ -160,15 +161,26 @@ fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
     }).collect()
 }
 
-fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+/// The directory the plugin writes logs (and the Blueprint spam-filter file) into:
+/// `%LOCALAPPDATA%\Chivalry 2\Saved{suffix}\Logs`, falling back to `./Logs`.
+fn log_dir_for(saved_dir_suffix: Option<&str>) -> PathBuf {
     let suffix = saved_dir_suffix
         .map(|value| format!("_{}", value))
         .unwrap_or_default();
-
-    let log_dir = std::env::var("LOCALAPPDATA").ok()
+    std::env::var("LOCALAPPDATA").ok()
         .map(|base| PathBuf::from(base).join(format!(r"Chivalry 2\Saved{suffix}")))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Logs");
+        .join("Logs")
+}
+
+/// Public accessor for the plugin log directory (uses the current CLI `saved_dir_suffix`). Other
+/// features (e.g. the Blueprint spam filter) read sidecar files from here.
+pub fn plugin_log_dir() -> PathBuf {
+    log_dir_for(cli_args().saved_dir_suffix.as_deref())
+}
+
+fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+    let log_dir = log_dir_for(saved_dir_suffix);
 
     if let Err(error) = std::fs::create_dir_all(&log_dir) {
         eprintln!(
@@ -183,6 +195,7 @@ fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> Stri
     yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &log_path("unchained.log"))
         .replace(KISMET_LOG_PATH_PLACEHOLDER, &log_path("kismet.log"))
         .replace(CHAT_LOG_PATH_PLACEHOLDER, &log_path("chat.log"))
+        .replace(BLUEPRINT_LOG_PATH_PLACEHOLDER, &log_path("blueprint.log"))
 }
 
 fn yaml_escape_double_quoted(value: &str) -> String {

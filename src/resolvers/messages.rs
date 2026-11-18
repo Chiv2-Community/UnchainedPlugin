@@ -272,17 +272,47 @@ pub mod kismet_natives {
     #[allow(unused_imports)]
     use crate::ue::{FString, UObject};
 
-    // Reflection-backed resolution (StaticFindObject -> FindFunctionByName -> UFunction::func).
-    // The patternsleuth RegisterNatives table (globals.kismet_system_library_native) still works
-    // and can be used as a fallback, but the path form generalizes to any class.
+    // Reflection-backed resolution (StaticFindObject -> FindFunctionByName -> UFunction::func), so
+    // any reflected class works by its /Script/... path. It queries the LIVE UObject system, so the
+    // LateHookRegistration drain waits for ENGINE_READY before attaching (see postinit_rustlib).
     kismet_native_class!(UKismetSystemLibrary => path "/Script/Engine.KismetSystemLibrary");
 
-    /// Shared emit for the Blueprint print-family observers: PrintString and PrintText produce the
-    /// same line and differ only in label and string source, so both funnel through here (one place
-    /// to later add filtering/throttling). PrintWarning stays separate (it uses `swarn!`).
+    /// Shared emit for all Blueprint print-family observers (PrintString/PrintWarning/PrintText).
+    /// Suppresses exact messages listed in the spam filter, then logs to the `blueprint_log` target
+    /// (console + `blueprint.log`, mirroring the chat log). `kind` is the reflected function name.
     #[cfg(feature = "blueprint_printstring_log")]
     fn log_blueprint_print(kind: &str, message: &str) {
-        sinfo!("[Blueprint {kind}] {message}");
+        if blueprint_spam_filter().contains(message) {
+            return;
+        }
+        sinfo!(target: "blueprint_log", kind = kind; "{}", message);
+    }
+
+    /// Exact full-message strings to suppress, loaded once from `blueprint_filter.txt` in the log
+    /// directory (one message per line; blank lines and `#` comments ignored). Edit the file and
+    /// restart the game to change it.
+    #[cfg(feature = "blueprint_printstring_log")]
+    fn blueprint_spam_filter() -> &'static std::collections::HashSet<String> {
+        use std::sync::OnceLock;
+        static FILTER: OnceLock<std::collections::HashSet<String>> = OnceLock::new();
+        FILTER.get_or_init(|| {
+            let path = crate::logging::log4rs::plugin_log_dir().join("blueprint_filter.txt");
+            let set: std::collections::HashSet<String> = std::fs::read_to_string(&path)
+                .map(|text| {
+                    text.lines()
+                        .map(str::trim)
+                        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            sinfo!(
+                "[Blueprint] loaded {} spam-filter entrie(s) from {}",
+                set.len(),
+                path.display()
+            );
+            set
+        })
     }
 
     // UKismetSystemLibrary::PrintString(UObject* WorldContextObject, FString InString,
@@ -303,7 +333,7 @@ pub mod kismet_natives {
         message: FString,
     ) {
         if let Ok(s) = message.copy_to_string() {
-            swarn!("[Blueprint PrintWarning] {s}");
+            log_blueprint_print("PrintWarning", &s);
         }
     });
 
