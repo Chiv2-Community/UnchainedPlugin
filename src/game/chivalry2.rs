@@ -7,7 +7,6 @@ use crate::{game::engine::{FText, UWorld}, ue::{AsUObject, FString, FVector, TAr
 
 // SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
 unsafe impl crate::ue::UObjectType for AController { const CLASS_NAME: &'static str = "Controller"; }
-unsafe impl crate::ue::UObjectType for AActor { const CLASS_NAME: &'static str = "Actor"; }
 unsafe impl crate::ue::UObjectType for AInfo { const CLASS_NAME: &'static str = "Info"; }
 unsafe impl crate::ue::UObjectType for ATBLPlayerController { const CLASS_NAME: &'static str = "TBLPlayerController"; }
 unsafe impl crate::ue::UObjectType for ATBLCharacterBase { const CLASS_NAME: &'static str = "TBLCharacterBase"; }
@@ -19,14 +18,8 @@ unsafe impl crate::ue::UObjectType for ATBLCharacter { const CLASS_NAME: &'stati
 unsafe impl crate::ue::UObjectType for ATBLPlayerState { const CLASS_NAME: &'static str = "TBLPlayerState"; }
 unsafe impl crate::ue::UObjectType for ATBLGameState { const CLASS_NAME: &'static str = "TBLGameState"; }
 
-// Native PDB: AActor 0x258; APawn/AController add INavAgentInterface at +0x258.
-#[rust_ctables::cpp_struct]
-#[derive(Debug)]
-pub struct AActor {
-    #[inherit]
-    pub base: crate::ue::UObject,
-    _private: [u8; 0x230],
-}
+pub use crate::ue::engine::aactor::AActor;
+pub(crate) use crate::ue::engine::aactor::{__ctables_AActor, __CtablesAActor};
 
 #[rust_ctables::cpp_struct]
 pub struct AInfo {
