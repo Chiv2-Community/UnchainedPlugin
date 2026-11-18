@@ -277,6 +277,14 @@ pub mod kismet_natives {
     // and can be used as a fallback, but the path form generalizes to any class.
     kismet_native_class!(UKismetSystemLibrary => path "/Script/Engine.KismetSystemLibrary");
 
+    /// Shared emit for the Blueprint print-family observers: PrintString and PrintText produce the
+    /// same line and differ only in label and string source, so both funnel through here (one place
+    /// to later add filtering/throttling). PrintWarning stays separate (it uses `swarn!`).
+    #[cfg(feature = "blueprint_printstring_log")]
+    fn log_blueprint_print(kind: &str, message: &str) {
+        sinfo!("[Blueprint {kind}] {message}");
+    }
+
     // UKismetSystemLibrary::PrintString(UObject* WorldContextObject, FString InString,
     //   bool bPrintToScreen, bool bPrintToLog, FLinearColor TextColor, float Duration)  [UE 4.25]
     #[cfg(feature = "blueprint_printstring_log")]
@@ -285,7 +293,7 @@ pub mod kismet_natives {
         _to_screen: bool, _to_log: bool, _color: [f32; 4], _duration: f32,
     ) {
         if let Ok(s) = message.copy_to_string() {
-            sinfo!("[Blueprint PrintString] {s}");
+            log_blueprint_print("PrintString", &s);
         }
     });
 
@@ -307,7 +315,7 @@ pub mod kismet_natives {
         _to_screen: bool, _to_log: bool, _color: [f32; 4], _duration: f32,
     ) {
         if let Some(s) = text.to_string() {
-            sinfo!("[Blueprint PrintText] {s}");
+            log_blueprint_print("PrintText", &s);
         }
     });
 
