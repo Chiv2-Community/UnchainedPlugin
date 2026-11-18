@@ -429,7 +429,7 @@ CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut
 // detour is never enabled; callers use it only as a trampoline via CALL_ORIGINAL!(GetTBLGameMode(..)).
 kismet_native_class!(UTBLSystemLibrary => path "/Script/TBL.TBLSystemLibrary");
 
-CREATE_HOOK_KISMET!(GetTBLGameMode, UTBLSystemLibrary, "GetTBLGameMode", INACTIVE,
+CREATE_HOOK_KISMET!(UTBLSystemLibrary, "GetTBLGameMode", GetTBLGameMode, INACTIVE,
     *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject), {
     sdebug!["Triggered!"];
 });

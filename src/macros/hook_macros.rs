@@ -116,7 +116,9 @@ macro_rules! __create_hook_impl {
     (@as_cond { $cond:expr }) => { $cond }; 
     (@as_cond $cond:expr) => { $cond };
 
-    ($name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+    // Shared: emit the detour static + the detour function (identical for offset- and
+    // reflection-resolved hooks; only resolution/registration differ between them).
+    (@emit_core $name:ident, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         paste::paste! {
             #[cfg(not(rust_analyzer))]
             ::retour::static_detour! {
@@ -127,7 +129,60 @@ macro_rules! __create_hook_impl {
             pub unsafe extern "C" fn [<$name _detour_fkt>]($( $arg: $ty ),+ ) -> $out_type {
                 $crate::__hook_dispatch!($hook_type, $name, $out_type, ( $( $arg ),+ ), $body)
             }
+        }
+    };
 
+    // Shared: given an absolute target address, initialize o_<Name> on the detour fn and enable it
+    // when `auto_activate` and the status condition both hold. `auto_activate` must be in scope.
+    (@finish_attach $name:ident, $out_type:ty, $status:tt, $target:expr, $auto_activate:expr, ( $( $arg:ident: $ty:ty ),+ $(,)? )) => {
+        paste::paste! {
+            type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+            let target: FnPtr = std::mem::transmute($target);
+            [<o_ $name>].initialize(target, |$( $arg ),+| {
+                unsafe { [<$name _detour_fkt>]($( $arg ),+) }
+            }).unwrap();
+            let condition_met = ($crate::__create_hook_impl![@as_cond $status])();
+            if $auto_activate && condition_met {
+                [<o_ $name>].enable()?;
+            }
+        }
+    };
+
+    // Reflection-resolved + late-attached variant. Resolves the target through the live UObject
+    // reflection system ($class's exec thunk -> inner C++ fn) and registers for the late drain
+    // (after ENGINE_READY) via LateHookRegistration, reusing @emit_core + @finish_attach.
+    (@kismet ( $class:ty, $native:literal ) $name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        $crate::__create_hook_impl!(@emit_core $name, $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
+
+        paste::paste! {
+            #[allow(non_snake_case)]
+            pub unsafe fn [<attach_ $name>]() -> Result<(), Box<dyn std::error::Error>> {
+                let auto_activate = true; // the status condition still gates enable (see @finish_attach)
+                let class_name = <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME;
+                let thunk = <$class as $crate::ue::kismet::KismetNativeClass>::resolve($native)
+                    .ok_or_else(|| format!("{}::{} not resolved (reflection)", class_name, $native))?;
+                // UFunction::func is the exec thunk; hook the inner C++ function it calls (real ABI).
+                let target_addr = $crate::ue::exec_thunk::inner_native_of(thunk)
+                    .ok_or_else(|| format!("{}::{} inner callee not found", class_name, $native))?;
+                $crate::sdebug!("{}::{} -> thunk {:#x}, inner {:#x}", class_name, $native, thunk, target_addr);
+                $crate::__create_hook_impl!(@finish_attach $name, $out_type, $status, target_addr, auto_activate, ( $( $arg: $ty ),+ ));
+                Ok(())
+            }
+
+            ::inventory::submit! {
+                $crate::resolvers::LateHookRegistration {
+                    class: <$class as $crate::ue::kismet::KismetNativeClass>::CLASS_NAME,
+                    native: $native,
+                    attach: [<attach_ $name>],
+                }
+            }
+        }
+    };
+
+    ($name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        $crate::__create_hook_impl!(@emit_core $name, $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
+
+        paste::paste! {
             #[allow(non_snake_case)]
             pub unsafe fn [<attach_ $name>](
                 offsets: std::collections::HashMap<String, u64>,
@@ -137,21 +192,8 @@ macro_rules! __create_hook_impl {
                     None => Err(format!("No address found for {}", stringify!($name)).into()),
                     Some(off) => {
                         let rel_address = *off as usize;
-                        type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
                         let base_address = * $crate::resolvers::BASE_ADDR;
-                        let target: FnPtr = std::mem::transmute(base_address + rel_address);
-                        [<o_ $name>].initialize(target, |$( $arg ),+| {
-                            unsafe { [<$name _detour_fkt>]($( $arg ),+) }
-                        }).unwrap();
-                        // $crate::sinfo!("Set up {}", stringify!([<$name _detour_fkt>]));
-                        
-                        // We combine the global 'auto_activate' flag with the local condition
-                        // Note: We evaluate the condition here at attachment time
-                        let condition_met = ($crate::__create_hook_impl![@as_cond $status])();
-                        
-                        if auto_activate && condition_met {
-                            [<o_ $name>].enable()?;
-                        }
+                        $crate::__create_hook_impl!(@finish_attach $name, $out_type, $status, base_address + rel_address, auto_activate, ( $( $arg: $ty ),+ ));
                         Ok(Some(rel_address))
                     }
                 }
