@@ -346,7 +346,7 @@ impl<K, V> TMapView<K, V> {
 
 #[cfg(test)]
 mod test {
-    use crate::ue::FName;
+    use crate::chivalry2::engine::FName;
     const _: [u8; 0x50] = [0; std::mem::size_of::<TMapView<[u64; 3], [u64; 5]>>()];
 
     use super::*;

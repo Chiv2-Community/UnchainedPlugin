@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [FLargeMemoryReader](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Serialization/LargeMemoryReader.h).
 
-use crate::ue::FName;
+use crate::chivalry2::engine::FName;
 use unchained_macros::bind_resolved_func;
 
 // Signature source: owner-provided target-build bytes for

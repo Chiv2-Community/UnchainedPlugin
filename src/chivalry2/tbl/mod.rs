@@ -1,19 +1,5 @@
 //! ArgonSDK main: [TBL native headers](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Source/TBL/Public).
 
-pub use crate::engine;
-pub use crate::engine::extensions::unchained;
-// Compatibility namespace while callers migrate to their native owner modules.
-pub mod chivalry2 {
-    pub use crate::engine;
-    pub use super::{
-        atbl_character::*, atbl_character_base::*, atbl_game_mode::*,
-        atbl_game_state::*, atbl_player_controller::*, atbl_player_state::*,
-        udamage_source::*, echat_type::*, efaction::*, ekill_reason::*,
-        fdamage_taken_event::*, fdeath_damage_taken_event::*,
-    };
-    pub use crate::engine::*;
-    pub use crate::features::native_chat::*;
-}
 pub mod atbl_character;
 pub mod atbl_game_mode;
 pub mod atbl_player_controller;

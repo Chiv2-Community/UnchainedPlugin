@@ -1,8 +1,8 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageTakenEvent.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
-use crate::game::*;
+use crate::chivalry2::engine::*;
+use crate::chivalry2::tbl::*;
 use std::os::raw::c_void;
 
 /// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x148`).
@@ -24,9 +24,9 @@ pub struct FDamageTakenEvent {
     pub _pad_after_flags: [u8; 0x2],                 // 0x002E
     pub hit_result: [u8; 0x88],                      // 0x0030
     pub ability_spec: *mut c_void,                   // 0x00B8
-    pub abilities_table_row: crate::ue::FName,       // 0x00C0
-    pub hit_direction: crate::ue::FVector,           // 0x00C8 (FVector_NetQuantizeNormal)
-    pub damage_taker_combat_state: crate::ue::FName, // 0x00D4
+    pub abilities_table_row: crate::chivalry2::engine::FName,       // 0x00C0
+    pub hit_direction: crate::chivalry2::engine::FVector,           // 0x00C8 (FVector_NetQuantizeNormal)
+    pub damage_taker_combat_state: crate::chivalry2::engine::FName, // 0x00D4
     pub apply_condition: u8,                         // EConditionType, 0x00DC
     pub _pad_after_apply_condition: [u8; 0x3],       // 0x00DD
     pub post_damage_info: [u8; 0x0C],                // 0x00E0

@@ -1,6 +1,6 @@
 //! ArgonSDK main: [FMapSpecificLoadingScreenConfigData](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfigData.h).
 
-use crate::engine::{FSoftObjectPath, FString, FText};
+use crate::chivalry2::engine::{FSoftObjectPath, FString, FText};
 
 /// Raw engine-owned FText storage. Rust never destroys this view.
 #[repr(C, align(8))]
@@ -8,7 +8,7 @@ pub struct FTextRaw(FText);
 
 impl FTextRaw {
     pub(crate) fn from_str(text: &str) -> Self {
-        Self(crate::engine::InvariantText::new(text).into_raw())
+        Self(crate::chivalry2::engine::InvariantText::new(text).into_raw())
     }
 }
 

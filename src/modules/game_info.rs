@@ -1,9 +1,10 @@
 
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
-use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
-use crate::game::UTBLSystemLibrary;
-use crate::ue::AsUObject;
+use crate::chivalry2::tbl::ATBLGameMode;
+use crate::chivalry2::engine::PlayerFlags;
+use crate::chivalry2::tbl::UTBLSystemLibrary;
+use crate::chivalry2::engine::AsUObject;
 use async_trait::async_trait;
 use clap::Parser;
 use itertools::Itertools;
@@ -19,7 +20,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
-        use crate::ue::engine::ugame_engine::run_on_game_thread;
+        use crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread;
 
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {

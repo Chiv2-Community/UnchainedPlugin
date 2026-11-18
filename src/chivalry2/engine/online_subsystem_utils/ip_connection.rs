@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystemUtils/Source/OnlineSubsystemUtils/Classes/IpConnection.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 #[repr(C)]
 pub struct UIpConnection {
@@ -10,6 +10,6 @@ pub struct UIpConnection {
     pub remote_addr: *const FInternetAddr, // 0x0118 (shared pointer)
 }
 
-unsafe impl crate::ue::UObjectType for UIpConnection {
+unsafe impl crate::chivalry2::engine::UObjectType for UIpConnection {
     const CLASS_NAME: &'static str = "IpConnection";
 }

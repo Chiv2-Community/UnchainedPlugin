@@ -2,18 +2,17 @@
 
 use std::os::raw::c_void;
 
-use crate::{
-    events::broadcast_message::game_chat::broadcast_parts,
-    game::{chivalry2::EChatType, engine::FText},
-    ue::{FLinearColor, FName, FString, InvariantText, UTBLGameInstance},
-};
+use crate::events::broadcast_message::game_chat::broadcast_parts;
+use crate::chivalry2::tbl::EChatType;
+use crate::chivalry2::engine::{FText, FLinearColor, FName, FString, InvariantText};
+use crate::chivalry2::tbl::UTBLGameInstance;
 
 define_pattern_resolver!(ClientReceiveLocalizedChat, [
     "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
 ]);
 // ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
 #[unchained_macros::runtime_bindings]
-impl crate::game::chivalry2::ATBLPlayerController {
+impl crate::chivalry2::tbl::ATBLPlayerController {
     #[bind_resolved_func_detour(ClientReceiveLocalizedChat)]
     unsafe fn client_receive_localized_chat_detour(
         self: *mut Self,
@@ -57,8 +56,7 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
 }
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {
-    use crate::game::engine::UWorld;
-    use crate::ue::{APlayerController, UObject, UObjectType, UPlayer};
+    use crate::chivalry2::engine::{UWorld, APlayerController, UObject, UObjectType, UPlayer};
 
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
     if controller.is_null() {

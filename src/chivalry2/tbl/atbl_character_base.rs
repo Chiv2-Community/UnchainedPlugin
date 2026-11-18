@@ -1,11 +1,11 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacterBase.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
-use crate::game::*;
+use crate::chivalry2::engine::*;
+use crate::chivalry2::tbl::*;
 use std::os::raw::c_void;
 
-unsafe impl crate::ue::UObjectType for ATBLCharacterBase {
+unsafe impl crate::chivalry2::engine::UObjectType for ATBLCharacterBase {
     const CLASS_NAME: &'static str = "TBLCharacterBase";
 }
 

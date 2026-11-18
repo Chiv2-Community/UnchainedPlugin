@@ -1,6 +1,6 @@
 //! ArgonSDK main: [UTBLGameInstance](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h).
 
-use crate::ue::{FLinearColor, FText};
+use crate::chivalry2::engine::{FLinearColor, FText};
 use unchained_macros::bind_resolved_func;
 mod startup_patch;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +20,7 @@ define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 
 #[unchained_macros::runtime_bindings]
 impl UTBLGameInstance {
     #[bind_resolved_func_detour(LoadFrontEndMap)]
-    pub(crate) unsafe fn load_front_end_map_detour(self: *mut Self, _url: *mut crate::ue::FString) -> bool {
+    pub(crate) unsafe fn load_front_end_map_detour(self: *mut Self, _url: *mut crate::chivalry2::engine::FString) -> bool {
         static INITIALIZED: AtomicBool = AtomicBool::new(false);
         let args = cli_args();
         let password = args.server_password.as_ref()
@@ -41,11 +41,11 @@ impl UTBLGameInstance {
         let map_url = format!("Frontend{password}{rcon}{startup}");
         #[cfg(feature = "verbose_hooks")]
         sinfo!("{}", map_url);
-        let mut map_url = crate::ue::FString::from(map_url.as_str());
+        let mut map_url = crate::chivalry2::engine::FString::from(map_url.as_str());
         unsafe { self.load_front_end_map(&mut map_url) }
     }
     #[bind_resolved_func_detour(OnPreLoadMap)]
-    pub(crate) unsafe fn on_pre_load_map_detour(self: *mut Self, url: *mut crate::ue::FString) {
+    pub(crate) unsafe fn on_pre_load_map_detour(self: *mut Self, url: *mut crate::chivalry2::engine::FString) {
         crate::features::motd::set_match_active(false);
         let name = unsafe { (*url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
         sinfo!("{}", name);
@@ -58,7 +58,7 @@ impl UTBLGameInstance {
         unsafe { self.on_pre_load_map(url); }
     }
     #[bind_resolved_func_detour(OnPostLoadMap)]
-    pub(crate) unsafe fn on_post_load_map_detour(self: *mut Self, world: *mut crate::ue::UWorld) {
+    pub(crate) unsafe fn on_post_load_map_detour(self: *mut Self, world: *mut crate::chivalry2::engine::UWorld) {
         crate::features::motd::set_match_active(false);
         sdebug!("Triggered");
         match globals().world() {
@@ -72,7 +72,7 @@ impl UTBLGameInstance {
             }
             _ => {}
         }
-        if let Some(url) = crate::ue::engine::uworld::get_current_map_name(world) {
+        if let Some(url) = crate::chivalry2::engine::engine::uworld::get_current_map_name(world) {
             let name = url.split('/').last().unwrap_or("UnknownMapName");
             EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
                 new_map_url: url.to_string(), new_map_name: name.to_string(),

@@ -1,9 +1,8 @@
 //! UE 4.25-plus: [UObject::LoadConfig](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Obj.cpp).
 
-use crate::{
-    tools::hook_globals::{cli_args, globals_initialized},
-    ue::{FString, UClass, UObject, TCHAR},
-};
+use crate::tools::hook_globals::cli_args;
+use crate::tools::hook_globals::globals_initialized;
+use crate::chivalry2::engine::{FString, UClass, UObject, TCHAR};
 use std::ffi::c_void;
 mod overrides;
 use overrides::{resolve_profile_override_paths_for_config, LOAD_CONFIG_REENTRY};

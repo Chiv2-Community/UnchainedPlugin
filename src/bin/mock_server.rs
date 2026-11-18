@@ -1,8 +1,9 @@
 use serenity::all::UserId;
 use UnchainedPlugin::sinfo;
 use UnchainedPlugin::features::discord::DiscordConfig;
-use UnchainedPlugin::events::models::{CombatActor, GameChatMessage, Join, Kill, GameEvent, ChatSource, NativeChat, CommandActor, CommandSource, CommandExecuted, Damage, DamageSource};
-use UnchainedPlugin::game::chivalry2::EChatType;
+use UnchainedPlugin::events::combat::{CombatActor, DamageSource};
+use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, NativeChat, CommandActor, CommandSource, CommandExecuted, Damage};
+use UnchainedPlugin::chivalry2::tbl::EChatType;
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::logging::log4rs::init;
 use std::io::{self, Write};
@@ -56,7 +57,7 @@ fn main() {
                         damage: DamageSource {
                             amount: 50.0,
                             source: "MockSword".to_string(),
-                            attack_type: "Slash".to_string(),
+                            attack_type: "Slash",
                         },
                     }
                 }));

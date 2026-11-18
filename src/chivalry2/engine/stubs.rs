@@ -6,12 +6,12 @@
 use std::ffi::c_void;
 
 // Compatibility names for opaque native types defined beside their bindings.
-pub type AGameMode = crate::ue::engine::agame_mode::AGameMode;
-pub type UGameEngine = crate::ue::engine::ugame_engine::UGameEngine;
-pub type FPakPlatformFile = crate::ue::core::fpak_platform_file::FPakPlatformFile;
-pub type FConsoleOutputDevice = crate::ue::core::fconsole_output_device::FConsoleOutputDevice;
-pub type FTBLOnlineStats = crate::game::ftbl_online_stats::FTBLOnlineStats;
-pub type FOnlineSessionPlayFab = crate::engine::extensions::fonline_session_playfab::FOnlineSessionPlayFab;
+pub type AGameMode = crate::chivalry2::engine::engine::agame_mode::AGameMode;
+pub type UGameEngine = crate::chivalry2::engine::engine::ugame_engine::UGameEngine;
+pub type FPakPlatformFile = crate::chivalry2::engine::core::fpak_platform_file::FPakPlatformFile;
+pub type FConsoleOutputDevice = crate::chivalry2::engine::core::fconsole_output_device::FConsoleOutputDevice;
+pub type FTBLOnlineStats = crate::chivalry2::tbl::ftbl_online_stats::FTBLOnlineStats;
+pub type FOnlineSessionPlayFab = crate::chivalry2::engine::extensions::fonline_session_playfab::FOnlineSessionPlayFab;
 
 // Native types used only behind pointers; these aliases do not describe layouts
 // or provide distinct type identities or thread-safety guarantees.

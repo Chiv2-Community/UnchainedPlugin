@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/NetDriver.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 /// Partial UNetDriver layout; fields after ServerConnection are omitted.
 #[repr(C)]

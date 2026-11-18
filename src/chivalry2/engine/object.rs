@@ -83,7 +83,7 @@ bitflags::bitflags! {
 pub struct UObjectBase {
     #[vtable(
         offset(0x150);
-        get_world(&self) -> *mut crate::game::engine::UWorld;
+        get_world(&self) -> *mut crate::chivalry2::engine::UWorld;
     )]
     vtable: *const (),
     pub object_flags: EObjectFlags,
@@ -216,7 +216,7 @@ impl UObject {
 #[derive(Debug)]
 pub struct APlayerController {
     #[inherit]
-    pub base: crate::game::chivalry2::AController,
+    pub base: crate::chivalry2::engine::AController,
     pub player: *mut UPlayer, // 0x02D0
 }
 

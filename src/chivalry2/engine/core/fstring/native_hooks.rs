@@ -1,10 +1,8 @@
 //! UE 4.25-plus: [FString](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/UnrealString.h).
 
-use crate::{
-    tools::hook_globals::cli_args,
-    engine::extensions::fonline_session_playfab::{IN_ON_GET_CURRENT_GAMES, IN_PING_SOME_SERVERS},
-    ue::{FString, TArray, TCHAR},
-};
+use crate::tools::hook_globals::cli_args;
+use crate::chivalry2::engine::extensions::fonline_session_playfab::{IN_ON_GET_CURRENT_GAMES, IN_PING_SOME_SERVERS};
+use crate::chivalry2::engine::{FString, TArray, TCHAR};
 
 define_pattern_resolver!(FStringFind, [
     "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 50 45 8B E1 48 8B FA 4C 8B F1"

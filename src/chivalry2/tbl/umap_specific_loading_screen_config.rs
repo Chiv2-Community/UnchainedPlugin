@@ -8,9 +8,9 @@
 //! them like any other map. The entries come from `DA_MapMarker_V2` map
 //! markers (see `features::map_markers`).
 
-use crate::game::engine::FSoftObjectPath;
-use crate::game::fmap_specific_loading_screen_config_data::{FMapSpecificLoadingScreenConfigData, FTextRaw};
-use crate::ue::{EFindName, FName, FString, TArray};
+use crate::chivalry2::engine::FSoftObjectPath;
+use crate::chivalry2::tbl::fmap_specific_loading_screen_config_data::{FMapSpecificLoadingScreenConfigData, FTextRaw};
+use crate::chivalry2::engine::{EFindName, FName, FString, TArray};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// A per-map loading screen to inject into

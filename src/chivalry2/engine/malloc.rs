@@ -4,7 +4,7 @@ use std::alloc::Layout;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use super::{FGenericMemoryStats, FOutputDevice, TCHAR};
-use crate::game::engine::UWorld;
+use crate::chivalry2::engine::UWorld;
 
 // UE global FMalloc* GMalloc. Cache its slot, not the current allocator pointer.
 /// # Safety
@@ -97,7 +97,7 @@ impl FMallocHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ue::TArray;
+    use crate::chivalry2::engine::TArray;
 
     #[test]
     fn allocator_prefix_preserves_native_layout() {
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Required native value GMalloc is not bound")]
     fn string_conversion_uses_early_allocator_accessor() {
-        let _ = crate::ue::FString::from("pak directory");
+        let _ = crate::chivalry2::engine::FString::from("pak directory");
     }
 
     #[test]

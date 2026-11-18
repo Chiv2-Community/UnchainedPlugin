@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/SoftObjectPtr.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 use std::os::raw::c_void;
 
 #[repr(C)]

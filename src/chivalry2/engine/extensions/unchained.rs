@@ -3,7 +3,7 @@
 
 use std::os::raw::c_void;
 
-use crate::{game::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr}, ue::{FField, FProperty, FString, TArray, TMap, TSet, UClass, UObject, UStruct}};
+use crate::chivalry2::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr, FField, FProperty, FString, TArray, TMap, TSet, UClass, UObject, UStruct};
 
 #[repr(C)]
 pub struct DA_ModMarker_C {
@@ -61,7 +61,7 @@ struct V2Field {
 /// read safely, and a note to log when the result deserves attention.
 fn pick_v2_offset(
     field: &V2Field,
-    found: Option<&crate::ue::FoundProperty>,
+    found: Option<&crate::chivalry2::engine::FoundProperty>,
     properties_size: usize,
     dump_size: usize,
 ) -> Result<(usize, Option<String>), String> {
@@ -104,7 +104,7 @@ unsafe fn resolve_marker_field(
     field: V2Field,
 ) -> Result<usize, String> {
     let properties_size = (*class).ustruct.properties_size.max(0) as usize;
-    let found = crate::ue::find_property(class, field.name);
+    let found = crate::chivalry2::engine::find_property(class, field.name);
     let (offset, note) = pick_v2_offset(&field, found.as_ref(), properties_size, dump_size)?;
     if let Some(note) = note {
         crate::swarn!("{}: {}", marker_name, note);
@@ -230,7 +230,7 @@ pub struct MapMarkerRow {
 }
 
 /// Property field by name on `start` or its supers, as the raw `FField` pointer
-/// (unlike [`crate::ue::find_property`], which returns only offset + type name).
+/// (unlike [`crate::chivalry2::engine::find_property`], which returns only offset + type name).
 ///
 /// # Safety
 /// `start` must be null or a live `UStruct` (a `UClass` cast to `UStruct`).
@@ -313,7 +313,7 @@ impl MapMarkerOffsets {
             return Err("marker has no class".into());
         }
         // DefaultLoadingScreen (soft Texture2D), required.
-        let dls = crate::ue::find_property(class, "DefaultLoadingScreen")
+        let dls = crate::chivalry2::engine::find_property(class, "DefaultLoadingScreen")
             .ok_or_else(|| "DefaultLoadingScreen not found".to_string())?;
         if dls.type_name != "SoftObjectProperty" {
             return Err(format!("DefaultLoadingScreen is a {}, expected SoftObjectProperty", dls.type_name));
@@ -481,7 +481,7 @@ pub struct UModLoaderSettings_C {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ue::FoundProperty;
+    use crate::chivalry2::engine::FoundProperty;
 
     const MOD_ID: V2Field = V2Field { name: "ModId", type_name: "StrProperty", dump_offset: 0x30 };
 

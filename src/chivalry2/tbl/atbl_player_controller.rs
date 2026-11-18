@@ -2,7 +2,7 @@
 
 // Methods to enable customization / loadout on custom servers
 
-use crate::game::fownership_response::FOwnershipResponse;
+use crate::chivalry2::tbl::fownership_response::FOwnershipResponse;
 
 define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, {
     EGS: ["40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD"], // EGS
@@ -107,13 +107,8 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
 
 use std::os::raw::c_void;
 
-use crate::{
-    game::chivalry2::ATBLPlayerState,
-    ue::{
-        FPrimaryAssetId, TSubclassOfAInventoryItem, TSubclassOfATBLCharacter,
-        TSubclassOfULoadoutSelection,
-    },
-};
+use crate::chivalry2::tbl::ATBLPlayerState;
+use crate::chivalry2::engine::{FPrimaryAssetId, TSubclassOfAInventoryItem, TSubclassOfATBLCharacter, TSubclassOfULoadoutSelection};
 mod layout;
 mod broadcast_display;
 pub use layout::*;

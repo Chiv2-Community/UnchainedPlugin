@@ -3,7 +3,8 @@
 //! Profile override policy for UObject::LoadConfig.
 use std::cell::Cell;
 
-use crate::{game::chivalry2::ATBLGameMode, tools::hook_globals::globals};
+use crate::chivalry2::tbl::ATBLGameMode;
+use crate::tools::hook_globals::globals;
 
 // Lowercased, normalized form of /Game/Mods/AgMods/ for case-insensitive matching.
 const MOD_ROOT_LOWER: &str = "/game/mods/agmods/";
@@ -120,7 +121,7 @@ pub fn current_map_rotation_folder_name() -> Option<String> {
     // We strip the full asset path down to the map's leaf name so that the override directory can be
     // keyed by a readable map identifier like TDM_QuarryKP.
     if let Some(world) = globals().world() {
-        let map_name = crate::ue::engine::uworld::get_current_map_name(world)?;
+        let map_name = crate::chivalry2::engine::engine::uworld::get_current_map_name(world)?;
         let last = map_name.rsplit('/').next().unwrap_or(&map_name);
         let cleaned = last.trim_matches(['/', '\\']);
         if !cleaned.is_empty() {

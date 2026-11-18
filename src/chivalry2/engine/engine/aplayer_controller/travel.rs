@@ -1,9 +1,10 @@
 //! UE 4.25-plus: [APlayerController](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerController.h).
 
-use crate::{
-    tools::hook_globals::globals,
-    ue::{APlayerController, FGuid, FString},
-};
+// Preserve the existing reverse-engineered trampoline signature.
+#![allow(c_void_returns)]
+
+use crate::tools::hook_globals::globals;
+use crate::chivalry2::engine::{APlayerController, FGuid, FString};
 use std::ffi::c_void;
 
 define_pattern_resolver!(

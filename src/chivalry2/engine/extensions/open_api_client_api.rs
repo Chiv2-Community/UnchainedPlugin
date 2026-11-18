@@ -3,7 +3,7 @@
 
 // Overrides for PlayFab (tbio) requests
 
-use crate::ue::FString;
+use crate::chivalry2::engine::FString;
 use patternsleuth::{resolvers::unreal::util, MemoryTrait};
 
 /// Generic Class for Get*Post requests
@@ -36,10 +36,10 @@ macro_rules! CREATE_REQUEST_HOOK {
             #[bind_resolved_func_detour($name)]
             unsafe fn [<$name _detour>](
                 self: *mut Self,
-                a2: *mut crate::ue::TSharedPtrIHttpRequest,
+                a2: *mut crate::chivalry2::engine::TSharedPtrIHttpRequest,
                 request: *mut GenericRequest,
                 a4: *mut std::os::raw::c_void
-            ) -> *mut crate::ue::TSharedPtrIHttpRequest {
+            ) -> *mut crate::chivalry2::engine::TSharedPtrIHttpRequest {
                 let this_ptr = self;
                 let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
                     (Some(t), Some(r)) => (t, r),
@@ -49,8 +49,8 @@ macro_rules! CREATE_REQUEST_HOOK {
                 let url = $crate::features::server_browser::urls::tbio_base_url(
                     &$crate::tools::hook_globals::cli_args().server_browser_backend,
                 );
-                let backend_url = $crate::ue::FString::from(url.as_str());
-                let empty_token = $crate::ue::FString::from("");
+                let backend_url = $crate::chivalry2::engine::FString::from(url.as_str());
+                let empty_token = $crate::chivalry2::engine::FString::from("");
                 let old_url = std::mem::replace(&mut this.url_base, backend_url);
                 let old_token = std::mem::replace(&mut req.token, empty_token);
                 let result = std::panic::catch_unwind(|| {
@@ -79,10 +79,10 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
             #[bind_resolved_func_detour($name)]
             unsafe fn [<$name _detour>](
                 self: *mut Self,
-                a2: *mut crate::ue::TSharedPtrIHttpRequest,
+                a2: *mut crate::chivalry2::engine::TSharedPtrIHttpRequest,
                 request: *mut GenericRequest,
                 a4: *mut std::os::raw::c_void,
-            ) -> *mut crate::ue::TSharedPtrIHttpRequest {
+            ) -> *mut crate::chivalry2::engine::TSharedPtrIHttpRequest {
                 let this_ptr = self;
                 if this_ptr.is_null() || request.is_null() {
                     $crate::serror!("Dummy request had null pointers");

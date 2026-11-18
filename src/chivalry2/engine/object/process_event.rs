@@ -6,10 +6,8 @@ use std::{
     os::raw::c_void,
 };
 
-use crate::{
-    tools::hook_globals::cli_args,
-    ue::{UFunction, UObject, UStruct},
-};
+use crate::tools::hook_globals::cli_args;
+use crate::chivalry2::engine::{UFunction, UObject, UStruct};
 
 // PROCESSEVENT FILTERING
 

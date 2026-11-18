@@ -4,14 +4,14 @@ use std::sync::Mutex;
 #[cfg(feature="mod_management")]
 use std::sync::Arc;
 use std::{env, panic};
-use crate::game::engine::UWorld;
+use crate::chivalry2::engine::UWorld;
 
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
-use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs, ue};
-use ue::object_array::FUObjectArray;
+use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs};
+use crate::chivalry2::engine::object_array::FUObjectArray;
 use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{
     UObjectBaseUtilityGetPathName,
@@ -152,14 +152,14 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
-    pub fn gmalloc(&self) -> ue::FMallocHandle {
-        ue::gmalloc()
+    pub fn gmalloc(&self) -> crate::chivalry2::engine::FMallocHandle {
+        crate::chivalry2::engine::gmalloc()
     }
 
-    resolution_fn!(fframe_step, fframe_step, ue::FnFFrameStep);
-    resolution_fn!(fframe_step_explicit_property, fframe_step_explicit_property, ue::FnFFrameStepExplicitProperty);
-    resolution_fn!(fname_to_string, fnametostring, ue::FnFNameToString);
-    resolution_fn!(uobject_base_utility_get_path_name, uobject_base_utility_get_path_name, ue::FnUObjectBaseUtilityGetPathName);
+    resolution_fn!(fframe_step, fframe_step, crate::chivalry2::engine::FnFFrameStep);
+    resolution_fn!(fframe_step_explicit_property, fframe_step_explicit_property, crate::chivalry2::engine::FnFFrameStepExplicitProperty);
+    resolution_fn!(fname_to_string, fnametostring, crate::chivalry2::engine::FnFNameToString);
+    resolution_fn!(uobject_base_utility_get_path_name, uobject_base_utility_get_path_name, crate::chivalry2::engine::FnUObjectBaseUtilityGetPathName);
 
     pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
         self.guobject_array.lock()
@@ -226,7 +226,7 @@ pub fn init_globals() -> Result<(), String> {
     };
 
     let guobject_array: &'static FUObjectArray =
-        unsafe { &*ue::object_array::native_guobject_array() };
+        unsafe { &*crate::chivalry2::engine::object_array::native_guobject_array() };
 
     let globals_instance = Globals {
         // Wrap the reference in our Sync-promising struct
@@ -260,7 +260,7 @@ mod tests {
         let _: fn(&Globals, *mut UWorld) = Globals::set_world;
         let _: fn(&Globals) -> &RwLock<SyncPtr<UWorld>> = |globals| &globals.world;
         let _: fn(*mut UWorld) -> Option<String> =
-            crate::ue::engine::uworld::get_current_map_name;
+            crate::chivalry2::engine::engine::uworld::get_current_map_name;
     }
 
     #[test]

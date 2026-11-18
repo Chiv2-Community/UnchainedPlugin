@@ -1,8 +1,8 @@
 //! UE 4.25-plus: [UWorld](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/World.h).
 
-use crate::game::chivalry2::{AActor, ATBLGameState};
-use crate::game::engine::{ENetMode, FActorSpawnParameters, FRotator, UNetDriver};
-use crate::ue::{FString, FVector, TArray, UClass, UObject};
+use crate::chivalry2::engine::AActor;
+use crate::chivalry2::tbl::ATBLGameState;
+use crate::chivalry2::engine::{ENetMode, FActorSpawnParameters, FRotator, UNetDriver, FString, FVector, TArray, UClass, UObject};
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
@@ -10,7 +10,7 @@ pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
     if world.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
         return None;
     }
-    let mut name = crate::ue::FString::default();
+    let mut name = crate::chivalry2::engine::FString::default();
     unsafe { world.get_map_name(&mut name); }
     name.copy_to_string().ok()
 }
@@ -31,7 +31,7 @@ define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
 
 // SAFETY: This supported native layout has its UObject prefix at offset zero.
-unsafe impl crate::ue::UObjectType for UWorld {
+unsafe impl crate::chivalry2::engine::UObjectType for UWorld {
     const CLASS_NAME: &'static str = "World";
 }
 

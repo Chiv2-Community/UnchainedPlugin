@@ -1,7 +1,7 @@
 //! UE 4.25-plus: [FName](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h).
 
-use crate::{globals, ue::FString};
-use crate::ue::UEHash;
+use crate::globals;
+use crate::chivalry2::engine::{FString, UEHash};
 use unchained_macros::bind_resolved_func;
 use widestring::U16CString;
 
@@ -30,7 +30,7 @@ impl FName {
     /// Self must be writable native FName storage, text NUL-terminated UTF-16,
     /// and the engine name table initialized.
     #[bind_resolved_func(self::FNameCtorWchar)]
-    pub unsafe fn construct_wchar(self: *mut Self, text: *const crate::ue::TCHAR, find_type: EFindName) -> *mut Self {}
+    pub unsafe fn construct_wchar(self: *mut Self, text: *const crate::chivalry2::engine::TCHAR, find_type: EFindName) -> *mut Self {}
 
     pub fn with_type(path: &str, find_type: EFindName) -> Self {
         let wide_path = U16CString::from_str(path).unwrap();

@@ -1,10 +1,10 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Pawn.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 use std::os::raw::c_void;
 
-unsafe impl crate::ue::UObjectType for APawn {
+unsafe impl crate::chivalry2::engine::UObjectType for APawn {
     const CLASS_NAME: &'static str = "Pawn";
 }
 

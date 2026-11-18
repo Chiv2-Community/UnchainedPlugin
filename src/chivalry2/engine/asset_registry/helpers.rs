@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/IAssetRegistry.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 // Helper functions
 
@@ -87,7 +87,7 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
     let size = i64::try_from(bytes.len())
         .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
 
-    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
+    let registry = crate::chivalry2::engine::IAssetRegistry::asset_registry_interface()?;
 
     crate::resolvers::require_function_bindings(&[
         "FLargeMemoryReaderCtor",
@@ -114,9 +114,9 @@ pub unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), Str
 }
 
 pub unsafe fn get_assets_by_class(class_name: &str) -> Result<TArray<FAssetData>, String> {
-    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
+    let registry = crate::chivalry2::engine::IAssetRegistry::asset_registry_interface()?;
 
-    let name_res = FName::with_type(class_name, crate::ue::EFindName::Find);
+    let name_res = FName::with_type(class_name, crate::chivalry2::engine::EFindName::Find);
 
     let mut asset_data = TArray::<FAssetData>::default();
     if registry.get_assets_by_class(name_res, &mut asset_data, true) {
@@ -131,9 +131,9 @@ pub unsafe fn get_assets_by_path(
     package_path: &str,
     recursive: bool,
 ) -> Result<TArray<FAssetData>, String> {
-    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
+    let registry = crate::chivalry2::engine::IAssetRegistry::asset_registry_interface()?;
 
-    let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
+    let name_res = FName::with_type(package_path, crate::chivalry2::engine::EFindName::Find);
 
     let mut asset_data = TArray::<FAssetData>::default();
     // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
@@ -147,9 +147,9 @@ pub unsafe fn get_assets_by_path(
 /// Calls the registry's public files-only scan wrapper (skips the
 /// Intermediates `AssetRegistryCache` write). Must run on the game thread.
 pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
-    let registry = crate::ue::IAssetRegistry::asset_registry_interface()?;
+    let registry = crate::chivalry2::engine::IAssetRegistry::asset_registry_interface()?;
 
-    let allocator = crate::ue::gmalloc();
+    let allocator = crate::chivalry2::engine::gmalloc();
 
     let mut files_array = TArray::<FString>::default();
     for file in files {

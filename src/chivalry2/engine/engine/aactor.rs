@@ -8,12 +8,12 @@ use crate::tools::hook_globals::cli_args;
 #[derive(Debug)]
 pub struct AActor {
     #[inherit]
-    pub base: crate::ue::UObject,
+    pub base: crate::chivalry2::engine::UObject,
     _private: [u8; 0x230],
 }
 
 // SAFETY: This repr(C) layout models the native class prefix at offset zero.
-unsafe impl crate::ue::UObjectType for AActor {
+unsafe impl crate::chivalry2::engine::UObjectType for AActor {
     const CLASS_NAME: &'static str = "Actor";
 }
 

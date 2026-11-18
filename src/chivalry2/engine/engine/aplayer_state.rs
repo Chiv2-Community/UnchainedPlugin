@@ -1,9 +1,9 @@
 //! UE 4.25-plus: [APlayerState](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerState.h).
 
-use crate::game::chivalry2::{APawn, FUniqueNetIdRepl};
+use crate::chivalry2::engine::{APawn, FUniqueNetIdRepl};
 mod flags;
 pub use flags::PlayerFlags;
-use crate::ue::{FString, UObjectType};
+use crate::chivalry2::engine::{FString, UObjectType};
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
@@ -17,7 +17,7 @@ unsafe impl UObjectType for APlayerState { const CLASS_NAME: &'static str = "Pla
 #[rust_ctables::cpp_struct]
 pub struct APlayerState {
     #[inherit]
-    pub base: crate::game::chivalry2::AInfo,
+    pub base: crate::chivalry2::engine::AInfo,
 
     pub score: f32,                     // 0x0258
     pub player_id: i32,                 // 0x025C

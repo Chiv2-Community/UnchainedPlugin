@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [UGameplayStatics](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Kismet/GameplayStatics.h).
 
-use crate::ue::{TArray, UClass, UObject, USaveGame, FString};
+use crate::chivalry2::engine::{TArray, UClass, UObject, USaveGame, FString};
 use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
@@ -27,7 +27,7 @@ define_pattern_resolver!(UGameplay_IsDedicatedServer, [
 impl UGameplayStatics {
     #[bind_resolved_func_detour(UGameplay_IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
     pub(crate) unsafe fn is_dedicated_server_detour(context: u64) -> bool {
-        use crate::game::engine::ENetMode;
+        use crate::chivalry2::engine::ENetMode;
         if let Some(world) = crate::tools::hook_globals::globals().world() {
             let mode = unsafe { world.internal_get_net_mode() };
             if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {

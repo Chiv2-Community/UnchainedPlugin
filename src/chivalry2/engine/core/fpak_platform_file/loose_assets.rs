@@ -2,7 +2,7 @@
 
 // Allows loading loose assets instead of pak files
 
-use crate::ue::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR};
+use crate::chivalry2::engine::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR};
 use widestring::U16CStr;
 use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
 

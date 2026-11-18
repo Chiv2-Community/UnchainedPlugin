@@ -1,8 +1,8 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
-use crate::game::*;
+use crate::chivalry2::engine::*;
+use crate::chivalry2::tbl::*;
 use std::os::raw::c_void;
 
 /// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x160`).

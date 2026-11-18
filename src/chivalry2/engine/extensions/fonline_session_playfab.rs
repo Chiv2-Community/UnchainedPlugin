@@ -1,7 +1,8 @@
 //! ArgonSDK main: [OnlineSubsystemPlayFab module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab).
 //! The SDK omits the private FOnlineSessionPlayFab declaration.
 
-use crate::{tools::hook_globals::cli_args, ue::GetCurrentGamesPostResponse};
+use crate::tools::hook_globals::cli_args;
+use crate::chivalry2::engine::GetCurrentGamesPostResponse;
 use std::cell::Cell;
 
 #[repr(C)]

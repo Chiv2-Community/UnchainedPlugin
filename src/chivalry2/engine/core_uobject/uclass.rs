@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [UClass](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h).
 
-use crate::ue::{FName, TArray, UObject, UStruct};
+use crate::chivalry2::engine::{FName, TArray, UObject, UStruct};
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
@@ -11,7 +11,7 @@ define_pattern_resolver!(GetConfigName, [
 #[unchained_macros::runtime_bindings]
 impl UClass {
     #[bind_resolved_func_detour(GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
-    pub(crate) unsafe fn get_config_name_detour(self: *mut Self, storage: *mut crate::ue::FString) -> *mut crate::ue::FString {
+    pub(crate) unsafe fn get_config_name_detour(self: *mut Self, storage: *mut crate::chivalry2::engine::FString) -> *mut crate::chivalry2::engine::FString {
         unsafe { self.get_config_name(storage) }
     }
 }

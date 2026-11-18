@@ -1,6 +1,10 @@
 //! ArgonSDK main: [UTBLSystemLibrary](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLSystemLibrary.h).
 
-use crate::ue::{ATBLGameMode, UObject};
+// Preserve the existing reverse-engineered console-command trampoline signature.
+#![allow(c_void_returns)]
+
+use crate::chivalry2::tbl::ATBLGameMode;
+use crate::chivalry2::engine::UObject;
 use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(AuthenticateConsoleCommandCaller, [
@@ -14,7 +18,7 @@ define_pattern_resolver!(GetGameInfo, {
 });
 
 #[unchained_macros::bind_resolved_func_detour(GetGameInfo)]
-unsafe fn get_game_info_detour(storage: *mut crate::ue::FString, world: *mut crate::ue::UWorld) -> *mut crate::ue::FString {
+unsafe fn get_game_info_detour(storage: *mut crate::chivalry2::engine::FString, world: *mut crate::chivalry2::engine::UWorld) -> *mut crate::chivalry2::engine::FString {
     let result = unsafe { get_game_info(storage, world) };
     sinfo!("{}", unsafe { (&*result).to_string() });
     result
@@ -26,7 +30,7 @@ define_pattern_resolver!(ExecuteConsoleCommand, [
 ]);
 
 #[unchained_macros::bind_resolved_func_detour(ExecuteConsoleCommand)]
-pub(crate) unsafe fn execute_console_command_detour(command: *mut crate::ue::FString) -> std::ffi::c_void {
+pub(crate) unsafe fn execute_console_command_detour(command: *mut crate::chivalry2::engine::FString) -> std::ffi::c_void {
     sinfo!("Executing: {}", unsafe { &*command });
     unsafe { execute_console_command(command) }
 }

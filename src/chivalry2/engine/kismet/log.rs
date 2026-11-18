@@ -1,7 +1,7 @@
 //! UE 4.25-plus: [FFrame::KismetExecutionMessage](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/ScriptCore.cpp).
 
 use super::FFrame;
-use crate::ue::{FName, UObject, TCHAR};
+use crate::chivalry2::engine::{FName, UObject, TCHAR};
 
 static LIST_OF_SHAME: [&str; 4] = [
     "/Game/Maps/Frontend/CIT/FE_Citadel_Atmospherics.FE_Citadel_Atmospherics_C",

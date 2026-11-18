@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [FString](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/UnrealString.h).
 
-use crate::ue::TArray;
+use crate::chivalry2::engine::TArray;
 mod native_hooks;
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows::Win32::System::Threading::GetCurrentProcess;
@@ -69,7 +69,7 @@ impl TArray<TCHAR> {
         struct Header { data: *const TCHAR, num: i32, max: i32 }
         const MAX_CODE_UNITS: i32 = 1 << 20;
 
-        let header = crate::ue::try_read(self as *const Self as *const Header)
+        let header = crate::chivalry2::engine::try_read(self as *const Self as *const Header)
             .ok_or(FStringCopyError::MemoryReadFailed)?;
         if header.num == 0 || header.data.is_null() {
             return Err(FStringCopyError::NullOrEmptyBuffer);

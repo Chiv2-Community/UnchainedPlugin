@@ -194,13 +194,13 @@ mod binding_tests {
 
     #[test]
     fn borrowed_binding_signatures_preserve_return_ownership() {
-        use crate::ue::{APlayerState, FString, FText, AssetRegistryScriptInterface, UWorld};
+        use crate::chivalry2::engine::{APlayerState, FString, FText, AssetRegistryScriptInterface, UWorld};
         let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::to_native_string;
         let _: for<'a> unsafe fn(*const APlayerState, &'a mut FString) -> &'a mut FString =
             APlayerState::get_player_name_native;
         let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::get_map_name;
         let _: for<'a> unsafe fn(&'a mut AssetRegistryScriptInterface) -> &'a mut AssetRegistryScriptInterface =
-            crate::ue::UAssetRegistryHelpers::get_asset_registry;
+            crate::chivalry2::engine::UAssetRegistryHelpers::get_asset_registry;
     }
 
     #[test]

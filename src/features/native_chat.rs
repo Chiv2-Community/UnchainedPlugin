@@ -1,8 +1,8 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/EChatType.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
-use crate::game::*;
+use crate::chivalry2::engine::*;
+use crate::chivalry2::tbl::*;
 use tokio_util::sync::CancellationToken;
 
 // Helper functions
@@ -18,10 +18,10 @@ pub(crate) fn send_ingame_message_with_world(
     world_accessor: UWorldAccessor,
     cancellation: Option<CancellationToken>,
 ) {
-    use crate::game::UTBLSystemLibrary;
+    use crate::chivalry2::tbl::UTBLSystemLibrary;
 
     // Cancellation, world resolution and native work must share one game-thread job.
-    crate::ue::engine::ugame_engine::run_on_game_thread(move || {
+    crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread(move || {
         if cancellation
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
@@ -43,7 +43,7 @@ pub(crate) fn send_ingame_message_with_world(
             return;
         }
         let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
-        let text = crate::ue::InvariantText::new(&message);
+        let text = crate::chivalry2::engine::InvariantText::new(&message);
         unsafe {
             game_mode.broadcast_localized_chat(text.as_ptr(), chat_type_actual);
         }

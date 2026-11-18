@@ -40,7 +40,7 @@ pub unsafe fn append_mod_asset_registry_on_game_thread(
     bytes: &[u8],
 ) -> Result<(), ModAssetRegistryMergeError> {
     validate_payload(bytes)?;
-    crate::game::engine::serialize_mod_asset_registry_bytes(bytes)
+    crate::chivalry2::engine::serialize_mod_asset_registry_bytes(bytes)
         .map_err(ModAssetRegistryMergeError::Engine)
 }
 

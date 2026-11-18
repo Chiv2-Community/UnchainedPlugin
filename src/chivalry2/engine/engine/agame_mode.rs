@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [AGameMode](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/GameMode.h).
 
-use crate::ue::FName;
+use crate::chivalry2::engine::FName;
 
 /// Opaque engine-owned game mode; no Rust layout is assumed.
 #[repr(C)]

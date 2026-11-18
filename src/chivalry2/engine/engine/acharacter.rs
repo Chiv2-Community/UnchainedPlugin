@@ -1,11 +1,11 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Character.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 use bitflags::bitflags;
 use std::os::raw::c_void;
 
-unsafe impl crate::ue::UObjectType for ACharacter {
+unsafe impl crate::chivalry2::engine::UObjectType for ACharacter {
     const CLASS_NAME: &'static str = "Character";
 }
 

@@ -1,9 +1,8 @@
 //! Combat event snapshots. Resolve native objects on the game thread.
 
-use crate::game::chivalry2::{
-    ACharacter, AController, APlayerState, ATBLCharacter, FDamageTakenEvent, FDeathDamageTakenEvent,
-};
-use crate::ue::UObject;
+use crate::chivalry2::engine::{ACharacter, AController, APlayerState};
+use crate::chivalry2::tbl::{ATBLCharacter, FDamageTakenEvent, FDeathDamageTakenEvent};
+use crate::chivalry2::engine::UObject;
 use std::fmt;
 
 /// Combat participant's display name and bot status.

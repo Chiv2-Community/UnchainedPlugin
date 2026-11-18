@@ -5,12 +5,12 @@ use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
 #[cfg(feature = "server_registration")]
 use crate::features::server_browser::http;
-use crate::game::chivalry2::{AController, ATBLGameMode, FUniqueNetIdRepl, PlayerFlags};
+use crate::chivalry2::engine::AController;
+use crate::chivalry2::tbl::ATBLGameMode;
+use crate::chivalry2::engine::{FUniqueNetIdRepl, PlayerFlags};
 use crate::tools::hook_globals::globals;
-use crate::{
-    tools::hook_globals::cli_args,
-    ue::{FString, FStringCopyError},
-};
+use crate::tools::hook_globals::cli_args;
+use crate::chivalry2::engine::{FString, FStringCopyError};
 
 /* seems to be broken, or just incorrect.
        Looks right in the binary, but keeps matching the wrong func

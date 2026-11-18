@@ -13,7 +13,7 @@
 //! goes through. (`GetMountedPakFilenames` exists but is `FORCEINLINE`, so it has
 //! no standalone symbol to resolve.)
 
-use crate::ue::TCHAR;
+use crate::chivalry2::engine::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
 

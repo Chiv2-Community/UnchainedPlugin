@@ -1,10 +1,10 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Controller.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 // SAFETY: These repr(C) layouts model the supported native class prefixes at offset zero.
-unsafe impl crate::ue::UObjectType for AController {
+unsafe impl crate::chivalry2::engine::UObjectType for AController {
     const CLASS_NAME: &'static str = "Controller";
 }
 

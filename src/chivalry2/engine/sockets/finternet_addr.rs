@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Sockets/Public/IPAddress.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 /// Partial socket address vtable. ToString is slot 15 in the supported builds.
 #[rust_ctables::cpp_struct]

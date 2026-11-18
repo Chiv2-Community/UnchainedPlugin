@@ -7,12 +7,13 @@ pub(crate) mod client_message {
     };
     use crate::features::events::EVENT_SYSTEM;
     use crate::tools::command_parser::parse_command;
-    use crate::ue::{APlayerController, UObjectType};
-    use crate::{
-        events::models::{GameChatMessage, GameEvent, NativeChat},
-        game::chivalry2::{AActor, AController, ATBLPlayerState, EChatType},
-        ue::{FName, FString},
-    };
+    use crate::chivalry2::engine::{APlayerController, UObjectType};
+    use crate::events::models::GameChatMessage;
+    use crate::events::models::GameEvent;
+    use crate::events::models::NativeChat;
+    use crate::chivalry2::engine::{AActor, AController};
+    use crate::chivalry2::tbl::{ATBLPlayerState, EChatType};
+    use crate::chivalry2::engine::{FName, FString};
     use regex::Regex;
 
     fn has_authority() -> bool {
@@ -51,7 +52,7 @@ pub(crate) mod client_message {
     /// # Safety
     /// UObjectType::from_ptr's game-thread, lifetime and layout requirements apply.
     pub(crate) unsafe fn actor_player_state(sender: &AActor) -> Option<&ATBLPlayerState> {
-        use crate::game::chivalry2::APawn;
+        use crate::chivalry2::engine::APawn;
         // BroadcastChat accepts either a pawn or a controller, not a PlayerState.
         unsafe {
             let object = &sender.base;

@@ -1,8 +1,7 @@
 use crate::events::bus::Subscriber;
 use crate::events::models::{ChatSource, ChatType, GameChatMessage, GameEvent, NativeChat};
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
-use crate::game;
-use crate::game::chivalry2::EChatType;
+use crate::chivalry2::tbl::EChatType;
 use async_trait::async_trait;
 use futures::future::join_all;
 use serenity::all::CreateMessage;
@@ -56,7 +55,7 @@ impl ChatSink for GameChatSink {
         };
 
         let message = format!("[{}] {}: {}", chat.chat_source, chat.sender, chat.message);
-        game::chivalry2::send_ingame_message(message, game_chat_type);
+        crate::features::native_chat::send_ingame_message(message, game_chat_type);
     }
 }
 
@@ -134,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn logging_sink_preserves_raw_chat_and_source_metadata() {
-        use crate::game::chivalry2::EFaction;
+        use crate::chivalry2::tbl::EFaction;
         use log4rs::encode::{Encode, writer::simple::SimpleWriter};
         use std::sync::Mutex as StdMutex;
         struct Capture(StdMutex<Vec<serde_json::Value>>);

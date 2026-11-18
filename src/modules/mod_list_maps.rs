@@ -18,7 +18,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
     // listen server / in-game chat, not just a dedicated server console.
     fn required_source(&self) -> Option<CommandSource> { None }
     async fn execute(&self, _args: ListModMapsArgs, _command: &CommandRequest) {
-        use crate::ue::engine::ugame_engine::run_on_game_thread;
+        use crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread;
         // Await the game-thread result with a tokio oneshot instead of a blocking
         // mpsc recv: execute() runs on a tokio worker, and a blocking recv() pins
         // that worker (an anti-pattern on a tokio runtime).
@@ -26,7 +26,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
         sinfo!("Querying the Asset Registry for /Game/Mods on the game thread");
 
         run_on_game_thread(move || {
-            let outcome = match unsafe { crate::game::engine::get_assets_by_path("/Game/Mods", true) } {
+            let outcome = match unsafe { crate::chivalry2::engine::get_assets_by_path("/Game/Mods", true) } {
                 Ok(assets) => {
                     let mut lines: Vec<String> = Vec::new();
                     let mut map_count = 0usize;

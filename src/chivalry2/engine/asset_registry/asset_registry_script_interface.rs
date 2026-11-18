@@ -1,7 +1,7 @@
 //! UE 4.25-plus: [TScriptInterface](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/ScriptInterface.h),
 //! [UAssetRegistryHelpers](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/AssetRegistryHelpers.h).
 
-use crate::ue::UObject;
+use crate::chivalry2::engine::UObject;
 use super::IAssetRegistry;
 
 /// Native TScriptInterface<IAssetRegistry> return storage; owns neither pointer.

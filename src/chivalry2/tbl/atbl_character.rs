@@ -3,7 +3,7 @@
 use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;
-use crate::game::chivalry2::{FDamageTakenEvent, FDeathDamageTakenEvent};
+use crate::chivalry2::tbl::{FDamageTakenEvent, FDeathDamageTakenEvent};
 mod layout;
 pub use layout::*;
 

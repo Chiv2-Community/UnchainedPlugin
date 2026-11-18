@@ -1,9 +1,9 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Info.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
-unsafe impl crate::ue::UObjectType for AInfo {
+unsafe impl crate::chivalry2::engine::UObjectType for AInfo {
     const CLASS_NAME: &'static str = "Info";
 }
 

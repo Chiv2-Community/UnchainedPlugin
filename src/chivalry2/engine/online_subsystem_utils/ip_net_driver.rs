@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystemUtils/Source/OnlineSubsystemUtils/Classes/IpNetDriver.h>.
 
 #![allow(non_snake_case)]
-use crate::engine::*;
+use crate::chivalry2::engine::*;
 
 #[repr(C)]
 pub struct UIpNetDriver {
@@ -11,6 +11,6 @@ pub struct UIpNetDriver {
 }
 
 // SAFETY: These supported native layouts have their UObject prefix at offset zero.
-unsafe impl crate::ue::UObjectType for UIpNetDriver {
+unsafe impl crate::chivalry2::engine::UObjectType for UIpNetDriver {
     const CLASS_NAME: &'static str = "IpNetDriver";
 }

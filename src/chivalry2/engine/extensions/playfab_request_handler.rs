@@ -3,7 +3,7 @@
 
 use crate::features::server_browser::urls::playfab_matchmake_url;
 use crate::tools::hook_globals::cli_args;
-use crate::ue::{FString, TSharedRefIHttpRequest};
+use crate::chivalry2::engine::{FString, TSharedRefIHttpRequest};
 mod backend_patch;
 
 define_pattern_resolver!(SendRequest, [

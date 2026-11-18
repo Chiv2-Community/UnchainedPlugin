@@ -1,6 +1,7 @@
 //! UE 4.25-plus: [UGameEngine](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/GameEngine.h).
 
-use crate::{commands::NATIVE_COMMAND_QUEUE, ue::FString};
+use crate::commands::NATIVE_COMMAND_QUEUE;
+use crate::chivalry2::engine::FString;
 use std::sync::{Mutex, Once};
 use windows::Win32::System::Memory::IsBadReadPtr;
 
@@ -60,7 +61,7 @@ impl UGameEngine {
             for command in commands.drain(..) {
                 let mut command = FString::from(command.as_str());
                 let _ = std::panic::catch_unwind(move || unsafe {
-                    crate::game::utbl_system_library::execute_console_command(&mut command)
+                    crate::chivalry2::tbl::utbl_system_library::execute_console_command(&mut command)
                 });
             }
         }

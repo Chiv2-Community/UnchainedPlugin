@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [FAssetData](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/AssetData.h).
 
-use crate::ue::FName;
+use crate::chivalry2::engine::FName;
 use std::fmt;
 
 #[repr(C)]

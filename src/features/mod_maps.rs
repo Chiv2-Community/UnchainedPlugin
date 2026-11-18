@@ -453,7 +453,7 @@ pub fn auto_register_all_assets() {
     log_registered_markers();
     // Reading the map markers loads their assets, so it runs as its own game
     // thread job on a later tick rather than inside the registration call.
-    crate::ue::engine::ugame_engine::run_on_game_thread(|| {
+    crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread(|| {
         unsafe { crate::features::map_markers::scan_map_markers() };
     });
 }
@@ -468,7 +468,7 @@ fn log_registered_markers() {
         .iter()
         .map(|class_name| {
             // A failed query means the registry has no asset of that class.
-            let count = unsafe { crate::game::engine::get_assets_by_class(class_name) }
+            let count = unsafe { crate::chivalry2::engine::get_assets_by_class(class_name) }
                 .map(|assets| assets.len())
                 .unwrap_or(0);
             format!("{count} {class_name}")
@@ -530,7 +530,7 @@ pub fn register_filtered_assets_sync() {
     let chunk = crate::cli_args().mod_map_batch;
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
-        if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
+        if let Err(e) = unsafe { crate::chivalry2::engine::scan_files_synchronous(batch) } {
             serror!("Synchronous filtered batch {} failed: {}", i, e);
             return;
         }
@@ -593,7 +593,7 @@ fn filter_mounted_paks(mounted: &[String]) -> Vec<PathBuf> {
 /// paks. Falls back to a `Content/Paks` scan if no mounts were captured (e.g. the
 /// `Mount` resolver isn't populated yet).
 fn discovery_pak_paths() -> Vec<PathBuf> {
-    let mounted = crate::ue::core::fpak_platform_file::mounted_pak_filenames();
+    let mounted = crate::chivalry2::engine::core::fpak_platform_file::mounted_pak_filenames();
     let fallback = || {
         default_paks_dir().and_then(|d| list_pak_files(&d).ok()).unwrap_or_default()
     };

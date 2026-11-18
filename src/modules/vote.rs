@@ -138,7 +138,7 @@ pub trait PlayerCountProvider: Send + Sync {
 pub struct GlobalPlayerCountProvider;
 impl PlayerCountProvider for GlobalPlayerCountProvider {
     fn get_player_count(&self) -> usize {
-        crate::game::chivalry2::get_human_player_count()
+        crate::chivalry2::tbl::get_human_player_count()
     }
 }
 
@@ -194,7 +194,7 @@ impl VotingState {
     }
 }
 
-use crate::game::chivalry2::send_ingame_message;
+use crate::features::native_chat::send_ingame_message;
 
 pub type SharedVotingState = Arc<Mutex<VotingState>>;
 

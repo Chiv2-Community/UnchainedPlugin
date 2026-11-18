@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [UAssetRegistryHelpers](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/AssetRegistryHelpers.h).
 
-use crate::ue::AssetRegistryScriptInterface;
+use crate::chivalry2::engine::AssetRegistryScriptInterface;
 use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(UAssetRegistryHelpers__GetAssetRegistry,[

@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [FText](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Internationalization/Text.h).
 
-use crate::ue::{FString, TCHAR};
+use crate::chivalry2::engine::{FString, TCHAR};
 use std::{ffi::c_void, mem::{ManuallyDrop, MaybeUninit}};
 use unchained_macros::bind_resolved_func;
 use binary_bloodhound::BinaryMatcher;

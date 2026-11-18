@@ -1,6 +1,6 @@
 //! UE 4.25-plus: [UObject](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Object.h).
 
-use crate::game::engine::UWorld;
+use crate::chivalry2::engine::UWorld;
 
 use super::UObject;
 
