@@ -30,6 +30,8 @@ required-features = ["container-tests"]
 container-tests = ["dep:testcontainers"]
 # Exercise the CLI field enabled by the corresponding plugin feature.
 move-autonomous-desync = []
+# Recognize the feature gates in the imported registration metadata module.
+server_registration = []
 
 [dependencies]
 testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }

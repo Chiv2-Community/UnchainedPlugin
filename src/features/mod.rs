@@ -1,7 +1,7 @@
 pub use server_browser::server_metadata::Mod;
 
 pub mod rcon;
-pub mod server_browser;
+pub(crate) mod server_browser;
 #[cfg(feature="mod_management")]
 #[macro_use]
 pub mod mod_management;

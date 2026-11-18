@@ -25,7 +25,7 @@ const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
 // Allow the bounded in-flight HTTP request and one DELETE to finish.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(25);
 
-pub async fn shutdown() {
+pub(crate) async fn shutdown() {
     let registration = globals()
         .registration
         .lock()
@@ -43,9 +43,10 @@ pub async fn shutdown() {
 
 /// Manages the background lifecycle of a game server registration.
 #[derive(Debug)]
-pub struct Registration {
+pub(crate) struct Registration {
     shutdown: CancellationToken,
     task: JoinHandle<()>,
+    #[cfg(feature = "mod_management")]
     refresh: Arc<Notify>,
 }
 
@@ -57,7 +58,7 @@ struct MetadataCollector {
 
 impl Registration {
     /// Initializes the registration manager.
-    pub fn new(query_address: SocketAddr, local_ip: Option<&str>) -> Self {
+    pub(crate) fn new(query_address: SocketAddr, local_ip: Option<&str>) -> Self {
         let advertised_local_ip = local_ip
             .filter(|address| !address.is_empty())
             .map(str::to_string);
@@ -79,12 +80,14 @@ impl Registration {
         Self {
             shutdown,
             task,
+            #[cfg(feature = "mod_management")]
             refresh,
         }
     }
 
     /// Refresh A2S metadata; the SDK decides whether an HTTP update is needed.
-    pub fn trigger_update(&self) {
+    #[cfg(feature = "mod_management")]
+    pub(crate) fn trigger_update(&self) {
         self.refresh.notify_one();
     }
 }
