@@ -9,11 +9,6 @@ use std::time::Duration;
 use tokio::runtime::Handle;
 
 // Runtime initialization depends on the Windows plugin globals.
-#[cfg(windows)]
-pub(crate) fn base_url() -> &'static str {
-    &crate::tools::hook_globals::cli_args().server_browser_backend
-}
-
 #[cfg(all(windows, feature = "server_registration"))]
 pub(crate) fn client() -> &'static HttpTransport {
     use crate::tools::hook_globals::cli_args;
@@ -22,8 +17,11 @@ pub(crate) fn client() -> &'static HttpTransport {
     static CLIENT: LazyLock<HttpTransport> = LazyLock::new(|| {
         let args = cli_args();
         let explicit_address = args.local_ip_explicit.then_some(args.local_ip.as_str());
-        transport(base_url(), source_ip(args.use_ipv6, explicit_address))
-            .expect("Failed to construct server-browser client")
+        transport(
+            &args.server_browser_backend,
+            source_ip(args.use_ipv6, explicit_address),
+        )
+        .expect("Failed to construct server-browser client")
     });
     &CLIENT
 }
