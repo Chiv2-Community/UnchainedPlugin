@@ -120,13 +120,17 @@ inventory::collect!(PatchRegistration);
 inventory::collect!(OffsetRegisty);
 
 /// Attach every `LateHookRegistration` (reflection-resolved hooks that need the live UObject
-/// system). Must be called AFTER the engine is ready (see `postinit_rustlib`, which waits on
-/// `ENGINE_READY` before calling this).
+/// system). **Idempotent** — the first call does the work, later calls are no-ops — so it can be
+/// driven from the earliest available trigger (the `FEngineLoop::Init` entry hook) with the
+/// `ENGINE_READY` wait as a fallback, without double-initializing a detour.
 pub fn attach_late_hooks() {
-    for hook in inventory::iter::<LateHookRegistration> {
-        match unsafe { (hook.attach)() } {
-            Ok(()) => crate::sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
-            Err(e) => crate::serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        for hook in inventory::iter::<LateHookRegistration> {
+            match unsafe { (hook.attach)() } {
+                Ok(()) => crate::sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
+                Err(e) => crate::serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+            }
         }
-    }
+    });
 }

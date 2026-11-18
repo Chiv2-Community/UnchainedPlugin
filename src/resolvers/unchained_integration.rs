@@ -14,6 +14,16 @@ use crate::{
     ENGINE_READY,
 };
 
+// FEngineLoop::Init(this) -> int32. By the time Init runs, PreInit has registered the native
+// /Script UClasses, so the live UObject reflection system is usable. Attach the reflection-resolved
+// kismet hooks (LateHookRegistration) at its ENTRY — earlier than ENGINE_READY/OnPreLoadMap, which
+// is set *during* Init as it loads the frontend map. attach_late_hooks() is idempotent, and the
+// ENGINE_READY wait in postinit_rustlib remains as a fallback if this hook ever fails to fire.
+CREATE_HOOK!(FEngineLoopInit, ACTIVE, NONE, i32, (engine_loop: *mut ::core::ffi::c_void), {
+    crate::resolvers::attach_late_hooks();
+    CALL_ORIGINAL!(FEngineLoopInit(engine_loop))
+});
+
 
 // Sets Server password and rcon flag
 define_pattern_resolver!(

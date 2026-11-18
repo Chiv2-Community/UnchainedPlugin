@@ -69,12 +69,23 @@ a byte signature: `CREATE_HOOK_KISMET!(Class, "Native", Name, …)` (`src/macros
 
 ## Timing (important)
 Reflection (`find_native` → `StaticFindObject`/`FindFunctionByName`) queries the **live UObject
-system**, which is **not** populated at `postinit_rustlib`. Attaching there returns null for every
-lookup. Fix: the `LateHookRegistration` drain runs on a thread that first waits for `ENGINE_READY`
-(set from `OnPreLoadMap`, `unchained_integration.rs`). The patternsleuth table (`globals.method`)
-is built by static binary analysis at scan time, so it has no such dependency — that is why it
-worked earlier. There is **no** `FEngineLoop::PreInit` hook; if you want to attach earlier than the
-first map load, hook the first `UGameEngineTick` (already resolved) or add a PreInit resolver.
+system**, which is **not** populated at `postinit_rustlib` — attaching there returns null for every
+lookup. The patternsleuth table (`globals.method`) is built by static binary analysis at scan time,
+so it has no such dependency — that is why it worked earlier.
+
+Attach triggers for the `LateHookRegistration` drain (`resolvers::attach_late_hooks()`, **idempotent**):
+- **Primary:** a `CREATE_HOOK!(FEngineLoopInit, …)` at the **entry** of `FEngineLoop::Init`
+  (`unchained_integration.rs`). By `Init`, `PreInit` has registered native `/Script` classes, so
+  reflection works; and `Init` is where `OnPreLoadMap` fires (it loads the frontend map), so the
+  **entry** is earlier than `ENGINE_READY` — it also covers pre-first-map calls (e.g. save/load).
+  `FEngineLoopInit` is a patternsleuth collector resolver, hookable by name like `UGameEngineTick`
+  (`FEngineLoop::Init` = `int Init(this)`, `0x14099b090`).
+- **Fallback:** a thread in `postinit_rustlib` that waits for `ENGINE_READY` (set from `OnPreLoadMap`)
+  then drains. If the `Init` hook ever fails to fire, this still attaches; idempotency means whichever
+  runs first wins.
+
+If the `Init` **entry** turns out too early for some lookup (reflection not ready), move that attach
+to `Init` return (≈ `ENGINE_READY` timing) or rely on the fallback.
 
 ## Build / validate
 - Build from WSL via Windows Cargo: `cmd.exe /C "cd /d U:\Unchained\2026\UnchainedPlugin && cargo build"`
