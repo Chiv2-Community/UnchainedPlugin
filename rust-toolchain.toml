@@ -1,3 +1,4 @@
 [toolchain]
 # Avoid the nightly async-drop regression that breaks Serenity 0.12.5.
 channel = "nightly-2026-10-30"
+targets = ["x86_64-pc-windows-msvc"]

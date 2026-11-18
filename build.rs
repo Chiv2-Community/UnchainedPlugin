@@ -1,29 +1,34 @@
-extern crate winres;
+#[path = "build/provenance.rs"]
+mod provenance;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build/provenance.rs");
+    println!("cargo:rerun-if-changed=resources/plugin.rc");
+    let (commit, dirty) = provenance::generate();
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
-        let mut res = winres::WindowsResource::new();
-        
-        let version = env!("CARGO_PKG_VERSION");
-        let mut components = version.split('.').fuse();
-        let major = components.next().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
-        let minor = components.next().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
-        let patch = components.next().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
-        
-        res.set_version_info(winres::VersionInfo::FILEVERSION, 
-            ((major as u64) << 48) | ((minor as u64) << 32) | ((patch as u64) << 16));
-        res.set_version_info(winres::VersionInfo::PRODUCTVERSION, 
-            ((major as u64) << 48) | ((minor as u64) << 32) | ((patch as u64) << 16));
-        
-        res.set("CompanyName", "UnchainedPlugin Contributors");
-        res.set("FileDescription", "UnchainedPlugin");
-        res.set("FileVersion", version);
-        res.set("InternalName", "UnchainedPlugin");
-        res.set("LegalCopyright", "Copyright (C) 2023-2025");
-        res.set("OriginalFilename", "UnchainedPlugin.dll");
-        res.set("ProductName", "UnchainedPlugin");
-        res.set("ProductVersion", version);
-        
-        res.compile().unwrap();
+        compile_resources(&commit, &dirty);
     }
+}
+
+fn compile_resources(commit: &str, dirty: &str) {
+    let [major, minor, patch] = [
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        env!("CARGO_PKG_VERSION_MINOR"),
+        env!("CARGO_PKG_VERSION_PATCH"),
+    ]
+    .map(|component| {
+        component
+            .parse::<u16>()
+            .expect("Windows version components must be integers from 0 to 65535")
+    });
+    let definitions = [
+        format!("PLUGIN_VERSION_NUM={major},{minor},{patch},0"),
+        format!("PLUGIN_VERSION=\"{}\\0\"", env!("CARGO_PKG_VERSION")),
+        format!("PLUGIN_GIT_COMMIT=\"{commit}\\0\""),
+        format!("PLUGIN_GIT_DIRTY=\"{dirty}\\0\""),
+    ];
+
+    embed_resource::compile_for_cdylib("resources/plugin.rc", &definitions)
+        .manifest_required()
+        .expect("Failed to compile DLL version resources");
 }

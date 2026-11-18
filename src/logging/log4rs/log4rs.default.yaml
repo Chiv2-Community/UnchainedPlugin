@@ -24,6 +24,7 @@ appenders:
         module: "#BE9D5C"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
+        dirty_build: {foreground: "#7B4A12", background: "#D3D3D3"}
         team_agatha: "#8cb4e1"
         team_mason: "#f28b82"
         team_tenosia: "#D09128"

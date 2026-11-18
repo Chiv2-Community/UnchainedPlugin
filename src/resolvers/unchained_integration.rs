@@ -193,6 +193,7 @@ define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 0
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
 // Reflection search found no OnPreLoadMap on UTBLGameInstance.
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut FString),{
+    crate::features::motd::set_match_active(false);
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     sinfo!["{}", url_w];
 
@@ -212,6 +213,8 @@ define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
 // Reflection search found no OnPostLoadMap on UTBLGameInstance.
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UWorld),{
+    // Pre-load is not guaranteed; never carry the old match's MOTD state forward.
+    crate::features::motd::set_match_active(false);
     sdebug!["Triggered"];
     match globals().world() {
         Some(current_world) => {
@@ -246,7 +249,9 @@ define_pattern_resolver!(SetMatchState,[
 // void AGameMode::SetMatchState(FName NewState)
 // Reflection search found no SetMatchState on AGameMode.
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut AGameMode, new_state: FName),{
-    sinfo!["Match state: {}", new_state];
+    let state = new_state.to_string();
+    sinfo!["Match state: {}", state];
+    crate::features::motd::set_match_active(state == "InProgress");
 });
 
 // TODO: FViewport unused
