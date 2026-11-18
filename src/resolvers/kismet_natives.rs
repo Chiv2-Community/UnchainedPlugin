@@ -2,9 +2,8 @@
 //! overrides), plus the Blueprint print logging + spam filter.
 //!
 //! Shipping folds `UKismetSystemLibrary::PrintString` (and friends) into a shared no-op, so we hook
-//! the uniquely registered exec thunks instead. Targets are resolved by their reflected name from
-//! the class's RegisterNatives table (see `KismetNativeClass`), so they attach LATE (postinit) via
-//! the `LateHookRegistration` inventory, not the preinit `CREATE_HOOK!` path.
+//! the uniquely registered exec thunks instead. The bindings look up live `UFunction`s by name
+//! and attach through `LateHookRegistration` once Unreal reflection is available.
 //!
 //! `observe` hooks step the real frame once per declared argument, run P_FINISH, and DO NOT call the
 //! original (folded no-op); never copy the frame or read an argument out of order. `forward` hooks
@@ -17,9 +16,6 @@
 #[allow(unused_imports)]
 use crate::ue::{FString, UObject};
 
-// Reflection-backed resolution (StaticFindObject -> FindFunctionByName -> UFunction::func), so any
-// reflected class works by its /Script/... path. It queries the LIVE UObject system, so the
-// LateHookRegistration drain waits for ENGINE_READY before attaching (see postinit_rustlib).
 kismet_native_class!(UKismetSystemLibrary => path "/Script/Engine.KismetSystemLibrary");
 
 // Other kismet libraries can be bound the same way, e.g.:

@@ -2,10 +2,9 @@
 //!
 //! A native exec thunk (`execFoo`) steps its arguments off the `FFrame` and then `CALL`s the plain
 //! C++ body (`UKismetSystemLibrary::PrintString`). In a debug build that call targets the real
-//! function; in shipping the print/warning/text bodies are all folded to one shared no-op stub, so
-//! the inner callee of a dummied thunk is that stub. This module recovers the inner callee and uses
-//! it to decide whether to hook the inner function directly (as `Called`) or fall back to hooking
-//! the exec thunk and stepping the frame.
+//! function. In shipping the print-family bodies fold to a shared no-op stub. Native-body hooks
+//! use this module to recover the C++ entry. Exec-thunk hooks are declared separately when the
+//! wrapper itself is the target. This module also provides helpers for identifying the shared stub.
 //!
 //! The scan is bounded by the thunk's x64 unwind entry. It finds `FFrame::Step` and
 //! `StepExplicitProperty` by their resolved addresses, then inspects the first call after the
@@ -13,6 +12,15 @@
 //! call encodes its target, while an indirect call may encode a byte offset into a receiver's
 //! vtable. The hook binding supplies that receiver because the call operand alone does not
 //! establish which object's or interface's vtable the thunk loaded.
+//!
+//! Call selection is a heuristic based on instruction order. The scan keeps the first eligible
+//! call after the last recognized frame step in address order. An out-of-line argument block,
+//! an inlined implementation, or a tail jump can hide the target or leave a cleanup call as the
+//! candidate. The scan also needs Windows x64 unwind metadata to bound the thunk.
+//!
+//! A register-relative call only suggests a vtable byte offset. Verify the receiver and native
+//! ABI before migrating a hook, ideally by comparing the recovered address with a known target
+//! in the same build. The module address range is a coarse filter for candidate targets.
 
 use std::sync::OnceLock;
 

@@ -1,13 +1,13 @@
 //! Macros for hooking Unreal **UFunction native exec thunks** (`execPrintString`, `execIsServer`, …).
 //!
-//! These targets are resolved by their reflected name from a UClass's `RegisterNatives` table at
-//! runtime, so they must attach LATE (postinit, after `init_globals`) — they cannot go through the
-//! preinit `CREATE_HOOK!`/`HookRegistration` path. Each hook submits a `LateHookRegistration` that
-//! `postinit_rustlib` drains once.
+//! These hooks resolve by reflected name and submit a `LateHookRegistration`. They attach at
+//! `FEngineLoop::Init` entry, with `ENGINE_READY` as a fallback, once the UObject system is live.
 //!
 //! Surface:
 //! - `kismet_native_class!(UKismetSystemLibrary => globals.kismet_system_library_native);`
 //!   binds a class to its existing `globals()` resolver (see `KismetNativeClass`).
+//! - `kismet_native_class!(Class => path "/Script/Package.Class");` looks up the live `UFunction`.
+//!   The `=> virtual` form also supplies a class default object for native-body hook resolution.
 //! - `kismet_exec_observe!(Class::Native => detour(args…) { body })` — step the real frame once per
 //!   declared argument (in order), run `P_FINISH`, run `body`, and DO NOT call the original. For
 //!   dummied no-op callees (the print family). `bool` reads a 4-byte VM bool; `FString` frees on
@@ -18,9 +18,8 @@
 //! Each invocation emits exactly one `retour::static_detour!` (retour's macro recursion limit is
 //! hit if several are combined in one invocation).
 
-/// Bind a reflected UClass to the `globals()` method that resolves its natives by name.
-/// Expands to a unit struct + `impl KismetNativeClass`. The resolver method must already exist
-/// (it is what locates that class's `RegisterNatives` table during `init_globals`).
+/// Bind a reflected class to a live class path or an existing `globals()` table resolver.
+/// Expands to a unit struct implementing `KismetNativeClass`.
 #[macro_export]
 macro_rules! kismet_native_class {
     // Table-backed: resolve by name via an existing globals() RegisterNatives map (rare — only for
@@ -37,7 +36,7 @@ macro_rules! kismet_native_class {
     };
 
     // Reflection-backed (general): resolve by name via StaticFindObject(class path) ->
-    // FindFunctionByName -> UFunction::func. Works for any reflected class by its /Script/... path.
+    // find_function -> UFunction::func. The class must be loaded at its /Script/... path.
     ($class:ident => path $path:literal) => {
         $crate::kismet_native_class!(@path $class, $path, None);
     };

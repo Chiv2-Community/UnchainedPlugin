@@ -26,10 +26,8 @@ pub type FNativeExec = unsafe extern "system" fn(*mut UObject, *mut FFrame, *mut
 
 /// A reflected UClass whose native UFunction thunks can be resolved by name at runtime.
 ///
-/// Resolution reads the class's `RegisterNatives` table (a `{ name -> address }` map built during
-/// `init_globals`), i.e. Unreal's own reflection data — not a byte signature. Each class has its
-/// own table, so each needs its own `globals()` resolver method; `kismet_native_class!` only wraps
-/// an existing one.
+/// Bindings normally look up a live `UFunction` by class path and read its exec pointer.
+/// A binding can also use an existing `globals()` resolver for a `RegisterNatives` table.
 pub trait KismetNativeClass {
     const CLASS_NAME: &'static str;
     const VIRTUAL_DISPATCH_PATH: Option<&'static str> = None;

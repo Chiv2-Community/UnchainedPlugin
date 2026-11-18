@@ -59,15 +59,11 @@ pub struct HookRegistration {
     // pub auto_activate: bool,
 }
 
-/// Attach a native-registry hook. Takes no offsets: it resolves its target from a class's
-/// RegisterNatives table at call time.
-/// Returns whether the attached detour was enabled.
+/// Resolve and attach a reflected hook, returning whether its detour was enabled.
 pub type LateHookAttachFn = unsafe fn() -> Result<bool, Box<dyn std::error::Error>>;
 
-/// A UFunction native-thunk hook that resolves its target from a reflected class's RegisterNatives
-/// table, so it must attach LATE (postinit, after `init_globals`) rather than through the preinit
-/// `HookRegistration` inventory. Submitted by `kismet_exec_observe!` / `kismet_exec_forward!` and
-/// drained once in `postinit_rustlib`.
+/// An exec-thunk or native-body hook that needs Unreal reflection. The late-hook inventory runs
+/// at `FEngineLoop::Init` entry, with `ENGINE_READY` as a fallback.
 pub struct LateHookRegistration {
     pub name: &'static str,
     pub class: &'static str,

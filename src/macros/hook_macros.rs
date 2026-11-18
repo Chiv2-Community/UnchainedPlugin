@@ -57,20 +57,8 @@ macro_rules! CREATE_HOOK {
     };
 }
 
-// Future optional convenience wrapper for hooks whose target comes from Unreal's RegisterNatives
-// table rather than BuildInfo's image-relative offset map. Keep the active Kismet hooks explicit:
-// their copied-FFrame and out-result behavior is security-sensitive and clearer at each call site.
-//
-// CREATE_KISMET_NATIVE_HOOK!(
-//     ExecPrintString, "PrintString", ACTIVE, PRE, (),
-//     (context: *mut UObject, stack: *mut FFrame, result: *mut c_void),
-//     { /* inspect a COPY of stack, then call the original */ }
-// );
-//
-// A future implementation would mirror __create_hook_impl!, except attach_<name> resolves:
-// globals().kismet_system_library_native("PrintString")
-// rather than offsets.get("ExecPrintString"). It must emit exactly one `static_detour!` item per
-// invocation; combining several declarations can exceed retour's macro recursion limit.
+// CREATE_HOOK_KISMET! resolves and hooks the native C++ body. The exec macros in
+// kismet_exec.rs hook the reflected thunk and work with Unreal's FFrame ABI.
 
 #[macro_export]
 macro_rules! __create_hook_inner {
@@ -149,8 +137,8 @@ macro_rules! __create_hook_impl {
     };
 
     // Reflection-resolved + late-attached variant. Resolves the target through the live UObject
-    // reflection system ($class's exec thunk -> inner C++ fn) and registers for the late drain
-    // (after ENGINE_READY) via LateHookRegistration, reusing @emit_core + @finish_attach.
+    // reflection system ($class's exec thunk -> inner C++ fn) and registers for attachment at
+    // FEngineLoop::Init entry, with ENGINE_READY as a fallback.
     (@kismet ( $class:ty, $native:literal ) $name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         $crate::__create_hook_impl!(@emit_core $name, $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
 

@@ -417,12 +417,8 @@ fn postinit_rustlib() {
     // crate::features::events::init_event_system();
     unsafe { seh::install() };
 
-    // Kismet native-registry hooks (kismet_exec_observe!/kismet_exec_forward!/CREATE_HOOK_KISMET!)
-    // submit a LateHookRegistration and resolve through the LIVE UObject reflection system, not
-    // populated at postinit. They are attached primarily at the FEngineLoop::Init ENTRY hook
-    // (resolvers::unchained_integration, earliest reflection-safe point). This thread is a FALLBACK:
-    // if that hook ever fails to fire, drain once ENGINE_READY is set (from OnPreLoadMap).
-    // attach_late_hooks() is idempotent, so whichever fires first wins and the other is a no-op.
+    // Reflected hooks normally attach at FEngineLoop::Init entry. This thread provides a fallback
+    // once OnPreLoadMap sets ENGINE_READY. The shared drain runs once.
     thread::spawn(|| {
         while !ENGINE_READY.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(250));

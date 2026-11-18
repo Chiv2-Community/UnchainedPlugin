@@ -4,11 +4,12 @@
 //! `__create_hook_impl` (`hook_macros.rs`), so nothing is duplicated.
 //!
 //! The target is resolved through the live UObject reflection system:
-//! `KismetNativeClass::resolve(native)` → the function's exec thunk → `exec_thunk::inner_native_of`
-//! → the inner C++ function (real ABI). Because reflection needs the live object system, the hook
+//! `KismetNativeClass::resolve(native)` finds the exec thunk, then `resolve_hook_target` recovers
+//! the C++ entry. Because reflection needs the live object system, the hook
 //! registers as a `LateHookRegistration` and attaches at `FEngineLoop::Init` entry, with
 //! `ENGINE_READY` as a fallback. Classes declared with `=> virtual` opt in to resolving
-//! context-vtable calls through the class default object.
+//! context-vtable calls through the class default object. Interface bindings can supply their
+//! own receiver through `KismetNativeClass::virtual_receiver`.
 //!
 //! Surface mirrors `CREATE_HOOK!`, prefixed with the class + reflected name:
 //! ```ignore
