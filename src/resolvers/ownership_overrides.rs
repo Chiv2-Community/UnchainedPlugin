@@ -21,6 +21,7 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
     OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
 });
 
+// Reflection probe: GetOwnership reaches this helper from a separate entry point.
 CREATE_HOOK!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, ACTIVE, POST,
     *mut FOwnershipResponse, (result: *mut FOwnershipResponse, PlayerController: *mut ATBLPlayerController, PlayerState: *mut ATBLPlayerState, AssetIdToCheck: *mut FPrimaryAssetId, BaseOnly: bool),
     | response: *mut FOwnershipResponse | {
@@ -31,18 +32,7 @@ CREATE_HOOK!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, ACT
         response
 });
 
-define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
-    EGS: ["48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00"], // EGS
-    // "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC", // STEAM
-    // from sigga
-    // "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00", // EGS
-    STEAM: [
-        "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC 60 49 8B 31 33 FF C6 02 00",
-        "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00" // EGS 2.11.4
-        ], // STEAM
-});
-
-CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
+CREATE_HOOK_KISMET!(super::messages::TBLPlayerControllerNatives, "CanUseLoadoutItem", ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
     *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, InLoadOutSelection: *mut TSubclassOfULoadoutSelection, InItem: *mut TSubclassOfAInventoryItem),
     | response: *mut FOwnershipResponse | {
         if let Some(resp) = unsafe { response.as_mut() } {
@@ -55,14 +45,7 @@ CREATE_HOOK!(ATBLPlayerController__CanUseLoadoutItem, ACTIVE, POST,
         response
 });
 
-define_pattern_resolver!(
-    ATBLPlayerController__CanUseCharacter,
-    [
-        "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 49 8B 18", // universal
-    ]
-);
-
-CREATE_HOOK!(ATBLPlayerController__CanUseCharacter, ACTIVE, POST,
+CREATE_HOOK_KISMET!(super::messages::TBLPlayerControllerNatives, "CanUseCharacter", ATBLPlayerController__CanUseCharacter, ACTIVE, POST,
     *mut FOwnershipResponse, (this: *mut ATBLPlayerController, result: *mut FOwnershipResponse, CharacterSubclass: *mut TSubclassOfATBLCharacter),
     | response: *mut FOwnershipResponse | {
         if let Some(resp) = unsafe { response.as_mut() } {
@@ -92,6 +75,7 @@ use crate::{
     },
 };
 // The extra legacy player_state argument is not established by the native signature.
+// Reflection probes found no exact match for the customization initializer.
 CREATE_HOOK!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, ACTIVE, PRE,
     c_void, (this: *mut ATBLPlayerController, player_state: *mut c_void), {
         if let Some(pc) = unsafe { this.as_mut() } {

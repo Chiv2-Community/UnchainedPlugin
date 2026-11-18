@@ -441,16 +441,10 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
 
     let name_res = FName::with_type(class_name.as_str(), crate::ue::EFindName::Find);
 
-    let asset_registry_interface = {
-        if asset_registry.interface.is_null() {
-            // Fallback: If the interface pointer isn't set,
-            // sometimes the Object itself IS the interface.
-            serror!("interface is null");
-            asset_registry.object as *mut c_void
-        } else {
-            asset_registry.interface as *mut c_void
-        }
-    };
+    let asset_registry_interface = asset_registry.interface;
+    if asset_registry_interface.is_null() {
+        return Err("Asset Registry interface is unavailable".into());
+    }
 
     let mut asset_data = TArray::<FAssetData>::default();
     let out = CALL_ORIGINAL_SAFE!(GetAssetsByClass(
@@ -468,9 +462,7 @@ pub unsafe fn get_assets_by_class(class_name: String) -> Result<TArray<FAssetDat
 
 /// Queries `UAssetRegistryImpl::GetAssetsByPath` on the registry singleton.
 ///
-/// Must run on the game thread. Returns `Err` (without panicking) while the
-/// `GetAssetsByPath` signature is a placeholder and the detour is not
-/// attached — see `src/resolvers/asset_registry.rs`.
+/// Must run on the game thread with the reflected registry bindings available.
 pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<TArray<FAssetData>, String> {
     let mut asset_registry = TScriptInterface::new();
     let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
@@ -479,15 +471,10 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
 
     let name_res = FName::with_type(package_path, crate::ue::EFindName::Find);
 
-    let asset_registry_interface = {
-        // GetAssetsByPath is virtual, but `this` still wants the impl object for
-        // member access; prefer object, fall back to the interface pointer.
-        if asset_registry.object.is_null() {
-            asset_registry.interface
-        } else {
-            asset_registry.object as *mut c_void
-        }
-    };
+    let asset_registry_interface = asset_registry.interface;
+    if asset_registry_interface.is_null() {
+        return Err("Asset Registry interface is unavailable".into());
+    }
 
     let mut asset_data = TArray::<FAssetData>::default();
     // bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive, bool bIncludeOnlyOnDiskAssets)
@@ -505,54 +492,29 @@ pub unsafe fn get_assets_by_path(package_path: &str, recursive: bool) -> Result<
     }
 }
 
-/// Drives the `ScanPathsAndFilesSynchronous` implementation on the registry
-/// singleton with an explicit file list (files-only scans skip the
-/// Intermediates `AssetRegistryCache` write). Must run on the game thread.
-///
-/// Returns `Err` (without panicking) while the signature is a placeholder and
-/// the detour is not attached — see `src/resolvers/asset_registry.rs`.
+/// Scans an explicit file list through the registry's reflected `ScanFilesSynchronous` wrapper.
+/// Must run on the game thread. Files-only scans skip the Intermediates `AssetRegistryCache` write.
 pub unsafe fn scan_files_synchronous(files: &[String]) -> Result<(), String> {
     let mut asset_registry = TScriptInterface::new();
     let _: *mut TScriptInterface = CALL_ORIGINAL_SAFE!(GetAssetRegistry_Helper(
         &mut asset_registry as *mut TScriptInterface
     ))?;
 
-    let registry = {
-        // ScanPathsAndFilesSynchronous is a non-virtual __thiscall on
-        // UAssetRegistryImpl, so `this` must be the real object pointer, not
-        // the IAssetRegistry interface pointer (which may be object+offset for
-        // a multiple-inheritance interface). Prefer object; fall back to the
-        // interface only if the object is unset.
-        if asset_registry.object.is_null() {
-            asset_registry.interface
-        } else {
-            asset_registry.object as *mut c_void
-        }
-    };
-
-    // EAssetDataCacheMode::UseModularCache — the value the public wrappers pass.
-    const USE_MODULAR_CACHE: u8 = 2;
+    let registry = asset_registry.interface;
+    if registry.is_null() {
+        return Err("Asset Registry interface is unavailable".into());
+    }
 
     let Some(allocator) = crate::ue::try_gmalloc() else {
         return Err("engine allocator (GMalloc) is not available; run on the game thread after globals init".into());
     };
 
-    let paths = TArray::<FString>::default();
     let mut files_array = TArray::<FString>::default();
     for file in files {
         files_array.push_in(FString::from(file.as_str()), allocator);
     }
 
-    // void ScanPathsAndFilesSynchronous(const TArray<FString>& InPaths, const TArray<FString>& InSpecificFiles, bool bForceRescan, EAssetDataCacheMode, TArray<FName>*, TArray<FName>*)
-    CALL_ORIGINAL_SAFE!(ScanPathsAndFilesSynchronous(
-        registry,
-        &paths,
-        &files_array,
-        false,
-        USE_MODULAR_CACHE,
-        std::ptr::null_mut(),
-        std::ptr::null_mut()
-    ))?;
+    CALL_ORIGINAL_SAFE!(ScanFilesSynchronous(registry, &files_array, false))?;
 
     Ok(())
 }

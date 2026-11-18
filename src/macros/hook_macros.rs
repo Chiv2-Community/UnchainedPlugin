@@ -162,8 +162,7 @@ macro_rules! __create_hook_impl {
                 let thunk = <$class as $crate::ue::kismet::KismetNativeClass>::resolve($native)
                     .ok_or_else(|| format!("{}::{} not resolved (reflection)", class_name, $native))?;
                 // UFunction::func is the exec thunk; hook the inner C++ function it calls (real ABI).
-                let virtual_path = <$class as $crate::ue::kismet::KismetNativeClass>::VIRTUAL_DISPATCH_PATH;
-                let target_addr = $crate::ue::exec_thunk::hook_native_of(thunk, virtual_path)
+                let target_addr = <$class as $crate::ue::kismet::KismetNativeClass>::resolve_hook_target(thunk)
                     .ok_or_else(|| format!("{}::{} inner callee not found (thunk {:#x})", class_name, $native, thunk))?;
                 $crate::sdebug!("{}::{} -> thunk {:#x}, inner {:#x}", class_name, $native, thunk, target_addr);
                 $crate::__create_hook_impl!(@finish_attach $name, $out_type, $status, target_addr, auto_activate, ( $( $arg: $ty ),+ ));

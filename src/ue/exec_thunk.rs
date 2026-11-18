@@ -9,16 +9,18 @@
 //!
 //! The scan is bounded by the thunk's x64 unwind entry. It finds `FFrame::Step` and
 //! `StepExplicitProperty` by their resolved addresses, then inspects the first call after the
-//! last step. Indirect dispatch must be identified before any later cleanup calls. The no-op stub address is derived at runtime from a
-//! known-dummied function (`PrintString`), so nothing here is hard-coded to a build.
+//! last step. Indirect dispatch must be identified before any later cleanup calls. A direct
+//! call encodes its target, while an indirect call may encode a byte offset into a receiver's
+//! vtable. The hook binding supplies that receiver because the call operand alone does not
+//! establish which object's or interface's vtable the thunk loaded.
 
 use std::sync::OnceLock;
 
 use iced_x86::{Decoder, DecoderOptions, Mnemonic, OpKind, Register};
 use windows::Win32::System::Diagnostics::Debug::RtlLookupFunctionEntry;
 
-use crate::resolvers::BASE_ADDR;
 use crate::resolvers::asset_registry::o_GetDefaultObject;
+use crate::resolvers::BASE_ADDR;
 use crate::tools::hook_globals::globals;
 use crate::ue::{try_read, UClass};
 
@@ -45,32 +47,52 @@ pub(crate) enum InnerCall {
 /// # Safety
 /// `thunk` must be a live, readable code address, and the `FFrameStep` resolvers must be available.
 pub unsafe fn inner_native_of(thunk: usize) -> Option<usize> {
+    hook_native_of(thunk, || None)
+}
+
+/// Resolve a native call. Fetch the receiver only when the thunk yielded a candidate vtable slot.
+///
+/// # Safety
+/// `thunk` must be a live exec thunk and the frame-step resolvers must be initialized. If the
+/// callback supplies a receiver, it must be the kind of object or interface whose vtable the thunk
+/// uses. The scanner identifies the slot but does not trace the receiver register's provenance.
+pub(crate) unsafe fn hook_native_of(
+    thunk: usize,
+    receiver: impl FnOnce() -> Option<*const usize>,
+) -> Option<usize> {
     match inner_call_of(thunk)? {
         InnerCall::Direct(target) => Some(target),
-        InnerCall::Indirect { .. } => None,
+        InnerCall::Indirect { candidate_slot } => {
+            let slot = candidate_slot?;
+            native_vtable_slot(receiver()?, slot)
+        }
     }
 }
 
-/// Resolve an opted-in virtual dispatch against the reflected class's existing default object.
-/// The caller must verify that the thunk dispatches through its context object's vtable.
-pub(crate) unsafe fn hook_native_of(thunk: usize, virtual_path: Option<&str>) -> Option<usize> {
-    let slot = match inner_call_of(thunk)? {
-        InnerCall::Direct(target) => return Some(target),
-        InnerCall::Indirect { candidate_slot } => candidate_slot?,
-    };
-    let path = virtual_path?;
-    if slot % size_of::<usize>() != 0 {
-        return None;
-    }
+/// Supply a representative receiver for thunks that dispatch through their context UObject.
+pub(crate) unsafe fn default_object_receiver(path: &str) -> Option<*const usize> {
     let class = crate::game::engine::get_uobject_from_path(path, false).cast::<UClass>();
     if class.is_null() {
         return None;
     }
+    // Use the engine accessor to avoid relying on the UClass layout. `false` keeps hook
+    // attachment from constructing a default object when the class has none yet.
     let object = CALL_ORIGINAL_SAFE!(GetDefaultObject(class, false)).ok()?;
-    let vtable = try_read(object.cast::<usize>()).filter(|address| *address != 0)?;
+    (!object.is_null()).then_some(object.cast())
+}
+
+fn native_vtable_slot(receiver: *const usize, slot: usize) -> Option<usize> {
+    if slot % size_of::<usize>() != 0 {
+        return None;
+    }
+    // The receiver's first pointer is its vtable. The decoded displacement is already in
+    // bytes, so add it directly. Checked reads let an unavailable pointer fail resolution.
+    let vtable = try_read(receiver).filter(|address| *address != 0)?;
     let target = try_read(vtable.checked_add(slot)? as *const usize)?;
     let base = *BASE_ADDR;
-    (base..base + MODULE_SPAN).contains(&target).then_some(target)
+    (base..base + MODULE_SPAN)
+        .contains(&target)
+        .then_some(target)
 }
 
 /// Same safety requirements as [`inner_native_of`].
@@ -85,8 +107,10 @@ pub(crate) unsafe fn inner_call_of(thunk: usize) -> Option<InnerCall> {
     if !(start..end).contains(&(thunk as u64)) {
         return None;
     }
-    let bytes = std::slice::from_raw_parts(thunk as *const u8, (end - thunk as u64) as usize);
-
+    let bytes = std::slice::from_raw_parts(
+        thunk as *const u8,
+        (end - thunk as u64) as usize,
+    );
     let step = globals().fframe_step() as usize;
     let step_x = globals().fframe_step_explicit_property() as usize;
     let lo = *BASE_ADDR;

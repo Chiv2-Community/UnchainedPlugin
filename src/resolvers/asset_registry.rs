@@ -57,6 +57,7 @@ define_pattern_resolver!(GetAssetRegistry,[
     "40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"
 ]);
 // IAssetRegistry * __thiscall UAssetManager::GetAssetRegistry(UAssetManager *this)
+// Reflection search found no native GetAssetRegistry on UAssetManager.
 CREATE_HOOK!(GetAssetRegistry, CALLED, *mut IAssetRegistry, (asset_manager: *mut UAssetManager),{
     // sinfo!["Triggered!"];
 });
@@ -105,12 +106,39 @@ impl fmt::Display for FAssetData {
     }
 }
 
-define_pattern_resolver!(GetAssetsByClass,[
-    "48 89 5C 24 ?? 55 56 57 41 56 41 57 48 8D 6C 24 ?? 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 45 33 FF C7 45 ?? 80 00 00 00 0F 57 C0 4C 89 7C 24 ?? 48 8B DA 4C 89 7C 24 ??"
-    ]);
+/// Resolves reflected Asset Registry queries to methods on the live `IAssetRegistry` interface.
+/// The exec thunk identifies a virtual slot, and the interface vtable supplies its target.
+/// The registry UObject has a different vtable. Callers must pass the interface pointer as `this`.
+/// If another native interface uses a reflected getter with the same `TScriptInterface` return
+/// ABI, we can share the getter lookup and return-storage handling. Each binding would still
+/// specify its getter, or supply a live interface pointer through `virtual_receiver` directly.
+struct AssetRegistryNatives;
 
-// bool __thiscall UAssetRegistryImpl::GetAssetsByClass(UAssetRegistryImpl *this,FName param_1,TArray<> *param_2,bool param_3)
-CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
+impl crate::ue::kismet::KismetNativeClass for AssetRegistryNatives {
+    const CLASS_NAME: &'static str = "AssetRegistry";
+
+    unsafe fn resolve(native: &str) -> Option<usize> {
+        crate::ue::find_native("/Script/AssetRegistry.AssetRegistry", native)
+    }
+
+    unsafe fn virtual_receiver() -> Option<*const usize> {
+        use crate::ue::exec_thunk::inner_native_of;
+
+        // Resolve GetAssetRegistry's direct native body here because its trampoline may not
+        // have been initialized yet when the late-hook inventory reaches these query hooks.
+        let getter = inner_native_of(UAssetRegistryHelpers::resolve("GetAssetRegistry")?)?;
+        // The native C++ return-by-value ABI passes caller-owned TScriptInterface storage.
+        // The getter fills it with the registry UObject and its separate interface pointer.
+        type GetRegistry = unsafe extern "C" fn(*mut TScriptInterface) -> *mut TScriptInterface;
+        let getter: GetRegistry = std::mem::transmute(getter);
+        let mut registry = TScriptInterface::new();
+        getter(&mut registry);
+        (!registry.interface.is_null()).then_some(registry.interface.cast())
+    }
+}
+
+// The receiver is the IAssetRegistry interface pointer returned by GetAssetRegistry_Helper.
+CREATE_HOOK_KISMET!(AssetRegistryNatives, "GetAssetsByClass", GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut IAssetRegistry, ClassPathName: FName, OutAssetData: *mut TArray<FAssetData>, bSearchSubClasses: bool), {
     // Debug code
     sdebug!["Triggered! {}", ClassPathName];
     let res: bool;
@@ -135,35 +163,19 @@ CREATE_HOOK!(GetAssetsByClass, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistr
     res
 });
 
-// Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::GetAssetsByPath` (function start). The RIP-relative
-// displacement in the `48 8B 05` stack-cookie load (immediately followed by
-// the `48 33 C4` xor with rsp) is wildcarded so the pattern survives
-// rebuilds that relocate the cookie global.
-define_pattern_resolver!(GetAssetsByPath,[
-    "40 55 53 56 57 41 56 48 8D 6C 24 E0 48 81 EC 20 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 10 45"
-]);
-// bool __thiscall UAssetRegistryImpl::GetAssetsByPath(UAssetRegistryImpl *this,FName PackagePath,TArray<FAssetData>& OutAssetData,bool bRecursive,bool bIncludeOnlyOnDiskAssets)
 // virtual bool GetAssetsByPath(FName PackagePath, TArray<FAssetData>& OutAssetData, bool bRecursive = false, bool bIncludeOnlyOnDiskAssets = false) const
-CREATE_HOOK!(GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut UAssetRegistryImpl, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
-    // CALLED hooks are never enabled on attach; this body only runs if someone
-    // explicitly enables the detour after a real signature is populated.
+CREATE_HOOK_KISMET!(AssetRegistryNatives, "GetAssetsByPath", GetAssetsByPath, CALLED, NONE, bool, (this_ptr: *mut IAssetRegistry, PackagePath: FName, OutAssetData: *mut TArray<FAssetData>, bRecursive: bool, bIncludeOnlyOnDiskAssets: bool), {
     CALL_ORIGINAL!(GetAssetsByPath(this_ptr, PackagePath, OutAssetData, bRecursive, bIncludeOnlyOnDiskAssets))
 });
 
-// Signature source: owner-provided pattern for
-// `UAssetRegistryImpl::ScanPathsAndFilesSynchronous` (function start). The
-// RIP-relative displacement in the `48 8B 05` load is wildcarded so the
-// pattern survives rebuilds that relocate the pointed-to global.
-define_pattern_resolver!(ScanPathsAndFilesSynchronous,[
-    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 10 FE FF FF 48 81 EC F0 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 E0 01 00 00 48 8B 85 58 02"
-]);
-// void __thiscall UAssetRegistryImpl::ScanPathsAndFilesSynchronous(UAssetRegistryImpl *this,const TArray<FString>& InPaths,const TArray<FString>& InSpecificFiles,bool bForceRescan,EAssetDataCacheMode AssetDataCacheMode,TArray<FName>* OutFoundAssets,TArray<FName>* OutFoundPaths)
-// Implementation both public wrappers (ScanPathsSynchronous / ScanFilesSynchronous) delegate to.
-CREATE_HOOK!(ScanPathsAndFilesSynchronous, CALLED, NONE, (), (this_ptr: *mut UAssetRegistryImpl, InPaths: *const TArray<FString>, InSpecificFiles: *const TArray<FString>, bForceRescan: bool, AssetDataCacheMode: u8, OutFoundAssets: *mut TArray<FName>, OutFoundPaths: *mut TArray<FName>), {
-    // CALLED hooks are never enabled on attach; this body only runs if someone
-    // explicitly enables the detour after a real signature is populated.
-    CALL_ORIGINAL!(ScanPathsAndFilesSynchronous(this_ptr, InPaths, InSpecificFiles, bForceRescan, AssetDataCacheMode, OutFoundAssets, OutFoundPaths))
+// The public wrapper supplies an empty path array, modular cache mode, and null output pointers
+// when it calls the internal ScanPathsAndFilesSynchronous helper.
+CREATE_HOOK_KISMET!(AssetRegistryNatives, "ScanFilesSynchronous", ScanFilesSynchronous, CALLED, NONE, (), (
+    registry: *mut IAssetRegistry,
+    files: *const TArray<FString>,
+    force_rescan: bool,
+), {
+    CALL_ORIGINAL!(ScanFilesSynchronous(registry, files, force_rescan))
 });
 
 #[repr(C)]

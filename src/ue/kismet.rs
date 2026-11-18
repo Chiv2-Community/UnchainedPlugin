@@ -35,6 +35,17 @@ pub trait KismetNativeClass {
     const VIRTUAL_DISPATCH_PATH: Option<&'static str> = None;
     /// Absolute address of the named native's exec thunk, or `None` if it was not resolved.
     unsafe fn resolve(native: &str) -> Option<usize>;
+
+    /// Supply a receiver with the vtable used by this binding's virtual exec thunks.
+    /// A class path opts in to using its existing class default object. Interface bindings
+    /// can override this method to supply the appropriate live interface pointer.
+    unsafe fn virtual_receiver() -> Option<*const usize> {
+        super::exec_thunk::default_object_receiver(Self::VIRTUAL_DISPATCH_PATH?)
+    }
+
+    unsafe fn resolve_hook_target(thunk: usize) -> Option<usize> {
+        super::exec_thunk::hook_native_of(thunk, || Self::virtual_receiver())
+    }
 }
 
 impl FFrame {
