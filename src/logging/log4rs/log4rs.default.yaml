@@ -24,6 +24,7 @@ appenders:
         module: "#BE9D5C"
         title: {foreground: "#D09128", background: "#2F2F2F"}
         subtitle: {foreground: "#D09128", background: "#2F2F2F"}
+        dirty_build: {foreground: "#7B4A12", background: "#D3D3D3"}
         team_agatha: "#8cb4e1"
         team_mason: "#f28b82"
         team_tenosia: "#D09128"
@@ -34,6 +35,7 @@ appenders:
         team_all: "#a8d5a2"
         team_spectator: "#ffffff"
         team_system: "#8cd8e1"
+        client_message: "#d7a0df"
         team_discord: "#b58cff"
   file:
     kind: file
@@ -56,13 +58,13 @@ appenders:
     kind: console
     encoder:
       kind: palette
-      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(faction)})}{K(label):<5.5}{palette(debug)} | {palette()}{m}{n}"
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(team_{K(faction)})}{K(label):<5.5}{palette(debug)} | {palette(client_message)}Client Message  {palette(debug)} - {palette()}{m}{n}"
       palette: *console_palette
   chat_system_file:
     kind: file
     path: "__CHAT_LOG_PATH__"
     encoder:
-      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | {m}{n}"
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | {K(label):<9} | Client Message   - {m}{n}"
   kismet:
     kind: file
     path: "__KISMET_LOG_PATH__"

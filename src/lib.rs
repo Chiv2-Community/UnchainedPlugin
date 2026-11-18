@@ -39,7 +39,6 @@ use crate::commands::spawn_cli_handler;
 use crate::features::rcon::handle_rcon;
 #[cfg(feature="server_registration")]
 use crate::features::server_registration::Registration;
-use crate::game::chivalry2::EChatType;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
 use self::resolvers::PlatformType;
@@ -507,17 +506,6 @@ pub fn world_init() {
     // Mod manager requires world
     while globals().world().is_none() {
         thread::sleep(Duration::from_millis(500));
-    }
-
-    if let Some(motd) = cli_args().motd.clone() {
-        sinfo!("Starting MOTD broadcast loop");
-        thread::spawn(move || {
-            loop {
-                sinfo!("Broadcasting MOTD: {}", motd);
-                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
-                thread::sleep(Duration::from_secs(30 * 60));
-            }
-        });
     }
 
     {
