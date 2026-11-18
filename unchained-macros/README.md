@@ -58,6 +58,45 @@ The body receives `crate::resolvers::current_platform()` and may use `?`.
 It still must produce one `u64` address. This selects matcher behavior; it
 does not register a platform restriction for hooks or patches.
 
+## Resolved function detours
+
+```rust,ignore
+#[unchained_macros::runtime_bindings]
+impl MyType {
+    #[bind_resolved_func_detour(MyResolver, ACTIVE)]
+    fn foo_detour(&mut self, value: i32) -> i32 {
+        unsafe { self.foo(value) + 1 }
+    }
+}
+```
+
+- Registers with the existing hook inventory; the resolver remains separately declared.
+- The optional condition defaults to `ACTIVE`. Accepts `ACTIVE`, `INACTIVE`,
+  `CALLED`, `DISABLED`, or a noncapturing closure/function returning `bool`.
+- Activation requires both the global activation flag and the condition at attachment.
+- Detour names must end with `_detour`. Stripping that suffix generates the
+  unsafe original method: `foo_detour` generates `foo`, never `foo_original`.
+  An existing associated item named `foo` is a compile error.
+- The original has the same visibility, arguments and result as the detour.
+  It calls the trampoline, even when disabled, and panics before attachment.
+- `runtime_bindings` supports non-generic inherent impls, borrowed/raw `Self`
+  receivers, associated functions, and explicit per-call lifetimes. Borrowed
+  methods preserve receiver-based return lifetime elision.
+- Standalone functions use the detour attribute without `runtime_bindings`,
+  with the same suffix rule: `foo_detour` generates `foo`. Use explicit
+  lifetimes for standalone borrowed results.
+- Native ABI is `extern "C"`; signatures must match the resolved native function.
+  Native calls must not unwind through the detour.
+- The consuming crate supplies `retour`, `inventory`, and the plugin's resolver
+  registration types, as with `CREATE_HOOK!`.
+
+Direct empty unsafe stubs use `#[bind_resolved_func(Resolver)]`.
+
+`detour_is_initialized("Resolver")` and `detour_is_enabled("Resolver")` expose
+generated detour state without exposing storage. Unknown names return `false`.
+Use initialization checks before optional native calls; disabled detours still
+provide their original trampoline.
+
 ## Required native values
 
 ```rust,ignore
@@ -87,7 +126,7 @@ Keep the resolver declaration separate, then bind a method to its type:
 ```rust,ignore
 impl FText {
     /// Safety: self owns a live native shared reference, released exactly once.
-    #[unchained_macros::bind_resolver_func(FText_Release)]
+    #[unchained_macros::bind_resolved_func(FText_Release)]
     pub unsafe fn release(&mut self) {}
 }
 ```

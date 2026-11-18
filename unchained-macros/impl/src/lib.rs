@@ -2,14 +2,29 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::quote;
 use syn::{FnArg, GenericParam, ItemFn, Pat, Path, ReturnType, Type};
+mod detour;
 
 /// Bind an unsafe Rust method/function to a separately declared named resolver.
 ///
 /// The empty body is replaced by a direct `extern "C"` call. Receiver types
 /// and declared per-call lifetime relationships are preserved.
 #[proc_macro_attribute]
-pub fn bind_resolver_func(args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
     expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+/// Register a `_detour` function and generate its suffix-stripped trampoline caller.
+#[proc_macro_attribute]
+pub fn bind_resolved_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
+    detour::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+/// Expand resolved detour methods in a concrete inherent implementation.
+#[proc_macro_attribute]
+pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
+    detour::expand_impl(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {

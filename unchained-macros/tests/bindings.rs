@@ -1,6 +1,6 @@
 #![feature(arbitrary_self_types_pointers)]
 
-use unchained_macros::bind_resolver_func;
+use unchained_macros::bind_resolved_func;
 
 mod resolvers {
     pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
@@ -18,28 +18,28 @@ mod resolvers {
 struct Native { value: i32 }
 
 impl Native {
-    #[bind_resolver_func(resolvers::Read)]
+    #[bind_resolved_func(resolvers::Read)]
     unsafe fn read(&self, extra: i32) -> i32 {}
 
-    #[bind_resolver_func(resolvers::Write)]
+    #[bind_resolved_func(resolvers::Write)]
     unsafe fn write(self: &mut Self, value: i32) {}
 
-    #[bind_resolver_func(resolvers::RawRead)]
+    #[bind_resolved_func(resolvers::RawRead)]
     unsafe fn raw_read(self: *const Self, extra: i32) -> i32 {}
 
-    #[bind_resolver_func(resolvers::RawWrite)]
+    #[bind_resolved_func(resolvers::RawWrite)]
     unsafe fn raw_write(self: *mut Self, value: i32) {}
 
-    #[bind_resolver_func(resolvers::Add)]
+    #[bind_resolved_func(resolvers::Add)]
     unsafe fn add(left: i32, right: i32) -> i32 {}
 
-    #[bind_resolver_func(resolvers::Missing)]
+    #[bind_resolved_func(resolvers::Missing)]
     unsafe fn missing(&self) {}
 
-    #[bind_resolver_func(resolvers::Borrow)]
+    #[bind_resolved_func(resolvers::Borrow)]
     unsafe fn borrow<'a>(&'a self) -> &'a i32 {}
 
-    #[bind_resolver_func(resolvers::ReturnStorage)]
+    #[bind_resolved_func(resolvers::ReturnStorage)]
     unsafe fn return_storage<'a>(self: *const Self, output: &'a mut i32) -> &'a mut i32 {}
 }
 
