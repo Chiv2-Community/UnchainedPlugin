@@ -545,13 +545,13 @@ pub fn world_init() {
 
     if let Some(motd) = cli_args().motd.clone() {
         sinfo!("Starting MOTD broadcast loop");
-        // thread::spawn(move || {
-        //     loop {
-        //         sinfo!("Broadcasting MOTD: {}", motd);
-        //         game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
-        //         thread::sleep(Duration::from_secs(30 * 60));
-        //     }
-        // });
+        thread::spawn(move || {
+            loop {
+                sinfo!("Broadcasting MOTD: {}", motd);
+                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
+                thread::sleep(Duration::from_secs(30 * 60));
+            }
+        });
     }
 
     {
