@@ -6,19 +6,18 @@ use a2s::{
 };
 use backon::{ConstantBuilder, Retryable};
 use std::{net::SocketAddr, num::NonZeroUsize, time::Duration};
-use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 /// Wait until metadata should refresh; return false on cancellation, which takes priority.
 pub(super) async fn should_refresh(
     shutdown: &CancellationToken,
-    refresh: &Notify,
+    refresh: impl std::future::Future<Output = ()>,
     interval: Duration,
 ) -> bool {
     tokio::select! {
         biased;
         _ = shutdown.cancelled() => false,
-        _ = refresh.notified() => true,
+        () = refresh => true,
         _ = tokio::time::sleep(interval) => true,
     }
 }

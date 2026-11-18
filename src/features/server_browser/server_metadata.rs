@@ -20,7 +20,7 @@ pub struct ServerStatus {
     pub current_map: String,
     pub player_count: i32,
     pub max_players: i32,
-    pub mods: Vec<Mod>,
+    pub all_mods: Vec<Mod>,
     pub active_mods: Vec<Mod>,
 }
 

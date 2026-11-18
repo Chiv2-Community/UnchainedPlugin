@@ -17,7 +17,7 @@ fn status(has_active_mod: bool) -> server_metadata::ServerStatus {
         current_map: "FFA_Courtyard".into(),
         player_count: 12,
         max_players: 64,
-        mods: vec![server_metadata::Mod {
+        all_mods: vec![server_metadata::Mod {
             name: "Inactive mod".into(),
             ..active_mod.clone()
         }],

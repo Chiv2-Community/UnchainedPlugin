@@ -13,15 +13,15 @@ pub(crate) fn base_url() -> &'static str {
 #[cfg(windows)]
 pub(crate) fn client() -> &'static HttpTransport {
     use crate::tools::hook_globals::cli_args;
-    use std::sync::OnceLock;
+    use std::sync::LazyLock;
 
-    static CLIENT: OnceLock<HttpTransport> = OnceLock::new();
-    CLIENT.get_or_init(|| {
+    static CLIENT: LazyLock<HttpTransport> = LazyLock::new(|| {
         let args = cli_args();
         let explicit_address = args.local_ip_explicit.then_some(args.local_ip.as_str());
         transport(base_url(), source_ip(args.use_ipv6, explicit_address))
             .expect("Failed to construct server-browser client")
-    })
+    });
+    &CLIENT
 }
 
 #[cfg(windows)]
