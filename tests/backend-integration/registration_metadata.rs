@@ -1,7 +1,4 @@
-#[path = "../../src/features/registration_metadata.rs"]
-mod registration_metadata;
-
-#[path = "../../src/server_metadata.rs"]
+#[path = "../../src/features/server_browser/server_metadata.rs"]
 pub mod server_metadata;
 
 use test_case::test_case;
@@ -46,7 +43,7 @@ fn update_maps_public_metadata(has_active_mod: bool) {
         Vec::new()
     };
     assert_eq!(
-        registration_metadata::update(&status),
+        server_metadata::update(&status),
         server_browser_client::models::UpdateRegisteredServer {
             player_count: 12,
             max_players: 64,
@@ -64,7 +61,7 @@ fn request_maps_registration_metadata(local_ip: Option<&str>, password_protected
 
     let mut status = status(true);
     status.password_protected = password_protected;
-    let request = registration_metadata::request(
+    let request = server_metadata::request(
         &status,
         Chivalry2Ports::new(9000, 3000, 7000),
         local_ip.map(str::to_owned),
@@ -101,7 +98,7 @@ fn advertised_ports_prefer_a2s_game_port_over_configuration(
     expected: [i32; 3],
 ) {
     let ports =
-        registration_metadata::ports(a2s_game_port, configured_game_port, ping_port, query_port);
+        server_metadata::ports(a2s_game_port, configured_game_port, ping_port, query_port);
     assert_eq!([ports.game, ports.ping, ports.a2s], expected);
 }
 
@@ -113,7 +110,7 @@ fn advertised_ports_prefer_a2s_game_port_over_configuration(
 #[test_case(255, 255, false, (255, 255); "full_a2s_range_preserved")]
 fn advertised_player_counts(players: u8, max_players: u8, headless: bool, expected: (i32, i32)) {
     assert_eq!(
-        registration_metadata::player_counts(players, max_players, headless),
+        server_metadata::player_counts(players, max_players, headless),
         expected,
     );
 }

@@ -18,10 +18,7 @@ use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::globals;
 use crate::tools::hook_globals::cli_args;
 
-#[path = "a2s_query.rs"]
-mod a2s_query;
-#[path = "registration_metadata.rs"]
-mod registration_metadata;
+use super::{a2s_query, server_metadata};
 
 const METADATA_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const A2S_MAX_ATTEMPTS: NonZeroUsize = NonZeroUsize::new(3).unwrap();
@@ -114,7 +111,7 @@ impl MetadataCollector {
         }
         let status = Self::metadata(&info);
         let mut registration = match SdkRegistration::new(
-            crate::backend_config::client().clone(),
+            super::client().clone(),
             self.request(&info, &status),
             Policy::default(),
         ) {
@@ -168,7 +165,7 @@ impl MetadataCollector {
                 continue;
             };
             let status = Self::metadata(&info);
-            let update = registration_metadata::update(&status);
+            let update = server_metadata::update(&status);
             *latest
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = status;
@@ -180,13 +177,13 @@ impl MetadataCollector {
 
     fn request(&self, info: &Info, status: &ServerStatus) -> ServerRegistrationRequest {
         let args = cli_args();
-        let ports = registration_metadata::ports(
+        let ports = server_metadata::ports(
             info.extended_server_info.port,
             args.game_port,
             args.game_server_ping_port,
             self.query_address.port(),
         );
-        registration_metadata::request(status, ports, self.local_ip_address.clone())
+        server_metadata::request(status, ports, self.local_ip_address.clone())
     }
 
     fn observe(event: &Event, latest: &Mutex<ServerStatus>) {
@@ -239,7 +236,7 @@ impl MetadataCollector {
         let (mods, all_mods): (Vec<Mod>, Vec<Mod>) = (Vec::new(), Vec::new());
 
         let (player_count, max_players) =
-            registration_metadata::player_counts(info.players, info.max_players, args.is_headless);
+            server_metadata::player_counts(info.players, info.max_players, args.is_headless);
         ServerStatus {
             name: args
                 .find_ini_value(&[("Game", "[/Script/TBL.TBLGameMode]", "ServerName")])

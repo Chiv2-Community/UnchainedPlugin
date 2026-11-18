@@ -1,9 +1,29 @@
-use crate::server_metadata::ServerStatus;
+use serde::Serialize;
 use server_browser_client::models::{
-    Chivalry2Ports, Mod, ServerRegistrationRequest, UpdateRegisteredServer,
+    Chivalry2Ports, Mod as BrowserMod, ServerRegistrationRequest, UpdateRegisteredServer,
 };
 
-pub(super) fn request(
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct Mod {
+    pub name: String,
+    pub organization: String,
+    pub version: String,
+    pub object_path: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ServerStatus {
+    pub name: String,
+    pub description: String,
+    pub password_protected: bool,
+    pub current_map: String,
+    pub player_count: i32,
+    pub max_players: i32,
+    pub mods: Vec<Mod>,
+    pub active_mods: Vec<Mod>,
+}
+
+pub fn request(
     status: &ServerStatus,
     ports: Chivalry2Ports,
     local_ip_address: Option<String>,
@@ -22,7 +42,7 @@ pub(super) fn request(
     }
 }
 
-pub(super) fn update(status: &ServerStatus) -> UpdateRegisteredServer {
+pub fn update(status: &ServerStatus) -> UpdateRegisteredServer {
     UpdateRegisteredServer {
         player_count: status.player_count,
         max_players: status.max_players,
@@ -32,7 +52,7 @@ pub(super) fn update(status: &ServerStatus) -> UpdateRegisteredServer {
                 .active_mods
                 .iter()
                 .map(|metadata| {
-                    Mod::new(
+                    BrowserMod::new(
                         metadata.name.clone(),
                         metadata.organization.clone(),
                         metadata.version.clone(),
@@ -43,7 +63,7 @@ pub(super) fn update(status: &ServerStatus) -> UpdateRegisteredServer {
     }
 }
 
-pub(super) fn ports(
+pub fn ports(
     a2s_game_port: Option<u16>,
     configured_game_port: u16,
     ping_port: u16,
@@ -56,7 +76,7 @@ pub(super) fn ports(
     }
 }
 
-pub(super) fn player_counts(players: u8, max_players: u8, headless: bool) -> (i32, i32) {
+pub fn player_counts(players: u8, max_players: u8, headless: bool) -> (i32, i32) {
     // A2S counts the headless host as a player and an occupied slot.
     let host = u8::from(headless);
     (

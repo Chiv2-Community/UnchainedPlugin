@@ -1,8 +1,7 @@
-pub use crate::server_metadata::Mod;
+pub use server_browser::server_metadata::Mod;
 
 pub mod rcon;
-#[cfg(feature="server_registration")]
-pub mod server_registration;
+pub mod server_browser;
 #[cfg(feature="mod_management")]
 #[macro_use]
 pub mod mod_management;

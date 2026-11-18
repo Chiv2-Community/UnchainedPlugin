@@ -252,7 +252,7 @@ pub struct CommandRejected {
     pub rejection_reason: String,
 }
 
-pub use crate::server_metadata::ServerStatus;
+pub use crate::features::server_browser::server_metadata::ServerStatus;
 
 /// Triggered when a player uses !admin in-game
 #[derive(Debug, Clone)]

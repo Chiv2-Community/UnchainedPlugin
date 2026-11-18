@@ -9,7 +9,7 @@ use crate::game::engine::UWorld;
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
-use crate::features::server_registration::Registration;
+use crate::features::server_browser::registration::Registration;
 use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs, ue};
 use ue::object_array::FUObjectArray;
 use itertools::Itertools;

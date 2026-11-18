@@ -108,7 +108,7 @@ define_pattern_resolver!(UTBLEnginePreExit, [
 CREATE_HOOK!(UTBLEnginePreExit, (engine: *mut UGameEngine), {
     let result = std::panic::catch_unwind(|| {
         crate::features::tokio_runtime::TOKIO_RUNTIME.block_on(
-            crate::features::server_registration::shutdown(),
+            crate::features::server_browser::registration::shutdown(),
         );
     });
     if result.is_err() {

@@ -1,6 +1,6 @@
 //! Exercise the plugin ban-check bridge against the real backend.
-#[path = "../../src/backend.rs"]
-mod backend;
+#[path = "../../src/features/server_browser/http.rs"]
+mod http;
 mod support;
 use server_browser_client::{apis::api_v1_api as api, models::IpListRequest};
 
@@ -9,7 +9,7 @@ use server_browser_client::{apis::api_v1_api as api, models::IpListRequest};
 fn native_ban_bridge_against_backend(banned: bool) {
     let (_container, url) = support::backend();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let client = backend::transport(&url, None).unwrap();
+    let client = http::transport(&url, None).unwrap();
     if banned {
         runtime.block_on(async {
             api::add_to_ban_list(
@@ -25,7 +25,7 @@ fn native_ban_bridge_against_backend(banned: bool) {
         });
     }
     assert_eq!(
-        backend::check_banned_sync(&client, "127.0.0.1", runtime.handle()),
+        http::check_banned_sync(&client, "127.0.0.1", runtime.handle()),
         Some(banned)
     );
 }

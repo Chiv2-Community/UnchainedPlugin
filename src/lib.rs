@@ -5,10 +5,6 @@ pub mod logging;
 #[macro_use]
 pub mod macros;
 mod resolvers;
-mod backend;
-mod backend_urls;
-mod backend_config;
-mod server_metadata;
 pub mod scan;
 pub mod tools;
 mod ue;
@@ -39,7 +35,7 @@ use crate::commands::spawn_cli_handler;
 #[cfg(feature="rcon_commands")]
 use crate::features::rcon::handle_rcon;
 #[cfg(feature="server_registration")]
-use crate::features::server_registration::Registration;
+use crate::features::server_browser::registration::Registration;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
 use self::resolvers::PlatformType;

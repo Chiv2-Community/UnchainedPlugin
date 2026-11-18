@@ -1,3 +1,11 @@
+pub mod http;
+pub mod server_metadata;
+pub mod urls;
+#[cfg(feature = "server_registration")]
+mod a2s_query;
+#[cfg(feature = "server_registration")]
+pub mod registration;
+
 use server_browser_client_sdk::HttpTransport;
 use std::sync::OnceLock;
 
@@ -10,7 +18,7 @@ pub fn base_url() -> &'static str {
 pub fn client() -> &'static HttpTransport {
     static CLIENT: OnceLock<HttpTransport> = OnceLock::new();
     CLIENT.get_or_init(|| {
-        crate::backend::transport(base_url(), source_ip(cli_args()))
+        http::transport(base_url(), source_ip(cli_args()))
             .expect("Failed to construct server-browser client")
     })
 }
