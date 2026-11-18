@@ -88,6 +88,7 @@ pub mod messages;
 pub mod desync;
 pub(crate) mod steam_auth;
 mod playfab_auth;
+mod listplayers;
 #[cfg(feature="move-autonomous-desync")]
 pub mod desync_tests;
 
