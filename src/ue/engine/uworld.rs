@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UWorld](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/World.h).
+
 use crate::game::chivalry2::{AActor, ATBLGameState};
 use crate::game::engine::{ENetMode, FActorSpawnParameters, FRotator, UNetDriver};
 use crate::ue::{FString, FVector, TArray, UClass, UObject};

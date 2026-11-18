@@ -1,3 +1,5 @@
+//! ArgonSDK main: [FTBLOnlineStats](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLOnlineStats.h).
+
 /// Opaque native statistics object. Do not construct in Rust.
 #[repr(C)]
 pub struct FTBLOnlineStats {

@@ -1,3 +1,6 @@
+//! ArgonSDK main: [ATBLCharacter](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacter.h).
+//! Combat events: [damage](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageTakenEvent.h), [death](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h).
+
 use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;

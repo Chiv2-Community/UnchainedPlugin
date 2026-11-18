@@ -1,3 +1,5 @@
+//! ArgonSDK main: [ATBLGameMode](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode.h).
+
 use crate::game::chivalry2::AActor;
 use crate::ue::engine::aplayer_controller::chat::client_message::{
     actor_player_state, capture_chat,

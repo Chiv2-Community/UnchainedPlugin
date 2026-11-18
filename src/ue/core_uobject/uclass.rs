@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UClass](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h).
+
 use crate::ue::{FName, TArray, UObject, UStruct};
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;

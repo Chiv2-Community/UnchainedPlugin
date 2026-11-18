@@ -1,3 +1,8 @@
+//! UE 4.25-plus: [memory statistics](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/MemoryMisc.h),
+//! [Asset Registry state](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/AssetRegistryState.h),
+//! [shared-pointer specializations](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
+//! Aliases do not establish layouts; class implementations live in their owner modules.
+
 use std::ffi::c_void;
 
 // Compatibility names for opaque native types defined beside their bindings.

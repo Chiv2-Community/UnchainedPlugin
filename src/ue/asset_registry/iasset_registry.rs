@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [IAssetRegistry](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/IAssetRegistry.h).
+
 use crate::ue::{FArchive, FName, FString, TArray};
 use super::{FAssetData, AssetRegistryScriptInterface, UAssetRegistryHelpers};
 

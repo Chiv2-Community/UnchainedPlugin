@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [AssetRegistry](https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/AssetRegistry).
+
 pub mod fasset_data;
 pub mod iasset_registry;
 pub mod asset_registry_script_interface;

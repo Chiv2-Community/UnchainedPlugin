@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FUObjectArray](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectArray.h).
+
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 use super::{TArray, UObjectBase};

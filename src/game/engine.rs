@@ -1,3 +1,9 @@
+//! UE 4.25-plus: [UWorld and spawn parameters](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/World.h),
+//! [soft object paths](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/SoftObjectPath.h),
+//! [UNetDriver](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/NetDriver.h),
+//! [UIpNetDriver](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystemUtils/Source/OnlineSubsystemUtils/Classes/IpNetDriver.h),
+//! [FInternetAddr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Sockets/Public/IPAddress.h).
+
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(clippy::upper_case_acronyms)]

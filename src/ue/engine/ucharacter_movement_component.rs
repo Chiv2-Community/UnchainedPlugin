@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UCharacterMovementComponent](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/CharacterMovementComponent.h).
+
 // UCharacterMovementComponent::MoveAutonomous + 0x2f9
 use crate::tools::hook_globals::cli_args;
 define_pattern_resolver!(

@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UObject::LoadConfig](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Obj.cpp).
+//!
 //! Profile override policy for UObject::LoadConfig.
 use std::cell::Cell;
 

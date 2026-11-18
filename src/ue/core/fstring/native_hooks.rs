@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FString](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/UnrealString.h).
+
 use crate::{
     tools::hook_globals::cli_args,
     ue::tbl::fonline_session_playfab::{IN_ON_GET_CURRENT_GAMES, IN_PING_SOME_SERVERS},

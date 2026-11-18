@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UObject::LoadConfig](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Obj.cpp).
+
 use crate::{
     tools::hook_globals::{cli_args, globals_initialized},
     ue::{FString, UClass, UObject, TCHAR},

@@ -1,3 +1,6 @@
+//! UE 4.25-plus: request handles use [TSharedPtr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
+//! OpenAPIClientApi and its generated request declarations are not shipped in ArgonSDK.
+
 // Overrides for PlayFab (tbio) requests
 
 use crate::ue::FString;

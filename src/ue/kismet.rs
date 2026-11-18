@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FFrame](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Stack.h).
+
 use std::mem::MaybeUninit;
 
 use super::*;

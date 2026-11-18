@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FFrame::KismetExecutionMessage](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/ScriptCore.cpp).
+
 use super::FFrame;
 use crate::ue::{FName, UObject, TCHAR};
 

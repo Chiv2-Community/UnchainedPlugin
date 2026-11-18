@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UAssetManager](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/AssetManager.h).
+
 use crate::ue::IAssetRegistry;
 use unchained_macros::bind_resolved_func;
 

@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [APlayerState](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerState.h).
+
 use crate::game::chivalry2::{APawn, FUniqueNetIdRepl, PlayerFlags};
 use crate::ue::{FString, UObjectType};
 use std::ffi::c_void;

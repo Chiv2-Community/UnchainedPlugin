@@ -1,3 +1,5 @@
+//! ArgonSDK main: [UTBLGameInstance](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h).
+
 use crate::ue::{FLinearColor, FText};
 use unchained_macros::bind_resolved_func;
 mod startup_patch;

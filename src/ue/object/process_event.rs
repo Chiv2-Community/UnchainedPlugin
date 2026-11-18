@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UObject::ProcessEvent](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/ScriptCore.cpp).
+
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},

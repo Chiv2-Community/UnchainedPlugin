@@ -1,3 +1,6 @@
+//! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
+//! This is a submodule containing mod/marker/settings assets, not native TBL headers.
+
 use std::os::raw::c_void;
 
 use crate::{game::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr}, ue::{FField, FProperty, FString, TArray, TMap, TSet, UClass, UObject, UStruct}};

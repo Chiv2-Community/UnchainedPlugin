@@ -1,3 +1,6 @@
+//! ArgonSDK main: [OnlineSubsystemPlayFab module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab).
+//! The SDK omits the private FOnlineAuthPlayFab declaration; layouts below are reverse-engineered.
+
 use std::ffi::c_void;
 
 // Current Steam/Epic layouts, verified against the native session getter:

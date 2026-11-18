@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [TMap](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Map.h).
+
 #![allow(private_interfaces)]
 use std::fmt::Debug;
 

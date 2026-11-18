@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FPakPlatformFile](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/PakFile/Public/IPlatformFilePak.h).
+
 // Allows loading loose assets instead of pak files
 
 use crate::ue::{FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR};

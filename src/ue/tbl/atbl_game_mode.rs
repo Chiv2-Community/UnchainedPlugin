@@ -1,3 +1,5 @@
+//! ArgonSDK main: [ATBLGameMode](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode.h).
+
 use crate::game::chivalry2::EChatType;
 use crate::ue::{FString, FText, TArray};
 use std::ffi::c_void;

@@ -1,3 +1,5 @@
+//! ArgonSDK main: [TBL native headers](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Source/TBL/Public).
+
 pub mod atbl_game_mode;
 pub mod atbl_character;
 pub mod atbl_player_controller;

@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [console output-device contract](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Misc/OutputDeviceConsole.h).
+
 use crate::ue::{FName, TCHAR};
 
 #[repr(C)]

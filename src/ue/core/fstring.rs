@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FString](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/UnrealString.h).
+
 use crate::ue::TArray;
 mod native_hooks;
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;

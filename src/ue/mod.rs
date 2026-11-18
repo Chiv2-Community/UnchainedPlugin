@@ -1,3 +1,6 @@
+//! UE 4.25-plus: [FVector](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Vector.h),
+//! [FLinearColor](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Color.h).
+
 #![allow(dead_code)]
 mod array;
 mod archive;

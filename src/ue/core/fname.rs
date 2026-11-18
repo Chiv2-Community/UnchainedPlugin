@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FName](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h).
+
 use crate::{globals, ue::FString};
 use crate::ue::UEHash;
 use unchained_macros::bind_resolved_func;

@@ -1,3 +1,6 @@
+//! UE 4.25-plus: [online identity contract](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystem/Source/Public/Interfaces/OnlineIdentityInterface.h).
+//! ArgonSDK does not ship this Redpoint Steam implementation.
+//!
 //! Redpoint Steam token-check patch.
 // Patch out Redpoint's nonempty-token check and its unused ticket allocation.
 // Steam login is still checked by GetLoginStatus(), which calls BLoggedOn().

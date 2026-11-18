@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FMalloc](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/MemoryBase.h).
+
 use std::alloc::Layout;
 use std::ffi::c_void;
 use std::ptr::NonNull;

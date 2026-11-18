@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [TArray](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Array.h).
+
 use std::alloc::Layout;
 
 use crate::globals;

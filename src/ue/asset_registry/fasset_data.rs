@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FAssetData](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/AssetData.h).
+
 use crate::ue::FName;
 use std::fmt;
 

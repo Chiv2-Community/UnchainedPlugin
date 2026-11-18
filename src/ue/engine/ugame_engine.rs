@@ -1,3 +1,6 @@
+//! UE 4.25-plus: [UGameEngine](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/GameEngine.h).
+//! ArgonSDK main: [UTBLEngine](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLEngine.h).
+
 use crate::{commands::NATIVE_COMMAND_QUEUE, ue::FString};
 use std::sync::{Mutex, Once};
 use windows::Win32::System::Memory::IsBadReadPtr;

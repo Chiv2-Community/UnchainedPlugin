@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [APlayerController](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerController.h).
+
 use crate::ue::APlayerController;
 pub(crate) mod chat;
 mod travel;

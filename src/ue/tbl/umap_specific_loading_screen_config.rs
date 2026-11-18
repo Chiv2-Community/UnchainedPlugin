@@ -1,3 +1,6 @@
+//! ArgonSDK main: [UMapSpecificLoadingScreenConfig](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h).
+//! Result layout: [FMapSpecificLoadingScreenConfigData](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfigData.h).
+//!
 //! Extra per-map loading screens.
 //!
 //! Hooks `UMapSpecificLoadingScreenConfig::GetDataForMap` and appends our own

@@ -1,3 +1,6 @@
+//! ArgonSDK main: [ATBLGameMode](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode.h).
+//! Native base: [ATBLGameMode_NativeBase](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode_NativeBase.h).
+
 use super::{ATBLGameMode__Logout, ATBLGameMode__PreLogin};
 use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;

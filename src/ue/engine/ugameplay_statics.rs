@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UGameplayStatics](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Kismet/GameplayStatics.h).
+
 use crate::ue::{TArray, UClass, UObject, USaveGame, FString};
 use unchained_macros::bind_resolved_func;
 

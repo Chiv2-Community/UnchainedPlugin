@@ -1,3 +1,6 @@
+//! ArgonSDK main: [PlayFabCpp module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/PlayFabCpp).
+//! The SDK omits PlayFabRequestHandler; its request ABI uses UE's [IHttpRequest](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Online/HTTP/Public/Interfaces/IHttpRequest.h).
+
 use crate::features::server_browser::urls::playfab_matchmake_url;
 use crate::tools::hook_globals::cli_args;
 use crate::ue::{FString, TSharedRefIHttpRequest};

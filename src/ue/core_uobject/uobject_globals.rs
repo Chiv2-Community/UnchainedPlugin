@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [UObject globals](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectGlobals.h).
+
 //! Global UE functions from UObjectGlobals.h, not UObject methods.
 use crate::ue::{FUObjectSerializeContext, TCHAR, UClass, UObject, UPackageMap};
 use unchained_macros::bind_resolved_func;

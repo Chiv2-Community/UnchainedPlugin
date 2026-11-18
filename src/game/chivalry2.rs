@@ -1,3 +1,18 @@
+//! ArgonSDK main:
+//! [ATBLCharacter](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacter.h),
+//! [ATBLCharacterBase](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacterBase.h),
+//! [ATBLPlayerController](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerController.h),
+//! [ATBLPlayerState](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerState.h),
+//! [ATBLGameState](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameState.h),
+//! [UDamageSource](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageSource.h),
+//! [FDamageTakenEvent](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageTakenEvent.h),
+//! [FDeathDamageTakenEvent](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h).
+//! UE 4.25-plus:
+//! [AController](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Controller.h),
+//! [APawn](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Pawn.h),
+//! [ACharacter](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Character.h),
+//! [AInfo](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Info.h).
+
 #![allow(non_snake_case)]
 use std::{os::raw::c_void, str::FromStr};
 use bitflags::bitflags;

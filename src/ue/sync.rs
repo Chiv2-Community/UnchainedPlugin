@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FWindowsCriticalSection](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Windows/WindowsCriticalSection.h).
+
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use windows::Win32::System::Threading::{

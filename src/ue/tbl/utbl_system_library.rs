@@ -1,3 +1,5 @@
+//! ArgonSDK main: [UTBLSystemLibrary](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLSystemLibrary.h).
+
 use crate::ue::{ATBLGameMode, UObject};
 use unchained_macros::bind_resolved_func;
 

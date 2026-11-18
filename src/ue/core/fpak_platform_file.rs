@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FPakPlatformFile](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/PakFile/Public/IPlatformFilePak.h).
+//!
 //! Pak-dir / mount discovery: records the actual `.pak` files the game mounts, so
 //! mod discovery can run against the engine's real mounted-pak list instead of a
 //! hardcoded `Content/Paks` scan.

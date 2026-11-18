@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [FUDPPing](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Online/ICMP/Public/Icmp.h).
+
 use crate::{
     tools::hook_globals::cli_args,
     ue::{FString, TFunctionFIcmpEchoResult},

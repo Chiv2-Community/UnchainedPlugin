@@ -1,3 +1,5 @@
+//! UE 4.25-plus: [APlayerController](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerController.h).
+
 use crate::{
     tools::hook_globals::globals,
     ue::{APlayerController, FGuid, FString},
