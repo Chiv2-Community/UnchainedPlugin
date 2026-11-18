@@ -1,7 +1,11 @@
 //! Plugin-specific HTTP configuration; lifecycle policy belongs to the SDK.
+#[cfg(feature = "server_registration")]
 use server_browser_client_sdk::HttpTransport;
+#[cfg(feature = "server_registration")]
 use std::net::IpAddr;
+#[cfg(feature = "server_registration")]
 use std::time::Duration;
+#[cfg(feature = "server_registration")]
 use tokio::runtime::Handle;
 
 // Runtime initialization depends on the Windows plugin globals.
@@ -10,7 +14,7 @@ pub(crate) fn base_url() -> &'static str {
     &crate::tools::hook_globals::cli_args().server_browser_backend
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "server_registration"))]
 pub(crate) fn client() -> &'static HttpTransport {
     use crate::tools::hook_globals::cli_args;
     use std::sync::LazyLock;
@@ -24,7 +28,7 @@ pub(crate) fn client() -> &'static HttpTransport {
     &CLIENT
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "server_registration"))]
 fn source_ip(use_ipv6: bool, explicit_address: Option<&str>) -> Option<IpAddr> {
     use get_if_addrs::{get_if_addrs, IfAddr};
     use std::net::Ipv6Addr;
@@ -55,6 +59,7 @@ fn source_ip(use_ipv6: bool, explicit_address: Option<&str>) -> Option<IpAddr> {
     address.map(IpAddr::V6)
 }
 
+#[cfg(feature = "server_registration")]
 fn transport(
     base_url: &str,
     source_ip: Option<IpAddr>,
@@ -68,6 +73,7 @@ fn transport(
 
 /// Legacy native admission cannot await. Never block inside a Tokio context.
 /// Timeout/task failure/shutdown keeps the banlist fail-open, not an authentication gate.
+#[cfg(feature = "server_registration")]
 pub(crate) fn check_banned_sync(client: &HttpTransport, address: &str, runtime: &Handle) -> Option<bool> {
     if Handle::try_current().is_ok() {
         return None;
@@ -88,7 +94,7 @@ pub(crate) fn check_banned_sync(client: &HttpTransport, address: &str, runtime: 
     result
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server_registration"))]
 mod tests {
     #[test]
     fn transport_sets_plugin_user_agent() {

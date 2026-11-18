@@ -16,6 +16,7 @@ path = "a2s_transport.rs"
 [[test]]
 name = "backend_transport"
 path = "backend_transport.rs"
+required-features = ["server_registration"]
 
 [[test]]
 name = "registration_metadata"
@@ -24,9 +25,11 @@ path = "registration_metadata.rs"
 [[test]]
 name = "backend_integration"
 path = "backend_integration.rs"
-required-features = ["container-tests"]
+required-features = ["container-tests", "server_registration"]
 
 [features]
+default = ["server_registration"]
+server_registration = []
 container-tests = ["dep:testcontainers"]
 # Exercise the CLI field enabled by the corresponding plugin feature.
 move-autonomous-desync = []

@@ -49,6 +49,7 @@ fn resolve_player_display_name(options: &str) -> String {
         .unwrap_or_else(|| "Error: Player name and identifier unknown".to_string())
 }
 
+#[cfg(feature = "server_registration")]
 fn is_user_banned(addr: &str) -> bool {
     sinfo!("Checking Unchained ban status for player");
     let response = std::panic::catch_unwind(|| {
@@ -123,7 +124,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         .and_then(|o| o.copy_to_string().ok())
         .unwrap_or_else(|| "<empty-string>".to_string());
 
-    if !cli_args().use_backend_banlist || address.is_null() {
+    if !cfg!(feature = "server_registration") || !cli_args().use_backend_banlist || address.is_null() {
         let result = CALL_ORIGINAL!(ATBLGameMode__PreLogin(this_ptr, options, address, unique_id, error_message));
         if !error_message.is_null() && !(*error_message).is_empty() {
             return result;
@@ -135,6 +136,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         return result;
     }
 
+    #[cfg(feature = "server_registration")]
     let addr_string = unsafe { (*address).to_string() };
     sinfo!("User joining");
 
@@ -147,6 +149,7 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         }
     }
 
+    #[cfg(feature = "server_registration")]
     if is_user_banned(&addr_string) {
         let msg = "You are banned from this server.";
         let wide_msg: Vec<u16> = msg.encode_utf16().collect();
@@ -161,12 +164,11 @@ CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
         }
         #[cfg(feature="verbose_hooks")]
         swarn!("User banned!");
+        return original_result;
     }
-    else {
-        let display_name = resolve_player_display_name(&options_string);
-        sinfo!("Player '{}' joined", display_name);
-        EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: display_name }));
-    }
+    let display_name = resolve_player_display_name(&options_string);
+    sinfo!("Player '{}' joined", display_name);
+    EVENT_SYSTEM.game_event_publisher.publish(GameEvent::JoinEvent(Join { name: display_name }));
 
     original_result
 });

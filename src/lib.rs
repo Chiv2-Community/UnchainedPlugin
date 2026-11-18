@@ -1,4 +1,4 @@
-#![feature(ip)]
+#![cfg_attr(feature = "server_registration", feature(ip))]
 
 #[macro_use]
 pub mod logging;
