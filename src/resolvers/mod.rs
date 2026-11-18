@@ -126,6 +126,14 @@ inventory::collect!(OffsetRegisty);
 pub fn attach_late_hooks() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
+        // Example probe for comparing a reflected native with a signature resolver.
+        // let reflected = unsafe {
+        //     crate::ue::find_native("/Script/Engine.KismetSystemLibrary", "IsDedicatedServer")
+        //         .and_then(|thunk| crate::ue::exec_thunk::inner_native_of(thunk))
+        //         .and_then(|target| target.checked_sub(*BASE_ADDR))
+        // };
+        // let signature = crate::current_build_offset("UGameplay_IsDedicatedServer");
+        // crate::sinfo!("IsDedicatedServer reflected RVA {reflected:x?}, signature RVA {signature:x?}");
         for hook in inventory::iter::<LateHookRegistration> {
             match unsafe { (hook.attach)() } {
                 Ok(()) => crate::sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),

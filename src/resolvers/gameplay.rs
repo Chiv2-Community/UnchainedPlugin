@@ -195,10 +195,8 @@ fn attack_type_from_damage_event(damage_event: &FDamageTakenEvent) -> String {
     "Damage".into()
 }
 
-define_pattern_resolver!(ATBLCharacter__OnKilled, [
-    "4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"
-]);
-CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
+kismet_native_class!(TBLCharacterNatives => path "/Script/TBL.TBLCharacter");
+CREATE_HOOK_KISMET!(TBLCharacterNatives, "OnKilled", ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLCharacter,
     damage_event: *const FDeathDamageTakenEvent
 ), {
@@ -245,10 +243,7 @@ CREATE_HOOK!(ATBLCharacter__OnKilled, ACTIVE, NONE, (), (
 });
 
 
-define_pattern_resolver!(ATBLCharacter__OnDamageTaken, [
-    "4C 8B DC 55 57 41 55 41 56 49 8D AB ?? ?? ?? ?? 48 81 EC 58 02 00 00"
-]);
-CREATE_HOOK!(ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
+CREATE_HOOK_KISMET!(TBLCharacterNatives, "OnDamageTaken", ATBLCharacter__OnDamageTaken, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLCharacter,
     damage_event: *const FDamageTakenEvent
 ), {

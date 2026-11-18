@@ -184,11 +184,9 @@ impl TScriptInterface {
     }
 }
 
-define_pattern_resolver!(GetAssetRegistry_Helper,[
-    "48 89 5C 24 ?? 57 48 83 EC 20 48 8B F9 48 8D 15 ?? ?? ?? ?? 48 8D 4C 24 ?? 41 B8 01 00 00 00 E8 ?? ?? ?? ?? 48 8B 18 E8 ?? ?? ?? ?? 48 8B D3 48 8B C8 E8 ?? ?? ?? ?? 48 8B C8 48 8B 10 FF 52 ?? 48 85 C0"
-    ]);
+kismet_native_class!(UAssetRegistryHelpers => path "/Script/AssetRegistry.AssetRegistryHelpers");
 // TScriptInterface<> * __cdecl UAssetRegistryHelpers::GetAssetRegistry(TScriptInterface<> *__return_storage_ptr__)
-CREATE_HOOK!(GetAssetRegistry_Helper, CALLED,  *mut TScriptInterface, (ret_val_tscr:  *mut TScriptInterface),{
+CREATE_HOOK_KISMET!(UAssetRegistryHelpers, "GetAssetRegistry", GetAssetRegistry_Helper, CALLED, *mut TScriptInterface, (ret_val_tscr: *mut TScriptInterface),{
     sdebug!["Triggered!"];
 });
 

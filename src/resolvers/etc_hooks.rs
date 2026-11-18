@@ -353,15 +353,10 @@ CREATE_HOOK!(LoadConfig, { || cli_args().unchained_profile_location.is_some() },
 //     CALL_ORIGINAL!(GetMapSummary(uObject, fstring, p3))
 // });
 
-define_pattern_resolver!(GetGameInfo, {
-    // "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00", // Universal
-    // From sigga
-    STEAM: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC b0 01 00 00 45 33 FF"], // STEAM
-    OTHER: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00 33 FF"], // PDB
-});
+kismet_native_class!(UUserFeedbackAndBugReportsLibrary => path "/Script/TBL.UserFeedbackAndBugReportsLibrary");
 
 // FIXME: When is this called?
-CREATE_HOOK!(GetGameInfo, ACTIVE, POST,
+CREATE_HOOK_KISMET!(UUserFeedbackAndBugReportsLibrary, "GetGameInfo", GetGameInfo, ACTIVE, POST,
 *mut FString, (ret_ptr: *mut FString, uWorld: *mut UWorld),
 |ret_val: *mut FString| {
     unsafe {

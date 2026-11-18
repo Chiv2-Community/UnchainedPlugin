@@ -7,6 +7,8 @@ use crate::{
 };
 
 pub(crate) mod broadcast_display;
+kismet_native_class!(TBLPlayerControllerNatives => virtual "/Script/TBL.TBLPlayerController");
+kismet_native_class!(TBLGameModeNatives => virtual "/Script/TBL.TBLGameMode");
 
 mod client_message {
     use crate::events::models::{
@@ -29,10 +31,7 @@ mod client_message {
         })
     }
 
-    define_pattern_resolver!(ClientReceiveChat, [
-        "40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"
-    ]);
-    CREATE_HOOK!(ClientReceiveChat, (
+    CREATE_HOOK_KISMET!(super::TBLPlayerControllerNatives, "ClientReceiveChat", ClientReceiveChat, (
         receiver: *mut APlayerController, sender: *mut ATBLPlayerState,
         message: *const FString, chat_type: u32, is_sender_dev: bool, override_color: u32
     ), {
@@ -42,10 +41,7 @@ mod client_message {
         }
     });
 
-    define_pattern_resolver!(BroadcastChat, [
-        "48 85 D2 0F 84 3E 04 00 00 48 8B C4 4C 89 40 18 48 89 48 08 55 41 55 41 56 41 57 48 8D 68 A9 48"
-    ]);
-    CREATE_HOOK!(BroadcastChat, (
+    CREATE_HOOK_KISMET!(super::TBLGameModeNatives, "BroadcastChat", BroadcastChat, (
         gamemode: *mut ATBLGameMode, sender: *mut AActor,
         message: *const FString, chat_type: u32, override_color: u32
     ), {
@@ -261,9 +257,8 @@ pub mod kismet_log {
 // Blueprint VM native-exec hooks (PrintString/Warning/Text + server-identity) and the Blueprint
 // print logging + spam filter live in `crate::resolvers::kismet_natives` (own file).
 
-define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
 //void __thiscall ATBLGameMode::BroadcastLocalizedChat(ATBLGameMode *this,FText *param_1,Type param_2)
-CREATE_HOOK!(BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
+CREATE_HOOK_KISMET!(TBLGameModeNatives, "BroadcastLocalizedChat", BroadcastLocalizedChat, CALLED, (gamemode: *mut ATBLGameMode, text: *mut FText, chat_type: EChatType),{
 });
 
 // Console output (e.g. "Command not recognized: ...")

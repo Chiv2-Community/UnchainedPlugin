@@ -7,11 +7,8 @@ use crate::{
     ue::{FName, FString},
 };
 
-define_pattern_resolver!(ClientReceiveLocalizedChat, [
-    "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
-]);
 // ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
-CREATE_HOOK!(ClientReceiveLocalizedChat, ACTIVE, NONE, (), (
+CREATE_HOOK_KISMET!(super::TBLPlayerControllerNatives, "ClientReceiveLocalizedChat", ClientReceiveLocalizedChat, ACTIVE, NONE, (), (
     controller: *mut c_void, message: *const FText, channel: u32
 ), {
     if let Some(raw) = native_string(message) {
