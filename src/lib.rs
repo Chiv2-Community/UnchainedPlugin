@@ -427,12 +427,7 @@ fn postinit_rustlib() {
         while !ENGINE_READY.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(250));
         }
-        for hook in inventory::iter::<resolvers::LateHookRegistration> {
-            match unsafe { (hook.attach)() } {
-                Ok(()) => sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
-                Err(e) => serror!("☐ {}::{}: {}", hook.class, hook.native, e),
-            }
-        }
+        resolvers::attach_late_hooks();
     });
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
@@ -545,13 +540,13 @@ pub fn world_init() {
 
     if let Some(motd) = cli_args().motd.clone() {
         sinfo!("Starting MOTD broadcast loop");
-        thread::spawn(move || {
-            loop {
-                sinfo!("Broadcasting MOTD: {}", motd);
-                game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
-                thread::sleep(Duration::from_secs(30 * 60));
-            }
-        });
+        // thread::spawn(move || {
+        //     loop {
+        //         sinfo!("Broadcasting MOTD: {}", motd);
+        //         game::chivalry2::send_ingame_message(motd.clone(), Some(EChatType::ServerSay));
+        //         thread::sleep(Duration::from_secs(30 * 60));
+        //     }
+        // });
     }
 
     {

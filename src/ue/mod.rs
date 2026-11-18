@@ -8,6 +8,7 @@ mod memory;
 mod name;
 mod object;
 mod object_ptr;
+mod reflection;
 pub mod object_array;
 mod string;
 pub mod stubs;
@@ -20,6 +21,7 @@ pub use memory::*;
 pub use name::*;
 pub use object::*;
 pub use object_ptr::*;
+pub use reflection::*;
 pub use string::*;
 pub use stubs::*;
 

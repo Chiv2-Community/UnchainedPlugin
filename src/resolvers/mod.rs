@@ -99,6 +99,8 @@ pub mod etc_hooks;
 pub mod ownership_overrides;
 pub mod unchained_integration;
 pub mod messages;
+#[cfg(any(feature = "blueprint_printstring_log", feature = "kismet_server_identity_hooks"))]
+pub mod kismet_natives;
 pub mod desync;
 pub(crate) mod steam_auth;
 mod playfab_auth;
@@ -116,3 +118,15 @@ inventory::collect!(HookRegistration);
 inventory::collect!(LateHookRegistration);
 inventory::collect!(PatchRegistration);
 inventory::collect!(OffsetRegisty);
+
+/// Attach every `LateHookRegistration` (reflection-resolved hooks that need the live UObject
+/// system). Must be called AFTER the engine is ready (see `postinit_rustlib`, which waits on
+/// `ENGINE_READY` before calling this).
+pub fn attach_late_hooks() {
+    for hook in inventory::iter::<LateHookRegistration> {
+        match unsafe { (hook.attach)() } {
+            Ok(()) => crate::sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
+            Err(e) => crate::serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+        }
+    }
+}
