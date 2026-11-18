@@ -1,4 +1,4 @@
-use super::TArray;
+use crate::ue::TArray;
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows::Win32::System::Threading::GetCurrentProcess;
 
@@ -39,6 +39,14 @@ impl FStringCopyError {
 }
 
 impl TArray<TCHAR> {
+    /// FString::AppendChars(const WIDECHAR*, int32).
+    ///
+    /// # Safety
+    /// Self must be a live writable native string with exclusive access. Text
+    /// must contain count readable UTF-16 units; count must be nonnegative.
+    #[unchained_macros::bind_resolver_func(crate::resolvers::backend_hooks::FString_AppendChars)]
+    pub unsafe fn append_chars(self: *mut Self, text: *const TCHAR, count: i32) {}
+
     /// Using direct to_string on TArray<TCHAR> (or the FString type) binds a reference to a string
     /// in the FString's backing buffer, which is not safe to do in a multithreaded environment.
     /// This function copies the buffer to a new string, which is safe to do in a multithreaded
@@ -54,7 +62,7 @@ impl TArray<TCHAR> {
         struct Header { data: *const TCHAR, num: i32, max: i32 }
         const MAX_CODE_UNITS: i32 = 1 << 20;
 
-        let header = super::try_read(self as *const Self as *const Header)
+        let header = crate::ue::try_read(self as *const Self as *const Header)
             .ok_or(FStringCopyError::MemoryReadFailed)?;
         if header.num == 0 || header.data.is_null() {
             return Err(FStringCopyError::NullOrEmptyBuffer);

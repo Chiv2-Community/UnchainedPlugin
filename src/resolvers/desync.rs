@@ -4,7 +4,6 @@ use std::{
     os::raw::c_void,
 };
 
-use crate::resolvers::unchained_integration::*;
 use crate::{
     game::engine::ENetMode,
     tools::hook_globals::{cli_args, globals},
@@ -238,7 +237,7 @@ define_pattern_resolver!(UGameplay_IsDedicatedServer, [
 ]);
 CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NONE, bool, (param_1: u64),{
     if let Some(world) = globals().world() {
-        let mode = unsafe { o_InternalGetNetMode.call(world) };
+        let mode = unsafe { world.internal_get_net_mode() };
         if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
             #[cfg(feature="verbose_hooks")]
             strace!("Overriding dedicated server status");

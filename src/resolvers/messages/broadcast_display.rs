@@ -3,8 +3,7 @@ use std::os::raw::c_void;
 use crate::{
     events::broadcast_message::game_chat::broadcast_parts,
     game::{chivalry2::EChatType, engine::FText},
-    resolvers::admin_control::o_FText_AsCultureInvariant,
-    ue::{FName, FString},
+    ue::{FLinearColor, FName, FString, InvariantText, UTBLGameInstance},
 };
 
 define_pattern_resolver!(ClientReceiveLocalizedChat, [
@@ -25,11 +24,6 @@ CREATE_HOOK!(ClientReceiveLocalizedChat, ACTIVE, NONE, (), (
 define_pattern_resolver!(TBLGameInstance_AddChatLine, [
     "48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"
 ]);
-// UTBLGameInstance::AddChatLine: local display helper, not an intercepted function.
-CREATE_HOOK!(TBLGameInstance_AddChatLine, CALLED, (), (
-    instance: *mut c_void, sender: *const FText, message: *const FText,
-    channel: u32, want_focus: bool, is_sender_dev: bool, origin_color: *const [f32; 4]
-), {});
 
 fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32; 4])> {
     if channel != EChatType::AllSay as u32 && channel != EChatType::ServerSay as u32 {
@@ -65,69 +59,40 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let world = unsafe { UWorld::from_ptr(controller.base.get_world()) }?;
     let instance = world.owning_game_instance;
     if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } { return None; }
-    let title = NativeText::new(title)?;
-    let body = NativeText::new(body)?;
+    let title = InvariantText::new(title);
+    let body = InvariantText::new(body);
     // Preflight both calls before producing any output; failures use the untouched native path.
-    if (!o_TBLGameInstance_AddChatLine.is_enabled() && unsafe { o_TBLGameInstance_AddChatLine.disable().is_err() })
-        || (!o_ClientMessage.is_enabled() && unsafe { o_ClientMessage.disable().is_err() })
+    if !crate::resolvers::function_is_bound("TBLGameInstance_AddChatLine")
+        || o_ClientMessage.get().is_none()
     {
         return None;
     }
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
     unsafe { ClientMessage_detour_fkt(controller_ptr, &mut console_line, FName::default(), 0.0); }
-    CALL_ORIGINAL!(TBLGameInstance_AddChatLine(instance, &title.0, &body.0, channel, false, is_sender_dev, &origin_color));
+    let [r, g, b, a] = origin_color;
+    let origin_color = FLinearColor { r, g, b, a };
+    unsafe { instance.cast::<UTBLGameInstance>().add_chat_line(title.as_ptr(), body.as_ptr(), channel, false, is_sender_dev, &origin_color); }
     Some(())
 }
 
 define_pattern_resolver!(FText_ToString, [
     "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"
 ]);
-// FText::ToString returns a borrowed FString owned by the text data.
-CREATE_HOOK!(FText_ToString, CALLED, *const FString, (text: *const FText), {});
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() { return None; }
-    let string = CALL_ORIGINAL_SAFE!(FText_ToString(text)).ok()?;
-    unsafe { string.as_ref() }?.copy_to_string().ok()
+    if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") { return None; }
+    let string = unsafe { FText::from_ptr(text)?.to_native_string() };
+    string.copy_to_string().ok()
 }
 
 define_pattern_resolver!(FText_Release, [
     "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
 ]);
-// Native thread-safe shared-reference destructor; FText's control block is at +8.
-CREATE_HOOK!(FText_Release, CALLED, (), (text: *mut FText), {});
-
-struct NativeText(FText);
-
-impl NativeText {
-    fn new(text: &str) -> Option<Self> {
-        if !o_FText_Release.is_enabled() && unsafe { o_FText_Release.disable().is_err() } {
-            return None;
-        }
-        let mut result = Self(FText::default());
-        let mut string = FString::from(text);
-        CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(&mut result.0, &mut string)).ok()?;
-        Some(result)
-    }
-}
-
-impl Drop for NativeText {
-    fn drop(&mut self) {
-        let _ = CALL_ORIGINAL_SAFE!(FText_Release(&mut self.0));
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn native_text_layout_matches_windows_abi() {
-        assert_eq!(std::mem::size_of::<FText>(), 24);
-        assert_eq!(std::mem::align_of::<FText>(), 8);
-        assert_eq!(std::mem::offset_of!(FText, flags), 16);
-    }
 
     #[test]
     fn display_override_accepts_only_global_channels() {

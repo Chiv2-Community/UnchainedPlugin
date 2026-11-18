@@ -61,26 +61,12 @@ fn native_key(raw: &str) -> &str {
 /// by the engine and then moved into an engine-owned array; Rust never reads or
 /// drops it.
 #[repr(C, align(8))]
-pub struct FTextRaw([u8; 0x18]);
+pub struct FTextRaw(FText);
 
 impl FTextRaw {
     /// Builds an engine-owned, culture-invariant `FText` from a Rust string.
-    ///
-    /// # Safety
-    /// Must run on the game thread after the engine allocator is available.
-    unsafe fn from_str(text: &str) -> Result<Self, String> {
-        use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
-
-        let mut raw = Self([0; 0x18]);
-        let mut string = FString::from(text);
-        let result = CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(
-            std::ptr::from_mut(&mut raw).cast::<FText>(),
-            &mut string
-        ));
-        // The callee takes its by-value FString and destroys/moves it, so ours
-        // must not be dropped again.
-        std::mem::forget(string);
-        result.map(|_| raw)
+    fn from_str(text: &str) -> Self {
+        Self(crate::ue::InvariantText::new(text).into_raw())
     }
 }
 
@@ -123,32 +109,27 @@ impl UMapSpecificLoadingScreenConfig {
     ///
     /// # Safety
     /// `self` must be the live engine object; must run on the game thread.
-    unsafe fn add_entry(&mut self, extra: &LoadingScreen) -> Result<(), String> {
+    unsafe fn add_entry(&mut self, extra: &LoadingScreen) {
         if self.has_entry(&extra.map) {
-            return Ok(());
+            return;
         }
         let entry = FMapSpecificLoadingScreenConfigData {
             map_name: FString::from(extra.map.as_str()),
             texture: FSoftObjectPath::new(&extra.texture),
-            text_a: FTextRaw::from_str(&extra.text_a)?,
-            text_b: FTextRaw::from_str(&extra.text_b)?,
+            text_a: FTextRaw::from_str(&extra.text_a),
+            text_b: FTextRaw::from_str(&extra.text_b),
             extra: [0; 0x10],
         };
         self.configs.push(entry);
         sinfo!["Added extra loading screen config for {} ({} entries)", extra.map, self.configs.len()];
-        Ok(())
     }
 }
 
-/// Adds the entry, turning panics and errors into log lines: neither may cross
-/// into the engine.
+/// Adds the entry, preventing panics from crossing into the engine.
 fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &LoadingScreen) {
     // SAFETY: `config` is the `this` pointer of a live `GetDataForMap` call on the game thread.
     match catch_unwind(AssertUnwindSafe(|| unsafe { (*config).add_entry(extra) })) {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => {
-            crate::swarn!("Could not add extra loading screen for {}: {}", extra.map, error)
-        }
+        Ok(()) => {}
         Err(_) => crate::serror!("Panic while adding extra loading screen for {}", extra.map),
     }
 }

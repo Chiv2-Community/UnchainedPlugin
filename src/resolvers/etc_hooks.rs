@@ -1,14 +1,11 @@
 use std::{cell::Cell, os::raw::c_void};
 
 use crate::{
-    game::{
-        chivalry2::AActor,
-        engine::{FActorSpawnParameters, FRotator, UWorld},
-    },
+    game::engine::UWorld,
     resolvers::config_overrides::{LOAD_CONFIG_REENTRY, resolve_profile_override_paths_for_config},
     tools::hook_globals::{cli_args, globals, globals_initialized},
     ue::{
-        APlayerController, FGuid, FOnlineSessionPlayFab, FString, FVector,
+        APlayerController, FGuid, FOnlineSessionPlayFab, FString,
         GetCurrentGamesPostResponse, TArray, TFunctionFIcmpEchoResult, UClass, UObject, TCHAR,
     },
 };
@@ -420,9 +417,6 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
-CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
-    sdebug!["Triggered!"];
-});
 /*
 ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 */
@@ -433,7 +427,3 @@ define_pattern_resolver![GetTBLGameMode, {
         "40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51" // EGS 2.11.4
         ]
 }];
-
-CREATE_HOOK!(GetTBLGameMode, INACTIVE, *mut crate::game::chivalry2::ATBLGameMode, (object: *mut UObject),{
-    sdebug!["Triggered!"];
-});

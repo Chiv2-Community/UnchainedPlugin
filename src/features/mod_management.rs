@@ -2,16 +2,15 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
+use crate::ue::tbl::UTBLSystemLibrary;
 use crate::game::chivalry2::EChatType;
-use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
+use crate::game::engine::{FActorSpawnParameters, FRotator, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};
-#[allow(unused_imports)]
-use crate::resolvers::asset_registry::o_FNameCtorWchar;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::ue::{AsUObject, FString, FVector, TArray, UClass, UObject};
-use crate::resolvers::{asset_registry::*, asset_loading::*};
+use crate::ue::{AsUObject, FString, FVector, TArray, UClass, UObject, UGameplayStatics};
+use crate::resolvers::asset_loading::*;
 #[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
@@ -19,10 +18,7 @@ use std::io::BufWriter;
 use std::path::Path;
 use crate::game::engine::get_uobject_from_path;
 use std::collections::{HashMap, HashSet};
-use crate::resolvers::etc_hooks::*;
 use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
-use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
-use crate::resolvers::messages::o_BroadcastLocalizedChat;
 
 
 
@@ -172,7 +168,8 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
     if class_ptr.is_null() {
         return None;
     }
-    let cdo_new = CALL_ORIGINAL_SAFE!(GetDefaultObject(class_ptr, true)).ok()?;
+    crate::resolvers::require_function_bindings(&["GetDefaultObject"]).ok()?;
+    let cdo_new = class_ptr.get_default_object(true);
     if cdo_new.is_null() {
         return None;
     }
@@ -194,7 +191,8 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 /// is of another class.
 fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
     let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
-    CALL_ORIGINAL_SAFE!(StaticLoadObject(
+    crate::resolvers::require_function_bindings(&["StaticLoadObject"])?;
+    Ok(unsafe { crate::ue::static_load_object(
         object_class,
         std::ptr::null_mut(),
         wide_path.as_ptr(),
@@ -203,7 +201,7 @@ fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UO
         std::ptr::null_mut(),
         false,
         std::ptr::null_mut()
-    ))
+    ) })
 }
 
 /// Combines both marker scans; a mod actor listed by both versions keeps its
@@ -410,11 +408,12 @@ impl ModManager {
 
         let mut res_arr = TArray::<*mut UObject>::default();
         
-        CALL_ORIGINAL_SAFE!(GetAllActorsOfClass(
+        crate::resolvers::require_function_bindings(&["GetAllActorsOfClass"])?;
+        unsafe { UGameplayStatics::get_all_actors_of_class(
             world.as_uobject(),
             mod_base_class,
             &mut res_arr
-        ))?;
+        ); }
 
         let actors = res_arr.as_slice();
         
@@ -478,19 +477,16 @@ impl ModManager {
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
-        let new_actor = match CALL_ORIGINAL_SAFE!(SpawnActor(
-            world,
+        if let Err(error) = crate::resolvers::require_function_bindings(&["SpawnActor"]) {
+            serror!("Cannot spawn mod actor: {}", error);
+            return;
+        }
+        let new_actor = world.spawn_actor(
             mod_class,
             &mut loc,
             &mut rot,
             &mut params
-        )) {
-            Ok(actor) => actor,
-            Err(error) => {
-                serror!("Cannot spawn mod actor: {}", error);
-                return;
-            }
-        };
+        );
 
         unsafe {
             let actor_obj = new_actor as *mut UObject;
@@ -505,35 +501,25 @@ impl ModManager {
     }
 
     /// Best-effort admin chat after a spawn; every step may be unavailable
-    /// (no world, no game mode in the menu, detour not installed).
+    /// (no world, no game mode in the menu, binding not initialized).
     fn broadcast_spawn_confirmation(&self) {
         let Some(world) = globals().world() else {
             swarn!("globals.world missing; skipping spawn confirmation chat");
             return;
         };
-        let mut txt = FText::default();
-        let mut message = FString::from("Spawned new Mod from console");
-        let converted = CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(&mut txt, &mut message));
-        // The engine may take ownership of the string (by-value overload), so
-        // don't free it a second time; at worst this leaks a short string.
-        std::mem::forget(message);
-        let text = match converted {
-            Ok(text) if !text.is_null() => text,
-            _ => {
-                swarn!("FText conversion unavailable; skipping spawn confirmation chat");
-                return;
-            }
-        };
-        let game_mode = match CALL_ORIGINAL_SAFE!(GetTBLGameMode(world.as_uobject())) {
-            Ok(game_mode) if !game_mode.is_null() => game_mode,
-            _ => {
-                swarn!("No game mode; skipping spawn confirmation chat");
-                return;
-            }
-        };
-        if let Err(error) = CALL_ORIGINAL_SAFE!(BroadcastLocalizedChat(game_mode, text, EChatType::Admin)) {
+        if let Err(error) = crate::resolvers::require_function_bindings(&[
+            "GetTBLGameMode", "BroadcastLocalizedChat",
+        ]) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
+            return;
         }
+        let text = crate::ue::InvariantText::new("Spawned new Mod from console");
+        let game_mode = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
+        if game_mode.is_null() {
+            swarn!("No game mode; skipping spawn confirmation chat");
+            return;
+        }
+        unsafe { game_mode.broadcast_localized_chat(text.as_ptr(), EChatType::Admin); }
     }
 
     pub fn destroy_mod_actor(&self, _actor_ptr: *mut UObject) {

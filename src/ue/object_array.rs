@@ -5,6 +5,14 @@ use super::sync::{FWindowsCriticalSection, CriticalSectionGuard};
 
 type ObjectIndex = i32;
 
+/// Address of UE's inline object registry; never copy its native storage.
+///
+/// # Safety
+/// Startup must bind the process-lifetime FUObjectArray. Access through the
+/// returned pointer must follow the registry's native synchronization rules.
+#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
+pub(crate) unsafe fn native_guobject_array() -> *const FUObjectArray {}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectCreateListener;
@@ -148,4 +156,13 @@ pub struct FUObjectItem {
     pub flags: i32,
     pub cluster_root_index: i32,
     pub serial_number: AtomicI32,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[should_panic(expected = "Required native value GUObjectArray is not bound")]
+    fn object_registry_access_requires_binding() {
+        unsafe { super::native_guobject_array(); }
+    }
 }

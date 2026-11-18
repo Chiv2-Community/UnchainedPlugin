@@ -1,56 +1,5 @@
-use super::{FArchive, FName, FString, TArray, UObject};
-use crate::resolvers::asset_registry::o_UAssetRegistryHelpers__GetAssetRegistry;
-use std::fmt;
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-#[allow(non_snake_case)]
-pub struct FAssetData {
-    pub ObjectPath: FName,
-    pub PackageName: FName,
-    pub PackagePath: FName,
-    pub AssetName: FName,
-    pub AssetClass: FName,
-    pub TagsAndValues: [u8; 0x10], // TSharedPtr<FAssetDataTagMap,0>
-    pub ChunkIDs: [u8; 0x10],      // TArray<int> ?
-    pub PackageFlags: u32,
-    pub padding: [u8; 4], // for alignment to 0x50
-}
-
-impl fmt::Display for FAssetData {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ObjectPath {}\n PackageName: {}\n PackagePath: {}\n AssetName: {}\n AssetClass: {}",
-            self.ObjectPath, self.PackageName, self.PackagePath, self.AssetName, self.AssetClass
-        )
-    }
-}
-
-/// Native TScriptInterface<IAssetRegistry> return storage; owns neither pointer.
-#[repr(C)]
-#[derive(Debug)]
-pub struct AssetRegistryScriptInterface {
-    pub object: *mut UObject,
-    pub interface: *mut IAssetRegistry,
-}
-
-impl AssetRegistryScriptInterface {
-    /// Return the borrowed interface, never the enclosing UObject address.
-    pub fn asset_registry(&self) -> Result<*mut IAssetRegistry, String> {
-        if self.interface.is_null() {
-            return Err("Asset Registry singleton has no native interface pointer".into());
-        }
-        Ok(self.interface)
-    }
-
-    pub fn new() -> Self {
-        Self {
-            object: std::ptr::null_mut(),
-            interface: std::ptr::null_mut(),
-        }
-    }
-}
+use crate::ue::{FArchive, FName, FString, TArray};
+use super::{FAssetData, AssetRegistryScriptInterface, UAssetRegistryHelpers};
 
 /// Native interface subobject, not the enclosing UObject.
 // Steam/EGS table 0x144d73648; UE AssetRegistry/Public/IAssetRegistry.h.
@@ -89,7 +38,8 @@ impl IAssetRegistry {
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = AssetRegistryScriptInterface::new();
-        CALL_ORIGINAL_SAFE!(UAssetRegistryHelpers__GetAssetRegistry(&mut registry))?;
+        crate::resolvers::require_function_bindings(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
+        UAssetRegistryHelpers::get_asset_registry(&mut registry);
         registry.asset_registry()
     }
 }

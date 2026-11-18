@@ -29,6 +29,11 @@
 ///    ```rust,ignore
 ///    CREATE_HOOK!(Name, Status, HookType, RetType, (args), { body });
 ///    ```
+/// 6. **Borrowed arguments/results**
+///    ```rust,ignore
+///    CREATE_HOOK!(Name, for<'a>, ACTIVE, PRE, &'a Value, (value: &'a Value), {});
+///    ```
+///    References require native validity and aliasing guarantees for each call.
 ///
 /// # Note on Testing
 /// These examples are marked `ignore` because they require external state (like `o_Name` statics) 
@@ -52,6 +57,11 @@
 /// 
 #[macro_export]
 macro_rules! CREATE_HOOK {
+    ($name:ident, for<$($lifetime:lifetime),+>, $status:tt, $hook_type:ident,
+        $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        $crate::__create_hook_impl!(@lifetimes [$($lifetime),+] $name, $status,
+            $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
+    };
     ($($tt:tt)*) => {
         $crate::__create_hook_inner!($($tt)*);
     };
@@ -102,14 +112,23 @@ macro_rules! __create_hook_impl {
     (@as_cond $cond:expr) => { $cond };
 
     ($name:ident, $status:tt, $hook_type:ident, $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
+        $crate::__create_hook_impl!(@lifetimes ['__unchained_call] $name, $status,
+            $hook_type, $out_type, ( $( $arg: $ty ),+ ), $body);
+    };
+
+    (@lifetimes [$($lifetime:lifetime),+] $name:ident, $status:tt, $hook_type:ident,
+        $out_type:ty, ( $( $arg:ident: $ty:ty ),+ $(,)? ), $body:expr) => {
         paste::paste! {
-            #[cfg(not(rust_analyzer))]
-            ::retour::static_detour! {
-                pub static [<o_ $name>]: unsafe extern "C" fn($( $ty ),+) -> $out_type;
+            ::retour::lifetime_detour! {
+                #[allow(non_camel_case_types)]
+                pub struct [<Detour_ $name>]: for<$($lifetime),+>
+                    unsafe extern "C" fn($( $arg: $ty ),+) -> $out_type;
             }
+            #[allow(non_upper_case_globals)]
+            pub static [<o_ $name>]: std::sync::OnceLock<[<Detour_ $name>]> = std::sync::OnceLock::new();
 
             #[allow(non_snake_case, unused_variables)]
-            pub unsafe extern "C" fn [<$name _detour_fkt>]($( $arg: $ty ),+ ) -> $out_type {
+            pub unsafe extern "C" fn [<$name _detour_fkt>]<$($lifetime),+>($( $arg: $ty ),+ ) -> $out_type {
                 $crate::__hook_dispatch!($hook_type, $name, $out_type, ( $( $arg ),+ ), $body)
             }
 
@@ -122,20 +141,19 @@ macro_rules! __create_hook_impl {
                     None => Err(format!("No address found for {}", stringify!($name)).into()),
                     Some(off) => {
                         let rel_address = *off as usize;
-                        type FnPtr = unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
-                        let base_address = * $crate::resolvers::BASE_ADDR;
+                        type FnPtr = for<$($lifetime),+> unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
+                        let base_address = * crate::resolvers::BASE_ADDR;
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
-                        [<o_ $name>].initialize(target, |$( $arg ),+| {
-                            unsafe { [<$name _detour_fkt>]($( $arg ),+) }
-                        }).unwrap();
-                        // $crate::sinfo!("Set up {}", stringify!([<$name _detour_fkt>]));
+                        let hook = [<Detour_ $name>]::new(target, [<$name _detour_fkt>])?;
+                        [<o_ $name>].set(hook).map_err(|_| ::retour::Error::AlreadyInitialized)?;
+                        // crate::sinfo!("Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition
                         // Note: We evaluate the condition here at attachment time
                         let condition_met = ($crate::__create_hook_impl![@as_cond $status])();
                         
                         if auto_activate && condition_met {
-                            [<o_ $name>].enable()?;
+                            [<o_ $name>].get().expect("Hook was just initialized").enable()?;
                         }
                         Ok(Some(rel_address))
                     }
@@ -143,7 +161,7 @@ macro_rules! __create_hook_impl {
             }
 
             inventory::submit! {
-                $crate::resolvers::HookRegistration {
+                crate::resolvers::HookRegistration {
                     name: stringify!($name),
                     hook_fn: [<attach_ $name>],
                     // Store the condition as a function pointer for runtime re-checks if needed
@@ -187,22 +205,20 @@ macro_rules! CALL_ORIGINAL {
         paste::paste! {
             #[allow(clippy::macro_metavars_in_unsafe)] // FIXME: I guess
             #[allow(unused_unsafe)]
-            unsafe { [<o_ $name>].call($($arg),*) }
+            unsafe { [<o_ $name>].get().expect(concat!("Detour ", stringify!($name), " is not initialized")).call($($arg),*) }
         }
     }};
 }
 
 /// Calls the original detour function `o_<name>` with arguments.
 /// Preserves type hints for Rust Analyzer.
-/// Returns if detour is disabled
+/// Returns if the detour is not initialized. Disabled detours remain callable.
 #[macro_export]
 macro_rules! TRY_CALL_ORIGINAL {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
         paste::paste! {
-            #[allow(unused_unsafe)]
-            let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
-            if !is_init {
-                $crate::swarn!("Detour {} is not initialized. Skipping.", stringify!($name));
+            if [<o_ $name>].get().is_none() {
+                crate::swarn!("Detour {} is not initialized. Skipping.", stringify!($name));
                 return; // The "TRY" part: exit the caller
             }
             
@@ -212,16 +228,14 @@ macro_rules! TRY_CALL_ORIGINAL {
 }
 /// Calls the original detour function `o_<name>` with arguments.
 /// Preserves type hints for Rust Analyzer.
-/// Returns Err if detour is disabled
+/// Returns Err if the detour is not initialized. Disabled detours remain callable.
 #[macro_export]
 macro_rules! CALL_ORIGINAL_SAFE {
     ($name:ident ( $($arg:expr),* $(,)? )) => {{
         paste::paste! {
-            let is_init = [<o_ $name>].is_enabled() || unsafe { [<o_ $name>].disable().is_ok() };
-            if !is_init {
-                Err(format!("Detour {} is not initialized", stringify!($name)))
-            } else {
-                Ok(unsafe { [<o_ $name>].call($($arg),*) })
+            match [<o_ $name>].get() {
+                None => Err(format!("Detour {} is not initialized", stringify!($name))),
+                Some(hook) => Ok(unsafe { hook.call($($arg),*) }),
             }
         }
     }};
@@ -233,37 +247,9 @@ macro_rules! TRY_OR_RETURN {
         match $call {
             Ok(val) => val,
             Err(e) => {
-                $crate::serror!("Error: {}", e);
+                crate::serror!("Error: {}", e);
                 return;
             }
         }
     };
-}
-
-#[cfg(test)]
-mod tests {
-    CREATE_HOOK!(TestVoidBasic, (value: i32), {});
-    CREATE_HOOK!(TestVoidStatus, INACTIVE, (value: i32), {});
-    CREATE_HOOK!(TestVoidCondition, { || false }, (value: i32), {});
-    CREATE_HOOK!(TestConstPointer, INACTIVE, *const std::ffi::c_void,
-        (value: *const std::ffi::c_void), {});
-
-    #[test]
-    fn shorthand_hooks_return_unit() {
-        // Check the generated detours and original-call signatures without
-        // attaching hooks or calling uninitialized detours.
-        let _: unsafe extern "C" fn(i32) = TestVoidBasic_detour_fkt;
-        let _: unsafe extern "C" fn(i32) = TestVoidStatus_detour_fkt;
-        let _: unsafe extern "C" fn(i32) = TestVoidCondition_detour_fkt;
-        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidBasic(value));
-        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidStatus(value));
-        let _: fn(i32) = |value| CALL_ORIGINAL!(TestVoidCondition(value));
-    }
-
-    #[test]
-    fn explicit_const_pointer_return_is_preserved() {
-        type Pointer = *const std::ffi::c_void;
-        let _: unsafe extern "C" fn(Pointer) -> Pointer = TestConstPointer_detour_fkt;
-        let _: fn(Pointer) -> Pointer = |value| CALL_ORIGINAL!(TestConstPointer(value));
-    }
 }

@@ -60,6 +60,9 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
+        if resolvers::is_required_value(resolver.name) && !offsets.contains_key(resolver.name) {
+            panic!("Required native value {} could not be resolved: {resolution:?}", resolver.name);
+        }
     }
 
     for p in inventory::iter::<resolvers::OffsetRegisty> {

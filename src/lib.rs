@@ -1,5 +1,8 @@
 #![cfg_attr(feature = "server_registration", feature(ip))]
 #![feature(arbitrary_self_types_pointers)]
+#[macro_use]
+extern crate unchained_macros;
+pub use unchained_macros::*;
 
 #[macro_use]
 pub mod logging;
@@ -343,8 +346,10 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
-                if let Some(offset) = offsets.get("GMalloc") {
-                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
+                unsafe { resolvers::initialize_value_bindings(*resolvers::BASE_ADDR, &offsets); }
+                if let Err(error) = unsafe { resolvers::initialize_function_bindings(&offsets) } {
+                    serror!("Failed to bind native functions: {}", error);
+                    std::process::exit(-67);
                 }
                 apply_patches(offsets.clone());
                 if let Err(e) = attach_hooks(offsets.clone()) {

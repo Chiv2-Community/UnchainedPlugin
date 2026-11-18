@@ -52,6 +52,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "unchained-macros",
  "unicode-segmentation",
  "widestring",
  "winapi 0.3.9",
@@ -2668,7 +2669,7 @@ dependencies = [
 [[package]]
 name = "retour"
 version = "0.4.0-alpha.4"
-source = "git+https://github.com/Chiv2-Community/retour-rs?rev=61e6cb966c040ace5e5f4ab9964cdae60f7ce0e1#61e6cb966c040ace5e5f4ab9964cdae60f7ce0e1"
+source = "git+https://github.com/Chiv2-Community/retour-rs?rev=7c34b70b60115041bd18ec636cdba9f6d2e97c35#7c34b70b60115041bd18ec636cdba9f6d2e97c35"
 dependencies = [
  "cfg-if",
  "generic-array",
@@ -3854,6 +3855,25 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "unchained-macros"
+version = "0.1.0"
+dependencies = [
+ "inventory",
+ "test-case",
+ "unchained-macros-impl",
+]
+
+[[package]]
+name = "unchained-macros-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "test-case",
 ]
 
 [[package]]

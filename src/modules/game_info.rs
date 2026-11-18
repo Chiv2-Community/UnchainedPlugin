@@ -2,7 +2,7 @@
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
-use crate::resolvers::etc_hooks::o_GetTBLGameMode;
+use crate::ue::tbl::UTBLSystemLibrary;
 use crate::ue::AsUObject;
 use async_trait::async_trait;
 use clap::Parser;
@@ -23,7 +23,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
 
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
-                let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
+                let game_ptr = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
 
                 let game = unsafe { game_ptr.as_mut() };
                 if let Some(g) = &game {

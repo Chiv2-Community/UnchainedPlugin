@@ -1,29 +1,33 @@
 #![allow(dead_code)]
 mod array;
 mod archive;
-mod asset_registry;
+pub mod asset_registry;
+pub mod core;
+pub mod core_uobject;
+pub mod engine;
+pub mod tbl;
 pub mod kismet;
 mod malloc;
 mod map;
 mod memory;
-mod name;
 mod object;
 mod object_ptr;
 pub mod object_array;
-mod string;
 pub mod stubs;
 pub mod sync;
 
 pub use array::*;
 pub use archive::*;
 pub use asset_registry::*;
+pub use core::*;
+pub use core_uobject::*;
+pub use engine::*;
+pub use tbl::*;
 pub use malloc::*;
 pub use map::*;
 pub use memory::*;
-pub use name::*;
 pub use object::*;
 pub use object_ptr::*;
-pub use string::*;
 pub use stubs::*;
 
 use std::ffi::c_void;
