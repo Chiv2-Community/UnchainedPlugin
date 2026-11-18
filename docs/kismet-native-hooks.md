@@ -39,13 +39,22 @@ runtime address of `execPrintString`. This avoids:
 
 ## Safety notes
 
-- **Never call `FFrame::arg` on the real `Stack`.** It advances the frame cursor
-  and would corrupt the original exec handler's input. Each detour bitwise-copies
-  the `FFrame` (raw-pointer state, no ownership/Drop) and decodes from the copy.
-- An opt-in build. Copying a bytecode `FFrame` before the real handler can, on
-  uncommon paths, evaluate a Blueprint argument expression a second time.
-- `PrintText` decodes an `FText` and renders it with the existing
-  `FText::ToString` helper.
+- **KNOWN ISSUE — argument decoding crashes.** The initial implementation tried to read
+  `InString` by copying the `FFrame` and calling `FFrame::arg()`. `arg()` drives the engine's
+  `FFrame::Step`/`StepExplicitProperty`, which for a **bytecode** frame re-evaluates the script
+  expression for that argument against the live VM. Called from a pre-hook (even on a copied
+  frame) this caused an access violation in unrelated UMG widget rebuilding
+  (`UWidget::TakeWidget_Private` / `UOverlay::RebuildWidget`) at the frontend map. It is NOT safe
+  to decode exec-wrapper args this way; this needs a proper, safe reading method and is
+  **unresolved**. The detours are currently restored to the decode attempt so the issue can be
+  attacked, not papered over.
+- Because shipping `PrintString` is dummied, there is **no** log/console output to capture via
+  `FOutputDevice`/`ConsoleOutputDevice` — reading the exec wrapper's args is the only place the
+  string exists, which is exactly why this was built. Reports that the string is already captured
+  via the console device are incorrect.
+- The `force_*` identity features are unrelated to the crash and remain safe (they only touch the
+  bool out-pointer after the original runs).
+
 
 ## Attachment timing
 

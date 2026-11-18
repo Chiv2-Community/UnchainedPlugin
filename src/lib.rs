@@ -417,16 +417,23 @@ fn postinit_rustlib() {
     // crate::features::events::init_event_system();
     unsafe { seh::install() };
 
-    // Kismet native-registry hooks attach here, after init_rustlib() has run init_globals().
-    // They resolve addresses from a class's RegisterNatives table, which lives in Globals;
-    // attaching during preinit (attach_hooks) would panic on uninitialized globals(). Every
-    // kismet_exec_observe!/kismet_exec_forward! submits a LateHookRegistration; drain them all here.
-    for hook in inventory::iter::<resolvers::LateHookRegistration> {
-        match unsafe { (hook.attach)() } {
-            Ok(()) => sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
-            Err(e) => serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+    // Kismet native-registry hooks (kismet_exec_observe!/kismet_exec_forward!) submit a
+    // LateHookRegistration. They resolve their target through the LIVE UObject reflection system
+    // (StaticFindObject -> FindFunctionByName -> UFunction::func), which is NOT populated at
+    // postinit — so drain the inventory on a thread that first waits for ENGINE_READY (set from
+    // OnPreLoadMap, by which point native /Script classes are registered). Table-resolved hooks
+    // would attach earlier too, but the wait is harmless for them.
+    thread::spawn(|| {
+        while !ENGINE_READY.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(250));
         }
-    }
+        for hook in inventory::iter::<resolvers::LateHookRegistration> {
+            match unsafe { (hook.attach)() } {
+                Ok(()) => sinfo!("☑ {}::{} (Kismet native)", hook.class, hook.native),
+                Err(e) => serror!("☐ {}::{}: {}", hook.class, hook.native, e),
+            }
+        }
+    });
     // #[cfg(feature="cli_commands")]
     // spawn_cli_handler();
     // #[cfg(feature="rcon_commands")]
