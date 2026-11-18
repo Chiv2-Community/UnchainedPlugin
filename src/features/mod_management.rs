@@ -2,7 +2,7 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::ue::tbl::UTBLSystemLibrary;
+use crate::game::UTBLSystemLibrary;
 use crate::game::chivalry2::EChatType;
 use crate::game::engine::{FActorSpawnParameters, FRotator, TSoftClassPtr, get_assets_by_class};
 use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};

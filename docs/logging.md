@@ -295,18 +295,22 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
-| `UnchainedPlugin::resolvers::admin_control` | Native administration commands. |
-| `UnchainedPlugin::resolvers::asset_loading` | Save-game loading and saving. |
-| `UnchainedPlugin::resolvers::asset_registry` | Asset and object lookups. |
-| `UnchainedPlugin::resolvers::backend_hooks` | Ban checks, player connections, and departures. |
-| `UnchainedPlugin::resolvers::config_overrides` | Profile selection in verbose builds. |
-| `UnchainedPlugin::resolvers::desync` | Blocked events and dedicated-server compatibility. |
-| `UnchainedPlugin::resolvers::etc_hooks` | Travel, game calls, and verbose override warnings. |
-| `UnchainedPlugin::resolvers::gameplay` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::resolvers::getpost_requests` | Backend request handling. |
-| `UnchainedPlugin::resolvers::messages` | Native console output and invalid native chat channels. |
-| `UnchainedPlugin::resolvers::messages::kismet_log` | Blueprint execution messages in `kismet_log` builds. |
-| `UnchainedPlugin::resolvers::unchained_integration` | Engine startup, game-thread jobs, maps, and match state. |
+| `UnchainedPlugin::game::utbl_system_library` | Native administration commands and game-info calls. |
+| `UnchainedPlugin::engine::engine::ugameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
+| `UnchainedPlugin::engine::asset_registry` | Asset Registry helpers. |
+| `UnchainedPlugin::engine::core_uobject::uobject_globals` | Native object lookups. |
+| `UnchainedPlugin::game::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
+| `UnchainedPlugin::engine::object::config::overrides` | Profile selection in verbose builds. |
+| `UnchainedPlugin::engine::object::process_event` | Blocked events and recursion limits. |
+| `UnchainedPlugin::engine::engine::aplayer_controller::travel` | Native travel. |
+| `UnchainedPlugin::game::atbl_character` | Combat validation and damage/kill TRACE details. |
+| `UnchainedPlugin::engine::extensions::open_api_client_api` | Backend request handling. |
+| `UnchainedPlugin::engine::core::fconsole_output_device` | Native console output. |
+| `UnchainedPlugin::engine::engine::aplayer_controller::chat` | Native chat capture and invalid channels. |
+| `UnchainedPlugin::engine::kismet::log` | Blueprint execution messages in `kismet_log` builds. |
+| `UnchainedPlugin::engine::engine::ugame_engine` | Engine tick and game-thread jobs. |
+| `UnchainedPlugin::game::utbl_game_instance` | Startup and map changes. |
+| `UnchainedPlugin::engine::engine::agame_mode` | Match state. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

@@ -2,7 +2,7 @@
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
 use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
-use crate::ue::tbl::UTBLSystemLibrary;
+use crate::game::UTBLSystemLibrary;
 use crate::ue::AsUObject;
 use async_trait::async_trait;
 use clap::Parser;
