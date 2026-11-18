@@ -1,5 +1,6 @@
 use crate::events::bus::Subscriber;
-use crate::events::models::{GameEvent, ServerStatus};
+use crate::events::models::GameEvent;
+use crate::features::server_browser::server_metadata::ServerStatus;
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
