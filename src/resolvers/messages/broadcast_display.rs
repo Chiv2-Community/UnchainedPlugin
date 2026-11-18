@@ -23,6 +23,7 @@ define_pattern_resolver!(TBLGameInstance_AddChatLine, [
     "48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"
 ]);
 // UTBLGameInstance::AddChatLine: local display helper, not an intercepted function.
+// Reflection search found no AddChatLine on UTBLGameInstance.
 CREATE_HOOK!(TBLGameInstance_AddChatLine, CALLED, (), (
     instance: *mut c_void, sender: *const FText, message: *const FText,
     channel: u32, want_focus: bool, is_sender_dev: bool, origin_color: *const [f32; 4]
@@ -84,6 +85,7 @@ define_pattern_resolver!(FText_ToString, [
     "40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"
 ]);
 // FText::ToString returns a borrowed FString owned by the text data.
+// Reflection probe: Conv_TextToString reaches this helper through a wrapper with a different ABI.
 CREATE_HOOK!(FText_ToString, CALLED, *const FString, (text: *const FText), {});
 
 pub(crate) fn native_string(text: *const FText) -> Option<String> {

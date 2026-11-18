@@ -87,6 +87,7 @@ mod client_message {
     ]);
 
     // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
+    // Reflection on TBLPlayerController resolves ClientMessage to a different entry.
     CREATE_HOOK!(ClientMessage, (this:*mut APlayerController, S:*mut FString, Type:FName, MsgLifeTime: f32), {
         if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
             if let Some((chat_type, sender, message)) = system_message(&message) {

@@ -177,6 +177,7 @@ define_pattern_resolver!(GetDataForMap, [
 //
 // NONE: the callee consumes (frees) its by-value FString arg, so the original
 // must be called exactly once.
+// GetDataForMap has no reflected entry.
 CREATE_HOOK!(GetDataForMap, ACTIVE, NONE, (), (
     this_ptr: *mut UMapSpecificLoadingScreenConfig,
     map_name: *mut FString,

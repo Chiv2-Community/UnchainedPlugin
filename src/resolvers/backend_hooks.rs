@@ -116,6 +116,7 @@ fn resolve_leave_name_from_controller(
         Ok(Some(display_name))
     }
 }
+// Reflection search found no native PreLogin on ATBLGameMode.
 CREATE_HOOK!(ATBLGameMode__PreLogin, ACTIVE, NONE, (), (
     this_ptr: *mut ATBLGameMode,
     options: *const FString,
@@ -179,6 +180,7 @@ define_pattern_resolver!(
     ATBLGameMode__Logout,
     ["48 8B C4 55 56 41 54 41 57 48 8B EC"]
 );
+// Reflection found the non-native K2_OnLogout event and no native Logout entry.
 CREATE_HOOK!(ATBLGameMode__Logout, ACTIVE, NONE, (), (this_ptr: *mut ATBLGameMode, exiting_player: *mut AController), {
     strace!("Logout hook triggered this_ptr={:?}, exiting_player={:?}", this_ptr, exiting_player);
 

@@ -29,6 +29,7 @@ define_pattern_resolver!(OnGetCurrentGames_, [
     "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 60 FE FF FF"
 ]);
 
+// OnGetCurrentGames has no reflected entry.
 CREATE_HOOK!(OnGetCurrentGames_, { || !cli_args().is_server() }, NONE, (), (
     this_ptr: *mut FOnlineSessionPlayFab,
     response: *mut GetCurrentGamesPostResponse,
@@ -46,6 +47,7 @@ define_pattern_resolver!(PingSomeServers, [
     "4C 8B DC 49 89 4B 08 55 56 41 55 49 8D AB 38 FE FF FF 48 81 EC B0 02 00 00 4C 8D A9 40 03 00 00 48 8B F1"
 ]);
 
+// PingSomeServers has no reflected entry.
 CREATE_HOOK!(PingSomeServers, { || !cli_args().is_server() }, NONE, (), (
     this_ptr: *mut FOnlineSessionPlayFab,
     max_servers: i32
@@ -63,6 +65,7 @@ define_pattern_resolver!(FStringFind, [
     "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54 41 56 41 57 48 83 EC 50 45 8B E1 48 8B FA 4C 8B F1"
 ]);
 
+// Reflection probe: FindSubstring resolves to a separate entry. Its route to FString::Find is unverified.
 CREATE_HOOK!(FStringFind, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
     needle: *const TCHAR,
@@ -159,6 +162,7 @@ define_pattern_resolver!(FStringParseIntoArray, [
     "44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"
 ]);
 
+// Reflection probe: the Kismet ParseIntoArray wrapper reaches this helper from a separate entry point.
 CREATE_HOOK!(FStringParseIntoArray, { || !cli_args().is_server() }, NONE, i32, (
     haystack: *const FString,
     output: *mut TArray<FString>,
@@ -369,6 +373,7 @@ define_pattern_resolver!(ClientTravelInternal,["4C 8B DC 48 83 EC 58 33 C0 49 89
 // void __thiscall
 // APlayerController::ClientTravelInternal
 // 		  (APlayerController *this,FString *param_1,ETravelType param_2,bool param_3,FGuid *param_4)
+// Reflection probe: ClientTravel reaches this entry, while the ClientTravelInternal thunk resolves elsewhere.
 CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, arg1: *mut FString, TravelType: u8, arg3: bool, guid: *mut FGuid),{
 
     #[derive(Debug, serde::Deserialize)]
@@ -415,6 +420,7 @@ CREATE_HOOK!(ClientTravelInternal, ACTIVE, c_void, (PC: *mut APlayerController, 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
+// Reflection probe: BeginDeferredActorSpawnFromClass resolves to a different entry.
 CREATE_HOOK!(SpawnActor, INACTIVE, *mut AActor, (world: *mut UWorld, class: *mut UClass, position: *mut FVector, rotation: *mut FRotator, spawn_params: *mut FActorSpawnParameters),{
     sdebug!["Triggered!"];
 });

@@ -22,6 +22,7 @@ define_pattern_resolver!(
     ExecuteConsoleCommand,
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
+// Reflection probe: KismetSystemLibrary::ExecuteConsoleCommand resolves to a different entry.
 CREATE_HOOK!(ExecuteConsoleCommand, ACTIVE, NONE, c_void, (command: *mut FString), {
     unsafe { sinfo!("Executing: {}", (&*command)); }
     CALL_ORIGINAL!(ExecuteConsoleCommand(command))
@@ -41,6 +42,7 @@ define_pattern_resolver![FText_AsCultureInvariant,  First, {
 
 }];
 // FText* __cdecl FText::AsCultureInvariant(FText* __return_storage_ptr__, FString* param_1)
+// Reflection probe: Conv_StringToText reaches this helper from a separate entry point.
 CREATE_HOOK!(FText_AsCultureInvariant, CALLED, *mut FText, (param_0: *mut FText, param_1: *mut FString), {
 });
 

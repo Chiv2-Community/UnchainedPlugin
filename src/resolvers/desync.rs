@@ -23,6 +23,7 @@ CREATE_PATCH!(UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3
 define_pattern_resolver!(DedicatedServerInit, [
    "41 56 48 83 EC 30 48 89 6C 24 48 48 89 74 24 50 48 89 7C 24 28 4C 89 7C 24 20 4C 8B F9 ?? ?? ?? ?? ?? 48 8B C8 4C 8B F0"
 ]);
+// Reflection search found no DedicatedServerInit on APlayerController.
 CREATE_HOOK!(DedicatedServerInit, ACTIVE, NONE, (), (this_ptr: *mut APlayerController), {});
 
 
@@ -236,6 +237,7 @@ CREATE_HOOK!(
 define_pattern_resolver!(UGameplay_IsDedicatedServer, [
     "48 83 EC 28 48 85 C9 ?? ?? BA 01 00 00 00 ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 83 F8 01 0F 94 C0 48",
 ]);
+// Reflection probe: KismetSystemLibrary::IsDedicatedServer resolves to a different native body.
 CREATE_HOOK!(UGameplay_IsDedicatedServer, { || cli_args().playable_listen }, NONE, bool, (param_1: u64),{
     if let Some(world) = globals().world() {
         let mode = unsafe { o_InternalGetNetMode.call(world) };

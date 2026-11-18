@@ -71,6 +71,7 @@ define_pattern_resolver!(InternalGetNetMode, {
         "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
         ], // STEAM
 });
+// Reflection probe: IsDedicatedServer reaches this helper from a separate entry point.
 CREATE_HOOK!(InternalGetNetMode, CALLED, ENetMode, (world: *mut UWorld), {});
 
 // Disable message on startup
@@ -178,6 +179,7 @@ CREATE_HOOK!(UGameEngineTick, ACTIVE, NONE, (), (engine:*mut UGameEngine, delta:
 
 // class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
 define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]);
+// Reflection probe: GetCurrentLevelName reaches this helper from a separate entry point.
 CREATE_HOOK!(UWorld__GetMapName, INACTIVE, bool, (this_ptr: *mut UWorld, return_value: *mut FString), {});
 pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
     let mut map_name = FString::default();
@@ -189,6 +191,7 @@ pub fn get_current_map_name(uworld: *mut UWorld) -> Option<String> {
 
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 // void __thiscall UTBLGameInstance::OnPreLoadMap(UTBLGameInstance *this,FString *param_1)
+// Reflection search found no OnPreLoadMap on UTBLGameInstance.
 CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut FString),{
     let url_w = unsafe { (*map_url).copy_to_string().unwrap_or_else(|_| "UnknownMap".to_string()) };
     sinfo!["{}", url_w];
@@ -207,6 +210,7 @@ CREATE_HOOK!(OnPreLoadMap,(game_instance: *mut UTBLGameInstance, map_url: *mut F
 // old: "40 55 53 56 57 41 55 41 56 41 57 48 8D AC 24 10 FF FF FF 48 81 EC F0 01 00 00 48 8B 05 07 AE 08 04 48 33 C4 48 89 85 D0 00 00 00 45 33"
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 // void __thiscall UTBLGameInstance::OnPostLoadMap(UTBLGameInstance *this,UWorld *param_1)
+// Reflection search found no OnPostLoadMap on UTBLGameInstance.
 CREATE_HOOK!(OnPostLoadMap,(game_instance: *mut UTBLGameInstance, world: *mut UWorld),{
     sdebug!["Triggered"];
     match globals().world() {
@@ -240,6 +244,7 @@ define_pattern_resolver!(SetMatchState,[
     "48 89 5C 24 ?? 56 48 83 EC 20 48 8B DA 48 8B F1 48 39 91 ?? ?? ?? ??"
     ]);
 // void AGameMode::SetMatchState(FName NewState)
+// Reflection search found no SetMatchState on AGameMode.
 CREATE_HOOK!(SetMatchState,(this_ptr: *mut AGameMode, new_state: FName),{
     sinfo!["Match state: {}", new_state];
 });
