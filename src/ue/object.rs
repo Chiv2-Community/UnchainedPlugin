@@ -122,7 +122,7 @@ pub struct FStructBaseChain {
 pub struct FFieldClass {
     // TODO: remaining members
     /// Field type name, e.g. `StrProperty`, `SetProperty`.
-    name: FName,
+    pub(crate) name: FName,
 }
 
 #[derive(Debug)]

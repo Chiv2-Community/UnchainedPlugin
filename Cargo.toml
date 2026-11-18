@@ -77,6 +77,7 @@ mod_management = [] # info about mod markers and actors
 discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
 move-autonomous-desync = []
 loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/found, patch only the texture FName
+reflection_search = ["cli_commands"]
 
 
 [dependencies]

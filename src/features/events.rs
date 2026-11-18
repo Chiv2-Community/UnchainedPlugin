@@ -25,6 +25,8 @@ use crate::modules::votes::votespeed::SpeedVote;
 use crate::modules::votes::votemod::ModVote;
 
 use crate::modules::mod_dump::DumpModsCommand;
+#[cfg(feature = "reflection_search")]
+use crate::modules::reflection_search::{FindClassesCommand, FindFunctionsCommand, FindPropertiesCommand};
 use crate::modules::game_info::GameInfoCommand;
 use crate::modules::mod_list::ListModsCommand;
 use crate::modules::mod_list_maps::ListModMapsCommand;
@@ -93,6 +95,12 @@ pub async fn initialize_subscribers() {
         command_subscriber.register(CmdCommand);
         command_subscriber.register(SayCommand::new(broadcast_message_publisher));
         command_subscriber.register(DumpModsCommand);
+        #[cfg(feature = "reflection_search")]
+        {
+            command_subscriber.register(FindClassesCommand);
+            command_subscriber.register(FindFunctionsCommand);
+            command_subscriber.register(FindPropertiesCommand);
+        }
         command_subscriber.register(GameInfoCommand);
         command_subscriber.register(ListModsCommand);
         command_subscriber.register(ListModMapsCommand);
@@ -116,7 +124,7 @@ pub async fn initialize_subscribers() {
 /// full `initialize_subscribers` (votes, server-oriented commands, MOTD, …) does
 /// not run because it is driven by server-only `world_init`. Clients subscribe
 /// the command subscriber to the game event bus and register only the
-/// client-safe diagnostic commands (listmodmaps / mod-list).
+/// client-safe diagnostic commands.
 pub async fn initialize_client_commands() {
     let _ = &*EVENT_SYSTEM; // Ensure EVENT_SYSTEM is initialized
     let game_event_bus = &EVENT_SYSTEM.game_event_bus;
@@ -125,6 +133,12 @@ pub async fn initialize_client_commands() {
         let mut command_subscriber = EVENT_SYSTEM.command_subscriber.lock().await;
         command_subscriber.register(ListModMapsCommand);
         command_subscriber.register(ListModsCommand);
+        #[cfg(feature = "reflection_search")]
+        {
+            command_subscriber.register(FindClassesCommand);
+            command_subscriber.register(FindFunctionsCommand);
+            command_subscriber.register(FindPropertiesCommand);
+        }
     }
 
     let _ = game_event_bus

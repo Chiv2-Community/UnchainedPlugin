@@ -7,6 +7,8 @@ pub mod duel;
 pub mod say;
 pub mod cmd;
 pub mod mod_dump;
+#[cfg(feature = "reflection_search")]
+pub mod reflection_search;
 pub mod game_info;
 pub mod mod_list;
 pub mod mod_list_maps;
