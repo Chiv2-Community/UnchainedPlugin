@@ -2,7 +2,7 @@
 
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedPtrIHttpRequest;
-use crate::unchained::integrations::open_api_client_api::*;
+use crate::chivalry2::plugins::online_subsystem_playfab::open_api_merged::open_api_client_api::*;
 use std::ffi::c_void;
 
 /// # Safety

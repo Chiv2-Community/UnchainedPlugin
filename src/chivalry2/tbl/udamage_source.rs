@@ -2,7 +2,6 @@
 
 #![allow(non_snake_case)]
 use crate::chivalry2::engine::*;
-use crate::unchained::blueprints::assembly_blueprint::*;
 
 unsafe impl crate::chivalry2::engine::UObjectType for UDamageSource {
     const CLASS_NAME: &'static str = "DamageSource";

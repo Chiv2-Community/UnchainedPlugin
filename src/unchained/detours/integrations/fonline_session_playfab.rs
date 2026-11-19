@@ -1,8 +1,8 @@
 //! Plugin replacements for the private PlayFab session ABI.
 
+use crate::chivalry2::plugins::online_subsystem_playfab::online_session_interface_playfab::*;
+use crate::chivalry2::plugins::online_subsystem_playfab::open_api_merged::open_api_client_api::GetCurrentGamesPostResponse;
 use crate::tools::hook_globals::cli_args;
-use crate::unchained::integrations::fonline_session_playfab::*;
-use crate::unchained::integrations::open_api_client_api::GetCurrentGamesPostResponse;
 use std::cell::Cell;
 
 #[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::on_get_current_games, || !cli_args().is_server())]

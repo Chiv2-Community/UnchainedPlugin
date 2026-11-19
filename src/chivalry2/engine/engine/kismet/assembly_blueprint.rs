@@ -1,5 +1,5 @@
-//! ArgonSDK consumer: [UDamageSource](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageSource.h).
-//! Private Assembly blueprint integration; this prefix is reverse-engineered.
+//! Native source: Engine/Source/Runtime/Engine/Classes/Kismet/AssemblyBlueprint.h.
+//! Chivalry engine-fork addition; header path and layout verified against shipping PDB.
 
 unsafe impl crate::chivalry2::engine::UObjectType for UAssemblyBlueprint {
     const CLASS_NAME: &'static str = "AssemblyBlueprint";

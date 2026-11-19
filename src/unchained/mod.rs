@@ -2,5 +2,4 @@
 
 pub mod blueprints;
 pub mod detours;
-pub mod integrations;
 pub mod patches;

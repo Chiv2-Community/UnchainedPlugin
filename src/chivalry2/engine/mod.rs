@@ -82,6 +82,7 @@ pub use self::engine::game_framework::pawn::*;
 pub use self::engine::game_framework::player_controller::*;
 pub use self::engine::game_framework::player_state::*;
 pub use self::engine::game_framework::save_game::*;
+pub use self::engine::kismet::assembly_blueprint::*;
 pub use self::engine::kismet::gameplay_statics::*;
 pub use self::online::icmp::*;
 pub use self::pak_file::i_platform_file_pak::*;

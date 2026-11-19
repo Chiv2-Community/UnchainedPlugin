@@ -81,7 +81,7 @@ the detour is stored, its address remains reserved even if activation fails.
 - Model: `src/chivalry2/engine/online/icmp.rs`
 - Plugin policy: `src/unchained/detours/networking/ipv6_support.rs`
 - Other native models: `src/chivalry2/{engine,tbl}/`
-- Private ABI integrations: `src/unchained/integrations/`
+- Native game-plugin ABIs: `src/chivalry2/plugins/`
 - Custom blueprint layouts/adapters: `src/unchained/blueprints/`
 - Replacements: `src/unchained/detours/{engine,tbl,integrations}/`
 - Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override

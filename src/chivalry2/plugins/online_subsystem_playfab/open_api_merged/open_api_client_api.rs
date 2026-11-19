@@ -1,5 +1,4 @@
-//! UE 4.25-plus: request handles use [TSharedPtr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
-//! Private OpenAPIClientAPI request ABI; these declarations are not shipped in ArgonSDK.
+//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h.
 
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedPtrIHttpRequest;

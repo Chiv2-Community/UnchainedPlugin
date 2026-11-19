@@ -1,5 +1,4 @@
-//! ArgonSDK main: [OnlineSubsystemPlayFab module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab).
-//! Private FOnlineAuthPlayFab ABI; the SDK omits this declaration.
+//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineAuthInterfacePlayFab.h.
 
 use std::ffi::c_void;
 

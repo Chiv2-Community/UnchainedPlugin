@@ -1,5 +1,4 @@
 //! UE 4.25-plus: [online identity contract](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystem/Source/Public/Interfaces/OnlineIdentityInterface.h).
-//! ArgonSDK does not ship this Redpoint Steam implementation.
 //!
 //! Plugin patch for the private Redpoint Steam token check.
 

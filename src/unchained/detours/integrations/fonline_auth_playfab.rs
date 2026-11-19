@@ -1,6 +1,6 @@
 //! Plugin replacement for the private PlayFab authentication ABI.
 
-use crate::unchained::integrations::fonline_auth_playfab::*;
+use crate::chivalry2::plugins::online_subsystem_playfab::online_auth_interface_playfab::*;
 use std::ffi::c_void;
 
 #[unchained_macros::bind_func_detour(FOnlineAuthPlayFab::end_authentication)]

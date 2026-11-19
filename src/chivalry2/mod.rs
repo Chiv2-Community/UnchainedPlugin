@@ -2,4 +2,5 @@
 //! and [UE 4.25-plus](https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source).
 
 pub mod engine;
+pub mod plugins;
 pub mod tbl;

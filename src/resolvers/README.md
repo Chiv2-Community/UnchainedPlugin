@@ -1,11 +1,11 @@
 
 # Chiv 2 Resolvers
 
-Resolver definitions, native bindings, and patches live beside their native owners under
-`src/chivalry2/tbl` (ArgonSDK TBL files) or `src/chivalry2/engine` (UE 4.25-plus modules).
+Resolver definitions and native bindings live beside their native owners under
+`src/chivalry2/tbl` (TBL files), `src/chivalry2/engine` (UE 4.25-plus modules),
+or `src/chivalry2/plugins` (native game plugins, including private headers).
 Game model files each identify one corresponding ArgonSDK source file.
-Private integration ABIs live under `src/unchained/integrations`; custom blueprint
-layouts and adapters live under `src/unchained/blueprints`. Private startup and
+Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Startup and
 integration patches live under `src/unchained/patches`.
 Engine paths mirror native module/header paths, omitting `Runtime` and header
 visibility directories. See the [source layout rules](../../docs/engine-sources.md).

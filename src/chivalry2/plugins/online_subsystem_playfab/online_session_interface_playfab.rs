@@ -1,7 +1,6 @@
-//! ArgonSDK main: [OnlineSubsystemPlayFab module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab).
-//! The SDK omits the private FOnlineSessionPlayFab declaration.
+//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineSessionInterfacePlayFab.h.
 
-use crate::unchained::integrations::open_api_client_api::GetCurrentGamesPostResponse;
+use super::open_api_merged::open_api_client_api::GetCurrentGamesPostResponse;
 
 define_pattern_resolver!(
     OnGetCurrentGames_,

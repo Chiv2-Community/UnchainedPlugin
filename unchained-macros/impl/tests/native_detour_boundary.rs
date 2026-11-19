@@ -148,7 +148,7 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
-fn private_integrations_and_custom_blueprints_stay_outside_chivalry2() {
+fn custom_blueprints_stay_outside_chivalry2() {
     fn check(directory: &Path) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
@@ -164,15 +164,10 @@ fn private_integrations_and_custom_blueprints_stay_outside_chivalry2() {
                 match item {
                     Item::Struct(item) => assert!(
                         ![
-                            "UAssemblyBlueprint",
                             "DA_ModMarker_C",
                             "DA_ModMarker_V2_C",
                             "ArgonSDKModBase",
                             "UModLoaderSettings_C",
-                            "FOnlineAuthPlayFab",
-                            "FOnlineSessionPlayFab",
-                            "OpenAPIClientAPI",
-                            "PlayFabRequestHandler",
                         ]
                         .contains(&item.ident.to_string().as_str()),
                         "custom/private model belongs in unchained: {}",
@@ -199,6 +194,31 @@ fn private_integrations_and_custom_blueprints_stay_outside_chivalry2() {
         }
     }
     check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+}
+
+#[test]
+fn playfab_native_types_follow_header_owners() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src/chivalry2/plugins/online_subsystem_playfab");
+    for (path, name) in [
+        ("online_auth_interface_playfab.rs", "FOnlineAuthPlayFab"),
+        (
+            "online_session_interface_playfab.rs",
+            "FOnlineSessionPlayFab",
+        ),
+        ("open_api_merged/open_api_client_api.rs", "OpenAPIClientAPI"),
+        (
+            "playfab_cpp/core/playfab_result_handler.rs",
+            "PlayFabRequestHandler",
+        ),
+    ] {
+        let source = std::fs::read_to_string(root.join(path)).unwrap();
+        let file = syn::parse_file(&source).unwrap();
+        assert!(file.items.iter().any(|item| matches!(
+            item, Item::Struct(item) if item.ident == name
+        )));
+        assert!(!source.contains("CREATE_PATCH!"));
+    }
 }
 
 #[test]
