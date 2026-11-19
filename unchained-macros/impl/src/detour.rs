@@ -34,7 +34,13 @@ impl Parse for Arguments {
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let function: ItemFn = syn::parse2(item)?;
-    let (original, helpers) = expand_function(args, &function, None)?;
+    let (original, helpers) = expand_function(args, &function, None, false)?;
+    Ok(quote!(#function #original #helpers))
+}
+
+pub(super) fn expand_request(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    let function: ItemFn = syn::parse2(item)?;
+    let (original, helpers) = expand_function(args, &function, None, true)?;
     Ok(quote!(#function #original #helpers))
 }
 
@@ -79,7 +85,8 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 attr.path()
                     .segments
                     .last()
-                    .is_some_and(|s| s.ident == "bind_resolved_func_detour")
+                    .is_some_and(|s| s.ident == "bind_resolved_func_detour"
+                        || s.ident == "bind_resolved_request_function_detour")
             })
             .map(|(i, _)| i)
             .collect();
@@ -93,9 +100,10 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             ));
         }
         let attribute = method.attrs.remove(attributes[0]);
+        let request = attribute.path().segments.last().unwrap().ident == "bind_resolved_request_function_detour";
         let args = attribute.meta.require_list()?.tokens.clone();
         let function: ItemFn = syn::parse2(quote!(#method))?;
-        let (original, helper) = expand_function(args, &function, Some(self_ty))?;
+        let (original, helper) = expand_function(args, &function, Some(self_ty), request)?;
         if !names.insert(original.sig.ident.to_string()) {
             return Err(syn::Error::new_spanned(
                 &original.sig.ident,
@@ -195,18 +203,20 @@ fn expand_function(
     args: Tokens,
     function: &ItemFn,
     self_ty: Option<&Type>,
+    request: bool,
 ) -> syn::Result<(ItemFn, Tokens)> {
     let Arguments {
         resolver,
         condition,
     } = syn::parse2(args)?;
     let resolver = resolver_path(quote!(#resolver))?;
+    if request { super::request_key(&resolver)?; }
     let name = resolver.segments.last().unwrap().ident.to_string();
     // Reuse direct-binding declaration checks without imposing an empty unsafe body.
     let mut stub = function.clone();
     stub.sig.unsafety = Some(syn::parse_quote!(unsafe));
     stub.block = Box::new(syn::parse_quote!({}));
-    super::expand(quote!(#resolver), quote!(#stub))?;
+    super::expand_binding(quote!(#resolver), quote!(#stub), !request)?;
     let ident = &function.sig.ident;
     let spelling = ident.to_string();
     let stripped = spelling
@@ -310,8 +320,11 @@ fn expand_function(
     original
         .attrs
         .retain(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"));
-    original.block = Box::new(syn::parse_quote!({
+    let resolver_type_check = (!request).then(|| quote! {
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
+    });
+    original.block = Box::new(syn::parse_quote!({
+        #resolver_type_check
         unsafe { #hook.get()
             .expect(concat!("Detour ", #name, " is not initialized")).call(#(#arguments),*) }
     }));
@@ -406,6 +419,45 @@ fn expand_function(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn request_detours_use_registry_keys_without_marker_types() {
+        let expanded = expand_impl(quote!(), quote! {
+            impl Client {
+                #[bind_resolved_request_function_detour(GetPost_GetPlayerInventory, || Self::enabled())]
+                pub unsafe fn get_post_get_player_inventory_detour(self: *mut Self, value: i32) -> i32 {
+                    unsafe { self.get_post_get_player_inventory(value) }
+                }
+            }
+        }).unwrap();
+        let text = expanded.to_string();
+        assert!(text.contains("\"GetPost_GetPlayerInventory\""));
+        assert!(text.contains("get_post_get_player_inventory"));
+        assert!(!text.contains("PhantomData"));
+        assert!(!text.contains("bind_resolved_request_function_detour"));
+        syn::parse2::<syn::File>(expanded).unwrap();
+    }
+
+    #[test]
+    fn standalone_request_detours_preserve_conditions_and_suffix_rules() {
+        let expanded = expand_request(quote!(GetPost_GetMotd, INACTIVE),
+            quote!(unsafe fn get_motd_detour(value: i32) -> i32 { unsafe { get_motd(value) } })).unwrap();
+        assert!(!expanded.to_string().contains("PhantomData"));
+        syn::parse2::<syn::File>(expanded).unwrap();
+        assert!(expand_request(quote!(GetPost_GetMotd), quote!(fn get_motd() {})).is_err());
+        assert!(expand_request(quote!(CreateHttpRequest), quote!(fn get_motd_detour() {})).is_err());
+    }
+
+    #[test]
+    fn request_and_native_detour_attributes_cannot_both_annotate_a_method() {
+        assert!(expand_impl(quote!(), quote! {
+            impl Client {
+                #[bind_resolved_func_detour(Native)]
+                #[bind_resolved_request_function_detour(GetPost_GetMotd)]
+                unsafe fn request_detour(&self) {}
+            }
+        }).unwrap_err().to_string().contains("duplicate detour"));
+    }
 
     #[test]
     fn accepts_safe_bodies_and_conditions() {

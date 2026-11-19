@@ -8,6 +8,7 @@ extern crate unchained_macros;
 // The macro consumer supplies startup registration. A synthetic nonzero base
 // keeps these tests independent of the plugin and exercises address overflow.
 mod resolvers {
+    pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
     pub static BASE_ADDR: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 1);
 
     pub struct HookRegistration {
@@ -22,6 +23,83 @@ mod resolvers {
 }
 
 CREATE_HOOK!(TestVoidBasic, (value: i32), {});
+
+mod request_methods {
+    struct Client { value: i32 }
+
+    #[unchained_macros::runtime_bindings]
+    impl Client {
+        fn enabled() -> bool { true }
+
+        #[unchained_macros::bind_resolved_request_function(GetPost_TestDirect)]
+        pub unsafe fn get_post_test_direct(self: *mut Self, value: i32) -> i32 {}
+
+        #[bind_resolved_request_function_detour(GetPost_TestInventory, || Self::enabled())]
+        pub unsafe fn get_post_test_inventory_detour(self: *mut Self, value: i32) -> i32 {
+            unsafe { self.get_post_test_inventory(value) + 10 }
+        }
+
+        #[bind_resolved_request_function_detour(GetPost_TestDisabled, INACTIVE)]
+        unsafe fn get_post_test_disabled_detour(&self, value: i32) -> i32 {
+            unsafe { self.get_post_test_disabled(value) + 20 }
+        }
+
+        #[cfg(any())]
+        #[bind_resolved_request_function_detour(GetPost_Excluded)]
+        unsafe fn excluded_detour(&self) {}
+    }
+
+    #[inline(never)]
+    unsafe extern "C" fn inventory_target(this: *mut Client, value: i32) -> i32 {
+        unsafe { (*std::hint::black_box(this)).value + value + 1 }
+    }
+
+    #[inline(never)]
+    unsafe extern "C" fn disabled_target(this: &Client, value: i32) -> i32 {
+        std::hint::black_box(this.value) + value + 2
+    }
+
+    #[inline(never)]
+    unsafe extern "C" fn direct_target(this: *mut Client, value: i32) -> i32 {
+        unsafe { (*std::hint::black_box(this)).value + value + 3 }
+    }
+
+    #[test]
+    fn request_key_detours_attach_without_resolver_types_and_preserve_original_calls() {
+        let base = *crate::resolvers::BASE_ADDR;
+        let offsets = std::collections::HashMap::from([
+            ("GetPost_TestInventory".into(), (inventory_target as *const () as usize - base) as u64),
+            ("GetPost_TestDisabled".into(), (disabled_target as *const () as usize - base) as u64),
+            ("GetPost_TestDirect".into(), (direct_target as *const () as usize - base) as u64),
+        ]);
+        let mut client = Client { value: 40 };
+        let pointer = &raw mut client;
+        assert!(std::panic::catch_unwind(|| unsafe { pointer.get_post_test_inventory(1) }).is_err());
+        let direct = inventory::iter::<crate::resolvers::FunctionBindingRegistration>.into_iter()
+            .find(|registration| registration.binding.name() == "GetPost_TestDirect").unwrap();
+        unsafe { direct.binding.initialize(base, offsets["GetPost_TestDirect"]).unwrap(); }
+        for name in ["GetPost_TestInventory", "GetPost_TestDisabled"] {
+            let registration = inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+                .find(|registration| registration.name == name).unwrap();
+            unsafe { (registration.hook_fn)(offsets.clone(), true).unwrap(); }
+        }
+        assert!(unchained_macros::detour_is_enabled("GetPost_TestInventory"));
+        assert!(unchained_macros::detour_is_initialized("GetPost_TestDisabled"));
+        assert!(!unchained_macros::detour_is_enabled("GetPost_TestDisabled"));
+        let active = std::hint::black_box(inventory_target as unsafe extern "C" fn(*mut Client, i32) -> i32);
+        let disabled = std::hint::black_box(disabled_target as unsafe extern "C" fn(&Client, i32) -> i32);
+        unsafe {
+            assert_eq!(active(pointer, 1), 52);
+            assert_eq!(pointer.get_post_test_inventory(1), 42);
+            assert_eq!(pointer.get_post_test_direct(1), 44);
+            assert_eq!(disabled(&client, 1), 43);
+            assert_eq!(client.get_post_test_disabled(1), 43);
+            assert_eq!(client.get_post_test_disabled_detour(1), 63);
+        }
+        assert!(!inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+            .any(|registration| registration.name == "GetPost_Excluded"));
+    }
+}
 
 mod resolved_detours {
     use std::sync::atomic::{AtomicBool, Ordering};

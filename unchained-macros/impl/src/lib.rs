@@ -13,10 +13,25 @@ pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
     expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
+/// Bind an unsafe method/function to a `GetPost_*` offset-registry key.
+/// Unlike a resolver binding, the key does not name a Rust type.
+#[proc_macro_attribute]
+pub fn bind_resolved_request_function(args: TokenStream, item: TokenStream) -> TokenStream {
+    expand_request(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
 /// Register a `_detour` function and generate its suffix-stripped trampoline caller.
 #[proc_macro_attribute]
 pub fn bind_resolved_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     detour::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+/// Register a request-key detour and generate its suffix-stripped trampoline.
+#[proc_macro_attribute]
+pub fn bind_resolved_request_function_detour(args: TokenStream, item: TokenStream) -> TokenStream {
+    detour::expand_request(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
@@ -28,6 +43,26 @@ pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    expand_binding(args, item, true)
+}
+
+fn request_key(path: &Path) -> syn::Result<()> {
+    let valid = path.get_ident().is_some_and(|name| {
+        name.to_string().strip_prefix("GetPost_").is_some_and(|suffix| !suffix.is_empty())
+    });
+    if !valid {
+        return Err(syn::Error::new_spanned(path, "request function keys must be unqualified GetPost_* identifiers"));
+    }
+    Ok(())
+}
+
+fn expand_request(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    let key = resolver_path(args)?;
+    request_key(&key)?;
+    expand_binding(quote!(#key), item, false)
+}
+
+fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
     let resolver = resolver_path(args)?;
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let mut function: ItemFn = syn::parse2(item)?;
@@ -80,9 +115,11 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let output = &signature.output;
     let binding = syn::Ident::new("__UNCHAINED_BINDING", Span::mixed_site());
     let native = syn::Ident::new("__unchained_native", Span::mixed_site());
-    function.block = Box::new(syn::parse2(quote!({
-        // Check that the resolver path names a type.
+    let resolver_type_check = require_resolver_type.then(|| quote! {
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
+    });
+    function.block = Box::new(syn::parse2(quote!({
+        #resolver_type_check
         static #binding: crate::resolvers::FunctionBinding =
             crate::resolvers::FunctionBinding::new(#resolver_name);
         ::inventory::submit! {
@@ -189,6 +226,37 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn request_bindings_use_registry_keys_without_resolver_types() {
+        let expanded = expand_request(quote!(GetPost_GetMotd),
+            quote!(pub unsafe fn get_post_get_motd(self: *mut Self, value: i32) -> i32 {})).unwrap();
+        let text = expanded.to_string();
+        assert!(text.contains("\"GetPost_GetMotd\""));
+        assert!(text.contains("FunctionBindingRegistration"));
+        assert!(!text.contains("PhantomData"));
+        syn::parse2::<ItemFn>(expanded).unwrap();
+    }
+
+    #[test]
+    fn request_bindings_reuse_native_signature_validation() {
+        for declaration in [
+            quote!(pub fn request() {}),
+            quote!(pub unsafe fn request() { panic!() }),
+            quote!(pub unsafe fn request<T>(value: T) {}),
+        ] {
+            assert!(expand_request(quote!(GetPost_GetMotd), declaration).is_err());
+        }
+    }
+
+    #[test]
+    fn request_bindings_reject_non_request_keys() {
+        for key in [quote!(GetPost_), quote!(CreateHttpRequest), quote!(module::GetPost_GetMotd),
+            quote!("GetPost_GetMotd"), quote!(GetPost_GetMotd<u8>)]
+        {
+            assert!(expand_request(key, quote!(pub unsafe fn request() {})).is_err());
+        }
+    }
 
     #[test_case::test_case(quote!(fn release(&mut self) {}), "require unsafe"; "safe function")]
     #[test_case::test_case(quote!(unsafe fn release(self) {}), "borrowed or raw-pointer"; "by value receiver")]

@@ -31,6 +31,11 @@ What remains here:
 - Methods use `#[runtime_bindings] impl Type` and
   `#[bind_resolved_func_detour(Resolver)] fn name_detour(...)`.
 - The generated unsafe `name(...)` calls the trampoline.
+- OpenAPI request methods use `#[bind_resolved_request_function(GetPost_Name)]`
+  for direct calls or `#[bind_resolved_request_function_detour(GetPost_Name)]`
+  for hooks inside `#[runtime_bindings]`. Keys come from the request offset
+  registry, not Rust resolver types. Direct bindings require empty `unsafe fn`
+  bodies; detours retain the `_detour` suffix and generate unsafe original callers.
 - Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/engine/ugame_engine.rs),
