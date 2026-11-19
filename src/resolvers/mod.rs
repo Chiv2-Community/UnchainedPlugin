@@ -77,6 +77,7 @@ pub struct OffsetRegisty {
 
 pub mod asset_registry;
 pub mod admin_control;
+pub(crate) mod networking;
 pub mod asset_loading;
 pub mod loading_screens;
 pub mod backend_hooks;
