@@ -149,6 +149,53 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
+fn native_binding_and_resolver_definitions_stay_outside_unchained() {
+    struct NoNativeBindings<'a>(&'a Path);
+    impl VisitMut for NoNativeBindings<'_> {
+        fn visit_attribute_mut(&mut self, attr: &mut Attribute) {
+            let name = attr.path().segments.last().unwrap().ident.to_string();
+            assert!(
+                ![
+                    "runtime_bindings",
+                    "bind_resolved_func",
+                    "bind_resolved_request_function",
+                    "bind_resolver_value",
+                ]
+                .contains(&name.as_str()),
+                "native binding belongs outside unchained: {}",
+                self.0.display()
+            );
+            syn::visit_mut::visit_attribute_mut(self, attr);
+        }
+
+        fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+            let name = mac.path.segments.last().unwrap().ident.to_string();
+            assert!(
+                !(name.starts_with("define_") && name.ends_with("resolver")
+                    || name == "impl_resolver_singleton"),
+                "native resolver belongs outside unchained: {}",
+                self.0.display()
+            );
+            syn::visit_mut::visit_macro_mut(self, mac);
+        }
+    }
+
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let source = std::fs::read_to_string(&path).unwrap();
+                let mut file = syn::parse_file(&source).unwrap();
+                NoNativeBindings(&path).visit_file_mut(&mut file);
+            }
+        }
+    }
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained"));
+}
+
+#[test]
 fn engine_bindings_preserve_native_source_categories() {
     fn check(root: &Path, directory: &Path) {
         for entry in std::fs::read_dir(directory).unwrap() {

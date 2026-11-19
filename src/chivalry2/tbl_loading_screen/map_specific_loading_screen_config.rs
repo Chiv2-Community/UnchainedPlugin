@@ -23,7 +23,33 @@ pub struct FMapSpecificLoadingScreenConfigData {
     pub(crate) text_a: FTextRaw,
     pub(crate) text_b: FTextRaw,
     /// Native TArray with 0x30-byte elements; Rust leaves it empty.
-    pub(crate) extra: [u8; 0x10],
+    extra: [u8; 0x10],
+}
+
+impl FMapSpecificLoadingScreenConfigData {
+    /// Rust construction adapter, not a verified native constructor.
+    /// Moves already-native values and preserves the existing zero-tail behavior.
+    pub(crate) fn from_native_values(
+        map_name: FString,
+        texture: FSoftObjectPath,
+        text_a: FTextRaw,
+        text_b: FTextRaw,
+    ) -> Self {
+        Self {
+            map_name,
+            texture,
+            text_a,
+            text_b,
+            extra: [0; 0x10],
+        }
+    }
+}
+
+/// Rust adapter for GetDataForMap's non-DemoMode key normalization.
+/// Shipping PDB build: 0x14397d860; strip through the last '/', then from the first '?'.
+pub(crate) fn normalize_map_key(raw: &str) -> &str {
+    let name = raw.rsplit('/').next().unwrap_or(raw);
+    name.split('?').next().unwrap_or(name)
 }
 
 const _: () = assert!(size_of::<FMapSpecificLoadingScreenConfigData>() == 0x68);
@@ -65,3 +91,41 @@ const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, conf
 
 const _: () =
     assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_key_strips_path_then_options() {
+        for (raw, expected) in [
+            ("TDM_QuarryKP", "TDM_QuarryKP"),
+            ("/Game/Maps/Frontend/Frontend", "Frontend"),
+            ("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM", "TDM_QuarryKP"),
+            ("TDM_QuarryKP?listen", "TDM_QuarryKP"),
+            ("", ""),
+            ("/Game/Maps/", ""),
+            ("?listen", ""),
+            ("/Game?option/Map?listen", "Map"),
+            ("/Game/Maps/地图?listen", "地图"),
+        ] {
+            let key = normalize_map_key(raw);
+            assert_eq!(key, expected);
+            // Normalization borrows the input rather than allocating.
+            let start = raw.as_ptr() as usize;
+            let key_start = key.as_ptr() as usize;
+            assert!(key_start >= start && key_start + key.len() <= start + raw.len());
+        }
+    }
+
+    #[test]
+    fn entry_adapter_moves_native_values_without_string_conversion() {
+        let _: fn(
+            FString,
+            FSoftObjectPath,
+            FTextRaw,
+            FTextRaw,
+        ) -> FMapSpecificLoadingScreenConfigData =
+            FMapSpecificLoadingScreenConfigData::from_native_values;
+    }
+}

@@ -12,7 +12,7 @@ fn has_entry(config: &UMapSpecificLoadingScreenConfig, key: &str) -> bool {
         .configs
         .as_slice()
         .iter()
-        .any(|entry| native_key(&entry.map_name.to_string()).eq_ignore_ascii_case(key))
+        .any(|entry| normalize_map_key(&entry.map_name.to_string()).eq_ignore_ascii_case(key))
 }
 
 /// Appends an entry for `extra` unless one with the same key already exists.
@@ -23,13 +23,12 @@ unsafe fn add_entry(config: &mut UMapSpecificLoadingScreenConfig, extra: &Loadin
     if has_entry(config, &extra.map) {
         return;
     }
-    let entry = FMapSpecificLoadingScreenConfigData {
-        map_name: FString::from(extra.map.as_str()),
-        texture: FSoftObjectPath::new(&extra.texture),
-        text_a: FTextRaw::from_str(&extra.text_a),
-        text_b: FTextRaw::from_str(&extra.text_b),
-        extra: [0; 0x10],
-    };
+    let entry = FMapSpecificLoadingScreenConfigData::from_native_values(
+        FString::from(extra.map.as_str()),
+        FSoftObjectPath::new(&extra.texture),
+        FTextRaw::from_str(&extra.text_a),
+        FTextRaw::from_str(&extra.text_b),
+    );
     config.configs.push(entry);
     sinfo![
         "Added extra loading screen config for {} ({} entries)",
@@ -74,9 +73,9 @@ struct LoadingScreen {
     map: String,
     /// Texture soft object path, without the `Texture2D'...'` wrapper.
     texture: String,
-    /// Text stored at entry +0x28.
+    /// Loading-screen title.
     text_a: String,
-    /// Text stored at entry +0x40.
+    /// Loading-screen subtitle.
     text_b: String,
 }
 
@@ -102,19 +101,12 @@ impl LoadingScreen {
     /// Finds the loading screen for a raw map name as passed to
     /// `GetDataForMap`, from the map marker cache.
     fn lookup(raw_map_name: &str) -> Option<Self> {
-        let key = native_key(raw_map_name);
+        let key = normalize_map_key(raw_map_name);
         crate::features::map_markers::map_marker_cache()
             .get(key)
             .as_ref()
             .and_then(Self::from_marker)
     }
-}
-
-/// Mirrors how the native `GetDataForMap` normalizes its key: drop everything
-/// up to the last '/', then everything from the first '?'.
-fn native_key(raw: &str) -> &str {
-    let name = raw.rsplit('/').next().unwrap_or(raw);
-    name.split('?').next().unwrap_or(name)
 }
 
 /// Adds the entry, preventing panics from crossing into the engine.
@@ -148,19 +140,6 @@ unsafe fn apply_texture_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn native_key_strips_path_and_options() {
-        assert_eq!(native_key("TDM_QuarryKP"), "TDM_QuarryKP");
-        assert_eq!(native_key("/Game/Maps/Frontend/Frontend"), "Frontend");
-        assert_eq!(
-            native_key("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM"),
-            "TDM_QuarryKP"
-        );
-        assert_eq!(native_key("TDM_QuarryKP?listen"), "TDM_QuarryKP");
-        assert_eq!(native_key(""), "");
-        assert_eq!(native_key("/Game/Maps/"), "");
-    }
 
     #[test]
     fn marker_loading_screen_needs_a_texture() {

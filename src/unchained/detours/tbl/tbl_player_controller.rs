@@ -142,15 +142,14 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
     } else {
         color.unwrap_or(0xFFFFFF)
     };
-    let [r, g, b] = [16, 8, 0].map(|shift| {
-        let srgb = ((rgb >> shift) & 0xFF) as f32 / 255.0;
-        if srgb <= 0.04045 {
-            srgb / 12.92
-        } else {
-            ((srgb + 0.055) / 1.055).powf(2.4)
-        }
-    });
-    Some((title, body, is_sender_dev, [r, g, b, 1.0]))
+    let rgb = [16, 8, 0].map(|shift| ((rgb >> shift) & 0xFF) as u8);
+    let color = FLinearColor::from_srgb8(rgb, 1.0);
+    Some((
+        title,
+        body,
+        is_sender_dev,
+        [color.r, color.g, color.b, color.a],
+    ))
 }
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {

@@ -16,6 +16,7 @@ pub use self::runtime::core::containers::array::*;
 pub(crate) use self::runtime::core::containers::bit_array::*;
 pub(crate) use self::runtime::core::containers::container_allocation_policies::*;
 pub use self::runtime::core::containers::map::*;
+pub use self::runtime::core::containers::script_array::*;
 pub use self::runtime::core::containers::set::*;
 pub(crate) use self::runtime::core::containers::sparse_array::*;
 pub use self::runtime::core::containers::unreal_string::*;

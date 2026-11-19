@@ -8,6 +8,13 @@ use crate::chivalry2::engine::TCHAR;
 
 use std::ffi::c_void;
 
+// Legacy key for FPakPlatformFile::Mount's filename-comparison branch, not
+// console authentication. Installed Steam RVA 0x2fc8e07 (Mount + 0xB7).
+define_pattern_resolver!(
+    AuthenticateConsoleCommandCaller,
+    ["74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"]
+);
+
 // Legacy cache key retained: shipping PDB verifies this is the static
 // FPakPlatformFile::BroadcastPakChunkSignatureCheckFailure at RVA 0x2e371b0.
 define_pattern_resolver!(DedicatedServerInit, [

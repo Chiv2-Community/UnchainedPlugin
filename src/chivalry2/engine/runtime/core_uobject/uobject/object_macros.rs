@@ -1,6 +1,13 @@
 //! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/ObjectMacros.h>.
 
 bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct EClassFlags: u32 {
+        const CLASS_Config = 0x0000_0004;
+    }
+}
+
+bitflags::bitflags! {
     #[derive(Debug, Clone)]
     pub struct EObjectFlags: u32 {
         const RF_NoFlags = 0x0000;
@@ -32,5 +39,16 @@ bitflags::bitflags! {
         const RF_NonPIEDuplicateTransient = 0x02000000;
         const RF_Dynamic = 0x04000000;
         const RF_WillBeLoaded = 0x08000000;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn class_config_matches_native_flag_width_and_value() {
+        assert_eq!(std::mem::size_of::<EClassFlags>(), 4);
+        assert_eq!(EClassFlags::CLASS_Config.bits(), 4);
     }
 }

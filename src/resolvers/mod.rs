@@ -14,6 +14,7 @@ pub enum PlatformType {
 pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
 
 mod platforms;
+pub(crate) mod unresolved_native_targets;
 pub use platforms::{supports_platform, ResolverPlatform};
 pub use unchained_macros::{
     FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration,

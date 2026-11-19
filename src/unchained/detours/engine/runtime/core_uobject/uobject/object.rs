@@ -35,8 +35,9 @@ pub(crate) unsafe fn load_config_detour(
     // GetConfigName is fatal for classes without CLASS_Config. Mirror the
     // native early return before looking up the base filename.
     // https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Private/UObject/Obj.cpp#L2017-L2020
-    const CLASS_CONFIG: u32 = 0x0000_0004;
-    if actual_class.is_null() || unsafe { (*actual_class).class_flags } & CLASS_CONFIG == 0 {
+    if actual_class.is_null()
+        || unsafe { (*actual_class).class_flags } & EClassFlags::CLASS_Config.bits() == 0
+    {
         return unsafe {
             this.load_config(config_class, filename, propagation_flags, property_to_load)
         };

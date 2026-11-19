@@ -1,10 +1,6 @@
 //! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
 //! Plugin-owned mod, marker, and settings assets; not native TBL headers.
 
-use crate::chivalry2::engine::runtime::core_uobject::uobject::unreal_type::{
-    FArrayProperty, FStructProperty,
-};
-use crate::chivalry2::engine::FProperty;
 use crate::chivalry2::engine::FSoftObjectPath;
 use crate::chivalry2::engine::FSoftObjectPtr;
 use crate::chivalry2::engine::FString;
@@ -15,10 +11,12 @@ use crate::chivalry2::engine::TSoftClassPtr;
 use crate::chivalry2::engine::UClass;
 use crate::chivalry2::engine::UObject;
 use crate::chivalry2::engine::UStruct;
+use crate::chivalry2::engine::{AActor, StructArrayError, StructArrayMetadata};
 use std::os::raw::c_void;
 
 #[repr(C)]
 pub struct DA_ModMarker_C {
+    // Opaque superclass prefix; exact native inheritance is not modeled here.
     _private: [u8; 0x30],
     pub mod_actors: TMap<*mut UClass, FString>, // Offset 0x0030
     pub custom_objects: TMap<*mut UObject, FString>, // Offset 0x0080
@@ -29,6 +27,7 @@ pub struct DA_ModMarker_C {
 /// fallback offsets. Only ever used through a pointer to a live engine object.
 #[repr(C)]
 pub struct DA_ModMarker_V2_C {
+    // Opaque superclass prefix; exact native inheritance is not modeled here.
     _private: [u8; 0x30],
     pub mod_id: FString,                          // 0x0030
     pub mod_version: FString,                     // 0x0040
@@ -238,16 +237,6 @@ impl V2MarkerOffsets {
     }
 }
 
-/// Raw `TArray` header {data, num, max} as laid out in memory. Only ever read as
-/// a view over engine memory - never wrapped in `TArray<T>`, whose `Drop` would
-/// free the engine's buffer.
-#[repr(C)]
-struct ArrayHeader {
-    data: *const u8,
-    num: i32,
-    max: i32,
-}
-
 /// One `F_ShippedMap` row read from a marker's `Maps` array. `DA_MapMarker_V2`'s
 /// `Maps` is a `TArray<F_ShippedMap>` (a Blueprint UserDefinedStruct); its members
 /// are resolved by authored name at runtime (see [`MapMarkerOffsets::resolve`]).
@@ -273,8 +262,7 @@ pub struct MapMarkerRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MapMarkerOffsets {
     default_loading_screen: usize,
-    maps: usize,
-    element_size: usize,
+    maps: StructArrayMetadata,
     m_map: Option<usize>,
     m_state: Option<usize>,
     m_loading_screen: Option<usize>,
@@ -304,30 +292,28 @@ impl MapMarkerOffsets {
             ));
         }
         // Maps (TArray<F_ShippedMap>), required.
-        let maps_field = UStruct::find_field(class.cast::<UStruct>(), "Maps")
+        let maps = StructArrayMetadata::find(class.cast::<UStruct>(), "Maps")
+            .map_err(|error| match error {
+                StructArrayError::NotArray => "Maps is not an ArrayProperty".to_string(),
+                StructArrayError::NegativeOffset => "Maps has a negative offset".to_string(),
+                StructArrayError::MisalignedOffset => "Maps has a misaligned offset".to_string(),
+                StructArrayError::OffsetOutOfBounds => {
+                    "Maps is outside its class layout".to_string()
+                }
+                StructArrayError::UnsupportedFlags(flags) => {
+                    format!("Maps array has unsupported allocator flags {flags:#x}")
+                }
+                StructArrayError::MissingInner => "Maps array has no inner property".to_string(),
+                StructArrayError::NotStruct => "Maps element is not a StructProperty".to_string(),
+                StructArrayError::InvalidElementSize => "Maps element size is zero".to_string(),
+                StructArrayError::MissingStruct => "Maps element has no script struct".to_string(),
+            })?
             .ok_or_else(|| "Maps array not found - not a V2 map marker".to_string())?;
-        let maps_offset = {
-            let offset = (*maps_field.cast::<FProperty>()).offset_internal;
-            if offset < 0 {
-                return Err("Maps has a negative offset".into());
-            }
-            offset as usize
-        };
-        let inner = maps_field.cast::<FArrayProperty>().inner();
-        if inner.is_null() {
-            return Err("Maps array has no inner property".into());
-        }
-        let element_size = (*inner).element_size.max(0) as usize;
-        if element_size == 0 {
-            return Err("Maps element size is zero".into());
-        }
-        let strukt = inner.cast::<FStructProperty>().script_struct();
-        let members = UStruct::struct_member_offsets(strukt);
+        let members = UStruct::struct_member_offsets(maps.script_struct);
         let member = |name: &str| members.get(name).copied();
         let offsets = Self {
             default_loading_screen: dls.offset,
-            maps: maps_offset,
-            element_size,
+            maps,
             m_map: member("Map"),
             m_state: member("State"),
             m_loading_screen: member("LoadingScreen"),
@@ -360,15 +346,14 @@ impl MapMarkerOffsets {
     /// # Safety
     /// See [`Self::default_loading_screen`].
     pub unsafe fn rows(&self, marker: *const UObject) -> Vec<MapMarkerRow> {
-        let header = &*marker.cast::<u8>().add(self.maps).cast::<ArrayHeader>();
-        let num = header.num.max(0) as usize;
         let map_offset = match self.m_map {
             Some(offset) => offset,
             None => return Vec::new(),
         };
-        if header.data.is_null() || self.element_size == 0 {
-            return Vec::new();
-        }
+        let elements = match self.maps.view(&*marker) {
+            Ok(elements) => elements,
+            Err(_) => return Vec::new(),
+        };
         let string_at = |elem: *const u8, offset: Option<usize>| -> String {
             offset.map_or_else(String::new, |o| {
                 (*elem.add(o).cast::<FString>()).to_string()
@@ -377,12 +362,8 @@ impl MapMarkerOffsets {
         let i32_at = |elem: *const u8, offset: Option<usize>| -> i32 {
             offset.map_or(0, |o| *elem.add(o).cast::<i32>())
         };
-        let mut rows = Vec::with_capacity(num);
-        for index in 0..num {
-            let elem = match index.checked_mul(self.element_size) {
-                Some(step) => header.data.add(step),
-                None => break,
-            };
+        let mut rows = Vec::with_capacity(elements.len());
+        for elem in elements.iter() {
             let map_path = (*elem.add(map_offset).cast::<FSoftObjectPath>()).to_path_string();
             if map_path.is_empty() {
                 continue;
@@ -407,7 +388,7 @@ impl MapMarkerOffsets {
 
 #[repr(C)]
 pub struct ArgonSDKModBase {
-    pub actor_padding: [u8; 0x258],
+    pub base: AActor,
     // 0x0258
     pub uber_graph_frame: u64,
     // 0x0260
@@ -441,9 +422,29 @@ pub struct ArgonSDKModBase {
     // pub b_clientside: bool,
 }
 
+const _: () = {
+    use std::mem::offset_of;
+    assert!(offset_of!(ArgonSDKModBase, uber_graph_frame) == 0x258);
+    assert!(offset_of!(ArgonSDKModBase, default_scene_root) == 0x260);
+    assert!(offset_of!(ArgonSDKModBase, mod_name) == 0x268);
+    assert!(offset_of!(ArgonSDKModBase, mod_version) == 0x278);
+    assert!(offset_of!(ArgonSDKModBase, mod_description) == 0x288);
+    assert!(offset_of!(ArgonSDKModBase, author) == 0x298);
+    assert!(offset_of!(ArgonSDKModBase, b_silent_load) == 0x2A8);
+    assert!(offset_of!(ArgonSDKModBase, mod_repo_url) == 0x2B0);
+    assert!(offset_of!(ArgonSDKModBase, duplicate) == 0x2C0);
+    assert!(offset_of!(ArgonSDKModBase, b_enable_by_default) == 0x2C1);
+    assert!(offset_of!(ArgonSDKModBase, b_show_in_gui) == 0x2C2);
+    assert!(offset_of!(ArgonSDKModBase, b_online_only) == 0x2C3);
+    assert!(offset_of!(ArgonSDKModBase, b_host_only) == 0x2C4);
+    assert!(offset_of!(ArgonSDKModBase, b_allow_on_frontend) == 0x2C5);
+    assert!(offset_of!(ArgonSDKModBase, mod_version_repl) == 0x2C8);
+};
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct UModLoaderSettings_C {
+    // Opaque superclass prefix; exact native inheritance is not modeled here.
     // 0x0000 (size 0x28)
     pub base: [u8; 0x28],
     // 0x0028 (size: 0x8)
