@@ -31,47 +31,6 @@ const AR_IS_ERROR_BIT: u8 = 0x01;
 /// without `SetError`).
 const REGISTRY_HEADER_BYTES: i64 = 20;
 
-#[cfg(test)]
-mod registry_load_tests {
-    use super::UAssetRegistryHelpers;
-
-    // A plausible ModAssetRegistry.bin size; the exact value is irrelevant since
-    // a valid read ends at the name-table offset, short of the total.
-    const TOTAL: i64 = 8192;
-
-    #[test]
-    fn a_wrong_magic_guid_header_is_rejected() {
-        // SerializeVersion reads only the 16-byte FGuid, then bails on mismatch.
-        assert!(UAssetRegistryHelpers::classify_registry_load(false, 16, TOTAL).is_err());
-    }
-
-    #[test]
-    fn an_unsupported_version_is_rejected() {
-        // GUID matches, the version int is read (20 bytes), then the engine
-        // returns early because Version < RemovedMD5Hash — with no error flag.
-        assert!(UAssetRegistryHelpers::classify_registry_load(false, 20, TOTAL).is_err());
-    }
-
-    #[test]
-    fn a_truncated_or_empty_buffer_is_rejected() {
-        assert!(UAssetRegistryHelpers::classify_registry_load(false, 0, TOTAL).is_err());
-    }
-
-    #[test]
-    fn a_mid_stream_error_flag_is_rejected() {
-        // Corruption detected deep in the stream: read past the header, flag set.
-        assert!(UAssetRegistryHelpers::classify_registry_load(true, 4096, TOTAL).is_err());
-    }
-
-    #[test]
-    fn a_successful_read_ending_before_the_trailing_name_table_succeeds() {
-        // A valid load ends at the name-table offset, legitimately short of total.
-        assert!(UAssetRegistryHelpers::classify_registry_load(false, 4096, TOTAL).is_ok());
-        // And one that happens to consume right up to the end is fine too.
-        assert!(UAssetRegistryHelpers::classify_registry_load(false, TOTAL, TOTAL).is_ok());
-    }
-}
-
 /// Static native helpers only; this is not a UObject instance layout.
 pub struct UAssetRegistryHelpers {
     _private: (),
@@ -212,5 +171,46 @@ impl UAssetRegistryHelpers {
     pub unsafe fn get_asset_registry<'a>(
         output: &'a mut AssetRegistryScriptInterface,
     ) -> &'a mut AssetRegistryScriptInterface {
+    }
+}
+
+#[cfg(test)]
+mod registry_load_tests {
+    use super::UAssetRegistryHelpers;
+
+    // A plausible ModAssetRegistry.bin size; the exact value is irrelevant since
+    // a valid read ends at the name-table offset, short of the total.
+    const TOTAL: i64 = 8192;
+
+    #[test]
+    fn a_wrong_magic_guid_header_is_rejected() {
+        // SerializeVersion reads only the 16-byte FGuid, then bails on mismatch.
+        assert!(UAssetRegistryHelpers::classify_registry_load(false, 16, TOTAL).is_err());
+    }
+
+    #[test]
+    fn an_unsupported_version_is_rejected() {
+        // GUID matches, the version int is read (20 bytes), then the engine
+        // returns early because Version < RemovedMD5Hash — with no error flag.
+        assert!(UAssetRegistryHelpers::classify_registry_load(false, 20, TOTAL).is_err());
+    }
+
+    #[test]
+    fn a_truncated_or_empty_buffer_is_rejected() {
+        assert!(UAssetRegistryHelpers::classify_registry_load(false, 0, TOTAL).is_err());
+    }
+
+    #[test]
+    fn a_mid_stream_error_flag_is_rejected() {
+        // Corruption detected deep in the stream: read past the header, flag set.
+        assert!(UAssetRegistryHelpers::classify_registry_load(true, 4096, TOTAL).is_err());
+    }
+
+    #[test]
+    fn a_successful_read_ending_before_the_trailing_name_table_succeeds() {
+        // A valid load ends at the name-table offset, legitimately short of total.
+        assert!(UAssetRegistryHelpers::classify_registry_load(false, 4096, TOTAL).is_ok());
+        // And one that happens to consume right up to the end is fine too.
+        assert!(UAssetRegistryHelpers::classify_registry_load(false, TOTAL, TOTAL).is_ok());
     }
 }
