@@ -295,23 +295,21 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
-| `UnchainedPlugin::unchained::detours::tbl::tbl_utility_library` | Native administration commands. |
-| `UnchainedPlugin::unchained::detours::tbl::ui::user_feedback_and_bug_reports_library` | Native game-info calls. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::engine::kismet::gameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
+| `UnchainedPlugin::unchained::detours::admin_control` | Administrative commands and game diagnostics. |
+| `UnchainedPlugin::unchained::detours::asset_loading` | Save games and optional loose-asset loading. |
 | `UnchainedPlugin::features::mod_asset_registry` | Mod Asset Registry merging. |
 | `UnchainedPlugin::chivalry2::engine::runtime::core_uobject::uobject::uobject_globals` | Native object lookups. |
-| `UnchainedPlugin::unchained::detours::tbl::tbl_game_mode::backend` | Ban checks, player connections, and departures. |
+| `UnchainedPlugin::unchained::detours::backend_hooks` | Ban checks, player connections, requests, and statistics. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::core_uobject::uobject::object` | Config loading, blocked events, and recursion limits. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::engine::game_framework::player_controller` | Native travel, chat capture, and invalid channels. |
-| `UnchainedPlugin::unchained::detours::tbl::tbl_character` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::unchained::detours::plugins::online_subsystem_playfab::open_api_merged::open_api_client_api` | Backend request handling. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::engine::engine_utils` | Native console output. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::core_uobject::uobject::stack` | Blueprint execution messages in `kismet_log` builds. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::engine::engine::game_engine` | Engine tick and game-thread jobs. |
-| `UnchainedPlugin::unchained::detours::tbl::tbl_game_instance` | Startup and map changes. |
-| `UnchainedPlugin::unchained::detours::engine::runtime::engine::game_framework::game_mode` | Match state. |
-| `UnchainedPlugin::unchained::detours::networking::ipv6_support` | UDP echo and IPv6 endpoint normalization. |
+| `UnchainedPlugin::unchained::detours::config_overrides` | Profile-specific native config loading. |
+| `UnchainedPlugin::unchained::detours::desync` | Blocked Blueprint events, recursion limits, and listen-server compatibility. |
+| `UnchainedPlugin::unchained::detours::messages` | Chat capture, broadcast presentation, native console output, and optional Blueprint messages. |
+| `UnchainedPlugin::unchained::detours::gameplay` | Combat validation and damage/kill TRACE details. |
+| `UnchainedPlugin::unchained::detours::getpost_requests` | Backend endpoint and request-token overrides. |
+| `UnchainedPlugin::unchained::detours::unchained_integration` | Game-thread jobs, startup, map changes, match state, and shutdown. |
+| `UnchainedPlugin::unchained::detours::networking` | Travel and IPv6 browser/ping compatibility. |
+| `UnchainedPlugin::unchained::detours::pak_mount` | Mounted-pak tracking. |
+| `UnchainedPlugin::unchained::detours::loading_screens` | Map-marker loading-screen injection. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

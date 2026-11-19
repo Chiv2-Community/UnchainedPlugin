@@ -83,7 +83,10 @@ the detour is stored, its address remains reserved even if activation fails.
 - Other native models: `src/chivalry2/{engine,tbl,tbl_loading_screen}/`
 - Native game-plugin ABIs: `src/chivalry2/plugins/`
 - Custom blueprint layouts/adapters: `src/unchained/blueprints/`
-- Replacements: `src/unchained/detours/{engine,tbl,tbl_loading_screen,plugins}/`
+- Replacements: `src/unchained/detours/`, grouped by plugin purpose rather than
+  native class/header layout. The groups follow `main`'s resolver organization:
+  backend handling, messages, ownership overrides, asset loading, gameplay,
+  loading screens, configuration, and lifecycle integration.
 - Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override
   state live with the replacements, not on native types.
 - `TBLUtility` and `UGameplay` adapt native namespaces for typed bindings, not

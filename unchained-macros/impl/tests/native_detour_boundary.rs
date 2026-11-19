@@ -149,6 +149,47 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
+fn detours_follow_plugin_purposes_not_native_header_paths() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/detours");
+    for old_root in ["engine", "plugins", "tbl", "tbl_loading_screen"] {
+        assert!(!root.join(old_root).exists(), "native hierarchy in detours: {old_root}");
+    }
+    for (path, targets) in [
+        ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
+        ("desync/blueprint_events.rs", &["UObject::process_event"][..]),
+        ("ownership_overrides.rs", &[
+            "ATBLPlayerController::get_ownership_from_player_controller_and_state",
+            "ATBLPlayerController::can_use_loadout_item",
+            "ATBLPlayerController::can_use_character",
+            "ATBLPlayerController::conditional_initialize_customization_on_server",
+        ][..]),
+        ("messages/chat.rs", &[
+            "ATBLPlayerController::client_receive_chat",
+            "ATBLGameMode::broadcast_chat",
+            "APlayerController::client_message",
+        ][..]),
+        ("networking/travel.rs", &["APlayerController::client_travel_internal"][..]),
+        ("pak_mount.rs", &["FPakPlatformFile::mount"][..]),
+        ("asset_loading/loose_assets.rs", &[
+            "FPakPlatformFile::find_file_in_pak_files",
+            "FPakPlatformFile::find_file_in_pak_files_static",
+            "FPakPlatformFile::is_non_pak_filename_allowed",
+        ][..]),
+    ] {
+        let source = std::fs::read_to_string(root.join(path)).unwrap();
+        let file = syn::parse_file(&source).unwrap();
+        let actual: Vec<_> = file.items.iter().filter_map(|item| {
+            let Item::Fn(function) = item else { return None };
+            let attr = attribute(&function.attrs, "bind_func_detour")?;
+            Some(args(attr)[0].to_token_stream().to_string().replace(' ', ""))
+        }).collect();
+        for target in targets {
+            assert!(actual.iter().any(|actual| actual == target), "{target} belongs in {path}");
+        }
+    }
+}
+
+#[test]
 fn native_binding_and_resolver_definitions_stay_outside_unchained() {
     struct NoNativeBindings<'a>(&'a Path);
     impl VisitMut for NoNativeBindings<'_> {

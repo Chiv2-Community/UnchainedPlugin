@@ -19,7 +19,7 @@ pub(crate) fn send_ingame_message_with_world(
     cancellation: Option<CancellationToken>,
 ) {
     use crate::chivalry2::tbl::UTBLSystemLibrary;
-    use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
+    use crate::unchained::detours::unchained_integration::game_thread::run_on_game_thread;
 
     // Cancellation, world resolution and native work must share one game-thread job.
     run_on_game_thread(move || {
