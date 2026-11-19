@@ -5,6 +5,9 @@
 #[macro_use]
 extern crate unchained_macros;
 
+// Distinct black-box tags keep optimized fixture entry points from being folded
+// together. Each test must own a different patch target, even for identical ABIs.
+
 // The macro consumer supplies startup registration. A synthetic nonzero base
 // keeps these tests independent of the plugin and exercises address overflow.
 mod resolvers {
@@ -51,16 +54,19 @@ mod request_methods {
 
     #[inline(never)]
     unsafe extern "C" fn inventory_target(this: *mut Client, value: i32) -> i32 {
+        std::hint::black_box(1u32);
         unsafe { (*std::hint::black_box(this)).value + value + 1 }
     }
 
     #[inline(never)]
     unsafe extern "C" fn disabled_target(this: &Client, value: i32) -> i32 {
+        std::hint::black_box(2u32);
         std::hint::black_box(this.value) + value + 2
     }
 
     #[inline(never)]
     unsafe extern "C" fn direct_target(this: *mut Client, value: i32) -> i32 {
+        std::hint::black_box(3u32);
         unsafe { (*std::hint::black_box(this)).value + value + 3 }
     }
 
@@ -131,16 +137,26 @@ mod resolved_detours {
     fn excluded_detour() {}
 
     #[inline(never)]
-    unsafe extern "C" fn add_target(value: i32) -> i32 { std::hint::black_box(value) + 3 }
+    unsafe extern "C" fn add_target(value: i32) -> i32 {
+        std::hint::black_box(4u32);
+        std::hint::black_box(value) + 3
+    }
     #[inline(never)]
     unsafe extern "C" fn borrow_target(value: &mut i32) -> &mut i32 {
+        std::hint::black_box(5u32);
         *value += 3;
         std::hint::black_box(value)
     }
     #[inline(never)]
-    unsafe extern "C" fn zero_target() -> i32 { std::hint::black_box(17) }
+    unsafe extern "C" fn zero_target() -> i32 {
+        std::hint::black_box(6u32);
+        std::hint::black_box(17)
+    }
     #[inline(never)]
-    unsafe extern "C" fn off_target(value: i32) -> i32 { std::hint::black_box(value) + 4 }
+    unsafe extern "C" fn off_target(value: i32) -> i32 {
+        std::hint::black_box(7u32);
+        std::hint::black_box(value) + 4
+    }
 
     #[test]
     fn registered_attributes_attach_and_call_trampolines() {
@@ -260,35 +276,44 @@ mod runtime_binding_methods {
 
     #[inline(never)]
     unsafe extern "C" fn add_target(this: &mut Native, value: i32) -> i32 {
+        std::hint::black_box(8u32);
         this.value += std::hint::black_box(value);
         this.value
     }
 
     #[inline(never)]
-    unsafe extern "C" fn borrow_target(this: &Native) -> &Native { std::hint::black_box(this) }
+    unsafe extern "C" fn borrow_target(this: &Native) -> &Native {
+        std::hint::black_box(9u32);
+        std::hint::black_box(this)
+    }
 
     #[inline(never)]
     unsafe extern "C" fn raw_target(this: *mut Native, extra: i32) -> i32 {
+        std::hint::black_box(10u32);
         unsafe { (*std::hint::black_box(this)).value + extra }
     }
 
     #[inline(never)]
     unsafe extern "C" fn other_target(_this: &mut Other, value: i32) -> i32 {
+        std::hint::black_box(11u32);
         std::hint::black_box(value) * 2
     }
 
     #[inline(never)]
     unsafe extern "C" fn mut_borrow_target(this: &mut Native) -> &mut i32 {
+        std::hint::black_box(12u32);
         std::hint::black_box(&mut this.value)
     }
 
     #[inline(never)]
     unsafe extern "C" fn arg_borrow_target<'a>(_this: &Native, value: &'a i32) -> &'a i32 {
+        std::hint::black_box(13u32);
         std::hint::black_box(value)
     }
 
     #[inline(never)]
     unsafe extern "C" fn make_target(value: i32) -> Native {
+        std::hint::black_box(14u32);
         Native { value: std::hint::black_box(value) }
     }
 
@@ -364,11 +389,13 @@ CREATE_HOOK!(TestMutBorrowed, for<'a>, INACTIVE, PRE, &'a mut i32,
 
 #[inline(never)]
 unsafe extern "C" fn borrowed_target(value: &i32) -> &i32 {
+    std::hint::black_box(15u32);
     std::hint::black_box(value)
 }
 
 #[inline(never)]
 unsafe extern "C" fn mut_borrowed_target(value: &mut i32) -> &mut i32 {
+    std::hint::black_box(16u32);
     *value += 3;
     std::hint::black_box(value)
 }
