@@ -4,9 +4,9 @@ use syn::fold::Fold;
 use syn::visit_mut::VisitMut;
 use syn::{parse::Parse, parse::ParseStream, Expr, Token};
 
-struct Arguments {
-    resolver: Path,
-    condition: Expr,
+pub(super) struct Arguments {
+    pub resolver: Path,
+    pub condition: Expr,
 }
 
 impl Parse for Arguments {
@@ -77,6 +77,32 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         let syn::ImplItem::Fn(method) = item else {
             continue;
         };
+        let binding_attributes: Vec<_> = method.attrs.iter().enumerate().filter(|(_, attr)|
+            attr.path().segments.last().is_some_and(|s|
+                s.ident == "bind_resolved_func" || s.ident == "bind_resolved_request_function")
+        ).map(|(index, _)| index).collect();
+        if !binding_attributes.is_empty() {
+            if binding_attributes.len() != 1 || method.attrs.iter().any(|attr|
+                attr.path().segments.last().is_some_and(|s|
+                    s.ident == "bind_resolved_func_detour" || s.ident == "bind_resolved_request_function_detour")
+            ) {
+                return Err(syn::Error::new_spanned(method, "duplicate or conflicting native binding attributes"));
+            }
+            let attribute = method.attrs.remove(binding_attributes[0]);
+            let require_resolver = attribute.path().segments.last().unwrap().ident == "bind_resolved_func";
+            let args = attribute.meta.require_list()?.tokens.clone();
+            let function: ItemFn = syn::parse2(quote!(#method))?;
+            let (expanded, descriptor, helper) = super::function_detour::expand_binding(
+                args, &function, self_ty, require_resolver,
+            )?;
+            if !names.insert(descriptor.ident.to_string()) {
+                return Err(syn::Error::new_spanned(descriptor, "generated binding metadata conflicts with an associated item"));
+            }
+            *method = syn::parse2(quote!(#expanded))?;
+            originals.push(syn::ImplItem::Const(descriptor));
+            helpers.push(helper);
+            continue;
+        }
         let attributes: Vec<_> = method
             .attrs
             .iter()
@@ -229,68 +255,18 @@ fn expand_function(
             )
         })?;
     let original_ident = format_ident!("{}", stripped, span = ident.span());
-    let mut native_signature = function.sig.clone();
+    let native_signature = concrete_signature(function, self_ty)?;
     let mut arguments = Vec::new();
-    // Native callbacks have an explicit receiver parameter. Preserve Rust's
-    // receiver-based output lifetime elision before removing that receiver.
-    if let Some(FnArg::Receiver(receiver)) = native_signature.inputs.first_mut() {
-        let self_ty = self_ty.ok_or_else(|| {
-            syn::Error::new_spanned(
-                &*receiver,
-                "detour methods require #[unchained_macros::runtime_bindings] on the impl",
-            )
-        })?;
-        if let Type::Reference(reference) = receiver.ty.as_mut() {
-            let lifetime = reference
-                .lifetime
-                .clone()
-                .filter(|l| l.ident != "_")
-                .unwrap_or_else(|| {
-                    let mut name = "__unchained_receiver".to_string();
-                    while function
-                        .sig
-                        .generics
-                        .lifetimes()
-                        .any(|p| p.lifetime.ident == name)
-                    {
-                        name.push('_');
-                    }
-                    let lifetime = syn::Lifetime::new(&format!("'{name}"), ident.span());
-                    native_signature
-                        .generics
-                        .params
-                        .push(syn::parse_quote!(#lifetime));
-                    lifetime
-                });
-            reference.lifetime = Some(lifetime.clone());
-            ElidedOutput(lifetime).visit_return_type_mut(&mut native_signature.output);
-        }
-        let ty = ConcreteSelf(self_ty).fold_type(*receiver.ty.clone());
-        let mut receiver_name = "__unchained_this".to_string();
-        while function.sig.inputs.iter().any(|input| matches!(input,
-            FnArg::Typed(arg) if matches!(arg.pat.as_ref(), Pat::Ident(p) if p.ident == receiver_name)))
-        {
-            receiver_name.push('_');
-        }
-        let receiver_name = format_ident!("{}", receiver_name);
-        native_signature.inputs[0] = syn::parse_quote!(#receiver_name: #ty);
+    if matches!(function.sig.inputs.first(), Some(FnArg::Receiver(_))) {
         arguments.push(quote!(self));
-    }
-    if let Some(self_ty) = self_ty {
-        native_signature = ConcreteSelf(self_ty).fold_signature(native_signature);
     }
     let mut types = Vec::new();
     let mut names = Vec::new();
     for (index, input) in native_signature.inputs.iter().enumerate() {
         let FnArg::Typed(argument) = input else {
-            return Err(syn::Error::new_spanned(
-                input,
-                "unsupported detour receiver",
-            ));
+            return Err(syn::Error::new_spanned(input, "unsupported detour receiver"));
         };
-        let Pat::Ident(ident) = &*argument.pat else {
-            unreachable!()
-        };
+        let Pat::Ident(ident) = &*argument.pat else { unreachable!() };
         types.push(&argument.ty);
         names.push(&ident.ident);
         let name = &ident.ident;
@@ -389,10 +365,15 @@ fn expand_function(
                 if #hook.get().is_some() {
                     return Err(::retour::Error::AlreadyInitialized.into());
                 }
+                let claim = ::unchained_macros::__private::claim_detour_address(address)?;
                 let target: #binder unsafe extern "C" fn(#(#types),*) #output =
                     unsafe { ::core::mem::transmute(address) };
                 let detour = unsafe { #detour::new(target, #replacement)? };
                 #hook.set(detour).map_err(|_| ::retour::Error::AlreadyInitialized)?;
+                claim.commit();
+                unsafe { ::unchained_macros::__private::publish_function_trampolines(
+                    address, #hook.get().expect("Hook was just initialized").trampoline() as *const () as usize,
+                )?; }
                 if auto_activate && #condition_fn() {
                     unsafe { #hook.get().expect("Hook was just initialized").enable()?; }
                 }
@@ -414,6 +395,59 @@ fn expand_function(
             }
         },
     ))
+}
+
+pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> syn::Result<syn::Signature> {
+    let mut native_signature = function.sig.clone();
+    let ident = &function.sig.ident;
+    // Native callbacks have an explicit receiver parameter. Preserve Rust's
+    // receiver-based output lifetime elision before removing that receiver.
+    if let Some(FnArg::Receiver(receiver)) = native_signature.inputs.first_mut() {
+        let self_ty = self_ty.ok_or_else(|| {
+            syn::Error::new_spanned(
+                &*receiver,
+                "detour methods require #[unchained_macros::runtime_bindings] on the impl",
+            )
+        })?;
+        if let Type::Reference(reference) = receiver.ty.as_mut() {
+            let lifetime = reference
+                .lifetime
+                .clone()
+                .filter(|l| l.ident != "_")
+                .unwrap_or_else(|| {
+                    let mut name = "__unchained_receiver".to_string();
+                    while function
+                        .sig
+                        .generics
+                        .lifetimes()
+                        .any(|p| p.lifetime.ident == name)
+                    {
+                        name.push('_');
+                    }
+                    let lifetime = syn::Lifetime::new(&format!("'{name}"), ident.span());
+                    native_signature
+                        .generics
+                        .params
+                        .push(syn::parse_quote!(#lifetime));
+                    lifetime
+                });
+            reference.lifetime = Some(lifetime.clone());
+            ElidedOutput(lifetime).visit_return_type_mut(&mut native_signature.output);
+        }
+        let ty = ConcreteSelf(self_ty).fold_type(*receiver.ty.clone());
+        let mut receiver_name = "__unchained_this".to_string();
+        while function.sig.inputs.iter().any(|input| matches!(input,
+            FnArg::Typed(arg) if matches!(arg.pat.as_ref(), Pat::Ident(p) if p.ident == receiver_name)))
+        {
+            receiver_name.push('_');
+        }
+        let receiver_name = format_ident!("{}", receiver_name);
+        native_signature.inputs[0] = syn::parse_quote!(#receiver_name: #ty);
+    }
+    if let Some(self_ty) = self_ty {
+        native_signature = ConcreteSelf(self_ty).fold_signature(native_signature);
+    }
+    Ok(native_signature)
 }
 
 #[cfg(test)]

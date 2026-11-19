@@ -2,7 +2,6 @@
 
 use crate::chivalry2::engine::FLinearColor;
 use crate::chivalry2::engine::FText;
-use unchained_macros::bind_resolved_func;
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::{
     events::models::{GameEvent, MapChange},

@@ -5,7 +5,6 @@ use crate::chivalry2::engine::TArray;
 use crate::chivalry2::engine::UObject;
 use crate::chivalry2::engine::*;
 use std::ffi::c_void;
-use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(GetConfigName, [
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"

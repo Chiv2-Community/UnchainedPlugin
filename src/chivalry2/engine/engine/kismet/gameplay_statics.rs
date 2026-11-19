@@ -6,7 +6,6 @@ use crate::chivalry2::engine::UClass;
 use crate::chivalry2::engine::UObject;
 use crate::chivalry2::engine::USaveGame;
 
-use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
 

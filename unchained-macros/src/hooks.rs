@@ -144,8 +144,14 @@ macro_rules! __create_hook_impl {
                         type FnPtr = for<$($lifetime),+> unsafe extern "C" fn ($( $ty ),+ ) -> $out_type;
                         let base_address = * crate::resolvers::BASE_ADDR;
                         let target: FnPtr = std::mem::transmute(base_address + rel_address);
+                        let claim = $crate::__private::claim_detour_address(base_address + rel_address)?;
                         let hook = [<Detour_ $name>]::new(target, [<$name _detour_fkt>])?;
                         [<o_ $name>].set(hook).map_err(|_| ::retour::Error::AlreadyInitialized)?;
+                        claim.commit();
+                        $crate::__private::publish_function_trampolines(
+                            base_address + rel_address,
+                            [<o_ $name>].get().expect("Hook was just initialized").trampoline() as *const () as usize,
+                        )?;
                         // crate::sinfo!("Set up {}", stringify!([<$name _detour_fkt>]));
                         
                         // We combine the global 'auto_activate' flag with the local condition

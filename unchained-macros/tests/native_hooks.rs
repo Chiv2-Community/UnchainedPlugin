@@ -8,7 +8,7 @@ extern crate unchained_macros;
 // The macro consumer supplies startup registration. A synthetic nonzero base
 // keeps these tests independent of the plugin and exercises address overflow.
 mod resolvers {
-    pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
+    pub use unchained_macros::FunctionBindingRegistration;
     pub static BASE_ADDR: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 1);
 
     pub struct HookRegistration {
