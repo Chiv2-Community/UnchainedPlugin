@@ -346,6 +346,10 @@
       "inside": false
     },
     {
+      "id": "src/unchained/detours/networking/ipv6_support.rs",
+      "inside": false
+    },
+    {
       "id": "unchained-macros/impl/src/lib.rs",
       "inside": false
     },
@@ -702,7 +706,7 @@
       "target": "src/tools/hook_globals.rs",
       "references": [
         {
-          "line": 56,
+          "line": 55,
           "path": "crate::tools::hook_globals::cli_args",
           "kind": "macro token"
         }
@@ -713,22 +717,17 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 8,
-          "path": "unchained_macros::bind_resolved_func",
-          "kind": "import"
-        },
-        {
-          "line": 54,
+          "line": 53,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 56,
+          "line": 55,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 68,
+          "line": 67,
           "path": "bind_resolved_func",
           "kind": "macro token"
         }
@@ -739,12 +738,12 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 10,
+          "line": 9,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 14,
+          "line": 13,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -1780,17 +1779,17 @@
       "target": "src/logging/macros.rs",
       "references": [
         {
-          "line": 49,
+          "line": 48,
           "path": "strace",
           "kind": "path"
         },
         {
-          "line": 61,
+          "line": 60,
           "path": "sdebug",
           "kind": "path"
         },
         {
-          "line": 71,
+          "line": 70,
           "path": "sdebug",
           "kind": "path"
         }
@@ -1801,12 +1800,12 @@
       "target": "src/tools/hook_globals.rs",
       "references": [
         {
-          "line": 42,
+          "line": 41,
           "path": "crate::tools::hook_globals::cli_args",
           "kind": "macro token"
         },
         {
-          "line": 45,
+          "line": 44,
           "path": "crate::tools::hook_globals::globals",
           "kind": "path"
         }
@@ -1817,32 +1816,27 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 9,
-          "path": "unchained_macros::bind_resolved_func",
-          "kind": "import"
-        },
-        {
-          "line": 29,
+          "line": 28,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 34,
+          "line": 33,
           "path": "bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 42,
+          "line": 41,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 56,
+          "line": 55,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 65,
+          "line": 64,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         }
@@ -1853,22 +1847,22 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 11,
+          "line": 10,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 13,
+          "line": 12,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 18,
+          "line": 17,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 20,
+          "line": 19,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -2192,48 +2186,16 @@
     },
     {
       "source": "src/chivalry2/engine/online/icmp.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 29,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 31,
-          "path": "strace",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/online/icmp.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 3,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 21,
-          "path": "cli_args",
-          "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/online/icmp.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 19,
+          "line": 17,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
           "line": 21,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2243,7 +2205,7 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 9,
+          "line": 7,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -3122,22 +3084,22 @@
       "target": "src/events/models.rs",
       "references": [
         {
-          "line": 8,
+          "line": 7,
           "path": "crate::events::models::GameEvent",
           "kind": "import"
         },
         {
-          "line": 8,
+          "line": 7,
           "path": "crate::events::models::MapChange",
           "kind": "import"
         },
         {
-          "line": 89,
+          "line": 88,
           "path": "GameEvent::MapChangeEvent",
           "kind": "path"
         },
         {
-          "line": 89,
+          "line": 88,
           "path": "MapChange",
           "kind": "path"
         }
@@ -3148,12 +3110,12 @@
       "target": "src/features/events.rs",
       "references": [
         {
-          "line": 9,
+          "line": 8,
           "path": "crate::features::events::EVENT_SYSTEM",
           "kind": "import"
         },
         {
-          "line": 89,
+          "line": 88,
           "path": "EVENT_SYSTEM",
           "kind": "path"
         }
@@ -3164,7 +3126,7 @@
       "target": "src/features/mod_maps.rs",
       "references": [
         {
-          "line": 47,
+          "line": 46,
           "path": "crate::features::mod_maps::auto_register_all_assets",
           "kind": "path"
         }
@@ -3175,12 +3137,12 @@
       "target": "src/features/motd.rs",
       "references": [
         {
-          "line": 61,
+          "line": 60,
           "path": "crate::features::motd::set_match_active",
           "kind": "path"
         },
         {
-          "line": 74,
+          "line": 73,
           "path": "crate::features::motd::set_match_active",
           "kind": "path"
         }
@@ -3191,17 +3153,17 @@
       "target": "src/lib.rs",
       "references": [
         {
-          "line": 11,
+          "line": 10,
           "path": "crate::ENGINE_READY",
           "kind": "import"
         },
         {
-          "line": 66,
+          "line": 65,
           "path": "ENGINE_READY",
           "kind": "path"
         },
         {
-          "line": 67,
+          "line": 66,
           "path": "ENGINE_READY",
           "kind": "path"
         }
@@ -3212,47 +3174,47 @@
       "target": "src/logging/macros.rs",
       "references": [
         {
-          "line": 50,
+          "line": 49,
           "path": "serror",
           "kind": "path"
         },
         {
-          "line": 55,
+          "line": 54,
           "path": "sinfo",
           "kind": "path"
         },
         {
-          "line": 63,
+          "line": 62,
           "path": "sinfo",
           "kind": "path"
         },
         {
-          "line": 65,
+          "line": 64,
           "path": "sdebug",
           "kind": "path"
         },
         {
-          "line": 68,
+          "line": 67,
           "path": "sinfo",
           "kind": "path"
         },
         {
-          "line": 75,
+          "line": 74,
           "path": "sdebug",
           "kind": "path"
         },
         {
-          "line": 78,
+          "line": 77,
           "path": "swarn",
           "kind": "path"
         },
         {
-          "line": 82,
+          "line": 81,
           "path": "sdebug",
           "kind": "path"
         },
         {
-          "line": 93,
+          "line": 92,
           "path": "swarn",
           "kind": "path"
         }
@@ -3263,37 +3225,37 @@
       "target": "src/tools/hook_globals.rs",
       "references": [
         {
-          "line": 10,
+          "line": 9,
           "path": "crate::tools::hook_globals::cli_args",
           "kind": "import"
         },
         {
-          "line": 10,
+          "line": 9,
           "path": "crate::tools::hook_globals::globals",
           "kind": "import"
         },
         {
-          "line": 37,
+          "line": 36,
           "path": "cli_args",
           "kind": "path"
         },
         {
-          "line": 64,
+          "line": 63,
           "path": "globals",
           "kind": "path"
         },
         {
-          "line": 76,
+          "line": 75,
           "path": "globals",
           "kind": "path"
         },
         {
-          "line": 79,
+          "line": 78,
           "path": "globals",
           "kind": "path"
         },
         {
-          "line": 83,
+          "line": 82,
           "path": "globals",
           "kind": "path"
         }
@@ -3304,32 +3266,27 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 5,
-          "path": "unchained_macros::bind_resolved_func",
-          "kind": "import"
-        },
-        {
-          "line": 32,
+          "line": 31,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 34,
+          "line": 33,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 59,
+          "line": 58,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 72,
+          "line": 71,
           "path": "bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 103,
+          "line": 102,
           "path": "bind_resolved_func",
           "kind": "macro token"
         }
@@ -3340,22 +3297,22 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 14,
+          "line": 13,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 18,
+          "line": 17,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 20,
+          "line": 19,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 22,
+          "line": 21,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -4555,12 +4512,12 @@
       "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
       "references": [
         {
-          "line": 585,
+          "line": 586,
           "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
           "kind": "path"
         },
         {
-          "line": 589,
+          "line": 590,
           "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
           "kind": "path"
         }
@@ -4823,7 +4780,7 @@
       "target": "src/chivalry2/engine/asset_registry/asset_registry_helpers.rs",
       "references": [
         {
-          "line": 204,
+          "line": 216,
           "path": "crate::chivalry2::engine::UAssetRegistryHelpers::get_asset_registry",
           "kind": "path"
         }
@@ -4834,22 +4791,22 @@
       "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
       "references": [
         {
-          "line": 195,
+          "line": 207,
           "path": "crate::chivalry2::engine::FString",
           "kind": "import"
         },
         {
-          "line": 199,
+          "line": 211,
           "path": "FString",
           "kind": "path"
         },
         {
-          "line": 200,
+          "line": 212,
           "path": "FString",
           "kind": "path"
         },
         {
-          "line": 202,
+          "line": 214,
           "path": "FString",
           "kind": "path"
         }
@@ -4860,17 +4817,17 @@
       "target": "src/chivalry2/engine/core/internationalization/text.rs",
       "references": [
         {
-          "line": 196,
+          "line": 208,
           "path": "crate::chivalry2::engine::FText",
           "kind": "import"
         },
         {
-          "line": 199,
+          "line": 211,
           "path": "FText",
           "kind": "path"
         },
         {
-          "line": 199,
+          "line": 211,
           "path": "FText::to_native_string",
           "kind": "path"
         }
@@ -4881,12 +4838,12 @@
       "target": "src/chivalry2/engine/core_uobject/uobject/script_interface.rs",
       "references": [
         {
-          "line": 197,
+          "line": 209,
           "path": "crate::chivalry2::engine::AssetRegistryScriptInterface",
           "kind": "import"
         },
         {
-          "line": 203,
+          "line": 215,
           "path": "AssetRegistryScriptInterface",
           "kind": "path"
         }
@@ -4897,17 +4854,17 @@
       "target": "src/chivalry2/engine/engine/engine/world.rs",
       "references": [
         {
-          "line": 198,
+          "line": 210,
           "path": "crate::chivalry2::engine::UWorld",
           "kind": "import"
         },
         {
-          "line": 202,
+          "line": 214,
           "path": "UWorld",
           "kind": "path"
         },
         {
-          "line": 202,
+          "line": 214,
           "path": "UWorld::get_map_name",
           "kind": "path"
         }
@@ -4918,18 +4875,34 @@
       "target": "src/chivalry2/engine/engine/game_framework/player_state.rs",
       "references": [
         {
-          "line": 194,
+          "line": 206,
           "path": "crate::chivalry2::engine::APlayerState",
           "kind": "import"
         },
         {
-          "line": 200,
+          "line": 212,
           "path": "APlayerState",
           "kind": "path"
         },
         {
-          "line": 201,
+          "line": 213,
           "path": "APlayerState::get_player_name_native",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/resolvers/mod.rs",
+      "target": "src/chivalry2/engine/online/icmp.rs",
+      "references": [
+        {
+          "line": 145,
+          "path": "crate::chivalry2::engine::online::icmp::FUDPPing",
+          "kind": "import"
+        },
+        {
+          "line": 146,
+          "path": "FUDPPing::__UNCHAINED_BINDING_udp_echo",
           "kind": "path"
         }
       ]
@@ -5066,6 +5039,73 @@
         {
           "line": 263,
           "path": "crate::chivalry2::engine::UWorld::get_current_map_name",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/networking/ipv6_support.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 9,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 18,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 44,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/networking/ipv6_support.rs",
+      "target": "src/chivalry2/engine/online/icmp.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::online::icmp::FUDPPing",
+          "kind": "import"
+        },
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::online::icmp::TFunctionFIcmpEchoResult",
+          "kind": "import"
+        },
+        {
+          "line": 7,
+          "path": "FUDPPing::udp_echo",
+          "kind": "macro token"
+        },
+        {
+          "line": 11,
+          "path": "TFunctionFIcmpEchoResult",
+          "kind": "path"
+        },
+        {
+          "line": 19,
+          "path": "FUDPPing::udp_echo",
+          "kind": "path"
+        },
+        {
+          "line": 22,
+          "path": "FUDPPing::udp_echo",
+          "kind": "path"
+        },
+        {
+          "line": 44,
+          "path": "TFunctionFIcmpEchoResult",
           "kind": "path"
         }
       ]

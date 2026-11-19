@@ -11,8 +11,11 @@ Each Rust file links its native source at the top.
   `Source/<module>/Classes` scaffolding.
 - `online/icmp.rs` omits the redundant `ICMP` module/header repetition.
 - `mod.rs` files are indexes, not native owners.
-- Keep layouts, resolvers, bindings, detours, state, and patches with their owners.
+- Keep layouts, resolvers, bindings, native state, and patches with their owners.
   Consolidate compatible inherent impls directly below the owning struct.
+- Plugin replacements may live outside the model and target its methods.
+  See [native bindings and plugin detours](native-bindings.md). `UDPEcho` uses
+  this split; the other detours have not yet migrated.
 - Static native calls stay static. Genuine UE globals remain free functions.
   Rust helper namespaces do not imply a native instance layout.
 

@@ -1,14 +1,17 @@
 
 # Chiv 2 Resolvers
 
-Resolver definitions, detours, and patches live beside their native owners under
+Resolver definitions, native bindings, and patches live beside their native owners under
 `src/chivalry2/tbl` (ArgonSDK TBL files) or `src/chivalry2/engine` (UE 4.25-plus modules).
 Game model files each identify one corresponding ArgonSDK source file.
 Private/custom engine integrations live under `src/chivalry2/engine/extensions`.
 Engine paths mirror native module/header paths, omitting `Runtime` and header
 visibility directories. See the [complete source map](../../docs/engine-sources.md).
-This directory contains only shared registration, platform filtering,
-and tests. Keep detour bodies and supporting state with the native implementation;
+Plugin replacements can live under `src/unchained/detours`, targeting a native
+method with `#[bind_func_detour(Type::method, condition)]`. See
+[native bindings and plugin detours](../../docs/native-bindings.md).
+`UDPEcho` uses this split; other detours still use the legacy colocated form.
+This directory contains only shared registration, platform filtering, and tests;
 do not add forwarding handlers here.
 
 Native source order:
@@ -18,7 +21,9 @@ Native source order:
 3. Each struct followed immediately by one inherent `impl`.
 4. Trait implementations and supporting functions/tests.
 
-Combine binding and detour methods under the same `#[runtime_bindings]` impl.
+New native methods use `#[bind_resolved_func]` under `#[runtime_bindings]`;
+plugin detours target those methods from outside the native model.
+Legacy binding/detour pairs remain under the same `#[runtime_bindings]` impl.
 Put additional generic bounds on the methods that need them, not separate impls.
 Keep cfg restrictions intact.
 

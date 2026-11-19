@@ -141,6 +141,17 @@ mod binding_tests {
     }
 
     #[test]
+    fn udp_echo_binding_and_plugin_replacement_share_one_native_target() {
+        use crate::chivalry2::engine::online::icmp::FUDPPing;
+        let binding = FUDPPing::__UNCHAINED_BINDING_udp_echo.binding();
+        assert_eq!(binding.name(), "UDPEcho");
+        assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()
+            .filter(|registration| std::ptr::eq(registration.binding, binding)).count(), 1);
+        assert_eq!(inventory::iter::<HookRegistration>.into_iter()
+            .filter(|hook| hook.name == binding.name()).count(), 1);
+    }
+
+    #[test]
     fn colocated_patches_keep_their_resolvers_and_registration() {
         let expected = [
             "UTBLLocalPlayer_Exec", "AuthenticateConsoleCommandCaller",
@@ -182,7 +193,8 @@ mod binding_tests {
             assert!(!hooks.contains(name), "Call-only resolver {name} still detours");
             assert!(crate::resolvers().any(|resolver| resolver.name == name), "Missing resolver {name}");
         }
-        assert_eq!(bindings.len(), expected.len());
+        // Detached replacements retain a model binding as well as a hook.
+        assert_eq!(bindings, expected.into_iter().chain(["UDPEcho"]).collect());
         for name in ["DedicatedServerInit", "ClientMessage", "UGameEngineTick",
             "ATBLCharacter__OnKilled", "ATBLCharacter__OnDamageTaken"] {
             assert!(hooks.contains(name), "Active hook {name} was removed");
