@@ -5,12 +5,8 @@ use crate::chivalry2::engine::FString;
 #[cfg(feature = "loose_assets")]
 use crate::chivalry2::engine::TArray;
 use crate::chivalry2::engine::TCHAR;
-use std::sync::Mutex;
-use widestring::U16CStr;
 
 use std::ffi::c_void;
-#[cfg(feature = "loose_assets")]
-use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
 
 // Signature source: owner-provided pattern for `FPakPlatformFile::Mount`
 // on the new build (`FUN_142fc8d50`; confirmed = the call site's `bool Mount(const TCHAR*, uint32, const TCHAR*, bool)`).
@@ -47,97 +43,46 @@ pub struct FPakPlatformFile {
 
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
-    #[bind_resolved_func_detour(PakPlatformFileMount)]
-    pub(crate) unsafe fn mount_detour(
+    #[unchained_macros::bind_resolved_func(PakPlatformFileMount)]
+    pub(crate) unsafe fn mount(
         self: *mut Self,
         InPakFilename: *const TCHAR,
         PakOrder: u32,
         InPath: *const TCHAR,
         bLoadIndex: bool,
     ) -> bool {
-        let ret = unsafe { self.mount(InPakFilename, PakOrder, InPath, bLoadIndex) };
-        let path = if InPakFilename.is_null() {
-            String::new()
-        } else {
-            unsafe { U16CStr::from_ptr_str(InPakFilename) }.to_string_lossy()
-        };
-        if ret {
-            if !path.is_empty() {
-                let mut paks = MOUNTED_PAKS.lock().unwrap();
-                if !paks.contains(&path) {
-                    paks.push(path);
-                }
-            }
-        } else if !path.is_empty() {
-            sdebug!("[modmaps] mount failed (excluded): {}", path);
-        }
-        ret
-    }
-
-    /// Snapshot of the mounted pak filenames (absolute paths on Windows).
-    pub fn mounted_pak_filenames() -> Vec<String> {
-        MOUNTED_PAKS.lock().unwrap().clone()
     }
 
     // FPakPlatformFile::FindFileInPakFiles(const TCHAR*, FPakFile**, FPakEntry*).
     #[cfg(feature = "loose_assets")]
-    #[bind_resolved_func_detour(FindFileInPakFiles_1)]
-    unsafe fn find_file_in_pak_files_detour(
+    #[unchained_macros::bind_resolved_func(FindFileInPakFiles_1)]
+    pub(crate) unsafe fn find_file_in_pak_files(
         self: *mut Self,
         Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
         OutEntry: *mut FPakEntry,
     ) -> u64 {
-        let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };
-        let u16_str = u16_wstr.to_string_lossy();
-        let attr = unsafe { GetFileAttributesW(Filename) };
-        if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
-            // swarn!("Blocked path traversal attempt: {}", u16_str);
-
-            if !OutPakFile.is_null() {
-                unsafe { *OutPakFile = std::ptr::null_mut() };
-            }
-            return 0;
-        }
-        unsafe { self.find_file_in_pak_files(Filename, OutPakFile, OutEntry) }
     }
 
     // Static FPakPlatformFile::FindFileInPakFiles(TArray<FPakListEntry>&, ...).
     #[cfg(feature = "loose_assets")]
-    #[bind_resolved_func_detour(FindFileInPakFiles_2)]
-    unsafe fn find_file_in_pak_files_static_detour(
+    #[unchained_macros::bind_resolved_func(FindFileInPakFiles_2)]
+    pub(crate) unsafe fn find_file_in_pak_files_static(
         this_ptr: *mut TArray<FPakListEntry>,
         Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
         OutEntry: *mut FPakEntry,
     ) -> u64 {
-        let u16_wstr = unsafe { U16CStr::from_ptr_str(Filename) };
-        let u16_str = u16_wstr.to_string_lossy();
-        let attr = unsafe { GetFileAttributesW(Filename) };
-        if attr != INVALID_FILE_ATTRIBUTES && u16_str.contains("../../../") {
-            // swarn!("Blocked path traversal attempt: {}", u16_str);
-
-            if !OutPakFile.is_null() {
-                unsafe { *OutPakFile = std::ptr::null_mut() };
-            }
-            return 0;
-        }
-        unsafe { Self::find_file_in_pak_files_static(this_ptr, Filename, OutPakFile, OutEntry) }
     }
 
     #[cfg(feature = "loose_assets")]
-    #[bind_resolved_func_detour(IsNonPakFilenameAllowed)]
-    unsafe fn is_non_pak_filename_allowed_detour(
+    #[unchained_macros::bind_resolved_func(IsNonPakFilenameAllowed)]
+    pub(crate) unsafe fn is_non_pak_filename_allowed(
         self: *mut Self,
         _InFilename: *mut FString,
     ) -> u64 {
-        1
     }
 }
-
-/// Paks the game has successfully mounted (recorded by the `Mount` detour on the
-/// game thread during engine init, before our startup discovery runs).
-pub static MOUNTED_PAKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 pub type FPakFile = c_void;
 

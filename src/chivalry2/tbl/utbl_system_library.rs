@@ -3,13 +3,13 @@
 // Preserve the existing reverse-engineered console-command trampoline signature.
 #![allow(c_void_returns)]
 
-use crate::chivalry2::tbl::ATBLGameMode;
 use crate::chivalry2::engine::UObject;
-use unchained_macros::bind_resolved_func;
+use crate::chivalry2::tbl::ATBLGameMode;
 
-define_pattern_resolver!(AuthenticateConsoleCommandCaller, [
-    "74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"
-]);
+define_pattern_resolver!(
+    AuthenticateConsoleCommandCaller,
+    ["74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"]
+);
 
 define_pattern_resolver!(GetGameInfo, {
     STEAM: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC b0 01 00 00 45 33 FF"],
@@ -17,9 +17,10 @@ define_pattern_resolver!(GetGameInfo, {
 });
 
 // The native owner/receiver is not established; preserve the existing free-function ABI.
-define_pattern_resolver!(ExecuteConsoleCommand, [
-    "40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"
-]);
+define_pattern_resolver!(
+    ExecuteConsoleCommand,
+    ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
+);
 
 // ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 define_pattern_resolver![GetTBLGameMode, {
@@ -32,23 +33,25 @@ define_pattern_resolver![GetTBLGameMode, {
 
 CREATE_PATCH!(AuthenticateConsoleCommandCaller, BYTES, &[0xEB]);
 
-#[unchained_macros::bind_resolved_func_detour(GetGameInfo)]
-unsafe fn get_game_info_detour(storage: *mut crate::chivalry2::engine::FString, world: *mut crate::chivalry2::engine::UWorld) -> *mut crate::chivalry2::engine::FString {
-    let result = unsafe { get_game_info(storage, world) };
-    sinfo!("{}", unsafe { (&*result).to_string() });
-    result
-}
-
-#[unchained_macros::bind_resolved_func_detour(ExecuteConsoleCommand)]
-pub(crate) unsafe fn execute_console_command_detour(command: *mut crate::chivalry2::engine::FString) -> std::ffi::c_void {
-    sinfo!("Executing: {}", unsafe { &*command });
-    unsafe { execute_console_command(command) }
-}
-
 /// Static native helpers only; this is not a UObject instance layout.
-pub struct UTBLSystemLibrary { _private: () }
+pub struct UTBLSystemLibrary {
+    _private: (),
+}
 
+#[unchained_macros::runtime_bindings]
 impl UTBLSystemLibrary {
+    #[unchained_macros::bind_resolved_func(GetGameInfo)]
+    pub(crate) unsafe fn get_game_info(
+        storage: *mut crate::chivalry2::engine::FString,
+        world: *mut crate::chivalry2::engine::UWorld,
+    ) -> *mut crate::chivalry2::engine::FString {
+    }
+
+    #[unchained_macros::bind_resolved_func(ExecuteConsoleCommand)]
+    pub(crate) unsafe fn execute_console_command(
+        command: *mut crate::chivalry2::engine::FString,
+    ) -> std::ffi::c_void {
+    }
     /// # Safety
     /// Context must be a live native object on the engine thread. The returned
     /// game mode is borrowed and can be null in non-game worlds.

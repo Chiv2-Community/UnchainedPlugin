@@ -194,7 +194,12 @@ mod binding_tests {
             assert!(crate::resolvers().any(|resolver| resolver.name == name), "Missing resolver {name}");
         }
         // Detached replacements retain a model binding as well as a hook.
-        assert_eq!(bindings, expected.into_iter().chain(["UDPEcho"]).collect());
+        assert_eq!(bindings, expected.into_iter().chain(hooks.iter().copied()).collect());
+        for name in &hooks {
+            assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()
+                .filter(|registration| registration.binding.name() == *name).count(), 1,
+                "Detached hook {name} must target one model binding");
+        }
         for name in ["DedicatedServerInit", "ClientMessage", "UGameEngineTick",
             "ATBLCharacter__OnKilled", "ATBLCharacter__OnDamageTaken"] {
             assert!(hooks.contains(name), "Active hook {name} was removed");

@@ -43,34 +43,24 @@ pub struct OpenAPIClientAPI {
 impl OpenAPIClientAPI {
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-    #[bind_resolved_request_function_detour(GetPost_GetMotd)]
-    pub unsafe fn get_post_get_motd_detour(
+    #[unchained_macros::bind_resolved_request_function(GetPost_GetMotd)]
+    pub unsafe fn get_post_get_motd(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
         request: *mut GenericRequest,
         delegate: *mut c_void,
     ) -> *mut TSharedPtrIHttpRequest {
-        unsafe {
-            self.with_backend_request(request, || {
-                self.get_post_get_motd(result, request, delegate)
-            })
-        }
     }
 
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-    #[bind_resolved_request_function_detour(GetPost_GetCurrentGames)]
-    pub unsafe fn get_post_get_current_games_detour(
+    #[unchained_macros::bind_resolved_request_function(GetPost_GetCurrentGames)]
+    pub unsafe fn get_post_get_current_games(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
         request: *mut GenericRequest,
         delegate: *mut c_void,
     ) -> *mut TSharedPtrIHttpRequest {
-        unsafe {
-            self.with_backend_request(request, || {
-                self.get_post_get_current_games(result, request, delegate)
-            })
-        }
     }
 
     // Other known request keys; no bindings or hooks are installed for these.
@@ -97,38 +87,6 @@ impl OpenAPIClientAPI {
     // GetPost_LoginEOS
     // GetPost_ConfirmJoinTicket
     // GetPost_PhonebookDeleteOwnId
-
-    unsafe fn with_backend_request(
-        self: *mut Self,
-        request: *mut GenericRequest,
-        call: impl FnOnce() -> *mut TSharedPtrIHttpRequest + std::panic::UnwindSafe,
-    ) -> *mut TSharedPtrIHttpRequest {
-        let (this, request) = match unsafe { (self.as_mut(), request.as_mut()) } {
-            (Some(this), Some(request)) => (this, request),
-            (None, _) => {
-                serror!("OpenAPIClientAPI was null");
-                return std::ptr::null_mut();
-            }
-            (_, None) => {
-                serror!("Request was null");
-                return std::ptr::null_mut();
-            }
-        };
-        let url = crate::features::server_browser::urls::tbio_base_url(
-            &crate::tools::hook_globals::cli_args().server_browser_backend,
-        );
-        let backend_url = FString::from(url.as_str());
-        let empty_token = FString::from("");
-        let old_url = std::mem::replace(&mut this.url_base, backend_url);
-        let old_token = std::mem::replace(&mut request.token, empty_token);
-        let result = std::panic::catch_unwind(call);
-        this.url_base = old_url;
-        request.token = old_token;
-        match result {
-            Ok(response) => response,
-            Err(panic) => std::panic::resume_unwind(panic),
-        }
-    }
 
     fn request_functions() -> patternsleuth::resolvers::Result<
         Matcher<'static, (), RequestFunctions, ExactlyOne, impl Send + Sync>,
@@ -205,7 +163,7 @@ mod tests {
         ) -> *mut TSharedPtrIHttpRequest;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
-        let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd_detour;
+        let _: RequestFunction = crate::unchained::detours::engine::extensions::open_api_client_api::get_post_get_motd_detour;
         let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
             .into_iter()
             .map(|registration| registration.name)
@@ -219,8 +177,13 @@ mod tests {
     fn invalid_request_pointers_do_not_call_native_code_or_prepare_overrides() {
         let client = std::ptr::null_mut::<OpenAPIClientAPI>();
         let request = std::ptr::null_mut::<GenericRequest>();
-        let result =
-            unsafe { client.with_backend_request(request, || panic!("must not call native code")) };
+        let result = unsafe {
+            crate::unchained::detours::engine::extensions::open_api_client_api::with_backend_request(
+                client,
+                request,
+                || panic!("must not call native code"),
+            )
+        };
         assert!(result.is_null());
     }
 

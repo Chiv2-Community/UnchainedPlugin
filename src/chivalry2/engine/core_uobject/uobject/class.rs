@@ -52,12 +52,11 @@ pub struct UClass {
 
 #[unchained_macros::runtime_bindings]
 impl UClass {
-    #[bind_resolved_func_detour(GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
-    pub(crate) unsafe fn get_config_name_detour(
+    #[unchained_macros::bind_resolved_func(GetConfigName)]
+    pub(crate) unsafe fn get_config_name(
         self: *mut Self,
         storage: *mut crate::chivalry2::engine::FString,
     ) -> *mut crate::chivalry2::engine::FString {
-        unsafe { self.get_config_name(storage) }
     }
 
     /// UClass::GetDefaultObject(bool) const; may lazily create the CDO.

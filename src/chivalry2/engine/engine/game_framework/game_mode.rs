@@ -15,13 +15,6 @@ pub struct AGameMode {
 
 #[unchained_macros::runtime_bindings]
 impl AGameMode {
-    #[bind_resolved_func_detour(SetMatchState)]
-    pub(crate) unsafe fn set_match_state_detour(self: *mut Self, state: FName) {
-        let name = state.to_string();
-        sinfo!("Match state: {}", name);
-        crate::features::motd::set_match_active(name == "InProgress");
-        unsafe {
-            self.set_match_state(state);
-        }
-    }
+    #[unchained_macros::bind_resolved_func(SetMatchState)]
+    pub(crate) unsafe fn set_match_state(self: *mut Self, state: FName) {}
 }

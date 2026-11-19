@@ -1,20 +1,5 @@
 //! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/GameEngine.h>.
 
-use crate::chivalry2::engine::FString;
-use crate::commands::NATIVE_COMMAND_QUEUE;
-use ::windows::Win32::System::Memory::IsBadReadPtr;
-use std::sync::{Mutex, Once};
-
-type GameThreadJob = Box<dyn FnOnce() + Send>;
-
-static JOB_QUEUE: Mutex<Vec<GameThreadJob>> = Mutex::new(Vec::new());
-
-static ENABLE_IPV6: Once = Once::new();
-
-thread_local! {
-    static IN_TICK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
 /// Opaque engine-owned game engine; no Rust layout is assumed.
 #[repr(C)]
 pub struct UGameEngine {
@@ -23,63 +8,8 @@ pub struct UGameEngine {
 
 #[unchained_macros::runtime_bindings]
 impl UGameEngine {
-    pub fn run_on_game_thread<F: FnOnce() + Send + 'static>(job: F) {
-        sdebug!("Task added to job queue");
-        JOB_QUEUE.lock().unwrap().push(Box::new(job));
-    }
-
-    pub fn in_game_thread_job() -> bool {
-        IN_TICK.with(|flag| flag.get())
-    }
-
-    #[bind_resolved_func_detour(patternsleuth::resolvers::unreal::game_loop::UGameEngineTick)]
-    pub(crate) unsafe fn tick_detour(self: *mut Self, delta: f32, state: u8) {
-        unsafe {
-            self.tick(delta, state);
-        }
-        ENABLE_IPV6.call_once(|| {
-            NATIVE_COMMAND_QUEUE
-                .lock()
-                .unwrap()
-                .push("net.DisableIPv6 0".to_string());
-        });
-        let reentered = IN_TICK.with(|flag| {
-            let was = flag.get();
-            flag.set(true);
-            was
-        });
-        if reentered {
-            serror!("Re-entrant UGameEngineTick");
-            return;
-        }
-        if unsafe { IsBadReadPtr(Some(self.cast()), 8) }.into() {
-            serror!("IsBadReadPtr UGameEngineTick");
-            return;
-        }
-        if !unchained_macros::detour_is_enabled("UGameEngineTick") {
-            serror!("Disabled UGameEngineTick");
-            return;
-        }
-        if let Ok(mut commands) = NATIVE_COMMAND_QUEUE.try_lock() {
-            for command in commands.drain(..) {
-                let mut command = FString::from(command.as_str());
-                let _ = std::panic::catch_unwind(move || unsafe {
-                    crate::chivalry2::tbl::utbl_system_library::execute_console_command(
-                        &mut command,
-                    )
-                });
-            }
-        }
-        let jobs = match JOB_QUEUE.try_lock() {
-            Ok(mut queue) => std::mem::take(&mut *queue),
-            Err(_) => Vec::new(),
-        };
-        for job in jobs {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job));
-            if result.is_err() {
-                serror!("GameThreadJob panicked! Catching to prevent engine crash.");
-            }
-        }
-        IN_TICK.with(|flag| flag.set(false));
-    }
+    #[unchained_macros::bind_resolved_func(
+        patternsleuth::resolvers::unreal::game_loop::UGameEngineTick
+    )]
+    pub(crate) unsafe fn tick(self: *mut Self, delta: f32, state: u8) {}
 }

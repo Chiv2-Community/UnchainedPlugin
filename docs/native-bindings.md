@@ -1,8 +1,7 @@
 # Native bindings and plugin detours
 
 Native models declare callable functions. Plugin modules declare replacements.
-The `UDPEcho` migration demonstrates this split; other existing detours still
-use the legacy colocated declarations.
+All 45 production detours use this split, including optional feature-gated hooks.
 
 ## Native model
 
@@ -81,6 +80,23 @@ the detour is stored, its address remains reserved even if activation fails.
 
 - Model: `src/chivalry2/engine/online/icmp.rs`
 - Plugin policy: `src/unchained/detours/networking/ipv6_support.rs`
+- Other native models: `src/chivalry2/{engine,tbl}/`
+- Other replacements: `src/unchained/detours/{engine,tbl}/`, mirroring model paths
+- Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override
+  state live with the replacements, not on native types.
+- `UTBLSystemLibrary::execute_console_command` is a static binding namespace;
+  its native owner remains unverified. No receiver was added.
 - Typed binding state: `unchained-macros/src/binding.rs`
 - Declaration expansion: `unchained-macros/impl/src/function_detour.rs`
 - Real native-patching tests: `unchained-macros/tests/detached_hooks.rs`
+- Migration baseline and boundary guard:
+  `unchained-macros/impl/tests/native_detour_boundary.rs` and `native_detours.tsv`
+
+The boundary guard checks all native signatures, resolver keys, activation
+conditions, and feature gates against the migration baseline. Production code
+cannot reintroduce legacy detour declarations or colocate replacements with
+native models. Legacy macro support remains for compatibility tests.
+
+Native bindings always bypass replacements. Code that deliberately needs plugin
+policy, such as capturing a synthetic console message, calls the plugin helper
+explicitly rather than a detour method on the native model.

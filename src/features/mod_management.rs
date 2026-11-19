@@ -81,13 +81,13 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //     {},
 //     false,
 //     |args| {
-//         use crate::chivalry2::engine::UGameEngine::run_on_game_thread;
+//         use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
 //             let (tx, rx) = mpsc::channel();
             
-//             UGameEngine::run_on_game_thread(move || {
+//             run_on_game_thread(move || {
 //                 if let Some(mm) = mm_lock().as_ref() {
 //                     sinfo!("Starting scan!");
 //                     mm.scan_asset_registry();
@@ -459,16 +459,16 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::chivalry2::engine::UGameEngine;
-
-
+        use crate::unchained::detours::engine::engine::engine::game_engine::{
+            in_game_thread_job, run_on_game_thread,
+        };
         if mod_class.is_null() {
             serror!("mod class was null; skipping actor spawn");
             return;
         }
-        if !UGameEngine::in_game_thread_job() {
+        if !in_game_thread_job() {
             let class_addr = mod_class as usize;
-            UGameEngine::run_on_game_thread(move || {
+            run_on_game_thread(move || {
                 if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
                     unsafe { mm.spawn_mod_actor(class_addr as *mut UClass) };
                 }

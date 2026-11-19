@@ -17,21 +17,14 @@ pub struct FOnlineAuthPlayFab {
 
 #[unchained_macros::runtime_bindings]
 impl FOnlineAuthPlayFab {
+    pub(crate) unsafe fn has_session(self: *const Self) -> bool {
+        unsafe { !(*(*self).subsystem).session.is_null() }
+    }
+
     // Shutdown clears SessionInterface before the auth destructor revokes tickets.
     // Skip EndAuthentication, not the remaining destructor cleanup.
-    #[bind_resolved_func_detour(PlayFabEndAuthentication)]
-    unsafe fn end_authentication_detour(self: *const Self, user_id: *const c_void) {
-        // SAFETY: The native caller keeps the auth object and its referenced
-        // subsystem valid for this call, using the verified layouts.
-        let subsystem = unsafe { &*(*self).subsystem };
-        if subsystem.session.is_null() {
-            sdebug!("Skipping PlayFab logout cleanup after session teardown");
-            return;
-        }
-        unsafe {
-            self.end_authentication(user_id);
-        }
-    }
+    #[unchained_macros::bind_resolved_func(PlayFabEndAuthentication)]
+    pub(crate) unsafe fn end_authentication(self: *const Self, user_id: *const c_void) {}
 }
 
 #[repr(C)]
@@ -53,7 +46,7 @@ mod tests {
     #[test]
     fn detour_and_original_preserve_the_native_pointer_signature() {
         type EndAuthentication = unsafe fn(*const FOnlineAuthPlayFab, *const c_void);
-        let _: EndAuthentication = FOnlineAuthPlayFab::end_authentication_detour;
+        let _: EndAuthentication = crate::unchained::detours::engine::extensions::fonline_auth_playfab::end_authentication_detour;
         let _: EndAuthentication = FOnlineAuthPlayFab::end_authentication;
     }
 
@@ -69,7 +62,7 @@ mod tests {
         };
         // The guard must return without calling the uninitialized trampoline.
         unsafe {
-            (&raw const auth).end_authentication_detour(std::ptr::null());
+            crate::unchained::detours::engine::extensions::fonline_auth_playfab::end_authentication_detour(&raw const auth, std::ptr::null());
         }
     }
 }

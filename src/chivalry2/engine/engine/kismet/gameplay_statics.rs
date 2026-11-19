@@ -6,7 +6,6 @@ use crate::chivalry2::engine::UClass;
 use crate::chivalry2::engine::UObject;
 use crate::chivalry2::engine::USaveGame;
 
-
 define_pattern_resolver!(GetAllActorsOfClass,["40 55 53 56 57 48 8D 6C 24 C1 48 81 EC A8 00 00 00 48 8B 05 70 B1 70 02 48 33 C4 48 89 45 1F 41"]);
 
 define_pattern_resolver!(
@@ -38,36 +37,17 @@ impl UGameplayStatics {
     ) {
     }
 
-    #[bind_resolved_func_detour(UGameplay_IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
-    pub(crate) unsafe fn is_dedicated_server_detour(context: u64) -> bool {
-        use crate::chivalry2::engine::ENetMode;
-        if let Some(world) = crate::tools::hook_globals::globals().world() {
-            let mode = unsafe { world.internal_get_net_mode() };
-            if matches!(mode, ENetMode::DEDICATED_SERVER | ENetMode::LISTEN_SERVER) {
-                #[cfg(feature = "verbose_hooks")]
-                strace!("Overriding dedicated server status");
-                return true;
-            }
-        }
-        unsafe { Self::is_dedicated_server(context) }
-    }
+    #[unchained_macros::bind_resolved_func(UGameplay_IsDedicatedServer)]
+    pub(crate) unsafe fn is_dedicated_server(context: u64) -> bool {}
 
-    #[bind_resolved_func_detour(LoadGameFromSlot)]
-    pub(crate) unsafe fn load_game_from_slot_detour<'a>(
-        slot: &'a FString,
-        index: i32,
-    ) -> *mut USaveGame {
-        sdebug!("Triggered! {}", slot);
-        unsafe { Self::load_game_from_slot(slot, index) }
-    }
+    #[unchained_macros::bind_resolved_func(LoadGameFromSlot)]
+    pub(crate) unsafe fn load_game_from_slot<'a>(slot: &'a FString, index: i32) -> *mut USaveGame {}
 
-    #[bind_resolved_func_detour(SaveGameToSlot)]
-    pub(crate) unsafe fn save_game_to_slot_detour<'a>(
+    #[unchained_macros::bind_resolved_func(SaveGameToSlot)]
+    pub(crate) unsafe fn save_game_to_slot<'a>(
         game: *mut USaveGame,
         slot: &'a FString,
         index: i32,
     ) -> bool {
-        sdebug!("Triggered! {}", slot);
-        unsafe { Self::save_game_to_slot(game, slot, index) }
     }
 }

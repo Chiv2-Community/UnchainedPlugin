@@ -18,6 +18,10 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/core/containers/map.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/core/containers/unreal_string.rs",
       "inside": true
     },
@@ -26,7 +30,15 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/core/hal/platform.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/core/internationalization/text.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/core/math/color.rs",
       "inside": true
     },
     {
@@ -38,11 +50,23 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/core/misc/guid.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/core/serialization/large_memory_reader.rs",
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/core/templates/shared_pointer.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/core_uobject/templates/subclass_of.rs",
       "inside": true
     },
     {
@@ -54,7 +78,15 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/core_uobject/uobject/primary_asset_id.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/core_uobject/uobject/script_interface.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/core_uobject/uobject/soft_object_path.rs",
       "inside": true
     },
     {
@@ -86,11 +118,19 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/engine/engine/engine_base_types.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/engine/engine/game_engine.rs",
       "inside": true
     },
     {
       "id": "src/chivalry2/engine/engine/engine/net_driver.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/engine/engine/player.rs",
       "inside": true
     },
     {
@@ -122,11 +162,23 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/engine/engine/game_framework/online_repl_structs.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/engine/game_framework/pawn.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
       "inside": true
     },
     {
       "id": "src/chivalry2/engine/engine/game_framework/player_state.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/engine/engine/game_framework/save_game.rs",
       "inside": true
     },
     {
@@ -194,6 +246,10 @@
       "inside": true
     },
     {
+      "id": "src/chivalry2/tbl/atbl_player_state.rs",
+      "inside": true
+    },
+    {
       "id": "src/chivalry2/tbl/echat_type.rs",
       "inside": true
     },
@@ -207,6 +263,14 @@
     },
     {
       "id": "src/chivalry2/tbl/fdeath_damage_taken_event.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/tbl/fmap_specific_loading_screen_config_data.rs",
+      "inside": true
+    },
+    {
+      "id": "src/chivalry2/tbl/fownership_response.rs",
       "inside": true
     },
     {
@@ -238,14 +302,6 @@
       "inside": true
     },
     {
-      "id": "src/commands.rs",
-      "inside": false
-    },
-    {
-      "id": "src/events/broadcast_message/game_chat.rs",
-      "inside": false
-    },
-    {
       "id": "src/events/combat.rs",
       "inside": false
     },
@@ -259,10 +315,6 @@
     },
     {
       "id": "src/features/discord/outbound.rs",
-      "inside": false
-    },
-    {
-      "id": "src/features/events.rs",
       "inside": false
     },
     {
@@ -290,22 +342,6 @@
       "inside": false
     },
     {
-      "id": "src/features/server_browser/http.rs",
-      "inside": false
-    },
-    {
-      "id": "src/features/server_browser/registration.rs",
-      "inside": false
-    },
-    {
-      "id": "src/features/server_browser/urls.rs",
-      "inside": false
-    },
-    {
-      "id": "src/features/tokio_runtime.rs",
-      "inside": false
-    },
-    {
       "id": "src/lib.rs",
       "inside": false
     },
@@ -322,10 +358,6 @@
       "inside": false
     },
     {
-      "id": "src/modules/mod_list.rs",
-      "inside": false
-    },
-    {
       "id": "src/modules/mod_list_maps.rs",
       "inside": false
     },
@@ -338,15 +370,103 @@
       "inside": false
     },
     {
-      "id": "src/tools/command_parser.rs",
-      "inside": false
-    },
-    {
       "id": "src/tools/hook_globals.rs",
       "inside": false
     },
     {
+      "id": "src/unchained/detours/engine/core/containers/unreal_string.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/core_uobject/uobject/class.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/core_uobject/uobject/object.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/core_uobject/uobject/stack.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/engine/engine/game_engine.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/engine/engine_utils.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/engine/game_framework/game_mode.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/engine/kismet/gameplay_statics.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/extensions/fonline_auth_playfab.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/extensions/fonline_session_playfab.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/extensions/open_api_client_api.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/extensions/playfab_request_handler.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/engine/pak_file/i_platform_file_pak.rs",
+      "inside": false
+    },
+    {
       "id": "src/unchained/detours/networking/ipv6_support.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/atbl_character.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/atbl_game_mode/chat.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/ftbl_online_stats.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/utbl_engine.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/utbl_game_instance.rs",
+      "inside": false
+    },
+    {
+      "id": "src/unchained/detours/tbl/utbl_system_library.rs",
       "inside": false
     },
     {
@@ -355,10 +475,6 @@
     },
     {
       "id": "unchained-macros/src/custom_resolver.rs",
-      "inside": false
-    },
-    {
-      "id": "unchained-macros/src/detour.rs",
       "inside": false
     },
     {
@@ -454,73 +570,26 @@
     },
     {
       "source": "src/chivalry2/engine/core/containers/unreal_string.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 118,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 121,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 126,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 158,
-          "path": "strace",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core/containers/unreal_string.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 8,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 104,
-          "path": "cli_args",
-          "kind": "macro token"
-        },
-        {
-          "line": 136,
-          "path": "cli_args",
-          "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core/containers/unreal_string.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 27,
+          "line": 24,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 42,
+          "line": 39,
           "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 104,
-          "path": "bind_resolved_func_detour",
+          "line": 101,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 136,
-          "path": "bind_resolved_func_detour",
+          "line": 111,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -530,17 +599,17 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 12,
+          "line": 9,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 16,
+          "line": 13,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 20,
+          "line": 17,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -703,17 +772,6 @@
     },
     {
       "source": "src/chivalry2/engine/core_uobject/uobject/class.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 55,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core_uobject/uobject/class.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
@@ -723,11 +781,11 @@
         },
         {
           "line": 55,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 67,
+          "line": 66,
           "path": "bind_resolved_func",
           "kind": "macro token"
         }
@@ -751,99 +809,17 @@
     },
     {
       "source": "src/chivalry2/engine/core_uobject/uobject/object.rs",
-      "target": "src/features/config_overrides.rs",
-      "references": [
-        {
-          "line": 11,
-          "path": "crate::features::config_overrides::LOAD_CONFIG_REENTRY",
-          "kind": "import"
-        },
-        {
-          "line": 11,
-          "path": "crate::features::config_overrides::resolve_profile_override_paths_for_config",
-          "kind": "import"
-        },
-        {
-          "line": 173,
-          "path": "LOAD_CONFIG_REENTRY",
-          "kind": "path"
-        },
-        {
-          "line": 222,
-          "path": "resolve_profile_override_paths_for_config",
-          "kind": "path"
-        },
-        {
-          "line": 227,
-          "path": "LOAD_CONFIG_REENTRY",
-          "kind": "path"
-        },
-        {
-          "line": 249,
-          "path": "LOAD_CONFIG_REENTRY",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core_uobject/uobject/object.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 236,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 354,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 377,
-          "path": "serror",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core_uobject/uobject/object.rs",
       "target": "src/tools/hook_globals.rs",
       "references": [
         {
-          "line": 13,
+          "line": 9,
           "path": "crate::globals",
           "kind": "import"
         },
         {
-          "line": 14,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 15,
-          "path": "crate::tools::hook_globals::globals_initialized",
-          "kind": "import"
-        },
-        {
-          "line": 72,
+          "line": 62,
           "path": "globals",
           "kind": "path"
-        },
-        {
-          "line": 165,
-          "path": "cli_args",
-          "kind": "macro token"
-        },
-        {
-          "line": 173,
-          "path": "globals_initialized",
-          "kind": "path"
-        },
-        {
-          "line": 333,
-          "path": "cli_args",
-          "kind": "macro token"
         }
       ]
     },
@@ -852,18 +828,18 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 39,
+          "line": 29,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 165,
-          "path": "bind_resolved_func_detour",
+          "line": 155,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 333,
-          "path": "bind_resolved_func_detour",
+          "line": 165,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -873,24 +849,13 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 23,
+          "line": 13,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 27,
+          "line": 17,
           "path": "define_pattern_resolver",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/core_uobject/uobject/stack.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 69,
-          "path": "sdebug",
           "kind": "path"
         }
       ]
@@ -927,7 +892,7 @@
         },
         {
           "line": 57,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1052,85 +1017,17 @@
     },
     {
       "source": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "target": "src/commands.rs",
-      "references": [
-        {
-          "line": 4,
-          "path": "crate::commands::NATIVE_COMMAND_QUEUE",
-          "kind": "import"
-        },
-        {
-          "line": 41,
-          "path": "NATIVE_COMMAND_QUEUE",
-          "kind": "path"
-        },
-        {
-          "line": 63,
-          "path": "NATIVE_COMMAND_QUEUE",
-          "kind": "path"
-        },
-        {
-          "line": 64,
-          "path": "commands",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 27,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 52,
-          "path": "serror",
-          "kind": "path"
-        },
-        {
-          "line": 56,
-          "path": "serror",
-          "kind": "path"
-        },
-        {
-          "line": 60,
-          "path": "serror",
-          "kind": "path"
-        },
-        {
-          "line": 80,
-          "path": "serror",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/engine/game_engine.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 24,
+          "line": 9,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 35,
-          "path": "bind_resolved_func_detour",
+          "line": 11,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "target": "unchained-macros/src/detour.rs",
-      "references": [
-        {
-          "line": 59,
-          "path": "unchained_macros::detour_is_enabled",
-          "kind": "path"
         }
       ]
     },
@@ -1232,17 +1129,6 @@
     },
     {
       "source": "src/chivalry2/engine/engine/engine_utils.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 28,
-          "path": "sinfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/engine_utils.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
@@ -1252,7 +1138,7 @@
         },
         {
           "line": 15,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1346,28 +1232,6 @@
     },
     {
       "source": "src/chivalry2/engine/engine/game_framework/game_mode.rs",
-      "target": "src/features/motd.rs",
-      "references": [
-        {
-          "line": 22,
-          "path": "crate::features::motd::set_match_active",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/game_mode.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 21,
-          "path": "sinfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/game_mode.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
@@ -1377,7 +1241,7 @@
         },
         {
           "line": 18,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1395,317 +1259,31 @@
     },
     {
       "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/events/broadcast_message/game_chat.rs",
-      "references": [
-        {
-          "line": 321,
-          "path": "crate::events::broadcast_message::game_chat::broadcast_parts",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/events/models.rs",
-      "references": [
-        {
-          "line": 12,
-          "path": "crate::events::models::GameChatMessage",
-          "kind": "import"
-        },
-        {
-          "line": 13,
-          "path": "crate::events::models::GameEvent",
-          "kind": "import"
-        },
-        {
-          "line": 14,
-          "path": "crate::events::models::NativeChat",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::ActorIdentity",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::ActorPermissions",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::ChatSource",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::CommandActor",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::CommandRequest",
-          "kind": "import"
-        },
-        {
-          "line": 16,
-          "path": "crate::events::models::CommandSource",
-          "kind": "import"
-        },
-        {
-          "line": 17,
-          "path": "crate::events::models::PermissionFlags",
-          "kind": "import"
-        },
-        {
-          "line": 49,
-          "path": "GameEvent::CommandRequestEvent",
-          "kind": "path"
-        },
-        {
-          "line": 84,
-          "path": "GameEvent::CommandRequestEvent",
-          "kind": "path"
-        },
-        {
-          "line": 89,
-          "path": "CommandSource::GameChat",
-          "kind": "macro token"
-        },
-        {
-          "line": 92,
-          "path": "ActorIdentity::GamePlayer",
-          "kind": "macro token"
-        },
-        {
-          "line": 96,
-          "path": "PermissionFlags::START_VOTE",
-          "kind": "macro token"
-        },
-        {
-          "line": 96,
-          "path": "PermissionFlags::USER",
-          "kind": "macro token"
-        },
-        {
-          "line": 208,
-          "path": "GameChatMessage",
-          "kind": "path"
-        },
-        {
-          "line": 208,
-          "path": "GameEvent::GameChatMessageEvent",
-          "kind": "path"
-        },
-        {
-          "line": 211,
-          "path": "ChatSource::Native",
-          "kind": "path"
-        },
-        {
-          "line": 211,
-          "path": "NativeChat::System",
-          "kind": "path"
-        },
-        {
-          "line": 256,
-          "path": "GameChatMessage",
-          "kind": "path"
-        },
-        {
-          "line": 256,
-          "path": "GameEvent::GameChatMessageEvent",
-          "kind": "path"
-        },
-        {
-          "line": 259,
-          "path": "ChatSource::Native",
-          "kind": "path"
-        },
-        {
-          "line": 259,
-          "path": "NativeChat::Player",
-          "kind": "path"
-        },
-        {
-          "line": 273,
-          "path": "GameEvent",
-          "kind": "path"
-        },
-        {
-          "line": 279,
-          "path": "CommandActor",
-          "kind": "path"
-        },
-        {
-          "line": 281,
-          "path": "ActorIdentity::GamePlayer",
-          "kind": "path"
-        },
-        {
-          "line": 285,
-          "path": "ActorPermissions",
-          "kind": "path"
-        },
-        {
-          "line": 286,
-          "path": "PermissionFlags::START_VOTE",
-          "kind": "path"
-        },
-        {
-          "line": 286,
-          "path": "PermissionFlags::USER",
-          "kind": "path"
-        },
-        {
-          "line": 289,
-          "path": "CommandRequest",
-          "kind": "path"
-        },
-        {
-          "line": 289,
-          "path": "GameEvent::CommandRequestEvent",
-          "kind": "path"
-        },
-        {
-          "line": 294,
-          "path": "CommandSource::GameChat",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/features/events.rs",
-      "references": [
-        {
-          "line": 19,
-          "path": "crate::features::events::EVENT_SYSTEM",
-          "kind": "import"
-        },
-        {
-          "line": 206,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        },
-        {
-          "line": 254,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        },
-        {
-          "line": 265,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 247,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 350,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 358,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 361,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 364,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 365,
-          "path": "serror",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/tools/command_parser.rs",
-      "references": [
-        {
-          "line": 20,
-          "path": "crate::tools::command_parser::parse_command",
-          "kind": "import"
-        },
-        {
-          "line": 278,
-          "path": "parse_command",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 21,
-          "path": "crate::tools::hook_globals::globals",
-          "kind": "import"
-        },
-        {
-          "line": 170,
-          "path": "crate::globals",
-          "kind": "path"
-        },
-        {
-          "line": 355,
-          "path": "globals",
-          "kind": "path"
-        },
-        {
-          "line": 356,
-          "path": "globals",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 164,
+          "line": 39,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 166,
-          "path": "bind_resolved_func_detour",
+          "line": 41,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 175,
-          "path": "bind_resolved_func_detour",
+          "line": 44,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 196,
-          "path": "bind_resolved_func_detour",
+          "line": 56,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 332,
-          "path": "bind_resolved_func_detour",
+          "line": 65,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1715,22 +1293,22 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
+          "line": 12,
+          "path": "define_pattern_resolver",
+          "kind": "path"
+        },
+        {
+          "line": 16,
+          "path": "define_pattern_resolver",
+          "kind": "path"
+        },
+        {
+          "line": 21,
+          "path": "define_pattern_resolver",
+          "kind": "path"
+        },
+        {
           "line": 25,
-          "path": "define_pattern_resolver",
-          "kind": "path"
-        },
-        {
-          "line": 29,
-          "path": "define_pattern_resolver",
-          "kind": "path"
-        },
-        {
-          "line": 34,
-          "path": "define_pattern_resolver",
-          "kind": "path"
-        },
-        {
-          "line": 38,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -1776,68 +1354,31 @@
     },
     {
       "source": "src/chivalry2/engine/engine/kismet/gameplay_statics.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 48,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 60,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 70,
-          "path": "sdebug",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/kismet/gameplay_statics.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 41,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "macro token"
-        },
-        {
-          "line": 44,
-          "path": "crate::tools::hook_globals::globals",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/engine/kismet/gameplay_statics.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 28,
+          "line": 27,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 33,
+          "line": 32,
           "path": "bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 41,
-          "path": "bind_resolved_func_detour",
+          "line": 40,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 55,
-          "path": "bind_resolved_func_detour",
+          "line": 43,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 64,
-          "path": "bind_resolved_func_detour",
+          "line": 46,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1847,22 +1388,22 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 10,
+          "line": 9,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 12,
+          "line": 11,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 17,
+          "line": 16,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 19,
+          "line": 18,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -1870,11 +1411,16 @@
     },
     {
       "source": "src/chivalry2/engine/extensions/fonline_auth_playfab.rs",
-      "target": "src/logging/macros.rs",
+      "target": "src/unchained/detours/engine/extensions/fonline_auth_playfab.rs",
       "references": [
         {
-          "line": 28,
-          "path": "sdebug",
+          "line": 49,
+          "path": "crate::unchained::detours::engine::extensions::fonline_auth_playfab::end_authentication_detour",
+          "kind": "path"
+        },
+        {
+          "line": 65,
+          "path": "crate::unchained::detours::engine::extensions::fonline_auth_playfab::end_authentication_detour",
           "kind": "path"
         }
       ]
@@ -1889,8 +1435,8 @@
           "kind": "macro token"
         },
         {
-          "line": 22,
-          "path": "bind_resolved_func_detour",
+          "line": 26,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1908,53 +1454,21 @@
     },
     {
       "source": "src/chivalry2/engine/extensions/fonline_session_playfab.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 43,
-          "path": "strace",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/extensions/fonline_session_playfab.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 4,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 26,
-          "path": "cli_args",
-          "kind": "macro token"
-        },
-        {
-          "line": 40,
-          "path": "cli_args",
-          "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/extensions/fonline_session_playfab.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 24,
+          "line": 20,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 26,
-          "path": "bind_resolved_func_detour",
+          "line": 22,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 40,
-          "path": "bind_resolved_func_detour",
+          "line": 29,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -1964,24 +1478,13 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 10,
+          "line": 6,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 15,
+          "line": 11,
           "path": "define_pattern_resolver",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/extensions/open_api_client_api.rs",
-      "target": "src/features/server_browser/urls.rs",
-      "references": [
-        {
-          "line": 117,
-          "path": "crate::features::server_browser::urls::tbio_base_url",
           "kind": "path"
         }
       ]
@@ -1999,16 +1502,6 @@
           "line": 19,
           "path": "sinfo",
           "kind": "macro token"
-        },
-        {
-          "line": 109,
-          "path": "serror",
-          "kind": "path"
-        },
-        {
-          "line": 113,
-          "path": "serror",
-          "kind": "path"
         }
       ]
     },
@@ -2017,17 +1510,17 @@
       "target": "src/resolvers/mod.rs",
       "references": [
         {
-          "line": 174,
+          "line": 132,
           "path": "crate::resolvers::OffsetRegisty",
           "kind": "macro token"
         },
         {
-          "line": 209,
+          "line": 167,
           "path": "crate::resolvers::HookRegistration",
           "kind": "path"
         },
         {
-          "line": 418,
+          "line": 381,
           "path": "crate::resolvers::OffsetRegisty",
           "kind": "path"
         }
@@ -2035,11 +1528,16 @@
     },
     {
       "source": "src/chivalry2/engine/extensions/open_api_client_api.rs",
-      "target": "src/tools/hook_globals.rs",
+      "target": "src/unchained/detours/engine/extensions/open_api_client_api.rs",
       "references": [
         {
-          "line": 118,
-          "path": "crate::tools::hook_globals::cli_args",
+          "line": 166,
+          "path": "crate::unchained::detours::engine::extensions::open_api_client_api::get_post_get_motd_detour",
+          "kind": "path"
+        },
+        {
+          "line": 181,
+          "path": "crate::unchained::detours::engine::extensions::open_api_client_api::with_backend_request",
           "kind": "path"
         }
       ]
@@ -2055,12 +1553,12 @@
         },
         {
           "line": 46,
-          "path": "bind_resolved_request_function_detour",
+          "path": "unchained_macros::bind_resolved_request_function",
           "kind": "macro token"
         },
         {
-          "line": 62,
-          "path": "bind_resolved_request_function_detour",
+          "line": 57,
+          "path": "unchained_macros::bind_resolved_request_function",
           "kind": "macro token"
         }
       ]
@@ -2078,48 +1576,16 @@
     },
     {
       "source": "src/chivalry2/engine/extensions/playfab_request_handler.rs",
-      "target": "src/features/server_browser/urls.rs",
-      "references": [
-        {
-          "line": 6,
-          "path": "crate::features::server_browser::urls::playfab_matchmake_url",
-          "kind": "import"
-        },
-        {
-          "line": 36,
-          "path": "playfab_matchmake_url",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/extensions/playfab_request_handler.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 7,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 36,
-          "path": "cli_args",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/extensions/playfab_request_handler.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 23,
+          "line": 21,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 25,
-          "path": "bind_resolved_func_detour",
+          "line": 23,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2129,7 +1595,7 @@
       "target": "unchained-macros/src/patch.rs",
       "references": [
         {
-          "line": 62,
+          "line": 34,
           "path": "CREATE_PATCH",
           "kind": "path"
         }
@@ -2140,12 +1606,12 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 9,
+          "line": 7,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 14,
+          "line": 12,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -2213,42 +1679,31 @@
     },
     {
       "source": "src/chivalry2/engine/pak_file/i_platform_file_pak.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 72,
-          "path": "sdebug",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/engine/pak_file/i_platform_file_pak.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 48,
+          "line": 44,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 50,
-          "path": "bind_resolved_func_detour",
+          "line": 46,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 84,
-          "path": "bind_resolved_func_detour",
+          "line": 58,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 107,
-          "path": "bind_resolved_func_detour",
+          "line": 69,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 129,
-          "path": "bind_resolved_func_detour",
+          "line": 79,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2258,177 +1713,23 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 20,
+          "line": 16,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 25,
+          "line": 21,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 31,
+          "line": 27,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 37,
+          "line": 33,
           "path": "define_pattern_resolver",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_character.rs",
-      "target": "src/events/combat.rs",
-      "references": [
-        {
-          "line": 6,
-          "path": "crate::events::combat::CombatActor",
-          "kind": "import"
-        },
-        {
-          "line": 6,
-          "path": "crate::events::combat::DamageSource",
-          "kind": "import"
-        },
-        {
-          "line": 276,
-          "path": "CombatActor::victim_from_damage_event",
-          "kind": "path"
-        },
-        {
-          "line": 277,
-          "path": "CombatActor::new",
-          "kind": "path"
-        },
-        {
-          "line": 278,
-          "path": "CombatActor::killers_from_death_event",
-          "kind": "path"
-        },
-        {
-          "line": 279,
-          "path": "DamageSource::from_damage_event",
-          "kind": "path"
-        },
-        {
-          "line": 285,
-          "path": "CombatActor::new",
-          "kind": "path"
-        },
-        {
-          "line": 343,
-          "path": "CombatActor::killer_from_damage_event",
-          "kind": "path"
-        },
-        {
-          "line": 344,
-          "path": "CombatActor::new",
-          "kind": "path"
-        },
-        {
-          "line": 345,
-          "path": "CombatActor::victim_from_damage_event",
-          "kind": "path"
-        },
-        {
-          "line": 346,
-          "path": "CombatActor::from_actor",
-          "kind": "path"
-        },
-        {
-          "line": 347,
-          "path": "CombatActor::new",
-          "kind": "path"
-        },
-        {
-          "line": 348,
-          "path": "DamageSource::from_damage_event",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_character.rs",
-      "target": "src/events/models.rs",
-      "references": [
-        {
-          "line": 7,
-          "path": "crate::events::models::Damage",
-          "kind": "import"
-        },
-        {
-          "line": 7,
-          "path": "crate::events::models::GameEvent",
-          "kind": "import"
-        },
-        {
-          "line": 7,
-          "path": "crate::events::models::Kill",
-          "kind": "import"
-        },
-        {
-          "line": 300,
-          "path": "GameEvent::KillEvent",
-          "kind": "path"
-        },
-        {
-          "line": 300,
-          "path": "Kill",
-          "kind": "path"
-        },
-        {
-          "line": 312,
-          "path": "Damage",
-          "kind": "path"
-        },
-        {
-          "line": 363,
-          "path": "Damage",
-          "kind": "path"
-        },
-        {
-          "line": 363,
-          "path": "GameEvent::DamageEvent",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_character.rs",
-      "target": "src/features/events.rs",
-      "references": [
-        {
-          "line": 8,
-          "path": "crate::features::events::EVENT_SYSTEM",
-          "kind": "import"
-        },
-        {
-          "line": 298,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        },
-        {
-          "line": 361,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_character.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 289,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 352,
-          "path": "strace",
           "kind": "path"
         }
       ]
@@ -2438,18 +1739,18 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 250,
+          "line": 247,
           "path": "unchained_macros::runtime_bindings",
+          "kind": "macro token"
+        },
+        {
+          "line": 255,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
           "line": 258,
-          "path": "bind_resolved_func_detour",
-          "kind": "macro token"
-        },
-        {
-          "line": 326,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2459,12 +1760,12 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 10,
+          "line": 7,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 15,
+          "line": 12,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -2514,227 +1815,21 @@
     },
     {
       "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/events/models.rs",
-      "references": [
-        {
-          "line": 4,
-          "path": "crate::events::models::GameEvent",
-          "kind": "import"
-        },
-        {
-          "line": 4,
-          "path": "crate::events::models::Join",
-          "kind": "import"
-        },
-        {
-          "line": 4,
-          "path": "crate::events::models::Leave",
-          "kind": "import"
-        },
-        {
-          "line": 145,
-          "path": "GameEvent::JoinEvent",
-          "kind": "path"
-        },
-        {
-          "line": 145,
-          "path": "Join",
-          "kind": "path"
-        },
-        {
-          "line": 189,
-          "path": "GameEvent::JoinEvent",
-          "kind": "path"
-        },
-        {
-          "line": 189,
-          "path": "Join",
-          "kind": "path"
-        },
-        {
-          "line": 230,
-          "path": "GameEvent::LeaveEvent",
-          "kind": "path"
-        },
-        {
-          "line": 230,
-          "path": "Leave",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/features/events.rs",
-      "references": [
-        {
-          "line": 5,
-          "path": "crate::features::events::EVENT_SYSTEM",
-          "kind": "import"
-        },
-        {
-          "line": 143,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        },
-        {
-          "line": 187,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        },
-        {
-          "line": 228,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/features/server_browser/http.rs",
-      "references": [
-        {
-          "line": 7,
-          "path": "crate::features::server_browser::http",
-          "kind": "import"
-        },
-        {
-          "line": 51,
-          "path": "http::check_banned_sync",
-          "kind": "path"
-        },
-        {
-          "line": 52,
-          "path": "http::client",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/features/tokio_runtime.rs",
-      "references": [
-        {
-          "line": 54,
-          "path": "crate::features::tokio_runtime::TOKIO_RUNTIME",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 49,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 62,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 139,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 151,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 169,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 182,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 186,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 197,
-          "path": "strace",
-          "kind": "path"
-        },
-        {
-          "line": 204,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 210,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 214,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 218,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 227,
-          "path": "sinfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 12,
-          "path": "crate::tools::hook_globals::globals",
-          "kind": "import"
-        },
-        {
-          "line": 13,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 130,
-          "path": "cli_args",
-          "kind": "path"
-        },
-        {
-          "line": 203,
-          "path": "globals",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_game_mode/backend.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 114,
+          "line": 18,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 116,
-          "path": "bind_resolved_func_detour",
+          "line": 20,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 194,
-          "path": "bind_resolved_func_detour",
+          "line": 30,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2744,13 +1839,13 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 13,
+          "line": 11,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 15,
-          "path": "bind_resolved_func_detour",
+          "line": 13,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2760,7 +1855,7 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 9,
+          "line": 7,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -2790,80 +1885,37 @@
     },
     {
       "source": "src/chivalry2/tbl/atbl_player_controller.rs",
-      "target": "src/events/broadcast_message/game_chat.rs",
-      "references": [
-        {
-          "line": 15,
-          "path": "crate::events::broadcast_message::game_chat::broadcast_parts",
-          "kind": "import"
-        },
-        {
-          "line": 169,
-          "path": "broadcast_parts",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_player_controller.rs",
-      "target": "src/resolvers/mod.rs",
-      "references": [
-        {
-          "line": 211,
-          "path": "crate::resolvers::function_is_bound",
-          "kind": "path"
-        },
-        {
-          "line": 237,
-          "path": "crate::resolvers::function_is_bound",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_player_controller.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 72,
+          "line": 67,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 74,
-          "path": "bind_resolved_func_detour",
+          "line": 69,
+          "path": "unchained_macros::bind_resolved_func",
+          "kind": "macro token"
+        },
+        {
+          "line": 81,
+          "path": "unchained_macros::bind_resolved_func",
+          "kind": "macro token"
+        },
+        {
+          "line": 90,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
           "line": 99,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 117,
-          "path": "bind_resolved_func_detour",
+          "line": 109,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
-        },
-        {
-          "line": 132,
-          "path": "bind_resolved_func_detour",
-          "kind": "macro token"
-        },
-        {
-          "line": 146,
-          "path": "bind_resolved_func_detour",
-          "kind": "macro token"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/atbl_player_controller.rs",
-      "target": "unchained-macros/src/detour.rs",
-      "references": [
-        {
-          "line": 212,
-          "path": "unchained_macros::detour_is_initialized",
-          "kind": "path"
         }
       ]
     },
@@ -2872,27 +1924,27 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 19,
+          "line": 14,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 28,
+          "line": 23,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 39,
+          "line": 34,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 46,
+          "line": 41,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 54,
+          "line": 49,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -2909,7 +1961,7 @@
         },
         {
           "line": 16,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -2927,83 +1979,16 @@
     },
     {
       "source": "src/chivalry2/tbl/umap_specific_loading_screen_config.rs",
-      "target": "src/features/map_markers.rs",
-      "references": [
-        {
-          "line": 43,
-          "path": "crate::features::map_markers::MapMarkerInfo",
-          "kind": "path"
-        },
-        {
-          "line": 61,
-          "path": "crate::features::map_markers::map_marker_cache",
-          "kind": "path"
-        },
-        {
-          "line": 199,
-          "path": "crate::features::map_markers::MapMarkerInfo",
-          "kind": "import"
-        },
-        {
-          "line": 200,
-          "path": "MapMarkerInfo",
-          "kind": "path"
-        },
-        {
-          "line": 222,
-          "path": "crate::features::map_markers::MapMarkerInfo",
-          "kind": "import"
-        },
-        {
-          "line": 223,
-          "path": "MapMarkerInfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/umap_specific_loading_screen_config.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 109,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 131,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 141,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 159,
-          "path": "crate::serror",
-          "kind": "path"
-        },
-        {
-          "line": 177,
-          "path": "sinfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/umap_specific_loading_screen_config.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 84,
+          "line": 21,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 120,
-          "path": "bind_resolved_func_detour",
+          "line": 27,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -3013,41 +1998,8 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 19,
+          "line": 7,
           "path": "define_pattern_resolver",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_engine.rs",
-      "target": "src/features/server_browser/registration.rs",
-      "references": [
-        {
-          "line": 19,
-          "path": "crate::features::server_browser::registration::shutdown",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_engine.rs",
-      "target": "src/features/tokio_runtime.rs",
-      "references": [
-        {
-          "line": 18,
-          "path": "crate::features::tokio_runtime::TOKIO_RUNTIME",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_engine.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 22,
-          "path": "swarn",
           "kind": "path"
         }
       ]
@@ -3057,13 +2009,13 @@
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 12,
+          "line": 15,
           "path": "unchained_macros::runtime_bindings",
           "kind": "macro token"
         },
         {
-          "line": 15,
-          "path": "bind_resolved_func_detour",
+          "line": 18,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         }
       ]
@@ -3075,188 +2027,6 @@
         {
           "line": 4,
           "path": "define_pattern_resolver",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/events/models.rs",
-      "references": [
-        {
-          "line": 7,
-          "path": "crate::events::models::GameEvent",
-          "kind": "import"
-        },
-        {
-          "line": 7,
-          "path": "crate::events::models::MapChange",
-          "kind": "import"
-        },
-        {
-          "line": 88,
-          "path": "GameEvent::MapChangeEvent",
-          "kind": "path"
-        },
-        {
-          "line": 88,
-          "path": "MapChange",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/features/events.rs",
-      "references": [
-        {
-          "line": 8,
-          "path": "crate::features::events::EVENT_SYSTEM",
-          "kind": "import"
-        },
-        {
-          "line": 88,
-          "path": "EVENT_SYSTEM",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/features/mod_maps.rs",
-      "references": [
-        {
-          "line": 46,
-          "path": "crate::features::mod_maps::auto_register_all_assets",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/features/motd.rs",
-      "references": [
-        {
-          "line": 60,
-          "path": "crate::features::motd::set_match_active",
-          "kind": "path"
-        },
-        {
-          "line": 73,
-          "path": "crate::features::motd::set_match_active",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/lib.rs",
-      "references": [
-        {
-          "line": 10,
-          "path": "crate::ENGINE_READY",
-          "kind": "import"
-        },
-        {
-          "line": 65,
-          "path": "ENGINE_READY",
-          "kind": "path"
-        },
-        {
-          "line": 66,
-          "path": "ENGINE_READY",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 49,
-          "path": "serror",
-          "kind": "path"
-        },
-        {
-          "line": 54,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 62,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 64,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 67,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 74,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 77,
-          "path": "swarn",
-          "kind": "path"
-        },
-        {
-          "line": 81,
-          "path": "sdebug",
-          "kind": "path"
-        },
-        {
-          "line": 92,
-          "path": "swarn",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_game_instance.rs",
-      "target": "src/tools/hook_globals.rs",
-      "references": [
-        {
-          "line": 9,
-          "path": "crate::tools::hook_globals::cli_args",
-          "kind": "import"
-        },
-        {
-          "line": 9,
-          "path": "crate::tools::hook_globals::globals",
-          "kind": "import"
-        },
-        {
-          "line": 36,
-          "path": "cli_args",
-          "kind": "path"
-        },
-        {
-          "line": 63,
-          "path": "globals",
-          "kind": "path"
-        },
-        {
-          "line": 75,
-          "path": "globals",
-          "kind": "path"
-        },
-        {
-          "line": 78,
-          "path": "globals",
-          "kind": "path"
-        },
-        {
-          "line": 82,
-          "path": "globals",
           "kind": "path"
         }
       ]
@@ -3272,21 +2042,21 @@
         },
         {
           "line": 33,
-          "path": "bind_resolved_func_detour",
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 58,
-          "path": "bind_resolved_func_detour",
+          "line": 39,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 71,
-          "path": "bind_resolved_func_detour",
+          "line": 45,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 102,
+          "line": 57,
           "path": "bind_resolved_func",
           "kind": "macro token"
         }
@@ -3297,22 +2067,22 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 13,
+          "line": 6,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 17,
+          "line": 11,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 19,
+          "line": 16,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
         {
-          "line": 21,
+          "line": 18,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -3364,41 +2134,25 @@
     },
     {
       "source": "src/chivalry2/tbl/utbl_system_library.rs",
-      "target": "src/logging/macros.rs",
-      "references": [
-        {
-          "line": 38,
-          "path": "sinfo",
-          "kind": "path"
-        },
-        {
-          "line": 44,
-          "path": "sinfo",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/chivalry2/tbl/utbl_system_library.rs",
       "target": "unchained-macros/impl/src/lib.rs",
       "references": [
         {
-          "line": 8,
+          "line": 41,
+          "path": "unchained_macros::runtime_bindings",
+          "kind": "macro token"
+        },
+        {
+          "line": 43,
           "path": "unchained_macros::bind_resolved_func",
-          "kind": "import"
-        },
-        {
-          "line": 35,
-          "path": "unchained_macros::bind_resolved_func_detour",
           "kind": "macro token"
         },
         {
-          "line": 42,
-          "path": "unchained_macros::bind_resolved_func_detour",
+          "line": 50,
+          "path": "unchained_macros::bind_resolved_func",
           "kind": "macro token"
         },
         {
-          "line": 55,
+          "line": 58,
           "path": "bind_resolved_func",
           "kind": "macro token"
         }
@@ -3409,7 +2163,7 @@
       "target": "unchained-macros/src/patch.rs",
       "references": [
         {
-          "line": 33,
+          "line": 34,
           "path": "CREATE_PATCH",
           "kind": "path"
         }
@@ -3420,7 +2174,7 @@
       "target": "unchained-macros/src/signatures.rs",
       "references": [
         {
-          "line": 10,
+          "line": 9,
           "path": "define_pattern_resolver",
           "kind": "path"
         },
@@ -3435,7 +2189,7 @@
           "kind": "path"
         },
         {
-          "line": 25,
+          "line": 26,
           "path": "define_pattern_resolver",
           "kind": "path"
         }
@@ -4234,27 +2988,6 @@
     },
     {
       "source": "src/features/mod_management.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 462,
-          "path": "crate::chivalry2::engine::UGameEngine",
-          "kind": "import"
-        },
-        {
-          "line": 469,
-          "path": "UGameEngine::in_game_thread_job",
-          "kind": "path"
-        },
-        {
-          "line": 471,
-          "path": "UGameEngine::run_on_game_thread",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/features/mod_management.rs",
       "target": "src/chivalry2/engine/engine/engine/world.rs",
       "references": [
         {
@@ -4388,35 +3121,13 @@
       "target": "src/chivalry2/engine/asset_registry/asset_registry_helpers.rs",
       "references": [
         {
-          "line": 471,
+          "line": 472,
           "path": "crate::chivalry2::engine::UAssetRegistryHelpers::get_assets_by_class",
           "kind": "path"
         },
         {
-          "line": 533,
+          "line": 534,
           "path": "crate::chivalry2::engine::UAssetRegistryHelpers::scan_files_synchronous",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/features/mod_maps.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 456,
-          "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/features/mod_maps.rs",
-      "target": "src/chivalry2/engine/pak_file/i_platform_file_pak.rs",
-      "references": [
-        {
-          "line": 596,
-          "path": "crate::chivalry2::engine::FPakPlatformFile::mounted_pak_filenames",
           "kind": "path"
         }
       ]
@@ -4442,19 +3153,8 @@
       "target": "src/chivalry2/engine/core/internationalization/text.rs",
       "references": [
         {
-          "line": 46,
+          "line": 47,
           "path": "crate::chivalry2::engine::InvariantText::new",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/features/native_chat.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 24,
-          "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
           "kind": "path"
         }
       ]
@@ -4485,7 +3185,7 @@
           "kind": "path"
         },
         {
-          "line": 45,
+          "line": 46,
           "path": "EChatType::AllSay",
           "kind": "path"
         }
@@ -4501,24 +3201,8 @@
           "kind": "import"
         },
         {
-          "line": 41,
+          "line": 42,
           "path": "UTBLSystemLibrary::get_tbl_game_mode",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/lib.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 586,
-          "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
-          "kind": "path"
-        },
-        {
-          "line": 590,
-          "path": "crate::chivalry2::engine::UGameEngine::run_on_game_thread",
           "kind": "path"
         }
       ]
@@ -4649,22 +3333,6 @@
     },
     {
       "source": "src/modules/game_info.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 23,
-          "path": "crate::chivalry2::engine::UGameEngine",
-          "kind": "import"
-        },
-        {
-          "line": 25,
-          "path": "UGameEngine::run_on_game_thread",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/modules/game_info.rs",
       "target": "src/chivalry2/engine/engine/game_framework/player_state.rs",
       "references": [
         {
@@ -4673,17 +3341,17 @@
           "kind": "import"
         },
         {
-          "line": 47,
+          "line": 46,
           "path": "PlayerFlags::IS_SPECTATOR",
           "kind": "path"
         },
         {
-          "line": 50,
+          "line": 49,
           "path": "PlayerFlags::ONLY_SPECTATOR",
           "kind": "path"
         },
         {
-          "line": 53,
+          "line": 52,
           "path": "PlayerFlags::IS_A_BOT",
           "kind": "path"
         }
@@ -4699,7 +3367,7 @@
           "kind": "import"
         },
         {
-          "line": 82,
+          "line": 81,
           "path": "ATBLGameMode",
           "kind": "path"
         }
@@ -4715,24 +3383,8 @@
           "kind": "import"
         },
         {
-          "line": 27,
+          "line": 26,
           "path": "UTBLSystemLibrary::get_tbl_game_mode",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/modules/mod_list.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 21,
-          "path": "crate::chivalry2::engine::UGameEngine",
-          "kind": "import"
-        },
-        {
-          "line": 28,
-          "path": "UGameEngine::run_on_game_thread",
           "kind": "path"
         }
       ]
@@ -4744,22 +3396,6 @@
         {
           "line": 29,
           "path": "crate::chivalry2::engine::UAssetRegistryHelpers::get_assets_by_path",
-          "kind": "path"
-        }
-      ]
-    },
-    {
-      "source": "src/modules/mod_list_maps.rs",
-      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
-      "references": [
-        {
-          "line": 21,
-          "path": "crate::chivalry2::engine::UGameEngine",
-          "kind": "import"
-        },
-        {
-          "line": 28,
-          "path": "UGameEngine::run_on_game_thread",
           "kind": "path"
         }
       ]
@@ -4780,7 +3416,7 @@
       "target": "src/chivalry2/engine/asset_registry/asset_registry_helpers.rs",
       "references": [
         {
-          "line": 216,
+          "line": 221,
           "path": "crate::chivalry2::engine::UAssetRegistryHelpers::get_asset_registry",
           "kind": "path"
         }
@@ -4791,22 +3427,22 @@
       "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
       "references": [
         {
-          "line": 207,
+          "line": 212,
           "path": "crate::chivalry2::engine::FString",
           "kind": "import"
         },
         {
-          "line": 211,
+          "line": 216,
           "path": "FString",
           "kind": "path"
         },
         {
-          "line": 212,
+          "line": 217,
           "path": "FString",
           "kind": "path"
         },
         {
-          "line": 214,
+          "line": 219,
           "path": "FString",
           "kind": "path"
         }
@@ -4817,17 +3453,17 @@
       "target": "src/chivalry2/engine/core/internationalization/text.rs",
       "references": [
         {
-          "line": 208,
+          "line": 213,
           "path": "crate::chivalry2::engine::FText",
           "kind": "import"
         },
         {
-          "line": 211,
+          "line": 216,
           "path": "FText",
           "kind": "path"
         },
         {
-          "line": 211,
+          "line": 216,
           "path": "FText::to_native_string",
           "kind": "path"
         }
@@ -4838,12 +3474,12 @@
       "target": "src/chivalry2/engine/core_uobject/uobject/script_interface.rs",
       "references": [
         {
-          "line": 209,
+          "line": 214,
           "path": "crate::chivalry2::engine::AssetRegistryScriptInterface",
           "kind": "import"
         },
         {
-          "line": 215,
+          "line": 220,
           "path": "AssetRegistryScriptInterface",
           "kind": "path"
         }
@@ -4854,17 +3490,17 @@
       "target": "src/chivalry2/engine/engine/engine/world.rs",
       "references": [
         {
-          "line": 210,
+          "line": 215,
           "path": "crate::chivalry2::engine::UWorld",
           "kind": "import"
         },
         {
-          "line": 214,
+          "line": 219,
           "path": "UWorld",
           "kind": "path"
         },
         {
-          "line": 214,
+          "line": 219,
           "path": "UWorld::get_map_name",
           "kind": "path"
         }
@@ -4875,17 +3511,17 @@
       "target": "src/chivalry2/engine/engine/game_framework/player_state.rs",
       "references": [
         {
-          "line": 206,
+          "line": 211,
           "path": "crate::chivalry2::engine::APlayerState",
           "kind": "import"
         },
         {
-          "line": 212,
+          "line": 217,
           "path": "APlayerState",
           "kind": "path"
         },
         {
-          "line": 213,
+          "line": 218,
           "path": "APlayerState::get_player_name_native",
           "kind": "path"
         }
@@ -5044,6 +3680,1355 @@
       ]
     },
     {
+      "source": "src/unchained/detours/engine/core/containers/unreal_string.rs",
+      "target": "src/chivalry2/engine/core/containers/array.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::TArray",
+          "kind": "import"
+        },
+        {
+          "line": 43,
+          "path": "TArray",
+          "kind": "path"
+        },
+        {
+          "line": 56,
+          "path": "TArray::new",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core/containers/unreal_string.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 11,
+          "path": "FString::find",
+          "kind": "macro token"
+        },
+        {
+          "line": 13,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 40,
+          "path": "FString::parse_into_array",
+          "kind": "macro token"
+        },
+        {
+          "line": 42,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 43,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 56,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 57,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 58,
+          "path": "FString::from",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core/containers/unreal_string.rs",
+      "target": "src/chivalry2/engine/core/hal/platform.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::TCHAR",
+          "kind": "import"
+        },
+        {
+          "line": 14,
+          "path": "TCHAR",
+          "kind": "path"
+        },
+        {
+          "line": 44,
+          "path": "TCHAR",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/class.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        },
+        {
+          "line": 9,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/class.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/class.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::UClass",
+          "kind": "import"
+        },
+        {
+          "line": 5,
+          "path": "UClass::get_config_name",
+          "kind": "macro token"
+        },
+        {
+          "line": 7,
+          "path": "UClass",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/object.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 45,
+          "path": "FString::default",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/object.rs",
+      "target": "src/chivalry2/engine/core/hal/platform.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "crate::chivalry2::engine::TCHAR",
+          "kind": "import"
+        },
+        {
+          "line": 24,
+          "path": "TCHAR",
+          "kind": "path"
+        },
+        {
+          "line": 98,
+          "path": "TCHAR",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/object.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/class.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::UClass",
+          "kind": "import"
+        },
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::UFunction",
+          "kind": "import"
+        },
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::UStruct",
+          "kind": "import"
+        },
+        {
+          "line": 23,
+          "path": "UClass",
+          "kind": "path"
+        },
+        {
+          "line": 34,
+          "path": "UClass",
+          "kind": "path"
+        },
+        {
+          "line": 113,
+          "path": "UFunction",
+          "kind": "path"
+        },
+        {
+          "line": 127,
+          "path": "UFunction",
+          "kind": "path"
+        },
+        {
+          "line": 143,
+          "path": "UStruct",
+          "kind": "path"
+        },
+        {
+          "line": 162,
+          "path": "UFunction",
+          "kind": "path"
+        },
+        {
+          "line": 190,
+          "path": "UFunction",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/object.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/object.rs",
+      "references": [
+        {
+          "line": 20,
+          "path": "UObject::load_config",
+          "kind": "macro token"
+        },
+        {
+          "line": 22,
+          "path": "UObject",
+          "kind": "path"
+        },
+        {
+          "line": 127,
+          "path": "UObject",
+          "kind": "path"
+        },
+        {
+          "line": 187,
+          "path": "UObject::process_event",
+          "kind": "macro token"
+        },
+        {
+          "line": 189,
+          "path": "UObject",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/stack.rs",
+      "target": "src/chivalry2/engine/core/hal/platform.rs",
+      "references": [
+        {
+          "line": 10,
+          "path": "crate::chivalry2::engine::TCHAR",
+          "kind": "import"
+        },
+        {
+          "line": 15,
+          "path": "TCHAR",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/stack.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 17,
+          "path": "FName",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/stack.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/object.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::UObject",
+          "kind": "import"
+        },
+        {
+          "line": 18,
+          "path": "UObject",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/core_uobject/uobject/stack.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/stack.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FFrame",
+          "kind": "import"
+        },
+        {
+          "line": 13,
+          "path": "FFrame::kismet_execution_message",
+          "kind": "macro token"
+        },
+        {
+          "line": 28,
+          "path": "FFrame::kismet_execution_message",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine/game_engine.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 48,
+          "path": "FString::from",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine/game_engine.rs",
+      "target": "src/chivalry2/engine/engine/engine/game_engine.rs",
+      "references": [
+        {
+          "line": 18,
+          "path": "UGameEngine::tick",
+          "kind": "macro token"
+        },
+        {
+          "line": 19,
+          "path": "UGameEngine",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine/game_engine.rs",
+      "target": "src/chivalry2/tbl/utbl_system_library.rs",
+      "references": [
+        {
+          "line": 50,
+          "path": "crate::chivalry2::tbl::utbl_system_library::UTBLSystemLibrary::execute_console_command",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine_utils.rs",
+      "target": "src/chivalry2/engine/core/hal/platform.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::TCHAR",
+          "kind": "import"
+        },
+        {
+          "line": 10,
+          "path": "TCHAR",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine_utils.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 12,
+          "path": "FName",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/engine_utils.rs",
+      "target": "src/chivalry2/engine/engine/engine_utils.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "FConsoleOutputDevice::serialize",
+          "kind": "macro token"
+        },
+        {
+          "line": 9,
+          "path": "FConsoleOutputDevice",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/game_mode.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 7,
+          "path": "FName",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/game_mode.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/game_mode.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "AGameMode::set_match_state",
+          "kind": "macro token"
+        },
+        {
+          "line": 7,
+          "path": "AGameMode",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/asset_registry/i_asset_registry.rs",
+      "references": [
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/containers/map.rs",
+      "references": [
+        {
+          "line": 226,
+          "path": "test",
+          "kind": "macro token"
+        },
+        {
+          "line": 238,
+          "path": "test",
+          "kind": "macro token"
+        },
+        {
+          "line": 255,
+          "path": "test",
+          "kind": "macro token"
+        },
+        {
+          "line": 307,
+          "path": "test",
+          "kind": "macro token"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 38,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 57,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 95,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 187,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/hal/memory_base.rs",
+      "references": [
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/internationalization/text.rs",
+      "references": [
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/misc/guid.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::FGuid",
+          "kind": "import"
+        },
+        {
+          "line": 190,
+          "path": "FGuid",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 58,
+          "path": "FName",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/object.rs",
+      "references": [
+        {
+          "line": 9,
+          "path": "crate::chivalry2::engine::UObjectType",
+          "kind": "import"
+        },
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/uobject_array.rs",
+      "references": [
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/actor.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::AActor",
+          "kind": "import"
+        },
+        {
+          "line": 79,
+          "path": "AActor",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/controller.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::AController",
+          "kind": "import"
+        },
+        {
+          "line": 86,
+          "path": "AController",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/pawn.rs",
+      "references": [
+        {
+          "line": 80,
+          "path": "crate::chivalry2::engine::APawn",
+          "kind": "import"
+        },
+        {
+          "line": 84,
+          "path": "APawn",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
+      "references": [
+        {
+          "line": 25,
+          "path": "APlayerController::dedicated_server_init",
+          "kind": "macro token"
+        },
+        {
+          "line": 26,
+          "path": "APlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 34,
+          "path": "APlayerController::client_receive_chat",
+          "kind": "macro token"
+        },
+        {
+          "line": 36,
+          "path": "APlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 54,
+          "path": "APlayerController::client_message",
+          "kind": "macro token"
+        },
+        {
+          "line": 56,
+          "path": "APlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 184,
+          "path": "APlayerController::client_travel_internal",
+          "kind": "macro token"
+        },
+        {
+          "line": 186,
+          "path": "APlayerController",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/engine/online/icmp.rs",
+      "references": [
+        {
+          "line": 223,
+          "path": "self::tests",
+          "kind": "module"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/tbl/atbl_player_state.rs",
+      "references": [
+        {
+          "line": 11,
+          "path": "crate::chivalry2::tbl::ATBLPlayerState",
+          "kind": "import"
+        },
+        {
+          "line": 37,
+          "path": "ATBLPlayerState",
+          "kind": "path"
+        },
+        {
+          "line": 45,
+          "path": "ATBLPlayerState::from_ptr",
+          "kind": "path"
+        },
+        {
+          "line": 79,
+          "path": "ATBLPlayerState",
+          "kind": "path"
+        },
+        {
+          "line": 91,
+          "path": "ATBLPlayerState",
+          "kind": "path"
+        },
+        {
+          "line": 95,
+          "path": "ATBLPlayerState",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/game_framework/player_controller.rs",
+      "target": "src/chivalry2/tbl/echat_type.rs",
+      "references": [
+        {
+          "line": 11,
+          "path": "crate::chivalry2::tbl::EChatType",
+          "kind": "import"
+        },
+        {
+          "line": 101,
+          "path": "EChatType::try_from",
+          "kind": "path"
+        },
+        {
+          "line": 125,
+          "path": "EChatType",
+          "kind": "path"
+        },
+        {
+          "line": 126,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 150,
+          "path": "EChatType",
+          "kind": "path"
+        },
+        {
+          "line": 162,
+          "path": "EChatType::try_from",
+          "kind": "path"
+        },
+        {
+          "line": 165,
+          "path": "EChatType::ServerSay",
+          "kind": "path"
+        },
+        {
+          "line": 168,
+          "path": "EChatType::ServerSay",
+          "kind": "path"
+        },
+        {
+          "line": 171,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 171,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 229,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 240,
+          "path": "EChatType::ALL",
+          "kind": "path"
+        },
+        {
+          "line": 243,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 252,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 258,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 280,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 281,
+          "path": "EChatType::TeamSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 282,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 283,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 284,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 285,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 288,
+          "path": "EChatType",
+          "kind": "path"
+        },
+        {
+          "line": 303,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 312,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 317,
+          "path": "EChatType::TeamSay",
+          "kind": "macro token"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/kismet/gameplay_statics.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 23,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 33,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/kismet/gameplay_statics.rs",
+      "target": "src/chivalry2/engine/engine/engine/engine_base_types.rs",
+      "references": [
+        {
+          "line": 9,
+          "path": "crate::chivalry2::engine::ENetMode",
+          "kind": "import"
+        },
+        {
+          "line": 12,
+          "path": "ENetMode::DEDICATED_SERVER",
+          "kind": "macro token"
+        },
+        {
+          "line": 12,
+          "path": "ENetMode::LISTEN_SERVER",
+          "kind": "macro token"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/kismet/gameplay_statics.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/save_game.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::USaveGame",
+          "kind": "import"
+        },
+        {
+          "line": 25,
+          "path": "USaveGame",
+          "kind": "path"
+        },
+        {
+          "line": 32,
+          "path": "USaveGame",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/engine/kismet/gameplay_statics.rs",
+      "target": "src/chivalry2/engine/engine/kismet/gameplay_statics.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "UGameplayStatics::is_dedicated_server",
+          "kind": "macro token"
+        },
+        {
+          "line": 18,
+          "path": "UGameplayStatics::is_dedicated_server",
+          "kind": "path"
+        },
+        {
+          "line": 21,
+          "path": "UGameplayStatics::load_game_from_slot",
+          "kind": "macro token"
+        },
+        {
+          "line": 27,
+          "path": "UGameplayStatics::load_game_from_slot",
+          "kind": "path"
+        },
+        {
+          "line": 30,
+          "path": "UGameplayStatics::save_game_to_slot",
+          "kind": "macro token"
+        },
+        {
+          "line": 37,
+          "path": "UGameplayStatics::save_game_to_slot",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/fonline_auth_playfab.rs",
+      "target": "src/chivalry2/engine/extensions/fonline_auth_playfab.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "FOnlineAuthPlayFab::end_authentication",
+          "kind": "macro token"
+        },
+        {
+          "line": 8,
+          "path": "FOnlineAuthPlayFab",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/fonline_session_playfab.rs",
+      "target": "src/chivalry2/engine/extensions/fonline_session_playfab.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "FOnlineSessionPlayFab::on_get_current_games",
+          "kind": "macro token"
+        },
+        {
+          "line": 10,
+          "path": "FOnlineSessionPlayFab",
+          "kind": "path"
+        },
+        {
+          "line": 23,
+          "path": "FOnlineSessionPlayFab::ping_some_servers",
+          "kind": "macro token"
+        },
+        {
+          "line": 24,
+          "path": "FOnlineSessionPlayFab",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/fonline_session_playfab.rs",
+      "target": "src/chivalry2/engine/extensions/open_api_client_api.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::extensions::open_api_client_api::GetCurrentGamesPostResponse",
+          "kind": "import"
+        },
+        {
+          "line": 11,
+          "path": "GetCurrentGamesPostResponse",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/open_api_client_api.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 59,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 60,
+          "path": "FString::from",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/open_api_client_api.rs",
+      "target": "src/chivalry2/engine/core/templates/shared_pointer.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::TSharedPtrIHttpRequest",
+          "kind": "import"
+        },
+        {
+          "line": 13,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 16,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 29,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 32,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 43,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 44,
+          "path": "TSharedPtrIHttpRequest",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/open_api_client_api.rs",
+      "target": "src/chivalry2/engine/extensions/open_api_client_api.rs",
+      "references": [
+        {
+          "line": 10,
+          "path": "OpenAPIClientAPI::get_post_get_motd",
+          "kind": "macro token"
+        },
+        {
+          "line": 12,
+          "path": "OpenAPIClientAPI",
+          "kind": "path"
+        },
+        {
+          "line": 14,
+          "path": "GenericRequest",
+          "kind": "path"
+        },
+        {
+          "line": 26,
+          "path": "OpenAPIClientAPI::get_post_get_current_games",
+          "kind": "macro token"
+        },
+        {
+          "line": 28,
+          "path": "OpenAPIClientAPI",
+          "kind": "path"
+        },
+        {
+          "line": 30,
+          "path": "GenericRequest",
+          "kind": "path"
+        },
+        {
+          "line": 41,
+          "path": "OpenAPIClientAPI",
+          "kind": "path"
+        },
+        {
+          "line": 42,
+          "path": "GenericRequest",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/playfab_request_handler.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 12,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 13,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 14,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 15,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 21,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 24,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 30,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/playfab_request_handler.rs",
+      "target": "src/chivalry2/engine/core/templates/shared_pointer.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::TSharedRefIHttpRequest",
+          "kind": "import"
+        },
+        {
+          "line": 11,
+          "path": "TSharedRefIHttpRequest",
+          "kind": "path"
+        },
+        {
+          "line": 16,
+          "path": "TSharedRefIHttpRequest",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/extensions/playfab_request_handler.rs",
+      "target": "src/chivalry2/engine/extensions/playfab_request_handler.rs",
+      "references": [
+        {
+          "line": 9,
+          "path": "PlayFabRequestHandler::send_request",
+          "kind": "macro token"
+        },
+        {
+          "line": 26,
+          "path": "PlayFabRequestHandler::send_request",
+          "kind": "path"
+        },
+        {
+          "line": 34,
+          "path": "PlayFabRequestHandler::send_request",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/pak_file/i_platform_file_pak.rs",
+      "target": "src/chivalry2/engine/core/containers/array.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "crate::chivalry2::engine::TArray",
+          "kind": "import"
+        },
+        {
+          "line": 71,
+          "path": "TArray",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/pak_file/i_platform_file_pak.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 96,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/pak_file/i_platform_file_pak.rs",
+      "target": "src/chivalry2/engine/core/hal/platform.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::TCHAR",
+          "kind": "import"
+        },
+        {
+          "line": 17,
+          "path": "TCHAR",
+          "kind": "path"
+        },
+        {
+          "line": 19,
+          "path": "TCHAR",
+          "kind": "path"
+        },
+        {
+          "line": 50,
+          "path": "TCHAR",
+          "kind": "path"
+        },
+        {
+          "line": 72,
+          "path": "TCHAR",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/engine/pak_file/i_platform_file_pak.rs",
+      "target": "src/chivalry2/engine/pak_file/i_platform_file_pak.rs",
+      "references": [
+        {
+          "line": 14,
+          "path": "FPakPlatformFile::mount",
+          "kind": "macro token"
+        },
+        {
+          "line": 16,
+          "path": "FPakPlatformFile",
+          "kind": "path"
+        },
+        {
+          "line": 47,
+          "path": "FPakPlatformFile::find_file_in_pak_files",
+          "kind": "macro token"
+        },
+        {
+          "line": 49,
+          "path": "FPakPlatformFile",
+          "kind": "path"
+        },
+        {
+          "line": 51,
+          "path": "FPakFile",
+          "kind": "path"
+        },
+        {
+          "line": 52,
+          "path": "FPakEntry",
+          "kind": "path"
+        },
+        {
+          "line": 69,
+          "path": "FPakPlatformFile::find_file_in_pak_files_static",
+          "kind": "macro token"
+        },
+        {
+          "line": 71,
+          "path": "FPakListEntry",
+          "kind": "path"
+        },
+        {
+          "line": 73,
+          "path": "FPakFile",
+          "kind": "path"
+        },
+        {
+          "line": 74,
+          "path": "FPakEntry",
+          "kind": "path"
+        },
+        {
+          "line": 88,
+          "path": "FPakPlatformFile::find_file_in_pak_files_static",
+          "kind": "path"
+        },
+        {
+          "line": 93,
+          "path": "FPakPlatformFile::is_non_pak_filename_allowed",
+          "kind": "macro token"
+        },
+        {
+          "line": 95,
+          "path": "FPakPlatformFile",
+          "kind": "path"
+        }
+      ]
+    },
+    {
       "source": "src/unchained/detours/networking/ipv6_support.rs",
       "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
       "references": [
@@ -5106,6 +5091,976 @@
         {
           "line": 44,
           "path": "TFunctionFIcmpEchoResult",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_character.rs",
+      "target": "src/chivalry2/tbl/atbl_character.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "ATBLCharacter::on_killed",
+          "kind": "macro token"
+        },
+        {
+          "line": 10,
+          "path": "ATBLCharacter",
+          "kind": "path"
+        },
+        {
+          "line": 76,
+          "path": "ATBLCharacter::on_damage_taken",
+          "kind": "macro token"
+        },
+        {
+          "line": 78,
+          "path": "ATBLCharacter",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_character.rs",
+      "target": "src/chivalry2/tbl/fdamage_taken_event.rs",
+      "references": [
+        {
+          "line": 79,
+          "path": "FDamageTakenEvent",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_character.rs",
+      "target": "src/chivalry2/tbl/fdeath_damage_taken_event.rs",
+      "references": [
+        {
+          "line": 11,
+          "path": "FDeathDamageTakenEvent",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::FStringCopyError",
+          "kind": "import"
+        },
+        {
+          "line": 19,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 20,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 22,
+          "path": "FString",
+          "kind": "path"
+        },
+        {
+          "line": 178,
+          "path": "FStringCopyError",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/controller.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::AController",
+          "kind": "import"
+        },
+        {
+          "line": 94,
+          "path": "AController",
+          "kind": "path"
+        },
+        {
+          "line": 196,
+          "path": "AController",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/online_repl_structs.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::FUniqueNetIdRepl",
+          "kind": "import"
+        },
+        {
+          "line": 21,
+          "path": "FUniqueNetIdRepl",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/player_state.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "crate::chivalry2::engine::PlayerFlags",
+          "kind": "import"
+        },
+        {
+          "line": 204,
+          "path": "PlayerFlags::IS_A_BOT",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/backend.rs",
+      "target": "src/chivalry2/tbl/atbl_game_mode.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::tbl::ATBLGameMode",
+          "kind": "import"
+        },
+        {
+          "line": 16,
+          "path": "ATBLGameMode::pre_login",
+          "kind": "macro token"
+        },
+        {
+          "line": 18,
+          "path": "ATBLGameMode",
+          "kind": "path"
+        },
+        {
+          "line": 93,
+          "path": "ATBLGameMode::logout",
+          "kind": "macro token"
+        },
+        {
+          "line": 94,
+          "path": "ATBLGameMode",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/chat.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 15,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/chat.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/object.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::UObjectType",
+          "kind": "import"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/chat.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/actor.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::AActor",
+          "kind": "import"
+        },
+        {
+          "line": 14,
+          "path": "AActor",
+          "kind": "path"
+        },
+        {
+          "line": 20,
+          "path": "AActor::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_game_mode/chat.rs",
+      "target": "src/chivalry2/tbl/atbl_game_mode.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::tbl::ATBLGameMode",
+          "kind": "import"
+        },
+        {
+          "line": 11,
+          "path": "ATBLGameMode::broadcast_chat",
+          "kind": "macro token"
+        },
+        {
+          "line": 13,
+          "path": "ATBLGameMode",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 161,
+          "path": "FString::from",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core/internationalization/text.rs",
+      "references": [
+        {
+          "line": 7,
+          "path": "crate::chivalry2::engine::FText",
+          "kind": "import"
+        },
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::InvariantText",
+          "kind": "import"
+        },
+        {
+          "line": 95,
+          "path": "FText",
+          "kind": "path"
+        },
+        {
+          "line": 153,
+          "path": "InvariantText::new",
+          "kind": "path"
+        },
+        {
+          "line": 154,
+          "path": "InvariantText::new",
+          "kind": "path"
+        },
+        {
+          "line": 181,
+          "path": "FText",
+          "kind": "path"
+        },
+        {
+          "line": 185,
+          "path": "FText::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core/math/color.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::FLinearColor",
+          "kind": "import"
+        },
+        {
+          "line": 167,
+          "path": "FLinearColor",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 164,
+          "path": "FName::default",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core_uobject/templates/subclass_of.rs",
+      "references": [
+        {
+          "line": 9,
+          "path": "crate::chivalry2::engine::TSubclassOfAInventoryItem",
+          "kind": "import"
+        },
+        {
+          "line": 10,
+          "path": "crate::chivalry2::engine::TSubclassOfATBLCharacter",
+          "kind": "import"
+        },
+        {
+          "line": 11,
+          "path": "crate::chivalry2::engine::TSubclassOfULoadoutSelection",
+          "kind": "import"
+        },
+        {
+          "line": 49,
+          "path": "TSubclassOfULoadoutSelection",
+          "kind": "path"
+        },
+        {
+          "line": 50,
+          "path": "TSubclassOfAInventoryItem",
+          "kind": "path"
+        },
+        {
+          "line": 67,
+          "path": "TSubclassOfATBLCharacter",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/object.rs",
+      "references": [
+        {
+          "line": 135,
+          "path": "crate::chivalry2::engine::UObject",
+          "kind": "import"
+        },
+        {
+          "line": 136,
+          "path": "crate::chivalry2::engine::UObjectType",
+          "kind": "import"
+        },
+        {
+          "line": 150,
+          "path": "UObject::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/primary_asset_id.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::FPrimaryAssetId",
+          "kind": "import"
+        },
+        {
+          "line": 25,
+          "path": "FPrimaryAssetId",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/engine/engine/player.rs",
+      "references": [
+        {
+          "line": 137,
+          "path": "crate::chivalry2::engine::UPlayer",
+          "kind": "import"
+        },
+        {
+          "line": 147,
+          "path": "UPlayer::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/engine/engine/world.rs",
+      "references": [
+        {
+          "line": 138,
+          "path": "crate::chivalry2::engine::UWorld",
+          "kind": "import"
+        },
+        {
+          "line": 148,
+          "path": "UWorld::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/engine/engine/game_framework/player_controller.rs",
+      "references": [
+        {
+          "line": 134,
+          "path": "crate::chivalry2::engine::APlayerController",
+          "kind": "import"
+        },
+        {
+          "line": 145,
+          "path": "APlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 146,
+          "path": "APlayerController::from_ptr",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/tbl/atbl_player_controller.rs",
+      "references": [
+        {
+          "line": 19,
+          "path": "ATBLPlayerController::get_ownership_from_player_controller_and_state",
+          "kind": "macro token"
+        },
+        {
+          "line": 23,
+          "path": "ATBLPlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 30,
+          "path": "ATBLPlayerController::get_ownership_from_player_controller_and_state",
+          "kind": "path"
+        },
+        {
+          "line": 45,
+          "path": "ATBLPlayerController::can_use_loadout_item",
+          "kind": "macro token"
+        },
+        {
+          "line": 47,
+          "path": "ATBLPlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 63,
+          "path": "ATBLPlayerController::can_use_character",
+          "kind": "macro token"
+        },
+        {
+          "line": 65,
+          "path": "ATBLPlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 78,
+          "path": "ATBLPlayerController::conditional_initialize_customization_on_server",
+          "kind": "macro token"
+        },
+        {
+          "line": 81,
+          "path": "ATBLPlayerController",
+          "kind": "path"
+        },
+        {
+          "line": 92,
+          "path": "ATBLPlayerController::client_receive_localized_chat",
+          "kind": "macro token"
+        },
+        {
+          "line": 94,
+          "path": "ATBLPlayerController",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/tbl/atbl_player_state.rs",
+      "references": [
+        {
+          "line": 14,
+          "path": "crate::chivalry2::tbl::ATBLPlayerState",
+          "kind": "import"
+        },
+        {
+          "line": 24,
+          "path": "ATBLPlayerState",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/tbl/echat_type.rs",
+      "references": [
+        {
+          "line": 14,
+          "path": "crate::chivalry2::tbl::EChatType",
+          "kind": "import"
+        },
+        {
+          "line": 110,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 110,
+          "path": "EChatType::ServerSay",
+          "kind": "path"
+        },
+        {
+          "line": 196,
+          "path": "EChatType::ALL",
+          "kind": "path"
+        },
+        {
+          "line": 197,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 197,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 212,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 220,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 223,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 224,
+          "path": "EChatType::ServerSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 225,
+          "path": "EChatType::AllSay",
+          "kind": "macro token"
+        },
+        {
+          "line": 226,
+          "path": "EChatType",
+          "kind": "path"
+        },
+        {
+          "line": 236,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        },
+        {
+          "line": 243,
+          "path": "EChatType::AllSay",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/tbl/fownership_response.rs",
+      "references": [
+        {
+          "line": 13,
+          "path": "crate::chivalry2::tbl::fownership_response::FOwnershipResponse",
+          "kind": "import"
+        },
+        {
+          "line": 22,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        },
+        {
+          "line": 27,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        },
+        {
+          "line": 48,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        },
+        {
+          "line": 51,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        },
+        {
+          "line": 66,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        },
+        {
+          "line": 68,
+          "path": "FOwnershipResponse",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/atbl_player_controller.rs",
+      "target": "src/chivalry2/tbl/utbl_game_instance.rs",
+      "references": [
+        {
+          "line": 14,
+          "path": "crate::chivalry2::tbl::UTBLGameInstance",
+          "kind": "import"
+        },
+        {
+          "line": 169,
+          "path": "UTBLGameInstance",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/ftbl_online_stats.rs",
+      "target": "src/chivalry2/tbl/ftbl_online_stats.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "FTBLOnlineStats::set_stat_inner",
+          "kind": "macro token"
+        },
+        {
+          "line": 6,
+          "path": "FTBLOnlineStats",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "import"
+        },
+        {
+          "line": 30,
+          "path": "FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 47,
+          "path": "FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "target": "src/chivalry2/engine/core/uobject/name_types.rs",
+      "references": [
+        {
+          "line": 3,
+          "path": "crate::chivalry2::engine::EFindName",
+          "kind": "import"
+        },
+        {
+          "line": 4,
+          "path": "crate::chivalry2::engine::FName",
+          "kind": "import"
+        },
+        {
+          "line": 147,
+          "path": "EFindName::Add",
+          "kind": "path"
+        },
+        {
+          "line": 147,
+          "path": "FName::with_type",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "target": "src/chivalry2/engine/core_uobject/uobject/soft_object_path.rs",
+      "references": [
+        {
+          "line": 5,
+          "path": "crate::chivalry2::engine::FSoftObjectPath",
+          "kind": "import"
+        },
+        {
+          "line": 31,
+          "path": "FSoftObjectPath::new",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "target": "src/chivalry2/tbl/fmap_specific_loading_screen_config_data.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::tbl::fmap_specific_loading_screen_config_data::FMapSpecificLoadingScreenConfigData",
+          "kind": "import"
+        },
+        {
+          "line": 8,
+          "path": "crate::chivalry2::tbl::fmap_specific_loading_screen_config_data::FTextRaw",
+          "kind": "import"
+        },
+        {
+          "line": 29,
+          "path": "FMapSpecificLoadingScreenConfigData",
+          "kind": "path"
+        },
+        {
+          "line": 32,
+          "path": "FTextRaw::from_str",
+          "kind": "path"
+        },
+        {
+          "line": 33,
+          "path": "FTextRaw::from_str",
+          "kind": "path"
+        },
+        {
+          "line": 48,
+          "path": "FMapSpecificLoadingScreenConfigData",
+          "kind": "path"
+        },
+        {
+          "line": 141,
+          "path": "FMapSpecificLoadingScreenConfigData",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/umap_specific_loading_screen_config.rs",
+      "target": "src/chivalry2/tbl/umap_specific_loading_screen_config.rs",
+      "references": [
+        {
+          "line": 13,
+          "path": "UMapSpecificLoadingScreenConfig",
+          "kind": "path"
+        },
+        {
+          "line": 25,
+          "path": "UMapSpecificLoadingScreenConfig",
+          "kind": "path"
+        },
+        {
+          "line": 44,
+          "path": "UMapSpecificLoadingScreenConfig::get_data_for_map",
+          "kind": "macro token"
+        },
+        {
+          "line": 46,
+          "path": "UMapSpecificLoadingScreenConfig",
+          "kind": "path"
+        },
+        {
+          "line": 124,
+          "path": "UMapSpecificLoadingScreenConfig",
+          "kind": "path"
+        },
+        {
+          "line": 140,
+          "path": "UMapSpecificLoadingScreenConfig",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_engine.rs",
+      "target": "src/chivalry2/tbl/utbl_engine.rs",
+      "references": [
+        {
+          "line": 4,
+          "path": "crate::chivalry2::tbl::utbl_engine::UTBLEngine",
+          "kind": "import"
+        },
+        {
+          "line": 7,
+          "path": "UTBLEngine::pre_exit",
+          "kind": "macro token"
+        },
+        {
+          "line": 8,
+          "path": "UTBLEngine",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_game_instance.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 15,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        },
+        {
+          "line": 46,
+          "path": "crate::chivalry2::engine::FString::from",
+          "kind": "path"
+        },
+        {
+          "line": 53,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_game_instance.rs",
+      "target": "src/chivalry2/engine/engine/engine/world.rs",
+      "references": [
+        {
+          "line": 76,
+          "path": "crate::chivalry2::engine::UWorld",
+          "kind": "path"
+        },
+        {
+          "line": 95,
+          "path": "crate::chivalry2::engine::UWorld::get_current_map_name",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_game_instance.rs",
+      "target": "src/chivalry2/tbl/utbl_game_instance.rs",
+      "references": [
+        {
+          "line": 12,
+          "path": "UTBLGameInstance::load_front_end_map",
+          "kind": "macro token"
+        },
+        {
+          "line": 14,
+          "path": "UTBLGameInstance",
+          "kind": "path"
+        },
+        {
+          "line": 50,
+          "path": "UTBLGameInstance::on_pre_load_map",
+          "kind": "macro token"
+        },
+        {
+          "line": 52,
+          "path": "UTBLGameInstance",
+          "kind": "path"
+        },
+        {
+          "line": 73,
+          "path": "UTBLGameInstance::on_post_load_map",
+          "kind": "macro token"
+        },
+        {
+          "line": 75,
+          "path": "UTBLGameInstance",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_system_library.rs",
+      "target": "src/chivalry2/engine/core/containers/unreal_string.rs",
+      "references": [
+        {
+          "line": 8,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        },
+        {
+          "line": 10,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        },
+        {
+          "line": 18,
+          "path": "crate::chivalry2::engine::FString",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_system_library.rs",
+      "target": "src/chivalry2/engine/engine/engine/world.rs",
+      "references": [
+        {
+          "line": 9,
+          "path": "crate::chivalry2::engine::UWorld",
+          "kind": "path"
+        }
+      ]
+    },
+    {
+      "source": "src/unchained/detours/tbl/utbl_system_library.rs",
+      "target": "src/chivalry2/tbl/utbl_system_library.rs",
+      "references": [
+        {
+          "line": 6,
+          "path": "UTBLSystemLibrary::get_game_info",
+          "kind": "macro token"
+        },
+        {
+          "line": 11,
+          "path": "UTBLSystemLibrary::get_game_info",
+          "kind": "path"
+        },
+        {
+          "line": 16,
+          "path": "UTBLSystemLibrary::execute_console_command",
+          "kind": "macro token"
+        },
+        {
+          "line": 21,
+          "path": "UTBLSystemLibrary::execute_console_command",
           "kind": "path"
         }
       ]

@@ -12,24 +12,12 @@ pub struct FConsoleOutputDevice {
 
 #[unchained_macros::runtime_bindings]
 impl FConsoleOutputDevice {
-    #[bind_resolved_func_detour(ConsoleOutputDevice__Serialize)]
-    unsafe fn serialize_detour(
+    #[unchained_macros::bind_resolved_func(ConsoleOutputDevice__Serialize)]
+    pub(crate) unsafe fn serialize(
         self: *mut Self,
         text: *const TCHAR,
         verbosity: u8,
         category: *const FName,
     ) {
-        if !text.is_null() {
-            let text = unsafe { widestring::U16CStr::from_ptr_str(text) };
-            if !text
-                .to_string_lossy()
-                .starts_with("Command not recognized: RCON_INTERCEPT")
-            {
-                sinfo!("{}", text.display());
-            }
-        }
-        unsafe {
-            self.serialize(text, verbosity, category);
-        }
     }
 }

@@ -453,7 +453,8 @@ pub fn auto_register_all_assets() {
     log_registered_markers();
     // Reading the map markers loads their assets, so it runs as its own game
     // thread job on a later tick rather than inside the registration call.
-    crate::chivalry2::engine::UGameEngine::run_on_game_thread(|| {
+    use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+    run_on_game_thread(|| {
         unsafe { crate::features::map_markers::scan_map_markers() };
     });
 }
@@ -593,7 +594,8 @@ fn filter_mounted_paks(mounted: &[String]) -> Vec<PathBuf> {
 /// paks. Falls back to a `Content/Paks` scan if no mounts were captured (e.g. the
 /// `Mount` resolver isn't populated yet).
 fn discovery_pak_paths() -> Vec<PathBuf> {
-    let mounted = crate::chivalry2::engine::FPakPlatformFile::mounted_pak_filenames();
+    use crate::unchained::detours::engine::pak_file::i_platform_file_pak::mounted_pak_filenames;
+    let mounted = mounted_pak_filenames();
     let fallback = || {
         default_paks_dir().and_then(|d| list_pak_files(&d).ok()).unwrap_or_default()
     };

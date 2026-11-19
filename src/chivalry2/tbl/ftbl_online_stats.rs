@@ -13,6 +13,6 @@ pub struct FTBLOnlineStats {
 #[unchained_macros::runtime_bindings]
 impl FTBLOnlineStats {
     // Preserve the existing ABI and suppression of the native call.
-    #[bind_resolved_func_detour(SetStatInner)]
-    pub(crate) unsafe fn set_stat_inner_detour(self: *mut Self, _p1: i32, _p2: i32) {}
+    #[unchained_macros::bind_resolved_func(SetStatInner)]
+    pub(crate) unsafe fn set_stat_inner(self: *mut Self, _p1: i32, _p2: i32) {}
 }

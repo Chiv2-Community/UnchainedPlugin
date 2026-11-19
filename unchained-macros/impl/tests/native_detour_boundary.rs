@@ -1,0 +1,193 @@
+//! Repository-level guard for the native binding/plugin replacement split.
+use quote::ToTokens;
+use std::{collections::BTreeMap, path::Path};
+use syn::{punctuated::Punctuated, Attribute, Expr, ImplItem, Item, Signature, Token};
+
+#[derive(Debug, PartialEq, Eq)]
+struct Binding {
+    resolver: String,
+    signature: String,
+    cfg: String,
+}
+
+fn attribute<'a>(attrs: &'a [Attribute], name: &str) -> Option<&'a Attribute> {
+    attrs
+        .iter()
+        .find(|a| a.path().segments.last().unwrap().ident == name)
+}
+
+fn args(attr: &Attribute) -> Vec<Expr> {
+    attr.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)
+        .unwrap()
+        .into_iter()
+        .collect()
+}
+
+fn signature(sig: &Signature) -> String {
+    let mut sig = sig.clone();
+    sig.ident = syn::parse_quote!(native);
+    sig.inputs.pop_punct();
+    sig.to_token_stream().to_string()
+}
+
+fn cfg(attrs: &[Attribute]) -> String {
+    attrs
+        .iter()
+        .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"))
+        .map(|a| a.to_token_stream().to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn scan(
+    path: &Path,
+    bindings: &mut BTreeMap<String, Binding>,
+    detours: &mut BTreeMap<String, (String, String)>,
+) {
+    for entry in std::fs::read_dir(path).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            scan(&path, bindings, detours);
+            continue;
+        }
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        for item in file.items {
+            match item {
+                Item::Impl(item) => {
+                    let owner = item.self_ty.to_token_stream().to_string();
+                    let owner = if owner == "TArray < TCHAR >" {
+                        "FString"
+                    } else {
+                        &owner
+                    };
+                    for member in item.items {
+                        let ImplItem::Fn(function) = member else {
+                            continue;
+                        };
+                        assert_no_legacy(&function.attrs, &path);
+                        assert!(
+                            attribute(&function.attrs, "bind_func_detour").is_none(),
+                            "replacement must be a free function: {}",
+                            path.display()
+                        );
+                        for name in ["bind_resolved_func", "bind_resolved_request_function"] {
+                            let Some(attr) = attribute(&function.attrs, name) else {
+                                continue;
+                            };
+                            // Only descriptor-enabled bindings can be detached targets.
+                            if attribute(&item.attrs, "runtime_bindings").is_none() {
+                                continue;
+                            }
+                            let key = format!("{owner}::{}", function.sig.ident);
+                            let resolver = args(attr)[0].to_token_stream().to_string();
+                            assert!(
+                                bindings
+                                    .insert(
+                                        key,
+                                        Binding {
+                                            resolver,
+                                            signature: signature(&function.sig),
+                                            cfg: cfg(&function.attrs),
+                                        }
+                                    )
+                                    .is_none(),
+                                "duplicate native binding"
+                            );
+                            assert!(
+                                function.block.stmts.is_empty(),
+                                "native declaration contains replacement policy: {}",
+                                path.display()
+                            );
+                        }
+                    }
+                }
+                Item::Fn(function) => {
+                    assert_no_legacy(&function.attrs, &path);
+                    let Some(attr) = attribute(&function.attrs, "bind_func_detour") else {
+                        continue;
+                    };
+                    assert!(
+                        path.components()
+                            .any(|part| part.as_os_str() == "unchained"),
+                        "replacement belongs outside chivalry2: {}",
+                        path.display()
+                    );
+                    let args = args(attr);
+                    let target = args[0].to_token_stream().to_string().replace(' ', "");
+                    let condition = args
+                        .get(1)
+                        .map(|e| e.to_token_stream().to_string())
+                        .unwrap_or_else(|| "ACTIVE".into());
+                    assert!(
+                        detours
+                            .insert(target, (condition, cfg(&function.attrs)))
+                            .is_none(),
+                        "duplicate detached target"
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
+    for name in [
+        "bind_resolved_func_detour",
+        "bind_resolved_request_function_detour",
+    ] {
+        assert!(
+            attribute(attrs, name).is_none(),
+            "legacy detour in {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn migrated_detours_preserve_native_signatures_conditions_and_feature_gates() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
+    let (mut bindings, mut detours) = (BTreeMap::new(), BTreeMap::new());
+    scan(&root, &mut bindings, &mut detours);
+    let baseline = include_str!("native_detours.tsv");
+    let mut expected = 0;
+    for line in baseline
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 5, "invalid baseline row");
+        let [target, resolver, sig, condition, gate] = fields.as_slice() else {
+            unreachable!()
+        };
+        let binding = bindings
+            .get(*target)
+            .unwrap_or_else(|| panic!("missing binding: {target}"));
+        let sig: Signature = syn::parse_str(sig).unwrap();
+        let resolver: Expr = syn::parse_str(resolver).unwrap();
+        assert_eq!(
+            binding,
+            &Binding {
+                resolver: resolver.to_token_stream().to_string(),
+                signature: signature(&sig),
+                cfg: gate.to_string(),
+            },
+            "{target}"
+        );
+        let condition: Expr = syn::parse_str(condition).unwrap();
+        assert_eq!(
+            detours.remove(*target),
+            Some((condition.to_token_stream().to_string(), gate.to_string())),
+            "{target}"
+        );
+        expected += 1;
+    }
+    assert_eq!(expected, 45);
+    assert!(
+        detours.is_empty(),
+        "unreviewed detached targets: {detours:?}"
+    );
+}
