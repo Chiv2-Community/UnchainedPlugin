@@ -65,7 +65,6 @@ default = [
         "server_registration",
         "mod_management",
         "discord_integration",
-        # "request_dummy_hooks",
         "syslog-client",
         # "config_overrides_verbose_hooks",
         # "map_profiles",
@@ -74,7 +73,6 @@ serde-resolvers = []
 image-elf = []
 dev = []
 syslog-client = [  ]
-request_dummy_hooks = [] # Enable Get*Post dummy hooks
 kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
