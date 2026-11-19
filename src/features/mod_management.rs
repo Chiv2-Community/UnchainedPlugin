@@ -7,10 +7,10 @@ use crate::chivalry2::engine::FActorSpawnParameters;
 use crate::chivalry2::engine::FRotator;
 use crate::chivalry2::engine::TSoftClassPtr;
 use crate::chivalry2::engine::UAssetRegistryHelpers;
-use crate::chivalry2::engine::extensions::unchained::ArgonSDKModBase;
-use crate::chivalry2::engine::extensions::unchained::DA_ModMarker_C;
-use crate::chivalry2::engine::extensions::unchained::UModLoaderSettings_C;
-use crate::chivalry2::engine::extensions::unchained::V2MarkerOffsets;
+use crate::unchained::blueprints::mod_assets::ArgonSDKModBase;
+use crate::unchained::blueprints::mod_assets::DA_ModMarker_C;
+use crate::unchained::blueprints::mod_assets::UModLoaderSettings_C;
+use crate::unchained::blueprints::mod_assets::V2MarkerOffsets;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;

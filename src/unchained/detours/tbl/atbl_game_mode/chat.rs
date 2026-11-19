@@ -1,4 +1,4 @@
-//! Plugin replacements for `crate::chivalry2::tbl::atbl_game_mode::chat`.
+//! Plugin replacement for the native game-mode chat binding.
 
 use crate::chivalry2::engine::AActor;
 use crate::chivalry2::engine::FString;

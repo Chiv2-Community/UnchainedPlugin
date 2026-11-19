@@ -1,5 +1,5 @@
 //! ArgonSDK consumer: [UDamageSource](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageSource.h).
-//! UAssemblyBlueprint's declaration is not shipped; this prefix is reverse-engineered.
+//! Private Assembly blueprint integration; this prefix is reverse-engineered.
 
 unsafe impl crate::chivalry2::engine::UObjectType for UAssemblyBlueprint {
     const CLASS_NAME: &'static str = "AssemblyBlueprint";

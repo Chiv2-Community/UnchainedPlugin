@@ -20,8 +20,6 @@ define_pattern_resolver!(
     ["48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"]
 );
 
-mod startup_patch;
-
 /// Opaque native game instance. Only live engine-owned pointers are valid.
 #[repr(C)]
 pub struct UTBLGameInstance {

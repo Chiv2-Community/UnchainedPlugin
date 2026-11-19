@@ -1,5 +1,5 @@
 //! ArgonSDK main: [PlayFabCpp module](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Plugins/OnlineSubsystemPlayFab/Source/PlayFabCpp).
-//! The SDK omits PlayFabRequestHandler; its request ABI uses UE's [IHttpRequest](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Online/HTTP/Public/Interfaces/IHttpRequest.h).
+//! Private request ABI using UE's [IHttpRequest](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Online/HTTP/Public/Interfaces/IHttpRequest.h).
 
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedRefIHttpRequest;

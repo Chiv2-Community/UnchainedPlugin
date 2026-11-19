@@ -4,13 +4,15 @@
 Resolver definitions, native bindings, and patches live beside their native owners under
 `src/chivalry2/tbl` (ArgonSDK TBL files) or `src/chivalry2/engine` (UE 4.25-plus modules).
 Game model files each identify one corresponding ArgonSDK source file.
-Private/custom engine integrations live under `src/chivalry2/engine/extensions`.
+Private integration ABIs live under `src/unchained/integrations`; custom blueprint
+layouts and adapters live under `src/unchained/blueprints`. Private startup and
+integration patches live under `src/unchained/patches`.
 Engine paths mirror native module/header paths, omitting `Runtime` and header
-visibility directories. See the [complete source map](../../docs/engine-sources.md).
+visibility directories. See the [source layout rules](../../docs/engine-sources.md).
 Plugin replacements can live under `src/unchained/detours`, targeting a native
 method with `#[bind_func_detour(Type::method, condition)]`. See
 [native bindings and plugin detours](../../docs/native-bindings.md).
-`UDPEcho` uses this split; other detours still use the legacy colocated form.
+All production detours use this split.
 This directory contains only shared registration, platform filtering, and tests;
 do not add forwarding handlers here.
 
@@ -23,7 +25,6 @@ Native source order:
 
 New native methods use `#[bind_resolved_func]` under `#[runtime_bindings]`;
 plugin detours target those methods from outside the native model.
-Legacy binding/detour pairs remain under the same `#[runtime_bindings]` impl.
 Put additional generic bounds on the methods that need them, not separate impls.
 Keep cfg restrictions intact.
 
@@ -35,14 +36,12 @@ What remains here:
 - Reusable macros, typed signatures, and native hook tests:
   [`unchained-macros`](../../unchained-macros).
 
-- Methods use `#[runtime_bindings] impl Type` and
-  `#[bind_resolved_func_detour(Resolver)] fn name_detour(...)`.
-- The generated unsafe `name(...)` calls the trampoline.
+- Native methods use `#[runtime_bindings] impl Type` and
+  `#[bind_resolved_func(Resolver)] unsafe fn name(...) {}`.
+- Model calls invoke the original implementation, bypassing replacements.
 - OpenAPI request methods use `#[bind_resolved_request_function(GetPost_Name)]`
-  for direct calls or `#[bind_resolved_request_function_detour(GetPost_Name)]`
-  for hooks inside `#[runtime_bindings]`. Keys come from the request offset
-  registry, not Rust resolver types. Direct bindings require empty `unsafe fn`
-  bodies; detours retain the `_detour` suffix and generate unsafe original callers.
+  under `#[runtime_bindings]`; their detached replacements target the method
+  just like other bindings. Keys come from the request offset registry.
 - Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/engine/engine/game_engine.rs),

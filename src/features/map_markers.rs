@@ -10,8 +10,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use crate::chivalry2::engine::extensions::unchained::MapMarkerOffsets;
-use crate::chivalry2::engine::extensions::unchained::MapMarkerRow;
+use crate::unchained::blueprints::mod_assets::MapMarkerOffsets;
+use crate::unchained::blueprints::mod_assets::MapMarkerRow;
 
 /// Asset Registry class name of the V2 map marker.
 pub const MAP_MARKER_V2_CLASS: &str = "DA_MapMarker_V2_C";

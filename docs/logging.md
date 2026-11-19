@@ -299,12 +299,12 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::chivalry2::engine::engine::kismet::gameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
 | `UnchainedPlugin::chivalry2::engine::asset_registry` | Asset Registry helpers. |
 | `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::uobject_globals` | Native object lookups. |
-| `UnchainedPlugin::chivalry2::tbl::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
+| `UnchainedPlugin::unchained::detours::tbl::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::object` | Config loading, blocked events, and recursion limits. |
 | `UnchainedPlugin::chivalry2::engine::engine::game_framework::player_controller` | Native travel, chat capture, and invalid channels. |
 | `UnchainedPlugin::chivalry2::tbl::atbl_character` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::chivalry2::engine::extensions::open_api_client_api` | Backend request handling. |
+| `UnchainedPlugin::unchained::detours::integrations::open_api_client_api` | Backend request handling. |
 | `UnchainedPlugin::chivalry2::engine::engine::engine_utils` | Native console output. |
 | `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::stack` | Blueprint execution messages in `kismet_log` builds. |
 | `UnchainedPlugin::chivalry2::engine::engine::engine::game_engine` | Engine tick and game-thread jobs. |

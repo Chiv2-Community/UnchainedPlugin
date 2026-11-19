@@ -148,6 +148,60 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
+fn private_integrations_and_custom_blueprints_stay_outside_chivalry2() {
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            let file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            for item in file.items {
+                match item {
+                    Item::Struct(item) => assert!(
+                        ![
+                            "UAssemblyBlueprint",
+                            "DA_ModMarker_C",
+                            "DA_ModMarker_V2_C",
+                            "ArgonSDKModBase",
+                            "UModLoaderSettings_C",
+                            "FOnlineAuthPlayFab",
+                            "FOnlineSessionPlayFab",
+                            "OpenAPIClientAPI",
+                            "PlayFabRequestHandler",
+                        ]
+                        .contains(&item.ident.to_string().as_str()),
+                        "custom/private model belongs in unchained: {}",
+                        path.display()
+                    ),
+                    Item::Mod(item) => assert!(
+                        !["extensions", "startup_patch", "backend", "chat"]
+                            .contains(&item.ident.to_string().as_str()),
+                        "non-header module belongs outside chivalry2: {}",
+                        path.display()
+                    ),
+                    Item::Use(item) if !matches!(item.vis, syn::Visibility::Inherited) => assert!(
+                        !item
+                            .tree
+                            .to_token_stream()
+                            .to_string()
+                            .contains("unchained"),
+                        "native indexes must not re-export private integrations: {}",
+                        path.display()
+                    ),
+                    _ => {}
+                }
+            }
+        }
+    }
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+}
+
+#[test]
 fn migrated_detours_preserve_native_signatures_conditions_and_feature_gates() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
     let (mut bindings, mut detours) = (BTreeMap::new(), BTreeMap::new());

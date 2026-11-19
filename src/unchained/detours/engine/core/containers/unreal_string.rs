@@ -4,7 +4,7 @@ use crate::chivalry2::engine::core::containers::unreal_string::*;
 use crate::chivalry2::engine::TArray;
 use crate::chivalry2::engine::TCHAR;
 use crate::tools::hook_globals::cli_args;
-use crate::unchained::detours::engine::extensions::fonline_session_playfab::{
+use crate::unchained::detours::integrations::fonline_session_playfab::{
     IN_ON_GET_CURRENT_GAMES, IN_PING_SOME_SERVERS,
 };
 

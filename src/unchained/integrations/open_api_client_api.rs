@@ -1,5 +1,5 @@
 //! UE 4.25-plus: request handles use [TSharedPtr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
-//! OpenAPIClientAPI and its generated request declarations are not shipped in ArgonSDK.
+//! Private OpenAPIClientAPI request ABI; these declarations are not shipped in ArgonSDK.
 
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedPtrIHttpRequest;
@@ -163,7 +163,8 @@ mod tests {
         ) -> *mut TSharedPtrIHttpRequest;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
-        let _: RequestFunction = crate::unchained::detours::engine::extensions::open_api_client_api::get_post_get_motd_detour;
+        let _: RequestFunction =
+            crate::unchained::detours::integrations::open_api_client_api::get_post_get_motd_detour;
         let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
             .into_iter()
             .map(|registration| registration.name)
@@ -178,7 +179,7 @@ mod tests {
         let client = std::ptr::null_mut::<OpenAPIClientAPI>();
         let request = std::ptr::null_mut::<GenericRequest>();
         let result = unsafe {
-            crate::unchained::detours::engine::extensions::open_api_client_api::with_backend_request(
+            crate::unchained::detours::integrations::open_api_client_api::with_backend_request(
                 client,
                 request,
                 || panic!("must not call native code"),

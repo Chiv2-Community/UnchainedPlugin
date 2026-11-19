@@ -1,17 +1,21 @@
 //! ArgonSDK main: [ATBLGameMode](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode.h).
 
-use crate::chivalry2::tbl::EChatType;
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::FText;
 use crate::chivalry2::engine::TArray;
+use crate::chivalry2::engine::{AActor, AController, FUniqueNetIdRepl};
+use crate::chivalry2::tbl::EChatType;
 use std::ffi::c_void;
-use unchained_macros::bind_resolved_func;
 
-define_pattern_resolver!(ATBLGameMode__PreLogin, [
-    "4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"
-]);
+define_pattern_resolver!(
+    ATBLGameMode__PreLogin,
+    ["4C 89 4C 24 ?? 48 89 54 24 ?? 48 89 4C 24 ?? 55 53 57 41 55"]
+);
 
-define_pattern_resolver!(ATBLGameMode__Logout, ["48 8B C4 55 56 41 54 41 57 48 8B EC"]);
+define_pattern_resolver!(
+    ATBLGameMode__Logout,
+    ["48 8B C4 55 56 41 54 41 57 48 8B EC"]
+);
 
 // Retained unused resolver; no native signature is established.
 define_pattern_resolver!(ApproveLogin, [
@@ -20,11 +24,14 @@ define_pattern_resolver!(ApproveLogin, [
 ]);
 
 // void ATBLGameMode::BroadcastLocalizedChat(const FText&, EChatType)
-define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
+define_pattern_resolver!(
+    BroadcastLocalizedChat,
+    ["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]
+);
 
-mod backend;
-
-mod chat;
+define_pattern_resolver!(BroadcastChat, [
+    "48 85 D2 0F 84 3E 04 00 00 48 8B C4 4C 89 40 18 48 89 48 08 55 41 55 41 56 41 57 48 8D 68 A9 48"
+]);
 
 #[repr(C)]
 #[derive(Debug)]
@@ -331,10 +338,39 @@ pub struct ATBLGameMode {
     pub auto_balance_with_friends_blocked: bool,
 }
 
+#[unchained_macros::runtime_bindings]
 impl ATBLGameMode {
+    #[unchained_macros::bind_resolved_func(ATBLGameMode__PreLogin)]
+    pub(crate) unsafe fn pre_login(
+        self: *mut Self,
+        options: *const FString,
+        address: *const FString,
+        unique_id: *const FUniqueNetIdRepl,
+        error_message: *mut FString,
+    ) {
+    }
+
+    #[unchained_macros::bind_resolved_func(ATBLGameMode__Logout)]
+    pub(crate) unsafe fn logout(self: *mut Self, exiting_player: *mut AController) {}
+
+    #[unchained_macros::bind_resolved_func(BroadcastChat)]
+    pub(crate) unsafe fn broadcast_chat(
+        self: *mut Self,
+        sender: *mut AActor,
+        message: *const FString,
+        chat_type: u32,
+        override_color: u32,
+    ) {
+    }
+
     /// # Safety
     /// Self must be a live native game mode, text a live FText. Call on the
     /// engine thread; neither pointer is owned by this call.
     #[bind_resolved_func(self::BroadcastLocalizedChat)]
-    pub unsafe fn broadcast_localized_chat(self: *mut Self, text: *const FText, chat_type: EChatType) {}
+    pub unsafe fn broadcast_localized_chat(
+        self: *mut Self,
+        text: *const FText,
+        chat_type: EChatType,
+    ) {
+    }
 }

@@ -1,5 +1,5 @@
 //! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
-//! This is a submodule containing mod/marker/settings assets, not native TBL headers.
+//! Plugin-owned mod, marker, and settings assets; not native TBL headers.
 
 use crate::chivalry2::engine::FProperty;
 use crate::chivalry2::engine::FSoftObjectPath;

@@ -1,4 +1,4 @@
-//! Plugin replacements for `crate::chivalry2::tbl::atbl_game_mode::backend`.
+//! Plugin replacements for native game-mode login/logout bindings.
 
 use crate::chivalry2::engine::AController;
 use crate::chivalry2::engine::FString;

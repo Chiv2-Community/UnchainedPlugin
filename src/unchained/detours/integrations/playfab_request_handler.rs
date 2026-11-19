@@ -1,10 +1,10 @@
-//! Plugin replacements for `crate::chivalry2::engine::extensions::playfab_request_handler`.
+//! Plugin replacement for the private PlayFab request ABI.
 
-use crate::chivalry2::engine::extensions::playfab_request_handler::*;
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedRefIHttpRequest;
 use crate::features::server_browser::urls::playfab_matchmake_url;
 use crate::tools::hook_globals::cli_args;
+use crate::unchained::integrations::playfab_request_handler::*;
 
 #[unchained_macros::bind_func_detour(PlayFabRequestHandler::send_request)]
 pub(crate) unsafe fn send_request_detour(

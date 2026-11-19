@@ -1,8 +1,8 @@
-//! Plugin replacements for `crate::chivalry2::engine::extensions::open_api_client_api`.
+//! Plugin replacements for the private OpenAPI request ABI.
 
-use crate::chivalry2::engine::extensions::open_api_client_api::*;
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::TSharedPtrIHttpRequest;
+use crate::unchained::integrations::open_api_client_api::*;
 use std::ffi::c_void;
 
 /// # Safety
