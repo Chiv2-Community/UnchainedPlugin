@@ -12,8 +12,6 @@ pub mod frotator;
 
 pub mod fpak_platform_file;
 
-pub mod fudp_ping;
-
 pub mod fconsole_output_device;
 
 pub mod fname;

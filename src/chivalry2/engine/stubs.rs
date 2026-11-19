@@ -51,4 +51,3 @@ pub type TSubclassOfAInventoryItem = c_void; // TSubclassOf<AInventoryItem>
 pub type TSubclassOfATBLCharacter = c_void; // TSubclassOf<ATBLCharacter>
 pub type TSharedRefIHttpRequest = c_void; // TSharedRef<IHttpRequest, 0>
 pub type TSharedPtrIHttpRequest = c_void; // TSharedPtr<IHttpRequest, 0>
-pub type TFunctionFIcmpEchoResult = c_void; // TFunction<void(FIcmpEchoResult)>

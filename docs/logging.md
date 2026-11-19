@@ -311,6 +311,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::chivalry2::engine::engine::ugame_engine` | Engine tick and game-thread jobs. |
 | `UnchainedPlugin::chivalry2::tbl::utbl_game_instance` | Startup and map changes. |
 | `UnchainedPlugin::chivalry2::engine::engine::agame_mode` | Match state. |
+| `UnchainedPlugin::chivalry2::engine::runtime::online::icmp` | UDP echo and IPv6 endpoint normalization. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

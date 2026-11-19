@@ -40,6 +40,8 @@ pub mod sockets;
 
 pub mod online_subsystem_utils;
 
+pub mod runtime;
+
 pub mod kismet;
 
 mod malloc;
