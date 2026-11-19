@@ -5,7 +5,7 @@
 //! / description), plus a `DefaultLoadingScreen` for rows without their own.
 //! `Held` rows are kept in the marker but not shipped, so they are excluded here.
 //! [`scan_map_markers`] reads every marker in the Asset Registry into
-//! [`map_marker_cache`]; `chivalry2::tbl::umap_specific_loading_screen_config` looks maps up there.
+//! [`map_marker_cache`]; `unchained::detours::tbl_loading_screen::map_specific_loading_screen_config` looks maps up there.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};

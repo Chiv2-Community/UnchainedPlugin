@@ -2,6 +2,7 @@
 use quote::ToTokens;
 use std::{collections::BTreeMap, path::Path};
 use syn::{punctuated::Punctuated, Attribute, Expr, ImplItem, Item, Signature, Token};
+use syn::visit_mut::VisitMut;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Binding {
@@ -184,7 +185,21 @@ fn engine_bindings_preserve_native_source_categories() {
 }
 
 #[test]
-fn custom_blueprints_stay_outside_chivalry2() {
+fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
+    struct NoPluginPolicy<'a>(&'a Path);
+    impl VisitMut for NoPluginPolicy<'_> {
+        fn visit_item_macro_mut(&mut self, item: &mut syn::ItemMacro) {
+            assert!(
+                !item.mac.path.segments.last().is_some_and(|segment|
+                    ["CREATE_PATCH", "CREATE_HOOK"].contains(&segment.ident.to_string().as_str())
+                ),
+                "plugin patch/hook policy belongs outside chivalry2: {}",
+                self.0.display()
+            );
+            syn::visit_mut::visit_item_macro_mut(self, item);
+        }
+    }
+
     fn check(directory: &Path) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
@@ -195,7 +210,8 @@ fn custom_blueprints_stay_outside_chivalry2() {
             if path.extension().is_none_or(|extension| extension != "rs") {
                 continue;
             }
-            let file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let mut file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            NoPluginPolicy(&path).visit_file_mut(&mut file);
             for item in file.items {
                 match item {
                     Item::Struct(item) => assert!(
@@ -230,6 +246,45 @@ fn custom_blueprints_stay_outside_chivalry2() {
         }
     }
     check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+}
+
+#[test]
+fn tbl_declarations_follow_original_native_header_owners() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2");
+    for (path, names) in [
+        ("tbl/player_types.rs", &["EChatType", "EFaction"][..]),
+        ("tbl/tbl_types.rs", &["FDamageTakenEvent", "UGameplay"][..]),
+        (
+            "tbl/tbl_player_controller.rs",
+            &["ATBLPlayerController", "FOwnershipResponse"][..],
+        ),
+        ("tbl/abilities/damage_source.rs", &["UDamageSource"][..]),
+        ("tbl/game/tbl_game_state.rs", &["ATBLGameState"][..]),
+        ("tbl/online/tbl_online_stats.rs", &["FTBLOnlineStats"][..]),
+        ("tbl/tbl_utility_library.rs", &["TBLUtility"][..]),
+        (
+            "tbl/ui/user_feedback_and_bug_reports_library.rs",
+            &["UUserFeedbackAndBugReportsLibrary"][..],
+        ),
+        (
+            "tbl_loading_screen/map_specific_loading_screen_config.rs",
+            &["UMapSpecificLoadingScreenConfig", "FMapSpecificLoadingScreenConfigData"][..],
+        ),
+    ] {
+        let source = std::fs::read_to_string(root.join(path)).unwrap();
+        let file = syn::parse_file(&source).unwrap();
+        for name in names {
+            assert!(file.items.iter().any(|item| match item {
+                Item::Struct(item) => item.ident == *name,
+                Item::Enum(item) => item.ident == *name,
+                _ => false,
+            }), "{name} belongs in {path}");
+        }
+    }
+    // Source-owner directories are legitimate native modules, not plugin policies.
+    for path in ["tbl/online/mod.rs", "tbl/ui/mod.rs"] {
+        assert!(root.join(path).is_file());
+    }
 }
 
 #[test]

@@ -1,9 +1,9 @@
-pub mod atbl_character;
-pub mod atbl_game_mode;
-pub mod atbl_player_controller;
-pub mod ftbl_online_stats;
-pub mod umap_specific_loading_screen_config;
-pub mod utbl_engine;
-pub mod utbl_game_instance;
-pub mod utbl_system_library;
+pub mod online;
+pub mod tbl_character;
+pub mod tbl_game_mode;
+pub mod tbl_player_controller;
+pub mod tbl_engine;
+pub mod tbl_game_instance;
 pub mod tbl_types;
+pub mod tbl_utility_library;
+pub mod ui;

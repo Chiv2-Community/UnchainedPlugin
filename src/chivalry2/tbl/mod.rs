@@ -1,61 +1,36 @@
-//! ArgonSDK main: [TBL native headers](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Source/TBL/Public).
+//! Native sources: TBL/Source/TBL; original header owners recovered from the shipping PDB.
 
-pub use atbl_game_mode::ATBLGameMode;
-pub use atbl_character::*;
-pub use atbl_character_base::*;
-pub use atbl_game_state::*;
-pub use atbl_player_controller::*;
-pub use atbl_player_state::*;
-pub use udamage_source::*;
-pub use echat_type::*;
-pub use efaction::*;
+pub use abilities::damage_source::*;
 pub use ekill_reason::*;
-pub use fdamage_taken_event::*;
 pub use fdeath_damage_taken_event::*;
-pub use fownership_response::*;
-pub use fmap_specific_loading_screen_config_data::*;
-pub use utbl_game_instance::UTBLGameInstance;
-pub use utbl_system_library::UTBLSystemLibrary;
+pub use game::tbl_game_state::*;
+pub use player_types::*;
+pub use tbl_character::*;
+pub use tbl_character_base::*;
+pub use tbl_game_instance::UTBLGameInstance;
+pub use tbl_game_mode::ATBLGameMode;
+pub use tbl_player_controller::*;
+pub use tbl_player_state::*;
+pub use tbl_system_library::UTBLSystemLibrary;
+pub use tbl_types::FDamageTakenEvent;
 
-pub mod atbl_character;
-pub mod tbl_types;
+pub mod abilities;
 #[cfg(feature = "move-autonomous-desync")]
 pub mod animation;
-
-pub mod atbl_game_mode;
-
-pub mod atbl_player_controller;
-
-pub mod ftbl_online_stats;
-
-pub mod umap_specific_loading_screen_config;
-
-pub mod utbl_game_instance;
-
-pub mod utbl_engine;
-
-pub mod utbl_local_player;
-
-pub mod utbl_system_library;
-
-pub mod atbl_character_base;
-
-pub mod atbl_game_state;
-
-pub mod atbl_player_state;
-
-pub mod udamage_source;
-
-pub mod echat_type;
-
-pub mod efaction;
-
 pub mod ekill_reason;
-
-pub mod fdamage_taken_event;
-
 pub mod fdeath_damage_taken_event;
-
-pub mod fownership_response;
-
-pub mod fmap_specific_loading_screen_config_data;
+pub mod game;
+pub mod online;
+pub mod player_types;
+pub mod tbl_character;
+pub mod tbl_character_base;
+pub mod tbl_engine;
+pub mod tbl_game_instance;
+pub mod tbl_game_mode;
+pub mod tbl_local_player;
+pub mod tbl_player_controller;
+pub mod tbl_player_state;
+pub mod tbl_system_library;
+pub mod tbl_types;
+pub mod tbl_utility_library;
+pub mod ui;

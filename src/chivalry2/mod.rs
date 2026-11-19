@@ -4,3 +4,4 @@
 pub mod engine;
 pub mod plugins;
 pub mod tbl;
+pub mod tbl_loading_screen;

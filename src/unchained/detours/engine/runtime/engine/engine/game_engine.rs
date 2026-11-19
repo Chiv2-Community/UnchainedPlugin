@@ -45,10 +45,10 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
     }
     if let Ok(mut commands) = NATIVE_COMMAND_QUEUE.try_lock() {
         for command in commands.drain(..) {
-            let mut command = FString::from(command.as_str());
+            let command = FString::from(command.as_str());
             let _ = std::panic::catch_unwind(move || unsafe {
-                crate::chivalry2::tbl::utbl_system_library::UTBLSystemLibrary::execute_console_command(
-                    &mut command,
+                crate::chivalry2::tbl::tbl_utility_library::TBLUtility::execute_console_command(
+                    &command,
                 )
             });
         }

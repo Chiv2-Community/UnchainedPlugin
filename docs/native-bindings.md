@@ -80,14 +80,14 @@ the detour is stored, its address remains reserved even if activation fails.
 
 - Model: `src/chivalry2/engine/runtime/online/icmp/icmp.rs`
 - Plugin policy: `src/unchained/detours/networking/ipv6_support.rs`
-- Other native models: `src/chivalry2/{engine,tbl}/`
+- Other native models: `src/chivalry2/{engine,tbl,tbl_loading_screen}/`
 - Native game-plugin ABIs: `src/chivalry2/plugins/`
 - Custom blueprint layouts/adapters: `src/unchained/blueprints/`
-- Replacements: `src/unchained/detours/{engine,tbl,plugins}/`
+- Replacements: `src/unchained/detours/{engine,tbl,tbl_loading_screen,plugins}/`
 - Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override
   state live with the replacements, not on native types.
-- `UTBLSystemLibrary::execute_console_command` is a static binding namespace;
-  its native owner remains unverified. No receiver was added.
+- `TBLUtility` and `UGameplay` adapt native namespaces for typed bindings, not
+  UObject instances. Their native free functions have no receiver.
 - Typed binding state: `unchained-macros/src/binding.rs`
 - Declaration expansion: `unchained-macros/impl/src/function_detour.rs`
 - Real native-patching tests: `unchained-macros/tests/detached_hooks.rs`

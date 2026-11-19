@@ -41,7 +41,7 @@ UMapSpecificLoadingScreenConfig::get_data_for_map	GetDataForMap	unsafe fn get_da
 UTBLGameInstance::load_front_end_map	LoadFrontEndMap	unsafe fn load_front_end_map_detour (self : * mut Self , _url : * mut crate :: chivalry2 :: engine :: FString) -> bool	ACTIVE	
 UTBLGameInstance::on_pre_load_map	OnPreLoadMap	unsafe fn on_pre_load_map_detour (self : * mut Self , url : * mut crate :: chivalry2 :: engine :: FString)	ACTIVE	
 UTBLGameInstance::on_post_load_map	OnPostLoadMap	unsafe fn on_post_load_map_detour (self : * mut Self , world : * mut crate :: chivalry2 :: engine :: UWorld)	ACTIVE	
-UTBLSystemLibrary::get_game_info	GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: chivalry2 :: engine :: FString , world : * mut crate :: chivalry2 :: engine :: UWorld) -> * mut crate :: chivalry2 :: engine :: FString	ACTIVE	
-UTBLSystemLibrary::execute_console_command	ExecuteConsoleCommand	unsafe fn execute_console_command_detour (command : * mut crate :: chivalry2 :: engine :: FString) -> std :: ffi :: c_void	ACTIVE	
+UUserFeedbackAndBugReportsLibrary::get_game_info	GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: chivalry2 :: engine :: FString , world : * mut crate :: chivalry2 :: engine :: UWorld) -> * mut crate :: chivalry2 :: engine :: FString	ACTIVE	
+TBLUtility::execute_console_command	ExecuteConsoleCommand	unsafe fn execute_console_command_detour (command : * const FString)	ACTIVE	
 UTBLEngine::pre_exit	UTBLEnginePreExit	unsafe fn pre_exit_detour (self : * mut Self)	ACTIVE	# [cfg (feature = "server_registration")]
 FUDPPing::udp_echo	UDPEcho	unsafe fn udp_echo(endpoint: *mut FString, timeout: f32, callback: *mut TFunctionFIcmpEchoResult)	|| !cli_args().is_server()	

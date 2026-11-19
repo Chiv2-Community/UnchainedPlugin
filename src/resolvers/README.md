@@ -2,9 +2,10 @@
 # Chiv 2 Resolvers
 
 Resolver definitions and native bindings live beside their native owners under
-`src/chivalry2/tbl` (TBL files), `src/chivalry2/engine` (UE 4.25-plus modules),
+`src/chivalry2/tbl` and `tbl_loading_screen` (game modules), `src/chivalry2/engine` (UE 4.25-plus modules),
 or `src/chivalry2/plugins` (native game plugins, including private headers).
-Game model files each identify one corresponding ArgonSDK source file.
+Identify original native owner headers/sources, using shipping PDB evidence where
+recovered. Generated per-type SDK splits do not establish original header ownership.
 Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Startup and
 integration patches live under `src/unchained/patches`.
 Engine paths mirror native source-category/module/header paths, omitting header
@@ -42,11 +43,12 @@ What remains here:
 - OpenAPI request methods use `#[bind_resolved_request_function(GetPost_Name)]`
   under `#[runtime_bindings]`; their detached replacements target the method
   just like other bindings. Keys come from the request offset registry.
-- Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
+- Native resolvers stay with their owners; `CREATE_PATCH!` belongs in the mirrored
+  module under `src/unchained/patches`.
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/runtime/engine/engine/game_engine.rs),
   [`UObject::LoadConfig`](../chivalry2/engine/runtime/core_uobject/uobject/object.rs), and
-  [`UNetDriver` patches](../chivalry2/engine/runtime/engine/engine/net_driver.rs).
+  [`UNetDriver` patches](../unchained/patches/engine/runtime/engine/engine/net_driver.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.
