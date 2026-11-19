@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chivalry2 · file boundary graph</title>
+<style>
+  :root { color-scheme: dark; font: 14px system-ui, sans-serif; background: #101722; color: #e6edf6; }
+  body { margin: 0; }
+  header { padding: 20px 24px; border-bottom: 1px solid #344157; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { color: #aebed2; margin: 6px 0; line-height: 1.5; }
+  nav { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+  input, select, button { background: #1b283a; color: #e6edf6; border: 1px solid #4b5e7a; border-radius: 6px; padding: 8px 10px; }
+  input { width: min(430px, 80vw); }
+  button { cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
+  #diagram { overflow: auto; padding: 20px; }
+  #details { padding: 20px; border-left: 1px solid #344157; overflow-wrap: anywhere; }
+  #details ol { padding-left: 20px; }
+  #details li { margin: 8px 0; }
+  #details code { font-size: 12px; }
+  #details .entry { border-bottom: 1px solid #344157; padding: 10px 0; }
+  svg { display: block; min-width: 950px; width: 100%; }
+  .node { cursor: pointer; }
+  .node text { font: 11px ui-monospace, monospace; fill: #e6edf6; pointer-events: none; }
+  .node rect { stroke: #52667e; stroke-width: 1; }
+  .node:hover rect, .node:focus rect { stroke: white; stroke-width: 2; }
+  .edge { fill: none; stroke-width: 1.1; opacity: .17; cursor: pointer; }
+  .edge:hover { stroke-width: 3; opacity: 1; }
+  .focused .edge { opacity: .7; stroke-width: 1.5; }
+  .label { font: 600 14px system-ui; fill: #aebed2; }
+  .out { color: #68bbff; } .in { color: #ffb65d; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } #details { border-left: 0; border-top: 1px solid #344157; } }
+</style>
+<header>
+  <h1>chivalry2 · file boundary graph</h1>
+  <p>Each node is a repository file. Arrows go from the referencing file to the referenced file.
+    Only connections crossing <code>src/chivalry2/</code> are shown.</p>
+  <p><span class="out">Blue → outbound</span> · <span class="in">Orange → inbound</span> ·
+    Includes tests and all feature gates. Click a file to isolate its neighbors; click an arrow for source evidence.</p>
+  <nav>
+    <input id="search" type="search" placeholder="Search files, e.g. hook_globals or player_controller" aria-label="Search file paths">
+    <select id="direction" aria-label="Edge direction">
+      <option value="all">Both directions</option>
+      <option value="out">chivalry2 → outside</option>
+      <option value="in">outside → chivalry2</option>
+    </select>
+    <button id="reset">Show all files</button>
+    <span id="counts"></span>
+  </nav>
+  <p>Static source dependencies, not a runtime call graph. Glob imports resolve at their usage sites.
+    Receiver-inferred methods, macro expansions, and external dependency sources are not enumerated.</p>
+</header>
+<main>
+  <section id="diagram" aria-label="Dependency graph"></section>
+  <aside id="details"><h2>Explore connections</h2><p>Select a file or arrow. Each edge retains its source lines and reference paths.</p></aside>
+</main>
+<script>
+const graph = /* GRAPH_DATA */;
+const NS = "http://www.w3.org/2000/svg";
+const search = document.querySelector("#search");
+const direction = document.querySelector("#direction");
+const details = document.querySelector("#details");
+const inside = path => path.startsWith("src/chivalry2/");
+let selected = null;
+function element(tag, attrs = {}, text) {
+  const el = document.createElementNS(NS, tag);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+function paragraph(text, parent = details) {
+  const p = document.createElement("p"); p.textContent = text; parent.append(p);
+}
+function showEdge(edge) {
+  details.replaceChildren();
+  paragraph(edge.source + " → " + edge.target);
+  paragraph(edge.references.length + " source references (before cfg evaluation)");
+  const list = document.createElement("ol");
+  for (const ref of edge.references) {
+    const li = document.createElement("li");
+    const code = document.createElement("code");
+    code.textContent = `${edge.source}:${ref.line} · ${ref.kind}\n${ref.path}`;
+    li.append(code); list.append(li);
+  }
+  details.append(list);
+}
+function showFile(path) {
+  details.replaceChildren();
+  paragraph(path);
+  const edges = graph.edges.filter(e => e.source === path || e.target === path);
+  paragraph(`${edges.filter(e => e.source === path).length} outgoing · ${edges.filter(e => e.target === path).length} incoming file connections`);
+  for (const edge of edges) {
+    const div = document.createElement("div"); div.className = "entry";
+    const button = document.createElement("button");
+    button.textContent = (edge.source === path ? "→ " + edge.target : "← " + edge.source);
+    button.onclick = () => showEdge(edge);
+    div.append(button); details.append(div);
+  }
+}
+function render() {
+  const term = search.value.toLowerCase();
+  let edges = graph.edges.filter(e => direction.value === "all" ||
+    (direction.value === "out" ? inside(e.source) : !inside(e.source)));
+  if (selected) edges = edges.filter(e => e.source === selected || e.target === selected);
+  if (term) edges = edges.filter(e => e.source.toLowerCase().includes(term) || e.target.toLowerCase().includes(term));
+  const ids = new Set(edges.flatMap(e => [e.source, e.target]));
+  const left = [...ids].filter(inside).sort();
+  const right = [...ids].filter(p => !inside(p)).sort();
+  const height = Math.max(120, Math.max(left.length, right.length) * 30 + 65);
+  const svg = element("svg", {viewBox: `0 0 1300 ${height}`, role: "img", "aria-label": "File dependencies across the chivalry2 boundary"});
+  if (selected || term) svg.classList.add("focused");
+  const defs = element("defs");
+  for (const [id, color] of [["out", "#68bbff"], ["in", "#ffb65d"]]) {
+    const marker = element("marker", {id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse"});
+    marker.append(element("path", {d: "M 0 0 L 10 5 L 0 10 z", fill: color})); defs.append(marker);
+  }
+  svg.append(defs, element("text", {x: 10, y: 20, class: "label"}, "INSIDE · src/chivalry2/"),
+    element("text", {x: 850, y: 20, class: "label"}, "OUTSIDE · repository files"));
+  const positions = new Map();
+  for (const [files, x] of [[left, 0], [right, 850]]) {
+    files.forEach((id, i) => positions.set(id, {x, y: 45 + i * 30}));
+  }
+  for (const edge of edges) {
+    const a = positions.get(edge.source), b = positions.get(edge.target);
+    const out = inside(edge.source);
+    const x1 = a.x + (out ? 450 : 0), x2 = b.x + (out ? 0 : 450);
+    const y1 = a.y + 11, y2 = b.y + 11;
+    const bend = out ? 170 : -170;
+    const path = element("path", {class: "edge",
+      d: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`,
+      stroke: out ? "#68bbff" : "#ffb65d", "marker-end": `url(#${out ? "out" : "in"})`});
+    path.append(element("title", {}, `${edge.source} → ${edge.target}\n${edge.references.length} references`));
+    path.onclick = () => showEdge(edge); svg.append(path);
+  }
+  for (const [id, pos] of positions) {
+    const group = element("g", {class: "node", tabindex: 0, role: "button", "aria-label": id});
+    group.append(element("rect", {x: pos.x, y: pos.y, width: 450, height: 23, rx: 4,
+      fill: id === selected ? "#385879" : (inside(id) ? "#17344c" : "#473322")}));
+    const label = inside(id) ? id.replace("src/chivalry2/", "") : id;
+    group.append(element("text", {x: pos.x + 7, y: pos.y + 15,
+      ...(label.length > 64 ? {textLength: 435, lengthAdjust: "spacingAndGlyphs"} : {})}, label),
+      element("title", {}, id));
+    const focus = () => { selected = selected === id ? null : id; search.value = ""; render(); showFile(id); };
+    group.onclick = focus;
+    group.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focus(); } };
+    svg.append(group);
+  }
+  document.querySelector("#diagram").replaceChildren(svg);
+  document.querySelector("#counts").textContent = `${ids.size}/${graph.nodes.length} files · ${edges.length}/${graph.edges.length} edges`;
+}
+search.oninput = () => {selected = null; render();};
+direction.onchange = render;
+document.querySelector("#reset").onclick = () => {selected = null; search.value = ""; direction.value = "all"; render();};
+render();
+</script>
+</html>
