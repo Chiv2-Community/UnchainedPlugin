@@ -38,7 +38,7 @@ unsafe impl crate::chivalry2::engine::UObjectType for ATBLPlayerState {
 #[rust_ctables::cpp_struct]
 pub struct ATBLPlayerState {
     #[inherit]
-    pub base: crate::chivalry2::engine::engine::aplayer_state::APlayerState, // 0x0000 (Size: 0x358 approx)
+    pub base: crate::chivalry2::engine::engine::game_framework::player_state::APlayerState, // 0x0000 (Size: 0x358 approx)
     pub _align_to_stats: [u8; 0x8], // 0x0358 -> 0x0360 (alignment)
 
     pub online_stats: [u8; 0xD8],          // 0x0360 (FTBLOnlineStats)

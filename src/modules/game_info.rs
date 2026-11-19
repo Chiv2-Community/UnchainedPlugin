@@ -20,9 +20,9 @@ impl Command<GameInfoArgs> for GameInfoCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
-        use crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread;
+        use crate::chivalry2::engine::UGameEngine;
 
-        run_on_game_thread(move || {
+        UGameEngine::run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
                 let game_ptr = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
 

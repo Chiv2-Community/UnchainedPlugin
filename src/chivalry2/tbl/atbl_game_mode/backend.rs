@@ -7,10 +7,12 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::features::server_browser::http;
 use crate::chivalry2::engine::AController;
 use crate::chivalry2::tbl::ATBLGameMode;
-use crate::chivalry2::engine::{FUniqueNetIdRepl, PlayerFlags};
+use crate::chivalry2::engine::FUniqueNetIdRepl;
+use crate::chivalry2::engine::PlayerFlags;
 use crate::tools::hook_globals::globals;
 use crate::tools::hook_globals::cli_args;
-use crate::chivalry2::engine::{FString, FStringCopyError};
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::FStringCopyError;
 
 /* seems to be broken, or just incorrect.
        Looks right in the binary, but keeps matching the wrong func

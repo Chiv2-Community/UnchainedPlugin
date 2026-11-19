@@ -21,7 +21,7 @@ pub(crate) fn send_ingame_message_with_world(
     use crate::chivalry2::tbl::UTBLSystemLibrary;
 
     // Cancellation, world resolution and native work must share one game-thread job.
-    crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread(move || {
+    crate::chivalry2::engine::UGameEngine::run_on_game_thread(move || {
         if cancellation
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)

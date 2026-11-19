@@ -1,10 +1,15 @@
 //! ArgonSDK main: [ATBLPlayerController](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerController.h).
 
 use std::os::raw::c_void;
-use crate::chivalry2::engine::{
-    FPrimaryAssetId, TSubclassOfAInventoryItem, TSubclassOfATBLCharacter,
-    TSubclassOfULoadoutSelection, FText, FLinearColor, FName, FString, InvariantText,
-};
+use crate::chivalry2::engine::FPrimaryAssetId;
+use crate::chivalry2::engine::TSubclassOfAInventoryItem;
+use crate::chivalry2::engine::TSubclassOfATBLCharacter;
+use crate::chivalry2::engine::TSubclassOfULoadoutSelection;
+use crate::chivalry2::engine::FText;
+use crate::chivalry2::engine::FLinearColor;
+use crate::chivalry2::engine::FName;
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::InvariantText;
 use crate::chivalry2::tbl::{ATBLPlayerState, EChatType, UTBLGameInstance};
 use crate::chivalry2::tbl::fownership_response::FOwnershipResponse;
 use crate::events::broadcast_message::game_chat::broadcast_parts;
@@ -181,7 +186,11 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
 }
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {
-    use crate::chivalry2::engine::{UWorld, APlayerController, UObject, UObjectType, UPlayer};
+    use crate::chivalry2::engine::UWorld;
+    use crate::chivalry2::engine::APlayerController;
+    use crate::chivalry2::engine::UObject;
+    use crate::chivalry2::engine::UObjectType;
+    use crate::chivalry2::engine::UPlayer;
 
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
     if controller.is_null() {

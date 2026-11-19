@@ -68,6 +68,8 @@ mod tests {
             subsystem: &subsystem,
         };
         // The guard must return without calling the uninitialized trampoline.
-        unsafe { (&raw const auth).end_authentication_detour(std::ptr::null()); }
+        unsafe {
+            (&raw const auth).end_authentication_detour(std::ptr::null());
+        }
     }
 }

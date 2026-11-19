@@ -3,18 +3,30 @@ use std::sync::Mutex;
 use widestring::U16CString;
 use crate::features::Mod;
 use crate::chivalry2::tbl::{UTBLSystemLibrary, EChatType};
-use crate::chivalry2::engine::{FActorSpawnParameters, FRotator, TSoftClassPtr, get_assets_by_class};
-use crate::chivalry2::engine::extensions::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};
+use crate::chivalry2::engine::FActorSpawnParameters;
+use crate::chivalry2::engine::FRotator;
+use crate::chivalry2::engine::TSoftClassPtr;
+use crate::chivalry2::engine::UAssetRegistryHelpers;
+use crate::chivalry2::engine::extensions::unchained::ArgonSDKModBase;
+use crate::chivalry2::engine::extensions::unchained::DA_ModMarker_C;
+use crate::chivalry2::engine::extensions::unchained::UModLoaderSettings_C;
+use crate::chivalry2::engine::extensions::unchained::V2MarkerOffsets;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::chivalry2::engine::{AsUObject, FString, FVector, TArray, UClass, UObject, UGameplayStatics};
+use crate::chivalry2::engine::AsUObject;
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::FVector;
+use crate::chivalry2::engine::TArray;
+use crate::chivalry2::engine::UClass;
+use crate::chivalry2::engine::UObject;
+use crate::chivalry2::engine::UGameplayStatics;
 #[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
-use crate::chivalry2::engine::get_uobject_from_path;
+
 use std::collections::{HashMap, HashSet};
 use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 
@@ -41,7 +53,7 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //             let mut mods: Vec<&Mod> = mod_map.values().collect();
 //             mods.sort_by(|a, b| a.name.cmp(&b.name));
 //             unsafe {
-//                 // let obj = get_uobject_from_path(args.first().unwrap(), false);
+//                 // let obj = UObject::get_uobject_from_path(args.first().unwrap(), false);
 //                 let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
 //                 if id > mods.len() {
 //                     sinfo!("{:#?}", mods);
@@ -50,7 +62,7 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //                 }
 //                 let cur_mod = mods.get(id).expect("Not a valid mod");
 //                 sinfo!("Spawning {} {}", id, cur_mod.name);
-//                 let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
+//                 let obj = UObject::get_uobject_from_path(cur_mod.object_path.as_str(), false);
 //                 if !obj.is_null() {
 //                     let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
 //                     mm.spawn_mod_actor(obj as *mut UClass);
@@ -69,13 +81,13 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //     {},
 //     false,
 //     |args| {
-//         use crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread;
+//         use crate::chivalry2::engine::UGameEngine::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
 //             let (tx, rx) = mpsc::channel();
             
-//             run_on_game_thread(move || {
+//             UGameEngine::run_on_game_thread(move || {
 //                 if let Some(mm) = mm_lock().as_ref() {
 //                     sinfo!("Starting scan!");
 //                     mm.scan_asset_registry();
@@ -149,7 +161,7 @@ const MOD_MARKER_V2_CLASS: &str = "DA_ModMarker_V2_C";
 /// Object paths of every asset of `class_name` in the Asset Registry. A failed
 /// query means no marker of that class is installed, which is not an error.
 unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
-    let Ok(assets) = get_assets_by_class(class_name) else {
+    let Ok(assets) = UAssetRegistryHelpers::get_assets_by_class(class_name) else {
         return Vec::new();
     };
     assets
@@ -174,7 +186,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 
     let cdo = &*(cdo_new as *mut ArgonSDKModBase);
     let class_obj = &(*class_ptr).ustruct.ufield.uobject;
-    let asset_path = class_obj.uobject_base_utility.uobject_base.get_path_name(None);
+    let asset_path = class_obj.uobject_base_utility.get_path_name(None);
 
     let mod_entry = Mod {
         name: cdo.mod_name.to_string(),
@@ -247,7 +259,7 @@ impl ModManager {
     /// Get Mod base class for Actor lookup
     pub fn get_mod_base_class(&self) -> *mut UClass {
         let base_class_name = "/Game/Mods/ArgonSDK/Mods/ArgonSDKModBase.ArgonSDKModBase_C"; 
-        let base_class_ptr = unsafe { get_uobject_from_path(base_class_name, false) as *mut UClass };
+        let base_class_ptr = unsafe { UObject::get_uobject_from_path(base_class_name, false) as *mut UClass };
 
         match base_class_ptr.is_null() {
             true => std::ptr::null_mut(),
@@ -292,7 +304,7 @@ impl ModManager {
     unsafe fn scan_v1_markers(&self) -> HashMap<String, Mod> {
         let mut found: HashMap<String, Mod> = HashMap::new();
         for path in marker_object_paths(MOD_MARKER_V1_CLASS) {
-            let mobj = get_uobject_from_path(&path, true);
+            let mobj = UObject::get_uobject_from_path(&path, true);
             if mobj.is_null() { continue; }
 
             let mod_struct = mobj as *mut DA_ModMarker_C;
@@ -313,7 +325,7 @@ impl ModManager {
         if marker_paths.is_empty() {
             return found;
         }
-        let class_type = get_uobject_from_path("/Script/CoreUObject.Class", false) as *mut UClass;
+        let class_type = UObject::get_uobject_from_path("/Script/CoreUObject.Class", false) as *mut UClass;
         if class_type.is_null() {
             serror!("Class type not found; cannot resolve V2 marker mod classes");
             return found;
@@ -325,7 +337,7 @@ impl ModManager {
         // verbose line per marker.
         let mut marker_summary: Vec<String> = Vec::new();
         for path in &marker_paths {
-            let marker = get_uobject_from_path(path, true);
+            let marker = UObject::get_uobject_from_path(path, true);
             if marker.is_null() {
                 swarn!("Could not load V2 marker {}", path);
                 continue;
@@ -424,7 +436,7 @@ impl ModManager {
                 let class_ptr = (*raw_ptr).uobject_base_utility.uobject_base.class_private;
                 if !class_ptr.is_null() {
                     let asset_path = (*class_ptr).ustruct.ufield.uobject
-                        .uobject_base_utility.uobject_base
+                        .uobject_base_utility
                         .get_path_name(None);
                     
                     active_mods_local.insert(asset_path);
@@ -447,15 +459,16 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::chivalry2::engine::engine::ugame_engine::{in_game_thread_job, run_on_game_thread};
+        use crate::chivalry2::engine::UGameEngine;
+
 
         if mod_class.is_null() {
             serror!("mod class was null; skipping actor spawn");
             return;
         }
-        if !in_game_thread_job() {
+        if !UGameEngine::in_game_thread_job() {
             let class_addr = mod_class as usize;
-            run_on_game_thread(move || {
+            UGameEngine::run_on_game_thread(move || {
                 if let Some(mm) = globals().mod_manager.lock().unwrap().as_ref() {
                     unsafe { mm.spawn_mod_actor(class_addr as *mut UClass) };
                 }
@@ -556,7 +569,7 @@ impl ModManager {
         // Loading with a Class filter rejects ordinary assets as well as stale paths.
         let server_mods = cli_args().server_mods.as_deref();
         let class_type = if server_mods.is_some_and(|mods| !mods.is_empty()) {
-            let class_type = unsafe { get_uobject_from_path("/Script/CoreUObject.Class", false) };
+            let class_type = unsafe { UObject::get_uobject_from_path("/Script/CoreUObject.Class", false) };
             if class_type.is_null() {
                 serror!("Class type not found; cannot validate any mods");
             }

@@ -1,6 +1,7 @@
 //! ArgonSDK main: [UTBLGameInstance](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h).
 
-use crate::chivalry2::engine::{FLinearColor, FText};
+use crate::chivalry2::engine::FLinearColor;
+use crate::chivalry2::engine::FText;
 use unchained_macros::bind_resolved_func;
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::{
@@ -83,7 +84,7 @@ impl UTBLGameInstance {
             }
             _ => {}
         }
-        if let Some(url) = crate::chivalry2::engine::engine::uworld::get_current_map_name(world) {
+        if let Some(url) = crate::chivalry2::engine::UWorld::get_current_map_name(world) {
             let name = url.split('/').last().unwrap_or("UnknownMapName");
             EVENT_SYSTEM.game_event_publisher.publish(GameEvent::MapChangeEvent(MapChange {
                 new_map_url: url.to_string(), new_map_name: name.to_string(),

@@ -167,7 +167,7 @@ with these fields:
 Closures use their enclosing function. Missing function metadata displays `???`.
 Defaults use `{fn:<16}`: left-aligned with a minimum width of 16 characters.
 `{sm}` abbreviates parent segments by word initials:
-`UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
+`UnchainedPlugin::features::native_chat` becomes `UP::f::native_chat`.
 Both fields support log4rs nesting, escaping, alignment, and truncation.
 The extensions apply to `pattern` and `palette` encoders in console, file, and
 rolling-file appenders.
@@ -296,22 +296,21 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
 | `UnchainedPlugin::chivalry2::tbl::utbl_system_library` | Native administration commands and game-info calls. |
-| `UnchainedPlugin::chivalry2::engine::engine::ugameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
+| `UnchainedPlugin::chivalry2::engine::engine::kismet::gameplay_statics` | Save-game loading, saving, and dedicated-server compatibility. |
 | `UnchainedPlugin::chivalry2::engine::asset_registry` | Asset Registry helpers. |
-| `UnchainedPlugin::chivalry2::engine::core_uobject::uobject_globals` | Native object lookups. |
+| `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::uobject_globals` | Native object lookups. |
 | `UnchainedPlugin::chivalry2::tbl::atbl_game_mode::backend` | Ban checks, player connections, and departures. |
-| `UnchainedPlugin::chivalry2::engine::object::config::overrides` | Profile selection in verbose builds. |
-| `UnchainedPlugin::chivalry2::engine::object::process_event` | Blocked events and recursion limits. |
-| `UnchainedPlugin::chivalry2::engine::engine::aplayer_controller::travel` | Native travel. |
+| `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
+| `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::object` | Config loading, blocked events, and recursion limits. |
+| `UnchainedPlugin::chivalry2::engine::engine::game_framework::player_controller` | Native travel, chat capture, and invalid channels. |
 | `UnchainedPlugin::chivalry2::tbl::atbl_character` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::chivalry2::engine::extensions::open_api_client_api` | Backend request handling. |
-| `UnchainedPlugin::chivalry2::engine::core::fconsole_output_device` | Native console output. |
-| `UnchainedPlugin::chivalry2::engine::engine::aplayer_controller::chat` | Native chat capture and invalid channels. |
-| `UnchainedPlugin::chivalry2::engine::kismet::log` | Blueprint execution messages in `kismet_log` builds. |
-| `UnchainedPlugin::chivalry2::engine::engine::ugame_engine` | Engine tick and game-thread jobs. |
+| `UnchainedPlugin::chivalry2::engine::engine::engine_utils` | Native console output. |
+| `UnchainedPlugin::chivalry2::engine::core_uobject::uobject::stack` | Blueprint execution messages in `kismet_log` builds. |
+| `UnchainedPlugin::chivalry2::engine::engine::engine::game_engine` | Engine tick and game-thread jobs. |
 | `UnchainedPlugin::chivalry2::tbl::utbl_game_instance` | Startup and map changes. |
-| `UnchainedPlugin::chivalry2::engine::engine::agame_mode` | Match state. |
-| `UnchainedPlugin::chivalry2::engine::runtime::online::icmp` | UDP echo and IPv6 endpoint normalization. |
+| `UnchainedPlugin::chivalry2::engine::engine::game_framework::game_mode` | Match state. |
+| `UnchainedPlugin::chivalry2::engine::online::icmp` | UDP echo and IPv6 endpoint normalization. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

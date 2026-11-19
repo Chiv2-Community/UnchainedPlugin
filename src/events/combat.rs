@@ -1,6 +1,8 @@
 //! Combat event snapshots. Resolve native objects on the game thread.
 
-use crate::chivalry2::engine::{ACharacter, AController, APlayerState};
+use crate::chivalry2::engine::ACharacter;
+use crate::chivalry2::engine::AController;
+use crate::chivalry2::engine::APlayerState;
 use crate::chivalry2::tbl::{ATBLCharacter, FDamageTakenEvent, FDeathDamageTakenEvent};
 use crate::chivalry2::engine::UObject;
 use std::fmt;

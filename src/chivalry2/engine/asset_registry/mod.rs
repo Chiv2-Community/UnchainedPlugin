@@ -1,17 +1,13 @@
-//! UE 4.25-plus: [AssetRegistry](https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/AssetRegistry).
+//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/AssetRegistry>.
 
-pub use helpers::*;
-pub use fasset_data::FAssetData;
-pub use iasset_registry::IAssetRegistry;
-pub use asset_registry_script_interface::AssetRegistryScriptInterface;
-pub use uasset_registry_helpers::UAssetRegistryHelpers;
+pub mod asset_data;
+pub mod asset_registry;
+pub mod asset_registry_helpers;
+pub mod asset_registry_state;
+pub mod i_asset_registry;
 
-pub mod fasset_data;
-
-mod helpers;
-
-pub mod iasset_registry;
-
-pub mod asset_registry_script_interface;
-
-pub mod uasset_registry_helpers;
+pub use self::asset_data::*;
+pub use self::asset_registry::*;
+pub use self::asset_registry_helpers::*;
+pub use self::asset_registry_state::*;
+pub use self::i_asset_registry::*;

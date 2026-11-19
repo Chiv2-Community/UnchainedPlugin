@@ -1,14 +1,23 @@
 //! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
 //! This is a submodule containing mod/marker/settings assets, not native TBL headers.
 
+use crate::chivalry2::engine::FProperty;
+use crate::chivalry2::engine::FSoftObjectPath;
+use crate::chivalry2::engine::FSoftObjectPtr;
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::TArray;
+use crate::chivalry2::engine::TMap;
+use crate::chivalry2::engine::TSet;
+use crate::chivalry2::engine::TSoftClassPtr;
+use crate::chivalry2::engine::UClass;
+use crate::chivalry2::engine::UObject;
+use crate::chivalry2::engine::UStruct;
 use std::os::raw::c_void;
-
-use crate::chivalry2::engine::{FSoftObjectPath, FSoftObjectPtr, TSoftClassPtr, FField, FProperty, FString, TArray, TMap, TSet, UClass, UObject, UStruct};
 
 #[repr(C)]
 pub struct DA_ModMarker_C {
-    _private: [u8; 0x30], 
-    pub mod_actors: TMap<*mut UClass, FString>,    // Offset 0x0030
+    _private: [u8; 0x30],
+    pub mod_actors: TMap<*mut UClass, FString>, // Offset 0x0030
     pub custom_objects: TMap<*mut UObject, FString>, // Offset 0x0080
 }
 
@@ -30,6 +39,7 @@ pub struct DA_ModMarker_V2_C {
     pub own_pak: bool,                            // 0x0140
     pub apply_version_to_bundled: bool,           // 0x0141
 }
+
 const _: () = {
     use std::mem::offset_of;
     assert!(offset_of!(DA_ModMarker_V2_C, mod_id) == 0x30);
@@ -56,62 +66,6 @@ struct V2Field {
     dump_offset: usize,
 }
 
-/// Picks the offset to use for one field. `found` is the by-name lookup result
-/// (`None` if the property is missing). Returns `Err` when the field cannot be
-/// read safely, and a note to log when the result deserves attention.
-fn pick_v2_offset(
-    field: &V2Field,
-    found: Option<&crate::chivalry2::engine::FoundProperty>,
-    properties_size: usize,
-    dump_size: usize,
-) -> Result<(usize, Option<String>), String> {
-    match found {
-        Some(property) if property.type_name != field.type_name => Err(format!(
-            "{} is a {}, expected {}",
-            field.name, property.type_name, field.type_name
-        )),
-        Some(property) if property.offset != field.dump_offset => Ok((
-            property.offset,
-            Some(format!(
-                "{} is at {:#x}, the dump has {:#x}; using the live offset",
-                field.name, property.offset, field.dump_offset
-            )),
-        )),
-        Some(property) => Ok((property.offset, None)),
-        None if properties_size >= dump_size => Ok((
-            field.dump_offset,
-            Some(format!(
-                "{} not found by name; using dump offset {:#x}",
-                field.name, field.dump_offset
-            )),
-        )),
-        None => Err(format!(
-            "{} not found by name and the class is too small ({:#x}) for the dump layout",
-            field.name, properties_size
-        )),
-    }
-}
-
-/// Resolves one marker field on the live class: by property name, else the
-/// dump offset (see [`pick_v2_offset`]). Notes are logged as warnings.
-///
-/// # Safety
-/// `class` must be a live `UClass`.
-unsafe fn resolve_marker_field(
-    class: *const UClass,
-    marker_name: &str,
-    dump_size: usize,
-    field: V2Field,
-) -> Result<usize, String> {
-    let properties_size = (*class).ustruct.properties_size.max(0) as usize;
-    let found = crate::chivalry2::engine::find_property(class, field.name);
-    let (offset, note) = pick_v2_offset(&field, found.as_ref(), properties_size, dump_size)?;
-    if let Some(note) = note {
-        crate::swarn!("{}: {}", marker_name, note);
-    }
-    Ok(offset)
-}
-
 /// Offsets of the `DA_ModMarker_V2_C` fields the loader reads, resolved from
 /// the live class by property name with the dump layout as fallback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +78,63 @@ pub struct V2MarkerOffsets {
 }
 
 impl V2MarkerOffsets {
+    /// Picks the offset to use for one field. `found` is the by-name lookup result
+    /// (`None` if the property is missing). Returns `Err` when the field cannot be
+    /// read safely, and a note to log when the result deserves attention.
+    fn pick_v2_offset(
+        field: &V2Field,
+        found: Option<&crate::chivalry2::engine::FoundProperty>,
+        properties_size: usize,
+        dump_size: usize,
+    ) -> Result<(usize, Option<String>), String> {
+        match found {
+            Some(property) if property.type_name != field.type_name => Err(format!(
+                "{} is a {}, expected {}",
+                field.name, property.type_name, field.type_name
+            )),
+            Some(property) if property.offset != field.dump_offset => Ok((
+                property.offset,
+                Some(format!(
+                    "{} is at {:#x}, the dump has {:#x}; using the live offset",
+                    field.name, property.offset, field.dump_offset
+                )),
+            )),
+            Some(property) => Ok((property.offset, None)),
+            None if properties_size >= dump_size => Ok((
+                field.dump_offset,
+                Some(format!(
+                    "{} not found by name; using dump offset {:#x}",
+                    field.name, field.dump_offset
+                )),
+            )),
+            None => Err(format!(
+                "{} not found by name and the class is too small ({:#x}) for the dump layout",
+                field.name, properties_size
+            )),
+        }
+    }
+
+    /// Resolves one marker field on the live class: by property name, else the
+    /// dump offset (see [`V2MarkerOffsets::pick_v2_offset`]). Notes are logged as warnings.
+    ///
+    /// # Safety
+    /// `class` must be a live `UClass`.
+    unsafe fn resolve_marker_field(
+        class: *const UClass,
+        marker_name: &str,
+        dump_size: usize,
+        field: V2Field,
+    ) -> Result<usize, String> {
+        let properties_size = (*class).ustruct.properties_size.max(0) as usize;
+        let found = crate::chivalry2::engine::UClass::find_property(class, field.name);
+        let (offset, note) =
+            V2MarkerOffsets::pick_v2_offset(&field, found.as_ref(), properties_size, dump_size)?;
+        if let Some(note) = note {
+            crate::swarn!("{}: {}", marker_name, note);
+        }
+        Ok(offset)
+    }
+
     /// Resolves the offsets from a marker's class. `Err` means the class does
     /// not look like a V2 marker the loader can read.
     ///
@@ -135,14 +146,43 @@ impl V2MarkerOffsets {
             return Err("marker has no class".into());
         }
         let resolve_field = |name, type_name, dump_offset| {
-            resolve_marker_field(class, "DA_ModMarker_V2", V2_MARKER_DUMP_SIZE, V2Field { name, type_name, dump_offset })
+            V2MarkerOffsets::resolve_marker_field(
+                class,
+                "DA_ModMarker_V2",
+                V2_MARKER_DUMP_SIZE,
+                V2Field {
+                    name,
+                    type_name,
+                    dump_offset,
+                },
+            )
         };
         Ok(Self {
-            mod_id: resolve_field("ModId", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_id))?,
-            mod_version: resolve_field("ModVersion", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_version))?,
-            format_version: resolve_field("FormatVersion", "IntProperty", offset_of!(DA_ModMarker_V2_C, format_version))?,
-            mod_actor_classes: resolve_field("ModActorClasses", "SetProperty", offset_of!(DA_ModMarker_V2_C, mod_actor_classes))?,
-            bundled_markers: resolve_field("BundledMarkers", "SetProperty", offset_of!(DA_ModMarker_V2_C, bundled_markers))?,
+            mod_id: resolve_field(
+                "ModId",
+                "StrProperty",
+                offset_of!(DA_ModMarker_V2_C, mod_id),
+            )?,
+            mod_version: resolve_field(
+                "ModVersion",
+                "StrProperty",
+                offset_of!(DA_ModMarker_V2_C, mod_version),
+            )?,
+            format_version: resolve_field(
+                "FormatVersion",
+                "IntProperty",
+                offset_of!(DA_ModMarker_V2_C, format_version),
+            )?,
+            mod_actor_classes: resolve_field(
+                "ModActorClasses",
+                "SetProperty",
+                offset_of!(DA_ModMarker_V2_C, mod_actor_classes),
+            )?,
+            bundled_markers: resolve_field(
+                "BundledMarkers",
+                "SetProperty",
+                offset_of!(DA_ModMarker_V2_C, bundled_markers),
+            )?,
         })
     }
 
@@ -229,62 +269,6 @@ pub struct MapMarkerRow {
     pub faction: i32,
 }
 
-/// Property field by name on `start` or its supers, as the raw `FField` pointer
-/// (unlike [`crate::chivalry2::engine::find_property`], which returns only offset + type name).
-///
-/// # Safety
-/// `start` must be null or a live `UStruct` (a `UClass` cast to `UStruct`).
-unsafe fn find_field(start: *const UStruct, name: &str) -> Option<*const FField> {
-    const MAX_FIELDS: usize = 4096;
-    let mut current = start;
-    let mut visited = 0usize;
-    while !current.is_null() {
-        let mut field = (*current).child_properties;
-        while !field.is_null() {
-            visited += 1;
-            if visited > MAX_FIELDS {
-                return None;
-            }
-            if (*field).name_private.to_string() == name {
-                return Some(field);
-            }
-            field = (*field).next;
-        }
-        current = (*current).super_struct;
-    }
-    None
-}
-
-/// Member byte offsets inside a `UserDefinedStruct`, keyed by authored field name
-/// (the token before the first `_` in each member's mangled FName, e.g.
-/// `MapName_11_<GUID>` -> `MapName`).
-///
-/// # Safety
-/// `strukt` must be null or a live `UScriptStruct` (read as its `UStruct` prefix).
-unsafe fn struct_member_offsets(strukt: *const UStruct) -> std::collections::HashMap<String, usize> {
-    const MAX_FIELDS: usize = 256;
-    let mut out = std::collections::HashMap::new();
-    if strukt.is_null() {
-        return out;
-    }
-    let mut field = (*strukt).child_properties;
-    let mut visited = 0usize;
-    while !field.is_null() {
-        visited += 1;
-        if visited > MAX_FIELDS {
-            break;
-        }
-        let raw = (*field).name_private.to_string();
-        let token = raw.split('_').next().unwrap_or(&raw).to_string();
-        let offset = (*field.cast::<FProperty>()).offset_internal;
-        if offset >= 0 {
-            out.entry(token).or_insert(offset as usize);
-        }
-        field = (*field).next;
-    }
-    out
-}
-
 /// Offsets the loader reads from a `DA_MapMarker_V2` instance: the class-level
 /// `DefaultLoadingScreen` and `Maps` array, plus the element stride and each
 /// `F_ShippedMap` member offset, all resolved from the live class/struct by name.
@@ -313,13 +297,16 @@ impl MapMarkerOffsets {
             return Err("marker has no class".into());
         }
         // DefaultLoadingScreen (soft Texture2D), required.
-        let dls = crate::chivalry2::engine::find_property(class, "DefaultLoadingScreen")
+        let dls = crate::chivalry2::engine::UClass::find_property(class, "DefaultLoadingScreen")
             .ok_or_else(|| "DefaultLoadingScreen not found".to_string())?;
         if dls.type_name != "SoftObjectProperty" {
-            return Err(format!("DefaultLoadingScreen is a {}, expected SoftObjectProperty", dls.type_name));
+            return Err(format!(
+                "DefaultLoadingScreen is a {}, expected SoftObjectProperty",
+                dls.type_name
+            ));
         }
         // Maps (TArray<F_ShippedMap>), required.
-        let maps_field = find_field(class.cast::<UStruct>(), "Maps")
+        let maps_field = UStruct::find_field(class.cast::<UStruct>(), "Maps")
             .ok_or_else(|| "Maps array not found - not a V2 map marker".to_string())?;
         let maps_offset = {
             let offset = (*maps_field.cast::<FProperty>()).offset_internal;
@@ -329,7 +316,10 @@ impl MapMarkerOffsets {
             offset as usize
         };
         // FArrayProperty::Inner (a StructProperty) follows the full FProperty.
-        let inner = *(maps_field.cast::<u8>().add(FPROPERTY_SIZE).cast::<*const FProperty>());
+        let inner = *(maps_field
+            .cast::<u8>()
+            .add(FPROPERTY_SIZE)
+            .cast::<*const FProperty>());
         if inner.is_null() {
             return Err("Maps array has no inner property".into());
         }
@@ -338,8 +328,10 @@ impl MapMarkerOffsets {
             return Err("Maps element size is zero".into());
         }
         // FStructProperty::Struct follows the full FProperty.
-        let strukt = *((inner as *const u8).add(FPROPERTY_SIZE).cast::<*const UStruct>());
-        let members = struct_member_offsets(strukt);
+        let strukt = *((inner as *const u8)
+            .add(FPROPERTY_SIZE)
+            .cast::<*const UStruct>());
+        let members = UStruct::struct_member_offsets(strukt);
         let member = |name: &str| members.get(name).copied();
         let offsets = Self {
             default_loading_screen: dls.offset,
@@ -364,7 +356,10 @@ impl MapMarkerOffsets {
     /// # Safety
     /// `marker` must be a live instance of the class these offsets came from.
     pub unsafe fn default_loading_screen(&self, marker: *const UObject) -> String {
-        let texture = &*marker.cast::<u8>().add(self.default_loading_screen).cast::<FSoftObjectPtr>();
+        let texture = &*marker
+            .cast::<u8>()
+            .add(self.default_loading_screen)
+            .cast::<FSoftObjectPtr>();
         texture.path.to_path_string()
     }
 
@@ -384,7 +379,9 @@ impl MapMarkerOffsets {
             return Vec::new();
         }
         let string_at = |elem: *const u8, offset: Option<usize>| -> String {
-            offset.map_or_else(String::new, |o| (*elem.add(o).cast::<FString>()).to_string())
+            offset.map_or_else(String::new, |o| {
+                (*elem.add(o).cast::<FString>()).to_string()
+            })
         };
         let i32_at = |elem: *const u8, offset: Option<usize>| -> i32 {
             offset.map_or(0, |o| *elem.add(o).cast::<i32>())
@@ -403,7 +400,9 @@ impl MapMarkerOffsets {
                 map_path,
                 held: self.m_state.is_some_and(|o| *elem.add(o).cast::<u8>() != 0),
                 loading_screen: self.m_loading_screen.map_or_else(String::new, |o| {
-                    (*elem.add(o).cast::<FSoftObjectPtr>()).path.to_path_string()
+                    (*elem.add(o).cast::<FSoftObjectPtr>())
+                        .path
+                        .to_path_string()
                 }),
                 map_name: string_at(elem, self.m_map_name),
                 description: string_at(elem, self.m_description),
@@ -419,9 +418,9 @@ impl MapMarkerOffsets {
 pub struct ArgonSDKModBase {
     pub actor_padding: [u8; 0x258],
     // 0x0258
-    pub uber_graph_frame: u64, 
+    pub uber_graph_frame: u64,
     // 0x0260
-    pub default_scene_root: *mut c_void, 
+    pub default_scene_root: *mut c_void,
     // 0x0268
     pub mod_name: FString,
     // 0x0278
@@ -454,10 +453,10 @@ pub struct ArgonSDKModBase {
 #[repr(C)]
 #[derive(Debug)]
 pub struct UModLoaderSettings_C {
-    // 0x0000 (size 0x28) 
-    pub base: [u8; 0x28], 
+    // 0x0000 (size 0x28)
+    pub base: [u8; 0x28],
     // 0x0028 (size: 0x8)
-    pub uber_graph_frame: u64, 
+    pub uber_graph_frame: u64,
     // 0x0030 (size: 0x10)
     pub last_active_mods: TArray<FString>,
     // 0x0040 (size: 0x10)
@@ -483,22 +482,33 @@ mod tests {
     use super::*;
     use crate::chivalry2::engine::FoundProperty;
 
-    const MOD_ID: V2Field = V2Field { name: "ModId", type_name: "StrProperty", dump_offset: 0x30 };
+    const MOD_ID: V2Field = V2Field {
+        name: "ModId",
+        type_name: "StrProperty",
+        dump_offset: 0x30,
+    };
 
     fn found(offset: usize, type_name: &str) -> FoundProperty {
-        FoundProperty { offset, type_name: type_name.into() }
+        FoundProperty {
+            offset,
+            type_name: type_name.into(),
+        }
     }
 
     #[test]
     fn live_offset_matching_the_dump_is_silent() {
         let property = found(0x30, "StrProperty");
-        assert_eq!(pick_v2_offset(&MOD_ID, Some(&property), 0x142, 0x142), Ok((0x30, None)));
+        assert_eq!(
+            V2MarkerOffsets::pick_v2_offset(&MOD_ID, Some(&property), 0x142, 0x142),
+            Ok((0x30, None))
+        );
     }
 
     #[test]
     fn live_offset_wins_over_the_dump_with_a_note() {
         let property = found(0x48, "StrProperty");
-        let (offset, note) = pick_v2_offset(&MOD_ID, Some(&property), 0x160, 0x142).unwrap();
+        let (offset, note) =
+            V2MarkerOffsets::pick_v2_offset(&MOD_ID, Some(&property), 0x160, 0x142).unwrap();
         assert_eq!(offset, 0x48);
         assert!(note.is_some());
     }
@@ -506,14 +516,14 @@ mod tests {
     #[test]
     fn wrong_field_type_is_rejected() {
         let property = found(0x30, "ArrayProperty");
-        assert!(pick_v2_offset(&MOD_ID, Some(&property), 0x142, 0x142).is_err());
+        assert!(V2MarkerOffsets::pick_v2_offset(&MOD_ID, Some(&property), 0x142, 0x142).is_err());
     }
 
     #[test]
     fn missing_property_falls_back_only_when_the_class_is_large_enough() {
-        let (offset, note) = pick_v2_offset(&MOD_ID, None, 0x142, 0x142).unwrap();
+        let (offset, note) = V2MarkerOffsets::pick_v2_offset(&MOD_ID, None, 0x142, 0x142).unwrap();
         assert_eq!(offset, 0x30);
         assert!(note.is_some());
-        assert!(pick_v2_offset(&MOD_ID, None, 0x141, 0x142).is_err());
+        assert!(V2MarkerOffsets::pick_v2_offset(&MOD_ID, None, 0x141, 0x142).is_err());
     }
 }

@@ -1,5 +1,5 @@
-//! UE 4.25-plus: [Sockets](https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/Sockets).
+//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/Sockets/Public>.
 
-pub use finternet_addr::*;
+pub mod ip_address;
 
-pub mod finternet_addr;
+pub use self::ip_address::*;

@@ -582,11 +582,11 @@ pub fn world_init() {
         // idempotent regardless of which site fires first.
         // Jobs run in queue order, so this is queued before the mod scan below:
         // the scan must see the markers this registers.
-        crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread(|| {
+        crate::chivalry2::engine::UGameEngine::run_on_game_thread(|| {
             crate::features::mod_maps::auto_register_all_assets();
         });
 
-        crate::chivalry2::engine::engine::ugame_engine::run_on_game_thread(move || {
+        crate::chivalry2::engine::UGameEngine::run_on_game_thread(move || {
             sinfo!("Mod scans in progress");
             mm.scan_asset_registry();
             mm.update_save_game();

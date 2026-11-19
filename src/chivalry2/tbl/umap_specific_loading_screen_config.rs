@@ -10,7 +10,10 @@
 
 use crate::chivalry2::engine::FSoftObjectPath;
 use crate::chivalry2::tbl::fmap_specific_loading_screen_config_data::{FMapSpecificLoadingScreenConfigData, FTextRaw};
-use crate::chivalry2::engine::{EFindName, FName, FString, TArray};
+use crate::chivalry2::engine::EFindName;
+use crate::chivalry2::engine::FName;
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::TArray;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 define_pattern_resolver!(

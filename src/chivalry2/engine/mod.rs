@@ -1,94 +1,92 @@
-//! UE 4.25-plus: [FVector](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Vector.h),
-//! [FLinearColor](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Color.h).
+//! UE 4.25-plus native bindings. Runtime and Public/Private/Classes are implicit.
 
 #![allow(dead_code)]
-pub use sockets::*;
-pub use online_subsystem_utils::*;
-pub use array::*;
-pub use archive::*;
-pub use asset_registry::*;
-pub use core::*;
-pub use core_uobject::*;
-pub use engine::*;
-pub use extensions::assembly_blueprint::*;
-pub use malloc::*;
-pub use map::*;
-pub use memory::*;
-pub use object::*;
-pub use object_ptr::*;
-pub use stubs::*;
-use std::ffi::c_void;
-use crate::globals;
-
-mod array;
-
-mod archive;
 
 pub mod asset_registry;
-
 pub mod core;
-
 pub mod core_uobject;
-
 pub mod engine;
-
 pub mod extensions;
-
-mod object_hash;
-
+pub mod online;
+pub mod pak_file;
+pub mod plugins;
 pub mod sockets;
 
-pub mod online_subsystem_utils;
-
-pub mod runtime;
-
-pub mod kismet;
-
-mod malloc;
-
-mod map;
-
-mod memory;
-
-mod object;
-
-mod object_ptr;
-
-pub mod object_array;
-
-pub mod stubs;
-
-pub mod sync;
-
-pub type FnFFrameStep =
-    unsafe extern "system" fn(stack: &mut kismet::FFrame, *mut UObject, result: *mut c_void);
-
-pub type FnFFrameStepExplicitProperty = unsafe extern "system" fn(
-    stack: &mut kismet::FFrame,
-    result: *mut c_void,
-    property: *const FProperty,
-);
-
-pub type FnFNameToString = unsafe extern "system" fn(&FName, &mut FString);
-
-pub type FnFNameCtorWchar = unsafe extern "system" fn(&mut FName, *const TCHAR, EFindName);
-
-pub type FnUObjectBaseUtilityGetPathName =
-    unsafe extern "system" fn(&UObjectBase, Option<&UObject>, &mut FString);
-
-#[derive(Debug, Default)]
-#[repr(C)]
-pub struct FVector {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-#[derive(Debug, Default)]
-#[repr(C)]
-pub struct FLinearColor {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
+pub use self::asset_registry::asset_data::*;
+pub use self::asset_registry::asset_registry::*;
+pub use self::asset_registry::asset_registry_helpers::*;
+pub use self::asset_registry::asset_registry_state::*;
+pub use self::asset_registry::i_asset_registry::*;
+pub use self::core::containers::array::*;
+pub(crate) use self::core::containers::bit_array::*;
+pub(crate) use self::core::containers::container_allocation_policies::*;
+pub use self::core::containers::map::*;
+pub use self::core::containers::set::*;
+pub(crate) use self::core::containers::sparse_array::*;
+pub use self::core::containers::unreal_string::*;
+pub use self::core::hal::memory_base::*;
+pub use self::core::hal::memory_misc::*;
+pub use self::core::hal::platform::*;
+pub use self::core::hal::unreal_memory::*;
+pub use self::core::internationalization::text::*;
+pub use self::core::math::color::*;
+pub use self::core::math::rotator::*;
+pub use self::core::math::vector::*;
+pub use self::core::misc::guid::*;
+pub use self::core::misc::output_device::*;
+pub use self::core::serialization::archive::*;
+pub use self::core::serialization::large_memory_reader::*;
+pub use self::core::templates::shared_pointer::*;
+pub(crate) use self::core::templates::tuple::*;
+pub use self::core::templates::type_hash::*;
+pub use self::core::uobject::name_types::*;
+pub use self::core::windows::windows_critical_section::*;
+pub use self::core_uobject::templates::subclass_of::*;
+pub use self::core_uobject::uobject::class::*;
+pub use self::core_uobject::uobject::core_net::*;
+pub use self::core_uobject::uobject::core_online::*;
+pub use self::core_uobject::uobject::field::*;
+pub use self::core_uobject::uobject::object::*;
+pub use self::core_uobject::uobject::object_macros::*;
+pub use self::core_uobject::uobject::primary_asset_id::*;
+pub use self::core_uobject::uobject::script_interface::*;
+pub use self::core_uobject::uobject::soft_object_path::*;
+pub use self::core_uobject::uobject::soft_object_ptr::*;
+pub use self::core_uobject::uobject::stack::*;
+pub use self::core_uobject::uobject::unreal_type::*;
+pub use self::core_uobject::uobject::uobject_array::*;
+pub use self::core_uobject::uobject::uobject_base::*;
+pub use self::core_uobject::uobject::uobject_base_utility::*;
+pub use self::core_uobject::uobject::uobject_globals::*;
+pub use self::core_uobject::uobject::uobject_thread_context::*;
+pub use self::core_uobject::uobject::weak_object_ptr::*;
+pub use self::engine::ai::navigation::nav_agent_interface::*;
+pub use self::engine::engine::asset_manager::*;
+pub use self::engine::engine::blueprint::*;
+pub use self::engine::engine::blueprint_core::*;
+pub use self::engine::engine::engine_base_types::*;
+pub use self::engine::engine::game_engine::*;
+pub use self::engine::engine::local_player::*;
+pub use self::engine::engine::net_driver::*;
+pub use self::engine::engine::player::*;
+pub use self::engine::engine::world::*;
+pub use self::engine::engine_utils::*;
+pub use self::engine::game_framework::actor::*;
+pub use self::engine::game_framework::character::*;
+#[cfg(feature = "move-autonomous-desync")]
+pub use self::engine::game_framework::character_movement_component::*;
+pub use self::engine::game_framework::controller::*;
+pub use self::engine::game_framework::game_mode::*;
+pub use self::engine::game_framework::info::*;
+pub use self::engine::game_framework::online_repl_structs::*;
+pub use self::engine::game_framework::pawn::*;
+pub use self::engine::game_framework::player_controller::*;
+pub use self::engine::game_framework::player_state::*;
+pub use self::engine::game_framework::save_game::*;
+pub use self::engine::kismet::gameplay_statics::*;
+pub use self::extensions::assembly_blueprint::*;
+pub use self::online::icmp::*;
+pub use self::pak_file::i_platform_file_pak::*;
+pub use self::plugins::online::online_subsystem_utils::ip_connection::*;
+pub use self::plugins::online::online_subsystem_utils::ip_net_driver::*;
+pub use self::sockets::ip_address::*;

@@ -2,7 +2,9 @@
 //! The SDK omits the private FOnlineSessionPlayFab declaration.
 
 use crate::tools::hook_globals::cli_args;
-use crate::chivalry2::engine::GetCurrentGamesPostResponse;
+
+use crate::chivalry2::engine::extensions::open_api_client_api::GetCurrentGamesPostResponse;
+
 use std::cell::Cell;
 
 define_pattern_resolver!(

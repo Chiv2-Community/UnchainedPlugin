@@ -18,3 +18,5 @@ pub mod discord;
 pub use discord::DiscordConfig;
 pub use discord::initialize_discord_system;
 pub mod native_chat;
+
+pub mod config_overrides;

@@ -11,7 +11,7 @@ use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
 use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs};
-use crate::chivalry2::engine::object_array::FUObjectArray;
+use crate::chivalry2::engine::core_uobject::uobject::uobject_array::FUObjectArray;
 use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{
     UObjectBaseUtilityGetPathName,
@@ -153,7 +153,7 @@ pub fn globals_initialized() -> bool {
 
 impl Globals {
     pub fn gmalloc(&self) -> crate::chivalry2::engine::FMallocHandle {
-        crate::chivalry2::engine::gmalloc()
+        crate::chivalry2::engine::FMalloc::global()
     }
 
     resolution_fn!(fframe_step, fframe_step, crate::chivalry2::engine::FnFFrameStep);
@@ -226,7 +226,7 @@ pub fn init_globals() -> Result<(), String> {
     };
 
     let guobject_array: &'static FUObjectArray =
-        unsafe { &*crate::chivalry2::engine::object_array::native_guobject_array() };
+        unsafe { &*crate::chivalry2::engine::FUObjectArray::native_guobject_array() };
 
     let globals_instance = Globals {
         // Wrap the reference in our Sync-promising struct
@@ -260,7 +260,7 @@ mod tests {
         let _: fn(&Globals, *mut UWorld) = Globals::set_world;
         let _: fn(&Globals) -> &RwLock<SyncPtr<UWorld>> = |globals| &globals.world;
         let _: fn(*mut UWorld) -> Option<String> =
-            crate::chivalry2::engine::engine::uworld::get_current_map_name;
+            crate::chivalry2::engine::UWorld::get_current_map_name;
     }
 
     #[test]

@@ -1,25 +1,26 @@
 //! UE 4.25-plus: request handles use [TSharedPtr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
 //! OpenAPIClientAPI and its generated request declarations are not shipped in ArgonSDK.
 
-// Overrides for PlayFab (tbio) requests
-
-use crate::chivalry2::engine::{FString, TSharedPtrIHttpRequest};
-use std::ffi::c_void;
+use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::TSharedPtrIHttpRequest;
 use binary_bloodhound::{BinaryMatcher, ExactlyOne, HasAddress, Matcher};
 use patternsleuth::MemoryTrait;
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 
 // OpenAPIClientAPI::CreateHttpRequest(OpenAPIClientAPI *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 define_custom_resolver!(CreateHttpRequest, {
-    request_functions()?.map(|resolved| {
+    OpenAPIClientAPI::request_functions()?.map(|resolved| {
         let (address, offsets) = resolved.value.as_ref();
         sinfo!("Request string → root map:");
         for (name, offset) in offsets {
             sinfo!("  '{}' => 0x{:x}", name, offset);
         }
-        *STRING_TO_ROOT_FN.write().expect("STRING_TO_ROOT_FN poisoned") = offsets.clone();
+        *STRING_TO_ROOT_FN
+            .write()
+            .expect("STRING_TO_ROOT_FN poisoned") = offsets.clone();
         *address
     })
 });
@@ -50,7 +51,9 @@ impl OpenAPIClientAPI {
         delegate: *mut c_void,
     ) -> *mut TSharedPtrIHttpRequest {
         unsafe {
-            self.with_backend_request(request, || self.get_post_get_motd(result, request, delegate))
+            self.with_backend_request(request, || {
+                self.get_post_get_motd(result, request, delegate)
+            })
         }
     }
 
@@ -64,7 +67,9 @@ impl OpenAPIClientAPI {
         delegate: *mut c_void,
     ) -> *mut TSharedPtrIHttpRequest {
         unsafe {
-            self.with_backend_request(request, || self.get_post_get_current_games(result, request, delegate))
+            self.with_backend_request(request, || {
+                self.get_post_get_current_games(result, request, delegate)
+            })
         }
     }
 
@@ -124,6 +129,42 @@ impl OpenAPIClientAPI {
             Err(panic) => std::panic::resume_unwind(panic),
         }
     }
+
+    fn request_functions() -> patternsleuth::resolvers::Result<
+        Matcher<'static, (), RequestFunctions, ExactlyOne, impl Send + Sync>,
+    > {
+        Ok(BinaryMatcher::patterns([
+            "40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",
+        ])?
+        // Preserve the original resolver's first-match selection.
+        .first()
+        .flat_map(|request| {
+            let address = *request.value;
+            BinaryMatcher::address(address)
+                .callers()
+                .root_functions()
+                .with_context()
+                .map_filter(|(ctx, root)| {
+                    let call = root.parent().address();
+                    // Target-build LEA: its displacement starts 0x4c past the call.
+                    let displacement = call.checked_add(0x49 + 0x3)?;
+                    let memory = &ctx.image().memory;
+                    let url = memory.read_wstring(memory.rip4(displacement).ok()?).ok()?;
+                    let endpoint = url.rsplit('/').next()?;
+                    let offset = root.address().checked_sub(ctx.image().base_address)?;
+                    Some((format!("GetPost_{endpoint}"), offset))
+                })
+                // Keep each endpoint paired with its own caller's function entry.
+                .transform(move |functions| {
+                    let offsets = functions
+                        .iter()
+                        .map(|node| node.value.as_ref().clone())
+                        .collect();
+                    (address, offsets)
+                })
+        })
+        .ensure_one())
+    }
 }
 
 pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
@@ -138,43 +179,10 @@ inventory::submit! {
 
 type RequestFunctions = (u64, HashMap<String, u64>);
 
-fn request_functions() -> patternsleuth::resolvers::Result<
-    Matcher<'static, (), RequestFunctions, ExactlyOne, impl Send + Sync>,
-> {
-    Ok(BinaryMatcher::patterns([
-        "40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",
-    ])?
-    // Preserve the original resolver's first-match selection.
-    .first()
-    .flat_map(|request| {
-        let address = *request.value;
-        BinaryMatcher::address(address)
-            .callers()
-            .root_functions()
-            .with_context()
-            .map_filter(|(ctx, root)| {
-                let call = root.parent().address();
-                // Target-build LEA: its displacement starts 0x4c past the call.
-                let displacement = call.checked_add(0x49 + 0x3)?;
-                let memory = &ctx.image().memory;
-                let url = memory.read_wstring(memory.rip4(displacement).ok()?).ok()?;
-                let endpoint = url.rsplit('/').next()?;
-                let offset = root.address().checked_sub(ctx.image().base_address)?;
-                Some((format!("GetPost_{endpoint}"), offset))
-            })
-            // Keep each endpoint paired with its own caller's function entry.
-            .transform(move |functions| {
-                let offsets = functions.iter().map(|node| node.value.as_ref().clone()).collect();
-                (address, offsets)
-            })
-    })
-    .ensure_one())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use object::SectionKind;
+    use ::object::SectionKind;
     use patternsleuth::{
         image::{pe::PEImage, Image, ImageType},
         Memory, NamedMemorySection,
@@ -183,19 +191,23 @@ mod tests {
 
     const BASE: u64 = 0x1_4000_0000;
     const PROLOGUE: [u8; 24] = [
-        0x40, 0x53, 0x55, 0x56, 0x41, 0x56, 0x48, 0x83, 0xEC, 0x78, 0x48, 0x8B,
-        0x05, 0, 0, 0, 0, 0x48, 0x33, 0xC4, 0x48, 0x89, 0x44, 0x24,
+        0x40, 0x53, 0x55, 0x56, 0x41, 0x56, 0x48, 0x83, 0xEC, 0x78, 0x48, 0x8B, 0x05, 0, 0, 0, 0,
+        0x48, 0x33, 0xC4, 0x48, 0x89, 0x44, 0x24,
     ];
 
     #[test]
     fn only_functional_request_hooks_are_registered() {
         type RequestFunction = unsafe fn(
-            *mut OpenAPIClientAPI, *mut TSharedPtrIHttpRequest, *mut GenericRequest, *mut c_void,
+            *mut OpenAPIClientAPI,
+            *mut TSharedPtrIHttpRequest,
+            *mut GenericRequest,
+            *mut c_void,
         ) -> *mut TSharedPtrIHttpRequest;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd_detour;
-        let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+        let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
+            .into_iter()
             .map(|registration| registration.name)
             .filter(|name| name.starts_with("GetPost_"))
             .collect();
@@ -207,7 +219,8 @@ mod tests {
     fn invalid_request_pointers_do_not_call_native_code_or_prepare_overrides() {
         let client = std::ptr::null_mut::<OpenAPIClientAPI>();
         let request = std::ptr::null_mut::<GenericRequest>();
-        let result = unsafe { client.with_backend_request(request, || panic!("must not call native code")) };
+        let result =
+            unsafe { client.with_backend_request(request, || panic!("must not call native code")) };
         assert!(result.is_null());
     }
 
@@ -248,7 +261,8 @@ mod tests {
             let target = match url {
                 Some(url) => {
                     let target = 0x4000 + self.strings.len() as u32;
-                    self.strings.extend(url.encode_utf16().chain([0]).flat_map(u16::to_le_bytes));
+                    self.strings
+                        .extend(url.encode_utf16().chain([0]).flat_map(u16::to_le_bytes));
                     target
                 }
                 None => 0x9000, // Unmapped string address.
@@ -259,7 +273,9 @@ mod tests {
         }
 
         fn image(self, base: u64) -> Image<'static> {
-            let pdata: Vec<u8> = self.functions.into_iter()
+            let pdata: Vec<u8> = self
+                .functions
+                .into_iter()
                 .flat_map(|(start, end)| [start, end, 0x3000])
                 .flat_map(u32::to_le_bytes)
                 .collect();
@@ -267,10 +283,30 @@ mod tests {
             Image::from_memory(
                 base,
                 Memory::from_sections(vec![
-                    NamedMemorySection::new(".text".into(), base + 0x1000, SectionKind::Text, self.text),
-                    NamedMemorySection::new(".pdata".into(), base + 0x2000, SectionKind::ReadOnlyData, pdata),
-                    NamedMemorySection::new(".xdata".into(), base + 0x3000, SectionKind::ReadOnlyData, vec![1, 0, 0, 0]),
-                    NamedMemorySection::new(".rdata".into(), base + 0x4000, SectionKind::ReadOnlyData, self.strings),
+                    NamedMemorySection::new(
+                        ".text".into(),
+                        base + 0x1000,
+                        SectionKind::Text,
+                        self.text,
+                    ),
+                    NamedMemorySection::new(
+                        ".pdata".into(),
+                        base + 0x2000,
+                        SectionKind::ReadOnlyData,
+                        pdata,
+                    ),
+                    NamedMemorySection::new(
+                        ".xdata".into(),
+                        base + 0x3000,
+                        SectionKind::ReadOnlyData,
+                        vec![1, 0, 0, 0],
+                    ),
+                    NamedMemorySection::new(
+                        ".rdata".into(),
+                        base + 0x4000,
+                        SectionKind::ReadOnlyData,
+                        self.strings,
+                    ),
                 ]),
                 ImageType::PEImage(PEImage {
                     exception_directory_range: base + 0x2000..pdata_end,
@@ -281,9 +317,16 @@ mod tests {
     }
 
     fn resolve(image: &Image<'_>) -> patternsleuth::resolvers::Result<RequestFunctions> {
-        patternsleuth::resolvers::eval(image, |ctx| Box::pin(async {
-            Ok(request_functions()?.resolve(ctx).await?.value.as_ref().clone())
-        }))
+        patternsleuth::resolvers::eval(image, |ctx| {
+            Box::pin(async {
+                Ok(OpenAPIClientAPI::request_functions()?
+                    .resolve(ctx)
+                    .await?
+                    .value
+                    .as_ref()
+                    .clone())
+            })
+        })
     }
 
     #[test_case::test_case(BASE; "normal image base")]
@@ -291,13 +334,20 @@ mod tests {
     fn endpoints_keep_their_own_caller_function(base: u64) {
         let mut fixture = Fixture::new();
         fixture.caller(Some(0x1100), 0x1110, Some("https://tbio.invalid/GetMotd"));
-        fixture.caller(Some(0x1200), 0x1210, Some("https://tbio.invalid/GetCurrentGames"));
+        fixture.caller(
+            Some(0x1200),
+            0x1210,
+            Some("https://tbio.invalid/GetCurrentGames"),
+        );
         let (address, offsets) = resolve(&fixture.image(base)).unwrap();
         assert_eq!(address, base + 0x1000);
-        assert_eq!(offsets, HashMap::from([
-            ("GetPost_GetMotd".into(), 0x1100),
-            ("GetPost_GetCurrentGames".into(), 0x1200),
-        ]));
+        assert_eq!(
+            offsets,
+            HashMap::from([
+                ("GetPost_GetMotd".into(), 0x1100),
+                ("GetPost_GetCurrentGames".into(), 0x1200),
+            ])
+        );
     }
 
     #[test]
@@ -320,7 +370,10 @@ mod tests {
         fixture.caller(Some(0x1400), 0x1410, Some("/GetCurrentGames"));
         fixture.caller(Some(0x1700), 0x17F0, None); // Displacement outside mapped text.
         let (_, offsets) = resolve(&fixture.image(BASE)).unwrap();
-        assert_eq!(offsets, HashMap::from([("GetPost_GetCurrentGames".into(), 0x1400)]));
+        assert_eq!(
+            offsets,
+            HashMap::from([("GetPost_GetCurrentGames".into(), 0x1400)])
+        );
     }
 
     #[test]
@@ -350,21 +403,40 @@ mod tests {
         let mut fixture = Fixture::new();
         fixture.caller(Some(0x1100), 0x1110, Some("/GetMotd"));
         let image = fixture.image(BASE);
-        STRING_TO_ROOT_FN.write().unwrap().insert("GetPost_Stale".into(), 0xDEAD);
-        patternsleuth::resolvers::eval(&image, |ctx| Box::pin(async {
-            let first = ctx.resolve(CreateHttpRequest::resolver()).await.unwrap();
-            let cached = ctx.resolve(CreateHttpRequest::resolver()).await.unwrap();
-            assert!(std::sync::Arc::ptr_eq(&first, &cached));
-            assert_eq!(first.0, BASE + 0x1000);
-        }));
-        let registry = inventory::iter::<crate::resolvers::OffsetRegisty>.into_iter()
-            .find(|registry| registry.name == "CreateHttpRequest Get*Post hooks").unwrap();
-        assert_eq!((registry.map)(), HashMap::from([("GetPost_GetMotd".into(), 0x1100)]));
+        STRING_TO_ROOT_FN
+            .write()
+            .unwrap()
+            .insert("GetPost_Stale".into(), 0xDEAD);
+        patternsleuth::resolvers::eval(&image, |ctx| {
+            Box::pin(async {
+                let first = ctx.resolve(CreateHttpRequest::resolver()).await.unwrap();
+                let cached = ctx.resolve(CreateHttpRequest::resolver()).await.unwrap();
+                assert!(std::sync::Arc::ptr_eq(&first, &cached));
+                assert_eq!(first.0, BASE + 0x1000);
+            })
+        });
+        let registry = inventory::iter::<crate::resolvers::OffsetRegisty>
+            .into_iter()
+            .find(|registry| registry.name == "CreateHttpRequest Get*Post hooks")
+            .unwrap();
+        assert_eq!(
+            (registry.map)(),
+            HashMap::from([("GetPost_GetMotd".into(), 0x1100)])
+        );
 
         let mut missing = Fixture::new();
         missing.text.fill(0x90);
-        let error = missing.image(BASE).resolve(CreateHttpRequest::resolver()).unwrap_err();
+        let error = missing
+            .image(BASE)
+            .resolve(CreateHttpRequest::resolver())
+            .unwrap_err();
         assert!(error.to_string().contains("CreateHttpRequest"), "{error}");
-        assert_eq!((registry.map)(), HashMap::from([("GetPost_GetMotd".into(), 0x1100)]));
+        assert_eq!(
+            (registry.map)(),
+            HashMap::from([("GetPost_GetMotd".into(), 0x1100)])
+        );
     }
 }
+
+// OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse.
+pub type GetCurrentGamesPostResponse = c_void;
