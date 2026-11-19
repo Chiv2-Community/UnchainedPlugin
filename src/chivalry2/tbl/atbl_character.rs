@@ -7,6 +7,16 @@ use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;
 
+define_pattern_resolver!(
+    ATBLCharacter__OnKilled,
+    ["4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"]
+);
+
+define_pattern_resolver!(
+    ATBLCharacter__OnDamageTaken,
+    ["4C 8B DC 55 57 41 55 41 56 49 8D AB ?? ?? ?? ?? 48 81 EC 58 02 00 00"]
+);
+
 unsafe impl crate::chivalry2::engine::UObjectType for ATBLCharacter {
     const CLASS_NAME: &'static str = "TBLCharacter";
 }
@@ -237,21 +247,14 @@ pub struct ATBLCharacter {
     pub final_padding: [u8; 0x18],                         // 0x16F8
 } // Size: 0x1710
 
+#[unchained_macros::runtime_bindings]
 impl ATBLCharacter {
     /// # Safety
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
     pub unsafe fn last_player_state(&self) -> Option<&APlayerState> {
         APlayerState::from_field(self.last_player_state, "TBLCharacter.LastPlayerState")
     }
-}
 
-define_pattern_resolver!(
-    ATBLCharacter__OnKilled,
-    ["4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"]
-);
-
-#[unchained_macros::runtime_bindings]
-impl ATBLCharacter {
     #[bind_resolved_func_detour(ATBLCharacter__OnKilled)]
     pub(crate) unsafe fn on_killed_detour(
         self: *mut Self,
@@ -319,15 +322,7 @@ impl ATBLCharacter {
             self.on_killed(damage_event);
         }
     }
-}
 
-define_pattern_resolver!(
-    ATBLCharacter__OnDamageTaken,
-    ["4C 8B DC 55 57 41 55 41 56 49 8D AB ?? ?? ?? ?? 48 81 EC 58 02 00 00"]
-);
-
-#[unchained_macros::runtime_bindings]
-impl ATBLCharacter {
     #[bind_resolved_func_detour(ATBLCharacter__OnDamageTaken)]
     pub(crate) unsafe fn on_damage_taken_detour(
         self: *mut Self,

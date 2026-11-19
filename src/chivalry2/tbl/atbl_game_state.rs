@@ -9,20 +9,6 @@ unsafe impl crate::chivalry2::engine::UObjectType for ATBLGameState {
     const CLASS_NAME: &'static str = "TBLGameState";
 }
 
-impl ATBLGameState {
-    pub fn get_human_player_count(&self) -> usize {
-        let mut count = 0;
-        for player_ptr in self.player_array.as_slice() {
-            if let Some(player) = unsafe { player_ptr.as_ref() } {
-                if !player.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
-                    count += 1;
-                }
-            }
-        }
-        count
-    }
-}
-
 pub fn get_human_player_count() -> usize {
     let world_ptr = match crate::globals().world() {
         Some(ptr) => ptr,
@@ -188,4 +174,18 @@ pub struct ATBLGameState {
     pub current_players_in_parties_padding: [u8; 0x50], // 0x0940 (TMap)
     pub xp_reward_modifier: f32,              // 0x0990
     pub gold_reward_modifier: f32,            // 0x0994
+}
+
+impl ATBLGameState {
+    pub fn get_human_player_count(&self) -> usize {
+        let mut count = 0;
+        for player_ptr in self.player_array.as_slice() {
+            if let Some(player) = unsafe { player_ptr.as_ref() } {
+                if !player.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
 }

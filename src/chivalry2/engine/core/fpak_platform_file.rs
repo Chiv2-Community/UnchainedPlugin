@@ -17,24 +17,6 @@ use crate::chivalry2::engine::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
 
-/// Opaque engine-owned platform-file implementation; no Rust layout is assumed.
-#[repr(C)]
-pub struct FPakPlatformFile {
-    _opaque: [u8; 0],
-}
-
-#[cfg(feature = "loose_assets")]
-mod loose_assets;
-
-/// Paks the game has successfully mounted (recorded by the `Mount` detour on the
-/// game thread during engine init, before our startup discovery runs).
-pub static MOUNTED_PAKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
-
-/// Snapshot of the mounted pak filenames (absolute paths on Windows).
-pub fn mounted_pak_filenames() -> Vec<String> {
-    MOUNTED_PAKS.lock().unwrap().clone()
-}
-
 // Signature source: owner-provided pattern for `FPakPlatformFile::Mount`
 // on the new build (`FUN_142fc8d50`; confirmed = the call site's `bool Mount(const TCHAR*, uint32, const TCHAR*, bool)`).
 // The RIP-relative displacement in the `48 8B 05` security-cookie load
@@ -43,6 +25,12 @@ pub fn mounted_pak_filenames() -> Vec<String> {
 define_pattern_resolver!(PakPlatformFileMount, [
     "4C 8B DC 55 57 49 8D AB 78 FE FF FF 48 81 EC 78 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 30 01 00 00 0F B6 BD B0 01 00 00 33 C0"
 ]);
+
+/// Opaque engine-owned platform-file implementation; no Rust layout is assumed.
+#[repr(C)]
+pub struct FPakPlatformFile {
+    _opaque: [u8; 0],
+}
 
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
@@ -72,4 +60,16 @@ impl FPakPlatformFile {
         }
         ret
     }
+}
+
+#[cfg(feature = "loose_assets")]
+mod loose_assets;
+
+/// Paks the game has successfully mounted (recorded by the `Mount` detour on the
+/// game thread during engine init, before our startup discovery runs).
+pub static MOUNTED_PAKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Snapshot of the mounted pak filenames (absolute paths on Windows).
+pub fn mounted_pak_filenames() -> Vec<String> {
+    MOUNTED_PAKS.lock().unwrap().clone()
 }

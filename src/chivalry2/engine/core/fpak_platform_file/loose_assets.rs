@@ -11,9 +11,19 @@ define_pattern_resolver!(
     ["48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 30 33 FF"]
 );
 
-// FPakPlatformFile::FindFileInPakFiles(const TCHAR*, FPakFile**, FPakEntry*).
+define_pattern_resolver!(
+    FindFileInPakFiles_2,
+    ["48 8B C4 4C 89 48 ?? 4C 89 40 ?? 48 89 48 ?? 55 53 48 8B EC"]
+);
+
+define_pattern_resolver!(
+    IsNonPakFilenameAllowed,
+    ["48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 30 48 8B F1 45 33 C0"]
+);
+
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
+    // FPakPlatformFile::FindFileInPakFiles(const TCHAR*, FPakFile**, FPakEntry*).
     #[bind_resolved_func_detour(FindFileInPakFiles_1)]
     unsafe fn find_file_in_pak_files_detour(
         self: *mut Self,
@@ -34,16 +44,8 @@ impl FPakPlatformFile {
         }
         unsafe { self.find_file_in_pak_files(Filename, OutPakFile, OutEntry) }
     }
-}
 
-define_pattern_resolver!(
-    FindFileInPakFiles_2,
-    ["48 8B C4 4C 89 48 ?? 4C 89 40 ?? 48 89 48 ?? 55 53 48 8B EC"]
-);
-
-// Static FPakPlatformFile::FindFileInPakFiles(TArray<FPakListEntry>&, ...).
-#[unchained_macros::runtime_bindings]
-impl FPakPlatformFile {
+    // Static FPakPlatformFile::FindFileInPakFiles(TArray<FPakListEntry>&, ...).
     #[bind_resolved_func_detour(FindFileInPakFiles_2)]
     unsafe fn find_file_in_pak_files_static_detour(
         this_ptr: *mut TArray<FPakListEntry>,
@@ -64,15 +66,7 @@ impl FPakPlatformFile {
         }
         unsafe { Self::find_file_in_pak_files_static(this_ptr, Filename, OutPakFile, OutEntry) }
     }
-}
 
-define_pattern_resolver!(
-    IsNonPakFilenameAllowed,
-    ["48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 30 48 8B F1 45 33 C0"]
-);
-
-#[unchained_macros::runtime_bindings]
-impl FPakPlatformFile {
     #[bind_resolved_func_detour(IsNonPakFilenameAllowed)]
     unsafe fn is_non_pak_filename_allowed_detour(
         self: *mut Self,

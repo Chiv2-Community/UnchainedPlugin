@@ -3,7 +3,20 @@
 //! [APlayerController](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerController.h).
 
 use super::*;
+// #[derive(Debug)]
+// #[repr(C)]
+// pub struct UClass {
+//     pub ustruct: UStruct,
+// }
+// // ClassDefaultObject
+use super::UClass;
+use std::ops::Deref;
+use std::sync::atomic::Ordering;
+use crate::globals;
+use super::object_array::FUObjectArray;
+
 mod process_event;
+
 mod config;
 
 bitflags::bitflags! {
@@ -40,6 +53,7 @@ bitflags::bitflags! {
         const RF_WillBeLoaded = 0x08000000;
     }
 }
+
 bitflags::bitflags! {
     #[derive(Debug, Clone)]
     pub struct EFunctionFlags: u32 {
@@ -93,6 +107,16 @@ pub struct UObjectBase {
     pub outer_private: *const UObject,
 }
 
+impl UObjectBase {
+    pub unsafe fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
+        let mut string = FString::new();
+        unsafe {
+            globals().uobject_base_utility_get_path_name()(self, stop_outer, &mut string);
+        }
+        string.to_string()
+    }
+}
+
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct UObjectBaseUtility {
@@ -105,40 +129,6 @@ pub struct UObjectBaseUtility {
 pub struct UObject {
     #[inherit]
     pub uobject_base_utility: UObjectBaseUtility,
-}
-
-/// Maps a Rust native-object prefix to its exact UE class name.
-///
-/// # Safety
-/// Implementors must have the supported native layout, alignment and UObject
-/// prefix at offset zero for this class and its subclasses. Never implement for
-/// an opaque alias such as c_void.
-pub unsafe trait UObjectType: Sized {
-    const CLASS_NAME: &'static str;
-
-    /// Validate a raw native pointer and borrow this class's view.
-    ///
-    /// # Safety
-    /// UObject::from_ptr's engine-thread and lifetime requirements apply, and
-    /// the engine build must match this type's native layout.
-    #[inline(always)]
-    unsafe fn from_ptr<'a, P>(object: *const P) -> Option<&'a Self> {
-        UObject::from_ptr(object.cast())?.uobj_cast::<Self>()
-    }
-}
-
-fn class_chain_matches<K, S: AsRef<str>>(
-    mut class: K,
-    name: &str,
-    mut inspect: impl FnMut(K) -> Option<(S, K)>,
-) -> bool {
-    // Bound corrupted or cyclic metadata; do not follow it indefinitely.
-    for _ in 0..32 {
-        let Some((class_name, parent)) = inspect(class) else { return false; };
-        if class_name.as_ref() == name { return true; }
-        class = parent;
-    }
-    false
 }
 
 impl UObject {
@@ -211,6 +201,40 @@ impl UObject {
     }
 }
 
+/// Maps a Rust native-object prefix to its exact UE class name.
+///
+/// # Safety
+/// Implementors must have the supported native layout, alignment and UObject
+/// prefix at offset zero for this class and its subclasses. Never implement for
+/// an opaque alias such as c_void.
+pub unsafe trait UObjectType: Sized {
+    const CLASS_NAME: &'static str;
+
+    /// Validate a raw native pointer and borrow this class's view.
+    ///
+    /// # Safety
+    /// UObject::from_ptr's engine-thread and lifetime requirements apply, and
+    /// the engine build must match this type's native layout.
+    #[inline(always)]
+    unsafe fn from_ptr<'a, P>(object: *const P) -> Option<&'a Self> {
+        UObject::from_ptr(object.cast())?.uobj_cast::<Self>()
+    }
+}
+
+fn class_chain_matches<K, S: AsRef<str>>(
+    mut class: K,
+    name: &str,
+    mut inspect: impl FnMut(K) -> Option<(S, K)>,
+) -> bool {
+    // Bound corrupted or cyclic metadata; do not follow it indefinitely.
+    for _ in 0..32 {
+        let Some((class_name, parent)) = inspect(class) else { return false; };
+        if class_name.as_ref() == name { return true; }
+        class = parent;
+    }
+    false
+}
+
 /// Partial native controller layout through Player; later fields are omitted.
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
@@ -233,8 +257,11 @@ pub struct ULocalPlayer {
 
 // SAFETY: These repr(C) prefixes begin with UObject and map to their native classes.
 unsafe impl UObjectType for UObject { const CLASS_NAME: &'static str = "Object"; }
+
 unsafe impl UObjectType for APlayerController { const CLASS_NAME: &'static str = "PlayerController"; }
+
 unsafe impl UObjectType for UPlayer { const CLASS_NAME: &'static str = "Player"; }
+
 unsafe impl UObjectType for ULocalPlayer { const CLASS_NAME: &'static str = "LocalPlayer"; }
 
 // Steam/EGS FConsoleOutputDevice table 0x1446d9b40; UE Misc/OutputDevice.h.
@@ -299,8 +326,11 @@ pub struct FField {
     pub name_private: FName,
     pub flags_private: EObjectFlags,
 }
+
 const _: () = assert!(std::mem::offset_of!(FField, next) == 0x20);
+
 const _: () = assert!(std::mem::offset_of!(FField, name_private) == 0x28);
+
 const _: () = assert!(std::mem::size_of::<FField>() == 0x38);
 
 /// Prefix of UE 4.25 `FProperty`; later members are not needed.
@@ -315,6 +345,7 @@ pub struct FProperty {
     /// Byte offset of the value inside its owning object.
     pub offset_internal: i32,
 }
+
 const _: () = assert!(std::mem::offset_of!(FProperty, offset_internal) == 0x4C);
 
 /// A property located by name on a class.
@@ -428,19 +459,6 @@ pub struct UBlueprint {
     pub component_class_overrides: TArray<u8>,     // 0x0088 (0x10)
     pub inheritable_component_handler: *mut c_void,// 0x0098 (0x08)
 }
-// #[derive(Debug)]
-// #[repr(C)]
-// pub struct UClass {
-//     pub ustruct: UStruct,
-// }
-// // ClassDefaultObject
-use super::UClass;
-
-
-use std::ops::Deref;
-use std::sync::atomic::Ordering;
-use crate::globals;
-use super::object_array::FUObjectArray;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -448,6 +466,7 @@ pub struct FWeakObjectPtr {
     object_index: i32,
     object_serial_number: i32,
 }
+
 impl FWeakObjectPtr {
     pub fn new(object: &UObjectBase) -> Self {
         Self::new_from_index(object.internal_index)
@@ -474,16 +493,6 @@ impl FWeakObjectPtr {
             return None;
         }
         item.object.as_ref()
-    }
-}
-
-impl UObjectBase {
-    pub unsafe fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
-        let mut string = FString::new();
-        unsafe {
-            globals().uobject_base_utility_get_path_name()(self, stop_outer, &mut string);
-        }
-        string.to_string()
     }
 }
 

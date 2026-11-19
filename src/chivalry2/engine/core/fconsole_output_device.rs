@@ -2,12 +2,12 @@
 
 use crate::chivalry2::engine::{FName, TCHAR};
 
+define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
+
 #[repr(C)]
 pub struct FConsoleOutputDevice {
     _opaque: [u8; 0],
 }
-
-define_pattern_resolver!(ConsoleOutputDevice__Serialize,["48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 41 56 48 83 EC 30 41 0F B6 E8 49 8B D9 44 0F B6 C5 48 8B"]);
 
 #[unchained_macros::runtime_bindings]
 impl FConsoleOutputDevice {

@@ -6,15 +6,6 @@ use crate::chivalry2::engine::{ENetMode, FActorSpawnParameters, FRotator, UNetDr
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
-pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
-    if world.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
-        return None;
-    }
-    let mut name = crate::chivalry2::engine::FString::default();
-    unsafe { world.get_map_name(&mut name); }
-    name.copy_to_string().ok()
-}
-
 // Used to set World reference
 define_pattern_resolver!(InternalGetNetMode, {
     EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
@@ -29,6 +20,15 @@ define_pattern_resolver!(UWorld__GetMapName, ["40 53 48 83 EC 40 48 89 6C 24 ?? 
 
 // AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 define_pattern_resolver!(SpawnActor,["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]);
+
+pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
+    if world.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
+        return None;
+    }
+    let mut name = crate::chivalry2::engine::FString::default();
+    unsafe { world.get_map_name(&mut name); }
+    name.copy_to_string().ok()
+}
 
 // SAFETY: This supported native layout has its UObject prefix at offset zero.
 unsafe impl crate::chivalry2::engine::UObjectType for UWorld {

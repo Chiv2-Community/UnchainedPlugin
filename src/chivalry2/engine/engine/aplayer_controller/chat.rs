@@ -16,16 +16,20 @@ pub(crate) mod client_message {
     use crate::chivalry2::engine::{FName, FString};
     use regex::Regex;
 
+    define_pattern_resolver!(
+        ClientReceiveChat,
+        ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
+    );
+
+    define_pattern_resolver!(ClientMessage, [
+        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
+    ]);
+
     fn has_authority() -> bool {
         crate::globals()
             .world()
             .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() })
     }
-
-    define_pattern_resolver!(
-        ClientReceiveChat,
-        ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
-    );
 
     #[unchained_macros::runtime_bindings]
     impl APlayerController {
@@ -46,6 +50,32 @@ pub(crate) mod client_message {
             }
             unsafe {
                 self.client_receive_chat(sender, message, chat_type, is_sender_dev, override_color);
+            }
+        }
+
+        // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
+        #[bind_resolved_func_detour(ClientMessage)]
+        pub(crate) unsafe fn client_message_detour(
+            self: *mut Self,
+            S: *mut FString,
+            Type: FName,
+            MsgLifeTime: f32,
+        ) {
+            if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
+                if let Some((chat_type, sender, message)) = system_message(&message) {
+                    EVENT_SYSTEM
+                        .game_event_publisher
+                        .publish(GameEvent::GameChatMessageEvent(GameChatMessage {
+                            sender: sender.unwrap_or_default().into(),
+                            message: message.into(),
+                            chat_source: ChatSource::Native(NativeChat::System {
+                                channel: chat_type,
+                            }),
+                        }));
+                }
+            }
+            unsafe {
+                self.client_message(S, Type, MsgLifeTime);
             }
         }
     }
@@ -96,39 +126,6 @@ pub(crate) mod client_message {
             }));
         if let Some(event) = command {
             EVENT_SYSTEM.game_event_publisher.publish(event);
-        }
-    }
-
-    define_pattern_resolver!(ClientMessage, [
-        "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
-    ]);
-
-    // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
-    #[unchained_macros::runtime_bindings]
-    impl APlayerController {
-        #[bind_resolved_func_detour(ClientMessage)]
-        pub(crate) unsafe fn client_message_detour(
-            self: *mut Self,
-            S: *mut FString,
-            Type: FName,
-            MsgLifeTime: f32,
-        ) {
-            if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
-                if let Some((chat_type, sender, message)) = system_message(&message) {
-                    EVENT_SYSTEM
-                        .game_event_publisher
-                        .publish(GameEvent::GameChatMessageEvent(GameChatMessage {
-                            sender: sender.unwrap_or_default().into(),
-                            message: message.into(),
-                            chat_source: ChatSource::Native(NativeChat::System {
-                                channel: chat_type,
-                            }),
-                        }));
-                }
-            }
-            unsafe {
-                self.client_message(S, Type, MsgLifeTime);
-            }
         }
     }
 

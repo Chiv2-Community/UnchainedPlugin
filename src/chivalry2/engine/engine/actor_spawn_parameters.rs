@@ -48,26 +48,6 @@ pub struct FActorSpawnParameters {
     pub object_flags: EObjectFlags, // EObjectFlags
 }
 
-impl Default for FActorSpawnParameters {
-    fn default() -> Self {
-        Self {
-            name: 0, // None
-            template: std::ptr::null(),
-            owner: std::ptr::null(),
-            instigator: std::ptr::null(),
-            override_level: std::ptr::null(),
-            // Default UE4/5 behavior: AlwaysSpawn
-            spawn_collision_handling_override: ESpawnActorCollisionHandlingMethod::AlwaysSpawn,
-            bitfield: 0,
-            // Default UE4/5 behavior: Requested
-            name_mode: ESpawnActorNameMode::Requested,
-            _padding: 0,
-            // Default UE4/5 behavior: RF_NoFlags
-            object_flags: EObjectFlags::RF_NoFlags,
-        }
-    }
-}
-
 impl FActorSpawnParameters {
     pub fn new() -> Self {
         Self::default()
@@ -99,5 +79,25 @@ impl FActorSpawnParameters {
     }
     pub fn allow_during_construction(&self) -> bool {
         (self.bitfield & (1 << 3)) != 0
+    }
+}
+
+impl Default for FActorSpawnParameters {
+    fn default() -> Self {
+        Self {
+            name: 0, // None
+            template: std::ptr::null(),
+            owner: std::ptr::null(),
+            instigator: std::ptr::null(),
+            override_level: std::ptr::null(),
+            // Default UE4/5 behavior: AlwaysSpawn
+            spawn_collision_handling_override: ESpawnActorCollisionHandlingMethod::AlwaysSpawn,
+            bitfield: 0,
+            // Default UE4/5 behavior: Requested
+            name_mode: ESpawnActorNameMode::Requested,
+            _padding: 0,
+            // Default UE4/5 behavior: RF_NoFlags
+            object_flags: EObjectFlags::RF_NoFlags,
+        }
     }
 }

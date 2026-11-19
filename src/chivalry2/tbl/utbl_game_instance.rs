@@ -2,7 +2,6 @@
 
 use crate::chivalry2::engine::{FLinearColor, FText};
 use unchained_macros::bind_resolved_func;
-mod startup_patch;
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::{
     events::models::{GameEvent, MapChange},
@@ -18,6 +17,16 @@ define_pattern_resolver!(LoadFrontEndMap, [
 define_pattern_resolver!(OnPreLoadMap,["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]);
 
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
+
+define_pattern_resolver!(TBLGameInstance_AddChatLine, [
+    "48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"
+]);
+
+mod startup_patch;
+
+/// Opaque native game instance. Only live engine-owned pointers are valid.
+#[repr(C)]
+pub struct UTBLGameInstance { _opaque: [u8; 0] }
 
 #[unchained_macros::runtime_bindings]
 impl UTBLGameInstance {
@@ -84,17 +93,7 @@ impl UTBLGameInstance {
         }
         unsafe { self.on_post_load_map(world); }
     }
-}
 
-define_pattern_resolver!(TBLGameInstance_AddChatLine, [
-    "48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"
-]);
-
-/// Opaque native game instance. Only live engine-owned pointers are valid.
-#[repr(C)]
-pub struct UTBLGameInstance { _opaque: [u8; 0] }
-
-impl UTBLGameInstance {
     /// UTBLGameInstance::AddChatLine, using borrowed native text/color inputs.
     ///
     /// # Safety

@@ -28,6 +28,49 @@ pub enum EChatType {
     MAX,
 }
 
+impl EChatType {
+    // A manual list of all variants for the loop
+    pub const ALL: [EChatType; 15] = [
+        Self::AllSay,
+        Self::TeamSay,
+        Self::Whisper,
+        Self::Admin,
+        Self::Objective,
+        Self::System,
+        Self::ServerSay,
+        Self::Debug,
+        Self::CrosshairMsg,
+        Self::Backend,
+        Self::Party,
+        Self::Spectator,
+        Self::ClosedCaption,
+        Self::ClosedCaptionMason,
+        Self::ClosedCaptionAgatha,
+    ];
+
+    // Manual string conversion
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AllSay => "AllSay",
+            Self::TeamSay => "TeamSay",
+            Self::Whisper => "Whisper",
+            Self::Admin => "Admin",
+            Self::Objective => "Objective",
+            Self::System => "System",
+            Self::ServerSay => "ServerSay",
+            Self::Debug => "Debug",
+            Self::CrosshairMsg => "CrosshairMsg",
+            Self::Backend => "Backend",
+            Self::Party => "Party",
+            Self::Spectator => "Spectator",
+            Self::ClosedCaption => "ClosedCaption",
+            Self::ClosedCaptionMason => "ClosedCaptionMason",
+            Self::ClosedCaptionAgatha => "ClosedCaptionAgatha",
+            Self::MAX => "MAX",
+        }
+    }
+}
+
 impl FromStr for EChatType {
     type Err = ();
 
@@ -76,49 +119,6 @@ impl TryFrom<u8> for EChatType {
             14 => Ok(EChatType::ClosedCaptionAgatha),
             15 => Ok(EChatType::MAX),
             _ => Err(()),
-        }
-    }
-}
-
-impl EChatType {
-    // A manual list of all variants for the loop
-    pub const ALL: [EChatType; 15] = [
-        Self::AllSay,
-        Self::TeamSay,
-        Self::Whisper,
-        Self::Admin,
-        Self::Objective,
-        Self::System,
-        Self::ServerSay,
-        Self::Debug,
-        Self::CrosshairMsg,
-        Self::Backend,
-        Self::Party,
-        Self::Spectator,
-        Self::ClosedCaption,
-        Self::ClosedCaptionMason,
-        Self::ClosedCaptionAgatha,
-    ];
-
-    // Manual string conversion
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::AllSay => "AllSay",
-            Self::TeamSay => "TeamSay",
-            Self::Whisper => "Whisper",
-            Self::Admin => "Admin",
-            Self::Objective => "Objective",
-            Self::System => "System",
-            Self::ServerSay => "ServerSay",
-            Self::Debug => "Debug",
-            Self::CrosshairMsg => "CrosshairMsg",
-            Self::Backend => "Backend",
-            Self::Party => "Party",
-            Self::Spectator => "Spectator",
-            Self::ClosedCaption => "ClosedCaption",
-            Self::ClosedCaptionMason => "ClosedCaptionMason",
-            Self::ClosedCaptionAgatha => "ClosedCaptionAgatha",
-            Self::MAX => "MAX",
         }
     }
 }

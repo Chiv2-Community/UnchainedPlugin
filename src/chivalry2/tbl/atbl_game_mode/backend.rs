@@ -108,6 +108,7 @@ fn resolve_leave_name_from_controller(
         Ok(Some(display_name))
     }
 }
+
 #[unchained_macros::runtime_bindings]
 impl ATBLGameMode {
     #[bind_resolved_func_detour(ATBLGameMode__PreLogin)]
@@ -187,10 +188,7 @@ impl ATBLGameMode {
 
         original_result
     }
-}
 
-#[unchained_macros::runtime_bindings]
-impl ATBLGameMode {
     #[bind_resolved_func_detour(ATBLGameMode__Logout)]
     pub(crate) unsafe fn logout_detour(self: *mut Self, exiting_player: *mut AController) {
         let this_ptr = self;

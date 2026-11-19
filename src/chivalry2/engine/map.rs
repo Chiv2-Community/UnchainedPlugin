@@ -2,9 +2,7 @@
 
 #![allow(private_interfaces)]
 use std::fmt::Debug;
-
 use super::TArray;
-
 // impl<K: PartialEq + UEHash, V> TMap<K, V> {
 //     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
 //         self.elements
@@ -17,68 +15,9 @@ use super::TArray;
 // }
 use std::collections::HashMap;
 
-
-impl<K, V> TMap<K, V>
-where
-    K: PartialEq + UEHash + std::hash::Hash + Eq + Clone,
-    V: Clone,
-{
-    pub fn to_hashmap(&self) -> HashMap<K, V> {
-        self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-    }
-}
-impl<K: UEHash + Eq + std::hash::Hash, V> TMap<K, V> {
-    pub fn into_hashmap(self) -> HashMap<K, V> {
-        let mut result = HashMap::new();
-        for i in 0..self.elements.data.len() {
-            if self.elements.allocation_flags.index(i).bool() {
-                let elem = unsafe { std::ptr::read(self.elements.index(i)) };
-                let TTuple { a, b } = elem.value;
-                result.insert(a, b);
-            }
-        }
-        result
-    }
-}
-
-impl<K: PartialEq + UEHash, V> TMap<K, V> {
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
-        let elements = &self.elements;
-        (0..elements.data.len())
-            .filter(move |&i| elements.allocation_flags.index(i).bool())
-            .map(move |i| {
-                let elem = elements.index(i);
-                (&elem.value.a, &elem.value.b)
-            })
-    }
-}
-
-impl<K: PartialEq + UEHash, V> TMap<K, V> {
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)> {
-        let allocation_flags = &self.elements.allocation_flags;
-        let data = self.elements.data.as_mut_slice();
-
-        data.iter_mut()
-            .enumerate()
-            .filter_map(move |(i, entry)| {
-                if allocation_flags.index(i).bool() {
-                    // SAFETY: The bit is set, so this is a live element.
-                    let elem_ptr = unsafe { &mut entry.element };
-                    let tuple = &mut elem_ptr.value;
-
-                    Some((&tuple.a, &mut tuple.b))
-                } else {
-                    None
-                }
-            })
-    }
-}
-
-
 pub trait UEHash {
     fn ue_hash(&self) -> u32;
 }
-
 
 #[derive(Default, Debug)]
 #[repr(C)]
@@ -87,6 +26,7 @@ struct TSetElement<V> {
     hash_next_id: FSetElementId,
     hash_index: i32,
 }
+
 impl<K: UEHash, V> UEHash for TSetElement<TTuple<K, V>> {
     fn ue_hash(&self) -> u32 {
         self.value.a.ue_hash()
@@ -98,11 +38,13 @@ impl<K: UEHash, V> UEHash for TSetElement<TTuple<K, V>> {
 pub struct FSetElementId {
     index: i32,
 }
+
 impl FSetElementId {
     pub fn is_valid(self) -> bool {
         self.index != -1
     }
 }
+
 impl Debug for FSetElementId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FSetElementId({:?})", self.index)
@@ -135,14 +77,6 @@ struct TInlineAllocator<const N: usize, V> {
     inline_data: [V; N],
     secondary_data: *const V, // TSizedHeapAllocator<32>::ForElementType<unsigned int>,
 }
-impl<const N: usize, V: Default + Copy> Default for TInlineAllocator<N, V> {
-    fn default() -> Self {
-        Self {
-            inline_data: [Default::default(); N],
-            secondary_data: std::ptr::null(),
-        }
-    }
-}
 
 impl<const N: usize, V> TInlineAllocator<N, V> {
     fn get_allocation(&self) -> *const V {
@@ -154,6 +88,15 @@ impl<const N: usize, V> TInlineAllocator<N, V> {
     }
 }
 
+impl<const N: usize, V: Default + Copy> Default for TInlineAllocator<N, V> {
+    fn default() -> Self {
+        Self {
+            inline_data: [Default::default(); N],
+            secondary_data: std::ptr::null(),
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 #[repr(C)]
 struct TBitArray {
@@ -161,6 +104,7 @@ struct TBitArray {
     num_bits: i32,
     max_bits: i32,
 }
+
 impl TBitArray {
     fn get_data(&self) -> *const u32 {
         self.allocator_instance.get_allocation()
@@ -182,6 +126,7 @@ struct FBitReference<'data> {
     data: &'data u32,
     mask: u32,
 }
+
 impl FBitReference<'_> {
     fn bool(self) -> bool {
         (self.data & self.mask) != 0
@@ -195,6 +140,15 @@ struct TSparseArray<E> {
     first_free_index: i32,
     num_free_indices: i32,
 }
+
+impl<E> TSparseArray<E> {
+    fn index(&self, index: usize) -> &E {
+        assert!(index < self.data.len() && index < self.allocation_flags.num_bits as usize);
+        assert!(self.allocation_flags.index(index).bool());
+        unsafe { &self.data.as_slice()[index].element }
+    }
+}
+
 impl<E> Default for TSparseArray<E> {
     fn default() -> Self {
         Self {
@@ -205,15 +159,9 @@ impl<E> Default for TSparseArray<E> {
         }
     }
 }
-impl<E> TSparseArray<E> {
-    fn index(&self, index: usize) -> &E {
-        assert!(index < self.data.len() && index < self.allocation_flags.num_bits as usize);
-        assert!(self.allocation_flags.index(index).bool());
-        unsafe { &self.data.as_slice()[index].element }
-    }
-}
 
 struct DbgTSparseArrayData<'a, E>(&'a TSparseArray<E>);
+
 impl<E: Debug> Debug for DbgTSparseArrayData<'_, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dbg = f.debug_list();
@@ -243,31 +191,70 @@ pub struct TMap<K: UEHash, V> {
     hash: TInlineAllocator<1, FSetElementId>,
     hash_size: i32,
 }
-impl<K: UEHash, V> TMap<K, V> {
-    fn hash(&self) -> &[FSetElementId] {
-        unsafe { std::slice::from_raw_parts(self.hash.get_allocation(), self.hash_size as usize) }
-    }
-}
-impl<K: UEHash, V> Default for TMap<K, V> {
-    fn default() -> Self {
-        Self {
-            elements: Default::default(),
-            hash: Default::default(),
-            hash_size: 0,
-        }
-    }
-}
-impl<K: UEHash + Debug, V: Debug> Debug for TMap<K, V> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TMap")
-            .field("elements", &self.elements)
-            .field("hash", &self.hash())
-            .finish()
-    }
-}
 
-impl<K: PartialEq + UEHash, V> TMap<K, V> {
-    pub fn find(&self, key: K) -> Option<&V> {
+impl<K: UEHash, V> TMap<K, V> {
+    pub fn to_hashmap(&self) -> HashMap<K, V>
+    where
+        K: PartialEq + std::hash::Hash + Eq + Clone,
+        V: Clone,
+    {
+        self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    pub fn into_hashmap(self) -> HashMap<K, V>
+    where
+        K: Eq + std::hash::Hash,
+    {
+        let mut result = HashMap::new();
+        for i in 0..self.elements.data.len() {
+            if self.elements.allocation_flags.index(i).bool() {
+                let elem = unsafe { std::ptr::read(self.elements.index(i)) };
+                let TTuple { a, b } = elem.value;
+                result.insert(a, b);
+            }
+        }
+        result
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)>
+    where
+        K: PartialEq,
+    {
+        let elements = &self.elements;
+        (0..elements.data.len())
+            .filter(move |&i| elements.allocation_flags.index(i).bool())
+            .map(move |i| {
+                let elem = elements.index(i);
+                (&elem.value.a, &elem.value.b)
+            })
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut V)>
+    where
+        K: PartialEq,
+    {
+        let allocation_flags = &self.elements.allocation_flags;
+        let data = self.elements.data.as_mut_slice();
+
+        data.iter_mut()
+            .enumerate()
+            .filter_map(move |(i, entry)| {
+                if allocation_flags.index(i).bool() {
+                    // SAFETY: The bit is set, so this is a live element.
+                    let elem_ptr = unsafe { &mut entry.element };
+                    let tuple = &mut elem_ptr.value;
+
+                    Some((&tuple.a, &mut tuple.b))
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn find(&self, key: K) -> Option<&V>
+    where
+        K: PartialEq,
+    {
         let id = self.find_id(key);
         if id.is_valid() {
             Some(&self.elements.index(id.index as usize).value.b)
@@ -275,7 +262,10 @@ impl<K: PartialEq + UEHash, V> TMap<K, V> {
             None
         }
     }
-    pub fn find_id(&self, key: K) -> FSetElementId {
+    pub fn find_id(&self, key: K) -> FSetElementId
+    where
+        K: PartialEq,
+    {
         if self.elements.data.len() != self.elements.num_free_indices as usize {
             let key_hash = key.ue_hash();
             let hash = &self.hash();
@@ -301,6 +291,29 @@ impl<K: PartialEq + UEHash, V> TMap<K, V> {
 
         FSetElementId { index: -1 }
     }
+
+    fn hash(&self) -> &[FSetElementId] {
+        unsafe { std::slice::from_raw_parts(self.hash.get_allocation(), self.hash_size as usize) }
+    }
+}
+
+impl<K: UEHash, V> Default for TMap<K, V> {
+    fn default() -> Self {
+        Self {
+            elements: Default::default(),
+            hash: Default::default(),
+            hash_size: 0,
+        }
+    }
+}
+
+impl<K: UEHash + Debug, V: Debug> Debug for TMap<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TMap")
+            .field("elements", &self.elements)
+            .field("hash", &self.hash())
+            .finish()
+    }
 }
 
 /// Read-only view of an engine `TSet<T>`. Only ever used through a reference
@@ -311,6 +324,7 @@ pub struct TSet<T> {
     hash: TInlineAllocator<1, FSetElementId>,
     hash_size: i32,
 }
+
 impl<T> TSet<T> {
     /// Iterates the live elements (allocation order, free slots skipped).
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -337,6 +351,7 @@ impl<T> TSet<T> {
 pub struct TMapView<K, V> {
     pairs: TSet<TTuple<K, V>>,
 }
+
 impl<K, V> TMapView<K, V> {
     /// Iterates the live key/value pairs.
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
@@ -347,10 +362,12 @@ impl<K, V> TMapView<K, V> {
 #[cfg(test)]
 mod test {
     use crate::chivalry2::engine::FName;
+    use super::*;
+
     const _: [u8; 0x50] = [0; std::mem::size_of::<TMapView<[u64; 3], [u64; 5]>>()];
 
-    use super::*;
     const _: [u8; 0x50] = [0; std::mem::size_of::<TSet<[u8; 0x18]>>()];
+
     // TSetElement<FSoftObjectPath>: 0x18 value + two i32 links.
     const _: [u8; 0x20] = [0; std::mem::size_of::<TSetElement<[u64; 3]>>()];
 
@@ -362,8 +379,11 @@ mod test {
         assert!(set.is_empty());
         std::mem::forget(set);
     }
+
     const _: [u8; 0x50] = [0; std::mem::size_of::<TMap<FName, [u8; 0x20]>>()];
+
     const _: [u8; 0x38] =
         [0; std::mem::size_of::<TSparseArray<TSetElement<TTuple<FName, [u8; 0x20]>>>>()];
+
     const _: [u8; 0x10] = [0; std::mem::size_of::<TInlineAllocator<1, FSetElementId>>()];
 }

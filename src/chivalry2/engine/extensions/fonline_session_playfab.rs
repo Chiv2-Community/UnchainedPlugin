@@ -5,16 +5,6 @@ use crate::tools::hook_globals::cli_args;
 use crate::chivalry2::engine::GetCurrentGamesPostResponse;
 use std::cell::Cell;
 
-#[repr(C)]
-pub struct FOnlineSessionPlayFab {
-    _opaque: [u8; 0],
-}
-
-thread_local! {
-    pub(crate) static IN_PING_SOME_SERVERS: Cell<bool> = const { Cell::new(false) };
-    pub(crate) static IN_ON_GET_CURRENT_GAMES: Cell<bool> = const { Cell::new(false) };
-}
-
 define_pattern_resolver!(
     OnGetCurrentGames_,
     ["48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 60 FE FF FF"]
@@ -23,6 +13,11 @@ define_pattern_resolver!(
 define_pattern_resolver!(PingSomeServers, [
     "4C 8B DC 49 89 4B 08 55 56 41 55 49 8D AB 38 FE FF FF 48 81 EC B0 02 00 00 4C 8D A9 40 03 00 00 48 8B F1"
 ]);
+
+#[repr(C)]
+pub struct FOnlineSessionPlayFab {
+    _opaque: [u8; 0],
+}
 
 #[unchained_macros::runtime_bindings]
 impl FOnlineSessionPlayFab {
@@ -51,4 +46,9 @@ impl FOnlineSessionPlayFab {
             IN_PING_SOME_SERVERS.with(|state| state.set(false));
         }
     }
+}
+
+thread_local! {
+    pub(crate) static IN_PING_SOME_SERVERS: Cell<bool> = const { Cell::new(false) };
+    pub(crate) static IN_ON_GET_CURRENT_GAMES: Cell<bool> = const { Cell::new(false) };
 }

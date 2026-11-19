@@ -14,8 +14,6 @@ pub struct FSoftObjectPtr {
     pub path: FSoftObjectPath, // 0x10
 }
 
-const _: () = assert!(std::mem::size_of::<FSoftObjectPtr>() == 0x28);
-
 impl FSoftObjectPtr {
     pub fn from_path(path: &str) -> Self {
         Self {
@@ -28,6 +26,15 @@ impl FSoftObjectPtr {
     }
 }
 
+const _: () = assert!(std::mem::size_of::<FSoftObjectPtr>() == 0x28);
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TSoftClassPtr<T = c_void> {
+    pub soft_ptr: FSoftObjectPtr,
+    _marker: std::marker::PhantomData<T>,
+}
+
 impl<T> TSoftClassPtr<T> {
     pub fn from_path(path: &str) -> Self {
         Self {
@@ -35,11 +42,4 @@ impl<T> TSoftClassPtr<T> {
             _marker: std::marker::PhantomData,
         }
     }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TSoftClassPtr<T = c_void> {
-    pub soft_ptr: FSoftObjectPtr,
-    _marker: std::marker::PhantomData<T>,
 }

@@ -5,6 +5,77 @@
 
 use crate::chivalry2::engine::FString;
 use patternsleuth::{resolvers::unreal::util, MemoryTrait};
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::sync::RwLock;
+
+// OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
+define_pattern_resolver!(
+    CreateHttpRequest,
+    ["40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",],
+    |ctx, patterns| {
+        let futures = ::patternsleuth::resolvers::futures::future::join_all(
+            patterns
+                .iter()
+                .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap())),
+        )
+        .await;
+
+        let addr = futures.into_iter().flatten().next().ok_or_else(|| {
+            ::patternsleuth::resolvers::ResolveError::new_msg(format!(
+                "Failed to find match for CreateHttpRequest with patterns: {patterns:?}",
+                patterns = patterns
+            ))
+        })?;
+
+        let base_addr = *crate::resolvers::BASE_ADDR as u64;
+        let mem = &ctx.image().memory;
+        let str_offset = 0x49 + 0x3; // offset to LEA call + string addr
+
+        let mut calls = Vec::new();
+        let mut strings = Vec::new();
+
+        for call in util::scan_xcalls(ctx, [&addr]).await {
+            let str_addr = mem.rip4(call + str_offset).unwrap_or(0);
+            if let Ok(s) = mem.read_wstring(str_addr) {
+                calls.push(call);
+                let suffix = s.rsplit('/').next().map(|s| s.to_string()).unwrap_or(s);
+                strings.push(format!("{}_{}", "GetPost", suffix));
+            }
+        }
+
+        let roots = util::root_functions(ctx, &calls)?;
+
+        {
+            let mut map = STRING_TO_ROOT_FN
+                .write()
+                .expect("STRING_TO_ROOT_FN poisoned");
+            for (s, root) in strings.into_iter().zip(roots.into_iter()) {
+                // sinfo!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
+                if root >= base_addr {
+                    map.insert(s, root - base_addr);
+                }
+            }
+        }
+
+        {
+            let map = STRING_TO_ROOT_FN.read().unwrap();
+            sinfo!("Request string → root map:");
+            for (s, fn_addr) in map.iter() {
+                sinfo!("  '{}' => 0x{:x}", s, fn_addr);
+            }
+        }
+
+        inventory::submit! {
+            crate::resolvers::OffsetRegisty {
+                name: "CreateHttpRequest Get*Post hooks",
+                map: || STRING_TO_ROOT_FN.read().unwrap().clone(),
+            }
+        }
+
+        Ok(addr)
+    }
+);
 
 /// Generic Class for Get*Post requests
 #[repr(C)]
@@ -97,82 +168,11 @@ macro_rules! CREATE_REQUEST_HOOK_DUMMY {
     };
 }
 
-use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::sync::RwLock;
-
 pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-// OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
-define_pattern_resolver!(
-    CreateHttpRequest,
-    ["40 53 55 56 41 56 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 44 24",],
-    |ctx, patterns| {
-        let futures = ::patternsleuth::resolvers::futures::future::join_all(
-            patterns
-                .iter()
-                .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap())),
-        )
-        .await;
-
-        let addr = futures.into_iter().flatten().next().ok_or_else(|| {
-            ::patternsleuth::resolvers::ResolveError::new_msg(format!(
-                "Failed to find match for CreateHttpRequest with patterns: {patterns:?}",
-                patterns = patterns
-            ))
-        })?;
-
-        let base_addr = *crate::resolvers::BASE_ADDR as u64;
-        let mem = &ctx.image().memory;
-        let str_offset = 0x49 + 0x3; // offset to LEA call + string addr
-
-        let mut calls = Vec::new();
-        let mut strings = Vec::new();
-
-        for call in util::scan_xcalls(ctx, [&addr]).await {
-            let str_addr = mem.rip4(call + str_offset).unwrap_or(0);
-            if let Ok(s) = mem.read_wstring(str_addr) {
-                calls.push(call);
-                let suffix = s.rsplit('/').next().map(|s| s.to_string()).unwrap_or(s);
-                strings.push(format!("{}_{}", "GetPost", suffix));
-            }
-        }
-
-        let roots = util::root_functions(ctx, &calls)?;
-
-        {
-            let mut map = STRING_TO_ROOT_FN
-                .write()
-                .expect("STRING_TO_ROOT_FN poisoned");
-            for (s, root) in strings.into_iter().zip(roots.into_iter()) {
-                // sinfo!("Request mapping: '{}' => 0x{:x}", s, (root - base_addr) as u64);
-                if root >= base_addr {
-                    map.insert(s, root - base_addr);
-                }
-            }
-        }
-
-        {
-            let map = STRING_TO_ROOT_FN.read().unwrap();
-            sinfo!("Request string → root map:");
-            for (s, fn_addr) in map.iter() {
-                sinfo!("  '{}' => 0x{:x}", s, fn_addr);
-            }
-        }
-
-        inventory::submit! {
-            crate::resolvers::OffsetRegisty {
-                name: "CreateHttpRequest Get*Post hooks",
-                map: || STRING_TO_ROOT_FN.read().unwrap().clone(),
-            }
-        }
-
-        Ok(addr)
-    }
-);
-
 CREATE_REQUEST_HOOK!(GetPost_GetMotd);
+
 CREATE_REQUEST_HOOK!(GetPost_GetCurrentGames);
 
 macro_rules! request_dummy_hooks {

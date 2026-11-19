@@ -9,6 +9,47 @@ use crate::chivalry2::tbl::{ATBLPlayerState, EChatType, UTBLGameInstance};
 use crate::chivalry2::tbl::fownership_response::FOwnershipResponse;
 use crate::events::broadcast_message::game_chat::broadcast_parts;
 
+// Methods to enable customization / loadout on custom servers
+
+define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, {
+    EGS: ["40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD"], // EGS
+    STEAM: [
+        "40 55 56 41 54 41 55 41 56 41 57 48 8D AC 24 B8",
+        "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD" // EGS 2.11.4
+        ], // STEAM
+    OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
+});
+
+define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
+    EGS: ["48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00"], // EGS
+    // "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC", // STEAM
+    // from sigga
+    // "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00", // EGS
+    STEAM: [
+        "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC 60 49 8B 31 33 FF C6 02 00",
+        "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00" // EGS 2.11.4
+        ], // STEAM
+});
+
+define_pattern_resolver!(
+    ATBLPlayerController__CanUseCharacter,
+    [
+        "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 49 8B 18", // universal
+    ]
+);
+
+define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, {
+    EGS: ["48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6"], // EGS
+    STEAM: ["48 89 54 24 10 53 ?? 57 41 54 48 83 EC 78"], // STEAM
+    // From Sigga
+    // Did the function change?
+    OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
+});
+
+define_pattern_resolver!(ClientReceiveLocalizedChat, [
+    "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
+]);
+
 unsafe impl crate::chivalry2::engine::UObjectType for ATBLPlayerController {
     const CLASS_NAME: &'static str = "TBLPlayerController";
 }
@@ -22,17 +63,6 @@ pub struct ATBLPlayerController {
     pub bOnlineInventoryInitialized: bool,
     pub bPlayerCustomizationReceived: bool,
 }
-
-// Methods to enable customization / loadout on custom servers
-
-define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerAndState, {
-    EGS: ["40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD"], // EGS
-    STEAM: [
-        "40 55 56 41 54 41 55 41 56 41 57 48 8D AC 24 B8",
-        "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD" // EGS 2.11.4
-        ], // STEAM
-    OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
-});
 
 #[unchained_macros::runtime_bindings]
 impl ATBLPlayerController {
@@ -60,21 +90,7 @@ impl ATBLPlayerController {
         }
         response
     }
-}
 
-define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
-    EGS: ["48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00"], // EGS
-    // "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC", // STEAM
-    // from sigga
-    // "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00", // EGS
-    STEAM: [
-        "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC 60 49 8B 31 33 FF C6 02 00",
-        "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00" // EGS 2.11.4
-        ], // STEAM
-});
-
-#[unchained_macros::runtime_bindings]
-impl ATBLPlayerController {
     #[bind_resolved_func_detour(ATBLPlayerController__CanUseLoadoutItem)]
     pub(crate) unsafe fn can_use_loadout_item_detour(
         self: *mut Self,
@@ -92,17 +108,7 @@ impl ATBLPlayerController {
         }
         response
     }
-}
 
-define_pattern_resolver!(
-    ATBLPlayerController__CanUseCharacter,
-    [
-        "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 49 8B 18", // universal
-    ]
-);
-
-#[unchained_macros::runtime_bindings]
-impl ATBLPlayerController {
     #[bind_resolved_func_detour(ATBLPlayerController__CanUseCharacter)]
     pub(crate) unsafe fn can_use_character_detour(
         self: *mut Self,
@@ -116,19 +122,8 @@ impl ATBLPlayerController {
         }
         response
     }
-}
 
-define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, {
-    EGS: ["48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6"], // EGS
-    STEAM: ["48 89 54 24 10 53 ?? 57 41 54 48 83 EC 78"], // STEAM
-    // From Sigga
-    // Did the function change?
-    OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
-});
-
-// The extra legacy player_state argument is not established by the native signature.
-#[unchained_macros::runtime_bindings]
-impl ATBLPlayerController {
+    // The extra legacy player_state argument is not established by the native signature.
     #[bind_resolved_func_detour(ATBLPlayerController__ConditionalInitializeCustomizationOnServer)]
     pub(crate) unsafe fn conditional_initialize_customization_on_server_detour(
         self: *mut Self,
@@ -141,15 +136,8 @@ impl ATBLPlayerController {
         }
         unsafe { self.conditional_initialize_customization_on_server(player_state) }
     }
-}
 
-define_pattern_resolver!(ClientReceiveLocalizedChat, [
-    "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
-]);
-
-// ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
-#[unchained_macros::runtime_bindings]
-impl ATBLPlayerController {
+    // ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
     #[bind_resolved_func_detour(ClientReceiveLocalizedChat)]
     unsafe fn client_receive_localized_chat_detour(
         self: *mut Self,

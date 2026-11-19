@@ -6,6 +6,10 @@ use bitflags::bitflags;
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
+define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
+    "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
+]);
+
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct PlayerFlags: u8 {
@@ -17,10 +21,6 @@ bitflags! {
         const FROM_PREVIOUS      = 1 << 5;
     }
 }
-
-define_pattern_resolver!(APlayerState_GetPlayerName, Call, [
-    "48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"
-]);
 
 // SAFETY: This native layout has its UObject prefix at offset zero.
 unsafe impl UObjectType for APlayerState { const CLASS_NAME: &'static str = "PlayerState"; }

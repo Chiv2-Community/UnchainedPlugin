@@ -3,17 +3,17 @@
 use super::FFrame;
 use crate::chivalry2::engine::{FName, UObject, TCHAR};
 
+define_pattern_resolver!(
+    KismetExecutionMessage,
+    ["48 89 5C 24 08 57 48 83 EC 30 0F B6 DA 48 8B F9 80 FA 01 ?? ?? ?? ?? ?? ?? ?? ?? ?? BA",]
+);
+
 static LIST_OF_SHAME: [&str; 4] = [
     "/Game/Maps/Frontend/CIT/FE_Citadel_Atmospherics.FE_Citadel_Atmospherics_C",
     "Divide by zero: ProjectVectorOnToVector with zero Target vector",
     "A null object was passed as a world context object to UEngine::GetWorldFromContextObject().",
     "/Game/Maps/Frontend/Blueprints/Customization_Rotation.Customization_Rotation_C",
 ];
-
-define_pattern_resolver!(
-    KismetExecutionMessage,
-    ["48 89 5C 24 08 57 48 83 EC 30 0F B6 DA 48 8B F9 80 FA 01 ?? ?? ?? ?? ?? ?? ?? ?? ?? BA",]
-);
 
 #[unchained_macros::runtime_bindings]
 impl FFrame {

@@ -3,6 +3,10 @@
 
 use std::ffi::c_void;
 
+define_pattern_resolver!(PlayFabEndAuthentication, [
+    "48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC F0 00 00 00 45 33 E4 4C 8B E9 44 89 65 6F 48 8B CA 48 8B 02 4C 8B FA 41 8B F4 FF 50 28 84 C0 0F 84 ?? ?? ?? ?? 49 8B 8D E0 00 00 00"
+]);
+
 // Current Steam/Epic layouts, verified against the native session getter:
 // FOnlineAuthPlayFab::PlayFabSubsystem (+0xe0), SessionInterface.Object (+0x140).
 #[repr(C)]
@@ -16,10 +20,6 @@ struct SubsystemContext {
     padding: [u8; 0x140],
     session: *const c_void,
 }
-
-define_pattern_resolver!(PlayFabEndAuthentication, [
-    "48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC F0 00 00 00 45 33 E4 4C 8B E9 44 89 65 6F 48 8B CA 48 8B 02 4C 8B FA 41 8B F4 FF 50 28 84 C0 0F 84 ?? ?? ?? ?? 49 8B 8D E0 00 00 00"
-]);
 
 // Shutdown clears SessionInterface before the auth destructor revokes tickets.
 // EndAuthentication assumes that interface exists; the remaining destructor cleanup still runs.

@@ -9,6 +9,17 @@ This directory contains only shared registration, platform filtering,
 and tests. Keep detour bodies and supporting state with the native implementation;
 do not add forwarding handlers here.
 
+Native source order:
+
+1. Source links and imports.
+2. Resolver declarations, separated by blank lines.
+3. Each struct followed immediately by one inherent `impl`.
+4. Trait implementations and supporting functions/tests.
+
+Combine binding and detour methods under the same `#[runtime_bindings]` impl.
+Put additional generic bounds on the methods that need them, not separate impls.
+Keep cfg restrictions intact.
+
 What remains here:
 
 - `mod.rs`: process image base, function-binding initialization/readiness checks,

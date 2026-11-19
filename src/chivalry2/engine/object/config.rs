@@ -4,12 +4,13 @@ use crate::tools::hook_globals::cli_args;
 use crate::tools::hook_globals::globals_initialized;
 use crate::chivalry2::engine::{FString, UClass, UObject, TCHAR};
 use std::ffi::c_void;
-mod overrides;
 use overrides::{resolve_profile_override_paths_for_config, LOAD_CONFIG_REENTRY};
 
 define_pattern_resolver!(LoadConfig, [
     "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
 ]);
+
+mod overrides;
 
 #[unchained_macros::runtime_bindings]
 impl UObject {

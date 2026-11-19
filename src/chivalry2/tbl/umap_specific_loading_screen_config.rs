@@ -13,6 +13,11 @@ use crate::chivalry2::tbl::fmap_specific_loading_screen_config_data::{FMapSpecif
 use crate::chivalry2::engine::{EFindName, FName, FString, TArray};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+define_pattern_resolver!(
+    GetDataForMap,
+    ["48 89 4C 24 08 55 53 57 41 56 48 8D 6C 24 C1 48 81 EC F8 00 00 00 49 8B F8 4C 8B F2"]
+);
+
 /// A per-map loading screen to inject into
 /// `UMapSpecificLoadingScreenConfig::Configs`, taken from a map marker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,10 +77,8 @@ pub struct UMapSpecificLoadingScreenConfig {
     configs: TArray<FMapSpecificLoadingScreenConfigData>, // 0x28
     default_screen: FMapSpecificLoadingScreenConfigData,  // 0x38
 }
-const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, configs) == 0x28);
-const _: () =
-    assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
 
+#[unchained_macros::runtime_bindings]
 impl UMapSpecificLoadingScreenConfig {
     fn has_entry(&self, key: &str) -> bool {
         self.configs
@@ -106,45 +109,11 @@ impl UMapSpecificLoadingScreenConfig {
             self.configs.len()
         ];
     }
-}
 
-/// Adds the entry, preventing panics from crossing into the engine.
-fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &LoadingScreen) {
-    // SAFETY: `config` is the `this` pointer of a live `GetDataForMap` call on the game thread.
-    match catch_unwind(AssertUnwindSafe(|| unsafe { (*config).add_entry(extra) })) {
-        Ok(()) => {}
-        Err(_) => crate::serror!("Panic while adding extra loading screen for {}", extra.map),
-    }
-}
-
-/// Fallback (feature `loading_screen_texture_fallback`): when the native lookup
-/// fell back to the default entry, patch just the texture `FName`.
-///
-/// # Safety
-/// `data` must be the out-struct filled by the original `GetDataForMap`.
-unsafe fn apply_texture_fallback(
-    config: &UMapSpecificLoadingScreenConfig,
-    data: &mut FMapSpecificLoadingScreenConfigData,
-    extra: &LoadingScreen,
-) {
-    if data.texture.asset_path_name != config.default_screen.texture.asset_path_name {
-        return;
-    }
-    data.texture.asset_path_name = FName::with_type(&extra.texture, EFindName::Add);
-    sinfo!["Using fallback loading screen texture {}", extra.texture];
-}
-
-define_pattern_resolver!(
-    GetDataForMap,
-    ["48 89 4C 24 08 55 53 57 41 56 48 8D 6C 24 C1 48 81 EC F8 00 00 00 49 8B F8 4C 8B F2"]
-);
-
-// void UMapSpecificLoadingScreenConfig::GetDataForMap(longlong param_1,FString *param_2,void **param_3)
+    // void UMapSpecificLoadingScreenConfig::GetDataForMap(longlong param_1,FString *param_2,void **param_3)
 //
 // NONE: the callee consumes (frees) its by-value FString arg, so the original
 // must be called exactly once.
-#[unchained_macros::runtime_bindings]
-impl UMapSpecificLoadingScreenConfig {
     #[bind_resolved_func_detour(GetDataForMap)]
     pub(crate) unsafe fn get_data_for_map_detour(
         self: *mut Self,
@@ -172,6 +141,37 @@ impl UMapSpecificLoadingScreenConfig {
             ];
         }
     }
+}
+
+const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, configs) == 0x28);
+
+const _: () =
+    assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
+
+/// Adds the entry, preventing panics from crossing into the engine.
+fn add_entry_guarded(config: *mut UMapSpecificLoadingScreenConfig, extra: &LoadingScreen) {
+    // SAFETY: `config` is the `this` pointer of a live `GetDataForMap` call on the game thread.
+    match catch_unwind(AssertUnwindSafe(|| unsafe { (*config).add_entry(extra) })) {
+        Ok(()) => {}
+        Err(_) => crate::serror!("Panic while adding extra loading screen for {}", extra.map),
+    }
+}
+
+/// Fallback (feature `loading_screen_texture_fallback`): when the native lookup
+/// fell back to the default entry, patch just the texture `FName`.
+///
+/// # Safety
+/// `data` must be the out-struct filled by the original `GetDataForMap`.
+unsafe fn apply_texture_fallback(
+    config: &UMapSpecificLoadingScreenConfig,
+    data: &mut FMapSpecificLoadingScreenConfigData,
+    extra: &LoadingScreen,
+) {
+    if data.texture.asset_path_name != config.default_screen.texture.asset_path_name {
+        return;
+    }
+    data.texture.asset_path_name = FName::with_type(&extra.texture, EFindName::Add);
+    sinfo!["Using fallback loading screen texture {}", extra.texture];
 }
 
 #[cfg(test)]

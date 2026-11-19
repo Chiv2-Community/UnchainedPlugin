@@ -17,11 +17,12 @@ define_pattern_resolver!(ApproveLogin, [
     "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8B EC 48 81 EC 80 00 00 00 8B", // STEAM
 ]);
 
-mod backend;
-mod chat;
-
 // void ATBLGameMode::BroadcastLocalizedChat(const FText&, EChatType)
 define_pattern_resolver!(BroadcastLocalizedChat,["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]);
+
+mod backend;
+
+mod chat;
 
 #[repr(C)]
 #[derive(Debug)]
