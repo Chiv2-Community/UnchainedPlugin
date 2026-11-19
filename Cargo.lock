@@ -29,6 +29,7 @@ dependencies = [
  "log",
  "log4rs",
  "memmap2",
+ "object",
  "parking_lot",
  "paste",
  "patternsleuth",

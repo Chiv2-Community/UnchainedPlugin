@@ -167,6 +167,7 @@ emojis = "0.6"
 unicode-segmentation = "1.12"
 
 [dev-dependencies]
+object = "0.32.2"
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 [patch.crates-io]
