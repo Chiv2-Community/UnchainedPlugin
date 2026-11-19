@@ -453,7 +453,7 @@ pub fn auto_register_all_assets() {
     log_registered_markers();
     // Reading the map markers loads their assets, so it runs as its own game
     // thread job on a later tick rather than inside the registration call.
-    use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+    use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
     run_on_game_thread(|| {
         unsafe { crate::features::map_markers::scan_map_markers() };
     });
@@ -469,8 +469,21 @@ fn log_registered_markers() {
         .iter()
         .map(|class_name| {
             // A failed query means the registry has no asset of that class.
-            let count = unsafe { crate::chivalry2::engine::UAssetRegistryHelpers::get_assets_by_class(class_name) }
-                .map(|assets| assets.len())
+            let count = unsafe {
+                use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+                IAssetRegistry::asset_registry_interface().map(|registry| {
+                    let mut assets = TArray::<FAssetData>::default();
+                    if registry.get_assets_by_class(
+                        FName::with_type(class_name, EFindName::Find),
+                        &mut assets,
+                        true,
+                    ) {
+                        assets.len()
+                    } else {
+                        0
+                    }
+                })
+            }
                 .unwrap_or(0);
             format!("{count} {class_name}")
         })
@@ -531,7 +544,18 @@ pub fn register_filtered_assets_sync() {
     let chunk = crate::cli_args().mod_map_batch;
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
-        if let Err(e) = unsafe { crate::chivalry2::engine::UAssetRegistryHelpers::scan_files_synchronous(batch) } {
+        let outcome = unsafe {
+            use crate::chivalry2::engine::{FMalloc, FString, IAssetRegistry, TArray};
+            IAssetRegistry::asset_registry_interface().map(|registry| {
+                let allocator = FMalloc::global();
+                let mut files = TArray::<FString>::default();
+                for file in batch {
+                    files.push_in(FString::from(file.as_str()), allocator);
+                }
+                registry.scan_files_synchronous(&files, false);
+            })
+        };
+        if let Err(e) = outcome {
             serror!("Synchronous filtered batch {} failed: {}", i, e);
             return;
         }
@@ -594,7 +618,7 @@ fn filter_mounted_paks(mounted: &[String]) -> Vec<PathBuf> {
 /// paks. Falls back to a `Content/Paks` scan if no mounts were captured (e.g. the
 /// `Mount` resolver isn't populated yet).
 fn discovery_pak_paths() -> Vec<PathBuf> {
-    use crate::unchained::detours::engine::pak_file::i_platform_file_pak::mounted_pak_filenames;
+    use crate::unchained::detours::engine::runtime::pak_file::i_platform_file_pak::mounted_pak_filenames;
     let mounted = mounted_pak_filenames();
     let fallback = || {
         default_paks_dir().and_then(|d| list_pak_files(&d).ok()).unwrap_or_default()

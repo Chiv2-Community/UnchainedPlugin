@@ -1,6 +1,6 @@
 //! IPv6 compatibility for native UDP pings.
 
-use crate::chivalry2::engine::online::icmp::{FUDPPing, TFunctionFIcmpEchoResult};
+use crate::chivalry2::engine::runtime::online::icmp::icmp::{FUDPPing, TFunctionFIcmpEchoResult};
 use crate::chivalry2::engine::FString;
 use crate::tools::hook_globals::cli_args;
 

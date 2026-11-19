@@ -78,12 +78,12 @@ the detour is stored, its address remains reserved even if activation fails.
 
 ## Current files
 
-- Model: `src/chivalry2/engine/online/icmp.rs`
+- Model: `src/chivalry2/engine/runtime/online/icmp/icmp.rs`
 - Plugin policy: `src/unchained/detours/networking/ipv6_support.rs`
 - Other native models: `src/chivalry2/{engine,tbl}/`
 - Native game-plugin ABIs: `src/chivalry2/plugins/`
 - Custom blueprint layouts/adapters: `src/unchained/blueprints/`
-- Replacements: `src/unchained/detours/{engine,tbl,integrations}/`
+- Replacements: `src/unchained/detours/{engine,tbl,plugins}/`
 - Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override
   state live with the replacements, not on native types.
 - `UTBLSystemLibrary::execute_console_command` is a static binding namespace;

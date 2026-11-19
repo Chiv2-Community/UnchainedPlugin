@@ -11,7 +11,7 @@ use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
 use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs};
-use crate::chivalry2::engine::core_uobject::uobject::uobject_array::FUObjectArray;
+use crate::chivalry2::engine::runtime::core_uobject::uobject::uobject_array::FUObjectArray;
 use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{
     UObjectBaseUtilityGetPathName,

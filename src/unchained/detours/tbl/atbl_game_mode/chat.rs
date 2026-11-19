@@ -4,7 +4,7 @@ use crate::chivalry2::engine::AActor;
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::UObjectType;
 use crate::chivalry2::tbl::ATBLGameMode;
-use crate::unchained::detours::engine::engine::game_framework::player_controller::{
+use crate::unchained::detours::engine::runtime::engine::game_framework::player_controller::{
     actor_player_state, capture_chat,
 };
 

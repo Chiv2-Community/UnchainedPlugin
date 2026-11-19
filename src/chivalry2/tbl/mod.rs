@@ -18,6 +18,9 @@ pub use utbl_game_instance::UTBLGameInstance;
 pub use utbl_system_library::UTBLSystemLibrary;
 
 pub mod atbl_character;
+pub mod tbl_types;
+#[cfg(feature = "move-autonomous-desync")]
+pub mod animation;
 
 pub mod atbl_game_mode;
 

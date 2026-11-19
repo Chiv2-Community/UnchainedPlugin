@@ -6,3 +6,4 @@ pub mod umap_specific_loading_screen_config;
 pub mod utbl_engine;
 pub mod utbl_game_instance;
 pub mod utbl_system_library;
+pub mod tbl_types;

@@ -583,7 +583,7 @@ pub fn world_init() {
         // idempotent regardless of which site fires first.
         // Jobs run in queue order, so this is queued before the mod scan below:
         // the scan must see the markers this registers.
-        use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+        use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
         run_on_game_thread(|| {
             crate::features::mod_maps::auto_register_all_assets();
         });

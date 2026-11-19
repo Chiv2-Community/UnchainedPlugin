@@ -24,7 +24,7 @@ impl Command<ListModsArgs> for ListModsCommand {
             let (tx, rx) = mpsc::channel();
             sinfo!("Starting scan!");
 
-        use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+        use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
         run_on_game_thread(move || {
                 if let Some(mm) = mm_lock().as_ref() {
                     mm.scan_asset_registry();

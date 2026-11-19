@@ -20,7 +20,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
-        use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+        use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
                 let game_ptr = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };

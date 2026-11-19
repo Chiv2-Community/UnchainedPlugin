@@ -6,7 +6,7 @@ use crate::chivalry2::tbl::{UTBLSystemLibrary, EChatType};
 use crate::chivalry2::engine::FActorSpawnParameters;
 use crate::chivalry2::engine::FRotator;
 use crate::chivalry2::engine::TSoftClassPtr;
-use crate::chivalry2::engine::UAssetRegistryHelpers;
+use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry};
 use crate::unchained::blueprints::mod_assets::ArgonSDKModBase;
 use crate::unchained::blueprints::mod_assets::DA_ModMarker_C;
 use crate::unchained::blueprints::mod_assets::UModLoaderSettings_C;
@@ -81,7 +81,7 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //     {},
 //     false,
 //     |args| {
-//         use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+//         use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
@@ -161,9 +161,17 @@ const MOD_MARKER_V2_CLASS: &str = "DA_ModMarker_V2_C";
 /// Object paths of every asset of `class_name` in the Asset Registry. A failed
 /// query means no marker of that class is installed, which is not an error.
 unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
-    let Ok(assets) = UAssetRegistryHelpers::get_assets_by_class(class_name) else {
+    let Ok(registry) = IAssetRegistry::asset_registry_interface() else {
         return Vec::new();
     };
+    let mut assets = TArray::<FAssetData>::default();
+    if !registry.get_assets_by_class(
+        FName::with_type(class_name, EFindName::Find),
+        &mut assets,
+        true,
+    ) {
+        return Vec::new();
+    }
     assets
         .as_slice()
         .iter()
@@ -459,7 +467,7 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::unchained::detours::engine::engine::engine::game_engine::{
+        use crate::unchained::detours::engine::runtime::engine::engine::game_engine::{
             in_game_thread_job, run_on_game_thread,
         };
         if mod_class.is_null() {

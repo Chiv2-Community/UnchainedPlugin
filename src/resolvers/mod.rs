@@ -142,7 +142,7 @@ mod binding_tests {
 
     #[test]
     fn udp_echo_binding_and_plugin_replacement_share_one_native_target() {
-        use crate::chivalry2::engine::online::icmp::FUDPPing;
+        use crate::chivalry2::engine::runtime::online::icmp::icmp::FUDPPing;
         let binding = FUDPPing::__UNCHAINED_BINDING_udp_echo.binding();
         assert_eq!(binding.name(), "UDPEcho");
         assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()

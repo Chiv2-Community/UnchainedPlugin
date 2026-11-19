@@ -148,6 +148,42 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
+fn engine_bindings_preserve_native_source_categories() {
+    fn check(root: &Path, directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(root, &path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs")
+                || path.file_name().unwrap() == "mod.rs"
+            {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).unwrap();
+            let header = source.lines().next().unwrap();
+            let category = if header.contains("Engine/Source/Runtime/") {
+                "runtime"
+            } else if header.contains("Engine/Source/ThirdParty/") {
+                "third_party"
+            } else if header.contains("Engine/Plugins/") {
+                "plugins"
+            } else {
+                panic!("missing native source category: {}", path.display());
+            };
+            assert!(
+                path.strip_prefix(root).unwrap().starts_with(category),
+                "native source category mismatch: {}",
+                path.display()
+            );
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2/engine");
+    check(&root, &root);
+}
+
+#[test]
 fn custom_blueprints_stay_outside_chivalry2() {
     fn check(directory: &Path) {
         for entry in std::fs::read_dir(directory).unwrap() {

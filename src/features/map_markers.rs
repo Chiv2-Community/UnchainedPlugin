@@ -137,13 +137,24 @@ pub fn map_marker_cache() -> &'static MapMarkerCache {
 /// Must run on the game thread, after mod assets were registered.
 pub unsafe fn scan_map_markers() -> usize {
     // A failed query means no map marker is installed.
-    let marker_paths: Vec<String> = match crate::chivalry2::engine::UAssetRegistryHelpers::get_assets_by_class(MAP_MARKER_V2_CLASS) {
-        Ok(assets) => assets
-            .as_slice()
-            .iter()
-            .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
-            .map(|asset| asset.ObjectPath.to_string())
-            .collect(),
+    use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+    let marker_paths: Vec<String> = match IAssetRegistry::asset_registry_interface() {
+        Ok(registry) => {
+            let mut assets = TArray::<FAssetData>::default();
+            if registry.get_assets_by_class(
+                FName::with_type(MAP_MARKER_V2_CLASS, EFindName::Find),
+                &mut assets,
+                true,
+            ) {
+                assets.as_slice()
+                    .iter()
+                    .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
+                    .map(|asset| asset.ObjectPath.to_string())
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        }
         Err(_) => Vec::new(),
     };
 

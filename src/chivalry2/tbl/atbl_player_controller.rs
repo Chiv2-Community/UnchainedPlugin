@@ -1,6 +1,7 @@
 //! ArgonSDK main: [ATBLPlayerController](https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerController.h).
 
 use crate::chivalry2::engine::FPrimaryAssetId;
+use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::FText;
 use crate::chivalry2::engine::TSubclassOfAInventoryItem;
 use crate::chivalry2::engine::TSubclassOfATBLCharacter;
@@ -8,6 +9,12 @@ use crate::chivalry2::engine::TSubclassOfULoadoutSelection;
 use crate::chivalry2::tbl::fownership_response::FOwnershipResponse;
 use crate::chivalry2::tbl::ATBLPlayerState;
 use std::os::raw::c_void;
+
+// Shipping PDB: ATBLPlayerController::ClientReceiveChat_Implementation, RVA 0x1861f00.
+define_pattern_resolver!(
+    ClientReceiveChat,
+    ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
+);
 
 // Methods to enable customization / loadout on custom servers
 
@@ -66,6 +73,18 @@ pub struct ATBLPlayerController {
 
 #[unchained_macros::runtime_bindings]
 impl ATBLPlayerController {
+    // Targets ClientReceiveChat_Implementation, not the generated RPC wrapper.
+    #[unchained_macros::bind_resolved_func(ClientReceiveChat)]
+    pub(crate) unsafe fn client_receive_chat(
+        self: *mut Self,
+        sender: *mut ATBLPlayerState,
+        message: *const FString,
+        chat_type: u32,
+        is_sender_dev: bool,
+        override_color: u32,
+    ) {
+    }
+
     #[unchained_macros::bind_resolved_func(
         ATBLPlayerController__GetOwnershipFromPlayerControllerAndState
     )]

@@ -7,7 +7,7 @@ or `src/chivalry2/plugins` (native game plugins, including private headers).
 Game model files each identify one corresponding ArgonSDK source file.
 Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Startup and
 integration patches live under `src/unchained/patches`.
-Engine paths mirror native module/header paths, omitting `Runtime` and header
+Engine paths mirror native source-category/module/header paths, omitting header
 visibility directories. See the [source layout rules](../../docs/engine-sources.md).
 Plugin replacements can live under `src/unchained/detours`, targeting a native
 method with `#[bind_func_detour(Type::method, condition)]`. See
@@ -44,9 +44,9 @@ What remains here:
   just like other bindings. Keys come from the request offset registry.
 - Patch resolvers and `CREATE_PATCH!` stay together in the owner's module.
 - Native owners that are not established remain free functions, not guessed receivers.
-- Examples: [`UGameEngine`](../chivalry2/engine/engine/engine/game_engine.rs),
-  [`UObject::LoadConfig`](../chivalry2/engine/core_uobject/uobject/object.rs), and
-  [`UNetDriver` patches](../chivalry2/engine/engine/engine/net_driver.rs).
+- Examples: [`UGameEngine`](../chivalry2/engine/runtime/engine/engine/game_engine.rs),
+  [`UObject::LoadConfig`](../chivalry2/engine/runtime/core_uobject/uobject/object.rs), and
+  [`UNetDriver` patches](../chivalry2/engine/runtime/engine/engine/net_driver.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.

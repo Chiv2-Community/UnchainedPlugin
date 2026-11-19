@@ -6,6 +6,7 @@ use crate::chivalry2::engine::FPrimaryAssetId;
 use crate::chivalry2::engine::FString;
 use crate::chivalry2::engine::FText;
 use crate::chivalry2::engine::InvariantText;
+use crate::chivalry2::engine::UObjectType;
 use crate::chivalry2::engine::TSubclassOfAInventoryItem;
 use crate::chivalry2::engine::TSubclassOfATBLCharacter;
 use crate::chivalry2::engine::TSubclassOfULoadoutSelection;
@@ -13,7 +14,30 @@ use crate::chivalry2::tbl::atbl_player_controller::*;
 use crate::chivalry2::tbl::fownership_response::FOwnershipResponse;
 use crate::chivalry2::tbl::{ATBLPlayerState, EChatType, UTBLGameInstance};
 use crate::events::broadcast_message::game_chat::broadcast_parts;
+use crate::unchained::detours::engine::runtime::engine::game_framework::player_controller::{
+    capture_chat, has_authority,
+};
 use std::os::raw::c_void;
+
+#[unchained_macros::bind_func_detour(ATBLPlayerController::client_receive_chat)]
+pub(crate) unsafe fn client_receive_chat_detour(
+    this: *mut ATBLPlayerController,
+    sender: *mut ATBLPlayerState,
+    message: *const FString,
+    chat_type: u32,
+    is_sender_dev: bool,
+    override_color: u32,
+) {
+    // Hosts capture once at BroadcastChat, not once per local recipient.
+    if !has_authority() {
+        if let Some(player) = unsafe { ATBLPlayerState::from_ptr(sender) } {
+            capture_chat(player, message, chat_type);
+        }
+    }
+    unsafe {
+        this.client_receive_chat(sender, message, chat_type, is_sender_dev, override_color);
+    }
+}
 
 #[unchained_macros::bind_func_detour(
     ATBLPlayerController::get_ownership_from_player_controller_and_state
@@ -161,7 +185,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
     unsafe {
-        crate::unchained::detours::engine::engine::game_framework::player_controller::client_message_detour(controller_ptr, &mut console_line, FName::default(), 0.0);
+        crate::unchained::detours::engine::runtime::engine::game_framework::player_controller::client_message_detour(controller_ptr, &mut console_line, FName::default(), 0.0);
     }
     let [r, g, b, a] = origin_color;
     let origin_color = FLinearColor { r, g, b, a };
@@ -189,6 +213,18 @@ fn native_string(text: *const FText) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_replacement_uses_tbl_controller_receiver() {
+        let _: unsafe fn(
+            *mut ATBLPlayerController,
+            *mut ATBLPlayerState,
+            *const FString,
+            u32,
+            bool,
+            u32,
+        ) = client_receive_chat_detour;
+    }
 
     #[test]
     fn display_override_accepts_only_global_channels() {

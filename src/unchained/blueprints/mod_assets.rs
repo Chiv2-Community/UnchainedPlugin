@@ -1,6 +1,9 @@
 //! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
 //! Plugin-owned mod, marker, and settings assets; not native TBL headers.
 
+use crate::chivalry2::engine::runtime::core_uobject::uobject::unreal_type::{
+    FArrayProperty, FStructProperty,
+};
 use crate::chivalry2::engine::FProperty;
 use crate::chivalry2::engine::FSoftObjectPath;
 use crate::chivalry2::engine::FSoftObjectPtr;
@@ -235,11 +238,6 @@ impl V2MarkerOffsets {
     }
 }
 
-/// Size of a UE4.25 `FProperty` (FField 0x38 + members through the four trailing
-/// property-link pointers). `FArrayProperty::Inner` and `FStructProperty::Struct`
-/// each follow the full `FProperty`, so both sit at this offset from the field.
-const FPROPERTY_SIZE: usize = 0x78;
-
 /// Raw `TArray` header {data, num, max} as laid out in memory. Only ever read as
 /// a view over engine memory - never wrapped in `TArray<T>`, whose `Drop` would
 /// free the engine's buffer.
@@ -315,11 +313,7 @@ impl MapMarkerOffsets {
             }
             offset as usize
         };
-        // FArrayProperty::Inner (a StructProperty) follows the full FProperty.
-        let inner = *(maps_field
-            .cast::<u8>()
-            .add(FPROPERTY_SIZE)
-            .cast::<*const FProperty>());
+        let inner = maps_field.cast::<FArrayProperty>().inner();
         if inner.is_null() {
             return Err("Maps array has no inner property".into());
         }
@@ -327,10 +321,7 @@ impl MapMarkerOffsets {
         if element_size == 0 {
             return Err("Maps element size is zero".into());
         }
-        // FStructProperty::Struct follows the full FProperty.
-        let strukt = *((inner as *const u8)
-            .add(FPROPERTY_SIZE)
-            .cast::<*const UStruct>());
+        let strukt = inner.cast::<FStructProperty>().script_struct();
         let members = UStruct::struct_member_offsets(strukt);
         let member = |name: &str| members.get(name).copied();
         let offsets = Self {

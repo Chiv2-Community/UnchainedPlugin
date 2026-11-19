@@ -24,9 +24,25 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
         let (tx, rx) = tokio::sync::oneshot::channel();
         sinfo!("Querying the Asset Registry for /Game/Mods on the game thread");
 
-        use crate::unchained::detours::engine::engine::engine::game_engine::run_on_game_thread;
+        use crate::unchained::detours::engine::runtime::engine::engine::game_engine::run_on_game_thread;
         run_on_game_thread(move || {
-            let outcome = match unsafe { crate::chivalry2::engine::UAssetRegistryHelpers::get_assets_by_path("/Game/Mods", true) } {
+            let assets = unsafe {
+                use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+                IAssetRegistry::asset_registry_interface().and_then(|registry| {
+                    let mut assets = TArray::<FAssetData>::default();
+                    if registry.get_assets_by_path(
+                        FName::with_type("/Game/Mods", EFindName::Find),
+                        &mut assets,
+                        true,
+                        false,
+                    ) {
+                        Ok(assets)
+                    } else {
+                        Err("GetAssetsByPath returned false for /Game/Mods".to_string())
+                    }
+                })
+            };
+            let outcome = match assets {
                 Ok(assets) => {
                     let mut lines: Vec<String> = Vec::new();
                     let mut map_count = 0usize;
