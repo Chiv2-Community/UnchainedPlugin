@@ -1,16 +1,17 @@
 //! UE 4.25-plus: request handles use [TSharedPtr](https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/SharedPointer.h).
-//! OpenAPIClientApi and its generated request declarations are not shipped in ArgonSDK.
+//! OpenAPIClientAPI and its generated request declarations are not shipped in ArgonSDK.
 
 // Overrides for PlayFab (tbio) requests
 
-use crate::chivalry2::engine::FString;
+use crate::chivalry2::engine::{FString, TSharedPtrIHttpRequest};
+use std::ffi::c_void;
 use binary_bloodhound::{BinaryMatcher, ExactlyOne, HasAddress, Matcher};
 use patternsleuth::MemoryTrait;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 
-// OpenAPIClientApi::CreateHttpRequest(OpenAPIClientApi *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
+// OpenAPIClientAPI::CreateHttpRequest(OpenAPIClientAPI *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
 define_custom_resolver!(CreateHttpRequest, {
     request_functions()?.map(|resolved| {
         let (address, offsets) = resolved.value.as_ref();
@@ -23,7 +24,7 @@ define_custom_resolver!(CreateHttpRequest, {
     })
 });
 
-/// Generic Class for Get*Post requests
+/// Common native prefix for Get*Post request parameters.
 #[repr(C)]
 #[derive(Debug)]
 pub struct GenericRequest {
@@ -33,85 +34,430 @@ pub struct GenericRequest {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct OpenAPIClientApi {
+pub struct OpenAPIClientAPI {
     pub url_base: FString,
 }
 
-/// Generic hook macro for Get*Post methods (e.g. GetMotd, GetCurrentGames)
-/// OpenAPIMerged::OpenAPIClientApi::GetMotdPost
-//   (OpenAPIClientApi *this,TSharedPtr<> *__return_storage_ptr__,GetMotdPostRequest *param_1,TBaseDelegate<> *param_2)
-// Delegate specializations depend on the response type; keep that slot untyped.
-macro_rules! CREATE_REQUEST_HOOK {
-    ($name:ident) => {
-        paste::paste! {
-            // These names resolve through CreateHttpRequest's offset registry,
-            // not a separate patternsleuth scan.
-            #[allow(non_camel_case_types)]
-            struct $name;
-            #[unchained_macros::runtime_bindings]
-            impl OpenAPIClientApi {
-            #[bind_resolved_func_detour($name)]
-            unsafe fn [<$name _detour>](
-                self: *mut Self,
-                a2: *mut crate::chivalry2::engine::TSharedPtrIHttpRequest,
-                request: *mut GenericRequest,
-                a4: *mut std::os::raw::c_void
-            ) -> *mut crate::chivalry2::engine::TSharedPtrIHttpRequest {
-                let this_ptr = self;
-                let (this, req) = match unsafe { (this_ptr.as_mut(), request.as_mut()) } {
-                    (Some(t), Some(r)) => (t, r),
-                    (None, _) => { $crate::serror!("GCGObj was null"); return std::ptr::null_mut(); }
-                    (_, None) => { $crate::serror!("Request was null"); return std::ptr::null_mut(); }
-                };
-                let url = $crate::features::server_browser::urls::tbio_base_url(
-                    &$crate::tools::hook_globals::cli_args().server_browser_backend,
-                );
-                let backend_url = $crate::chivalry2::engine::FString::from(url.as_str());
-                let empty_token = $crate::chivalry2::engine::FString::from("");
-                let old_url = std::mem::replace(&mut this.url_base, backend_url);
-                let old_token = std::mem::replace(&mut req.token, empty_token);
-                let result = std::panic::catch_unwind(|| {
-                    unsafe { Self::$name(this_ptr, a2, request, a4) }
-                });
-                this.url_base = old_url;
-                req.token = old_token;
-                match result {
-                    Ok(response) => response,
-                    Err(panic) => std::panic::resume_unwind(panic),
-                }
-            }
-            }
+#[unchained_macros::runtime_bindings]
+impl OpenAPIClientAPI {
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetMotd)]
+    pub unsafe fn get_post_get_motd_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.with_backend_request(request, || self.get_post_get_motd(result, request, delegate))
         }
-    };
-}
+    }
 
-#[cfg(feature = "request_dummy_hooks")]
-macro_rules! CREATE_REQUEST_HOOK_DUMMY {
-    ($name:ident) => {
-        paste::paste! {
-            #[allow(non_camel_case_types)]
-            struct $name;
-            #[unchained_macros::runtime_bindings]
-            impl OpenAPIClientApi {
-            #[bind_resolved_func_detour($name)]
-            unsafe fn [<$name _detour>](
-                self: *mut Self,
-                a2: *mut crate::chivalry2::engine::TSharedPtrIHttpRequest,
-                request: *mut GenericRequest,
-                a4: *mut std::os::raw::c_void,
-            ) -> *mut crate::chivalry2::engine::TSharedPtrIHttpRequest {
-                let this_ptr = self;
-                if this_ptr.is_null() || request.is_null() {
-                    $crate::serror!("Dummy request had null pointers");
-                    return std::ptr::null_mut();
-                }
-                // $crate::sinfo!("{} Dummy: url_base={}", stringify!($name), this.url_base);
-                $crate::sinfo!("Handling dummy request");
-                unsafe { Self::$name(this_ptr, a2, request, a4) }
-            }
-            }
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetCurrentGames)]
+    pub unsafe fn get_post_get_current_games_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.with_backend_request(request, || self.get_post_get_current_games(result, request, delegate))
         }
-    };
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetPlayerInventory)]
+    pub unsafe fn get_post_get_player_inventory_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_get_player_inventory(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_LoginPlayFab)]
+    pub unsafe fn get_post_login_play_fab_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_login_play_fab(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetCampaigns)]
+    pub unsafe fn get_post_get_campaigns_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_get_campaigns(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_ReAuthServerCustomId)]
+    pub unsafe fn get_post_re_auth_server_custom_id_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_re_auth_server_custom_id(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PostLogin)]
+    pub unsafe fn get_post_post_login_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_post_login(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_Heartbeat)]
+    pub unsafe fn get_post_heartbeat_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_heartbeat(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PreRegisterGame)]
+    pub unsafe fn get_post_pre_register_game_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_pre_register_game(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetMyProgress)]
+    pub unsafe fn get_post_get_my_progress_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_get_my_progress(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetJoinTicket)]
+    pub unsafe fn get_post_get_join_ticket_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_get_join_ticket(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_DeregisterGame)]
+    pub unsafe fn get_post_deregister_game_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_deregister_game(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_NotifyPlayerJoined)]
+    pub unsafe fn get_post_notify_player_joined_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_notify_player_joined(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GrantFlavorEntitlement)]
+    pub unsafe fn get_post_grant_flavor_entitlement_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_grant_flavor_entitlement(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_ReportTelemetry)]
+    pub unsafe fn get_post_report_telemetry_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_report_telemetry(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PhonebookSearchId)]
+    pub unsafe fn get_post_phonebook_search_id_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_phonebook_search_id(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PhonebookGetOwnId)]
+    pub unsafe fn get_post_phonebook_get_own_id_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_phonebook_get_own_id(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_Award)]
+    pub unsafe fn get_post_award_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_award(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_RedeemEntitlementEOS)]
+    pub unsafe fn get_post_redeem_entitlement_eos_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_redeem_entitlement_eos(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GrantPendingRewards)]
+    pub unsafe fn get_post_grant_pending_rewards_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_grant_pending_rewards(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PurchaseWithVirtualCurrency)]
+    pub unsafe fn get_post_purchase_with_virtual_currency_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_purchase_with_virtual_currency(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_GetTitleData)]
+    pub unsafe fn get_post_get_title_data_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_get_title_data(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_LoginEOS)]
+    pub unsafe fn get_post_login_eos_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_login_eos(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_ConfirmJoinTicket)]
+    pub unsafe fn get_post_confirm_join_ticket_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_confirm_join_ticket(result, request, delegate))
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    /// # Safety
+    /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
+    #[bind_resolved_request_function_detour(GetPost_PhonebookDeleteOwnId)]
+    pub unsafe fn get_post_phonebook_delete_own_id_detour(
+        self: *mut Self,
+        result: *mut TSharedPtrIHttpRequest,
+        request: *mut GenericRequest,
+        delegate: *mut c_void,
+    ) -> *mut TSharedPtrIHttpRequest {
+        unsafe {
+            self.log_request(request, || self.get_post_phonebook_delete_own_id(result, request, delegate))
+        }
+    }
+
+    unsafe fn with_backend_request(
+        self: *mut Self,
+        request: *mut GenericRequest,
+        call: impl FnOnce() -> *mut TSharedPtrIHttpRequest + std::panic::UnwindSafe,
+    ) -> *mut TSharedPtrIHttpRequest {
+        let (this, request) = match unsafe { (self.as_mut(), request.as_mut()) } {
+            (Some(this), Some(request)) => (this, request),
+            (None, _) => {
+                serror!("OpenAPIClientAPI was null");
+                return std::ptr::null_mut();
+            }
+            (_, None) => {
+                serror!("Request was null");
+                return std::ptr::null_mut();
+            }
+        };
+        let url = crate::features::server_browser::urls::tbio_base_url(
+            &crate::tools::hook_globals::cli_args().server_browser_backend,
+        );
+        let backend_url = FString::from(url.as_str());
+        let empty_token = FString::from("");
+        let old_url = std::mem::replace(&mut this.url_base, backend_url);
+        let old_token = std::mem::replace(&mut request.token, empty_token);
+        let result = std::panic::catch_unwind(call);
+        this.url_base = old_url;
+        request.token = old_token;
+        match result {
+            Ok(response) => response,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
+
+    #[cfg(feature = "request_dummy_hooks")]
+    unsafe fn log_request(
+        self: *mut Self,
+        request: *mut GenericRequest,
+        call: impl FnOnce() -> *mut TSharedPtrIHttpRequest,
+    ) -> *mut TSharedPtrIHttpRequest {
+        if self.is_null() || request.is_null() {
+            serror!("Dummy request had null pointers");
+            return std::ptr::null_mut();
+        }
+        sinfo!("Handling dummy request");
+        call()
+    }
 }
 
 pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
@@ -159,46 +505,6 @@ fn request_functions() -> patternsleuth::resolvers::Result<
     .ensure_one())
 }
 
-CREATE_REQUEST_HOOK!(GetPost_GetMotd);
-
-CREATE_REQUEST_HOOK!(GetPost_GetCurrentGames);
-
-macro_rules! request_dummy_hooks {
-    ($($hook:ident),* $(,)?) => {
-        $(
-            #[cfg(feature = "request_dummy_hooks")]
-            CREATE_REQUEST_HOOK_DUMMY!($hook);
-        )*
-    }
-}
-
-request_dummy_hooks!(
-    GetPost_GetPlayerInventory,
-    GetPost_LoginPlayFab,
-    GetPost_GetCampaigns,
-    GetPost_ReAuthServerCustomId,
-    GetPost_PostLogin,
-    GetPost_Heartbeat,
-    GetPost_PreRegisterGame,
-    GetPost_GetMyProgress,
-    GetPost_GetJoinTicket,
-    GetPost_DeregisterGame,
-    GetPost_NotifyPlayerJoined,
-    GetPost_GrantFlavorEntitlement,
-    GetPost_ReportTelemetry,
-    GetPost_PhonebookSearchId,
-    GetPost_PhonebookGetOwnId,
-    GetPost_Award,
-    GetPost_RedeemEntitlementEOS,
-    GetPost_GrantPendingRewards,
-    GetPost_PurchaseWithVirtualCurrency,
-    // GetPost_SetCampaignPurchased,
-    GetPost_GetTitleData,
-    GetPost_LoginEOS,
-    GetPost_ConfirmJoinTicket,
-    GetPost_PhonebookDeleteOwnId
-);
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,6 +520,39 @@ mod tests {
         0x40, 0x53, 0x55, 0x56, 0x41, 0x56, 0x48, 0x83, 0xEC, 0x78, 0x48, 0x8B,
         0x05, 0, 0, 0, 0, 0x48, 0x33, 0xC4, 0x48, 0x89, 0x44, 0x24,
     ];
+
+    #[test]
+    fn request_methods_preserve_native_signatures_keys_and_feature_gates() {
+        type RequestFunction = unsafe fn(
+            *mut OpenAPIClientAPI, *mut TSharedPtrIHttpRequest, *mut GenericRequest, *mut c_void,
+        ) -> *mut TSharedPtrIHttpRequest;
+        let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
+        let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
+        let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd_detour;
+        let keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+            .map(|registration| registration.name)
+            .filter(|name| name.starts_with("GetPost_"))
+            .collect();
+        assert!(keys.contains(&"GetPost_GetMotd"));
+        assert!(keys.contains(&"GetPost_GetCurrentGames"));
+        assert_eq!(keys.len(), if cfg!(feature = "request_dummy_hooks") { 25 } else { 2 });
+        assert_eq!(keys.contains(&"GetPost_GetPlayerInventory"), cfg!(feature = "request_dummy_hooks"));
+        #[cfg(feature = "request_dummy_hooks")]
+        {
+            let _: RequestFunction = OpenAPIClientAPI::get_post_get_player_inventory;
+            let _: RequestFunction = OpenAPIClientAPI::get_post_get_player_inventory_detour;
+        }
+    }
+
+    #[test]
+    fn invalid_request_pointers_do_not_call_native_code_or_prepare_overrides() {
+        let client = std::ptr::null_mut::<OpenAPIClientAPI>();
+        let request = std::ptr::null_mut::<GenericRequest>();
+        let result = unsafe { client.with_backend_request(request, || panic!("must not call native code")) };
+        assert!(result.is_null());
+        #[cfg(feature = "request_dummy_hooks")]
+        assert!(unsafe { client.log_request(request, || panic!("must not call native code")) }.is_null());
+    }
 
     struct Fixture {
         text: Vec<u8>,
