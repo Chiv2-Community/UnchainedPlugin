@@ -10,9 +10,28 @@ define_pattern_resolver!(PlayFabEndAuthentication, [
 // Current Steam/Epic layouts, verified against the native session getter:
 // FOnlineAuthPlayFab::PlayFabSubsystem (+0xe0), SessionInterface.Object (+0x140).
 #[repr(C)]
-struct AuthContext<'a> {
+pub struct FOnlineAuthPlayFab {
     padding: [u8; 0xe0],
-    subsystem: &'a SubsystemContext,
+    subsystem: *const SubsystemContext,
+}
+
+#[unchained_macros::runtime_bindings]
+impl FOnlineAuthPlayFab {
+    // Shutdown clears SessionInterface before the auth destructor revokes tickets.
+    // Skip EndAuthentication, not the remaining destructor cleanup.
+    #[bind_resolved_func_detour(PlayFabEndAuthentication)]
+    unsafe fn end_authentication_detour(self: *const Self, user_id: *const c_void) {
+        // SAFETY: The native caller keeps the auth object and its referenced
+        // subsystem valid for this call, using the verified layouts.
+        let subsystem = unsafe { &*(*self).subsystem };
+        if subsystem.session.is_null() {
+            sdebug!("Skipping PlayFab logout cleanup after session teardown");
+            return;
+        }
+        unsafe {
+            self.end_authentication(user_id);
+        }
+    }
 }
 
 #[repr(C)]
@@ -21,29 +40,34 @@ struct SubsystemContext {
     session: *const c_void,
 }
 
-// Shutdown clears SessionInterface before the auth destructor revokes tickets.
-// EndAuthentication assumes that interface exists; the remaining destructor cleanup still runs.
-#[unchained_macros::bind_resolved_func_detour(PlayFabEndAuthentication)]
-unsafe fn end_authentication_detour(auth: *const c_void, user_id: *const c_void) {
-    // SAFETY: The native caller keeps the auth object and its referenced subsystem
-    // valid for this call, using the verified layouts above.
-    let context = unsafe { &*auth.cast::<AuthContext<'_>>() };
-    if context.subsystem.session.is_null() {
-        sdebug!("Skipping PlayFab logout cleanup after session teardown");
-        return;
-    }
-    unsafe {
-        end_authentication(auth, user_id);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn native_layout_matches_supported_builds() {
-        assert_eq!(std::mem::offset_of!(AuthContext<'_>, subsystem), 0xe0);
+        assert_eq!(std::mem::offset_of!(FOnlineAuthPlayFab, subsystem), 0xe0);
         assert_eq!(std::mem::offset_of!(SubsystemContext, session), 0x140);
+    }
+
+    #[test]
+    fn detour_and_original_preserve_the_native_pointer_signature() {
+        type EndAuthentication = unsafe fn(*const FOnlineAuthPlayFab, *const c_void);
+        let _: EndAuthentication = FOnlineAuthPlayFab::end_authentication_detour;
+        let _: EndAuthentication = FOnlineAuthPlayFab::end_authentication;
+    }
+
+    #[test]
+    fn cleared_session_skips_the_native_cleanup_call() {
+        let subsystem = SubsystemContext {
+            padding: [0; 0x140],
+            session: std::ptr::null(),
+        };
+        let auth = FOnlineAuthPlayFab {
+            padding: [0; 0xe0],
+            subsystem: &subsystem,
+        };
+        // The guard must return without calling the uninitialized trampoline.
+        unsafe { (&raw const auth).end_authentication_detour(std::ptr::null()); }
     }
 }
