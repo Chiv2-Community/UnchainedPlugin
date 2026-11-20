@@ -4,6 +4,11 @@ Compared `07749c63267e9edf4ffba0a6de44691b227669e9` (`main`) with
 `c01e1555573f833abc990736c3cfe4b2a65e8a14` (PR47), on Linux.
 Results apply to these commits, not subsequent cleanup.
 
+Subsequent cleanup integrated as `8926985` removes the per-hook offset-map
+clones and consolidates detour registrations. `9641a7d` removes redundant typed
+detour wrappers. Neither change was included in these timings. The C++ lookup
+and globals-batching findings below remain open.
+
 ## Resolver measurements
 
 A standalone, optimized host harness loaded the installed Steam PE read-only.
