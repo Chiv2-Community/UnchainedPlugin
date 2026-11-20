@@ -28,7 +28,6 @@ struct NativeType {
     label: &'static str,
     notes: String,
     source: Option<Source>,
-    link: String,
 }
 
 struct Binding {
@@ -362,7 +361,6 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                             .join("\n"),
                         source: native_source(&item_source, &roots)?
                             .or(native_source(&source, &roots)?),
-                        link: file_link(&path, name.span().start().line)?,
                     });
                 }
             }
@@ -468,15 +466,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
     fs::create_dir_all(&directory)?;
     let mut written = BTreeSet::new();
     for native in types {
-        let link = native
-            .source
-            .as_ref()
-            .map(|source| source.url.as_str())
-            .unwrap_or(&native.link);
-        let mut docs = format!("Native {}: {}.", native.label, linked(&native.name, link));
-        if !native.notes.is_empty() {
-            docs.push_str(&format!("\n\n{}", native.notes));
-        }
+        let mut docs = native.notes.clone();
         let implementation =
             native_implementation(native.source.as_ref(), &native.name, true, &mut watches);
         append_native(
@@ -489,7 +479,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         write_document(
             &directory,
             &format!("type-{}", native.name),
-            &docs,
+            docs.trim_start(),
             &mut written,
         )?;
     }
@@ -682,11 +672,14 @@ impl Native {
         generate(&root, &root.join("out")).unwrap();
         let directory = root.join("out/native-docs");
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
+        assert!(class.starts_with("Native class definition:"));
+        assert!(!class.contains("Native class:"));
         assert!(class.contains("class Native : public Base"));
         assert!(class.contains("private: int Value;"));
         let faction = fs::read_to_string(directory.join("type-Faction.md")).unwrap();
         assert!(faction.contains("enum class Faction : unsigned char { First, Second };"));
         assert!(faction.contains("Faction notes."));
+        assert!(!faction.contains("Native enum:"));
         assert!(!faction.contains("Native source:"));
         assert!(!faction.contains("Native.h"));
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
@@ -728,8 +721,7 @@ impl Native {
         .unwrap();
         generate(&root, &root.join("out")).unwrap();
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
-        assert!(class.contains(UE));
-        assert!(class.ends_with(CONFIGURATION_NOTE));
+        assert_eq!(class, CONFIGURATION_NOTE);
         fs::write(root.join("src/unchained/patches/Test.rs"), "").unwrap();
         generate(&root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
