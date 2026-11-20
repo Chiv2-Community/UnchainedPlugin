@@ -22,4 +22,4 @@ pub(crate) unsafe fn end_authentication_detour(
 // Instruction site in FLogUserIntoOnlineSubsystemNode's native login helper.
 // jmp +0x26: skip GetAuthToken and its length check, landing on xor r14b,r14b.
 // EBX stays zero from the prologue, so the uninitialized FString is never freed.
-CREATE_PATCH!(FLogUserIntoOnlineSubsystemNode__GetAuthTokenBranchPointer, BYTES, &[0xEB, 0x26]);
+CREATE_PATCH!(FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite, BYTES, &[0xEB, 0x26]);

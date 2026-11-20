@@ -156,7 +156,7 @@ mod binding_tests {
         let expected = [
             "UTBLLocalPlayer__Exec", "AuthenticateConsoleCommandCaller",
             "AllowAlternateBackend", "EACAntiCheatMesssage", "UNetDriver__GetNetMode",
-            "FLogUserIntoOnlineSubsystemNode__GetAuthTokenBranchPointer",
+            "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite",
             #[cfg(feature = "move-autonomous-desync")]
             "MoveAutonomous",
             #[cfg(feature = "move-autonomous-desync")]

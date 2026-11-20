@@ -325,7 +325,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/tick_actors.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/tick_actors.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
-        ("backend_hooks/auth_token_cleanup.rs", "FLogUserIntoOnlineSubsystemNode__GetAuthTokenBranchPointer, BYTES, &[0xEB, 0x26]"),
+        ("backend_hooks/auth_token_cleanup.rs", "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite, BYTES, &[0xEB, 0x26]"),
         ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
     ] {
         let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();
@@ -659,7 +659,7 @@ fn redpoint_instruction_resolver_follows_authentication_node_owner() {
     assert!(file.items.iter().any(|item| matches!(
         item, Item::Macro(item)
             if item.mac.path.is_ident("define_single_platform_pattern_resolver")
-                && item.mac.tokens.to_string().starts_with("STEAM , FLogUserIntoOnlineSubsystemNode__GetAuthTokenBranchPointer ,")
+                && item.mac.tokens.to_string().starts_with("STEAM , FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite ,")
     )));
     assert!(!source.contains("CREATE_PATCH!"));
 }
