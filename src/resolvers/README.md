@@ -1,6 +1,9 @@
 
 # Chiv 2 Resolvers
 
+For the resolver → native binding → plugin detour workflow, see
+[Creating game hooks](../../CONTRIBUTING.md#creating-game-hooks).
+
 Resolver definitions and native bindings live beside their native owners under
 `src/chivalry2/tbl` and `tbl_loading_screen` (game modules), `src/chivalry2/engine` (UE 4.25-plus modules),
 or `src/chivalry2/plugins` (native game plugins, including private headers).
@@ -51,8 +54,8 @@ What remains here:
 - OpenAPI request methods use `#[bind_resolved_request_function(GetPost_Name)]`
   under `#[runtime_bindings]`; their detached replacements target the method
   just like other bindings. Keys come from the request offset registry.
-- Native resolvers stay with their owners; `CREATE_PATCH!` belongs in the mirrored
-  module under `src/unchained/patches`.
+- Native resolvers stay with their owners; `CREATE_PATCH!` belongs in the relevant
+  functional module under `src/unchained/patches`.
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/runtime/engine/engine/game_engine.rs),
   [`UObject::LoadConfig`](../chivalry2/engine/runtime/core_uobject/uobject/object.rs), and
@@ -78,7 +81,7 @@ impl_resolver_singleton!(all, FString_AppendChars, |ctx| async {
 });
 ```
 
-With the `derive_pattern_resolver` macro, the code above can be simplified:
+With the `define_pattern_resolver` macro, the code above can be simplified:
 ```rust
 define_pattern_resolver!(FString_AppendChars, [
     "45 85 C0 0F" // Universal
@@ -86,7 +89,7 @@ define_pattern_resolver!(FString_AppendChars, [
 |ctx, patterns| {
     let res = join_all(patterns.iter()
         .map(|p| ctx.scan(Pattern::new(p).unwrap()))).await;
-    ensure_one(res.into_iter().flatten())?
+    ensure_one(res.into_iter().flatten())
 });
 ```
 
@@ -127,7 +130,7 @@ define_pattern_resolver!(ApproveLoginTwo, Simple, [
     "48 89", // STEAM
 ]);
 
-// Per-platform signatures. Other extends platform-dependent result
+// Per-platform signatures. OTHER extends the current platform's patterns.
 define_pattern_resolver!(GetMotd2, Simple, {
     EGS: ["4C 89"],
     STEAM: ["4C 89 "],
@@ -144,7 +147,7 @@ define_pattern_resolver!(ApproveLoginFour, XrefLast, [
     util::utf8_pattern(" Minutes")
 ]);
 
-// Custom code. patterns contains one signature (depending on platform)
+// Custom code. patterns combines the current platform and OTHER entries.
 define_pattern_resolver!(GetMotd3, {
     EGS: ["4C 89 "],
     STEAM: ["4C 89 "]
@@ -155,7 +158,7 @@ define_pattern_resolver!(GetMotd3, {
             .map(|p| ctx.scan(Pattern::new(p).unwrap()))
     ).await;
 
-    ensure_one(futures.into_iter().flatten())?
+    ensure_one(futures.into_iter().flatten())
 });
 ```
 
@@ -166,4 +169,4 @@ define_pattern_resolver!(GetMotd3, {
 - [Native hook tests](../../unchained-macros/tests/native_hooks.rs)
 
 ### Notes
-- platforms atm can be STEAM or EGS (read from cli arguments)
+- Runtime platform names are `STEAM`, `EGS`, `XBOX`, and `OTHER`.

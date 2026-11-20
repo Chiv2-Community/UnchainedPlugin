@@ -58,7 +58,17 @@ The body receives `crate::resolvers::current_platform()` and may use `?`.
 It still must produce one `u64` address. This selects matcher behavior; it
 does not register a platform restriction for hooks or patches.
 
-## Resolved function detours
+## Native bindings and detached detours
+
+New production hooks declare a native binding under `#[runtime_bindings]` in
+`src/chivalry2/*`, then target it with `#[bind_func_detour(Type::method)]` from
+`src/unchained/patches/*`. See
+[Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for resolver choices,
+binding declarations, replacement examples, and validation.
+
+## Legacy resolved function detours
+
+The following API remains for compatibility tests, not new production hooks.
 
 ```rust,ignore
 #[unchained_macros::runtime_bindings]
@@ -124,6 +134,7 @@ unsafe fn native_guobject_array() -> *const FUObjectArray {}
 Keep the resolver declaration separate, then bind a method to its type:
 
 ```rust,ignore
+#[unchained_macros::runtime_bindings]
 impl FText {
     /// Safety: self owns a live native shared reference, released exactly once.
     #[unchained_macros::bind_resolved_func(FText_Release)]
@@ -139,8 +150,9 @@ impl FText {
   type/const-generic, async, const and explicit-ABI
   declarations are rejected. Hidden C++ parameters must be declared explicitly;
   the attribute does not infer native layouts or return-storage conventions.
-- Registers a direct address, not a detour or trampoline. Do not bind a target
-  that is also actively intercepted; retain `CALL_ORIGINAL!` for that case.
+- Registers a native binding, not a replacement. Calls use the resolved entry
+  until a detached detour attaches, then use its original-function trampoline.
+  Calling the binding from its replacement bypasses that replacement.
 - The plugin initializes registrations from cached/scanned resolver RVAs before
   applying patches or hooks. Missing bindings fail startup; premature calls panic.
 - Resolver arguments are type paths, so existing complex resolver definitions
