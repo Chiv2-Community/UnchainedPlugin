@@ -77,6 +77,18 @@ New production hooks declare a native binding under `#[runtime_bindings]` in
 [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for resolver choices,
 binding declarations, replacement examples, and validation.
 
+Hover `Type::Method` inside `bind_func_detour` to see the full native binding
+declaration, a link to the native method, and its resolver name and link.
+Request bindings identify their offset-registry key instead of linking a
+nonexistent resolver type. The detour function's hover links back to the binding.
+Go to definition on the attribute target opens the native source declaration.
+Generated metadata and attachment helpers stay out of those hover spans; inspect
+the expanded macro to view them. Rustdoc links follow the editor's documentation
+URL handling, which may use docs.rs rather than local source.
+
+An installed, enabled detour intercepts native game-code calls. Calling the Rust
+native binding invokes the original implementation, not the replacement.
+
 ## Legacy resolved function detours
 
 The following API remains for compatibility tests, not new production hooks.

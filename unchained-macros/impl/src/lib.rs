@@ -30,6 +30,10 @@ pub fn bind_resolved_func_detour(args: TokenStream, item: TokenStream) -> TokenS
 }
 
 /// Register a replacement for a typed method binding, not a resolver.
+///
+/// Hover the target method in this attribute to inspect its native declaration,
+/// resolver link, and original-call behavior. The replacement's hover links
+/// back to that binding and explains game-side interception.
 #[proc_macro_attribute]
 pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     function_detour::expand(args.into(), item.into())

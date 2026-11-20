@@ -1,5 +1,48 @@
 use super::*;
-use quote::format_ident;
+use quote::{format_ident, ToTokens};
+
+fn binding_documentation(
+    function: &ItemFn,
+    self_ty: &Type,
+    resolver: &Path,
+    require_resolver: bool,
+) -> syn::Result<syn::LitStr> {
+    let name = &function.sig.ident;
+    let mut declaration = function.clone();
+    declaration.attrs.clear();
+    let attribute = if require_resolver {
+        quote!(bind_resolved_func)
+    } else {
+        quote!(bind_resolved_request_function)
+    };
+    declaration.attrs.push(syn::parse_quote!(#[#attribute(#resolver)]));
+    let source = prettyplease::unparse(&syn::parse2(quote! {
+        #[unchained_macros::runtime_bindings]
+        impl #self_ty {
+            #declaration
+        }
+    })?);
+    let resolution = resolution_documentation(resolver, require_resolver);
+    let documentation = format!(
+        "# Native detour target\n\n\
+         Native binding: [`Self::{name}`](Self::{name}).\n\n\
+         When installed and enabled, a detour overrides this native method for calls \
+         originating in game code. Calls through the Rust native binding invoke the \
+         original implementation, using its trampoline after attachment, not the detour.\n\n\
+         ## Native binding declaration\n\n```rust\n{source}```\n\n\
+         {resolution}"
+    );
+    Ok(syn::LitStr::new(&documentation, name.span()))
+}
+
+fn resolution_documentation(resolver: &Path, require_resolver: bool) -> String {
+    let resolver = resolver.to_token_stream().to_string().replace(' ', "");
+    if require_resolver {
+        format!("Resolver: [`{resolver}`]({resolver}).")
+    } else {
+        format!("Request offset-registry key: `{resolver}` (not a Rust resolver type).")
+    }
+}
 
 fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
     if signature.generics.lifetimes().any(|p| !p.bounds.is_empty()) {
@@ -31,6 +74,7 @@ pub(super) fn expand_binding(
     // Keep declaration validation shared with standalone/legacy bindings.
     super::expand_binding(args.clone(), quote!(#function), require_resolver)?;
     let resolver = resolver_path(args)?;
+    let documentation = binding_documentation(function, self_ty, &resolver, require_resolver)?;
     if !require_resolver {
         request_key(&resolver)?;
     }
@@ -38,8 +82,8 @@ pub(super) fn expand_binding(
     let signature = super::detour::concrete_signature(function, Some(self_ty))?;
     let native = native_type(&signature)?;
     let name = &function.sig.ident;
-    let descriptor = format_ident!("__UNCHAINED_BINDING_{}", name);
-    let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name);
+    let descriptor = format_ident!("__UNCHAINED_BINDING_{}", name, span = Span::mixed_site());
+    let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name, span = Span::mixed_site());
     let vis = &function.vis;
     let cfg: Vec<_> = function
         .attrs
@@ -67,6 +111,7 @@ pub(super) fn expand_binding(
         }
     });
     let mut expanded = function.clone();
+    expanded.attrs.push(syn::parse_quote!(#[doc = #documentation]));
     expanded.block = Box::new(syn::parse2(quote!({
         #resolver_check
         let native: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
@@ -99,7 +144,7 @@ pub(super) fn expand_binding(
 }
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    let function: ItemFn = syn::parse2(item)?;
+    let mut function: ItemFn = syn::parse2(item)?;
     let super::detour::Arguments {
         resolver: mut target,
         condition,
@@ -110,8 +155,13 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "detour target must be a non-generic Type::method binding path",
         ));
     }
+    let native_target = target.clone();
+    // Keep the user's target span on the native method, not its internal descriptor.
+    for segment in &mut target.segments {
+        segment.ident.set_span(Span::mixed_site());
+    }
     let method = target.segments.last_mut().unwrap();
-    method.ident = format_ident!("__UNCHAINED_BINDING_{}", method.ident);
+    method.ident = format_ident!("__UNCHAINED_BINDING_{}", method.ident, span = Span::mixed_site());
     let mut stub = function.clone();
     stub.block = Box::new(syn::parse_quote!({}));
     super::expand_binding(quote!(TypeCheck), quote!(#stub), false)?;
@@ -126,14 +176,26 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "detours must be free functions with explicit native receiver arguments",
         ));
     }
+    let native_link = native_target.to_token_stream().to_string().replace(' ', "");
+    let documentation = syn::LitStr::new(
+        &format!(
+            "## Native detour\n\n\
+             Overrides [`{native_link}`]({native_link}) for calls originating in game code \
+             while this detour is installed and enabled. Calling the Rust native binding \
+             invokes the original implementation, not this replacement.\n\n\
+             See the [native binding declaration and resolver]({native_link})."
+        ),
+        function.sig.ident.span(),
+    );
+    function.attrs.insert(0, syn::parse_quote!(#[doc = #documentation]));
     let signature = super::detour::concrete_signature(&function, None)?;
     let native = native_type(&signature)?;
     let ident = &function.sig.ident;
-    let hook = format_ident!("__UNCHAINED_HOOK_{}", ident);
-    let detour = format_ident!("__UnchainedDetour_{}", ident);
-    let replacement = format_ident!("__unchained_replacement_{}", ident);
-    let attach = format_ident!("__unchained_attach_{}", ident);
-    let condition_fn = format_ident!("__unchained_condition_{}", ident);
+    let hook = format_ident!("__UNCHAINED_HOOK_{}", ident, span = Span::mixed_site());
+    let detour = format_ident!("__UnchainedDetour_{}", ident, span = Span::mixed_site());
+    let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
+    let attach = format_ident!("__unchained_attach_{}", ident, span = Span::mixed_site());
+    let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
     let cfg: Vec<_> = function
         .attrs
         .iter()
@@ -175,6 +237,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #function
         #(#cfg)*
         const _: () = {
+            let _ = #native_target;
             // Invariant signature metadata makes mismatches compiler errors.
             let _: ::unchained_macros::NativeFunction<#native> = #target;
         };
@@ -240,6 +303,81 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn documentation(attributes: &[syn::Attribute]) -> String {
+        attributes.iter().filter_map(|attribute| {
+            if !attribute.path().is_ident("doc") { return None; }
+            let syn::Meta::NameValue(value) = &attribute.meta else { return None };
+            let syn::Expr::Lit(value) = &value.value else { return None };
+            let syn::Lit::Str(value) = &value.lit else { return None };
+            Some(value.value())
+        }).collect::<Vec<_>>().join("\n")
+    }
+
+    #[test]
+    fn binding_hover_preserves_native_declaration_and_links() {
+        let function = syn::parse_quote! {
+            pub(crate) unsafe fn Call<'a>(
+                self: *const Self,
+                Result: &'a mut FString,
+            ) -> &'a mut FString {}
+        };
+        let (binding, descriptor, _) = expand_binding(
+            quote!(self::Native__Call), &function, &syn::parse_quote!(Native), true,
+        ).unwrap();
+        let docs = documentation(&binding.attrs);
+        assert!(documentation(&descriptor.attrs).is_empty());
+        assert!(docs.contains("[`Self::Call`](Self::Call)"));
+        assert!(docs.contains("#[unchained_macros::runtime_bindings]\nimpl Native"));
+        assert!(docs.contains("#[bind_resolved_func(self::Native__Call)]"));
+        assert!(docs.contains("pub(crate) unsafe fn Call<'a>("));
+        assert!(docs.contains("self: *const Self"));
+        assert!(docs.contains("Result: &'a mut FString"));
+        assert!(docs.contains("-> &'a mut FString"));
+        assert!(docs.contains("[`self::Native__Call`](self::Native__Call)"));
+        assert!(docs.contains("originating in game code"));
+        assert!(docs.contains("not the detour"));
+    }
+
+    #[test]
+    fn request_hover_identifies_registry_keys_without_fabricating_resolver_links() {
+        let function = syn::parse_quote! {
+            pub unsafe fn GetPost_Example(value: i32) -> i32 {}
+        };
+        let (binding, _, _) = expand_binding(
+            quote!(GetPost_Example), &function, &syn::parse_quote!(Client), false,
+        ).unwrap();
+        let docs = documentation(&binding.attrs);
+        assert!(docs.contains("#[bind_resolved_request_function(GetPost_Example)]"));
+        assert!(docs.contains("Request offset-registry key: `GetPost_Example`"));
+        assert!(!docs.contains("](GetPost_Example)"));
+    }
+
+    #[test]
+    fn detour_hover_keeps_existing_docs_and_links_to_the_native_binding() {
+        let expanded = expand(
+            quote!(model::Native::Call),
+            quote! {
+                /// Existing safety note.
+                unsafe fn replacement(value: i32) -> i32 { value }
+            },
+        ).unwrap();
+        let file = syn::parse2::<syn::File>(expanded).unwrap();
+        let function = file.items.iter().find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == "replacement" => Some(function),
+            _ => None,
+        }).unwrap();
+        let docs = documentation(&function.attrs);
+        assert!(docs.starts_with("## Native detour"));
+        assert!(docs.contains(" Existing safety note."));
+        assert!(!docs.contains("or hover"));
+        assert!(docs.contains("[`model::Native::Call`](model::Native::Call)"));
+        assert!(docs.contains(
+            "[native binding declaration and resolver](model::Native::Call)"
+        ));
+        assert!(docs.contains("installed and enabled"));
+        assert!(docs.contains("original implementation, not this replacement"));
+    }
 
     #[test]
     fn targets_typed_binding_metadata_without_generating_an_original_caller() {
