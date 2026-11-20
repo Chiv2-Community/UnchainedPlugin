@@ -34,6 +34,11 @@ pub struct APlayerController {
 
 #[unchained_macros::runtime_bindings]
 impl APlayerController {
+    /// Calls the generated RPC wrapper through ProcessEvent, not the implementation directly.
+    /// Native RPC implementation: `APlayerController::ClientMessage_Implementation`
+    ///
+    /// # Safety
+    /// Self must be a live controller; S must point to a live native string.
     #[unchained_macros::bind_resolved_func(APlayerController__ClientMessage)]
     pub(crate) unsafe fn ClientMessage(
         self: *mut Self,

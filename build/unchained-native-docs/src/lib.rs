@@ -34,6 +34,7 @@ struct NativeType {
 struct Binding {
     target: String,
     overload: Option<String>,
+    rpc_implementation: Option<String>,
     resolver: String,
     request: bool,
     notes: String,
@@ -374,15 +375,15 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         )
                     }) =>
                 {
-                    let mut identifiers = item
-                        .mac
-                        .tokens
-                        .clone()
-                        .into_iter()
-                        .filter_map(|token| match token {
-                            TokenTree::Ident(name) => Some(name.to_string()),
-                            _ => None,
-                        });
+                    let mut identifiers =
+                        item.mac
+                            .tokens
+                            .clone()
+                            .into_iter()
+                            .filter_map(|token| match token {
+                                TokenTree::Ident(name) => Some(name.to_string()),
+                                _ => None,
+                            });
                     let index = usize::from(
                         item.mac.path.segments.last().unwrap().ident
                             == "define_single_platform_pattern_resolver",
@@ -433,10 +434,20 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     .lines()
                                     .find_map(|line| line.strip_prefix("Native overload: "))
                                     .map(|selector| selector.trim().trim_matches('`').to_owned()),
+                                rpc_implementation: documentation
+                                    .lines()
+                                    .find_map(|line| {
+                                        line.strip_prefix("Native RPC implementation: ")
+                                    })
+                                    .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
                                 request: binding.path().segments.last().unwrap().ident
                                     == "bind_resolved_request_function",
-                                notes: documentation,
+                                notes: documentation
+                                    .lines()
+                                    .filter(|line| !line.starts_with("Native RPC implementation: "))
+                                    .collect::<Vec<_>>()
+                                    .join("\n"),
                                 source: file_source.clone(),
                                 link: file_link(&path, method.sig.ident.span().start().line)?,
                                 signature: format!("{};", text(&source, signature_span).trim()),
@@ -539,7 +550,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         if !binding.notes.is_empty() {
             docs.push_str(&format!("\n\n{}", binding.notes));
         }
-        let implementation = native_implementation(
+        let mut implementation = native_implementation(
             binding.source.as_ref(),
             &format!(
                 "{}{}",
@@ -549,12 +560,29 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             false,
             &mut watches,
         );
+        let mut implementation_name = &binding.target;
+        let mut implementation_title = "Native implementation";
+        if implementation.is_none() {
+            if let Some(target) = &binding.rpc_implementation {
+                let related = native_implementation(
+                    binding.source.as_ref(),
+                    &format!("{target}{}", binding.overload.as_deref().unwrap_or("")),
+                    false,
+                    &mut watches,
+                );
+                if related.is_some() {
+                    implementation = related;
+                    implementation_name = target;
+                    implementation_title = "Related RPC implementation";
+                }
+            }
+        }
         append_native(
             &mut docs,
             implementation.as_ref(),
             binding.source.as_ref(),
-            "Native implementation",
-            &binding.target,
+            implementation_title,
+            implementation_name,
         )?;
         write_document(
             &directory,
@@ -572,8 +600,8 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                 &mut docs,
                 implementation.as_ref(),
                 binding.source.as_ref(),
-                "Native implementation",
-                &binding.target,
+                implementation_title,
+                implementation_name,
             )?;
             write_document(
                 &directory,
@@ -668,7 +696,7 @@ mod tests {
         .unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Private/Native.cpp"),
-            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }",
+            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }\nvoid Native::Rpc_Implementation() { HandleMessage(); }\nvoid Native::Plain_Implementation() { NotTheBoundFunction(); }",
         )
         .unwrap();
         fs::write(root.join("src/Chivalry2/Native.rs"), r#"//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Native.h>.
@@ -680,6 +708,8 @@ pub struct Native;
 pub enum Faction { First, Second }
 define_pattern_resolver!(Native__Call, ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B"]);
 define_pattern_resolver!(Native__Other, ["40 53"]);
+define_pattern_resolver!(Native__Rpc, ["40 54"]);
+define_pattern_resolver!(Native__Plain, ["40 55"]);
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
@@ -688,11 +718,17 @@ impl Native {
     pub unsafe fn Call(&self) -> &FString {}
     #[bind_resolved_func(Native__Other)]
     pub unsafe fn Other(&self) {}
+    /// Calls a generated RPC wrapper.
+    /// Native RPC implementation: `Native::Rpc_Implementation`
+    #[bind_resolved_func(Native__Rpc)]
+    pub unsafe fn Rpc(&self) {}
+    #[bind_resolved_func(Native__Plain)]
+    pub unsafe fn Plain(&self) {}
 }
 "#).unwrap();
         fs::write(
             root.join("src/unchained/patches/Test.rs"),
-            "#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }",
+            "#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }\n#[bind_func_detour(Native::Rpc)]\nunsafe fn rpc_detour() {}",
         )
         .unwrap();
         generate(&root, &root.join("out")).unwrap();
@@ -732,6 +768,34 @@ impl Native {
         assert!(!other.contains("Overwritten by"));
         assert!(!other.contains("Detours apply only when"));
         assert!(other.ends_with(NO_CPP_SOURCES));
+        let rpc = fs::read_to_string(directory.join("binding-Native__Rpc.md")).unwrap();
+        assert!(rpc.starts_with("Native binding to [`Native::Rpc`]"));
+        assert!(rpc.contains("Calls a generated RPC wrapper."));
+        assert!(!rpc.contains("Native RPC implementation:"));
+        assert!(rpc.contains("Related RPC implementation: [`Native::Rpc_Implementation`]"));
+        assert!(rpc.contains("void Native::Rpc_Implementation() { HandleMessage(); }"));
+        assert!(!rpc.contains(NO_CPP_SOURCES));
+        let rpc_detour = fs::read_to_string(directory.join("detour-rpc_detour.md")).unwrap();
+        assert!(rpc_detour.starts_with("Overrides in-game calls to [`Native::Rpc`]"));
+        assert!(rpc_detour.contains("Related RPC implementation:"));
+        assert!(rpc_detour.contains("HandleMessage();"));
+        let plain = fs::read_to_string(directory.join("binding-Native__Plain.md")).unwrap();
+        assert!(plain.ends_with(NO_CPP_SOURCES));
+        assert!(!plain.contains("NotTheBoundFunction"));
+        let cpp = root.join("cpp/Engine/Source/Test/Private/Native.cpp");
+        fs::write(
+            &cpp,
+            format!(
+                "{}\nvoid Native::Rpc() {{ ProcessEvent(); }}",
+                fs::read_to_string(&cpp).unwrap()
+            ),
+        )
+        .unwrap();
+        generate(&root, &root.join("out")).unwrap();
+        let rpc = fs::read_to_string(directory.join("binding-Native__Rpc.md")).unwrap();
+        assert!(rpc.contains("Native implementation: [`Native::Rpc`]"));
+        assert!(rpc.contains("void Native::Rpc() { ProcessEvent(); }"));
+        assert!(!rpc.contains("Related RPC implementation"));
         let detour = fs::read_to_string(directory.join("detour-call_detour.md")).unwrap();
         assert!(detour.contains("pub unsafe fn Call(&self) -> &FString;"));
         assert!(detour.contains("Native implementation:"));
@@ -754,6 +818,8 @@ impl Native {
         generate(&root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.ends_with(NO_CPP_SOURCES));
+        let rpc = fs::read_to_string(directory.join("binding-Native__Rpc.md")).unwrap();
+        assert!(rpc.ends_with(NO_CPP_SOURCES));
         let detour = fs::read_to_string(directory.join("detour-call_detour.md")).unwrap();
         assert!(detour.ends_with(NO_CPP_SOURCES));
         fs::write(

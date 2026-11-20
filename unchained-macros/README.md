@@ -107,6 +107,17 @@ Ambiguous matches remain unavailable. The `native-implementation` example also
 accepts selectors in `--target 'FText::AsCultureInvariant(const FString&)'`.
 Use the source's type spelling; typedef equivalence and complex callable
 parameter declarators are not resolved.
+
+For a verified generated RPC wrapper, a binding may name its related body:
+
+```rust
+/// Native RPC implementation: `APlayerController::ClientMessage_Implementation`
+```
+
+When the wrapper body is unavailable, docs show this as
+**Related RPC implementation**. This does not rename,
+retarget, or bypass the bound wrapper. An available wrapper body takes precedence;
+the generator never infers `_Implementation` automatically.
 Local roots enable inline C++ implementations and complete native type
 definitions. Unconfigured roots show the configuration note; unavailable
 definitions show `No cpp sources available`.
