@@ -8,16 +8,16 @@ use widestring::U16CStr;
 #[unchained_macros::bind_func_detour(FPakPlatformFile::Mount)]
 pub(crate) unsafe fn mount_detour(
     this: *mut FPakPlatformFile,
-    InPakFilename: *const TCHAR,
-    PakOrder: u32,
-    InPath: *const TCHAR,
-    bLoadIndex: bool,
+    in_pak_filename: *const TCHAR,
+    pak_order: u32,
+    in_path: *const TCHAR,
+    load_index: bool,
 ) -> bool {
-    let ret = unsafe { this.Mount(InPakFilename, PakOrder, InPath, bLoadIndex) };
-    let path = if InPakFilename.is_null() {
+    let ret = unsafe { this.Mount(in_pak_filename, pak_order, in_path, load_index) };
+    let path = if in_pak_filename.is_null() {
         String::new()
     } else {
-        unsafe { U16CStr::from_ptr_str(InPakFilename) }.to_string_lossy()
+        unsafe { U16CStr::from_ptr_str(in_pak_filename) }.to_string_lossy()
     };
     if ret {
         if !path.is_empty() {

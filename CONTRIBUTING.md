@@ -287,6 +287,8 @@ Target the binding method from a functional module under `src/unchained/patches/
 
 - Put detours after imports, before patches, helpers, state, and tests.
 - Use an unsafe free function; declare instance receivers as the first argument.
+- Use snake_case for detour function and parameter names, even when the native
+  binding uses C++ spelling.
 - The macro checks argument types, return types, and lifetime relationships
   against the binding at compile time.
 - Calling the binding invokes the original, bypassing this replacement.

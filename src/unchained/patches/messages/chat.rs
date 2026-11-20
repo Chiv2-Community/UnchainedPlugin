@@ -58,11 +58,11 @@ pub(crate) unsafe fn broadcast_chat_detour(
 #[unchained_macros::bind_func_detour(APlayerController::ClientMessage)]
 pub(crate) unsafe fn client_message_detour(
     this: *mut APlayerController,
-    S: *mut FString,
-    Type: FName,
-    MsgLifeTime: f32,
+    message: *mut FString,
+    message_type: FName,
+    message_lifetime: f32,
 ) {
-    if let Some(message) = (unsafe { S.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
+    if let Some(message) = (unsafe { message.as_ref() }).and_then(|s| s.copy_to_string().ok()) {
         if let Some((chat_type, sender, message)) = system_message(&message) {
             EVENT_SYSTEM
                 .game_event_publisher
@@ -74,7 +74,7 @@ pub(crate) unsafe fn client_message_detour(
         }
     }
     unsafe {
-        this.ClientMessage(S, Type, MsgLifeTime);
+        this.ClientMessage(message, message_type, message_lifetime);
     }
 }
 

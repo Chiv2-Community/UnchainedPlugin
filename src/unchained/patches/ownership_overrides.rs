@@ -12,19 +12,19 @@ use std::os::raw::c_void;
 )]
 pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
     result: *mut FOwnershipResponse,
-    PlayerController: *mut ATBLPlayerController,
-    PlayerState: *mut ATBLPlayerState,
-    AssetIdToCheck: *mut FPrimaryAssetId,
-    BaseOnly: bool,
+    player_controller: *mut ATBLPlayerController,
+    player_state: *mut ATBLPlayerState,
+    asset_id_to_check: *mut FPrimaryAssetId,
+    base_only: bool,
 ) -> *mut FOwnershipResponse {
     // Caller-provided result storage precedes the controller in the native ABI.
     let response = unsafe {
         ATBLPlayerController::GetOwnershipFromPlayerControllerAndState(
             result,
-            PlayerController,
-            PlayerState,
-            AssetIdToCheck,
-            BaseOnly,
+            player_controller,
+            player_state,
+            asset_id_to_check,
+            base_only,
         )
     };
     if let Some(resp) = unsafe { response.as_mut() } {
@@ -38,10 +38,10 @@ pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
 pub(crate) unsafe fn can_use_loadout_item_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
-    InLoadOutSelection: *mut TSubclassOfULoadoutSelection,
-    InItem: *mut TSubclassOfAInventoryItem,
+    in_loadout_selection: *mut TSubclassOfULoadoutSelection,
+    in_item: *mut TSubclassOfAInventoryItem,
 ) -> *mut FOwnershipResponse {
-    let response = unsafe { this.CanUseLoadoutItem(result, InLoadOutSelection, InItem) };
+    let response = unsafe { this.CanUseLoadoutItem(result, in_loadout_selection, in_item) };
     if let Some(resp) = unsafe { response.as_mut() } {
         resp.level = 0;
         resp.owned = true;
@@ -56,9 +56,9 @@ pub(crate) unsafe fn can_use_loadout_item_detour(
 pub(crate) unsafe fn can_use_character_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
-    CharacterSubclass: *mut TSubclassOfATBLCharacter,
+    character_subclass: *mut TSubclassOfATBLCharacter,
 ) -> *mut FOwnershipResponse {
-    let response = unsafe { this.CanUseCharacter(result, CharacterSubclass) };
+    let response = unsafe { this.CanUseCharacter(result, character_subclass) };
     if let Some(resp) = unsafe { response.as_mut() } {
         resp.level = 0;
         resp.owned = true;

@@ -25,7 +25,7 @@ fn args(attr: &Attribute) -> Vec<Expr> {
 }
 
 #[test]
-fn detour_entry_points_precede_supporting_items() {
+fn detour_entry_points_use_rust_parameters_and_precede_supporting_items() {
     fn check(path: &Path) {
         for entry in std::fs::read_dir(path).unwrap() {
             let path = entry.unwrap().path();
@@ -45,6 +45,18 @@ fn detour_entry_points_precede_supporting_items() {
                     Item::Fn(function)
                         if attribute(&function.attrs, "bind_func_detour").is_some() =>
                     {
+                        for input in &function.sig.inputs {
+                            let syn::FnArg::Typed(arg) = input else { continue };
+                            let syn::Pat::Ident(arg) = &*arg.pat else { continue };
+                            assert!(
+                                arg.ident.to_string().chars().all(|c|
+                                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                                "{}: detour {} parameter {} must use snake_case",
+                                path.display(),
+                                function.sig.ident,
+                                arg.ident,
+                            );
+                        }
                         assert!(
                             !supporting_item_seen,
                             "{}: detour {} follows supporting code",

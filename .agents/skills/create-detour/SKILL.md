@@ -43,7 +43,8 @@ Place replacements under `src/unchained/patches/*` by plugin purpose.
 Use `bind_func_detour` on an unsafe free function.
 
 - Target `NativeType::Method`; names do not require a `_detour` suffix.
-- Use the binding's C++-spelled method name; plugin detour names remain Rust-style.
+- Use the binding's C++-spelled method name; detour function and parameter names
+  use snake_case.
 - Native destructor bindings are named `Destructor`; do not simplify their ABI.
 - Preserve `TBL` capitalization in native type and method references.
 - Match every parameter and return type, including hidden storage and lifetimes.
