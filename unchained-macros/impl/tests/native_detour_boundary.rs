@@ -266,6 +266,13 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
             "APlayerController::client_message",
         ][..]),
         ("networking/travel.rs", &["APlayerController::client_travel_internal"][..]),
+        ("networking/ipv6_support.rs", &[
+            "FUDPPing::udp_echo",
+            "FString::find",
+            "FString::parse_into_array",
+            "FOnlineSessionPlayFab::on_get_current_games",
+            "FOnlineSessionPlayFab::ping_some_servers",
+        ][..]),
         ("pak_mount.rs", &["FPakPlatformFile::mount"][..]),
         ("server_browser.rs", &[
             "OpenAPIClientAPI::get_post_get_motd",
