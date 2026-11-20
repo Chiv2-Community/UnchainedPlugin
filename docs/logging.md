@@ -307,7 +307,8 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::unchained::patches::messages` | Chat capture, broadcast presentation, native console output, and optional Blueprint messages. |
 | `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::unchained::patches::server_browser` | Server-browser request routing, endpoint overrides, and request-token handling. |
-| `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, startup, map changes, match state, and shutdown. |
+| `UnchainedPlugin::unchained::patches::frontend_patches` | Frontend startup options and mod asset initialization. |
+| `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, map changes, match state, and shutdown. |
 | `UnchainedPlugin::unchained::patches::networking` | Travel and IPv6 browser/ping compatibility. |
 | `UnchainedPlugin::unchained::patches::pak_mount` | Mounted-pak tracking. |
 | `UnchainedPlugin::unchained::patches::custom_loading_screens` | Map-marker loading-screen injection. |

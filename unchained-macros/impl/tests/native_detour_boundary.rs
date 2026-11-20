@@ -248,6 +248,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     );
     for (path, targets) in [
         ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
+        ("frontend_patches.rs", &["UTBLGameInstance::load_front_end_map"][..]),
         ("auth_token_cleanup.rs", &["FOnlineAuthPlayFab::end_authentication"][..]),
         ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::get_data_for_map"][..]),
         ("damage_events.rs", &["ATBLCharacter::on_killed", "ATBLCharacter::on_damage_taken"][..]),
@@ -300,7 +301,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("pak_mount.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
         ("auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
-        ("unchained_integration/anti_cheat_message.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
+        ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
     ] {
         let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();
         let actual: Vec<_> = file.items.iter().filter_map(|item| {

@@ -6,6 +6,7 @@ pub mod backend_hooks;
 pub mod config_overrides;
 pub mod custom_loading_screens;
 pub mod damage_events;
+pub mod frontend_patches;
 pub mod hosting;
 #[cfg(feature = "loose_assets")]
 pub mod loose_assets;
