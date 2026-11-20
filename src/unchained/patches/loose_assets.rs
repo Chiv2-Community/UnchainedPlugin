@@ -29,7 +29,7 @@ pub(crate) unsafe fn find_file_in_pak_files_detour(
 
 #[unchained_macros::bind_func_detour(FPakPlatformFile::FindFileInPakFiles_Static)]
 pub(crate) unsafe fn find_file_in_pak_files_static_detour(
-    this_ptr: *mut TArray<FPakListEntry>,
+    Paks: *mut TArray<FPakListEntry>,
     Filename: *const TCHAR,
     OutPakFile: *mut *mut FPakFile,
     OutEntry: *mut FPakEntry,
@@ -46,7 +46,7 @@ pub(crate) unsafe fn find_file_in_pak_files_static_detour(
         return 0;
     }
     unsafe {
-        FPakPlatformFile::FindFileInPakFiles_Static(this_ptr, Filename, OutPakFile, OutEntry)
+        FPakPlatformFile::FindFileInPakFiles_Static(Paks, Filename, OutPakFile, OutEntry)
     }
 }
 

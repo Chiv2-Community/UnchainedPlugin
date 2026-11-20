@@ -67,7 +67,7 @@ impl FPakPlatformFile {
     #[cfg(feature = "loose_assets")]
     #[unchained_macros::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles_Static)]
     pub(crate) unsafe fn FindFileInPakFiles_Static(
-        this_ptr: *mut TArray<FPakListEntry>,
+        Paks: *mut TArray<FPakListEntry>,
         Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
         OutEntry: *mut FPakEntry,
