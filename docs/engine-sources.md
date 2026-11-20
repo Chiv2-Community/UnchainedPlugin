@@ -19,8 +19,7 @@ Organize native declarations by their original source owner.
 - Use native source and shipping PDB evidence where available.
 - Do not treat generated per-type SDK filenames as original header ownership.
 - Keep native layouts, signatures, resolvers, and bindings with their owners.
-- Keep unproven resolver ownership in the
-  [unresolved-target quarantine](../src/resolvers/README.md); do not guess a header.
+- Establish resolver ownership before choosing a native path; do not guess a header.
 
 ## Path rules
 

@@ -650,6 +650,21 @@ fn playfab_native_types_follow_header_owners() {
 }
 
 #[test]
+fn redpoint_instruction_resolver_follows_authentication_node_owner() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
+    let source = std::fs::read_to_string(root.join(
+        "chivalry2/plugins/online_subsystem_redpoint_eos/shared/authentication/nodes/log_user_into_online_subsystem_node.rs",
+    )).unwrap();
+    let file = syn::parse_file(&source).unwrap();
+    assert!(file.items.iter().any(|item| matches!(
+        item, Item::Macro(item)
+            if item.mac.path.is_ident("define_single_platform_pattern_resolver")
+                && item.mac.tokens.to_string().starts_with("STEAM , RedpointSteamSkipTokenCheck ,")
+    )));
+    assert!(!source.contains("CREATE_PATCH!"));
+}
+
+#[test]
 fn migrated_detours_preserve_native_signatures_conditions_and_feature_gates() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
     let (mut bindings, mut detours) = (BTreeMap::new(), BTreeMap::new());

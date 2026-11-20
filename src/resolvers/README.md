@@ -19,8 +19,7 @@ plugin purpose, using `main`'s resolver feature groups as the basis, not by
 native class/header paths. See
 [native bindings and plugin detours](../../docs/native-bindings.md).
 All production detours use this split.
-This directory contains shared registration, platform filtering, tests, and a
-limited quarantine for native targets with unresolved source provenance;
+This directory contains shared registration, platform filtering, and tests;
 do not add forwarding handlers here.
 
 Native source order:
@@ -46,11 +45,6 @@ What remains here:
 - `mod.rs`: process image base, function-binding initialization/readiness checks,
   hook/patch/offset inventories, and plugin registration invariants.
 - `platforms.rs`: platform restrictions and filtering tests.
-- `unresolved_native_targets.rs`: native resolver definitions whose concrete
-  declaring source/header is not yet proven. Record build/address evidence and
-  the unresolved owner explicitly; do not guess a header or receiver. Move each
-  resolver to its actual `chivalry2` owner once proven. Patch bytes, activation,
-  and replacement behavior remain under `src/unchained`, never in this quarantine.
 - Reusable macros, typed signatures, and native hook tests:
   [`unchained-macros`](../../unchained-macros).
 
