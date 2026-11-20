@@ -248,6 +248,9 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     );
     for (path, targets) in [
         ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
+        ("auth_token_cleanup.rs", &["FOnlineAuthPlayFab::end_authentication"][..]),
+        ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::get_data_for_map"][..]),
+        ("damage_events.rs", &["ATBLCharacter::on_killed", "ATBLCharacter::on_damage_taken"][..]),
         ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
         ("hosting/playable_listen.rs", &["UGameplay::is_dedicated_server"][..]),
         ("ownership_overrides.rs", &[
@@ -263,7 +266,16 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ][..]),
         ("networking/travel.rs", &["APlayerController::client_travel_internal"][..]),
         ("pak_mount.rs", &["FPakPlatformFile::mount"][..]),
-        ("asset_loading/loose_assets.rs", &[
+        ("server_browser.rs", &[
+            "OpenAPIClientAPI::get_post_get_motd",
+            "OpenAPIClientAPI::get_post_get_current_games",
+            "PlayFabRequestHandler::send_request",
+        ][..]),
+        ("save_games.rs", &[
+            "UGameplayStatics::load_game_from_slot",
+            "UGameplayStatics::save_game_to_slot",
+        ][..]),
+        ("loose_assets.rs", &[
             "FPakPlatformFile::find_file_in_pak_files",
             "FPakPlatformFile::find_file_in_pak_files_static",
             "FPakPlatformFile::is_non_pak_filename_allowed",
@@ -287,7 +299,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("pak_mount.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
-        ("steam_auth.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
+        ("auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
         ("unchained_integration/anti_cheat_message.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
     ] {
         let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();

@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn detour_and_original_preserve_the_native_pointer_signature() {
         type EndAuthentication = unsafe fn(*const FOnlineAuthPlayFab, *const c_void);
-        let _: EndAuthentication = crate::unchained::patches::playfab_auth::end_authentication_detour;
+        let _: EndAuthentication = crate::unchained::patches::auth_token_cleanup::end_authentication_detour;
         let _: EndAuthentication = FOnlineAuthPlayFab::end_authentication;
     }
 
@@ -61,7 +61,7 @@ mod tests {
         };
         // The guard must return without calling the uninitialized trampoline.
         unsafe {
-            crate::unchained::patches::playfab_auth::end_authentication_detour(&raw const auth, std::ptr::null());
+            crate::unchained::patches::auth_token_cleanup::end_authentication_detour(&raw const auth, std::ptr::null());
         }
     }
 }

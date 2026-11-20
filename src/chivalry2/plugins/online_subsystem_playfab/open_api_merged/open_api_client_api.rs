@@ -163,7 +163,7 @@ mod tests {
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
         let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
         let _: RequestFunction =
-            crate::unchained::patches::getpost_requests::get_post_get_motd_detour;
+            crate::unchained::patches::server_browser::get_post_get_motd_detour;
         let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
             .into_iter()
             .map(|registration| registration.name)
@@ -178,7 +178,7 @@ mod tests {
         let client = std::ptr::null_mut::<OpenAPIClientAPI>();
         let request = std::ptr::null_mut::<GenericRequest>();
         let result = unsafe {
-            crate::unchained::patches::getpost_requests::with_backend_request(
+            crate::unchained::patches::server_browser::with_backend_request(
                 client,
                 request,
                 || panic!("must not call native code"),
