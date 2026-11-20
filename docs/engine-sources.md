@@ -62,7 +62,8 @@ Keep callable native contracts easy to find.
 - Preserve C++ method spelling on native bindings and vtable entries.
 - Name native C++ destructors `Destructor`; preserve deleting-thunk ABI details.
 - Preserve acronyms such as `TBL` in native identifiers.
-- Name project-defined method/value resolvers `Class__Name` or `Name`.
+- Name project-defined method resolvers `Class__Method`, free functions `Function`,
+  and globals `Owner__Value` or `Value`.
 - Keep Rust-only helpers and trait methods in Rust style.
 - Retain ABI/safety/source notes; omit comments that just repeat signatures.
 - Put Rust adapters beside the native types they adapt.

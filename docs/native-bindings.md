@@ -18,7 +18,8 @@ Declare callable native functions separately from plugin behavior.
 - Keep static methods receiver-free; preserve instance receivers and hidden ABI arguments.
 - Match C++ method spelling, including acronyms and names such as `GetPost_GetMotd`.
 - Use `Destructor` for native destructors without changing deleting flags or returns.
-- Preserve `TBL` capitalization; name project-owned resolvers `Class__Name` or `Name`.
+- Preserve `TBL` capitalization; name project-owned method resolvers `Class__Method`
+  and free-function resolvers `Function`.
 - `self::ResolverName` qualifies a module-local resolver; use it when needed to
   disambiguate imports. It is not a macro requirement.
 - Keep comments about ABI or safety, not duplicate function headers.
@@ -35,7 +36,7 @@ Existing static UDP-ping binding:
 ```rust
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
-    #[unchained_macros::bind_resolved_func(UDPEcho)]
+    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,

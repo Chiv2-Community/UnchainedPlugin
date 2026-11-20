@@ -67,8 +67,9 @@ Establish the native contract before writing Rust declarations.
 
 Reuse an existing resolver or declare one beside the binding.
 
-- Name project-defined resolvers after their target: `Class__Method` or `Method`,
-  and `Owner__Value` or `Value` for globals. Use `Class__Destructor` for destructors.
+- Name project-defined method resolvers `Class__Method`; use `Function` for free
+  functions and `Owner__Value` or `Value` for globals. Use `Class__Destructor`
+  for destructors.
 - Keep native spelling and capitalization, including `TBL` and `GetPost_*`.
 - Upstream patternsleuth resolver types retain their upstream names.
 - Resolver identifiers are cache/registration keys. When explicitly renaming one,
@@ -94,7 +95,7 @@ Use `define_pattern_resolver!` for byte scans.
 Existing UDP-ping resolver:
 
 ```rust
-define_pattern_resolver!(UDPEcho, [
+define_pattern_resolver!(FUDPPing__UDPEcho, [
     "48 89 5C 24 20 55 56 57 48 81 EC 90 00 00 00 49 8B D8 0F 29 B4 24 80 00 00 00 48 8B E9"
 ]);
 ```
@@ -187,7 +188,7 @@ pub struct FUDPPing {
 
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
-    #[unchained_macros::bind_resolved_func(UDPEcho)]
+    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,

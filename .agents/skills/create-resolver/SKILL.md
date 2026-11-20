@@ -59,8 +59,9 @@ Reuse an existing resolver when it already resolves the verified target.
 - Put new declarations beside the native owner under `src/Chivalry2/*`.
 - Follow source-category/header paths; omit `Public`, `Private`, and `Classes`.
 - Add new modules to `mod.rs`; put resolvers before types and bindings.
-- Name project-defined method/value resolvers `Class__Name` or `Name`, matching
-  the target. Destructor resolvers use `Class__Destructor`.
+- Name project-defined method resolvers `Class__Method`, matching the target.
+  Free-function resolvers use `Function`; globals use `Owner__Value` or `Value`.
+  Destructor resolvers use `Class__Destructor`.
 - Preserve native capitalization: `TBLFoo`, never `TblFoo`.
 - Keep intentional integration aliases and upstream resolver names intact.
 - Resolver identifiers are cache/registration keys. For explicitly requested

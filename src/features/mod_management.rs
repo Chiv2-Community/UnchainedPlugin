@@ -186,7 +186,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
     if class_ptr.is_null() {
         return None;
     }
-    unchained_macros::require_function_bindings(&["GetDefaultObject"]).ok()?;
+    unchained_macros::require_function_bindings(&["UClass__GetDefaultObject"]).ok()?;
     let cdo_new = class_ptr.GetDefaultObject(true);
     if cdo_new.is_null() {
         return None;
@@ -426,7 +426,7 @@ impl ModManager {
 
         let mut res_arr = TArray::<*mut UObject>::default();
         
-        unchained_macros::require_function_bindings(&["GetAllActorsOfClass"])?;
+        unchained_macros::require_function_bindings(&["UGameplayStatics__GetAllActorsOfClass"])?;
         unsafe { UGameplayStatics::GetAllActorsOfClass(
             world.as_uobject(),
             mod_base_class,
@@ -496,7 +496,7 @@ impl ModManager {
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
-        if let Err(error) = unchained_macros::require_function_bindings(&["SpawnActor"]) {
+        if let Err(error) = unchained_macros::require_function_bindings(&["UWorld__SpawnActor"]) {
             serror!("Cannot spawn mod actor: {}", error);
             return;
         }
@@ -527,7 +527,7 @@ impl ModManager {
             return;
         };
         if let Err(error) = unchained_macros::require_function_bindings(&[
-            "GetTBLGameMode", "BroadcastLocalizedChat",
+            "UTBLSystemLibrary__GetTBLGameMode", "ATBLGameMode__BroadcastLocalizedChat",
         ]) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
             return;
@@ -560,7 +560,7 @@ impl ModManager {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
         let settings_fstring = FString::from(settings_file);
-        if !unchained_macros::detour_is_initialized("LoadGameFromSlot") {
+        if !unchained_macros::detour_is_initialized("UGameplayStatics__LoadGameFromSlot") {
             swarn!("Detour LoadGameFromSlot is not initialized. Skipping.");
             return;
         }
@@ -611,7 +611,7 @@ impl ModManager {
         // live-world actor scan is unreliable at init (world may be None and
         // the mod actors are not spawned yet).
         self.set_active_paths(enabled);
-        if !unchained_macros::detour_is_initialized("SaveGameToSlot") {
+        if !unchained_macros::detour_is_initialized("UGameplayStatics__SaveGameToSlot") {
             swarn!("Detour SaveGameToSlot is not initialized. Skipping.");
             return;
         }

@@ -31,7 +31,7 @@ define_pattern_resolver!(
 
 #[cfg(feature = "loose_assets")]
 define_pattern_resolver!(
-    IsNonPakFilenameAllowed,
+    FPakPlatformFile__IsNonPakFilenameAllowed,
     ["48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 30 48 8B F1 45 33 C0"]
 );
 
@@ -75,7 +75,7 @@ impl FPakPlatformFile {
     }
 
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(IsNonPakFilenameAllowed)]
+    #[unchained_macros::bind_resolved_func(FPakPlatformFile__IsNonPakFilenameAllowed)]
     pub(crate) unsafe fn IsNonPakFilenameAllowed(
         self: *mut Self,
         _InFilename: *mut FString,

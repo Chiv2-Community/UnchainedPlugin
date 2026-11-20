@@ -34,7 +34,7 @@ plugin detours target those methods from outside the native model.
 Put additional generic bounds on the methods that need them, not separate impls.
 Keep cfg restrictions intact.
 
-- Name project-defined resolvers `Class__Method` or `Method`; use
+- Name project-defined method resolvers `Class__Method` and free functions `Function`; use
   `Owner__Value` or `Value` for globals and `Class__Destructor` for destructors.
 - Preserve C++ spelling and `TBL` capitalization.
 - Keep upstream resolver type names and intentional integration aliases intact.

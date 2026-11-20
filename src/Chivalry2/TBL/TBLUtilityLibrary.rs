@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::FString;
 
 // Shipping RVA 0x18b8cc0.
 define_pattern_resolver!(
-    ExecuteConsoleCommand,
+    TBLUtility__ExecuteConsoleCommand,
     ["40 53 48 83 EC 30 48 8B 05 ?? ?? ?? ?? 48 8B D9 48 8B 90 58 0C 00 00"]
 );
 
@@ -15,6 +15,6 @@ pub struct TBLUtility {
 
 #[unchained_macros::runtime_bindings]
 impl TBLUtility {
-    #[unchained_macros::bind_resolved_func(ExecuteConsoleCommand)]
+    #[unchained_macros::bind_resolved_func(TBLUtility__ExecuteConsoleCommand)]
     pub(crate) unsafe fn ExecuteConsoleCommand(command: *const FString) {}
 }

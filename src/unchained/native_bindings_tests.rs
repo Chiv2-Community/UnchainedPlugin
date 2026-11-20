@@ -7,19 +7,19 @@ mod binding_tests {
     #[test]
     fn native_detours_keep_their_registered_names_and_state_access() {
         let expected = [
-            "LoadFrontEndMap", "UGameEngineTick", "OnPreLoadMap", "OnPostLoadMap",
-            "SetMatchState", "ExecuteConsoleCommand", "FPakPlatformFile__Mount",
-            "ClientReceiveChat_Implementation", "BroadcastChat", "ClientMessage",
-            "ClientReceiveLocalizedChat_Implementation", "FConsoleOutputDevice__Serialize", "GetDataForMap",
+            "UTBLGameInstance__LoadFrontEndMap", "UGameEngineTick", "UTBLGameInstance__OnPreLoadMap", "UTBLGameInstance__OnPostLoadMap",
+            "AGameMode__SetMatchState", "TBLUtility__ExecuteConsoleCommand", "FPakPlatformFile__Mount",
+            "ATBLPlayerController__ClientReceiveChat_Implementation", "ATBLGameMode__BroadcastChat", "APlayerController__ClientMessage",
+            "ATBLPlayerController__ClientReceiveLocalizedChat_Implementation", "FConsoleOutputDevice__Serialize", "UMapSpecificLoadingScreenConfig__GetDataForMap",
             "ATBLPlayerController__GetOwnershipFromPlayerControllerAndState",
             "ATBLPlayerController__CanUseLoadoutItem", "ATBLPlayerController__CanUseCharacter",
             "ATBLPlayerController__ConditionalInitializeCustomizationOnServer",
-            "DedicatedServerInit", "ProcessEvent", "UGameplay__IsDedicatedServer",
-            "FOnlineAuthPlayFab__EndAuthentication", "LoadGameFromSlot", "SaveGameToSlot",
-            "ATBLGameMode__PreLogin", "ATBLGameMode__Logout", "SendRequest", "SetStatInner",
-            "OnGetCurrentGames", "PingSomeServers", "FString__Find", "UDPEcho",
-            "FString__ParseIntoArray", "GetConfigName", "LoadConfig", "GetGameInfo",
-            "GetPost_GetMotd", "GetPost_GetCurrentGames", "ClientTravelInternal",
+            "DedicatedServerInit", "UObject__ProcessEvent", "UGameplay__IsDedicatedServer",
+            "FOnlineAuthPlayFab__EndAuthentication", "UGameplayStatics__LoadGameFromSlot", "UGameplayStatics__SaveGameToSlot",
+            "ATBLGameMode__PreLogin", "ATBLGameMode__Logout", "PlayFabRequestHandler__SendRequest", "FTBLOnlineStats__SetStatInner",
+            "FOnlineSessionPlayFab__OnGetCurrentGames", "FOnlineSessionPlayFab__PingSomeServers", "FString__Find", "FUDPPing__UDPEcho",
+            "FString__ParseIntoArray", "UClass__GetConfigName", "UObject__LoadConfig", "UUserFeedbackAndBugReportsLibrary__GetGameInfo",
+            "GetPost_GetMotd", "GetPost_GetCurrentGames", "APlayerController__ClientTravelInternal",
         ];
         for name in expected {
             assert_eq!(inventory::iter::<HookRegistration>.into_iter()
@@ -27,14 +27,14 @@ mod binding_tests {
             assert_eq!(inventory::iter::<unchained_macros::DetourBindingRegistration>.into_iter()
                 .filter(|hook| hook.name == name).count(), 1, "State access for {name}");
         }
-        assert_eq!(crate::resolvers().filter(|resolver| resolver.name == "GetTBLGameMode").count(), 1);
+        assert_eq!(crate::resolvers().filter(|resolver| resolver.name == "UTBLSystemLibrary__GetTBLGameMode").count(), 1);
     }
 
     #[test]
     fn udp_echo_binding_and_plugin_replacement_share_one_native_target() {
         use crate::Chivalry2::Engine::Runtime::Online::ICMP::Icmp::FUDPPing;
         let binding = FUDPPing::__UNCHAINED_BINDING_UDPEcho.binding();
-        assert_eq!(binding.name(), "UDPEcho");
+        assert_eq!(binding.name(), "FUDPPing__UDPEcho");
         assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()
             .filter(|registration| std::ptr::eq(registration.binding, binding)).count(), 1);
         assert_eq!(inventory::iter::<HookRegistration>.into_iter()
@@ -48,7 +48,7 @@ mod binding_tests {
             "AllowAlternateBackend", "EACAntiCheatMesssage", "UNetDriver__GetNetMode",
             "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite",
             #[cfg(feature = "move-autonomous-desync")]
-            "MoveAutonomous",
+            "UCharacterMovementComponent__MoveAutonomous",
             #[cfg(feature = "move-autonomous-desync")]
             "TickActor",
         ];
@@ -63,12 +63,12 @@ mod binding_tests {
     #[test]
     fn call_only_resolvers_are_bindings_not_detours() {
         let expected = [
-            "APlayerState__GetPlayerName", "BroadcastLocalizedChat",
+            "APlayerState__GetPlayerName", "ATBLGameMode__BroadcastLocalizedChat",
             "FLargeMemoryReader__FLargeMemoryReader", "FLargeMemoryReader__Destructor", "FName__FName",
             "FString__AppendChars", "FText__AsCultureInvariant", "FText__Release",
-            "FText__ToString", "GetAllActorsOfClass", "GetAssetRegistry",
-            "GetDefaultObject", "GetTBLGameMode", "InternalGetNetMode",
-            "SpawnActor", "StaticFindObject", "StaticLoadObject",
+            "FText__ToString", "UGameplayStatics__GetAllActorsOfClass", "UAssetManager__GetAssetRegistry",
+            "UClass__GetDefaultObject", "UTBLSystemLibrary__GetTBLGameMode", "UWorld__InternalGetNetMode",
+            "UWorld__SpawnActor", "StaticFindObject", "StaticLoadObject",
             "UTBLGameInstance__AddChatLine", "UAssetRegistryHelpers__GetAssetRegistry",
             "UWorld__GetMapName",
         ];
@@ -90,7 +90,7 @@ mod binding_tests {
                 .filter(|registration| registration.binding.name() == *name).count(), 1,
                 "Detached hook {name} must target one model binding");
         }
-        for name in ["DedicatedServerInit", "ClientMessage", "UGameEngineTick",
+        for name in ["DedicatedServerInit", "APlayerController__ClientMessage", "UGameEngineTick",
             "ATBLCharacter__OnKilled", "ATBLCharacter__OnDamageTaken"] {
             assert!(hooks.contains(name), "Active hook {name} was removed");
         }

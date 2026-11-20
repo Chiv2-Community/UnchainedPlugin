@@ -30,8 +30,8 @@ pub(crate) fn send_ingame_message_with_world(
             return;
         }
         if let Err(error) = unchained_macros::require_function_bindings(&[
-            "GetTBLGameMode",
-            "BroadcastLocalizedChat",
+            "UTBLSystemLibrary__GetTBLGameMode",
+            "ATBLGameMode__BroadcastLocalizedChat",
         ]) {
             serror!("Cannot send chat: {}", error);
             return;

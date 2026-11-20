@@ -13,12 +13,12 @@ define_pattern_resolver!(
     ["74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"]
 );
 
-define_pattern_resolver!(ClientMessage, [
+define_pattern_resolver!(APlayerController__ClientMessage, [
     "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
 ]);
 
 define_pattern_resolver!(
-    ClientTravelInternal,
+    APlayerController__ClientTravelInternal,
     ["4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 6B 10 41 0F B6 E9 49 89 73 18 48"]
 );
 
@@ -33,7 +33,7 @@ pub struct APlayerController {
 
 #[unchained_macros::runtime_bindings]
 impl APlayerController {
-    #[unchained_macros::bind_resolved_func(ClientMessage)]
+    #[unchained_macros::bind_resolved_func(APlayerController__ClientMessage)]
     pub(crate) unsafe fn ClientMessage(
         self: *mut Self,
         S: *mut FString,
@@ -42,7 +42,7 @@ impl APlayerController {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(ClientTravelInternal)]
+    #[unchained_macros::bind_resolved_func(APlayerController__ClientTravelInternal)]
     pub(crate) unsafe fn ClientTravelInternal(
         self: *mut Self,
         url: *mut FString,

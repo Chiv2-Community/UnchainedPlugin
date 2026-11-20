@@ -15,7 +15,7 @@ use std::os::raw::c_void;
 use unchained_macros::bind_resolved_func;
 
 // Used to set World reference
-define_pattern_resolver!(InternalGetNetMode, {
+define_pattern_resolver!(UWorld__InternalGetNetMode, {
     EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
     STEAM: [
         "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B",
@@ -29,7 +29,7 @@ define_pattern_resolver!(
 );
 
 define_pattern_resolver!(
-    SpawnActor,
+    UWorld__SpawnActor,
     ["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]
 );
 
@@ -249,7 +249,7 @@ impl UWorld {
 
     /// # Safety
     /// Self must be a live native world on the engine thread.
-    #[bind_resolved_func(self::InternalGetNetMode)]
+    #[bind_resolved_func(self::UWorld__InternalGetNetMode)]
     pub unsafe fn InternalGetNetMode(self: *const Self) -> ENetMode {}
 
     /// Uses caller-provided FString return storage.
@@ -263,7 +263,7 @@ impl UWorld {
     /// # Safety
     /// Call on the engine thread with a live world, compatible actor class and
     /// valid native parameter storage. The world owns any returned actor.
-    #[bind_resolved_func(self::SpawnActor)]
+    #[bind_resolved_func(self::UWorld__SpawnActor)]
     pub unsafe fn SpawnActor(
         self: *mut Self,
         class: *mut UClass,

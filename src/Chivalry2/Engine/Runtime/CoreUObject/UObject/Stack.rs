@@ -13,7 +13,7 @@ use std::mem::MaybeUninit;
 
 #[cfg(feature = "kismet_log")]
 define_pattern_resolver!(
-    KismetExecutionMessage,
+    FFrame__KismetExecutionMessage,
     ["48 89 5C 24 08 57 48 83 EC 30 0F B6 DA 48 8B F9 80 FA 01 ?? ?? ?? ?? ?? ?? ?? ?? ?? BA",]
 );
 
@@ -54,7 +54,7 @@ impl FFrame {
 
     // Preserve the legacy return ABI pending native-signature verification.
     #[cfg(feature = "kismet_log")]
-    #[unchained_macros::bind_resolved_func(KismetExecutionMessage)]
+    #[unchained_macros::bind_resolved_func(FFrame__KismetExecutionMessage)]
     pub(crate) unsafe fn KismetExecutionMessage(
         text: *const TCHAR,
         kind: u8,

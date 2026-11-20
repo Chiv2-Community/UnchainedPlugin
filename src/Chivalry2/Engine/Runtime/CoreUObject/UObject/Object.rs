@@ -10,12 +10,12 @@ use crate::globals;
 use std::ffi::c_void;
 use widestring::U16CString;
 
-define_pattern_resolver!(LoadConfig, [
+define_pattern_resolver!(UObject__LoadConfig, [
     "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 FC FF FF 48 81 EC 30 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 10 03 00 00"
 ]);
 
 define_pattern_resolver!(
-    ProcessEvent,
+    UObject__ProcessEvent,
     ["40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC F0 00 00 00 48 8D 6C 24 30 48 89 9D 18 01"]
 );
 
@@ -156,7 +156,7 @@ impl UObject {
         false
     }
 
-    #[unchained_macros::bind_resolved_func(LoadConfig)]
+    #[unchained_macros::bind_resolved_func(UObject__LoadConfig)]
     pub(crate) unsafe fn LoadConfig(
         self: *mut Self,
         config_class: *mut UClass,
@@ -166,7 +166,7 @@ impl UObject {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(ProcessEvent)]
+    #[unchained_macros::bind_resolved_func(UObject__ProcessEvent)]
     pub(crate) unsafe fn ProcessEvent(
         self: *mut Self,
         function: *mut UFunction,

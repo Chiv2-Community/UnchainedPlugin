@@ -6,11 +6,11 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::*;
 use std::ffi::c_void;
 
-define_pattern_resolver!(GetConfigName, [
+define_pattern_resolver!(UClass__GetConfigName, [
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 70 48 8D B9 E8 00 00 00 48 8B DA 48 8B F1 BA 1F 00 00 00 8B 0F E8 ?? ?? ?? ?? 83 7F 04 00 41 0F 94 C0 44 84 C0 74 15 33 C0 48 89 03 48 8B 3D ?? ?? ?? ?? 48 8B"
 ]);
 
-define_pattern_resolver!(GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
+define_pattern_resolver!(UClass__GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
 
 #[repr(C)]
 pub struct UClass {
@@ -52,7 +52,7 @@ pub struct UClass {
 
 #[unchained_macros::runtime_bindings]
 impl UClass {
-    #[unchained_macros::bind_resolved_func(GetConfigName)]
+    #[unchained_macros::bind_resolved_func(UClass__GetConfigName)]
     pub(crate) unsafe fn GetConfigName(
         self: *mut Self,
         storage: *mut crate::Chivalry2::Engine::FString,
@@ -63,7 +63,7 @@ impl UClass {
     ///
     /// # Safety
     /// Self must be a live native class; call on the engine thread.
-    #[bind_resolved_func(self::GetDefaultObject)]
+    #[bind_resolved_func(self::UClass__GetDefaultObject)]
     pub unsafe fn GetDefaultObject(self: *const Self, create_if_needed: bool) -> *mut UObject {}
 
     /// Looks up a property by name on `class` and its super classes, reading only

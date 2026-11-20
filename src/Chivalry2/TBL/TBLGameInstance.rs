@@ -12,16 +12,16 @@ define_pattern_resolver!(
 );
 
 define_pattern_resolver!(
-    LoadFrontEndMap,
+    UTBLGameInstance__LoadFrontEndMap,
     ["48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"]
 );
 
 define_pattern_resolver!(
-    OnPreLoadMap,
+    UTBLGameInstance__OnPreLoadMap,
     ["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]
 );
 
-define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
+define_pattern_resolver!(UTBLGameInstance__OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 
 define_pattern_resolver!(
     UTBLGameInstance__AddChatLine,
@@ -36,19 +36,19 @@ pub struct UTBLGameInstance {
 
 #[unchained_macros::runtime_bindings]
 impl UTBLGameInstance {
-    #[unchained_macros::bind_resolved_func(LoadFrontEndMap)]
+    #[unchained_macros::bind_resolved_func(UTBLGameInstance__LoadFrontEndMap)]
     pub(crate) unsafe fn LoadFrontEndMap(
         self: *mut Self,
         _url: *mut crate::Chivalry2::Engine::FString,
     ) -> bool {
     }
-    #[unchained_macros::bind_resolved_func(OnPreLoadMap)]
+    #[unchained_macros::bind_resolved_func(UTBLGameInstance__OnPreLoadMap)]
     pub(crate) unsafe fn OnPreLoadMap(
         self: *mut Self,
         url: *mut crate::Chivalry2::Engine::FString,
     ) {
     }
-    #[unchained_macros::bind_resolved_func(OnPostLoadMap)]
+    #[unchained_macros::bind_resolved_func(UTBLGameInstance__OnPostLoadMap)]
     pub(crate) unsafe fn OnPostLoadMap(
         self: *mut Self,
         world: *mut crate::Chivalry2::Engine::UWorld,

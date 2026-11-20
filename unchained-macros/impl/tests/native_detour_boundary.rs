@@ -325,7 +325,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("enable_console_commands.rs", "UTBLLocalPlayer__Exec, BYTES, &[0xEB]"),
         ("hosting/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
         ("hosting/desync/net_mode.rs", "UNetDriver__GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
-        ("hosting/desync/tick_actors.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
+        ("hosting/desync/tick_actors.rs", "UCharacterMovementComponent__MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/tick_actors.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
         ("backend_hooks/auth_token_cleanup.rs", "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite, BYTES, &[0xEB, 0x26]"),
@@ -480,9 +480,16 @@ fn project_binding_resolvers_match_their_targets() {
         }
         let name = resolver.segments.last().unwrap().ident.to_string();
         let (owner, method) = target.rsplit_once("::").unwrap();
+        // Preserve deliberately obfuscated integration aliases and request keys.
+        if target == "UGameEngine::DedicatedServerInit"
+            || (owner == "OpenAPIClientAPI" && method.starts_with("GetPost_"))
+        {
+            assert_eq!(name, method, "{target}: integration key changed");
+            continue;
+        }
         assert!(
-            name == method || name == format!("{owner}__{method}"),
-            "{target}: resolver {name} must be Method or Class__Method",
+            name == format!("{owner}__{method}"),
+            "{target}: resolver {name} must be Class__Method",
         );
         assert!(!name.contains("Tbl"), "{name} must preserve TBL capitalization");
     }

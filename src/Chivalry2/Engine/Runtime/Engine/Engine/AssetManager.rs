@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::IAssetRegistry;
 use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(
-    GetAssetRegistry,
+    UAssetManager__GetAssetRegistry,
     ["40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"]
 );
 
@@ -18,6 +18,6 @@ pub struct UAssetManager {
 impl UAssetManager {
     /// # Safety
     /// Self must be a live native asset manager; call on the engine thread.
-    #[bind_resolved_func(self::GetAssetRegistry)]
+    #[bind_resolved_func(self::UAssetManager__GetAssetRegistry)]
     pub unsafe fn GetAssetRegistry(self: *const Self) -> *mut IAssetRegistry {}
 }

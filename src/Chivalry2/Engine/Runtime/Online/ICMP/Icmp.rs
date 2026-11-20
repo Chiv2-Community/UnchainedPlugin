@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::FString;
 use std::ffi::c_void;
 
 define_pattern_resolver!(
-    UDPEcho,
+    FUDPPing__UDPEcho,
     ["48 89 5C 24 20 55 56 57 48 81 EC 90 00 00 00 49 8B D8 0F 29 B4 24 80 00 00 00 48 8B E9"]
 );
 
@@ -18,7 +18,7 @@ pub struct FUDPPing {
 impl FUDPPing {
     /// # Safety
     /// Arguments must satisfy the native UDPEcho ABI and callback lifetime.
-    #[unchained_macros::bind_resolved_func(UDPEcho)]
+    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,
