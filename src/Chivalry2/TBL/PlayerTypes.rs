@@ -1,4 +1,6 @@
-//! Native source: TBL/Source/TBL/PlayerTypes.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/EChatType.h>.
+//! Native owner: TBL/Source/TBL/PlayerTypes.h.
+//! ArgonSDK splits these enums into EChatType.h and EFaction.h.
 
 #![allow(non_snake_case)]
 use std::str::FromStr;
@@ -124,6 +126,7 @@ impl TryFrom<u8> for EChatType {
     }
 }
 
+/// Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/EFaction.h>.
 #[unchained_macros::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

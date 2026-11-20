@@ -346,11 +346,22 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             };
             if let Some((name, attrs, label)) = native_type {
                 if attr(attrs, "runtime_bindings").is_some() {
+                    let item_source = notes(attrs)
+                        .lines()
+                        .filter(|line| line.starts_with("Native source: <"))
+                        .map(|line| format!("//! {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     types.push(NativeType {
                         name: name.to_string(),
                         label,
-                        notes: notes(attrs),
-                        source: native_source(&source, &roots)?,
+                        notes: notes(attrs)
+                            .lines()
+                            .filter(|line| !line.starts_with("Native source: <"))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                        source: native_source(&item_source, &roots)?
+                            .or(native_source(&source, &roots)?),
                         link: file_link(&path, name.span().start().line)?,
                     });
                 }
@@ -639,6 +650,11 @@ mod tests {
         fs::write(root.join("cpp/Engine/Source/Test/Public/Native.h"),
             "class Native : public Base { public: const FString& Call() const; private: int Value; };").unwrap();
         fs::write(
+            root.join("cpp/Engine/Source/Test/Public/Faction.h"),
+            "enum class Faction : unsigned char { First, Second };",
+        )
+        .unwrap();
+        fs::write(
             root.join("cpp/Engine/Source/Test/Private/Native.cpp"),
             "const FString& Native::Call() const { return Value; }",
         )
@@ -646,6 +662,10 @@ mod tests {
         fs::write(root.join("src/Chivalry2/Native.rs"), r#"//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Native.h>.
 #[runtime_bindings]
 pub struct Native;
+/// Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Faction.h>.
+/// Faction notes.
+#[runtime_bindings]
+pub enum Faction { First, Second }
 define_pattern_resolver!(Native__Call, ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B"]);
 impl Native {
     /// # Safety
@@ -664,6 +684,11 @@ impl Native {
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
         assert!(class.contains("class Native : public Base"));
         assert!(class.contains("private: int Value;"));
+        let faction = fs::read_to_string(directory.join("type-Faction.md")).unwrap();
+        assert!(faction.contains("enum class Faction : unsigned char { First, Second };"));
+        assert!(faction.contains("Faction notes."));
+        assert!(!faction.contains("Native source:"));
+        assert!(!faction.contains("Native.h"));
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.contains("Overwritten by [`call_detour`](file:"));
         assert!(binding.contains(".\nResolved by "));

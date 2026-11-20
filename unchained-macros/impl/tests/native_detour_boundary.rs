@@ -550,7 +550,11 @@ fn native_modules_preserve_header_casing() {
             }
             let source = std::fs::read_to_string(&path).unwrap();
             if path.file_name().unwrap() != "mod.rs" {
-                let header = source.lines().next().unwrap().split_once(".h").unwrap().0;
+                let owner = source
+                    .lines()
+                    .find(|line| line.starts_with("//! Native owner: "))
+                    .unwrap_or_else(|| source.lines().next().unwrap());
+                let header = owner.split_once(".h").unwrap().0;
                 let basename = header.rsplit('/').next().unwrap();
                 assert_eq!(path.file_stem().unwrap(), basename, "{}", path.display());
             }
