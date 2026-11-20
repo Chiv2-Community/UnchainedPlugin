@@ -197,7 +197,7 @@ fn scan_with_cfg(
                     assert!(
                         path.components()
                             .any(|part| part.as_os_str() == "unchained"),
-                        "replacement belongs outside chivalry2: {}",
+                        "replacement belongs outside Chivalry2: {}",
                         path.display()
                     );
                     let args = args(attr);
@@ -465,12 +465,12 @@ fn native_callables_use_cpp_style_names() {
         }
     }
 
-    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
 }
 
 #[test]
 fn project_binding_resolvers_match_their_targets() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2");
     let mut bindings = BTreeMap::new();
     scan(&root, &mut bindings, &mut BTreeMap::new());
     for (target, binding) in bindings {
@@ -522,7 +522,7 @@ fn native_modules_preserve_header_casing() {
             }
         }
     }
-    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
 }
 
 #[test]
@@ -557,7 +557,7 @@ fn engine_bindings_preserve_native_source_categories() {
             );
         }
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2/Engine");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2/Engine");
     check(&root, &root);
 }
 
@@ -570,7 +570,7 @@ fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
                 !item.mac.path.segments.last().is_some_and(|segment|
                     ["CREATE_PATCH", "CREATE_HOOK"].contains(&segment.ident.to_string().as_str())
                 ),
-                "plugin patch/hook policy belongs outside chivalry2: {}",
+                "plugin patch/hook policy belongs outside Chivalry2: {}",
                 self.0.display()
             );
             syn::visit_mut::visit_item_macro_mut(self, item);
@@ -605,7 +605,7 @@ fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
                     Item::Mod(item) => assert!(
                         !["extensions", "startup_patch", "backend", "chat"]
                             .contains(&item.ident.to_string().as_str()),
-                        "non-header module belongs outside chivalry2: {}",
+                        "non-header module belongs outside Chivalry2: {}",
                         path.display()
                     ),
                     Item::Use(item) if !matches!(item.vis, syn::Visibility::Inherited) => assert!(
@@ -622,12 +622,12 @@ fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
             }
         }
     }
-    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
 }
 
 #[test]
 fn tbl_declarations_follow_original_native_header_owners() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2");
     for (path, names) in [
         ("TBL/PlayerTypes.rs", &["EChatType", "EFaction"][..]),
         ("TBL/TBLTypes.rs", &["FDamageTakenEvent", "UGameplay"][..]),
@@ -667,7 +667,7 @@ fn tbl_declarations_follow_original_native_header_owners() {
 #[test]
 fn playfab_native_types_follow_header_owners() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../src/chivalry2/Plugins/OnlineSubsystemPlayFab");
+        .join("../../src/Chivalry2/Plugins/OnlineSubsystemPlayFab");
     for (path, name) in [
         ("OnlineAuthInterfacePlayFab.rs", "FOnlineAuthPlayFab"),
         (
@@ -693,7 +693,7 @@ fn playfab_native_types_follow_header_owners() {
 fn redpoint_instruction_resolver_follows_authentication_node_owner() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
     let source = std::fs::read_to_string(root.join(
-        "chivalry2/Plugins/OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.rs",
+        "Chivalry2/Plugins/OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.rs",
     )).unwrap();
     let file = syn::parse_file(&source).unwrap();
     assert!(file.items.iter().any(|item| matches!(

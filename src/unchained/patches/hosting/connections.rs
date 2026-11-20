@@ -1,11 +1,11 @@
 //! Player admission, bans, and connection lifecycle.
 
-use crate::chivalry2::Engine::AController;
-use crate::chivalry2::Engine::FString;
-use crate::chivalry2::Engine::FStringCopyError;
-use crate::chivalry2::Engine::FUniqueNetIdRepl;
-use crate::chivalry2::Engine::PlayerFlags;
-use crate::chivalry2::TBL::ATBLGameMode;
+use crate::Chivalry2::Engine::AController;
+use crate::Chivalry2::Engine::FString;
+use crate::Chivalry2::Engine::FStringCopyError;
+use crate::Chivalry2::Engine::FUniqueNetIdRepl;
+use crate::Chivalry2::Engine::PlayerFlags;
+use crate::Chivalry2::TBL::ATBLGameMode;
 use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
 #[cfg(feature = "server_registration")]

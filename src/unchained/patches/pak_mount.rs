@@ -1,7 +1,7 @@
 //! Track mounted paks.
 
-use crate::chivalry2::Engine::Runtime::PakFile::IPlatformFilePak::*;
-use crate::chivalry2::Engine::TCHAR;
+use crate::Chivalry2::Engine::Runtime::PakFile::IPlatformFilePak::*;
+use crate::Chivalry2::Engine::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
 

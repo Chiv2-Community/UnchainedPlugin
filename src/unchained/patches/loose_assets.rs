@@ -1,6 +1,6 @@
 //! Optional loose-file loading outside mounted paks.
 
-use crate::chivalry2::Engine::{
+use crate::Chivalry2::Engine::{
     FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR,
 };
 use widestring::U16CStr;

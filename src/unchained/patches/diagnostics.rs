@@ -1,18 +1,18 @@
 //! Logging-only hooks; native behavior is unchanged.
 
-use crate::chivalry2::Engine::Runtime::Engine::EngineUtils::FConsoleOutputDevice;
-use crate::chivalry2::Engine::Runtime::Engine::Kismet::GameplayStatics::UGameplayStatics;
+use crate::Chivalry2::Engine::Runtime::Engine::EngineUtils::FConsoleOutputDevice;
+use crate::Chivalry2::Engine::Runtime::Engine::Kismet::GameplayStatics::UGameplayStatics;
 #[cfg(feature = "kismet_log")]
-use crate::chivalry2::Engine::{FFrame, UObject};
-use crate::chivalry2::Engine::{FName, FString, USaveGame, TCHAR};
-use crate::chivalry2::TBL::TBLUtilityLibrary::TBLUtility;
-use crate::chivalry2::TBL::UI::UserFeedbackAndBugReportsLibrary::UUserFeedbackAndBugReportsLibrary;
+use crate::Chivalry2::Engine::{FFrame, UObject};
+use crate::Chivalry2::Engine::{FName, FString, USaveGame, TCHAR};
+use crate::Chivalry2::TBL::TBLUtilityLibrary::TBLUtility;
+use crate::Chivalry2::TBL::UI::UserFeedbackAndBugReportsLibrary::UUserFeedbackAndBugReportsLibrary;
 
 #[unchained_macros::bind_func_detour(UUserFeedbackAndBugReportsLibrary::GetGameInfo)]
 pub(crate) unsafe fn get_game_info_detour(
-    storage: *mut crate::chivalry2::Engine::FString,
-    world: *mut crate::chivalry2::Engine::UWorld,
-) -> *mut crate::chivalry2::Engine::FString {
+    storage: *mut crate::Chivalry2::Engine::FString,
+    world: *mut crate::Chivalry2::Engine::UWorld,
+) -> *mut crate::Chivalry2::Engine::FString {
     let result = unsafe { UUserFeedbackAndBugReportsLibrary::GetGameInfo(storage, world) };
     sinfo!("{}", unsafe { (&*result).to_string() });
     result

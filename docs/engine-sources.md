@@ -11,10 +11,10 @@
 
 Organize native declarations by their original source owner.
 
-- `src/chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
-- `src/chivalry2/TBL/`: native TBL owners.
-- `src/chivalry2/TBLLoadingScreen/`: the separate loading-screen module.
-- `src/chivalry2/Plugins/`: native game-plugin headers, including private headers.
+- `src/Chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
+- `src/Chivalry2/TBL/`: native TBL owners.
+- `src/Chivalry2/TBLLoadingScreen/`: the separate loading-screen module.
+- `src/Chivalry2/Plugins/`: native game-plugin headers, including private headers.
 - Identify the owner in the file's opening source comment.
 - Use native source and shipping PDB evidence where available.
 - Do not treat generated per-type SDK filenames as original header ownership.
@@ -28,10 +28,10 @@ Mirror source categories, modules, and header directories.
 - Omit `Source`, `Public`, `Private`, and `Classes`.
 - Preserve native casing in module names, directories, and header basenames,
   including `Runtime`, `ThirdParty`, `CoreUObject`, and `TBL`.
-- Keep the Rust root `chivalry2` lowercase. For example:
-  `chivalry2::Engine::Runtime::Core::Windows::WindowsCriticalSection`.
-- Keep engine plugins under `chivalry2/Engine/Plugins/`.
-- Use `chivalry2/Plugins/<plugin path>/<header>.rs` for game plugins.
+- Use `Chivalry2` for the Rust root. For example:
+  `Chivalry2::Engine::Runtime::Core::Windows::WindowsCriticalSection`.
+- Keep engine plugins under `Chivalry2/Engine/Plugins/`.
+- Use `Chivalry2/Plugins/<plugin path>/<header>.rs` for game plugins.
 - Drop repeated `Source/<same module>` scaffolding in game-plugin paths.
 - Retain distinct module directories, such as `OpenAPIMerged`.
 
@@ -39,14 +39,14 @@ Engine header:
 
 ```text
 Engine/Source/Runtime/Engine/Classes/Engine/World.h
-→ src/chivalry2/Engine/Runtime/Engine/Engine/World.rs
+→ src/Chivalry2/Engine/Runtime/Engine/Engine/World.rs
 ```
 
 Game-plugin header:
 
 ```text
 TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h
-→ src/chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs
+→ src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs
 ```
 
 ## Declaration order

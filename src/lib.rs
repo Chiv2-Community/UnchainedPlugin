@@ -9,7 +9,7 @@ pub mod logging;
 mod resolvers;
 pub mod scan;
 pub mod tools;
-pub mod chivalry2;
+pub mod Chivalry2;
 mod unchained;
 pub mod features;
 pub mod commands;

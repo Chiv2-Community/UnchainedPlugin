@@ -1,6 +1,6 @@
 //! Track world state and publish map lifecycle events.
 
-use crate::chivalry2::TBL::TBLGameInstance::*;
+use crate::Chivalry2::TBL::TBLGameInstance::*;
 use crate::{
     events::models::{GameEvent, MapChange},
     features::events::EVENT_SYSTEM,
@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering;
 #[unchained_macros::bind_func_detour(UTBLGameInstance::OnPreLoadMap)]
 pub(crate) unsafe fn on_pre_load_map_detour(
     this: *mut UTBLGameInstance,
-    url: *mut crate::chivalry2::Engine::FString,
+    url: *mut crate::Chivalry2::Engine::FString,
 ) {
     crate::features::motd::set_match_active(false);
     let name = unsafe {
@@ -35,7 +35,7 @@ pub(crate) unsafe fn on_pre_load_map_detour(
 #[unchained_macros::bind_func_detour(UTBLGameInstance::OnPostLoadMap)]
 pub(crate) unsafe fn on_post_load_map_detour(
     this: *mut UTBLGameInstance,
-    world: *mut crate::chivalry2::Engine::UWorld,
+    world: *mut crate::Chivalry2::Engine::UWorld,
 ) {
     crate::features::motd::set_match_active(false);
     sdebug!("Triggered");
@@ -54,7 +54,7 @@ pub(crate) unsafe fn on_post_load_map_detour(
         }
         _ => {}
     }
-    if let Some(url) = crate::chivalry2::Engine::UWorld::get_current_map_name(world) {
+    if let Some(url) = crate::Chivalry2::Engine::UWorld::get_current_map_name(world) {
         let name = url.split('/').last().unwrap_or("UnknownMapName");
         EVENT_SYSTEM
             .game_event_publisher

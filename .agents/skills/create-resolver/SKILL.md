@@ -56,7 +56,7 @@ Use whichever binary-analysis tools are available.
 Reuse an existing resolver when it already resolves the verified target.
 
 - Search native declarations and existing patternsleuth resolvers first.
-- Put new declarations beside the native owner under `src/chivalry2/*`.
+- Put new declarations beside the native owner under `src/Chivalry2/*`.
 - Follow source-category/header paths; omit `Public`, `Private`, and `Classes`.
 - Add new modules to `mod.rs`; put resolvers before types and bindings.
 - Name project-defined method/value resolvers `Class__Name` or `Name`, matching

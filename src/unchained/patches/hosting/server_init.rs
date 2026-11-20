@@ -1,4 +1,4 @@
-use crate::chivalry2::Engine::UGameEngine;
+use crate::Chivalry2::Engine::UGameEngine;
 use std::ffi::c_void;
 
 #[unchained_macros::bind_func_detour(UGameEngine::DedicatedServerInit)]

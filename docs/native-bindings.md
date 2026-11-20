@@ -11,7 +11,7 @@
 
 Declare callable native functions separately from plugin behavior.
 
-- Keep resolvers, native ABI declarations, and bindings under `src/chivalry2/*`.
+- Keep resolvers, native ABI declarations, and bindings under `src/Chivalry2/*`.
 - Follow the [native source layout](engine-sources.md).
 - Use `#[runtime_bindings]` on the native type's inherent impl.
 - Declare an empty unsafe method with `#[bind_resolved_func(Resolver)]`.

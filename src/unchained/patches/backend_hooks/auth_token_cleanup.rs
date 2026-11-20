@@ -1,6 +1,6 @@
 //! Authentication token handling and cleanup after native session teardown.
 
-use crate::chivalry2::Plugins::OnlineSubsystemPlayFab::OnlineAuthInterfacePlayFab::*;
+use crate::Chivalry2::Plugins::OnlineSubsystemPlayFab::OnlineAuthInterfacePlayFab::*;
 use std::ffi::c_void;
 
 #[unchained_macros::bind_func_detour(FOnlineAuthPlayFab::EndAuthentication)]

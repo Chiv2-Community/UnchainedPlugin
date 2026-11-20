@@ -2,7 +2,7 @@
 
 use crate::features::tokio_runtime::TOKIO_RUNTIME;
 use crate::features::native_chat::send_ingame_message_with_world;
-use crate::chivalry2::TBL::EChatType;
+use crate::Chivalry2::TBL::EChatType;
 use crate::features::native_chat::UWorldAccessor;
 use std::{cell::RefCell, time::Duration};
 use tokio::task::JoinHandle;

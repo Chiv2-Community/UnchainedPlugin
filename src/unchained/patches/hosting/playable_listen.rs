@@ -1,7 +1,7 @@
 //! Dedicated-server status overrides for playable listen servers.
 
-use crate::chivalry2::Engine::{ENetMode, UObject};
-use crate::chivalry2::TBL::TBLTypes::UGameplay;
+use crate::Chivalry2::Engine::{ENetMode, UObject};
+use crate::Chivalry2::TBL::TBLTypes::UGameplay;
 
 #[unchained_macros::bind_func_detour(UGameplay::IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
 pub(crate) unsafe fn is_dedicated_server_detour(context: *mut UObject) -> bool {

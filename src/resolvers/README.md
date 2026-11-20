@@ -5,8 +5,8 @@ For the resolver → native binding → plugin detour workflow, see
 [Creating game hooks](../../CONTRIBUTING.md#creating-game-hooks).
 
 Resolver definitions and native bindings live beside their native owners under
-`src/chivalry2/TBL` and `TBLLoadingScreen` (game modules), `src/chivalry2/Engine` (UE 4.25-plus modules),
-or `src/chivalry2/Plugins` (native game plugins, including private headers).
+`src/Chivalry2/TBL` and `TBLLoadingScreen` (game modules), `src/Chivalry2/Engine` (UE 4.25-plus modules),
+or `src/Chivalry2/Plugins` (native game plugins, including private headers).
 Identify original native owner headers/sources, using shipping PDB evidence where
 recovered. Generated per-type SDK splits do not establish original header ownership.
 Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Startup and
@@ -57,8 +57,8 @@ What remains here:
 - Native resolvers stay with their owners; `CREATE_PATCH!` belongs in the relevant
   functional module under `src/unchained/patches`.
 - Native owners that are not established remain free functions, not guessed receivers.
-- Examples: [`UGameEngine`](../chivalry2/Engine/Runtime/Engine/Engine/GameEngine.rs),
-  [`UObject::LoadConfig`](../chivalry2/Engine/Runtime/CoreUObject/UObject/Object.rs), and
+- Examples: [`UGameEngine`](../Chivalry2/Engine/Runtime/Engine/Engine/GameEngine.rs),
+  [`UObject::LoadConfig`](../Chivalry2/Engine/Runtime/CoreUObject/UObject/Object.rs), and
   [`UNetDriver` patches](../unchained/patches/hosting/desync/net_mode.rs).
 
 ## Macros

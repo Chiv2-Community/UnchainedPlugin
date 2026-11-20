@@ -1,6 +1,6 @@
 //! Damage and kill events.
 
-use crate::chivalry2::TBL::*;
+use crate::Chivalry2::TBL::*;
 use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;

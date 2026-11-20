@@ -1,13 +1,13 @@
 //! Frontend startup options, mod asset initialization, and startup messages.
 
-use crate::chivalry2::TBL::TBLGameInstance::*;
+use crate::Chivalry2::TBL::TBLGameInstance::*;
 use crate::tools::hook_globals::cli_args;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[unchained_macros::bind_func_detour(UTBLGameInstance::LoadFrontEndMap)]
 pub(crate) unsafe fn load_front_end_map_detour(
     this: *mut UTBLGameInstance,
-    _url: *mut crate::chivalry2::Engine::FString,
+    _url: *mut crate::Chivalry2::Engine::FString,
 ) -> bool {
     static INITIALIZED: AtomicBool = AtomicBool::new(false);
     let args = cli_args();
@@ -38,7 +38,7 @@ pub(crate) unsafe fn load_front_end_map_detour(
     let map_url = format!("Frontend{password}{rcon}{startup}");
     #[cfg(feature = "verbose_hooks")]
     sinfo!("{}", map_url);
-    let mut map_url = crate::chivalry2::Engine::FString::from(map_url.as_str());
+    let mut map_url = crate::Chivalry2::Engine::FString::from(map_url.as_str());
     unsafe { this.LoadFrontEndMap(&mut map_url) }
 }
 

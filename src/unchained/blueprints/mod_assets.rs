@@ -1,17 +1,17 @@
 //! ArgonSDK main: [Unchained Blueprint sources](https://github.com/Chiv2-Community/ArgonSDK/tree/main/Content/Mods/ArgonSDK).
 //! Plugin-owned mod, marker, and settings assets; not native TBL headers.
 
-use crate::chivalry2::Engine::FSoftObjectPath;
-use crate::chivalry2::Engine::FSoftObjectPtr;
-use crate::chivalry2::Engine::FString;
-use crate::chivalry2::Engine::TArray;
-use crate::chivalry2::Engine::TMap;
-use crate::chivalry2::Engine::TSet;
-use crate::chivalry2::Engine::TSoftClassPtr;
-use crate::chivalry2::Engine::UClass;
-use crate::chivalry2::Engine::UObject;
-use crate::chivalry2::Engine::UStruct;
-use crate::chivalry2::Engine::{AActor, StructArrayError, StructArrayMetadata};
+use crate::Chivalry2::Engine::FSoftObjectPath;
+use crate::Chivalry2::Engine::FSoftObjectPtr;
+use crate::Chivalry2::Engine::FString;
+use crate::Chivalry2::Engine::TArray;
+use crate::Chivalry2::Engine::TMap;
+use crate::Chivalry2::Engine::TSet;
+use crate::Chivalry2::Engine::TSoftClassPtr;
+use crate::Chivalry2::Engine::UClass;
+use crate::Chivalry2::Engine::UObject;
+use crate::Chivalry2::Engine::UStruct;
+use crate::Chivalry2::Engine::{AActor, StructArrayError, StructArrayMetadata};
 use std::os::raw::c_void;
 
 #[repr(C)]
@@ -85,7 +85,7 @@ impl V2MarkerOffsets {
     /// read safely, and a note to log when the result deserves attention.
     fn pick_v2_offset(
         field: &V2Field,
-        found: Option<&crate::chivalry2::Engine::FoundProperty>,
+        found: Option<&crate::Chivalry2::Engine::FoundProperty>,
         properties_size: usize,
         dump_size: usize,
     ) -> Result<(usize, Option<String>), String> {
@@ -128,7 +128,7 @@ impl V2MarkerOffsets {
         field: V2Field,
     ) -> Result<usize, String> {
         let properties_size = (*class).ustruct.properties_size.max(0) as usize;
-        let found = crate::chivalry2::Engine::UClass::find_property(class, field.name);
+        let found = crate::Chivalry2::Engine::UClass::find_property(class, field.name);
         let (offset, note) =
             V2MarkerOffsets::pick_v2_offset(&field, found.as_ref(), properties_size, dump_size)?;
         if let Some(note) = note {
@@ -263,7 +263,7 @@ impl MapMarkerOffsets {
             return Err("marker has no class".into());
         }
         // DefaultLoadingScreen (soft Texture2D), required.
-        let dls = crate::chivalry2::Engine::UClass::find_property(class, "DefaultLoadingScreen")
+        let dls = crate::Chivalry2::Engine::UClass::find_property(class, "DefaultLoadingScreen")
             .ok_or_else(|| "DefaultLoadingScreen not found".to_string())?;
         if dls.type_name != "SoftObjectProperty" {
             return Err(format!(
@@ -452,7 +452,7 @@ pub struct UModLoaderSettings_C {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chivalry2::Engine::FoundProperty;
+    use crate::Chivalry2::Engine::FoundProperty;
 
     const MOD_ID: V2Field = V2Field {
         name: "ModId",

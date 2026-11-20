@@ -400,7 +400,7 @@ where
 mod tests {
     use super::*;
     use crate::events::models::Join;
-    use crate::chivalry2::TBL::EChatType;
+    use crate::Chivalry2::TBL::EChatType;
 
     fn event(name: impl Into<String>) -> GameEvent {
         GameEvent::JoinEvent(Join { name: name.into() })
@@ -906,7 +906,7 @@ mod tests {
             relay
                 .on_event(&GameEvent::GameChatMessageEvent(GameChatMessage {
                     chat_source: ChatSource::Native(crate::events::models::NativeChat::Player {
-                        channel: crate::chivalry2::TBL::EChatType::AllSay, faction: None,
+                        channel: crate::Chivalry2::TBL::EChatType::AllSay, faction: None,
                     }),
                     sender: "Player".into(),
                     message: "chat".into(),

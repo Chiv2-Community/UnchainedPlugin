@@ -36,7 +36,7 @@ Place replacements under `src/unchained/patches/*` by plugin purpose.
 - Put imports first, then all detour entry points, then instruction patches,
   helpers, state, types, and tests.
 - Gate a whole module when all its contents require the same feature.
-- Keep native resolvers and ABI declarations under `src/chivalry2/*`.
+- Keep native resolvers and ABI declarations under `src/Chivalry2/*`.
 
 ## Implement the replacement
 
@@ -61,7 +61,7 @@ Use `bind_func_detour` on an unsafe free function.
 Alternative to the existing UDP replacement; do not install both:
 
 ```rust
-use crate::chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
+use crate::Chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
 use crate::tools::hook_globals::cli_args;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]

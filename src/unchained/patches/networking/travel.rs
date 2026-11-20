@@ -2,7 +2,7 @@
 
 #![allow(c_void_returns)]
 
-use crate::chivalry2::Engine::{APlayerController, FGuid, FString};
+use crate::Chivalry2::Engine::{APlayerController, FGuid, FString};
 use crate::tools::hook_globals::globals;
 use std::ffi::c_void;
 
