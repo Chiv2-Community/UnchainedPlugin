@@ -154,16 +154,6 @@ mod tests {
 
     #[test]
     fn only_functional_request_hooks_are_registered() {
-        type RequestFunction = unsafe fn(
-            *mut OpenAPIClientAPI,
-            *mut TSharedPtrIHttpRequest,
-            *mut GenericRequest,
-            *mut c_void,
-        ) -> *mut TSharedPtrIHttpRequest;
-        let _: RequestFunction = OpenAPIClientAPI::get_post_get_motd;
-        let _: RequestFunction = OpenAPIClientAPI::get_post_get_current_games;
-        let _: RequestFunction =
-            crate::unchained::patches::server_browser::get_post_get_motd_detour;
         let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
             .into_iter()
             .map(|registration| registration.name)

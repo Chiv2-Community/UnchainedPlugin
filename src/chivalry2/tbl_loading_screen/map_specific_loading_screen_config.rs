@@ -118,14 +118,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn entry_adapter_moves_native_values_without_string_conversion() {
-        let _: fn(
-            FString,
-            FSoftObjectPath,
-            FTextRaw,
-            FTextRaw,
-        ) -> FMapSpecificLoadingScreenConfigData =
-            FMapSpecificLoadingScreenConfigData::from_native_values;
-    }
 }

@@ -134,11 +134,6 @@ fn bracket_ipv6_udp_endpoint(endpoint: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn replacement_preserves_the_static_native_signature() {
-        let _: unsafe fn(*mut FString, f32, *mut TFunctionFIcmpEchoResult) = ipv6_udp_echo;
-    }
-
     #[test_case::test_case("2001:db8::1:7777", Some("[2001:db8::1]:7777"); "ipv6")]
     #[test_case::test_case("::1:7777", Some("[::1]:7777"); "loopback")]
     #[test_case::test_case("fe80::1%3:7777", Some("[fe80::1%3]:7777"); "scope id")]

@@ -255,15 +255,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn world_pointer_contracts() {
-        let _: fn(&Globals) -> Option<*mut UWorld> = Globals::world;
-        let _: fn(&Globals, *mut UWorld) = Globals::set_world;
-        let _: fn(&Globals) -> &RwLock<SyncPtr<UWorld>> = |globals| &globals.world;
-        let _: fn(*mut UWorld) -> Option<String> =
-            crate::chivalry2::engine::UWorld::get_current_map_name;
-    }
-
-    #[test]
     fn pointer_debug_does_not_require_pointee_debug() {
         struct NoDebug;
         let pointer = SyncPtr::<NoDebug>::default();

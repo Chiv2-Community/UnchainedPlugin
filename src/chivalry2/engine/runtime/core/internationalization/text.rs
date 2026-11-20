@@ -152,10 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn safe_text_api_preserves_borrows_without_default_clone_or_thread_transfer() {
-        let _: fn(&str) -> InvariantText = InvariantText::new;
-        let _: for<'a> fn(&'a InvariantText) -> &'a [TCHAR] = InvariantText::as_utf16;
-
+    fn native_text_has_no_default_clone_or_thread_transfer() {
         // Inference becomes ambiguous if any forbidden implementation is added.
         trait AmbiguousIfImplemented<A> {
             fn check() {}

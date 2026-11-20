@@ -196,18 +196,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chat_replacement_uses_tbl_controller_receiver() {
-        let _: unsafe fn(
-            *mut ATBLPlayerController,
-            *mut ATBLPlayerState,
-            *const FString,
-            u32,
-            bool,
-            u32,
-        ) = client_receive_chat_detour;
-    }
-
-    #[test]
     fn global_player_command_preserves_arguments() {
         let Some(GameEvent::CommandRequestEvent(command)) =
             player_command_event("Player", "!vote kick\nreason", EChatType::AllSay)

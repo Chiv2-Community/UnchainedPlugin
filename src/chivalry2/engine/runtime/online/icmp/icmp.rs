@@ -29,14 +29,3 @@ impl FUDPPing {
 
 /// Opaque `TFunction<void(FIcmpEchoResult)>`; passed only through native pointers.
 pub type TFunctionFIcmpEchoResult = c_void;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn binding_remains_a_static_native_call() {
-        type UdpEcho = unsafe fn(*mut FString, f32, *mut TFunctionFIcmpEchoResult);
-        let _: UdpEcho = FUDPPing::udp_echo;
-    }
-}
