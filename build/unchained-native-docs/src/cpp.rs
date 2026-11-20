@@ -483,6 +483,30 @@ struct Native { int* Call() const { return nullptr; } };
     }
 
     #[test]
+    fn selects_callback_overload_in_cpp_instead_of_inline_delegate_wrapper() {
+        let fixture = Fixture::new();
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            "class TEST_API Native { public: static void Call(const String& Address, float Timeout, Delegate Result) { Forward(Result); } };",
+        );
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "void Native::Call(const String& Address, float Timeout, Callback Result) { Send(Result); }",
+        );
+        assert!(fixture.find("Native::Call").is_none());
+        let callback = fixture
+            .find("Native::Call(const String&, float, Callback)")
+            .unwrap();
+        assert!(callback.path.ends_with("Native.cpp"));
+        assert!(callback.code.contains("Send(Result);"));
+        let delegate = fixture
+            .find("Native::Call(const String&, float, Delegate)")
+            .unwrap();
+        assert!(delegate.path.ends_with("Native.h"));
+        assert!(delegate.code.contains("Forward(Result);"));
+    }
+
+    #[test]
     fn selects_overloads_by_cpp_parameter_types() {
         let fixture = Fixture::new();
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");

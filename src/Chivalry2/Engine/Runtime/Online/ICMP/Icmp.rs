@@ -17,6 +17,8 @@ pub struct FUDPPing {
 
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
+    /// Native overload: `(const FString&, float, FIcmpEchoResultCallback)`
+    ///
     /// # Safety
     /// Arguments must satisfy the native UDPEcho ABI and callback lifetime.
     #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
