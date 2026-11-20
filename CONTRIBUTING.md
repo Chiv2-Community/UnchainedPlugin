@@ -1,5 +1,24 @@
 # Contributing to Unchained Plugin
 
+## Contents
+
+- [Creating game hooks](#creating-game-hooks)
+  - [Find the native owner and ABI](#find-the-native-owner-and-abi)
+  - [Create a resolver](#create-a-resolver)
+    - [Byte patterns](#byte-patterns)
+    - [Platform selection](#platform-selection)
+    - [Custom searches](#custom-searches)
+  - [Declare a native binding](#declare-a-native-binding)
+  - [Declare vtable methods](#declare-vtable-methods)
+    - [Inherited vtables](#inherited-vtables)
+  - [Create the detour](#create-the-detour)
+  - [Validate hooks](#validate-hooks)
+- [Creating commands](#creating-commands)
+- [Creating vote types](#creating-vote-types)
+- [Creating subscribers](#creating-subscribers)
+- [State and game-thread work](#state-and-game-thread-work)
+- [Logging](#logging)
+
 Extend the plugin through native hooks, commands, votes, and event subscribers.
 
 - Follow existing modules and feature gates.
@@ -169,6 +188,79 @@ Other binding sources:
   value from a slot. These are not detour targets. See
   [native value accessors](unchained-macros/README.md#required-native-values).
 
+### Declare vtable methods
+
+Use `rust_ctables::cpp_struct` for calls dispatched through a native object's vtable.
+
+- Keep vtable declarations with their native owner under `src/chivalry2/*`.
+- Verify the vptr location, slot offsets, receiver, and ABI for supported builds.
+- `offset(...)` is a **byte offset within the vtable**, not a slot index or RVA.
+  Slots are eight bytes on Windows x64; declarations advance one slot each.
+- Use explicit offsets to skip unmodeled entries.
+- Generated methods are unsafe and use the object's current vtable.
+- Keep the object and table alive; obey native aliasing and thread requirements.
+- Vtable dispatch needs no pattern resolver, but it does not initialize or
+  validate the object.
+
+Existing `FUniqueNetId` entries at `0x28` and `0x30`:
+
+```rust
+use crate::chivalry2::engine::FString;
+
+#[rust_ctables::cpp_struct]
+pub struct FUniqueNetId {
+    #[vtable(
+        offset(0x28);
+        is_valid(&self) -> bool;
+        write_native_string(&self, output: *mut FString) -> *mut FString;
+    )]
+    vtable: *const (),
+}
+
+unsafe fn read_id(id: &FUniqueNetId) -> Option<String> {
+    if !unsafe { id.is_valid() } {
+        return None;
+    }
+    let mut output = FString::new();
+    unsafe { id.write_native_string(&mut output) };
+    Some(output.to_string())
+}
+```
+
+- `write_native_string` explicitly models caller-provided return storage.
+- `&self` supplies the native `this` pointer.
+- Use `self: *mut Self` for raw mutable receivers when a Rust borrow is
+  inappropriate; see [FOutputDevice](src/chivalry2/engine/runtime/core/misc/output_device.rs).
+- See [FUniqueNetId](src/chivalry2/engine/runtime/core_uobject/uobject/core_online.rs)
+  for a native-table fixture test and
+  [FInternetAddr](src/chivalry2/engine/runtime/sockets/ip_address.rs) for a slot-15 call.
+
+#### Inherited vtables
+
+Extend the inherited primary vtable rather than adding a second vptr.
+
+- Put `#[inherit]` and `#[vtable(...)]` on the embedded base field.
+- Offsets remain relative to the vtable start.
+- Model base layout and subobject placement accurately; do not guess adjustments
+  for multiple inheritance.
+- The generated methods forward through the inherited vptr.
+
+Existing `UObject::GetWorld` binding at byte offset `0x150`:
+
+```rust
+use crate::chivalry2::engine::{UObjectBaseUtility, UWorld};
+
+#[rust_ctables::cpp_struct]
+pub struct UObject {
+    #[inherit]
+    #[vtable(
+        offset(0x150);
+        get_world(&self) -> *mut UWorld;
+    )]
+    pub uobject_base_utility: UObjectBaseUtility,
+}
+```
+
 ### Create the detour
 
 Target the binding method from a functional module under `src/unchained/patches/`.
@@ -178,6 +270,10 @@ Target the binding method from a functional module under `src/unchained/patches/
 - The macro checks argument types, return types, and lifetime relationships
   against the binding at compile time.
 - Calling the binding invokes the original, bypassing this replacement.
+- A generated vtable method is not a `bind_func_detour` target. To intercept a
+  concrete virtual implementation, resolve its entry and declare a separate
+  `runtime_bindings` method. Calling through the vtable may re-enter the hook;
+  use the resolver-backed binding for original calls.
 - Only one detour may own a native address.
 - The condition defaults to `ACTIVE`; activation also requires global
   auto-activation. Conditions run during attachment, not on each call.
