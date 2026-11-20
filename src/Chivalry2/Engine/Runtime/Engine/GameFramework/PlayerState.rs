@@ -10,7 +10,6 @@ use bitflags::bitflags;
 
 use std::ffi::c_void;
 
-use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(
     APlayerState__GetPlayerName,

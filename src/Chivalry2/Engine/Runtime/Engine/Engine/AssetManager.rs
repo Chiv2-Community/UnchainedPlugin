@@ -2,7 +2,6 @@
 
 use crate::Chivalry2::Engine::IAssetRegistry;
 
-use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(
     UAssetManager__GetAssetRegistry,

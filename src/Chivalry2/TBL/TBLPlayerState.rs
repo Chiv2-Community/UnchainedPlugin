@@ -3,7 +3,6 @@
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;
-use crate::Chivalry2::TBL::*;
 use crate::Chivalry2::TBL::EFaction::EFaction;
 use std::os::raw::c_void;
 

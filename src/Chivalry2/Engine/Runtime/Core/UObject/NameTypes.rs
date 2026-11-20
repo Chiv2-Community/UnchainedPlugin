@@ -6,7 +6,6 @@ use crate::globals;
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::UEHash;
 
-use unchained_macros::bind_resolved_func;
 
 use widestring::U16CString;
 

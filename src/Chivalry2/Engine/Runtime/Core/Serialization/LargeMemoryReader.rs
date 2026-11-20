@@ -1,7 +1,6 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Serialization/LargeMemoryReader.h>.
 
 use crate::Chivalry2::Engine::FName;
-use unchained_macros::bind_resolved_func;
 
 // Signature source: owner-provided target-build bytes for
 // `FLargeMemoryReader::FLargeMemoryReader`. The constructor is used with

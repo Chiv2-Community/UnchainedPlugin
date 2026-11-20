@@ -8,7 +8,6 @@ use std::{
     mem::{ManuallyDrop, MaybeUninit},
 };
 
-use unchained_macros::bind_resolved_func;
 
 use binary_bloodhound::BinaryMatcher;
 

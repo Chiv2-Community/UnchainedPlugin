@@ -12,7 +12,6 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::ATBLGameState;
 use std::os::raw::c_void;
-use unchained_macros::bind_resolved_func;
 
 // Used to set World reference
 define_pattern_resolver!(UWorld__InternalGetNetMode, {
