@@ -160,31 +160,11 @@ impl V2MarkerOffsets {
             )
         };
         Ok(Self {
-            mod_id: resolve_field(
-                "ModId",
-                "StrProperty",
-                offset_of!(DA_ModMarker_V2_C, mod_id),
-            )?,
-            mod_version: resolve_field(
-                "ModVersion",
-                "StrProperty",
-                offset_of!(DA_ModMarker_V2_C, mod_version),
-            )?,
-            format_version: resolve_field(
-                "FormatVersion",
-                "IntProperty",
-                offset_of!(DA_ModMarker_V2_C, format_version),
-            )?,
-            mod_actor_classes: resolve_field(
-                "ModActorClasses",
-                "SetProperty",
-                offset_of!(DA_ModMarker_V2_C, mod_actor_classes),
-            )?,
-            bundled_markers: resolve_field(
-                "BundledMarkers",
-                "SetProperty",
-                offset_of!(DA_ModMarker_V2_C, bundled_markers),
-            )?,
+            mod_id: resolve_field("ModId", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_id))?,
+            mod_version: resolve_field("ModVersion", "StrProperty", offset_of!(DA_ModMarker_V2_C, mod_version))?,
+            format_version: resolve_field("FormatVersion", "IntProperty", offset_of!(DA_ModMarker_V2_C, format_version))?,
+            mod_actor_classes: resolve_field("ModActorClasses", "SetProperty", offset_of!(DA_ModMarker_V2_C, mod_actor_classes))?,
+            bundled_markers: resolve_field("BundledMarkers", "SetProperty", offset_of!(DA_ModMarker_V2_C, bundled_markers))?,
         })
     }
 
