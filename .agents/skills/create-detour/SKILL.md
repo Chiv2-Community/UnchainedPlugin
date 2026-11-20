@@ -61,7 +61,7 @@ Use `bind_func_detour` on an unsafe free function.
 Alternative to the existing UDP replacement; do not install both:
 
 ```rust
-use crate::chivalry2::engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
+use crate::chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
 use crate::tools::hook_globals::cli_args;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]

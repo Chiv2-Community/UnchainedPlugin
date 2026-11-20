@@ -55,7 +55,7 @@ Existing `FUniqueNetId` pattern; extend the actual declaration rather than
 creating another copy:
 
 ```rust
-use crate::chivalry2::engine::FString;
+use crate::chivalry2::Engine::FString;
 
 #[rust_ctables::cpp_struct]
 pub struct FUniqueNetId {
@@ -70,9 +70,9 @@ pub struct FUniqueNetId {
 
 - `IsValid` uses slot 5 (`0x28`); `ToString` uses slot 6 (`0x30`).
 - The string method explicitly receives caller-provided storage.
-- See [FOutputDevice](../../../src/chivalry2/engine/runtime/core/misc/output_device.rs)
+- See [FOutputDevice](../../../src/chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs)
   for raw receivers and
-  [FInternetAddr](../../../src/chivalry2/engine/runtime/sockets/ip_address.rs)
+  [FInternetAddr](../../../src/chivalry2/Engine/Runtime/Sockets/IPAddress.rs)
   for a sparse table declaration.
 
 ## Extend an inherited table
@@ -87,7 +87,7 @@ Use the embedded base's primary vptr rather than adding a second one.
 Existing `UObject::GetWorld` pattern:
 
 ```rust
-use crate::chivalry2::engine::{UObjectBaseUtility, UWorld};
+use crate::chivalry2::Engine::{UObjectBaseUtility, UWorld};
 
 #[rust_ctables::cpp_struct]
 pub struct UObject {
