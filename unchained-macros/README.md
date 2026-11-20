@@ -195,8 +195,10 @@ to live in a separate crate. Runtime binding state stays in `unchained-macros`.
 
 ## Lifetime-aware hooks
 
-Detours use retour's `lifetime_detour!` with static `OnceLock` storage. Preserve
-borrow relationships in both the native binding and replacement:
+Detours keep a `RawDetour` in static `OnceLock` storage. Both entry and replacement
+are checked against the higher-ranked native signature before pointer erasure.
+Original calls use the native binding. Preserve borrow relationships in both
+the binding and replacement:
 
 ```rust,ignore
 #[unchained_macros::bind_func_detour(Native::Read, INACTIVE)]

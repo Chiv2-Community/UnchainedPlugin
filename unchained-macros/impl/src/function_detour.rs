@@ -171,7 +171,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let native = native_type(&signature)?;
     let ident = &function.sig.ident;
     let hook = format_ident!("__UNCHAINED_HOOK_{}", ident, span = Span::mixed_site());
-    let detour = format_ident!("__UnchainedDetour_{}", ident, span = Span::mixed_site());
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
     let attach = format_ident!("__unchained_attach_{}", ident, span = Span::mixed_site());
     let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
@@ -195,12 +194,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         .unzip();
     let output = &signature.output;
     let generics = &signature.generics;
-    let lifetimes: Vec<_> = generics.lifetimes().map(|p| &p.lifetime).collect();
-    let binder = if lifetimes.is_empty() {
-        quote!(for<'__unchained_call>)
-    } else {
-        quote!(for<#(#lifetimes),*>)
-    };
     let condition = match &condition {
         syn::Expr::Path(path) if path.path.is_ident("ACTIVE") => quote!(|| true),
         syn::Expr::Path(path)
@@ -224,14 +217,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #[allow(non_snake_case)]
         fn #condition_fn() -> bool { (#condition)() }
         #(#cfg)*
-        ::retour::lifetime_detour! {
-            #[allow(non_camel_case_types)]
-            #(#cfg)*
-            struct #detour: #binder unsafe extern "C" fn(#(#names: #types),*) #output;
-        }
-        #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::std::sync::OnceLock<#detour> = ::std::sync::OnceLock::new();
+        static #hook: ::std::sync::OnceLock<::retour::RawDetour> = ::std::sync::OnceLock::new();
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
@@ -251,7 +238,10 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             if #hook.get().is_some() { return Err(::retour::Error::AlreadyInitialized.into()); }
             let claim = ::unchained_macros::__private::claim_detour_address(address)?;
             let target: #native = unsafe { ::core::mem::transmute(address) };
-            let detour = unsafe { #detour::new(target, #replacement)? };
+            let replacement: #native = #replacement;
+            let detour = unsafe { ::retour::RawDetour::new(
+                target as *const (), replacement as *const (),
+            )? };
             #hook.set(detour).map_err(|_| ::retour::Error::AlreadyInitialized)?;
             let hook = #hook.get().expect("Hook was just initialized");
             // The detour and trampoline are process-lifetime storage, even disabled.
