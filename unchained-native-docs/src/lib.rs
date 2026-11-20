@@ -525,9 +525,11 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                 block("rust,ignore", &detour.declaration)
             ));
         }
-        docs.push_str(
-            "\n\nDetours apply only when installed and enabled; direct binding calls bypass them.",
-        );
+        if !matching.is_empty() {
+            docs.push_str(
+                "\n\nDetours apply only when installed and enabled; direct binding calls bypass them.",
+            );
+        }
         if !binding.notes.is_empty() {
             docs.push_str(&format!("\n\n{}", binding.notes));
         }
@@ -664,6 +666,7 @@ impl Native {
         assert!(class.contains("private: int Value;"));
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.contains("Overwritten by [`call_detour`](file:"));
+        assert!(binding.contains("Detours apply only when installed and enabled;"));
         assert!(binding.contains("Keep the receiver alive."));
         assert!(binding.contains("const FString& Native::Call() const { return Value; }"));
         assert!(!binding.contains(CONFIGURATION_NOTE));
@@ -700,6 +703,11 @@ impl Native {
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
         assert!(class.contains(UE));
         assert!(class.ends_with(CONFIGURATION_NOTE));
+        fs::write(root.join("src/unchained/patches/Test.rs"), "").unwrap();
+        generate(&root, &root.join("out")).unwrap();
+        let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
+        assert!(!binding.contains("Overwritten by"));
+        assert!(!binding.contains("Detours apply only when"));
         fs::remove_dir_all(root).unwrap();
     }
 }
