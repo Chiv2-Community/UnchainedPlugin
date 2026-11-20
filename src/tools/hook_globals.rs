@@ -203,20 +203,30 @@ pub fn init_globals() -> Result<(), String> {
     sinfo!("Running resolvers");
     // Required values are fatal on resolution failure, including standalone
     // initialization that has not run the cached preinit binding pass.
-    let gmalloc = exe.resolve(GMalloc::resolver())
+    // Share one resolution context so globals and function dependencies scan together.
+    let [gmalloc, guobject_array, resolution]: [_; 3] = exe
+        .resolve_many(&[
+            GMalloc::dyn_resolver,
+            GUObjectArray::dyn_resolver,
+            DllHookResolution::dyn_resolver,
+        ])
+        .try_into()
+        .expect("Global resolver batch must return one result per target");
+    let gmalloc = gmalloc
         .unwrap_or_else(|error| panic!("Required native value GMalloc could not be resolved: {error}"));
     unsafe { unchained_macros::initialize_value_binding("GMalloc",
-        usize::try_from(gmalloc.0).expect("GMalloc address does not fit a pointer")); }
-    let guobject_array = exe.resolve(GUObjectArray::resolver())
+        usize::try_from(gmalloc.get().expect("GMalloc must resolve a singleton address"))
+            .expect("GMalloc address does not fit a pointer")); }
+    let guobject_array = guobject_array
         .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
     unsafe { unchained_macros::initialize_value_binding("GUObjectArray",
-        usize::try_from(guobject_array.0).expect("GUObjectArray address does not fit a pointer")); }
-    let result = panic::catch_unwind(|| {
-        let resolution = exe.resolve(DllHookResolution::resolver())
-            .expect("Critical: Could not resolve DLL symbols"); // This panic is caught
-        
-        resolution
+        usize::try_from(guobject_array.get().expect("GUObjectArray must resolve a singleton address"))
+            .expect("GUObjectArray address does not fit a pointer")); }
+    let resolution = resolution.map(|value| {
+        value.as_ref().as_any().downcast_ref::<DllHookResolution>()
+            .expect("Global function resolver returned an unexpected type").clone()
     });
+    let result = panic::catch_unwind(|| resolution.expect("Critical: Could not resolve DLL symbols"));
 
     let resolution = match result {
         Ok(res) => res,
