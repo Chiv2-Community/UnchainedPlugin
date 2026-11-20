@@ -38,6 +38,9 @@ Keep native contracts with their source owners.
 - Keep opaque types opaque. Use raw pointers where Rust borrow guarantees
   cannot be established.
 - Preserve existing aliases, resolver/cache keys, and feature restrictions.
+- Use C++ method spelling, including acronyms and `GetPost_*` names.
+- Use descriptive overload suffixes only where Rust cannot share a name.
+- Keep ABI/safety notes; omit comments that only repeat signatures.
 - Keep detours, configuration policy, queues, and patch bytes out of native models.
 
 ## Declare the callable binding
@@ -64,7 +67,7 @@ registering a second copy:
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(UDPEcho)]
-    pub(crate) unsafe fn udp_echo(
+    pub(crate) unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,
         callback: *mut TFunctionFIcmpEchoResult,

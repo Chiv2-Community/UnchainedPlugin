@@ -19,7 +19,7 @@ impl FUDPPing {
     /// # Safety
     /// Arguments must satisfy the native UDPEcho ABI and callback lifetime.
     #[unchained_macros::bind_resolved_func(UDPEcho)]
-    pub unsafe fn udp_echo(
+    pub unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,
         callback: *mut TFunctionFIcmpEchoResult,

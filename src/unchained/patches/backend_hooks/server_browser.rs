@@ -11,7 +11,7 @@ use std::ffi::c_void;
 
 /// # Safety
 /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-#[unchained_macros::bind_func_detour(OpenAPIClientAPI::get_post_get_motd)]
+#[unchained_macros::bind_func_detour(OpenAPIClientAPI::GetPost_GetMotd)]
 pub unsafe fn get_post_get_motd_detour(
     this: *mut OpenAPIClientAPI,
     result: *mut TSharedPtrIHttpRequest,
@@ -20,14 +20,14 @@ pub unsafe fn get_post_get_motd_detour(
 ) -> *mut TSharedPtrIHttpRequest {
     unsafe {
         with_backend_request(this, request, || {
-            this.get_post_get_motd(result, request, delegate)
+            this.GetPost_GetMotd(result, request, delegate)
         })
     }
 }
 
 /// # Safety
 /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-#[unchained_macros::bind_func_detour(OpenAPIClientAPI::get_post_get_current_games)]
+#[unchained_macros::bind_func_detour(OpenAPIClientAPI::GetPost_GetCurrentGames)]
 pub unsafe fn get_post_get_current_games_detour(
     this: *mut OpenAPIClientAPI,
     result: *mut TSharedPtrIHttpRequest,
@@ -36,12 +36,12 @@ pub unsafe fn get_post_get_current_games_detour(
 ) -> *mut TSharedPtrIHttpRequest {
     unsafe {
         with_backend_request(this, request, || {
-            this.get_post_get_current_games(result, request, delegate)
+            this.GetPost_GetCurrentGames(result, request, delegate)
         })
     }
 }
 
-#[unchained_macros::bind_func_detour(PlayFabRequestHandler::send_request)]
+#[unchained_macros::bind_func_detour(PlayFabRequestHandler::SendRequest)]
 pub(crate) unsafe fn send_request_detour(
     storage: *mut TSharedRefIHttpRequest,
     url: *mut FString,
@@ -58,7 +58,7 @@ pub(crate) unsafe fn send_request_detour(
         "https://EBF8D.playfabapi.com/Match/GetMatchmakingTicket?sdk=Chiv2_Version" => {
             (FString::from("http://localhost"), None)
         }
-        _ => return unsafe { PlayFabRequestHandler::send_request(storage, url, body, key, value) },
+        _ => return unsafe { PlayFabRequestHandler::SendRequest(storage, url, body, key, value) },
     };
     let original_url = unsafe { std::mem::replace(&mut *url, target_url) };
     let auth = match target_auth {
@@ -66,7 +66,7 @@ pub(crate) unsafe fn send_request_detour(
         None => value,
     };
     let result = std::panic::catch_unwind(|| unsafe {
-        PlayFabRequestHandler::send_request(storage, url, body, key, auth)
+        PlayFabRequestHandler::SendRequest(storage, url, body, key, auth)
     });
     unsafe {
         *url = original_url;

@@ -16,5 +16,5 @@ pub struct UTBLEngine {
 impl UTBLEngine {
     #[cfg(feature = "server_registration")]
     #[unchained_macros::bind_resolved_func(UTBLEnginePreExit)]
-    pub(crate) unsafe fn pre_exit(self: *mut Self) {}
+    pub(crate) unsafe fn PreExit(self: *mut Self) {}
 }

@@ -165,7 +165,7 @@ unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
         return Vec::new();
     };
     let mut assets = TArray::<FAssetData>::default();
-    if !registry.get_assets_by_class(
+    if !registry.GetAssetsByClass(
         FName::with_type(class_name, EFindName::Find),
         &mut assets,
         true,
@@ -187,14 +187,14 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
         return None;
     }
     crate::resolvers::require_function_bindings(&["GetDefaultObject"]).ok()?;
-    let cdo_new = class_ptr.get_default_object(true);
+    let cdo_new = class_ptr.GetDefaultObject(true);
     if cdo_new.is_null() {
         return None;
     }
 
     let cdo = &*(cdo_new as *mut ArgonSDKModBase);
     let class_obj = &(*class_ptr).ustruct.ufield.uobject;
-    let asset_path = class_obj.uobject_base_utility.get_path_name(None);
+    let asset_path = class_obj.uobject_base_utility.GetPathName(None);
 
     let mod_entry = Mod {
         name: cdo.mod_name.to_string(),
@@ -210,7 +210,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
     let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
     crate::resolvers::require_function_bindings(&["StaticLoadObject"])?;
-    Ok(unsafe { crate::chivalry2::engine::static_load_object(
+    Ok(unsafe { crate::chivalry2::engine::StaticLoadObject(
         object_class,
         std::ptr::null_mut(),
         wide_path.as_ptr(),
@@ -427,7 +427,7 @@ impl ModManager {
         let mut res_arr = TArray::<*mut UObject>::default();
         
         crate::resolvers::require_function_bindings(&["GetAllActorsOfClass"])?;
-        unsafe { UGameplayStatics::get_all_actors_of_class(
+        unsafe { UGameplayStatics::GetAllActorsOfClass(
             world.as_uobject(),
             mod_base_class,
             &mut res_arr
@@ -445,7 +445,7 @@ impl ModManager {
                 if !class_ptr.is_null() {
                     let asset_path = (*class_ptr).ustruct.ufield.uobject
                         .uobject_base_utility
-                        .get_path_name(None);
+                        .GetPathName(None);
                     
                     active_mods_local.insert(asset_path);
                 }
@@ -500,7 +500,7 @@ impl ModManager {
             serror!("Cannot spawn mod actor: {}", error);
             return;
         }
-        let new_actor = world.spawn_actor(
+        let new_actor = world.SpawnActor(
             mod_class,
             &mut loc,
             &mut rot,
@@ -533,12 +533,12 @@ impl ModManager {
             return;
         }
         let text = crate::chivalry2::engine::InvariantText::new("Spawned new Mod from console");
-        let game_mode = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
+        let game_mode = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
         if game_mode.is_null() {
             swarn!("No game mode; skipping spawn confirmation chat");
             return;
         }
-        unsafe { game_mode.broadcast_localized_chat(text.as_ptr(), EChatType::Admin); }
+        unsafe { game_mode.BroadcastLocalizedChat(text.as_ptr(), EChatType::Admin); }
     }
 
     pub fn destroy_mod_actor(&self, _actor_ptr: *mut UObject) {
@@ -564,7 +564,7 @@ impl ModManager {
             swarn!("Detour LoadGameFromSlot is not initialized. Skipping.");
             return;
         }
-        let save_game_ptr = unsafe { UGameplayStatics::load_game_from_slot(&settings_fstring, 0) };
+        let save_game_ptr = unsafe { UGameplayStatics::LoadGameFromSlot(&settings_fstring, 0) };
         if save_game_ptr.is_null() {
             serror!("save game is null");
             return;
@@ -615,7 +615,7 @@ impl ModManager {
             swarn!("Detour SaveGameToSlot is not initialized. Skipping.");
             return;
         }
-        let res = unsafe { UGameplayStatics::save_game_to_slot(save_game_ptr, &settings_fstring, 0) };
+        let res = unsafe { UGameplayStatics::SaveGameToSlot(save_game_ptr, &settings_fstring, 0) };
         if res {
             sinfo!("Modloader settings saved: {res}");
         }

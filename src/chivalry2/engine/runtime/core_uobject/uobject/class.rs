@@ -53,18 +53,18 @@ pub struct UClass {
 #[unchained_macros::runtime_bindings]
 impl UClass {
     #[unchained_macros::bind_resolved_func(GetConfigName)]
-    pub(crate) unsafe fn get_config_name(
+    pub(crate) unsafe fn GetConfigName(
         self: *mut Self,
         storage: *mut crate::chivalry2::engine::FString,
     ) -> *mut crate::chivalry2::engine::FString {
     }
 
-    /// UClass::GetDefaultObject(bool) const; may lazily create the CDO.
+    /// May lazily create the class default object.
     ///
     /// # Safety
     /// Self must be a live native class; call on the engine thread.
     #[bind_resolved_func(self::GetDefaultObject)]
-    pub unsafe fn get_default_object(self: *const Self, create_if_needed: bool) -> *mut UObject {}
+    pub unsafe fn GetDefaultObject(self: *const Self, create_if_needed: bool) -> *mut UObject {}
 
     /// Looks up a property by name on `class` and its super classes, reading only
     /// the class's own field list (no engine calls besides `FName` to string).

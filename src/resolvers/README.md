@@ -14,7 +14,7 @@ integration patches live under `src/unchained/patches`.
 Engine paths mirror native source-category/module/header paths, omitting header
 visibility directories. See the [source layout rules](../../docs/engine-sources.md).
 Plugin replacements live with instruction patches under `src/unchained/patches`, targeting a native
-method with `#[bind_func_detour(Type::method, condition)]`. Organize them by
+method with `#[bind_func_detour(Type::Method, condition)]`. Organize them by
 plugin purpose, using `main`'s resolver feature groups as the basis, not by
 native class/header paths. See
 [native bindings and plugin detours](../../docs/native-bindings.md).

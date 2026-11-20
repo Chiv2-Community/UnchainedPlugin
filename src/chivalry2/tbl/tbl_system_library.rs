@@ -3,7 +3,6 @@
 use crate::chivalry2::engine::UObject;
 use crate::chivalry2::tbl::ATBLGameMode;
 
-// ATBLGameMode * __cdecl UTBLSystemLibrary::GetTBLGameMode(UObject *param_1)
 define_pattern_resolver![GetTBLGameMode, {
     EGS : ["40 53 48 83 EC 20 48 8B D9 48 85 C9 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 0F 1F 40 00 48 8B 5B 20 48 85 DB ?? ?? 48 8B 03 48 8B CB ?? ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B 98 28 01 00 00 48 85 DB ?? ?? ?? ?? ?? ?? ?? 48 8B 4B 10 48 83 C0 30 48 63 50 08 3B 51"], // EGS
     OTHER : [
@@ -23,5 +22,5 @@ impl UTBLSystemLibrary {
     /// Context must be a live native object on the engine thread. The returned
     /// game mode is borrowed and can be null in non-game worlds.
     #[bind_resolved_func(self::GetTBLGameMode)]
-    pub unsafe fn get_tbl_game_mode(context: *mut UObject) -> *mut ATBLGameMode {}
+    pub unsafe fn GetTBLGameMode(context: *mut UObject) -> *mut ATBLGameMode {}
 }

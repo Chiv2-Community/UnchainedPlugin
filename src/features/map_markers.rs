@@ -141,7 +141,7 @@ pub unsafe fn scan_map_markers() -> usize {
     let marker_paths: Vec<String> = match IAssetRegistry::asset_registry_interface() {
         Ok(registry) => {
             let mut assets = TArray::<FAssetData>::default();
-            if registry.get_assets_by_class(
+            if registry.GetAssetsByClass(
                 FName::with_type(MAP_MARKER_V2_CLASS, EFindName::Find),
                 &mut assets,
                 true,

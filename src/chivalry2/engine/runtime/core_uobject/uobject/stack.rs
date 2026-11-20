@@ -55,7 +55,7 @@ impl FFrame {
     // Preserve the legacy return ABI pending native-signature verification.
     #[cfg(feature = "kismet_log")]
     #[unchained_macros::bind_resolved_func(KismetExecutionMessage)]
-    pub(crate) unsafe fn kismet_execution_message(
+    pub(crate) unsafe fn KismetExecutionMessage(
         text: *const TCHAR,
         kind: u8,
         name: FName,

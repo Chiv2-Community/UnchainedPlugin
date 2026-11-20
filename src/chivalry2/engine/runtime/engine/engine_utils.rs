@@ -13,7 +13,7 @@ pub struct FConsoleOutputDevice {
 #[unchained_macros::runtime_bindings]
 impl FConsoleOutputDevice {
     #[unchained_macros::bind_resolved_func(ConsoleOutputDevice__Serialize)]
-    pub(crate) unsafe fn serialize(
+    pub(crate) unsafe fn Serialize(
         self: *mut Self,
         text: *const TCHAR,
         verbosity: u8,

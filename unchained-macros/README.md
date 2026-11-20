@@ -61,7 +61,7 @@ does not register a platform restriction for hooks or patches.
 ## Native bindings and detached detours
 
 New production hooks declare a native binding under `#[runtime_bindings]` in
-`src/chivalry2/*`, then target it with `#[bind_func_detour(Type::method)]` from
+`src/chivalry2/*`, then target it with `#[bind_func_detour(Type::Method)]` from
 `src/unchained/patches/*`. See
 [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for resolver choices,
 binding declarations, replacement examples, and validation.
@@ -138,7 +138,7 @@ Keep the resolver declaration separate, then bind a method to its type:
 impl FText {
     /// Safety: self owns a live native shared reference, released exactly once.
     #[unchained_macros::bind_resolved_func(FText_Release)]
-    pub unsafe fn release(&mut self) {}
+    pub unsafe fn Release(&mut self) {}
 }
 ```
 

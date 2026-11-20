@@ -18,23 +18,23 @@ pub struct IAssetRegistry {
         offset(0x20);
         /// # Safety
         /// Call on the game thread; output must be a writable engine-compatible array.
-        get_assets_by_path(self: *const Self, path: FName, output: *mut TArray<FAssetData>, recursive: bool, on_disk_only: bool) -> bool;
+        GetAssetsByPath(self: *const Self, path: FName, output: *mut TArray<FAssetData>, recursive: bool, on_disk_only: bool) -> bool;
         /// # Safety
         /// Call on the game thread; output must be a writable engine-compatible array.
-        get_assets_by_class(self: *const Self, class: FName, output: *mut TArray<FAssetData>, search_subclasses: bool) -> bool;
+        GetAssetsByClass(self: *const Self, class: FName, output: *mut TArray<FAssetData>, search_subclasses: bool) -> bool;
         offset(0x148);
         /// # Safety
         /// Call on the game thread with a live array of native path strings.
-        scan_paths_synchronous(self: *mut Self, paths: *const TArray<FString>, force_rescan: bool);
+        ScanPathsSynchronous(self: *mut Self, paths: *const TArray<FString>, force_rescan: bool);
         /// # Safety
         /// Call on the game thread with a live array of native filename strings.
-        scan_files_synchronous(self: *mut Self, files: *const TArray<FString>, force_rescan: bool);
+        ScanFilesSynchronous(self: *mut Self, files: *const TArray<FString>, force_rescan: bool);
         offset(0x1f8);
         // Target UAssetRegistryImpl::Serialize reads State at +0x30 and
         // SerializationOptions at +0x2a0, then caches paths after state serialization.
         /// # Safety
         /// Call on the game thread with a live native archive and initialized registry.
-        serialize(self: *mut Self, archive: *mut FArchive);
+        Serialize(self: *mut Self, archive: *mut FArchive);
     )]
     vtable: *const (),
 }
@@ -47,7 +47,7 @@ impl IAssetRegistry {
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = AssetRegistryScriptInterface::new();
         crate::resolvers::require_function_bindings(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
-        UAssetRegistryHelpers::get_asset_registry(&mut registry);
+        UAssetRegistryHelpers::GetAssetRegistry(&mut registry);
         registry.asset_registry()
     }
 }

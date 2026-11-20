@@ -33,9 +33,8 @@ pub struct APlayerController {
 
 #[unchained_macros::runtime_bindings]
 impl APlayerController {
-    // void APlayerController::ClientMessage(const FString& S, FName Type, float MsgLifeTime)
     #[unchained_macros::bind_resolved_func(ClientMessage)]
-    pub(crate) unsafe fn client_message(
+    pub(crate) unsafe fn ClientMessage(
         self: *mut Self,
         S: *mut FString,
         Type: FName,
@@ -44,7 +43,7 @@ impl APlayerController {
     }
 
     #[unchained_macros::bind_resolved_func(ClientTravelInternal)]
-    pub(crate) unsafe fn client_travel_internal(
+    pub(crate) unsafe fn ClientTravelInternal(
         self: *mut Self,
         url: *mut FString,
         travel_type: u8,

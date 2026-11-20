@@ -19,10 +19,10 @@ pub struct UGameEngine {
 #[unchained_macros::runtime_bindings]
 impl UGameEngine {
     #[unchained_macros::bind_resolved_func(DedicatedServerInit)]
-    pub(crate) unsafe fn dedicated_server_init(context: *const c_void) {}
+    pub(crate) unsafe fn DedicatedServerInit(context: *const c_void) {}
 
     #[unchained_macros::bind_resolved_func(
         patternsleuth::resolvers::unreal::game_loop::UGameEngineTick
     )]
-    pub(crate) unsafe fn tick(self: *mut Self, delta: f32, state: u8) {}
+    pub(crate) unsafe fn Tick(self: *mut Self, delta: f32, state: u8) {}
 }

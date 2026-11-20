@@ -7,7 +7,7 @@ use crate::chivalry2::engine::FString;
 use crate::chivalry2::tbl_loading_screen::map_specific_loading_screen_config::*;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-#[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::get_data_for_map)]
+#[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::GetDataForMap)]
 pub(crate) unsafe fn get_data_for_map_detour(
     this: *mut UMapSpecificLoadingScreenConfig,
     map_name: *mut FString,
@@ -24,7 +24,7 @@ pub(crate) unsafe fn get_data_for_map_detour(
         ];
     }
     unsafe {
-        this.get_data_for_map(map_name, data);
+        this.GetDataForMap(map_name, data);
     }
     if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
         apply_texture_fallback(&*this_ptr, &mut *data, extra);

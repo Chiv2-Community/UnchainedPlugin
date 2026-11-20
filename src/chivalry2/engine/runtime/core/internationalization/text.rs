@@ -53,7 +53,7 @@ impl FText {
         unsafe { text.as_ref() }
     }
 
-    /// Native FText::ToString; the returned FString is borrowed from the text data.
+    /// Returns an FString borrowed from the native text data.
     ///
     /// # Safety
     /// Self must be a live native FText. Access localized/history-driven text
@@ -62,23 +62,23 @@ impl FText {
     /// native aliases or culture changes) while the returned borrow is live.
     /// Synchronize native history access for the call, including invariant text.
     #[bind_resolved_func(self::FText_ToString)]
-    pub unsafe fn to_native_string<'a>(&'a self) -> &'a FString {}
+    pub unsafe fn ToString<'a>(&'a self) -> &'a FString {}
 
-    /// FText::AsCultureInvariant(const FString&), with hidden return storage.
+    /// Uses caller-provided return storage.
     ///
     /// # Safety
     /// Output must be uninitialized writable native FText storage. String must
     /// be a valid native string, with the engine allocator/runtime initialized.
     /// The input is copied, not consumed. Output acquires one native reference.
     #[bind_resolved_func(self::FText_AsCultureInvariantCopy)]
-    unsafe fn as_culture_invariant(output: *mut Self, string: &FString) -> *mut Self {}
+    unsafe fn AsCultureInvariant(output: *mut Self, string: &FString) -> *mut Self {}
 
     /// Release the native thread-safe shared reference (control block at +8).
     ///
     /// # Safety
     /// Self must own a live native shared reference, released exactly once.
     #[bind_resolved_func(self::FText_Release)]
-    pub unsafe fn release(self: *mut Self) {}
+    pub unsafe fn Release(self: *mut Self) {}
 }
 
 /// One owned culture-invariant native text reference. Its display string is
@@ -96,7 +96,7 @@ impl InvariantText {
         // The verified const-reference overload copies the input and fully
         // initializes output; no zero-filled FText or ownership transfer occurs.
         unsafe {
-            FText::as_culture_invariant(output.as_mut_ptr(), &string);
+            FText::AsCultureInvariant(output.as_mut_ptr(), &string);
             Self {
                 text: output.assume_init(),
             }
@@ -108,7 +108,7 @@ impl InvariantText {
         // Only this type's constructor creates its text. Base text history never
         // rebuilds the display contents; persistence copies rather than moves
         // the old display buffer. Both remain alive until our reference drops.
-        let string = unsafe { self.text.to_native_string() };
+        let string = unsafe { self.text.ToString() };
         let units = string.as_slice();
         units.strip_suffix(&[0]).unwrap_or(units)
     }
@@ -137,7 +137,7 @@ impl Drop for InvariantText {
         // Startup initializes the process-lifetime bindings. This owner holds
         // exactly one reference; borrowed native FText values never run this.
         unsafe {
-            (&raw mut self.text).release();
+            (&raw mut self.text).Release();
         }
     }
 }

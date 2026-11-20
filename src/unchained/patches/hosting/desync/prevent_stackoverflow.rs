@@ -10,7 +10,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-#[unchained_macros::bind_func_detour(UObject::process_event, || cli_args().apply_desync_patch)]
+#[unchained_macros::bind_func_detour(UObject::ProcessEvent, || cli_args().apply_desync_patch)]
 pub(crate) unsafe fn process_event_detour(
     this: *mut UObject,
     function: *mut UFunction,
@@ -18,7 +18,7 @@ pub(crate) unsafe fn process_event_detour(
 ) {
     let object = this;
     if function.is_null() {
-        return unsafe { this.process_event(function, params) };
+        return unsafe { this.ProcessEvent(function, params) };
     }
 
     let index = process_event_function_index(function);
@@ -69,7 +69,7 @@ pub(crate) unsafe fn process_event_detour(
     PROCESS_EVENT_DEPTH.with(|d| d.set(depth + 1));
     let _depth_guard = ProcessEventDepthGuard;
 
-    unsafe { this.process_event(function, params) }
+    unsafe { this.ProcessEvent(function, params) }
 }
 
 #[inline]

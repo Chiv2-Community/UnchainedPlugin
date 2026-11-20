@@ -10,7 +10,7 @@ use crate::chivalry2::tbl::{EChatType, UTBLGameInstance};
 use crate::events::broadcast_message::game_chat::broadcast_parts;
 use std::os::raw::c_void;
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::client_receive_localized_chat)]
+#[unchained_macros::bind_func_detour(ATBLPlayerController::ClientReceiveLocalizedChat_Implementation)]
 pub(crate) unsafe fn client_receive_localized_chat_detour(
     this: *mut ATBLPlayerController,
     message: *const FText,
@@ -23,7 +23,7 @@ pub(crate) unsafe fn client_receive_localized_chat_detour(
         }
     }
     unsafe {
-        this.client_receive_localized_chat(message, channel);
+        this.ClientReceiveLocalizedChat_Implementation(message, channel);
     }
 }
 
@@ -65,7 +65,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let controller_ptr = controller.cast::<APlayerController>();
     let controller = unsafe { APlayerController::from_ptr(controller) }?;
     unsafe { UPlayer::from_ptr(controller.player) }?;
-    let world = unsafe { UWorld::from_ptr(controller.base.get_world()) }?;
+    let world = unsafe { UWorld::from_ptr(controller.base.GetWorld()) }?;
     let instance = world.owning_game_instance;
     if !unsafe { UObject::from_ptr(instance.cast())?.inherits_from("TBLGameInstance") } {
         return None;
@@ -86,7 +86,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let [r, g, b, a] = origin_color;
     let origin_color = FLinearColor { r, g, b, a };
     unsafe {
-        instance.cast::<UTBLGameInstance>().add_chat_line(
+        instance.cast::<UTBLGameInstance>().AddChatLine(
             title.as_ptr(),
             body.as_ptr(),
             channel,
@@ -102,7 +102,7 @@ fn native_string(text: *const FText) -> Option<String> {
     if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") {
         return None;
     }
-    let string = unsafe { FText::from_ptr(text)?.to_native_string() };
+    let string = unsafe { FText::from_ptr(text)?.ToString() };
     string.copy_to_string().ok()
 }
 

@@ -43,6 +43,7 @@ Keep native types and virtual methods under their verified source owner.
 - `offset(...)` is a byte offset within the table, not an RVA or slot number.
 - Windows x64 slots are eight bytes; method declarations advance one slot each.
 - Skip unmodeled entries with explicit offsets; do not fabricate intervening methods.
+- Match C++ method spelling; keep ABI/safety notes rather than duplicate headers.
 - Match receiver mutability and native ABI. Raw mutable receivers use
   `self: *mut Self` when reference guarantees are unavailable.
 - Keep declarations separate from plugin policy, logging hooks, and patches.
@@ -57,14 +58,14 @@ use crate::chivalry2::engine::FString;
 pub struct FUniqueNetId {
     #[vtable(
         offset(0x28);
-        is_valid(&self) -> bool;
-        write_native_string(&self, output: *mut FString) -> *mut FString;
+        IsValid(&self) -> bool;
+        ToString(&self, output: *mut FString) -> *mut FString;
     )]
     vtable: *const (),
 }
 ```
 
-- `is_valid` uses slot 5 (`0x28`); `write_native_string` uses slot 6 (`0x30`).
+- `IsValid` uses slot 5 (`0x28`); `ToString` uses slot 6 (`0x30`).
 - The string method explicitly receives caller-provided storage.
 - See [FOutputDevice](../../../src/chivalry2/engine/runtime/core/misc/output_device.rs)
   for raw receivers and
@@ -90,7 +91,7 @@ pub struct UObject {
     #[inherit]
     #[vtable(
         offset(0x150);
-        get_world(&self) -> *mut UWorld;
+        GetWorld(&self) -> *mut UWorld;
     )]
     pub uobject_base_utility: UObjectBaseUtility,
 }

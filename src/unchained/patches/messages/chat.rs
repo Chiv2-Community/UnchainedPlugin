@@ -17,7 +17,7 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::tools::command_parser::parse_command;
 use regex::Regex;
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::client_receive_chat)]
+#[unchained_macros::bind_func_detour(ATBLPlayerController::ClientReceiveChat_Implementation)]
 pub(crate) unsafe fn client_receive_chat_detour(
     this: *mut ATBLPlayerController,
     sender: *mut ATBLPlayerState,
@@ -33,11 +33,11 @@ pub(crate) unsafe fn client_receive_chat_detour(
         }
     }
     unsafe {
-        this.client_receive_chat(sender, message, chat_type, is_sender_dev, override_color);
+        this.ClientReceiveChat_Implementation(sender, message, chat_type, is_sender_dev, override_color);
     }
 }
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::broadcast_chat)]
+#[unchained_macros::bind_func_detour(ATBLGameMode::BroadcastChat)]
 pub(crate) unsafe fn broadcast_chat_detour(
     this: *mut ATBLGameMode,
     sender: *mut AActor,
@@ -51,11 +51,11 @@ pub(crate) unsafe fn broadcast_chat_detour(
         capture_chat(player, message, chat_type);
     }
     unsafe {
-        this.broadcast_chat(sender, message, chat_type, override_color);
+        this.BroadcastChat(sender, message, chat_type, override_color);
     }
 }
 
-#[unchained_macros::bind_func_detour(APlayerController::client_message)]
+#[unchained_macros::bind_func_detour(APlayerController::ClientMessage)]
 pub(crate) unsafe fn client_message_detour(
     this: *mut APlayerController,
     S: *mut FString,
@@ -74,7 +74,7 @@ pub(crate) unsafe fn client_message_detour(
         }
     }
     unsafe {
-        this.client_message(S, Type, MsgLifeTime);
+        this.ClientMessage(S, Type, MsgLifeTime);
     }
 }
 

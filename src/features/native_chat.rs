@@ -39,14 +39,14 @@ pub(crate) fn send_ingame_message_with_world(
         let Some(world) = world_accessor().filter(|world| !world.is_null()) else {
             return;
         };
-        let game_mode = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
+        let game_mode = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
         if game_mode.is_null() {
             return;
         }
         let chat_type_actual = chat_type.unwrap_or(EChatType::AllSay);
         let text = crate::chivalry2::engine::InvariantText::new(&message);
         unsafe {
-            game_mode.broadcast_localized_chat(text.as_ptr(), chat_type_actual);
+            game_mode.BroadcastLocalizedChat(text.as_ptr(), chat_type_actual);
         }
     });
 }

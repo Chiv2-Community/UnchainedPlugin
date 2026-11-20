@@ -5,7 +5,7 @@ use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;
 
-#[unchained_macros::bind_func_detour(ATBLCharacter::on_killed)]
+#[unchained_macros::bind_func_detour(ATBLCharacter::OnKilled)]
 pub(crate) unsafe fn on_killed_detour(
     this: *mut ATBLCharacter,
     damage_event: *const FDeathDamageTakenEvent,
@@ -13,7 +13,7 @@ pub(crate) unsafe fn on_killed_detour(
     let this_ptr = this;
     if this_ptr.is_null() || damage_event.is_null() {
         unsafe {
-            this.on_killed(damage_event);
+            this.OnKilled(damage_event);
         }
         return;
     }
@@ -69,11 +69,11 @@ pub(crate) unsafe fn on_killed_detour(
         }));
 
     unsafe {
-        this.on_killed(damage_event);
+        this.OnKilled(damage_event);
     }
 }
 
-#[unchained_macros::bind_func_detour(ATBLCharacter::on_damage_taken)]
+#[unchained_macros::bind_func_detour(ATBLCharacter::OnDamageTaken)]
 pub(crate) unsafe fn on_damage_taken_detour(
     this: *mut ATBLCharacter,
     damage_event: *const FDamageTakenEvent,
@@ -81,7 +81,7 @@ pub(crate) unsafe fn on_damage_taken_detour(
     let this_ptr = this;
     if this_ptr.is_null() || damage_event.is_null() {
         unsafe {
-            this.on_damage_taken(damage_event);
+            this.OnDamageTaken(damage_event);
         }
         return;
     }
@@ -119,6 +119,6 @@ pub(crate) unsafe fn on_damage_taken_detour(
         }));
 
     unsafe {
-        this.on_damage_taken(damage_event);
+        this.OnDamageTaken(damage_event);
     }
 }

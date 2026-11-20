@@ -16,5 +16,5 @@ pub struct AGameMode {
 #[unchained_macros::runtime_bindings]
 impl AGameMode {
     #[unchained_macros::bind_resolved_func(SetMatchState)]
-    pub(crate) unsafe fn set_match_state(self: *mut Self, state: FName) {}
+    pub(crate) unsafe fn SetMatchState(self: *mut Self, state: FName) {}
 }

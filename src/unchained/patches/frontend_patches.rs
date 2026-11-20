@@ -4,7 +4,7 @@ use crate::chivalry2::tbl::tbl_game_instance::*;
 use crate::tools::hook_globals::cli_args;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::load_front_end_map)]
+#[unchained_macros::bind_func_detour(UTBLGameInstance::LoadFrontEndMap)]
 pub(crate) unsafe fn load_front_end_map_detour(
     this: *mut UTBLGameInstance,
     _url: *mut crate::chivalry2::engine::FString,
@@ -39,7 +39,7 @@ pub(crate) unsafe fn load_front_end_map_detour(
     #[cfg(feature = "verbose_hooks")]
     sinfo!("{}", map_url);
     let mut map_url = crate::chivalry2::engine::FString::from(map_url.as_str());
-    unsafe { this.load_front_end_map(&mut map_url) }
+    unsafe { this.LoadFrontEndMap(&mut map_url) }
 }
 
 // Startup anti-cheat-message patch in UTBLGameInstance::Init.

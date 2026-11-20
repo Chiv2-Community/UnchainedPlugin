@@ -32,14 +32,14 @@ pub struct FName {
 }
 
 impl FName {
-    /// Call FName::FName(const TCHAR*, EFindName) through the entry, never a
+    /// Call the constructor through the entry, never a
     /// copied trampoline: UE4SS may patch this entry after plugin initialization.
     ///
     /// # Safety
     /// Self must be writable native FName storage, text NUL-terminated UTF-16,
     /// and the engine name table initialized.
     #[bind_resolved_func(self::FNameCtorWchar)]
-    pub unsafe fn construct_wchar(
+    pub unsafe fn FName(
         self: *mut Self,
         text: *const crate::chivalry2::engine::TCHAR,
         find_type: EFindName,
@@ -50,11 +50,11 @@ impl FName {
         let wide_path = U16CString::from_str(path).unwrap();
         let mut name = Self::default();
         unsafe {
-            (&raw mut name).construct_wchar(wide_path.as_ptr(), find_type);
+            (&raw mut name).FName(wide_path.as_ptr(), find_type);
         }
         if name.comparison_index.value == 0 {
             unsafe {
-                (&raw mut name).construct_wchar(wide_path.as_ptr(), EFindName::Add);
+                (&raw mut name).FName(wide_path.as_ptr(), EFindName::Add);
             }
         }
         if name.comparison_index.value == 0 {
@@ -65,12 +65,12 @@ impl FName {
 
     pub unsafe fn new(string: &FString) -> FName {
         let mut ret = FName::default();
-        (&raw mut ret).construct_wchar(string.as_ptr(), EFindName::Add);
+        (&raw mut ret).FName(string.as_ptr(), EFindName::Add);
         ret
     }
     pub unsafe fn find(string: &FString) -> FName {
         let mut ret = FName::default();
-        (&raw mut ret).construct_wchar(string.as_ptr(), EFindName::Find);
+        (&raw mut ret).FName(string.as_ptr(), EFindName::Find);
         ret
     }
 }

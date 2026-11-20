@@ -25,7 +25,7 @@ pub struct UObject {
     #[inherit]
     #[vtable(
         offset(0x150);
-        get_world(&self) -> *mut UWorld;
+        GetWorld(&self) -> *mut UWorld;
     )]
     pub uobject_base_utility: UObjectBaseUtility,
 }
@@ -37,7 +37,7 @@ impl UObject {
 
         if !load_if_missing {
             // Try to find it in memory first
-            return crate::chivalry2::engine::static_find_object(
+            return crate::chivalry2::engine::StaticFindObject(
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 wide_path.as_ptr(),
@@ -45,7 +45,7 @@ impl UObject {
             );
         }
 
-        crate::chivalry2::engine::static_load_object(
+        crate::chivalry2::engine::StaticLoadObject(
             std::ptr::null_mut(), // Any class
             std::ptr::null_mut(), // No specific outer
             wide_path.as_ptr(),
@@ -157,7 +157,7 @@ impl UObject {
     }
 
     #[unchained_macros::bind_resolved_func(LoadConfig)]
-    pub(crate) unsafe fn load_config(
+    pub(crate) unsafe fn LoadConfig(
         self: *mut Self,
         config_class: *mut UClass,
         filename: *mut TCHAR,
@@ -167,7 +167,7 @@ impl UObject {
     }
 
     #[unchained_macros::bind_resolved_func(ProcessEvent)]
-    pub(crate) unsafe fn process_event(
+    pub(crate) unsafe fn ProcessEvent(
         self: *mut Self,
         function: *mut UFunction,
         params: *mut c_void,
@@ -331,7 +331,7 @@ mod tests {
             outer: expected.cast(),
         };
         let object = unsafe { &*(&raw const fixture).cast::<UObject>() };
-        assert_eq!(unsafe { object.get_world() }, expected);
+        assert_eq!(unsafe { object.GetWorld() }, expected);
     }
 
     #[test]

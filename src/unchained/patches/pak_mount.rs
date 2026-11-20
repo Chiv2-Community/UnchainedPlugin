@@ -5,7 +5,7 @@ use crate::chivalry2::engine::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
 
-#[unchained_macros::bind_func_detour(FPakPlatformFile::mount)]
+#[unchained_macros::bind_func_detour(FPakPlatformFile::Mount)]
 pub(crate) unsafe fn mount_detour(
     this: *mut FPakPlatformFile,
     InPakFilename: *const TCHAR,
@@ -13,7 +13,7 @@ pub(crate) unsafe fn mount_detour(
     InPath: *const TCHAR,
     bLoadIndex: bool,
 ) -> bool {
-    let ret = unsafe { this.mount(InPakFilename, PakOrder, InPath, bLoadIndex) };
+    let ret = unsafe { this.Mount(InPakFilename, PakOrder, InPath, bLoadIndex) };
     let path = if InPakFilename.is_null() {
         String::new()
     } else {

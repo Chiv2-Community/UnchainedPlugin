@@ -61,5 +61,5 @@ pub struct UGameplay {
 #[unchained_macros::runtime_bindings]
 impl UGameplay {
     #[unchained_macros::bind_resolved_func(UGameplay_IsDedicatedServer)]
-    pub(crate) unsafe fn is_dedicated_server(context: *mut UObject) -> bool {}
+    pub(crate) unsafe fn IsDedicatedServer(context: *mut UObject) -> bool {}
 }

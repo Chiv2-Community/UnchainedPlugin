@@ -17,7 +17,6 @@ define_pattern_resolver!(
     ["48 8B C4 55 56 41 54 41 57 48 8B EC"]
 );
 
-// void ATBLGameMode::BroadcastLocalizedChat(const FText&, EChatType)
 define_pattern_resolver!(
     BroadcastLocalizedChat,
     ["48 89 74 24 10 57 48 83 EC 30 48 8B 01 41 8B F8 48 8B F2 ?? ?? ?? ?? ?? ?? 48 8B C8 48 8D"]
@@ -335,7 +334,7 @@ pub struct ATBLGameMode {
 #[unchained_macros::runtime_bindings]
 impl ATBLGameMode {
     #[unchained_macros::bind_resolved_func(ATBLGameMode__PreLogin)]
-    pub(crate) unsafe fn pre_login(
+    pub(crate) unsafe fn PreLogin(
         self: *mut Self,
         options: *const FString,
         address: *const FString,
@@ -345,10 +344,10 @@ impl ATBLGameMode {
     }
 
     #[unchained_macros::bind_resolved_func(ATBLGameMode__Logout)]
-    pub(crate) unsafe fn logout(self: *mut Self, exiting_player: *mut AController) {}
+    pub(crate) unsafe fn Logout(self: *mut Self, exiting_player: *mut AController) {}
 
     #[unchained_macros::bind_resolved_func(BroadcastChat)]
-    pub(crate) unsafe fn broadcast_chat(
+    pub(crate) unsafe fn BroadcastChat(
         self: *mut Self,
         sender: *mut AActor,
         message: *const FString,
@@ -361,7 +360,7 @@ impl ATBLGameMode {
     /// Self must be a live native game mode, text a live FText. Call on the
     /// engine thread; neither pointer is owned by this call.
     #[bind_resolved_func(self::BroadcastLocalizedChat)]
-    pub unsafe fn broadcast_localized_chat(
+    pub unsafe fn BroadcastLocalizedChat(
         self: *mut Self,
         text: *const FText,
         chat_type: EChatType,

@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::atomic::Ordering;
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::on_pre_load_map)]
+#[unchained_macros::bind_func_detour(UTBLGameInstance::OnPreLoadMap)]
 pub(crate) unsafe fn on_pre_load_map_detour(
     this: *mut UTBLGameInstance,
     url: *mut crate::chivalry2::engine::FString,
@@ -28,11 +28,11 @@ pub(crate) unsafe fn on_pre_load_map_detour(
         sinfo!("Engine signaled for initialization");
     }
     unsafe {
-        this.on_pre_load_map(url);
+        this.OnPreLoadMap(url);
     }
 }
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::on_post_load_map)]
+#[unchained_macros::bind_func_detour(UTBLGameInstance::OnPostLoadMap)]
 pub(crate) unsafe fn on_post_load_map_detour(
     this: *mut UTBLGameInstance,
     world: *mut crate::chivalry2::engine::UWorld,
@@ -66,6 +66,6 @@ pub(crate) unsafe fn on_post_load_map_detour(
         swarn!("Current map name unavailable");
     }
     unsafe {
-        this.on_post_load_map(world);
+        this.OnPostLoadMap(world);
     }
 }

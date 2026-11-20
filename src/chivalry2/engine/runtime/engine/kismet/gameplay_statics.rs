@@ -26,7 +26,7 @@ impl UGameplayStatics {
     /// Call on the engine thread with live context/class pointers and writable
     /// engine-compatible array storage. Entries are borrowed native actors.
     #[bind_resolved_func(self::GetAllActorsOfClass)]
-    pub unsafe fn get_all_actors_of_class(
+    pub unsafe fn GetAllActorsOfClass(
         context: *const UObject,
         actor_class: *mut UClass,
         output: *mut TArray<*mut UObject>,
@@ -34,10 +34,10 @@ impl UGameplayStatics {
     }
 
     #[unchained_macros::bind_resolved_func(LoadGameFromSlot)]
-    pub(crate) unsafe fn load_game_from_slot<'a>(slot: &'a FString, index: i32) -> *mut USaveGame {}
+    pub(crate) unsafe fn LoadGameFromSlot<'a>(slot: &'a FString, index: i32) -> *mut USaveGame {}
 
     #[unchained_macros::bind_resolved_func(SaveGameToSlot)]
-    pub(crate) unsafe fn save_game_to_slot<'a>(
+    pub(crate) unsafe fn SaveGameToSlot<'a>(
         game: *mut USaveGame,
         slot: &'a FString,
         index: i32,

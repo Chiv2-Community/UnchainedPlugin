@@ -37,19 +37,19 @@ pub struct UTBLGameInstance {
 #[unchained_macros::runtime_bindings]
 impl UTBLGameInstance {
     #[unchained_macros::bind_resolved_func(LoadFrontEndMap)]
-    pub(crate) unsafe fn load_front_end_map(
+    pub(crate) unsafe fn LoadFrontEndMap(
         self: *mut Self,
         _url: *mut crate::chivalry2::engine::FString,
     ) -> bool {
     }
     #[unchained_macros::bind_resolved_func(OnPreLoadMap)]
-    pub(crate) unsafe fn on_pre_load_map(
+    pub(crate) unsafe fn OnPreLoadMap(
         self: *mut Self,
         url: *mut crate::chivalry2::engine::FString,
     ) {
     }
     #[unchained_macros::bind_resolved_func(OnPostLoadMap)]
-    pub(crate) unsafe fn on_post_load_map(
+    pub(crate) unsafe fn OnPostLoadMap(
         self: *mut Self,
         world: *mut crate::chivalry2::engine::UWorld,
     ) {
@@ -61,7 +61,7 @@ impl UTBLGameInstance {
     /// Self must be live on the engine thread; text and color pointers must
     /// remain valid for the call. No ownership transfers.
     #[bind_resolved_func(self::TBLGameInstance_AddChatLine)]
-    pub unsafe fn add_chat_line(
+    pub unsafe fn AddChatLine(
         self: *mut Self,
         sender: *const FText,
         message: *const FText,

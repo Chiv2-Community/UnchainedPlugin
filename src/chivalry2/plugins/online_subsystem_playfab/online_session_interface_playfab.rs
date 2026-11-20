@@ -19,12 +19,12 @@ pub struct FOnlineSessionPlayFab {
 #[unchained_macros::runtime_bindings]
 impl FOnlineSessionPlayFab {
     #[unchained_macros::bind_resolved_func(OnGetCurrentGames_)]
-    pub(crate) unsafe fn on_get_current_games(
+    pub(crate) unsafe fn OnGetCurrentGames(
         self: *mut Self,
         response: *mut GetCurrentGamesPostResponse,
         extra: i32,
     ) {
     }
     #[unchained_macros::bind_resolved_func(PingSomeServers)]
-    pub(crate) unsafe fn ping_some_servers(self: *mut Self, max_servers: i32) {}
+    pub(crate) unsafe fn PingSomeServers(self: *mut Self, max_servers: i32) {}
 }

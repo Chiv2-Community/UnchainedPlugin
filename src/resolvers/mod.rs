@@ -144,7 +144,7 @@ mod binding_tests {
     #[test]
     fn udp_echo_binding_and_plugin_replacement_share_one_native_target() {
         use crate::chivalry2::engine::runtime::online::icmp::icmp::FUDPPing;
-        let binding = FUDPPing::__UNCHAINED_BINDING_udp_echo.binding();
+        let binding = FUDPPing::__UNCHAINED_BINDING_UDPEcho.binding();
         assert_eq!(binding.name(), "UDPEcho");
         assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()
             .filter(|registration| std::ptr::eq(registration.binding, binding)).count(), 1);
@@ -214,12 +214,12 @@ mod binding_tests {
         use crate::chivalry2::engine::FText;
         use crate::chivalry2::engine::AssetRegistryScriptInterface;
         use crate::chivalry2::engine::UWorld;
-        let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::to_native_string;
+        let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::ToString;
         let _: for<'a> unsafe fn(*const APlayerState, &'a mut FString) -> &'a mut FString =
-            APlayerState::get_player_name_native;
-        let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::get_map_name;
+            APlayerState::GetPlayerName;
+        let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::GetMapName;
         let _: for<'a> unsafe fn(&'a mut AssetRegistryScriptInterface) -> &'a mut AssetRegistryScriptInterface =
-            crate::chivalry2::engine::UAssetRegistryHelpers::get_asset_registry;
+            crate::chivalry2::engine::UAssetRegistryHelpers::GetAssetRegistry;
     }
 
     #[test]

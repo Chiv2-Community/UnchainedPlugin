@@ -19,5 +19,5 @@ impl UAssetManager {
     /// # Safety
     /// Self must be a live native asset manager; call on the engine thread.
     #[bind_resolved_func(self::GetAssetRegistry)]
-    pub unsafe fn get_asset_registry(self: *const Self) -> *mut IAssetRegistry {}
+    pub unsafe fn GetAssetRegistry(self: *const Self) -> *mut IAssetRegistry {}
 }

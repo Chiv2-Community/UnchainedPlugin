@@ -58,6 +58,9 @@ Keep callable native contracts easy to find.
 - Trait implementations, supporting functions, and tests.
 - Use `mod.rs` as a module index.
 - Keep static calls static; genuine UE globals remain free functions.
+- Preserve C++ method spelling on native bindings and vtable entries.
+- Keep Rust-only helpers and trait methods in Rust style.
+- Retain ABI/safety/source notes; omit comments that just repeat signatures.
 - Put Rust adapters beside the native types they adapt.
 - See [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for binding
   and vtable examples.

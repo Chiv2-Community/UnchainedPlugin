@@ -247,52 +247,52 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         "legacy movement patches must retain their module feature gates",
     );
     for (path, targets) in [
-        ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
-        ("frontend_patches.rs", &["UTBLGameInstance::load_front_end_map"][..]),
-        ("backend_hooks/auth_token_cleanup.rs", &["FOnlineAuthPlayFab::end_authentication"][..]),
-        ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::get_data_for_map"][..]),
-        ("damage_events.rs", &["ATBLCharacter::on_killed", "ATBLCharacter::on_damage_taken"][..]),
-        ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
-        ("hosting/playable_listen.rs", &["UGameplay::is_dedicated_server"][..]),
-        ("hosting/server_init.rs", &["UGameEngine::dedicated_server_init"][..]),
-        ("hosting/graceful_shutdown.rs", &["UTBLEngine::pre_exit"][..]),
+        ("config_overrides.rs", &["UObject::LoadConfig", "UClass::GetConfigName"][..]),
+        ("frontend_patches.rs", &["UTBLGameInstance::LoadFrontEndMap"][..]),
+        ("backend_hooks/auth_token_cleanup.rs", &["FOnlineAuthPlayFab::EndAuthentication"][..]),
+        ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::GetDataForMap"][..]),
+        ("damage_events.rs", &["ATBLCharacter::OnKilled", "ATBLCharacter::OnDamageTaken"][..]),
+        ("hosting/desync/prevent_stackoverflow.rs", &["UObject::ProcessEvent"][..]),
+        ("hosting/playable_listen.rs", &["UGameplay::IsDedicatedServer"][..]),
+        ("hosting/server_init.rs", &["UGameEngine::DedicatedServerInit"][..]),
+        ("hosting/graceful_shutdown.rs", &["UTBLEngine::PreExit"][..]),
         ("ownership_overrides.rs", &[
-            "ATBLPlayerController::get_ownership_from_player_controller_and_state",
-            "ATBLPlayerController::can_use_loadout_item",
-            "ATBLPlayerController::can_use_character",
-            "ATBLPlayerController::conditional_initialize_customization_on_server",
+            "ATBLPlayerController::GetOwnershipFromPlayerControllerAndState",
+            "ATBLPlayerController::CanUseLoadoutItem",
+            "ATBLPlayerController::CanUseCharacter",
+            "ATBLPlayerController::ConditionalInitializeCustomizationOnServer",
         ][..]),
         ("messages/chat.rs", &[
-            "ATBLPlayerController::client_receive_chat",
-            "ATBLGameMode::broadcast_chat",
-            "APlayerController::client_message",
+            "ATBLPlayerController::ClientReceiveChat_Implementation",
+            "ATBLGameMode::BroadcastChat",
+            "APlayerController::ClientMessage",
         ][..]),
-        ("networking/travel.rs", &["APlayerController::client_travel_internal"][..]),
+        ("networking/travel.rs", &["APlayerController::ClientTravelInternal"][..]),
         ("networking/ipv6_support.rs", &[
-            "FUDPPing::udp_echo",
-            "FString::find",
-            "FString::parse_into_array",
-            "FOnlineSessionPlayFab::on_get_current_games",
-            "FOnlineSessionPlayFab::ping_some_servers",
+            "FUDPPing::UDPEcho",
+            "FString::Find",
+            "FString::ParseIntoArray",
+            "FOnlineSessionPlayFab::OnGetCurrentGames",
+            "FOnlineSessionPlayFab::PingSomeServers",
         ][..]),
-        ("pak_mount.rs", &["FPakPlatformFile::mount"][..]),
+        ("pak_mount.rs", &["FPakPlatformFile::Mount"][..]),
         ("backend_hooks/server_browser.rs", &[
-            "OpenAPIClientAPI::get_post_get_motd",
-            "OpenAPIClientAPI::get_post_get_current_games",
-            "PlayFabRequestHandler::send_request",
+            "OpenAPIClientAPI::GetPost_GetMotd",
+            "OpenAPIClientAPI::GetPost_GetCurrentGames",
+            "PlayFabRequestHandler::SendRequest",
         ][..]),
         ("diagnostics.rs", &[
-            "UUserFeedbackAndBugReportsLibrary::get_game_info",
-            "TBLUtility::execute_console_command",
-            "UGameplayStatics::load_game_from_slot",
-            "UGameplayStatics::save_game_to_slot",
-            "FConsoleOutputDevice::serialize",
-            "FFrame::kismet_execution_message",
+            "UUserFeedbackAndBugReportsLibrary::GetGameInfo",
+            "TBLUtility::ExecuteConsoleCommand",
+            "UGameplayStatics::LoadGameFromSlot",
+            "UGameplayStatics::SaveGameToSlot",
+            "FConsoleOutputDevice::Serialize",
+            "FFrame::KismetExecutionMessage",
         ][..]),
         ("loose_assets.rs", &[
-            "FPakPlatformFile::find_file_in_pak_files",
-            "FPakPlatformFile::find_file_in_pak_files_static",
-            "FPakPlatformFile::is_non_pak_filename_allowed",
+            "FPakPlatformFile::FindFileInPakFiles",
+            "FPakPlatformFile::FindFileInPakFiles_Static",
+            "FPakPlatformFile::IsNonPakFilenameAllowed",
         ][..]),
     ] {
         let source = std::fs::read_to_string(root.join(path)).unwrap();
@@ -375,6 +375,74 @@ fn native_binding_and_resolver_definitions_stay_outside_unchained() {
         }
     }
     check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained"));
+}
+
+#[test]
+fn native_callables_use_cpp_style_names() {
+    struct CheckNames<'a>(&'a Path);
+
+    impl CheckNames<'_> {
+        fn check(&self, name: &syn::Ident) {
+            assert!(
+                name.to_string().starts_with(|c: char| c.is_ascii_uppercase()),
+                "{}: native callable {name} must use C++ spelling",
+                self.0.display(),
+            );
+        }
+
+        fn binding(&self, attrs: &[Attribute], signature: &Signature) {
+            if ["bind_resolved_func", "bind_resolved_request_function"]
+                .iter().any(|name| attribute(attrs, name).is_some())
+            {
+                self.check(&signature.ident);
+            }
+        }
+    }
+
+    impl VisitMut for CheckNames<'_> {
+        fn visit_item_fn_mut(&mut self, item: &mut syn::ItemFn) {
+            self.binding(&item.attrs, &item.sig);
+            syn::visit_mut::visit_item_fn_mut(self, item);
+        }
+
+        fn visit_impl_item_fn_mut(&mut self, item: &mut syn::ImplItemFn) {
+            self.binding(&item.attrs, &item.sig);
+            syn::visit_mut::visit_impl_item_fn_mut(self, item);
+        }
+
+        fn visit_attribute_mut(&mut self, attr: &mut Attribute) {
+            if attr.path().is_ident("vtable") {
+                let mut tokens = attr.meta.require_list().unwrap().tokens.clone()
+                    .into_iter().peekable();
+                while let Some(token) = tokens.next() {
+                    if let proc_macro2::TokenTree::Ident(name) = token {
+                        if name != "offset" && matches!(
+                            tokens.peek(),
+                            Some(proc_macro2::TokenTree::Group(group))
+                                if group.delimiter() == proc_macro2::Delimiter::Parenthesis
+                        ) {
+                            self.check(&name);
+                        }
+                    }
+                }
+            }
+            syn::visit_mut::visit_attribute_mut(self, attr);
+        }
+    }
+
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let mut file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+                CheckNames(&path).visit_file_mut(&mut file);
+            }
+        }
+    }
+
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
 }
 
 #[test]

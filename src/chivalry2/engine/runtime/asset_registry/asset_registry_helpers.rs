@@ -19,7 +19,7 @@ impl UAssetRegistryHelpers {
     /// Call on the engine thread after registry initialization; output must be
     /// writable native TScriptInterface storage. The returned pointers are borrowed.
     #[bind_resolved_func(self::UAssetRegistryHelpers__GetAssetRegistry)]
-    pub unsafe fn get_asset_registry<'a>(
+    pub unsafe fn GetAssetRegistry<'a>(
         output: &'a mut AssetRegistryScriptInterface,
     ) -> &'a mut AssetRegistryScriptInterface {
     }

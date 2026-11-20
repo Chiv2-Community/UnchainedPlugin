@@ -3,7 +3,7 @@
 use crate::chivalry2::plugins::online_subsystem_playfab::online_auth_interface_playfab::*;
 use std::ffi::c_void;
 
-#[unchained_macros::bind_func_detour(FOnlineAuthPlayFab::end_authentication)]
+#[unchained_macros::bind_func_detour(FOnlineAuthPlayFab::EndAuthentication)]
 pub(crate) unsafe fn end_authentication_detour(
     this: *const FOnlineAuthPlayFab,
     user_id: *const c_void,
@@ -15,7 +15,7 @@ pub(crate) unsafe fn end_authentication_detour(
         return;
     }
     unsafe {
-        this.end_authentication(user_id);
+        this.EndAuthentication(user_id);
     }
 }
 

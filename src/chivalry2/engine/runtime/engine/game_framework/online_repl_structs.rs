@@ -20,7 +20,7 @@ impl FUniqueNetIdRepl {
     /// IsValid/ToString ABI. No ownership of the shared object is transferred.
     pub unsafe fn to_native_string(&self) -> Option<String> {
         let object = self.id.as_ref()?;
-        if !object.is_valid() {
+        if !object.IsValid() {
             return None;
         }
         Some(object.to_native_string())

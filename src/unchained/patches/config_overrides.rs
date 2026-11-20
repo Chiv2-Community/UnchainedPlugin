@@ -7,7 +7,7 @@ use crate::features::config_overrides::{
 use crate::tools::hook_globals::{cli_args, globals_initialized};
 use std::ffi::c_void;
 
-#[unchained_macros::bind_func_detour(UObject::load_config, || cli_args().unchained_profile_location.is_some())]
+#[unchained_macros::bind_func_detour(UObject::LoadConfig, || cli_args().unchained_profile_location.is_some())]
 pub(crate) unsafe fn load_config_detour(
     this: *mut UObject,
     config_class: *mut UClass,
@@ -17,7 +17,7 @@ pub(crate) unsafe fn load_config_detour(
 ) {
     if LOAD_CONFIG_REENTRY.with(|state| state.get()) || !globals_initialized() {
         return unsafe {
-            this.load_config(config_class, filename, propagation_flags, property_to_load)
+            this.LoadConfig(config_class, filename, propagation_flags, property_to_load)
         };
     }
     let object = unsafe { &*this };
@@ -29,12 +29,12 @@ pub(crate) unsafe fn load_config_detour(
         || unsafe { (*actual_class).class_flags } & EClassFlags::CLASS_Config.bits() == 0
     {
         return unsafe {
-            this.load_config(config_class, filename, propagation_flags, property_to_load)
+            this.LoadConfig(config_class, filename, propagation_flags, property_to_load)
         };
     }
     let config_name = {
         let mut storage = FString::default();
-        let result = unsafe { actual_class.get_config_name(&mut storage) };
+        let result = unsafe { actual_class.GetConfigName(&mut storage) };
         if result.is_null() {
             if storage.is_empty() {
                 None
@@ -58,7 +58,7 @@ pub(crate) unsafe fn load_config_detour(
     let object_path = if this.is_null() {
         None
     } else {
-        let path = unsafe { &*this }.uobject_base_utility.get_path_name(None);
+        let path = unsafe { &*this }.uobject_base_utility.GetPathName(None);
         if path.trim().is_empty() {
             None
         } else {
@@ -72,7 +72,7 @@ pub(crate) unsafe fn load_config_detour(
     if !filenames.is_empty() {
         LOAD_CONFIG_REENTRY.with(|state| state.set(true));
         unsafe {
-            this.load_config(config_class, filename, propagation_flags, property_to_load);
+            this.LoadConfig(config_class, filename, propagation_flags, property_to_load);
         }
         for name in &filenames {
             let path = match widestring::U16CString::from_str(name.as_str()) {
@@ -84,7 +84,7 @@ pub(crate) unsafe fn load_config_detour(
                 }
             };
             unsafe {
-                this.load_config(
+                this.LoadConfig(
                     config_class,
                     path.as_ptr() as *mut TCHAR,
                     propagation_flags,
@@ -96,14 +96,14 @@ pub(crate) unsafe fn load_config_detour(
         return;
     }
     unsafe {
-        this.load_config(config_class, filename, propagation_flags, property_to_load);
+        this.LoadConfig(config_class, filename, propagation_flags, property_to_load);
     }
 }
 
-#[unchained_macros::bind_func_detour(UClass::get_config_name, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
+#[unchained_macros::bind_func_detour(UClass::GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
 pub(crate) unsafe fn get_config_name_detour(
     this: *mut UClass,
     storage: *mut crate::chivalry2::engine::FString,
 ) -> *mut crate::chivalry2::engine::FString {
-    unsafe { this.get_config_name(storage) }
+    unsafe { this.GetConfigName(storage) }
 }

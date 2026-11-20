@@ -31,13 +31,11 @@ impl TArray<TCHAR> {
         }
     }
 
-    /// FString::AppendChars(const WIDECHAR*, int32).
-    ///
     /// # Safety
     /// Self must be a live writable native string with exclusive access. Text
     /// must contain count readable UTF-16 units; count must be nonnegative.
     #[unchained_macros::bind_resolved_func(self::FString_AppendChars)]
-    pub unsafe fn append_chars(self: *mut Self, text: *const TCHAR, count: i32) {}
+    pub unsafe fn AppendChars(self: *mut Self, text: *const TCHAR, count: i32) {}
 
     /// Using direct to_string on TArray<TCHAR> (or the FString type) binds a reference to a string
     /// in the FString's backing buffer, which is not safe to do in a multithreaded environment.
@@ -99,7 +97,7 @@ impl TArray<TCHAR> {
     }
 
     #[unchained_macros::bind_resolved_func(FStringFind)]
-    pub(crate) unsafe fn find(
+    pub(crate) unsafe fn Find(
         self: *const Self,
         needle: *const TCHAR,
         search_case: i32,
@@ -109,7 +107,7 @@ impl TArray<TCHAR> {
     }
 
     #[unchained_macros::bind_resolved_func(FStringParseIntoArray)]
-    pub(crate) unsafe fn parse_into_array(
+    pub(crate) unsafe fn ParseIntoArray(
         self: *const Self,
         output: *mut TArray<FString>,
         delimiter: *const TCHAR,

@@ -7,7 +7,7 @@ use crate::chivalry2::plugins::online_subsystem_playfab::open_api_merged::open_a
 use crate::tools::hook_globals::cli_args;
 use std::cell::Cell;
 
-#[unchained_macros::bind_func_detour(FUDPPing::udp_echo, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn ipv6_udp_echo(
     endpoint: *mut FString,
     timeout: f32,
@@ -19,13 +19,13 @@ unsafe fn ipv6_udp_echo(
         if let Some(normalized) = bracket_ipv6_udp_endpoint(&text) {
             strace!("UDPEcho: normalizing IPv6 endpoint to {normalized}");
             let mut normalized = FString::from(normalized.as_str());
-            return unsafe { FUDPPing::udp_echo(&mut normalized, timeout, callback) };
+            return unsafe { FUDPPing::UDPEcho(&mut normalized, timeout, callback) };
         }
     }
-    unsafe { FUDPPing::udp_echo(endpoint, timeout, callback) };
+    unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
 }
 
-#[unchained_macros::bind_func_detour(FString::find, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FString::Find, || !cli_args().is_server())]
 pub(crate) unsafe fn find_detour(
     this: *const FString,
     needle: *const TCHAR,
@@ -51,10 +51,10 @@ pub(crate) unsafe fn find_detour(
             }
         }
     }
-    unsafe { this.find(needle, search_case, search_direction, start_position) }
+    unsafe { this.Find(needle, search_case, search_direction, start_position) }
 }
 
-#[unchained_macros::bind_func_detour(FString::parse_into_array, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FString::ParseIntoArray, || !cli_args().is_server())]
 pub(crate) unsafe fn parse_into_array_detour(
     this: *const FString,
     output: *mut TArray<FString>,
@@ -82,10 +82,10 @@ pub(crate) unsafe fn parse_into_array_detour(
             }
         }
     }
-    unsafe { this.parse_into_array(output, delimiter, cull_empty) }
+    unsafe { this.ParseIntoArray(output, delimiter, cull_empty) }
 }
 
-#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::on_get_current_games, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::OnGetCurrentGames, || !cli_args().is_server())]
 pub(crate) unsafe fn on_get_current_games_detour(
     this: *mut FOnlineSessionPlayFab,
     response: *mut GetCurrentGamesPostResponse,
@@ -93,19 +93,19 @@ pub(crate) unsafe fn on_get_current_games_detour(
 ) {
     let already = IN_ON_GET_CURRENT_GAMES.with(|state| state.replace(true));
     unsafe {
-        this.on_get_current_games(response, extra);
+        this.OnGetCurrentGames(response, extra);
     }
     if !already {
         IN_ON_GET_CURRENT_GAMES.with(|state| state.set(false));
     }
 }
 
-#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::ping_some_servers, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::PingSomeServers, || !cli_args().is_server())]
 pub(crate) unsafe fn ping_some_servers_detour(this: *mut FOnlineSessionPlayFab, max_servers: i32) {
     let already = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
     strace!("PingSomeServers called");
     unsafe {
-        this.ping_some_servers(max_servers);
+        this.PingSomeServers(max_servers);
     }
     if !already {
         IN_PING_SOME_SERVERS.with(|state| state.set(false));

@@ -16,6 +16,8 @@ Declare callable native functions separately from plugin behavior.
 - Use `#[runtime_bindings]` on the native type's inherent impl.
 - Declare an empty unsafe method with `#[bind_resolved_func(Resolver)]`.
 - Keep static methods receiver-free; preserve instance receivers and hidden ABI arguments.
+- Match C++ method spelling, including acronyms and names such as `GetPost_GetMotd`.
+- Keep comments about ABI or safety, not duplicate function headers.
 - Use visibility accessible to the replacement.
 - `runtime_bindings` emits invariant signature metadata; it is internal plumbing,
   not an application API.
@@ -30,7 +32,7 @@ Existing static UDP-ping binding:
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(UDPEcho)]
-    pub(crate) unsafe fn udp_echo(
+    pub(crate) unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,
         callback: *mut TFunctionFIcmpEchoResult,
@@ -42,7 +44,7 @@ impl FUDPPing {
 
 Target the native binding from a functional module under `src/unchained/patches/`.
 
-- Use `#[bind_func_detour(Type::method)]` on an unsafe free function.
+- Use `#[bind_func_detour(Type::Method)]` on an unsafe free function.
 - Do not target the resolver or Rust wrapper address.
 - Declare instance receivers as the first argument.
 - Names need no `_detour` suffix.
@@ -58,14 +60,14 @@ Target the native binding from a functional module under `src/unchained/patches/
 Alternative to the existing UDP replacement:
 
 ```rust
-#[unchained_macros::bind_func_detour(FUDPPing::udp_echo, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *mut FString,
     timeout: f32,
     callback: *mut TFunctionFIcmpEchoResult,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
-    unsafe { FUDPPing::udp_echo(endpoint, timeout, callback) };
+    unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
 }
 ```
 

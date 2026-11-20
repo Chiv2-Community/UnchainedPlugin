@@ -8,42 +8,42 @@ use crate::chivalry2::engine::{FName, FString, USaveGame, TCHAR};
 use crate::chivalry2::tbl::tbl_utility_library::TBLUtility;
 use crate::chivalry2::tbl::ui::user_feedback_and_bug_reports_library::UUserFeedbackAndBugReportsLibrary;
 
-#[unchained_macros::bind_func_detour(UUserFeedbackAndBugReportsLibrary::get_game_info)]
+#[unchained_macros::bind_func_detour(UUserFeedbackAndBugReportsLibrary::GetGameInfo)]
 pub(crate) unsafe fn get_game_info_detour(
     storage: *mut crate::chivalry2::engine::FString,
     world: *mut crate::chivalry2::engine::UWorld,
 ) -> *mut crate::chivalry2::engine::FString {
-    let result = unsafe { UUserFeedbackAndBugReportsLibrary::get_game_info(storage, world) };
+    let result = unsafe { UUserFeedbackAndBugReportsLibrary::GetGameInfo(storage, world) };
     sinfo!("{}", unsafe { (&*result).to_string() });
     result
 }
 
-#[unchained_macros::bind_func_detour(TBLUtility::execute_console_command)]
+#[unchained_macros::bind_func_detour(TBLUtility::ExecuteConsoleCommand)]
 pub(crate) unsafe fn execute_console_command_detour(command: *const FString) {
     sinfo!("Executing: {}", unsafe { &*command });
-    unsafe { TBLUtility::execute_console_command(command) }
+    unsafe { TBLUtility::ExecuteConsoleCommand(command) }
 }
 
-#[unchained_macros::bind_func_detour(UGameplayStatics::load_game_from_slot)]
+#[unchained_macros::bind_func_detour(UGameplayStatics::LoadGameFromSlot)]
 pub(crate) unsafe fn load_game_from_slot_detour<'a>(
     slot: &'a FString,
     index: i32,
 ) -> *mut USaveGame {
     sdebug!("Loading save game from slot {} (user index {})", slot, index);
-    unsafe { UGameplayStatics::load_game_from_slot(slot, index) }
+    unsafe { UGameplayStatics::LoadGameFromSlot(slot, index) }
 }
 
-#[unchained_macros::bind_func_detour(UGameplayStatics::save_game_to_slot)]
+#[unchained_macros::bind_func_detour(UGameplayStatics::SaveGameToSlot)]
 pub(crate) unsafe fn save_game_to_slot_detour<'a>(
     game: *mut USaveGame,
     slot: &'a FString,
     index: i32,
 ) -> bool {
     sdebug!("Saving game to slot {} (user index {})", slot, index);
-    unsafe { UGameplayStatics::save_game_to_slot(game, slot, index) }
+    unsafe { UGameplayStatics::SaveGameToSlot(game, slot, index) }
 }
 
-#[unchained_macros::bind_func_detour(FConsoleOutputDevice::serialize)]
+#[unchained_macros::bind_func_detour(FConsoleOutputDevice::Serialize)]
 pub(crate) unsafe fn serialize_detour(
     this: *mut FConsoleOutputDevice,
     text: *const TCHAR,
@@ -60,12 +60,12 @@ pub(crate) unsafe fn serialize_detour(
         }
     }
     unsafe {
-        this.serialize(text, verbosity, category);
+        this.Serialize(text, verbosity, category);
     }
 }
 
 #[cfg(feature = "kismet_log")]
-#[unchained_macros::bind_func_detour(FFrame::kismet_execution_message)]
+#[unchained_macros::bind_func_detour(FFrame::KismetExecutionMessage)]
 pub(crate) unsafe fn kismet_execution_message_detour(
     text: *const TCHAR,
     kind: u8,
@@ -80,7 +80,7 @@ pub(crate) unsafe fn kismet_execution_message_detour(
             sdebug!("{text}");
         }
     }
-    unsafe { FFrame::kismet_execution_message(text, kind, name) }
+    unsafe { FFrame::KismetExecutionMessage(text, kind, name) }
 }
 
 #[cfg(feature = "kismet_log")]

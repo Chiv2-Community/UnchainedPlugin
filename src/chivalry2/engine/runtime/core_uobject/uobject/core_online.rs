@@ -6,8 +6,8 @@ use crate::chivalry2::engine::*;
 pub struct FUniqueNetId {
     #[vtable(
         offset(0x28);
-        is_valid(&self) -> bool;
-        write_native_string(&self, output: *mut FString) -> *mut FString;
+        IsValid(&self) -> bool;
+        ToString(&self, output: *mut FString) -> *mut FString;
     )]
     vtable: *const (),
 }
@@ -18,7 +18,7 @@ impl FUniqueNetId {
     #[inline(always)]
     pub unsafe fn to_native_string(&self) -> String {
         let mut value = FString::new();
-        self.write_native_string(&mut value);
+        self.ToString(&mut value);
         value.to_string()
     }
 }
@@ -51,8 +51,8 @@ mod unique_net_id_tests {
         }
         let vtable = FUniqueNetIdVTable {
             _pad_0: [0; 5],
-            is_valid: invalid,
-            write_native_string: unexpected,
+            IsValid: invalid,
+            ToString: unexpected,
         };
         let object = FUniqueNetId { vtable: &vtable };
         let mut id = missing_id();

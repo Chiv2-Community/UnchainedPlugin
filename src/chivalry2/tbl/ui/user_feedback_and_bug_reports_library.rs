@@ -14,7 +14,7 @@ pub struct UUserFeedbackAndBugReportsLibrary {
 impl UUserFeedbackAndBugReportsLibrary {
     // Static FString return: RCX is caller storage, RDX is world, RAX returns storage.
     #[unchained_macros::bind_resolved_func(GetGameInfo)]
-    pub(crate) unsafe fn get_game_info(
+    pub(crate) unsafe fn GetGameInfo(
         storage: *mut crate::chivalry2::engine::FString,
         world: *mut crate::chivalry2::engine::UWorld,
     ) -> *mut crate::chivalry2::engine::FString {

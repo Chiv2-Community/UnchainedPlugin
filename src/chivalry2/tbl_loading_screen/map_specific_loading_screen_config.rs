@@ -74,12 +74,11 @@ pub struct UMapSpecificLoadingScreenConfig {
 
 #[unchained_macros::runtime_bindings]
 impl UMapSpecificLoadingScreenConfig {
-    // void UMapSpecificLoadingScreenConfig::GetDataForMap(longlong param_1,FString *param_2,void **param_3)
     //
     // NONE: the callee consumes (frees) its by-value FString arg, so the original
     // must be called exactly once.
     #[unchained_macros::bind_resolved_func(GetDataForMap)]
-    pub(crate) unsafe fn get_data_for_map(
+    pub(crate) unsafe fn GetDataForMap(
         self: *mut Self,
         map_name: *mut FString,
         data: *mut FMapSpecificLoadingScreenConfigData,

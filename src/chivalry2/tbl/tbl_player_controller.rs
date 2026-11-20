@@ -86,7 +86,7 @@ pub struct ATBLPlayerController {
 impl ATBLPlayerController {
     // Targets ClientReceiveChat_Implementation, not the generated RPC wrapper.
     #[unchained_macros::bind_resolved_func(ClientReceiveChat)]
-    pub(crate) unsafe fn client_receive_chat(
+    pub(crate) unsafe fn ClientReceiveChat_Implementation(
         self: *mut Self,
         sender: *mut ATBLPlayerState,
         message: *const FString,
@@ -99,7 +99,7 @@ impl ATBLPlayerController {
     #[unchained_macros::bind_resolved_func(
         ATBLPlayerController__GetOwnershipFromPlayerControllerAndState
     )]
-    pub(crate) unsafe fn get_ownership_from_player_controller_and_state(
+    pub(crate) unsafe fn GetOwnershipFromPlayerControllerAndState(
         result: *mut FOwnershipResponse,
         PlayerController: *mut ATBLPlayerController,
         PlayerState: *mut ATBLPlayerState,
@@ -109,7 +109,7 @@ impl ATBLPlayerController {
     }
 
     #[unchained_macros::bind_resolved_func(ATBLPlayerController__CanUseLoadoutItem)]
-    pub(crate) unsafe fn can_use_loadout_item(
+    pub(crate) unsafe fn CanUseLoadoutItem(
         self: *mut Self,
         result: *mut FOwnershipResponse,
         InLoadOutSelection: *mut TSubclassOfULoadoutSelection,
@@ -118,7 +118,7 @@ impl ATBLPlayerController {
     }
 
     #[unchained_macros::bind_resolved_func(ATBLPlayerController__CanUseCharacter)]
-    pub(crate) unsafe fn can_use_character(
+    pub(crate) unsafe fn CanUseCharacter(
         self: *mut Self,
         result: *mut FOwnershipResponse,
         CharacterSubclass: *mut TSubclassOfATBLCharacter,
@@ -129,15 +129,14 @@ impl ATBLPlayerController {
     #[unchained_macros::bind_resolved_func(
         ATBLPlayerController__ConditionalInitializeCustomizationOnServer
     )]
-    pub(crate) unsafe fn conditional_initialize_customization_on_server(
+    pub(crate) unsafe fn ConditionalInitializeCustomizationOnServer(
         self: *mut Self,
         player_state: *mut c_void,
     ) -> c_void {
     }
 
-    // ATBLPlayerController::ClientReceiveLocalizedChat_Implementation(const FText&, EChatType)
     #[unchained_macros::bind_resolved_func(ClientReceiveLocalizedChat)]
-    pub(crate) unsafe fn client_receive_localized_chat(
+    pub(crate) unsafe fn ClientReceiveLocalizedChat_Implementation(
         self: *mut Self,
         message: *const FText,
         channel: u32,

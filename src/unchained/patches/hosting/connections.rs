@@ -13,7 +13,7 @@ use crate::features::server_browser::http;
 use crate::tools::hook_globals::cli_args;
 use crate::tools::hook_globals::globals;
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::pre_login)]
+#[unchained_macros::bind_func_detour(ATBLGameMode::PreLogin)]
 pub(crate) unsafe fn pre_login_detour(
     this: *mut ATBLGameMode,
     options: *const FString,
@@ -30,7 +30,7 @@ pub(crate) unsafe fn pre_login_detour(
         || !cli_args().use_backend_banlist
         || address.is_null()
     {
-        let result = unsafe { this_ptr.pre_login(options, address, unique_id, error_message) };
+        let result = unsafe { this_ptr.PreLogin(options, address, unique_id, error_message) };
         if !error_message.is_null() && !(*error_message).is_empty() {
             return result;
         }
@@ -50,7 +50,7 @@ pub(crate) unsafe fn pre_login_detour(
     let addr_string = unsafe { (*address).to_string() };
     sinfo!("User joining");
 
-    let original_result = unsafe { this_ptr.pre_login(options, address, unique_id, error_message) };
+    let original_result = unsafe { this_ptr.PreLogin(options, address, unique_id, error_message) };
 
     unsafe {
         if !error_message.is_null() && !(*error_message).is_empty() {
@@ -72,7 +72,7 @@ pub(crate) unsafe fn pre_login_detour(
                 return original_result;
             }
 
-            error_message.append_chars(
+            error_message.AppendChars(
                 wide_msg.as_ptr(),
                 i32::try_from(wide_msg.len()).expect("Login error message too long"),
             );
@@ -90,7 +90,7 @@ pub(crate) unsafe fn pre_login_detour(
     original_result
 }
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::logout)]
+#[unchained_macros::bind_func_detour(ATBLGameMode::Logout)]
 pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut AController) {
     let this_ptr = this;
     strace!(
@@ -101,13 +101,13 @@ pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut
 
     if globals().world() == None {
         swarn!("globals.world is None; skipping leave event");
-        return unsafe { this_ptr.logout(exiting_player) };
+        return unsafe { this_ptr.Logout(exiting_player) };
     }
 
     let leave_name = match resolve_leave_name_from_controller(exiting_player) {
         Ok(None) => {
             swarn!("Player is a bot; skipping leave event");
-            return unsafe { this_ptr.logout(exiting_player) };
+            return unsafe { this_ptr.Logout(exiting_player) };
         }
         Ok(Some(name)) => {
             sdebug!("Resolved logout player name '{}'", name);
@@ -120,7 +120,7 @@ pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut
     };
 
     unsafe {
-        this_ptr.logout(exiting_player);
+        this_ptr.Logout(exiting_player);
     }
 
     sinfo!("Player '{}' left", leave_name);

@@ -8,7 +8,7 @@ use crate::chivalry2::tbl::{ATBLPlayerController, ATBLPlayerState, FOwnershipRes
 use std::os::raw::c_void;
 
 #[unchained_macros::bind_func_detour(
-    ATBLPlayerController::get_ownership_from_player_controller_and_state
+    ATBLPlayerController::GetOwnershipFromPlayerControllerAndState
 )]
 pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
     result: *mut FOwnershipResponse,
@@ -19,7 +19,7 @@ pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
 ) -> *mut FOwnershipResponse {
     // Caller-provided result storage precedes the controller in the native ABI.
     let response = unsafe {
-        ATBLPlayerController::get_ownership_from_player_controller_and_state(
+        ATBLPlayerController::GetOwnershipFromPlayerControllerAndState(
             result,
             PlayerController,
             PlayerState,
@@ -34,14 +34,14 @@ pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
     response
 }
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::can_use_loadout_item)]
+#[unchained_macros::bind_func_detour(ATBLPlayerController::CanUseLoadoutItem)]
 pub(crate) unsafe fn can_use_loadout_item_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
     InLoadOutSelection: *mut TSubclassOfULoadoutSelection,
     InItem: *mut TSubclassOfAInventoryItem,
 ) -> *mut FOwnershipResponse {
-    let response = unsafe { this.can_use_loadout_item(result, InLoadOutSelection, InItem) };
+    let response = unsafe { this.CanUseLoadoutItem(result, InLoadOutSelection, InItem) };
     if let Some(resp) = unsafe { response.as_mut() } {
         resp.level = 0;
         resp.owned = true;
@@ -52,13 +52,13 @@ pub(crate) unsafe fn can_use_loadout_item_detour(
     response
 }
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::can_use_character)]
+#[unchained_macros::bind_func_detour(ATBLPlayerController::CanUseCharacter)]
 pub(crate) unsafe fn can_use_character_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
     CharacterSubclass: *mut TSubclassOfATBLCharacter,
 ) -> *mut FOwnershipResponse {
-    let response = unsafe { this.can_use_character(result, CharacterSubclass) };
+    let response = unsafe { this.CanUseCharacter(result, CharacterSubclass) };
     if let Some(resp) = unsafe { response.as_mut() } {
         resp.level = 0;
         resp.owned = true;
@@ -67,7 +67,7 @@ pub(crate) unsafe fn can_use_character_detour(
 }
 
 #[unchained_macros::bind_func_detour(
-    ATBLPlayerController::conditional_initialize_customization_on_server
+    ATBLPlayerController::ConditionalInitializeCustomizationOnServer
 )]
 pub(crate) unsafe fn conditional_initialize_customization_on_server_detour(
     this: *mut ATBLPlayerController,
@@ -78,5 +78,5 @@ pub(crate) unsafe fn conditional_initialize_customization_on_server_detour(
         pc.bOnlineInventoryInitialized = true;
         pc.bPlayerCustomizationReceived = true;
     }
-    unsafe { this.conditional_initialize_customization_on_server(player_state) }
+    unsafe { this.ConditionalInitializeCustomizationOnServer(player_state) }
 }

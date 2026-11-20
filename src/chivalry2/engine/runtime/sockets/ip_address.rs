@@ -7,7 +7,7 @@ use crate::chivalry2::engine::*;
 pub struct FInternetAddr {
     #[vtable(
         offset(0x78);
-        write_native_string(&self, output: *mut FString, append_port: bool) -> *mut FString;
+        ToString(&self, output: *mut FString, append_port: bool) -> *mut FString;
     )]
     vtable: *const (),
 }
@@ -18,7 +18,7 @@ impl FInternetAddr {
     #[inline(always)]
     pub unsafe fn to_native_string(&self, append_port: bool) -> String {
         let mut output = FString::new();
-        self.write_native_string(&mut output, append_port);
+        self.ToString(&mut output, append_port);
         output.to_string()
     }
 }

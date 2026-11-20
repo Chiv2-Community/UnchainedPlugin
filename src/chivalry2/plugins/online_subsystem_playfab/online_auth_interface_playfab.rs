@@ -23,7 +23,7 @@ impl FOnlineAuthPlayFab {
     // Shutdown clears SessionInterface before the auth destructor revokes tickets.
     // Skip EndAuthentication, not the remaining destructor cleanup.
     #[unchained_macros::bind_resolved_func(PlayFabEndAuthentication)]
-    pub(crate) unsafe fn end_authentication(self: *const Self, user_id: *const c_void) {}
+    pub(crate) unsafe fn EndAuthentication(self: *const Self, user_id: *const c_void) {}
 }
 
 #[repr(C)]

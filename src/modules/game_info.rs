@@ -23,7 +23,7 @@ impl Command<GameInfoArgs> for GameInfoCommand {
         use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
-                let game_ptr = unsafe { UTBLSystemLibrary::get_tbl_game_mode(world.as_uobject()) };
+                let game_ptr = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
 
                 let game = unsafe { game_ptr.as_mut() };
                 if let Some(g) = &game {

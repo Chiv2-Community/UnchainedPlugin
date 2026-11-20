@@ -9,7 +9,7 @@ use std::ffi::c_void;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 
-// OpenAPIClientAPI::CreateHttpRequest(OpenAPIClientAPI *this,TSharedRef<> *__return_storage_ptr__,Request *param_1)
+// Request factory used to map endpoint strings to GetPost_* caller entries.
 define_custom_resolver!(CreateHttpRequest, {
     OpenAPIClientAPI::request_functions()?.map(|resolved| {
         let (address, offsets) = resolved.value.as_ref();
@@ -43,7 +43,7 @@ impl OpenAPIClientAPI {
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
     #[unchained_macros::bind_resolved_request_function(GetPost_GetMotd)]
-    pub unsafe fn get_post_get_motd(
+    pub unsafe fn GetPost_GetMotd(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
         request: *mut GenericRequest,
@@ -54,7 +54,7 @@ impl OpenAPIClientAPI {
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
     #[unchained_macros::bind_resolved_request_function(GetPost_GetCurrentGames)]
-    pub unsafe fn get_post_get_current_games(
+    pub unsafe fn GetPost_GetCurrentGames(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
         request: *mut GenericRequest,

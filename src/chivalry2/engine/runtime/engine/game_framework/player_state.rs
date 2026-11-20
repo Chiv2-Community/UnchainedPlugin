@@ -96,7 +96,7 @@ impl APlayerState {
     /// This must be a live native player state, and the native callable must be initialized.
     pub unsafe fn get_player_name(&self) -> String {
         let mut name = FString::new();
-        (self as *const Self).get_player_name_native(&mut name);
+        (self as *const Self).GetPlayerName(&mut name);
         name.to_string()
     }
 
@@ -106,7 +106,7 @@ impl APlayerState {
     /// Self must be live on the engine thread; output must be writable native
     /// FString return storage, whose result the caller owns.
     #[bind_resolved_func(self::APlayerState_GetPlayerName)]
-    pub unsafe fn get_player_name_native<'a>(
+    pub unsafe fn GetPlayerName<'a>(
         self: *const Self,
         output: &'a mut FString,
     ) -> &'a mut FString {

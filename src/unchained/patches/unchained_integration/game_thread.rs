@@ -6,10 +6,10 @@ use crate::commands::NATIVE_COMMAND_QUEUE;
 use ::windows::Win32::System::Memory::IsBadReadPtr;
 use std::sync::{Mutex, Once};
 
-#[unchained_macros::bind_func_detour(UGameEngine::tick)]
+#[unchained_macros::bind_func_detour(UGameEngine::Tick)]
 pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) {
     unsafe {
-        this.tick(delta, state);
+        this.Tick(delta, state);
     }
     ENABLE_IPV6.call_once(|| {
         NATIVE_COMMAND_QUEUE
@@ -38,7 +38,7 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
         for command in commands.drain(..) {
             let command = FString::from(command.as_str());
             let _ = std::panic::catch_unwind(move || unsafe {
-                crate::chivalry2::tbl::tbl_utility_library::TBLUtility::execute_console_command(
+                crate::chivalry2::tbl::tbl_utility_library::TBLUtility::ExecuteConsoleCommand(
                     &command,
                 )
             });

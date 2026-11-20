@@ -23,13 +23,11 @@ define_pattern_resolver!(InternalGetNetMode, {
         ], // STEAM
 });
 
-// class FString* UWorld::GetMapName(class UWorld const* `this`, class FString* __return)
 define_pattern_resolver!(
     UWorld__GetMapName,
     ["40 53 48 83 EC 40 48 89 6C 24 ?? 48 8B DA 48 89 7C 24"]
 );
 
-// AActor * __thiscall UWorld::SpawnActor(UWorld *this,UClass *param_1,FVector *param_2,FRotator *param_3,FActorSpawnParameters *param_4)
 define_pattern_resolver!(
     SpawnActor,
     ["40 53 56 57 48 83 EC 70 48 8B 05 09 4B 63 02 48 33 C4 48 89 44 24 60 0F 28 1D E2 74"]
@@ -244,7 +242,7 @@ impl UWorld {
         }
         let mut name = crate::chivalry2::engine::FString::default();
         unsafe {
-            world.get_map_name(&mut name);
+            world.GetMapName(&mut name);
         }
         name.copy_to_string().ok()
     }
@@ -252,23 +250,21 @@ impl UWorld {
     /// # Safety
     /// Self must be a live native world on the engine thread.
     #[bind_resolved_func(self::InternalGetNetMode)]
-    pub unsafe fn internal_get_net_mode(self: *const Self) -> ENetMode {}
+    pub unsafe fn InternalGetNetMode(self: *const Self) -> ENetMode {}
 
-    /// UWorld::GetMapName() const, with explicit hidden FString return storage.
+    /// Uses caller-provided FString return storage.
     ///
     /// # Safety
     /// Self must be a live native world on the engine thread and output writable
     /// native FString storage. The caller owns the resulting string.
     #[bind_resolved_func(self::UWorld__GetMapName)]
-    pub unsafe fn get_map_name<'a>(self: *const Self, output: &'a mut FString) -> &'a mut FString {}
+    pub unsafe fn GetMapName<'a>(self: *const Self, output: &'a mut FString) -> &'a mut FString {}
 
-    /// UWorld::SpawnActor(UClass*, FVector const*, FRotator const*, ...).
-    ///
     /// # Safety
     /// Call on the engine thread with a live world, compatible actor class and
     /// valid native parameter storage. The world owns any returned actor.
     #[bind_resolved_func(self::SpawnActor)]
-    pub unsafe fn spawn_actor(
+    pub unsafe fn SpawnActor(
         self: *mut Self,
         class: *mut UClass,
         position: *const FVector,

@@ -75,7 +75,7 @@ fn classify_registry_load(errored: bool, consumed: i64, total: i64) -> Result<()
 unsafe fn registry_load_outcome(reader: *mut FLargeMemoryReader) -> Result<(), String> {
     let errored = *reader.cast::<u8>().add(AR_IS_ERROR_BYTE) & AR_IS_ERROR_BIT != 0;
     let archive = reader.cast::<FArchive>();
-    classify_registry_load(errored, archive.tell(), archive.total_size())
+    classify_registry_load(errored, archive.Tell(), archive.TotalSize())
 }
 
 /// # Safety
@@ -89,7 +89,7 @@ unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String>
         "FLargeMemoryReaderDtor",
     ])?;
     let mut storage = std::mem::MaybeUninit::<FLargeMemoryReaderStorage>::zeroed();
-    let reader = storage.as_mut_ptr().cast::<FLargeMemoryReader>().construct(
+    let reader = storage.as_mut_ptr().cast::<FLargeMemoryReader>().FLargeMemoryReader(
         bytes.as_ptr(),
         size,
         0, // ELargeMemoryReaderFlags::None: borrow bytes; never free Rust memory.
@@ -99,11 +99,11 @@ unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String>
         return Err("FLargeMemoryReader constructor returned null".into());
     }
 
-    registry.serialize(reader.cast::<FArchive>());
+    registry.Serialize(reader.cast::<FArchive>());
     // Inspect before destruction. A valid read ends at the name-table offset,
     // which can be short of TotalSize; only the header/error checks imply failure.
     let outcome = registry_load_outcome(reader);
-    reader.destruct();
+    reader.Destruct();
     outcome
 }
 

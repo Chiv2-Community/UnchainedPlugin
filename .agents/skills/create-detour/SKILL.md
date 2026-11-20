@@ -42,7 +42,8 @@ Place replacements under `src/unchained/patches/*` by plugin purpose.
 
 Use `bind_func_detour` on an unsafe free function.
 
-- Target `NativeType::method`; names do not require a `_detour` suffix.
+- Target `NativeType::Method`; names do not require a `_detour` suffix.
+- Use the binding's C++-spelled method name; plugin detour names remain Rust-style.
 - Match every parameter and return type, including hidden storage and lifetimes.
 - Declare an instance receiver explicitly as the first argument.
 - Rust checks compatibility with invariant binding metadata; this does not
@@ -60,14 +61,14 @@ Alternative to the existing UDP replacement; do not install both:
 use crate::chivalry2::engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
 use crate::tools::hook_globals::cli_args;
 
-#[unchained_macros::bind_func_detour(FUDPPing::udp_echo, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *mut FString,
     timeout: f32,
     callback: *mut TFunctionFIcmpEchoResult,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
-    unsafe { FUDPPing::udp_echo(endpoint, timeout, callback) };
+    unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
 }
 ```
 

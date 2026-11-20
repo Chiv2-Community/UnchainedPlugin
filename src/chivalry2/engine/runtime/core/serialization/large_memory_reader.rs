@@ -43,7 +43,7 @@ impl FLargeMemoryReader {
     /// Self must be writable, aligned storage of the verified native size. Data
     /// must remain valid until destruction. Use the engine thread/allocator.
     #[bind_resolved_func(self::FLargeMemoryReaderCtor)]
-    pub unsafe fn construct(
+    pub unsafe fn FLargeMemoryReader(
         self: *mut Self,
         data: *const u8,
         size: i64,
@@ -58,5 +58,5 @@ impl FLargeMemoryReader {
     /// Self must be a constructed reader, destroyed exactly once before its
     /// borrowed data expires, on the engine thread.
     #[bind_resolved_func(self::FLargeMemoryReaderDtor)]
-    pub unsafe fn destruct(self: *mut Self) {}
+    pub unsafe fn Destruct(self: *mut Self) {}
 }

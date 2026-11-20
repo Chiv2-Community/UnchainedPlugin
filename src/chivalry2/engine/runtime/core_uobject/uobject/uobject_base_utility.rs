@@ -14,7 +14,7 @@ pub struct UObjectBaseUtility {
 }
 
 impl UObjectBaseUtility {
-    pub unsafe fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
+    pub unsafe fn GetPathName(&self, stop_outer: Option<&UObject>) -> String {
         let mut string = FString::new();
         unsafe {
             globals().uobject_base_utility_get_path_name()(

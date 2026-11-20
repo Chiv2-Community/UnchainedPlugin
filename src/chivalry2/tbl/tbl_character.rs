@@ -253,8 +253,8 @@ impl ATBLCharacter {
     }
 
     #[unchained_macros::bind_resolved_func(ATBLCharacter__OnKilled)]
-    pub(crate) unsafe fn on_killed(self: *mut Self, damage_event: *const FDeathDamageTakenEvent) {}
+    pub(crate) unsafe fn OnKilled(self: *mut Self, damage_event: *const FDeathDamageTakenEvent) {}
 
     #[unchained_macros::bind_resolved_func(ATBLCharacter__OnDamageTaken)]
-    pub(crate) unsafe fn on_damage_taken(self: *mut Self, damage_event: *const FDamageTakenEvent) {}
+    pub(crate) unsafe fn OnDamageTaken(self: *mut Self, damage_event: *const FDamageTakenEvent) {}
 }

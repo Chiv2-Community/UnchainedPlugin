@@ -44,7 +44,7 @@ pub struct FPakPlatformFile {
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
     #[unchained_macros::bind_resolved_func(PakPlatformFileMount)]
-    pub(crate) unsafe fn mount(
+    pub(crate) unsafe fn Mount(
         self: *mut Self,
         InPakFilename: *const TCHAR,
         PakOrder: u32,
@@ -53,10 +53,9 @@ impl FPakPlatformFile {
     ) -> bool {
     }
 
-    // FPakPlatformFile::FindFileInPakFiles(const TCHAR*, FPakFile**, FPakEntry*).
     #[cfg(feature = "loose_assets")]
     #[unchained_macros::bind_resolved_func(FindFileInPakFiles_1)]
-    pub(crate) unsafe fn find_file_in_pak_files(
+    pub(crate) unsafe fn FindFileInPakFiles(
         self: *mut Self,
         Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
@@ -64,10 +63,10 @@ impl FPakPlatformFile {
     ) -> u64 {
     }
 
-    // Static FPakPlatformFile::FindFileInPakFiles(TArray<FPakListEntry>&, ...).
+    // Static overload; receives the pak-list array rather than a platform-file object.
     #[cfg(feature = "loose_assets")]
     #[unchained_macros::bind_resolved_func(FindFileInPakFiles_2)]
-    pub(crate) unsafe fn find_file_in_pak_files_static(
+    pub(crate) unsafe fn FindFileInPakFiles_Static(
         this_ptr: *mut TArray<FPakListEntry>,
         Filename: *const TCHAR,
         OutPakFile: *mut *mut FPakFile,
@@ -77,7 +76,7 @@ impl FPakPlatformFile {
 
     #[cfg(feature = "loose_assets")]
     #[unchained_macros::bind_resolved_func(IsNonPakFilenameAllowed)]
-    pub(crate) unsafe fn is_non_pak_filename_allowed(
+    pub(crate) unsafe fn IsNonPakFilenameAllowed(
         self: *mut Self,
         _InFilename: *mut FString,
     ) -> u64 {

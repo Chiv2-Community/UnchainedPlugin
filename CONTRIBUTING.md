@@ -47,6 +47,14 @@ Establish the native contract before writing Rust declarations.
 - Add new files to their parent `mod.rs`.
 - Put resolvers before native types and bindings.
 - Keep static methods static; declare instance receivers explicitly.
+- Use C++ spelling for native bindings and virtual methods: `GetWorld`,
+  `UDPEcho`, and `GetPost_GetMotd`, not snake_case.
+- Add descriptive suffixes only to disambiguate overloads, such as
+  `FindFileInPakFiles_Static` and `Serialize_WithTime`. Constructors use the
+  type name; destructor adapters use `Destruct` or `DeletingDestructor`.
+- Keep Rust-only helpers and trait implementations idiomatic Rust.
+- Remove comments that only repeat signatures; retain ABI, ownership, safety,
+  and source-evidence notes.
 - Include hidden return-storage arguments.
 - Use raw pointers unless Rust reference guarantees are established.
 - Keep opaque types opaque; do not invent layouts.
@@ -167,7 +175,7 @@ pub struct FUDPPing {
 #[unchained_macros::runtime_bindings]
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(UDPEcho)]
-    pub(crate) unsafe fn udp_echo(
+    pub(crate) unsafe fn UDPEcho(
         endpoint: *mut FString,
         timeout: f32,
         callback: *mut TFunctionFIcmpEchoResult,
@@ -211,23 +219,23 @@ use crate::chivalry2::engine::FString;
 pub struct FUniqueNetId {
     #[vtable(
         offset(0x28);
-        is_valid(&self) -> bool;
-        write_native_string(&self, output: *mut FString) -> *mut FString;
+        IsValid(&self) -> bool;
+        ToString(&self, output: *mut FString) -> *mut FString;
     )]
     vtable: *const (),
 }
 
 unsafe fn read_id(id: &FUniqueNetId) -> Option<String> {
-    if !unsafe { id.is_valid() } {
+    if !unsafe { id.IsValid() } {
         return None;
     }
     let mut output = FString::new();
-    unsafe { id.write_native_string(&mut output) };
+    unsafe { id.ToString(&mut output) };
     Some(output.to_string())
 }
 ```
 
-- `write_native_string` explicitly models caller-provided return storage.
+- `ToString` explicitly models caller-provided return storage.
 - `&self` supplies the native `this` pointer.
 - Use `self: *mut Self` for raw mutable receivers when a Rust borrow is
   inappropriate; see [FOutputDevice](src/chivalry2/engine/runtime/core/misc/output_device.rs).
@@ -255,7 +263,7 @@ pub struct UObject {
     #[inherit]
     #[vtable(
         offset(0x150);
-        get_world(&self) -> *mut UWorld;
+        GetWorld(&self) -> *mut UWorld;
     )]
     pub uobject_base_utility: UObjectBaseUtility,
 }
@@ -289,14 +297,14 @@ Alternative replacement for the existing UDP hook:
 use crate::chivalry2::engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
 use crate::tools::hook_globals::cli_args;
 
-#[unchained_macros::bind_func_detour(FUDPPing::udp_echo, || !cli_args().is_server())]
+#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *mut FString,
     timeout: f32,
     callback: *mut TFunctionFIcmpEchoResult,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
-    unsafe { FUDPPing::udp_echo(endpoint, timeout, callback) };
+    unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
 }
 ```
 

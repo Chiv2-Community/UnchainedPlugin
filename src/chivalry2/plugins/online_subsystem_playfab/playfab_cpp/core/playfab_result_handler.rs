@@ -15,7 +15,7 @@ pub struct PlayFabRequestHandler {
 #[unchained_macros::runtime_bindings]
 impl PlayFabRequestHandler {
     #[unchained_macros::bind_resolved_func(SendRequest)]
-    pub(crate) unsafe fn send_request(
+    pub(crate) unsafe fn SendRequest(
         storage: *mut TSharedRefIHttpRequest,
         url: *mut FString,
         body: *mut FString,

@@ -30,7 +30,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
                 use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
                 IAssetRegistry::asset_registry_interface().and_then(|registry| {
                     let mut assets = TArray::<FAssetData>::default();
-                    if registry.get_assets_by_path(
+                    if registry.GetAssetsByPath(
                         FName::with_type("/Game/Mods", EFindName::Find),
                         &mut assets,
                         true,

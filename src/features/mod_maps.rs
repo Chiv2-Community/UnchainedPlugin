@@ -473,7 +473,7 @@ fn log_registered_markers() {
                 use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
                 IAssetRegistry::asset_registry_interface().map(|registry| {
                     let mut assets = TArray::<FAssetData>::default();
-                    if registry.get_assets_by_class(
+                    if registry.GetAssetsByClass(
                         FName::with_type(class_name, EFindName::Find),
                         &mut assets,
                         true,
@@ -552,7 +552,7 @@ pub fn register_filtered_assets_sync() {
                 for file in batch {
                     files.push_in(FString::from(file.as_str()), allocator);
                 }
-                registry.scan_files_synchronous(&files, false);
+                registry.ScanFilesSynchronous(&files, false);
             })
         };
         if let Err(e) = outcome {
