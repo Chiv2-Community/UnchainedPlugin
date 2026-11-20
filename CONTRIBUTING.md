@@ -41,9 +41,10 @@ Establish the native contract before writing Rust declarations.
 
 - Use source, debug symbols, and disassembly to verify arguments and returns.
 - Follow the [source layout](docs/engine-sources.md):
-  - Preserve `runtime`, `third_party`, and native header paths.
+  - Preserve native casing and header paths, including `Runtime`, `ThirdParty`,
+    `CoreUObject`, and `TBL`.
   - Omit `Public`, `Private`, and `Classes`.
-  - Put native game-plugin types under `src/chivalry2/plugins/`.
+  - Put native game-plugin types under `src/chivalry2/Plugins/`.
 - Add new files to their parent `mod.rs`.
 - Put resolvers before native types and bindings.
 - Keep static methods static; declare instance receivers explicitly.
@@ -175,7 +176,7 @@ Declare an empty `unsafe fn` inside `#[runtime_bindings] impl Type`.
 Static UDP-ping binding, with an opaque callback type:
 
 ```rust
-use crate::chivalry2::engine::FString;
+use crate::chivalry2::Engine::FString;
 use std::ffi::c_void;
 
 pub type TFunctionFIcmpEchoResult = c_void;
@@ -202,7 +203,7 @@ Other binding sources:
 - **Request registry:** use `bind_resolved_request_function(GetPost_GetMotd)`
   inside `runtime_bindings`. Populate that exact key in `OffsetRegisty` with
   an RVA, not an absolute address. See the
-  [OpenAPI bindings](src/chivalry2/plugins/online_subsystem_playfab/open_api_merged/open_api_client_api.rs).
+  [OpenAPI bindings](src/chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
 - **Native globals:** use `bind_resolver_value(Resolver, Address)` for an inline
   object's address, or `bind_resolver_value(Resolver, Value)` to read a `Copy`
   value from a slot. These are not detour targets. See
@@ -225,7 +226,7 @@ Use `rust_ctables::cpp_struct` for calls dispatched through a native object's vt
 Existing `FUniqueNetId` entries at `0x28` and `0x30`:
 
 ```rust
-use crate::chivalry2::engine::FString;
+use crate::chivalry2::Engine::FString;
 
 #[rust_ctables::cpp_struct]
 pub struct FUniqueNetId {
@@ -250,10 +251,10 @@ unsafe fn read_id(id: &FUniqueNetId) -> Option<String> {
 - `ToString` explicitly models caller-provided return storage.
 - `&self` supplies the native `this` pointer.
 - Use `self: *mut Self` for raw mutable receivers when a Rust borrow is
-  inappropriate; see [FOutputDevice](src/chivalry2/engine/runtime/core/misc/output_device.rs).
-- See [FUniqueNetId](src/chivalry2/engine/runtime/core_uobject/uobject/core_online.rs)
+  inappropriate; see [FOutputDevice](src/chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs).
+- See [FUniqueNetId](src/chivalry2/Engine/Runtime/CoreUObject/UObject/CoreOnline.rs)
   for a native-table fixture test and
-  [FInternetAddr](src/chivalry2/engine/runtime/sockets/ip_address.rs) for a slot-15 call.
+  [FInternetAddr](src/chivalry2/Engine/Runtime/Sockets/IPAddress.rs) for a slot-15 call.
 
 #### Inherited vtables
 
@@ -268,7 +269,7 @@ Extend the inherited primary vtable rather than adding a second vptr.
 Existing `UObject::GetWorld` binding at byte offset `0x150`:
 
 ```rust
-use crate::chivalry2::engine::{UObjectBaseUtility, UWorld};
+use crate::chivalry2::Engine::{UObjectBaseUtility, UWorld};
 
 #[rust_ctables::cpp_struct]
 pub struct UObject {
@@ -309,7 +310,7 @@ Target the binding method from a functional module under `src/unchained/patches/
 Alternative replacement for the existing UDP hook:
 
 ```rust
-use crate::chivalry2::engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
+use crate::chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
 use crate::tools::hook_globals::cli_args;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]

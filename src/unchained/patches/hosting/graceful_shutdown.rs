@@ -1,7 +1,7 @@
 //! Unregister the server before engine shutdown.
 
 #[cfg(feature = "server_registration")]
-use crate::chivalry2::tbl::tbl_engine::UTBLEngine;
+use crate::chivalry2::TBL::TBLEngine::UTBLEngine;
 
 #[cfg(feature = "server_registration")]
 #[unchained_macros::bind_func_detour(UTBLEngine::PreExit)]

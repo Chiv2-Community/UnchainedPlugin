@@ -1,11 +1,11 @@
 //! Capture player/system chat and dispatch chat commands.
 
-use crate::chivalry2::engine::AActor;
-use crate::chivalry2::engine::AController;
-use crate::chivalry2::engine::FName;
-use crate::chivalry2::engine::FString;
-use crate::chivalry2::engine::*;
-use crate::chivalry2::tbl::{ATBLGameMode, ATBLPlayerController, ATBLPlayerState, EChatType};
+use crate::chivalry2::Engine::AActor;
+use crate::chivalry2::Engine::AController;
+use crate::chivalry2::Engine::FName;
+use crate::chivalry2::Engine::FString;
+use crate::chivalry2::Engine::*;
+use crate::chivalry2::TBL::{ATBLGameMode, ATBLPlayerController, ATBLPlayerState, EChatType};
 use crate::events::models::GameChatMessage;
 use crate::events::models::GameEvent;
 use crate::events::models::NativeChat;
@@ -87,7 +87,7 @@ pub(crate) fn has_authority() -> bool {
 /// # Safety
 /// UObjectType::from_ptr's game-thread, lifetime and layout requirements apply.
 pub(crate) unsafe fn actor_player_state(sender: &AActor) -> Option<&ATBLPlayerState> {
-    use crate::chivalry2::engine::APawn;
+    use crate::chivalry2::Engine::APawn;
     // BroadcastChat accepts either a pawn or a controller, not a PlayerState.
     unsafe {
         let object = &sender.base;

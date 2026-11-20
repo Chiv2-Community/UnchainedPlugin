@@ -2,11 +2,11 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::chivalry2::tbl::{UTBLSystemLibrary, EChatType};
-use crate::chivalry2::engine::FActorSpawnParameters;
-use crate::chivalry2::engine::FRotator;
-use crate::chivalry2::engine::TSoftClassPtr;
-use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry};
+use crate::chivalry2::TBL::{UTBLSystemLibrary, EChatType};
+use crate::chivalry2::Engine::FActorSpawnParameters;
+use crate::chivalry2::Engine::FRotator;
+use crate::chivalry2::Engine::TSoftClassPtr;
+use crate::chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry};
 use crate::unchained::blueprints::mod_assets::ArgonSDKModBase;
 use crate::unchained::blueprints::mod_assets::DA_ModMarker_C;
 use crate::unchained::blueprints::mod_assets::UModLoaderSettings_C;
@@ -14,13 +14,13 @@ use crate::unchained::blueprints::mod_assets::V2MarkerOffsets;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::chivalry2::engine::AsUObject;
-use crate::chivalry2::engine::FString;
-use crate::chivalry2::engine::FVector;
-use crate::chivalry2::engine::TArray;
-use crate::chivalry2::engine::UClass;
-use crate::chivalry2::engine::UObject;
-use crate::chivalry2::engine::UGameplayStatics;
+use crate::chivalry2::Engine::AsUObject;
+use crate::chivalry2::Engine::FString;
+use crate::chivalry2::Engine::FVector;
+use crate::chivalry2::Engine::TArray;
+use crate::chivalry2::Engine::UClass;
+use crate::chivalry2::Engine::UObject;
+use crate::chivalry2::Engine::UGameplayStatics;
 #[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
@@ -28,7 +28,7 @@ use std::io::BufWriter;
 use std::path::Path;
 
 use std::collections::{HashMap, HashSet};
-use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
+use crate::chivalry2::Engine::ESpawnActorCollisionHandlingMethod::*;
 
 
 
@@ -210,7 +210,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
     let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
     crate::resolvers::require_function_bindings(&["StaticLoadObject"])?;
-    Ok(unsafe { crate::chivalry2::engine::StaticLoadObject(
+    Ok(unsafe { crate::chivalry2::Engine::StaticLoadObject(
         object_class,
         std::ptr::null_mut(),
         wide_path.as_ptr(),
@@ -532,7 +532,7 @@ impl ModManager {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
             return;
         }
-        let text = crate::chivalry2::engine::InvariantText::new("Spawned new Mod from console");
+        let text = crate::chivalry2::Engine::InvariantText::new("Spawned new Mod from console");
         let game_mode = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
         if game_mode.is_null() {
             swarn!("No game mode; skipping spawn confirmation chat");

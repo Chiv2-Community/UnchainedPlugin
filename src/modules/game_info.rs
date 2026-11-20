@@ -1,10 +1,10 @@
 
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
-use crate::chivalry2::tbl::ATBLGameMode;
-use crate::chivalry2::engine::PlayerFlags;
-use crate::chivalry2::tbl::UTBLSystemLibrary;
-use crate::chivalry2::engine::AsUObject;
+use crate::chivalry2::TBL::ATBLGameMode;
+use crate::chivalry2::Engine::PlayerFlags;
+use crate::chivalry2::TBL::UTBLSystemLibrary;
+use crate::chivalry2::Engine::AsUObject;
 use async_trait::async_trait;
 use clap::Parser;
 use itertools::Itertools;

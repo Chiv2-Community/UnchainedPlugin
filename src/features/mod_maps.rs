@@ -470,7 +470,7 @@ fn log_registered_markers() {
         .map(|class_name| {
             // A failed query means the registry has no asset of that class.
             let count = unsafe {
-                use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+                use crate::chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
                 IAssetRegistry::asset_registry_interface().map(|registry| {
                     let mut assets = TArray::<FAssetData>::default();
                     if registry.GetAssetsByClass(
@@ -545,7 +545,7 @@ pub fn register_filtered_assets_sync() {
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
         let outcome = unsafe {
-            use crate::chivalry2::engine::{FMalloc, FString, IAssetRegistry, TArray};
+            use crate::chivalry2::Engine::{FMalloc, FString, IAssetRegistry, TArray};
             IAssetRegistry::asset_registry_interface().map(|registry| {
                 let allocator = FMalloc::global();
                 let mut files = TArray::<FString>::default();

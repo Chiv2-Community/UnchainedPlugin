@@ -3,7 +3,7 @@
 //! The SDK packages the engine's cooked Asset Registry payload under this
 //! namespaced filename; it is merged into the live registry on the game thread.
 
-use crate::chivalry2::engine::{
+use crate::chivalry2::Engine::{
     FArchive, FLargeMemoryReader, FLargeMemoryReaderStorage, FName, IAssetRegistry,
 };
 use std::fmt;

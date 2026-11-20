@@ -3,7 +3,7 @@ use UnchainedPlugin::sinfo;
 use UnchainedPlugin::features::discord::DiscordConfig;
 use UnchainedPlugin::events::combat::{CombatActor, DamageSource};
 use UnchainedPlugin::events::models::{GameChatMessage, Join, Kill, GameEvent, ChatSource, NativeChat, CommandActor, CommandSource, CommandExecuted, Damage};
-use UnchainedPlugin::chivalry2::tbl::EChatType;
+use UnchainedPlugin::chivalry2::TBL::EChatType;
 use UnchainedPlugin::features::events::EVENT_SYSTEM;
 use UnchainedPlugin::logging::log4rs::init;
 use std::io::{self, Write};

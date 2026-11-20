@@ -11,10 +11,10 @@
 
 Organize native declarations by their original source owner.
 
-- `src/chivalry2/engine/`: UE **4.25-plus** headers and engine plugins.
-- `src/chivalry2/tbl/`: native TBL owners.
-- `src/chivalry2/tbl_loading_screen/`: the separate loading-screen module.
-- `src/chivalry2/plugins/`: native game-plugin headers, including private headers.
+- `src/chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
+- `src/chivalry2/TBL/`: native TBL owners.
+- `src/chivalry2/TBLLoadingScreen/`: the separate loading-screen module.
+- `src/chivalry2/Plugins/`: native game-plugin headers, including private headers.
 - Identify the owner in the file's opening source comment.
 - Use native source and shipping PDB evidence where available.
 - Do not treat generated per-type SDK filenames as original header ownership.
@@ -26,10 +26,12 @@ Organize native declarations by their original source owner.
 Mirror source categories, modules, and header directories.
 
 - Omit `Engine/Source`, `Public`, `Private`, and `Classes`.
-- Preserve `Runtime` as `runtime` and `ThirdParty` as `third_party`.
-- Snake-case native header basenames.
-- Keep engine plugins under `chivalry2/engine/plugins/`.
-- Use `chivalry2/plugins/<plugin path>/<header>.rs` for game plugins.
+- Preserve native casing in module names, directories, and header basenames,
+  including `Runtime`, `ThirdParty`, `CoreUObject`, and `TBL`.
+- Keep the Rust root `chivalry2` lowercase. For example:
+  `chivalry2::Engine::Runtime::Core::Windows::WindowsCriticalSection`.
+- Keep engine plugins under `chivalry2/Engine/Plugins/`.
+- Use `chivalry2/Plugins/<plugin path>/<header>.rs` for game plugins.
 - Drop repeated `Source/<same module>` scaffolding in game-plugin paths.
 - Retain distinct module directories, such as `OpenAPIMerged`.
 
@@ -37,14 +39,14 @@ Engine header:
 
 ```text
 Engine/Source/Runtime/Engine/Classes/Engine/World.h
-→ src/chivalry2/engine/runtime/engine/engine/world.rs
+→ src/chivalry2/Engine/Runtime/Engine/Engine/World.rs
 ```
 
 Game-plugin header:
 
 ```text
 TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h
-→ src/chivalry2/plugins/online_subsystem_playfab/open_api_merged/open_api_client_api.rs
+→ src/chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs
 ```
 
 ## Declaration order

@@ -138,7 +138,7 @@ pub trait PlayerCountProvider: Send + Sync {
 pub struct GlobalPlayerCountProvider;
 impl PlayerCountProvider for GlobalPlayerCountProvider {
     fn get_player_count(&self) -> usize {
-        crate::chivalry2::tbl::get_human_player_count()
+        crate::chivalry2::TBL::get_human_player_count()
     }
 }
 

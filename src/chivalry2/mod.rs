@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-pub mod engine;
-pub mod plugins;
-pub mod tbl;
-pub mod tbl_loading_screen;
+pub mod Engine;
+pub mod Plugins;
+pub mod TBL;
+pub mod TBLLoadingScreen;

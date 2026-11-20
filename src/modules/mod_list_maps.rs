@@ -27,7 +27,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
         use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
         run_on_game_thread(move || {
             let assets = unsafe {
-                use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+                use crate::chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
                 IAssetRegistry::asset_registry_interface().and_then(|registry| {
                     let mut assets = TArray::<FAssetData>::default();
                     if registry.GetAssetsByPath(

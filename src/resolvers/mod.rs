@@ -142,7 +142,7 @@ mod binding_tests {
 
     #[test]
     fn udp_echo_binding_and_plugin_replacement_share_one_native_target() {
-        use crate::chivalry2::engine::runtime::online::icmp::icmp::FUDPPing;
+        use crate::chivalry2::Engine::Runtime::Online::ICMP::Icmp::FUDPPing;
         let binding = FUDPPing::__UNCHAINED_BINDING_UDPEcho.binding();
         assert_eq!(binding.name(), "UDPEcho");
         assert_eq!(inventory::iter::<FunctionBindingRegistration>.into_iter()
@@ -208,17 +208,17 @@ mod binding_tests {
 
     #[test]
     fn borrowed_binding_signatures_preserve_return_ownership() {
-        use crate::chivalry2::engine::APlayerState;
-        use crate::chivalry2::engine::FString;
-        use crate::chivalry2::engine::FText;
-        use crate::chivalry2::engine::AssetRegistryScriptInterface;
-        use crate::chivalry2::engine::UWorld;
+        use crate::chivalry2::Engine::APlayerState;
+        use crate::chivalry2::Engine::FString;
+        use crate::chivalry2::Engine::FText;
+        use crate::chivalry2::Engine::AssetRegistryScriptInterface;
+        use crate::chivalry2::Engine::UWorld;
         let _: for<'a> unsafe fn(&'a FText) -> &'a FString = FText::ToString;
         let _: for<'a> unsafe fn(*const APlayerState, &'a mut FString) -> &'a mut FString =
             APlayerState::GetPlayerName;
         let _: for<'a> unsafe fn(*const UWorld, &'a mut FString) -> &'a mut FString = UWorld::GetMapName;
         let _: for<'a> unsafe fn(&'a mut AssetRegistryScriptInterface) -> &'a mut AssetRegistryScriptInterface =
-            crate::chivalry2::engine::UAssetRegistryHelpers::GetAssetRegistry;
+            crate::chivalry2::Engine::UAssetRegistryHelpers::GetAssetRegistry;
     }
 
     #[test]

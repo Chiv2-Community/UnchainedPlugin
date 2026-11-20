@@ -1,10 +1,10 @@
 //! Permit customization and loadouts on custom servers.
 
-use crate::chivalry2::engine::{
+use crate::chivalry2::Engine::{
     FPrimaryAssetId, TSubclassOfAInventoryItem, TSubclassOfATBLCharacter,
     TSubclassOfULoadoutSelection,
 };
-use crate::chivalry2::tbl::{ATBLPlayerController, ATBLPlayerState, FOwnershipResponse};
+use crate::chivalry2::TBL::{ATBLPlayerController, ATBLPlayerState, FOwnershipResponse};
 use std::os::raw::c_void;
 
 #[unchained_macros::bind_func_detour(

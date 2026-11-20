@@ -1,10 +1,10 @@
 //! Inject map-marker loading screens and optional texture fallback.
 
-use crate::chivalry2::engine::EFindName;
-use crate::chivalry2::engine::FName;
-use crate::chivalry2::engine::FSoftObjectPath;
-use crate::chivalry2::engine::FString;
-use crate::chivalry2::tbl_loading_screen::map_specific_loading_screen_config::*;
+use crate::chivalry2::Engine::EFindName;
+use crate::chivalry2::Engine::FName;
+use crate::chivalry2::Engine::FSoftObjectPath;
+use crate::chivalry2::Engine::FString;
+use crate::chivalry2::TBLLoadingScreen::MapSpecificLoadingScreenConfig::*;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::GetDataForMap)]

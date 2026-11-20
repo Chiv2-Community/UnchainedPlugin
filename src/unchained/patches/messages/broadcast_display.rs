@@ -1,12 +1,12 @@
 //! Localized broadcast presentation.
 
-use crate::chivalry2::engine::FLinearColor;
-use crate::chivalry2::engine::FName;
-use crate::chivalry2::engine::FString;
-use crate::chivalry2::engine::FText;
-use crate::chivalry2::engine::InvariantText;
-use crate::chivalry2::tbl::tbl_player_controller::*;
-use crate::chivalry2::tbl::{EChatType, UTBLGameInstance};
+use crate::chivalry2::Engine::FLinearColor;
+use crate::chivalry2::Engine::FName;
+use crate::chivalry2::Engine::FString;
+use crate::chivalry2::Engine::FText;
+use crate::chivalry2::Engine::InvariantText;
+use crate::chivalry2::TBL::TBLPlayerController::*;
+use crate::chivalry2::TBL::{EChatType, UTBLGameInstance};
 use crate::events::broadcast_message::game_chat::broadcast_parts;
 use std::os::raw::c_void;
 
@@ -51,11 +51,11 @@ fn display_parts(channel: u32, message: &str) -> Option<(&str, &str, bool, [f32;
 }
 
 fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option<()> {
-    use crate::chivalry2::engine::APlayerController;
-    use crate::chivalry2::engine::UObject;
-    use crate::chivalry2::engine::UObjectType;
-    use crate::chivalry2::engine::UPlayer;
-    use crate::chivalry2::engine::UWorld;
+    use crate::chivalry2::Engine::APlayerController;
+    use crate::chivalry2::Engine::UObject;
+    use crate::chivalry2::Engine::UObjectType;
+    use crate::chivalry2::Engine::UPlayer;
+    use crate::chivalry2::Engine::UWorld;
 
     let (title, body, is_sender_dev, origin_color) = display_parts(channel, raw)?;
     if controller.is_null() {

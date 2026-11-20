@@ -137,7 +137,7 @@ pub fn map_marker_cache() -> &'static MapMarkerCache {
 /// Must run on the game thread, after mod assets were registered.
 pub unsafe fn scan_map_markers() -> usize {
     // A failed query means no map marker is installed.
-    use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+    use crate::chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
     let marker_paths: Vec<String> = match IAssetRegistry::asset_registry_interface() {
         Ok(registry) => {
             let mut assets = TArray::<FAssetData>::default();
@@ -163,7 +163,7 @@ pub unsafe fn scan_map_markers() -> usize {
     // Offsets are per class; every map marker normally shares one class.
     let mut offsets_by_class: HashMap<usize, Option<MapMarkerOffsets>> = HashMap::new();
     for marker_path in &marker_paths {
-        let marker = crate::chivalry2::engine::UObject::get_uobject_from_path(marker_path, true);
+        let marker = crate::chivalry2::Engine::UObject::get_uobject_from_path(marker_path, true);
         if marker.is_null() {
             crate::swarn!("Could not load map marker {}", marker_path);
             continue;

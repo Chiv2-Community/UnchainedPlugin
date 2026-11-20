@@ -298,7 +298,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::unchained::patches::diagnostics` | Game diagnostics, console commands/output, save games, and optional Blueprint messages. |
 | `UnchainedPlugin::unchained::patches::loose_assets` | Optional loose-asset loading. |
 | `UnchainedPlugin::features::mod_asset_registry` | Mod Asset Registry merging. |
-| `UnchainedPlugin::chivalry2::engine::runtime::core_uobject::uobject::uobject_globals` | Native object lookups. |
+| `UnchainedPlugin::chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectGlobals` | Native object lookups. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
 | `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, registration shutdown, blocked Blueprint events, recursion limits, and listen-server compatibility. |

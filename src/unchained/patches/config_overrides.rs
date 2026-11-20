@@ -1,6 +1,6 @@
 //! Profile-specific configuration loading.
 
-use crate::chivalry2::engine::{EClassFlags, FString, UClass, UObject, TCHAR};
+use crate::chivalry2::Engine::{EClassFlags, FString, UClass, UObject, TCHAR};
 use crate::features::config_overrides::{
     resolve_profile_override_paths_for_config, LOAD_CONFIG_REENTRY,
 };
@@ -103,7 +103,7 @@ pub(crate) unsafe fn load_config_detour(
 #[unchained_macros::bind_func_detour(UClass::GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
 pub(crate) unsafe fn get_config_name_detour(
     this: *mut UClass,
-    storage: *mut crate::chivalry2::engine::FString,
-) -> *mut crate::chivalry2::engine::FString {
+    storage: *mut crate::chivalry2::Engine::FString,
+) -> *mut crate::chivalry2::Engine::FString {
     unsafe { this.GetConfigName(storage) }
 }

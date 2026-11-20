@@ -1,7 +1,7 @@
 # Target	Resolver	Native signature before extraction	Activation condition	Feature gate
 FString::Find	FString__Find	unsafe fn find_detour (self : * const Self , needle : * const TCHAR , search_case : i32 , search_direction : i32 , start_position : i32 ,) -> i32	|| !cli_args().is_server()	
 FString::ParseIntoArray	FString__ParseIntoArray	unsafe fn parse_into_array_detour (self : * const Self , output : * mut TArray < FString > , delimiter : * const TCHAR , cull_empty : bool ,) -> i32	|| !cli_args().is_server()	
-UClass::GetConfigName	GetConfigName	unsafe fn get_config_name_detour (self : * mut Self , storage : * mut crate :: chivalry2 :: engine :: FString ,) -> * mut crate :: chivalry2 :: engine :: FString	|| crate::tools::hook_globals::cli_args().unchained_profile_location.is_some()	
+UClass::GetConfigName	GetConfigName	unsafe fn get_config_name_detour (self : * mut Self , storage : * mut crate :: chivalry2 :: Engine :: FString ,) -> * mut crate :: chivalry2 :: Engine :: FString	|| crate::tools::hook_globals::cli_args().unchained_profile_location.is_some()	
 UObject::LoadConfig	LoadConfig	unsafe fn load_config_detour (self : * mut Self , config_class : * mut UClass , filename : * mut TCHAR , propagation_flags : u32 , property_to_load : * mut c_void ,)	|| cli_args().unchained_profile_location.is_some()	
 UObject::ProcessEvent	ProcessEvent	unsafe fn process_event_detour (self : * mut Self , function : * mut UFunction , params : * mut c_void ,)	|| cli_args().apply_desync_patch	
 FFrame::KismetExecutionMessage	KismetExecutionMessage	unsafe fn kismet_execution_message_detour (text : * const TCHAR , kind : u8 , name : FName ,) -> * mut UObject	ACTIVE	# [cfg (feature = "kismet_log")]
@@ -37,10 +37,10 @@ ATBLPlayerController::ConditionalInitializeCustomizationOnServer	ATBLPlayerContr
 ATBLPlayerController::ClientReceiveLocalizedChat_Implementation	ClientReceiveLocalizedChat_Implementation	unsafe fn client_receive_localized_chat_detour (self : * mut Self , message : * const FText , channel : u32 ,)	ACTIVE	
 FTBLOnlineStats::SetStatInner	SetStatInner	unsafe fn set_stat_inner_detour (self : * mut Self , _p1 : i32 , _p2 : i32)	ACTIVE	
 UMapSpecificLoadingScreenConfig::GetDataForMap	GetDataForMap	unsafe fn get_data_for_map_detour (self : * mut Self , map_name : * mut FString , data : * mut FMapSpecificLoadingScreenConfigData ,)	ACTIVE	
-UTBLGameInstance::LoadFrontEndMap	LoadFrontEndMap	unsafe fn load_front_end_map_detour (self : * mut Self , _url : * mut crate :: chivalry2 :: engine :: FString) -> bool	ACTIVE	
-UTBLGameInstance::OnPreLoadMap	OnPreLoadMap	unsafe fn on_pre_load_map_detour (self : * mut Self , url : * mut crate :: chivalry2 :: engine :: FString)	ACTIVE	
-UTBLGameInstance::OnPostLoadMap	OnPostLoadMap	unsafe fn on_post_load_map_detour (self : * mut Self , world : * mut crate :: chivalry2 :: engine :: UWorld)	ACTIVE	
-UUserFeedbackAndBugReportsLibrary::GetGameInfo	GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: chivalry2 :: engine :: FString , world : * mut crate :: chivalry2 :: engine :: UWorld) -> * mut crate :: chivalry2 :: engine :: FString	ACTIVE	
+UTBLGameInstance::LoadFrontEndMap	LoadFrontEndMap	unsafe fn load_front_end_map_detour (self : * mut Self , _url : * mut crate :: chivalry2 :: Engine :: FString) -> bool	ACTIVE	
+UTBLGameInstance::OnPreLoadMap	OnPreLoadMap	unsafe fn on_pre_load_map_detour (self : * mut Self , url : * mut crate :: chivalry2 :: Engine :: FString)	ACTIVE	
+UTBLGameInstance::OnPostLoadMap	OnPostLoadMap	unsafe fn on_post_load_map_detour (self : * mut Self , world : * mut crate :: chivalry2 :: Engine :: UWorld)	ACTIVE	
+UUserFeedbackAndBugReportsLibrary::GetGameInfo	GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: chivalry2 :: Engine :: FString , world : * mut crate :: chivalry2 :: Engine :: UWorld) -> * mut crate :: chivalry2 :: Engine :: FString	ACTIVE	
 TBLUtility::ExecuteConsoleCommand	ExecuteConsoleCommand	unsafe fn execute_console_command_detour (command : * const FString)	ACTIVE	
 UTBLEngine::PreExit	UTBLEngine__PreExit	unsafe fn pre_exit_detour (self : * mut Self)	ACTIVE	# [cfg (feature = "server_registration")]
 FUDPPing::UDPEcho	UDPEcho	unsafe fn udp_echo(endpoint: *mut FString, timeout: f32, callback: *mut TFunctionFIcmpEchoResult)	|| !cli_args().is_server()	

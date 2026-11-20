@@ -239,7 +239,10 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 fn patches_follow_plugin_purposes_not_native_header_paths() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/patches");
     assert!(!root.with_file_name("detours").exists(), "detours belong in patches");
-    for old_root in ["engine", "plugins", "tbl", "tbl_loading_screen"] {
+    for old_root in [
+        "engine", "plugins", "tbl", "tbl_loading_screen",
+        "Engine", "Plugins", "TBL", "TBLLoadingScreen",
+    ] {
         assert!(!root.join(old_root).exists(), "native hierarchy in patches: {old_root}");
     }
     let desync = syn::parse_file(
@@ -486,6 +489,43 @@ fn project_binding_resolvers_match_their_targets() {
 }
 
 #[test]
+fn native_modules_preserve_header_casing() {
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).unwrap();
+            if path.file_name().unwrap() != "mod.rs" {
+                let header = source.lines().next().unwrap().split_once(".h").unwrap().0;
+                let basename = header.rsplit('/').next().unwrap();
+                assert_eq!(path.file_stem().unwrap(), basename, "{}", path.display());
+            }
+            let file = syn::parse_file(&source).unwrap();
+            for item in file.items {
+                let Item::Mod(module) = item else { continue };
+                if module.content.is_some() {
+                    continue;
+                }
+                let name = module.ident.to_string();
+                assert!(
+                    directory.join(format!("{name}.rs")).is_file()
+                        || directory.join(&name).join("mod.rs").is_file(),
+                    "{}: module {name} must match its native file's casing",
+                    path.display(),
+                );
+            }
+        }
+    }
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+}
+
+#[test]
 fn engine_bindings_preserve_native_source_categories() {
     fn check(root: &Path, directory: &Path) {
         for entry in std::fs::read_dir(directory).unwrap() {
@@ -502,11 +542,11 @@ fn engine_bindings_preserve_native_source_categories() {
             let source = std::fs::read_to_string(&path).unwrap();
             let header = source.lines().next().unwrap();
             let category = if header.contains("Engine/Source/Runtime/") {
-                "runtime"
+                "Runtime"
             } else if header.contains("Engine/Source/ThirdParty/") {
-                "third_party"
+                "ThirdParty"
             } else if header.contains("Engine/Plugins/") {
-                "plugins"
+                "Plugins"
             } else {
                 panic!("missing native source category: {}", path.display());
             };
@@ -517,7 +557,7 @@ fn engine_bindings_preserve_native_source_categories() {
             );
         }
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2/engine");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2/Engine");
     check(&root, &root);
 }
 
@@ -589,22 +629,22 @@ fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
 fn tbl_declarations_follow_original_native_header_owners() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2");
     for (path, names) in [
-        ("tbl/player_types.rs", &["EChatType", "EFaction"][..]),
-        ("tbl/tbl_types.rs", &["FDamageTakenEvent", "UGameplay"][..]),
+        ("TBL/PlayerTypes.rs", &["EChatType", "EFaction"][..]),
+        ("TBL/TBLTypes.rs", &["FDamageTakenEvent", "UGameplay"][..]),
         (
-            "tbl/tbl_player_controller.rs",
+            "TBL/TBLPlayerController.rs",
             &["ATBLPlayerController", "FOwnershipResponse"][..],
         ),
-        ("tbl/abilities/damage_source.rs", &["UDamageSource"][..]),
-        ("tbl/game/tbl_game_state.rs", &["ATBLGameState"][..]),
-        ("tbl/online/tbl_online_stats.rs", &["FTBLOnlineStats"][..]),
-        ("tbl/tbl_utility_library.rs", &["TBLUtility"][..]),
+        ("TBL/Abilities/DamageSource.rs", &["UDamageSource"][..]),
+        ("TBL/Game/TBLGameState.rs", &["ATBLGameState"][..]),
+        ("TBL/Online/TBLOnlineStats.rs", &["FTBLOnlineStats"][..]),
+        ("TBL/TBLUtilityLibrary.rs", &["TBLUtility"][..]),
         (
-            "tbl/ui/user_feedback_and_bug_reports_library.rs",
+            "TBL/UI/UserFeedbackAndBugReportsLibrary.rs",
             &["UUserFeedbackAndBugReportsLibrary"][..],
         ),
         (
-            "tbl_loading_screen/map_specific_loading_screen_config.rs",
+            "TBLLoadingScreen/MapSpecificLoadingScreenConfig.rs",
             &["UMapSpecificLoadingScreenConfig", "FMapSpecificLoadingScreenConfigData"][..],
         ),
     ] {
@@ -619,7 +659,7 @@ fn tbl_declarations_follow_original_native_header_owners() {
         }
     }
     // Source-owner directories are legitimate native modules, not plugin policies.
-    for path in ["tbl/online/mod.rs", "tbl/ui/mod.rs"] {
+    for path in ["TBL/Online/mod.rs", "TBL/UI/mod.rs"] {
         assert!(root.join(path).is_file());
     }
 }
@@ -627,16 +667,16 @@ fn tbl_declarations_follow_original_native_header_owners() {
 #[test]
 fn playfab_native_types_follow_header_owners() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../src/chivalry2/plugins/online_subsystem_playfab");
+        .join("../../src/chivalry2/Plugins/OnlineSubsystemPlayFab");
     for (path, name) in [
-        ("online_auth_interface_playfab.rs", "FOnlineAuthPlayFab"),
+        ("OnlineAuthInterfacePlayFab.rs", "FOnlineAuthPlayFab"),
         (
-            "online_session_interface_playfab.rs",
+            "OnlineSessionInterfacePlayFab.rs",
             "FOnlineSessionPlayFab",
         ),
-        ("open_api_merged/open_api_client_api.rs", "OpenAPIClientAPI"),
+        ("OpenAPIMerged/OpenAPIClientApi.rs", "OpenAPIClientAPI"),
         (
-            "playfab_cpp/core/playfab_result_handler.rs",
+            "PlayFabCpp/Core/PlayFabResultHandler.rs",
             "PlayFabRequestHandler",
         ),
     ] {
@@ -653,7 +693,7 @@ fn playfab_native_types_follow_header_owners() {
 fn redpoint_instruction_resolver_follows_authentication_node_owner() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
     let source = std::fs::read_to_string(root.join(
-        "chivalry2/plugins/online_subsystem_redpoint_eos/shared/authentication/nodes/log_user_into_online_subsystem_node.rs",
+        "chivalry2/Plugins/OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.rs",
     )).unwrap();
     let file = syn::parse_file(&source).unwrap();
     assert!(file.items.iter().any(|item| matches!(

@@ -29,10 +29,10 @@ Load the `create-resolver` skill before creating or changing an address resolver
 
 Keep native contracts with their source owners.
 
-- Use the appropriate `src/chivalry2/{engine,tbl,tbl_loading_screen,plugins}/*`
+- Use the appropriate `src/chivalry2/{Engine,TBL,TBLLoadingScreen,Plugins}/*`
   module, not a plugin-policy directory.
-- Preserve `runtime`, `third_party`, and native header paths; omit visibility
-  directories. Add new modules to `mod.rs`.
+- Preserve native module/header casing, including `Runtime`, `ThirdParty`, and
+  `CoreUObject`; omit visibility directories. Add new modules to `mod.rs`.
 - Put source evidence/imports first, then resolvers, then native types and impls.
 - Reuse existing types; declare only layouts supported by evidence.
 - Keep opaque types opaque. Use raw pointers where Rust borrow guarantees
