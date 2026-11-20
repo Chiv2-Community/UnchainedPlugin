@@ -66,8 +66,7 @@ Use an empty unsafe method under `runtime_bindings`.
 - Match surrounding feature gates; do not widen optional native dependencies.
 - Calls use the resolved entry before attachment, then the original trampoline.
   Calling a binding must not invoke its plugin replacement.
-- Do not add per-call readiness preflights unless preserving runtime checks from
-  `main`; required binding initialization belongs to startup.
+- Assume startup initialized required bindings.
 
 Existing static-call pattern; reuse the existing declaration rather than
 registering a second copy:

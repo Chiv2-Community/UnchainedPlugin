@@ -85,8 +85,7 @@ Call the native binding to invoke the original implementation.
 - Calling the binding from its replacement does not recurse into that replacement.
 - Bypass applies to our hook on that target, not nested callees or third-party patches.
 - To invoke plugin policy deliberately, call the plugin helper explicitly.
-- Assume required bindings are initialized at startup; avoid extra per-call
-  readiness guards unless retaining an existing runtime check from `main`.
+- Assume startup initialized required bindings.
 - Generated vtable calls dispatch through the current object table; they do not
   guarantee original-call bypass.
 - Vtable methods are not `bind_func_detour` targets. Resolve a concrete

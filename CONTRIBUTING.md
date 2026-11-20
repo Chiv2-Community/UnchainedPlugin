@@ -290,8 +290,7 @@ Target the binding method from a functional module under `src/unchained/patches/
 - The macro checks argument types, return types, and lifetime relationships
   against the binding at compile time.
 - Calling the binding invokes the original, bypassing this replacement.
-- Assume startup initialized required bindings. Do not add per-call binding or
-  detour-readiness guards unless preserving a runtime check from `main`.
+- Assume startup initialized required bindings.
 - A generated vtable method is not a `bind_func_detour` target. To intercept a
   concrete virtual implementation, resolve its entry and declare a separate
   `runtime_bindings` method. Calling through the vtable may re-enter the hook;

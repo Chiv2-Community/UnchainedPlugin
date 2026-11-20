@@ -83,9 +83,7 @@ Make original-call and lifetime decisions explicit.
 - Do not call the detour recursively or dispatch through a vtable to reach
   the original; virtual dispatch may re-enter the replacement.
 - Preserve return values unless changing them is the requested policy.
-- Assume required bindings were initialized at startup. Do not add per-call
-  readiness guards unless preserving checks present in `main`, including
-  existing fallible-call macros.
+- Assume startup initialized required bindings.
 - Preserve pointer validity, thread affinity, ownership, and callback lifetimes.
 - Do not free engine-owned borrowed buffers or retain pointers beyond validity.
 - Do not let Rust panics unwind through native callers; use appropriate guards
