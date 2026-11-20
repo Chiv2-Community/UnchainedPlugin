@@ -255,7 +255,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
         ("hosting/playable_listen.rs", &["UGameplay::is_dedicated_server"][..]),
         ("hosting/server_init.rs", &["UGameEngine::dedicated_server_init"][..]),
-        ("hosting/server_registration.rs", &["UTBLEngine::pre_exit"][..]),
+        ("hosting/graceful_shutdown.rs", &["UTBLEngine::pre_exit"][..]),
         ("ownership_overrides.rs", &[
             "ATBLPlayerController::get_ownership_from_player_controller_and_state",
             "ATBLPlayerController::can_use_loadout_item",
