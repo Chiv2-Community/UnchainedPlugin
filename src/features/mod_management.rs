@@ -2,7 +2,7 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::Chivalry2::TBL::{UTBLSystemLibrary, EChatType};
+use crate::Chivalry2::TBL::{UTBLSystemLibrary, EChatType::EChatType};
 use crate::Chivalry2::Engine::FActorSpawnParameters;
 use crate::Chivalry2::Engine::FRotator;
 use crate::Chivalry2::Engine::TSoftClassPtr;

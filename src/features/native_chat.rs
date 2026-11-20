@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::*;
+use crate::Chivalry2::TBL::EChatType::EChatType;
 use tokio_util::sync::CancellationToken;
 
 // Helper functions

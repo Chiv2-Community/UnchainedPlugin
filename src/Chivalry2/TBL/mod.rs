@@ -3,7 +3,6 @@
 pub use Abilities::DamageSource::*;
 pub use DeathDamageTakenEvent::*;
 pub use Game::TBLGameState::*;
-pub use PlayerTypes::*;
 pub use TBLCharacter::*;
 pub use TBLCharacterBase::*;
 pub use TBLGameInstance::UTBLGameInstance;
@@ -20,7 +19,8 @@ pub mod EKillReason;
 pub mod DeathDamageTakenEvent;
 pub mod Game;
 pub mod Online;
-pub mod PlayerTypes;
+pub mod EChatType;
+pub mod EFaction;
 pub mod TBLCharacter;
 pub mod TBLCharacterBase;
 pub mod TBLEngine;

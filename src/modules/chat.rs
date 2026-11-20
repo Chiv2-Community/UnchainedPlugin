@@ -1,7 +1,7 @@
 use crate::events::bus::Subscriber;
 use crate::events::models::{ChatSource, ChatType, GameChatMessage, GameEvent, NativeChat};
 use crate::features::discord::{outbound::DiscordOutbox, SharedDiscordConfig};
-use crate::Chivalry2::TBL::EChatType;
+use crate::Chivalry2::TBL::EChatType::EChatType;
 use async_trait::async_trait;
 use futures::future::join_all;
 use serenity::all::CreateMessage;
@@ -133,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn logging_sink_preserves_raw_chat_and_source_metadata() {
-        use crate::Chivalry2::TBL::EFaction;
+        use crate::Chivalry2::TBL::EFaction::EFaction;
         use log4rs::encode::{Encode, writer::simple::SimpleWriter};
         use std::sync::Mutex as StdMutex;
         struct Capture(StdMutex<Vec<serde_json::Value>>);

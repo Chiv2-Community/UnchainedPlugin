@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::FText;
 use crate::Chivalry2::Engine::TArray;
 use crate::Chivalry2::Engine::{AActor, AController, FUniqueNetIdRepl};
-use crate::Chivalry2::TBL::EChatType;
+use crate::Chivalry2::TBL::EChatType::EChatType;
 use std::ffi::c_void;
 
 define_pattern_resolver!(

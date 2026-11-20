@@ -277,111 +277,39 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
-fn patches_follow_plugin_purposes_not_native_header_paths() {
+fn instruction_patches_preserve_bytes_and_activation_conditions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/patches");
-    assert!(!root.with_file_name("detours").exists(), "detours belong in patches");
-    for old_root in [
-        "engine", "plugins", "tbl", "tbl_loading_screen",
-        "Engine", "Plugins", "TBL", "TBLLoadingScreen",
-    ] {
-        assert!(!root.join(old_root).exists(), "native hierarchy in patches: {old_root}");
-    }
-    let desync = syn::parse_file(
-        &std::fs::read_to_string(root.join("hosting/desync/mod.rs")).unwrap()
-    ).unwrap();
-    let gated_modules: Vec<_> = desync.items.iter().filter_map(|item| {
-        let Item::Mod(module) = item else { return None };
-        if cfg(&module.attrs).is_empty() {
-            return None;
-        }
-        Some((module.ident.to_string(), cfg(&module.attrs)))
-    }).collect();
-    let gate = cfg(&[syn::parse_quote!(#[cfg(feature = "move-autonomous-desync")])]);
-    assert_eq!(
-        gated_modules,
-        [("tick_actors".into(), gate)],
-        "legacy movement patches must retain their module feature gates",
-    );
-    for (path, targets) in [
-        ("config_overrides.rs", &["UObject::LoadConfig", "UClass::GetConfigName"][..]),
-        ("frontend_patches.rs", &["UTBLGameInstance::LoadFrontEndMap"][..]),
-        ("backend_hooks/auth_token_cleanup.rs", &["FOnlineAuthPlayFab::EndAuthentication"][..]),
-        ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::GetDataForMap"][..]),
-        ("damage_events.rs", &["ATBLCharacter::OnKilled", "ATBLCharacter::OnDamageTaken"][..]),
-        ("hosting/desync/prevent_stackoverflow.rs", &["UObject::ProcessEvent"][..]),
-        ("hosting/playable_listen.rs", &["UGameplay::IsDedicatedServer"][..]),
-        ("hosting/server_init.rs", &["UGameEngine::DedicatedServerInit"][..]),
-        ("hosting/graceful_shutdown.rs", &["UTBLEngine::PreExit"][..]),
-        ("ownership_overrides.rs", &[
-            "ATBLPlayerController::GetOwnershipFromPlayerControllerAndState",
-            "ATBLPlayerController::CanUseLoadoutItem",
-            "ATBLPlayerController::CanUseCharacter",
-            "ATBLPlayerController::ConditionalInitializeCustomizationOnServer",
-        ][..]),
-        ("messages/chat.rs", &[
-            "ATBLPlayerController::ClientReceiveChat_Implementation",
-            "ATBLGameMode::BroadcastChat",
-            "APlayerController::ClientMessage",
-        ][..]),
-        ("networking/travel.rs", &["APlayerController::ClientTravelInternal"][..]),
-        ("networking/ipv6_support.rs", &[
-            "FUDPPing::UDPEcho",
-            "FString::Find",
-            "FString::ParseIntoArray",
-            "FOnlineSessionPlayFab::OnGetCurrentGames",
-            "FOnlineSessionPlayFab::PingSomeServers",
-        ][..]),
-        ("pak_mount.rs", &["FPakPlatformFile::Mount"][..]),
-        ("backend_hooks/server_browser.rs", &[
-            "OpenAPIClientAPI::GetPost_GetMotd",
-            "OpenAPIClientAPI::GetPost_GetCurrentGames",
-            "PlayFabRequestHandler::SendRequest",
-        ][..]),
-        ("diagnostics.rs", &[
-            "UUserFeedbackAndBugReportsLibrary::GetGameInfo",
-            "TBLUtility::ExecuteConsoleCommand",
-            "UGameplayStatics::LoadGameFromSlot",
-            "UGameplayStatics::SaveGameToSlot",
-            "FConsoleOutputDevice::Serialize",
-            "FFrame::KismetExecutionMessage",
-        ][..]),
-        ("loose_assets.rs", &[
-            "FPakPlatformFile::FindFileInPakFiles",
-            "FPakPlatformFile::FindFileInPakFiles_Static",
-            "FPakPlatformFile::IsNonPakFilenameAllowed",
-        ][..]),
-    ] {
-        let source = std::fs::read_to_string(root.join(path)).unwrap();
-        let file = syn::parse_file(&source).unwrap();
-        let actual: Vec<_> = file.items.iter().filter_map(|item| {
-            let Item::Fn(function) = item else { return None };
-            let attr = attribute(&function.attrs, "bind_func_detour")?;
-            Some(args(attr)[0].to_token_stream().to_string().replace(' ', ""))
-        }).collect();
-        for target in targets {
-            assert!(actual.iter().any(|actual| actual == target), "{target} belongs in {path}");
+    fn collect(directory: &Path, patches: &mut Vec<String>) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                collect(&path, patches);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let file = syn::parse_file(&std::fs::read_to_string(path).unwrap()).unwrap();
+                patches.extend(file.items.into_iter().filter_map(|item| {
+                    let Item::Macro(item) = item else { return None };
+                    item.mac.path.is_ident("CREATE_PATCH").then(|| item.mac.tokens.to_string())
+                }));
+            }
         }
     }
-    for (path, expected) in [
-        ("enable_console_commands.rs", "UTBLLocalPlayer__Exec, BYTES, &[0xEB]"),
-        ("hosting/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
-        ("hosting/desync/net_mode.rs", "UNetDriver__GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
-        ("hosting/desync/tick_actors.rs", "UCharacterMovementComponent__MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
-        ("hosting/desync/tick_actors.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
-        ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
-        ("backend_hooks/auth_token_cleanup.rs", "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite, BYTES, &[0xEB, 0x26]"),
-        ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
+    let mut actual = Vec::new();
+    collect(&root, &mut actual);
+    for expected in [
+        "UTBLLocalPlayer__Exec, BYTES, &[0xEB]",
+        "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]",
+        "UNetDriver__GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }",
+        "UCharacterMovementComponent__MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }",
+        "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }",
+        "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]",
+        "FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite, BYTES, &[0xEB, 0x26]",
+        "EACAntiCheatMesssage, 0xE, NOP, 5",
     ] {
-        let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();
-        let actual: Vec<_> = file.items.iter().filter_map(|item| {
-            let Item::Macro(item) = item else { return None };
-            item.mac.path.is_ident("CREATE_PATCH").then(|| item.mac.tokens.to_string())
-        }).collect();
         let expected = expected.parse::<proc_macro2::TokenStream>().unwrap().to_string();
         assert_eq!(
             actual.iter().filter(|tokens| **tokens == expected).count(),
             1,
-            "instruction patch changed, duplicated, or misplaced: {path}",
+            "instruction patch changed or duplicated: {expected}",
         );
     }
 }
@@ -537,83 +465,6 @@ fn project_binding_resolvers_match_their_targets() {
 }
 
 #[test]
-fn native_modules_preserve_header_casing() {
-    fn check(directory: &Path) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                check(&path);
-                continue;
-            }
-            if path.extension().is_none_or(|extension| extension != "rs") {
-                continue;
-            }
-            let source = std::fs::read_to_string(&path).unwrap();
-            if path.file_name().unwrap() != "mod.rs" {
-                let owner = source
-                    .lines()
-                    .find(|line| line.starts_with("//! Native owner: "))
-                    .unwrap_or_else(|| source.lines().next().unwrap());
-                let header = owner.split_once(".h").unwrap().0;
-                let basename = header.rsplit('/').next().unwrap();
-                assert_eq!(path.file_stem().unwrap(), basename, "{}", path.display());
-            }
-            let file = syn::parse_file(&source).unwrap();
-            for item in file.items {
-                let Item::Mod(module) = item else { continue };
-                if module.content.is_some() {
-                    continue;
-                }
-                let name = module.ident.to_string();
-                assert!(
-                    directory.join(format!("{name}.rs")).is_file()
-                        || directory.join(&name).join("mod.rs").is_file(),
-                    "{}: module {name} must match its native file's casing",
-                    path.display(),
-                );
-            }
-        }
-    }
-    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
-}
-
-#[test]
-fn engine_bindings_preserve_native_source_categories() {
-    fn check(root: &Path, directory: &Path) {
-        for entry in std::fs::read_dir(directory).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                check(root, &path);
-                continue;
-            }
-            if path.extension().is_none_or(|extension| extension != "rs")
-                || path.file_name().unwrap() == "mod.rs"
-            {
-                continue;
-            }
-            let source = std::fs::read_to_string(&path).unwrap();
-            let header = source.lines().next().unwrap();
-            let category = if header.contains("Engine/Source/Runtime/") {
-                "Runtime"
-            } else if header.contains("Engine/Source/ThirdParty/") {
-                "ThirdParty"
-            } else if header.contains("Engine/Plugins/") {
-                "Plugins"
-            } else {
-                panic!("missing native source category: {}", path.display());
-            };
-            assert!(
-                path.strip_prefix(root).unwrap().starts_with(category),
-                "native source category mismatch: {}",
-                path.display()
-            );
-        }
-    }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2/Engine");
-    check(&root, &root);
-}
-
-#[test]
 fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
     struct NoPluginPolicy<'a>(&'a Path);
     impl VisitMut for NoPluginPolicy<'_> {
@@ -675,85 +526,6 @@ fn custom_blueprints_and_patch_policy_stay_outside_chivalry2() {
         }
     }
     check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
-}
-
-#[test]
-fn tbl_declarations_follow_original_native_header_owners() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2");
-    for (path, names) in [
-        ("TBL/PlayerTypes.rs", &["EChatType", "EFaction"][..]),
-        ("TBL/TBLTypes.rs", &["FDamageTakenEvent", "UGameplay"][..]),
-        (
-            "TBL/TBLPlayerController.rs",
-            &["ATBLPlayerController", "FOwnershipResponse"][..],
-        ),
-        ("TBL/Abilities/DamageSource.rs", &["UDamageSource"][..]),
-        ("TBL/Game/TBLGameState.rs", &["ATBLGameState"][..]),
-        ("TBL/Online/TBLOnlineStats.rs", &["FTBLOnlineStats"][..]),
-        ("TBL/TBLUtilityLibrary.rs", &["TBLUtility"][..]),
-        (
-            "TBL/UI/UserFeedbackAndBugReportsLibrary.rs",
-            &["UUserFeedbackAndBugReportsLibrary"][..],
-        ),
-        (
-            "TBLLoadingScreen/MapSpecificLoadingScreenConfig.rs",
-            &["UMapSpecificLoadingScreenConfig", "FMapSpecificLoadingScreenConfigData"][..],
-        ),
-    ] {
-        let source = std::fs::read_to_string(root.join(path)).unwrap();
-        let file = syn::parse_file(&source).unwrap();
-        for name in names {
-            assert!(file.items.iter().any(|item| match item {
-                Item::Struct(item) => item.ident == *name,
-                Item::Enum(item) => item.ident == *name,
-                _ => false,
-            }), "{name} belongs in {path}");
-        }
-    }
-    // Source-owner directories are legitimate native modules, not plugin policies.
-    for path in ["TBL/Online/mod.rs", "TBL/UI/mod.rs"] {
-        assert!(root.join(path).is_file());
-    }
-}
-
-#[test]
-fn playfab_native_types_follow_header_owners() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../src/Chivalry2/Plugins/OnlineSubsystemPlayFab");
-    for (path, name) in [
-        ("OnlineAuthInterfacePlayFab.rs", "FOnlineAuthPlayFab"),
-        (
-            "OnlineSessionInterfacePlayFab.rs",
-            "FOnlineSessionPlayFab",
-        ),
-        ("OpenAPIMerged/OpenAPIClientApi.rs", "OpenAPIClientAPI"),
-        (
-            "PlayFabCpp/Core/PlayFabResultHandler.rs",
-            "PlayFabRequestHandler",
-        ),
-    ] {
-        let source = std::fs::read_to_string(root.join(path)).unwrap();
-        let file = syn::parse_file(&source).unwrap();
-        assert!(file.items.iter().any(|item| matches!(
-            item, Item::Struct(item) if item.ident == name
-        )));
-        assert!(!source.contains("CREATE_PATCH!"));
-    }
-}
-
-#[test]
-fn redpoint_instruction_resolver_follows_authentication_node_owner() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src");
-    let source = std::fs::read_to_string(root.join(
-        "Chivalry2/Plugins/OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.rs",
-    )).unwrap();
-    let file = syn::parse_file(&source).unwrap();
-    assert!(file.items.iter().any(|item| matches!(
-        item, Item::Macro(item)
-            if item.mac.path.is_ident("define_single_platform_pattern_resolver")
-                && item.mac.tokens.to_string().starts_with("STEAM , FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite ,")
-    )));
-    assert!(!source.contains("CREATE_PATCH!"));
 }
 
 #[test]

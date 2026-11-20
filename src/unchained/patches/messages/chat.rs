@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::AController;
 use crate::Chivalry2::Engine::FName;
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::*;
-use crate::Chivalry2::TBL::{ATBLGameMode, ATBLPlayerController, ATBLPlayerState, EChatType};
+use crate::Chivalry2::TBL::{ATBLGameMode, ATBLPlayerController, ATBLPlayerState, EChatType::EChatType};
 use crate::events::models::GameChatMessage;
 use crate::events::models::GameEvent;
 use crate::events::models::NativeChat;

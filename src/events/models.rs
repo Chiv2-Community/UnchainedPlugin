@@ -1,6 +1,6 @@
 use serenity::all::{RoleId, UserId};
 use crate::features::discord::DiscordConfig;
-use crate::Chivalry2::TBL::{EChatType, EFaction};
+use crate::Chivalry2::TBL::{EChatType::EChatType, EFaction::EFaction};
 use strum::{Display, IntoStaticStr};
 use itertools::Itertools;
 use std::fmt;

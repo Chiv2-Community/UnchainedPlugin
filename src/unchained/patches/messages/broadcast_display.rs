@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::FText;
 use crate::Chivalry2::Engine::InvariantText;
 use crate::Chivalry2::TBL::TBLPlayerController::*;
-use crate::Chivalry2::TBL::{EChatType, UTBLGameInstance};
+use crate::Chivalry2::TBL::{EChatType::EChatType, UTBLGameInstance};
 use crate::events::broadcast_message::game_chat::broadcast_parts;
 use std::os::raw::c_void;
 
