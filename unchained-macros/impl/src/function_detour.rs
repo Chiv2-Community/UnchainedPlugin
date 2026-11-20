@@ -10,37 +10,27 @@ fn binding_documentation(
     let name = &function.sig.ident;
     let mut declaration = function.clone();
     declaration.attrs.clear();
-    let attribute = if require_resolver {
-        quote!(bind_resolved_func)
-    } else {
-        quote!(bind_resolved_request_function)
-    };
-    declaration.attrs.push(syn::parse_quote!(#[#attribute(#resolver)]));
-    let source = prettyplease::unparse(&syn::parse2(quote! {
-        #[unchained_macros::runtime_bindings]
-        impl #self_ty {
-            #declaration
-        }
-    })?);
+    let source = prettyplease::unparse(&syn::parse2(quote!(#declaration))?);
+    let signature = source.trim_end().strip_suffix("{}")
+        .expect("Native declaration has an empty body").trim_end();
+    let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let resolution = resolution_documentation(resolver, require_resolver);
     let documentation = format!(
-        "# Native detour target\n\n\
-         Native binding: [`Self::{name}`](Self::{name}).\n\n\
-         When installed and enabled, a detour overrides this native method for calls \
-         originating in game code. Calls through the Rust native binding invoke the \
-         original implementation, using its trampoline after attachment, not the detour.\n\n\
-         ## Native binding declaration\n\n```rust\n{source}```\n\n\
-         {resolution}"
+        "Overrides in-game calls to [`{native_name}`](Self::{name}), \
+         after resolving it with {resolution}.\n\n\
+         Invoking `{native_name}` in this project directly skips this detour.\n\n\
+         ```rust\n{signature};\n```"
     );
     Ok(syn::LitStr::new(&documentation, name.span()))
 }
 
 fn resolution_documentation(resolver: &Path, require_resolver: bool) -> String {
-    let resolver = resolver.to_token_stream().to_string().replace(' ', "");
+    let name = &resolver.segments.last().unwrap().ident;
+    let path = resolver.to_token_stream().to_string().replace(' ', "");
     if require_resolver {
-        format!("Resolver: [`{resolver}`]({resolver}).")
+        format!("[`{name}`]({path})")
     } else {
-        format!("Request offset-registry key: `{resolver}` (not a Rust resolver type).")
+        format!("`{name}` (offset-registry key; not a Rust resolver type)")
     }
 }
 
@@ -111,7 +101,7 @@ pub(super) fn expand_binding(
         }
     });
     let mut expanded = function.clone();
-    expanded.attrs.push(syn::parse_quote!(#[doc = #documentation]));
+    expanded.attrs.insert(0, syn::parse_quote!(#[doc = #documentation]));
     expanded.block = Box::new(syn::parse2(quote!({
         #resolver_check
         let native: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
@@ -180,10 +170,9 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let documentation = syn::LitStr::new(
         &format!(
             "## Native detour\n\n\
-             Overrides [`{native_link}`]({native_link}) for calls originating in game code \
-             while this detour is installed and enabled. Calling the Rust native binding \
-             invokes the original implementation, not this replacement.\n\n\
-             See the [native binding declaration and resolver]({native_link})."
+             Overrides in-game calls to [`{native_link}`]({native_link}).\n\n\
+             Invoking `{native_link}` in this project directly skips this detour.\n\n\
+             See the [native binding and resolver]({native_link})."
         ),
         function.sig.ident.span(),
     );
@@ -317,6 +306,7 @@ mod tests {
     #[test]
     fn binding_hover_preserves_native_declaration_and_links() {
         let function = syn::parse_quote! {
+            /// Existing native safety note.
             pub(crate) unsafe fn Call<'a>(
                 self: *const Self,
                 Result: &'a mut FString,
@@ -327,16 +317,15 @@ mod tests {
         ).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(documentation(&descriptor.attrs).is_empty());
-        assert!(docs.contains("[`Self::Call`](Self::Call)"));
-        assert!(docs.contains("#[unchained_macros::runtime_bindings]\nimpl Native"));
-        assert!(docs.contains("#[bind_resolved_func(self::Native__Call)]"));
+        assert!(docs.starts_with("Overrides in-game calls to [`Native::Call`](Self::Call),"));
         assert!(docs.contains("pub(crate) unsafe fn Call<'a>("));
         assert!(docs.contains("self: *const Self"));
         assert!(docs.contains("Result: &'a mut FString"));
         assert!(docs.contains("-> &'a mut FString"));
-        assert!(docs.contains("[`self::Native__Call`](self::Native__Call)"));
-        assert!(docs.contains("originating in game code"));
-        assert!(docs.contains("not the detour"));
+        assert!(docs.contains("after resolving it with [`Native__Call`](self::Native__Call)."));
+        assert!(docs.contains("Invoking `Native::Call` in this project directly skips this detour."));
+        assert!(docs.contains("Existing native safety note."));
+        assert!(!docs.contains("impl Native"));
     }
 
     #[test]
@@ -348,8 +337,7 @@ mod tests {
             quote!(GetPost_Example), &function, &syn::parse_quote!(Client), false,
         ).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(docs.contains("#[bind_resolved_request_function(GetPost_Example)]"));
-        assert!(docs.contains("Request offset-registry key: `GetPost_Example`"));
+        assert!(docs.contains("after resolving it with `GetPost_Example` (offset-registry key;"));
         assert!(!docs.contains("](GetPost_Example)"));
     }
 
@@ -373,10 +361,10 @@ mod tests {
         assert!(!docs.contains("or hover"));
         assert!(docs.contains("[`model::Native::Call`](model::Native::Call)"));
         assert!(docs.contains(
-            "[native binding declaration and resolver](model::Native::Call)"
+            "[native binding and resolver](model::Native::Call)"
         ));
-        assert!(docs.contains("installed and enabled"));
-        assert!(docs.contains("original implementation, not this replacement"));
+        assert!(docs.contains("Overrides in-game calls to"));
+        assert!(docs.contains("Invoking `model::Native::Call` in this project directly skips this detour."));
     }
 
     #[test]

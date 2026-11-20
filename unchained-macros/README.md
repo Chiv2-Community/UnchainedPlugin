@@ -78,7 +78,7 @@ New production hooks declare a native binding under `#[runtime_bindings]` in
 binding declarations, replacement examples, and validation.
 
 Hover `Type::Method` inside `bind_func_detour` to see the full native binding
-declaration, a link to the native method, and its resolver name and link.
+signature, a link to the native method, and its resolver name and link.
 Request bindings identify their offset-registry key instead of linking a
 nonexistent resolver type. The detour function's hover links back to the binding.
 Go to definition on the attribute target opens the native source declaration.
