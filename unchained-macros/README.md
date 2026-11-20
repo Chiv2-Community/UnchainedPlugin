@@ -61,7 +61,7 @@ does not register a platform restriction for hooks or patches.
 ## Native bindings and detached detours
 
 New production hooks declare a native binding under `#[runtime_bindings]` in
-`src/chivalry2/*`, then target it with `#[bind_func_detour(Type::Method)]` from
+`src/Chivalry2/*`, then target it with `#[bind_func_detour(Type::Method)]` from
 `src/unchained/patches/*`. See
 [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for resolver choices,
 binding declarations, replacement examples, and validation.
