@@ -6,16 +6,15 @@ fn binding_documentation(
     self_ty: &Type,
     resolver: &Path,
     require_resolver: bool,
-) -> syn::Result<syn::LitStr> {
+) -> syn::LitStr {
     let name = &function.sig.ident;
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let resolution = resolution_documentation(resolver, require_resolver);
     let documentation = format!(
         "Native binding to [`{native_name}`](Self::{name}).\n\
-         Resolved by {resolution}.\n\n\
-         Direct calls invoke the original implementation, bypassing detours."
+         Resolved by {resolution}."
     );
-    Ok(syn::LitStr::new(&documentation, name.span()))
+    syn::LitStr::new(&documentation, name.span())
 }
 
 fn resolution_documentation(resolver: &Path, require_resolver: bool) -> String {
@@ -58,7 +57,7 @@ pub(super) fn expand_binding(
     // Keep declaration validation shared with standalone/legacy bindings.
     super::expand_binding(args.clone(), quote!(#function), require_resolver)?;
     let resolver = resolver_path(args)?;
-    let documentation = binding_documentation(function, self_ty, &resolver, require_resolver)?;
+    let documentation = binding_documentation(function, self_ty, &resolver, require_resolver);
     if !require_resolver {
         request_key(&resolver)?;
     }
@@ -165,8 +164,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         &format!(
             "## Native detour\n\n\
              Overrides in-game calls to [`{native_link}`]({native_link}).\n\n\
-             Invoking `{native_link}` in this project directly skips this detour.\n\n\
-             See the [native binding and resolver]({native_link})."
+             Invoking `{native_link}` in this project directly skips this detour."
         ),
         function.sig.ident.span(),
     );
@@ -299,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn binding_hover_identifies_native_method_resolver_and_bypass() {
+    fn binding_hover_identifies_native_method_and_resolver_without_assuming_a_detour() {
         let function = syn::parse_quote! {
             /// Existing native safety note.
             pub(crate) unsafe fn Call<'a>(
@@ -315,7 +313,7 @@ mod tests {
         assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
         assert!(docs.contains("](Self::Call).\nResolved by "));
         assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));
-        assert!(docs.contains("Direct calls invoke the original implementation, bypassing detours."));
+        assert!(!docs.contains("detours"));
         assert!(docs.contains("Existing native safety note."));
         assert!(!docs.contains("impl Native"));
         assert!(!docs.contains("Overrides in-game calls"));
@@ -353,9 +351,7 @@ mod tests {
         assert!(docs.contains(" Existing safety note."));
         assert!(!docs.contains("or hover"));
         assert!(docs.contains("[`model::Native::Call`](model::Native::Call)"));
-        assert!(docs.contains(
-            "[native binding and resolver](model::Native::Call)"
-        ));
+        assert_eq!(docs.matches("](model::Native::Call)").count(), 1);
         assert!(docs.contains("Overrides in-game calls to"));
         assert!(docs.contains("Invoking `model::Native::Call` in this project directly skips this detour."));
     }

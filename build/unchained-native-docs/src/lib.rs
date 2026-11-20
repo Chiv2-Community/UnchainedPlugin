@@ -18,6 +18,7 @@ pub const NO_CPP_SOURCES: &str = "No cpp sources available";
 const ARGON: &str = "https://github.com/Chiv2-Community/ArgonSDK/blob/main";
 const UE: &str = "https://github.com/EpicGames/UnrealEngine/blob/4.25-plus";
 
+#[derive(Clone)]
 struct Source {
     url: String,
     local: Option<(PathBuf, PathBuf)>,
@@ -43,7 +44,6 @@ struct Binding {
 
 struct Detour {
     name: String,
-    target: String,
     notes: String,
     link: String,
     declaration: String,
@@ -231,12 +231,8 @@ fn rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
 fn native_target(path: &syn::Path) -> String {
     path.segments
         .iter()
-        .rev()
-        .take(2)
+        .skip(path.segments.len().saturating_sub(2))
         .map(|part| part.ident.to_string())
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
         .collect::<Vec<_>>()
         .join("::")
 }
@@ -330,12 +326,13 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
     rust_files(&manifest.join("src/unchained/patches"), &mut files)?;
     let mut types = Vec::new();
     let mut bindings = Vec::new();
-    let mut detours = Vec::new();
+    let mut detours: BTreeMap<String, Vec<Detour>> = BTreeMap::new();
     let mut resolvers = BTreeMap::new();
     for path in files {
         let source = fs::read_to_string(&path)?;
         let file =
             syn::parse_file(&source).with_context(|| format!("Cannot parse {}", path.display()))?;
+        let file_source = native_source(&source, &roots)?;
         for item in file.items {
             let native_type = match &item {
                 Item::Struct(item) => Some((&item.ident, &item.attrs, "class")),
@@ -346,7 +343,8 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             };
             if let Some((name, attrs, label)) = native_type {
                 if attr(attrs, "runtime_bindings").is_some() {
-                    let item_source = notes(attrs)
+                    let documentation = notes(attrs);
+                    let item_source = documentation
                         .lines()
                         .filter(|line| line.starts_with("Native source: <"))
                         .map(|line| format!("//! {line}"))
@@ -355,13 +353,13 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                     types.push(NativeType {
                         name: name.to_string(),
                         label,
-                        notes: notes(attrs)
+                        notes: documentation
                             .lines()
                             .filter(|line| !line.starts_with("Native source: <"))
                             .collect::<Vec<_>>()
                             .join("\n"),
                         source: native_source(&item_source, &roots)?
-                            .or(native_source(&source, &roots)?),
+                            .or_else(|| file_source.clone()),
                     });
                 }
             }
@@ -376,7 +374,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         )
                     }) =>
                 {
-                    let identifiers = item
+                    let mut identifiers = item
                         .mac
                         .tokens
                         .clone()
@@ -384,13 +382,12 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         .filter_map(|token| match token {
                             TokenTree::Ident(name) => Some(name.to_string()),
                             _ => None,
-                        })
-                        .collect::<Vec<_>>();
+                        });
                     let index = usize::from(
                         item.mac.path.segments.last().unwrap().ident
                             == "define_single_platform_pattern_resolver",
                     );
-                    if let Some(name) = identifiers.get(index) {
+                    if let Some(name) = identifiers.nth(index) {
                         anyhow::ensure!(
                             resolvers
                                 .insert(
@@ -414,6 +411,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         let binding = attr(&method.attrs, "bind_resolved_func")
                             .or_else(|| attr(&method.attrs, "bind_resolved_request_function"));
                         if let Some(binding) = binding {
+                            let documentation = notes(&method.attrs);
                             let resolver: syn::Path = binding.parse_args()?;
                             let resolver_name = resolver.segments.last().unwrap().ident.to_string();
                             let native_owner = resolver_name
@@ -431,15 +429,15 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                             };
                             bindings.push(Binding {
                                 target: format!("{native_owner}::{}", method.sig.ident),
-                                overload: notes(&method.attrs)
+                                overload: documentation
                                     .lines()
                                     .find_map(|line| line.strip_prefix("Native overload: "))
                                     .map(|selector| selector.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
                                 request: binding.path().segments.last().unwrap().ident
                                     == "bind_resolved_request_function",
-                                notes: notes(&method.attrs),
-                                source: native_source(&source, &roots)?,
+                                notes: documentation,
+                                source: file_source.clone(),
                                 link: file_link(&path, method.sig.ident.span().start().line)?,
                                 signature: format!("{};", text(&source, signature_span).trim()),
                             });
@@ -454,13 +452,15 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         let Some(syn::Expr::Path(target)) = args.first() else {
                             continue;
                         };
-                        detours.push(Detour {
-                            name: item.sig.ident.to_string(),
-                            target: native_target(&target.path),
-                            notes: notes(&item.attrs),
-                            link: file_link(&path, item.sig.ident.span().start().line)?,
-                            declaration: text(&source, item.span()).to_owned(),
-                        });
+                        detours
+                            .entry(native_target(&target.path))
+                            .or_default()
+                            .push(Detour {
+                                name: item.sig.ident.to_string(),
+                                notes: notes(&item.attrs),
+                                link: file_link(&path, item.sig.ident.span().start().line)?,
+                                declaration: text(&source, item.span()).to_owned(),
+                            });
                     }
                 }
                 _ => {}
@@ -471,7 +471,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
     fs::create_dir_all(&directory)?;
     let mut written = BTreeSet::new();
     for native in types {
-        let mut docs = native.notes.clone();
+        let mut docs = native.notes;
         let implementation =
             native_implementation(native.source.as_ref(), &native.name, true, &mut watches);
         append_native(
@@ -520,11 +520,11 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             "Native binding to {}.\nResolved by {resolution}",
             linked(&binding.target, source_link)
         );
-        let matching: Vec<_> = detours
-            .iter()
-            .filter(|detour| detour.target == binding.target)
-            .collect();
-        for detour in &matching {
+        let matching = detours
+            .get(&binding.target)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        for detour in matching {
             docs.push_str(&format!(
                 "\n\nOverwritten by {}.\n\n{}",
                 linked(&detour.name, &detour.link),
@@ -605,6 +605,19 @@ mod tests {
         let text = preview(&"λ".repeat(120));
         assert_eq!(text.chars().count(), 80);
         assert!(text.ends_with('…'));
+        assert_eq!(preview("first\n    second\tthird"), "first second third");
+        assert_eq!(preview(&"x".repeat(80)), "x".repeat(80));
+    }
+
+    #[test]
+    fn detour_targets_keep_only_the_native_owner_and_method() {
+        for path in [
+            syn::parse_quote!(Native::Call),
+            syn::parse_quote!(crate::Chivalry2::Native::Call),
+            syn::parse_quote!(::engine::Native::Call),
+        ] {
+            assert_eq!(native_target(&path), "Native::Call");
+        }
     }
 
     #[test]
@@ -666,12 +679,15 @@ pub struct Native;
 #[runtime_bindings]
 pub enum Faction { First, Second }
 define_pattern_resolver!(Native__Call, ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B"]);
+define_pattern_resolver!(Native__Other, ["40 53"]);
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
     /// Native overload: `() const`
     #[bind_resolved_func(Native__Call)]
     pub unsafe fn Call(&self) -> &FString {}
+    #[bind_resolved_func(Native__Other)]
+    pub unsafe fn Other(&self) {}
 }
 "#).unwrap();
         fs::write(
@@ -700,6 +716,22 @@ impl Native {
         assert!(binding.contains("Keep the receiver alive."));
         assert!(binding.contains("const FString& Native::Call() const { return Value; }"));
         assert!(!binding.contains(CONFIGURATION_NOTE));
+        let resolver_preview = binding
+            .split("```rust,ignore\n")
+            .nth(1)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap();
+        assert_eq!(resolver_preview.chars().count(), 80);
+        assert!(resolver_preview.ends_with('…'));
+        assert!(binding.contains(
+            "#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }"
+        ));
+        let other = fs::read_to_string(directory.join("binding-Native__Other.md")).unwrap();
+        assert!(!other.contains("Overwritten by"));
+        assert!(!other.contains("Detours apply only when"));
+        assert!(other.ends_with(NO_CPP_SOURCES));
         let detour = fs::read_to_string(directory.join("detour-call_detour.md")).unwrap();
         assert!(detour.contains("pub unsafe fn Call(&self) -> &FString;"));
         assert!(detour.contains("Native implementation:"));
