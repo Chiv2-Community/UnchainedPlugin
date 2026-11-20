@@ -3986,6 +3986,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "memchr",
  "proc-macro2",
  "quote",
  "serde_json",

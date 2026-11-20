@@ -243,6 +243,7 @@ fn native_implementation(
     target: &str,
     class: bool,
     watches: &mut BTreeSet<PathBuf>,
+    sources: &mut cpp::SourceIndex,
 ) -> Option<cpp::Implementation> {
     let (root, header) = source?.local.as_ref()?;
     watches.insert(root.join(header));
@@ -250,9 +251,10 @@ fn native_implementation(
         watches.insert(cpp::module_directory(&root.join(header), root));
     }
     if class {
-        cpp::find_class(root, header, target).ok().flatten()
+        sources.find_class(root, header, target).ok().flatten()
     } else {
-        cpp::find_implementation(root, header, target)
+        sources
+            .find_implementation(root, header, target)
             .ok()
             .flatten()
     }
@@ -329,6 +331,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
     let mut bindings = Vec::new();
     let mut detours: BTreeMap<String, Vec<Detour>> = BTreeMap::new();
     let mut resolvers = BTreeMap::new();
+    let mut sources = cpp::SourceIndex::new();
     for path in files {
         let source = fs::read_to_string(&path)?;
         let file =
@@ -478,13 +481,31 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             }
         }
     }
+    for binding in &bindings {
+        if let Some((root, header)) = binding
+            .source
+            .as_ref()
+            .and_then(|source| source.local.as_ref())
+        {
+            // Unavailable roots/headers retain the usual unavailable-source footer.
+            let _ = sources.plan_implementation(root, header, &binding.target);
+            if let Some(target) = &binding.rpc_implementation {
+                let _ = sources.plan_implementation(root, header, target);
+            }
+        }
+    }
     let directory = output.join("native-docs");
     fs::create_dir_all(&directory)?;
     let mut written = BTreeSet::new();
     for native in types {
         let mut docs = native.notes;
-        let implementation =
-            native_implementation(native.source.as_ref(), &native.name, true, &mut watches);
+        let implementation = native_implementation(
+            native.source.as_ref(),
+            &native.name,
+            true,
+            &mut watches,
+            &mut sources,
+        );
         append_native(
             &mut docs,
             implementation.as_ref(),
@@ -559,6 +580,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             ),
             false,
             &mut watches,
+            &mut sources,
         );
         let mut implementation_name = &binding.target;
         let mut implementation_title = "Native implementation";
@@ -569,6 +591,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                     &format!("{target}{}", binding.overload.as_deref().unwrap_or("")),
                     false,
                     &mut watches,
+                    &mut sources,
                 );
                 if related.is_some() {
                     implementation = related;

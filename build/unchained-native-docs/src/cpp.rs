@@ -1,17 +1,197 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
-use tree_sitter::{Node, Parser as CppParser};
+use tree_sitter::{Node, Parser as CppParser, Tree};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Implementation {
     pub path: PathBuf,
     pub line: usize,
     pub code: String,
+}
+
+struct SourceFile {
+    bytes: Vec<u8>,
+    declarations: Option<Declarations>,
+}
+
+struct Definition {
+    name: String,
+    line: usize,
+    range: std::ops::Range<usize>,
+    overload: Option<Vec<Vec<String>>>,
+}
+
+impl Definition {
+    fn matches(&self, target: &str) -> bool {
+        self.name == target
+            || self
+                .name
+                .strip_suffix(target)
+                .is_some_and(|prefix| prefix.ends_with("::"))
+    }
+
+    fn implementation(&self, path: &Path, source: &str) -> Implementation {
+        Implementation {
+            path: path.to_owned(),
+            line: self.line,
+            code: source[self.range.clone()].to_owned(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct Declarations {
+    classes: Vec<Definition>,
+    functions: Vec<Definition>,
+}
+
+impl SourceFile {
+    fn parse<'a>(&'a mut self, path: &Path) -> Result<(&'a str, &'a Declarations)> {
+        let source = std::str::from_utf8(&self.bytes)
+            .with_context(|| format!("Native source is not UTF-8: {}", path.display()))?;
+        if self.declarations.is_none() {
+            let tree = parse_source(source)?;
+            let mut declarations = Declarations::default();
+            class_definitions(tree.root_node(), source, &mut declarations.classes);
+            definitions(tree.root_node(), source, None, &mut declarations.functions);
+            self.declarations = Some(declarations);
+        }
+        Ok((source, self.declarations.as_ref().unwrap()))
+    }
+}
+
+/// Build-local source index. Planned module lookups share one read/parse pass.
+/// Create a fresh index after source changes; nothing persists across builds.
+#[derive(Default)]
+pub struct SourceIndex {
+    files: BTreeMap<PathBuf, SourceFile>,
+    modules: BTreeMap<PathBuf, ModuleIndex>,
+    requests: BTreeMap<PathBuf, BTreeSet<String>>,
+}
+
+struct ModuleIndex {
+    files: BTreeSet<PathBuf>,
+    functions: BTreeMap<String, std::result::Result<Vec<IndexedFunction>, String>>,
+}
+
+struct IndexedFunction {
+    definition: Definition,
+    implementation: Implementation,
+}
+
+impl SourceIndex {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn load(&mut self, path: &Path) -> Result<()> {
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.files.entry(path.to_owned())
+        {
+            entry.insert(SourceFile {
+                bytes: fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?,
+                declarations: None,
+            });
+        }
+        Ok(())
+    }
+
+    /// Register all planned method lookups before generation to batch file reads.
+    pub fn plan_implementation(&mut self, root: &Path, header: &Path, target: &str) -> Result<()> {
+        let (root, header) = native_header(root, header)?;
+        self.requests
+            .entry(module_directory(&header, &root))
+            .or_default()
+            .insert(method_name(target));
+        Ok(())
+    }
+
+    fn index_module(&mut self, module: &Path, method: &str) -> Result<()> {
+        self.requests
+            .entry(module.to_owned())
+            .or_default()
+            .insert(method.to_owned());
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            self.modules.entry(module.to_owned())
+        {
+            let mut files = BTreeSet::new();
+            cpp_files(module, &mut files)?;
+            entry.insert(ModuleIndex {
+                files,
+                functions: BTreeMap::new(),
+            });
+        }
+        let indexed = &self.modules[module];
+        let mut pending: BTreeMap<_, std::result::Result<Vec<IndexedFunction>, String>> = self
+            .requests[module]
+            .iter()
+            .filter(|method| !indexed.functions.contains_key(*method))
+            .map(|method| (method.clone(), Ok(Vec::new())))
+            .collect();
+        if pending.is_empty() {
+            return Ok(());
+        }
+        let wanted: BTreeSet<_> = pending.keys().cloned().collect();
+        for path in &indexed.files {
+            let bytes =
+                fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
+            if !pending
+                .keys()
+                .any(|method| memchr::memmem::find(&bytes, method.as_bytes()).is_some())
+            {
+                continue;
+            }
+            let parsed = (|| -> Result<Vec<Definition>> {
+                let source = std::str::from_utf8(&bytes)
+                    .with_context(|| format!("Native source is not UTF-8: {}", path.display()))?;
+                let tree = parse_source(source)?;
+                let mut found = Vec::new();
+                definitions(tree.root_node(), source, Some(&wanted), &mut found);
+                Ok(found)
+            })();
+            match parsed {
+                Ok(found) => {
+                    let source = std::str::from_utf8(&bytes).unwrap();
+                    for definition in found {
+                        let method = definition.name.rsplit("::").next().unwrap();
+                        if let Some(Ok(functions)) = pending.get_mut(method) {
+                            let implementation = definition.implementation(path, source);
+                            functions.push(IndexedFunction {
+                                definition,
+                                implementation,
+                            });
+                        }
+                    }
+                }
+                Err(error) => {
+                    for (method, functions) in &mut pending {
+                        if memchr::memmem::find(&bytes, method.as_bytes()).is_some() {
+                            *functions = Err(error.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        self.modules
+            .get_mut(module)
+            .unwrap()
+            .functions
+            .extend(pending);
+        Ok(())
+    }
+}
+
+fn method_name(target: &str) -> String {
+    let target = target.split('(').next().unwrap().trim();
+    if let Some(owner) = target.strip_suffix("::Destructor") {
+        format!("~{}", owner.rsplit("::").next().unwrap())
+    } else {
+        target.rsplit("::").next().unwrap().to_owned()
+    }
 }
 
 fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
@@ -197,7 +377,15 @@ fn parser_input(source: &str) -> Vec<u8> {
     input
 }
 
-fn class_definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec<(usize, String)>) {
+fn parse_source(source: &str) -> Result<Tree> {
+    let mut parser = CppParser::new();
+    parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
+    parser
+        .parse(parser_input(source), None)
+        .context("C++ parsing was cancelled")
+}
+
+fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) {
     if matches!(
         node.kind(),
         "class_specifier" | "struct_specifier" | "union_specifier" | "enum_specifier"
@@ -212,29 +400,29 @@ fn class_definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec
             if closed {
                 if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source)
                 {
-                    if name == target || name.ends_with(&format!("::{target}")) {
-                        let declaration = node
-                            .parent()
-                            .filter(|parent| parent.kind() == "template_declaration")
-                            .unwrap_or(node);
-                        let mut end = declaration.end_byte();
-                        let suffix = &source[end..];
-                        let whitespace = suffix.len() - suffix.trim_start().len();
-                        if suffix[whitespace..].starts_with(';') {
-                            end += whitespace + 1;
-                        }
-                        found.push((
-                            declaration.start_position().row + 1,
-                            source[declaration.start_byte()..end].to_owned(),
-                        ));
+                    let declaration = node
+                        .parent()
+                        .filter(|parent| parent.kind() == "template_declaration")
+                        .unwrap_or(node);
+                    let mut end = declaration.end_byte();
+                    let suffix = &source[end..];
+                    let whitespace = suffix.len() - suffix.trim_start().len();
+                    if suffix[whitespace..].starts_with(';') {
+                        end += whitespace + 1;
                     }
+                    found.push(Definition {
+                        name,
+                        line: declaration.start_position().row + 1,
+                        range: declaration.start_byte()..end,
+                        overload: None,
+                    });
                 }
             }
         }
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        class_definitions(child, source, target, found);
+        class_definitions(child, source, found);
     }
 }
 
@@ -252,55 +440,63 @@ fn native_header(root: &Path, header: &Path) -> Result<(PathBuf, PathBuf)> {
 }
 
 pub fn find_class(root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
-    let (_, header) = native_header(root, header)?;
-    let source = fs::read_to_string(&header)?;
-    let mut parser = CppParser::new();
-    parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
-    let tree = parser
-        .parse(parser_input(&source), None)
-        .context("C++ parsing was cancelled")?;
-    let mut found = Vec::new();
-    class_definitions(tree.root_node(), &source, target, &mut found);
-    if found.len() != 1 {
-        return Ok(None);
+    SourceIndex::new().find_class(root, header, target)
+}
+
+impl SourceIndex {
+    pub fn find_class(
+        &mut self,
+        root: &Path,
+        header: &Path,
+        target: &str,
+    ) -> Result<Option<Implementation>> {
+        let (_, header) = native_header(root, header)?;
+        self.load(&header)?;
+        let (source, declarations) = self.files.get_mut(&header).unwrap().parse(&header)?;
+        let mut found = declarations
+            .classes
+            .iter()
+            .filter(|definition| definition.matches(target));
+        let first = found.next();
+        Ok(if found.next().is_none() {
+            first.map(|definition| definition.implementation(&header, source))
+        } else {
+            None
+        })
     }
-    let (line, code) = found.pop().unwrap();
-    Ok(Some(Implementation {
-        path: header,
-        line,
-        code,
-    }))
 }
 
 fn definitions(
     node: Node<'_>,
     source: &str,
-    target: &str,
-    overload: Option<&Vec<Vec<String>>>,
-    found: &mut Vec<(usize, String)>,
+    wanted: Option<&BTreeSet<String>>,
+    found: &mut Vec<Definition>,
 ) {
     if node.kind() == "function_definition" {
         if !node.has_error() && node.child_by_field_name("body").is_some() {
             if let Some(name) = qualified_name(node, source) {
-                if (name == target || name.ends_with(&format!("::{target}")))
-                    && overload.is_none_or(|key| overload_key(node, source).as_ref() == Some(key))
+                if wanted
+                    .is_some_and(|methods| !methods.contains(name.rsplit("::").next().unwrap()))
                 {
-                    let declaration = node
-                        .parent()
-                        .filter(|parent| parent.kind() == "template_declaration")
-                        .unwrap_or(node);
-                    found.push((
-                        declaration.start_position().row + 1,
-                        source[declaration.byte_range()].to_owned(),
-                    ));
+                    return;
                 }
+                let declaration = node
+                    .parent()
+                    .filter(|parent| parent.kind() == "template_declaration")
+                    .unwrap_or(node);
+                found.push(Definition {
+                    name,
+                    line: declaration.start_position().row + 1,
+                    range: declaration.byte_range(),
+                    overload: overload_key(node, source),
+                });
             }
         }
         return;
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        definitions(child, source, target, overload, found);
+        definitions(child, source, wanted, found);
     }
 }
 
@@ -309,82 +505,91 @@ pub fn find_implementation(
     header: &Path,
     target: &str,
 ) -> Result<Option<Implementation>> {
-    let (target, selector) = target
-        .split_once('(')
-        .map_or((target, None), |(name, parameters)| {
-            (name.trim(), Some(parameters))
-        });
-    anyhow::ensure!(
-        target
-            .rsplit_once("::")
-            .is_some_and(|(owner, method)| !owner.is_empty() && !method.is_empty()),
-        "Expected a Class::Method target"
-    );
-    let (root, header) = native_header(root, header)?;
-    let mut files = BTreeSet::from([header.clone()]);
-    cpp_files(&module_directory(&header, &root), &mut files)?;
-    let mut parser = CppParser::new();
-    parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
-    let overload = if let Some(selector) = selector {
-        let source = format!("void selected({selector} {{}}");
-        let tree = parser
-            .parse(&source, None)
-            .context("C++ parsing was cancelled")?;
+    SourceIndex::new().find_implementation(root, header, target)
+}
+
+impl SourceIndex {
+    pub fn find_implementation(
+        &mut self,
+        root: &Path,
+        header: &Path,
+        target: &str,
+    ) -> Result<Option<Implementation>> {
+        let (target, selector) = target
+            .split_once('(')
+            .map_or((target, None), |(name, parameters)| {
+                (name.trim(), Some(parameters))
+            });
         anyhow::ensure!(
-            !tree.root_node().has_error(),
-            "Invalid C++ overload selector"
+            target
+                .rsplit_once("::")
+                .is_some_and(|(owner, method)| !owner.is_empty() && !method.is_empty()),
+            "Expected a Class::Method target"
         );
-        let function = tree
-            .root_node()
-            .named_child(0)
-            .context("Missing overload selector")?;
-        Some(overload_key(function, &source).context("Unsupported C++ overload selector")?)
-    } else {
-        None
-    };
-    let target = if let Some(owner) = target.strip_suffix("::Destructor") {
-        format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
-    } else {
-        target.to_owned()
-    };
-    let method = target.rsplit("::").next().unwrap();
-    let mut implementations = Vec::new();
-    for path in files {
-        let bytes = fs::read(&path).with_context(|| format!("Cannot read {}", path.display()))?;
-        if !bytes
-            .windows(method.len())
-            .any(|window| window == method.as_bytes())
-        {
-            continue;
+        let (root, header) = native_header(root, header)?;
+        let module = module_directory(&header, &root);
+        let overload = if let Some(selector) = selector {
+            let source = format!("void selected({selector} {{}}");
+            let tree = parse_source(&source)?;
+            anyhow::ensure!(
+                !tree.root_node().has_error(),
+                "Invalid C++ overload selector"
+            );
+            let function = tree
+                .root_node()
+                .named_child(0)
+                .context("Missing overload selector")?;
+            Some(overload_key(function, &source).context("Unsupported C++ overload selector")?)
+        } else {
+            None
+        };
+        let target = if let Some(owner) = target.strip_suffix("::Destructor") {
+            format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
+        } else {
+            target.to_owned()
+        };
+        let method = target.rsplit("::").next().unwrap();
+        let mut implementations = Vec::new();
+        self.load(&header)?;
+        let file = self.files.get_mut(&header).unwrap();
+        if memchr::memmem::find(&file.bytes, method.as_bytes()).is_some() {
+            let (source, declarations) = file.parse(&header)?;
+            implementations.extend(
+                declarations
+                    .functions
+                    .iter()
+                    .filter(|definition| {
+                        definition.matches(&target)
+                            && overload
+                                .as_ref()
+                                .is_none_or(|key| definition.overload.as_ref() == Some(key))
+                    })
+                    .map(|definition| definition.implementation(&header, source)),
+            );
         }
-        let source = String::from_utf8(bytes).with_context(|| {
-            format!(
-                "Native implementation source is not UTF-8: {}",
-                path.display()
-            )
-        })?;
-        let tree = parser
-            .parse(parser_input(&source), None)
-            .context("C++ parsing was cancelled")?;
-        let mut found = Vec::new();
-        definitions(
-            tree.root_node(),
-            &source,
-            &target,
-            overload.as_ref(),
-            &mut found,
+        self.index_module(&module, method)?;
+        let functions = self.modules[&module].functions[method]
+            .as_ref()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        implementations.extend(
+            functions
+                .iter()
+                .filter(|function| {
+                    function.implementation.path != header
+                        && function.definition.matches(&target)
+                        && overload
+                            .as_ref()
+                            .is_none_or(|key| function.definition.overload.as_ref() == Some(key))
+                })
+                .map(|function| function.implementation.clone()),
         );
-        implementations.extend(found.into_iter().map(|(line, code)| Implementation {
-            path: path.clone(),
-            line,
-            code,
-        }));
         // Never choose an overload or preprocessor branch by directory order.
-        if implementations.len() > 1 {
-            return Ok(None);
-        }
+        Ok(if implementations.len() == 1 {
+            implementations.pop()
+        } else {
+            None
+        })
     }
-    Ok(implementations.pop())
 }
 
 #[cfg(test)]
@@ -422,6 +627,146 @@ mod tests {
             // Only this test's uniquely created fixture directory.
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn source_index_reuses_files_and_trees_within_one_generation() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            "struct Native { int Call(); int Other(); };",
+        );
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "int Native::Call() { return 1; }\nint Native::Other() { return 2; }",
+        );
+        fixture.write("Source/Test/Private/Unrelated.cpp", "void Unrelated() {}");
+        let mut index = SourceIndex::new();
+        index
+            .plan_implementation(&fixture.0, header, "Native::Call()")
+            .unwrap();
+        index
+            .plan_implementation(&fixture.0, header, "Native::Other")
+            .unwrap();
+        assert!(index
+            .find_class(&fixture.0, header, "Native")
+            .unwrap()
+            .is_some());
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .unwrap()
+            .code
+            .contains("return 1;"));
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Other")
+            .unwrap()
+            .unwrap()
+            .code
+            .contains("return 2;"));
+        assert_eq!(index.modules.len(), 1);
+        assert_eq!(index.files.len(), 1);
+        let module = index.modules.values().next().unwrap();
+        assert_eq!(module.functions.len(), 2);
+        assert_eq!(module.functions["Call"].as_ref().unwrap().len(), 1);
+        assert_eq!(module.functions["Other"].as_ref().unwrap().len(), 1);
+        assert_eq!(
+            index
+                .files
+                .values()
+                .filter(|file| file.declarations.is_some())
+                .count(),
+            1
+        );
+
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "int Native::Call() { return 3; }",
+        );
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .unwrap()
+            .code
+            .contains("return 1;"));
+        let mut fresh = SourceIndex::new();
+        assert!(fresh
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .unwrap()
+            .code
+            .contains("return 3;"));
+        fixture.write(
+            "Source/Test/Private/Duplicate.cpp",
+            "int Native::Call() { return 4; }",
+        );
+        assert!(SourceIndex::new()
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn unplanned_methods_extend_the_index_without_losing_matches() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write("Source/Test/Private/First.cpp", "void Native::Call() {}");
+        fixture.write("Source/Test/Private/Second.cpp", "void Native::Other() {}");
+        let mut index = SourceIndex::new();
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .is_some());
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Other")
+            .unwrap()
+            .is_some());
+        assert_eq!(index.modules.len(), 1);
+    }
+
+    #[test]
+    fn planned_method_errors_do_not_hide_other_methods() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() {}");
+        fs::write(
+            fixture.0.join("Source/Test/Private/Other.cpp"),
+            b"\xff Native::Other",
+        )
+        .unwrap();
+        let mut index = SourceIndex::new();
+        index
+            .plan_implementation(&fixture.0, header, "Native::Call")
+            .unwrap();
+        index
+            .plan_implementation(&fixture.0, header, "Native::Other")
+            .unwrap();
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .is_some());
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Other")
+            .is_err());
+    }
+
+    #[test]
+    fn unrelated_non_utf8_sources_are_not_parsed() {
+        let fixture = Fixture::new();
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "int Native::Call() { return 1; }",
+        );
+        fs::write(
+            fixture.0.join("Source/Test/Private/Unrelated.cpp"),
+            [0xff, 0xfe],
+        )
+        .unwrap();
+        assert!(fixture.find("Native::Call").is_some());
     }
 
     #[test]
