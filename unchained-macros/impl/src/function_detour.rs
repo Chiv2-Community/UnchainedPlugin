@@ -11,7 +11,7 @@ fn binding_documentation(
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let resolution = resolution_documentation(resolver, require_resolver);
     let documentation = format!(
-        "Native binding to [`{native_name}`](Self::{name}).\n\n\
+        "Native binding to [`{native_name}`](Self::{name}).\n\
          Resolved by {resolution}.\n\n\
          Direct calls invoke the original implementation, bypassing detours."
     );
@@ -313,6 +313,7 @@ mod tests {
         let docs = documentation(&binding.attrs);
         assert!(documentation(&descriptor.attrs).is_empty());
         assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
+        assert!(docs.contains("](Self::Call).\nResolved by "));
         assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));
         assert!(docs.contains("Direct calls invoke the original implementation, bypassing detours."));
         assert!(docs.contains("Existing native safety note."));

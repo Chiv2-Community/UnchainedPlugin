@@ -511,7 +511,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             format!("`{}` (upstream resolver)", binding.resolver)
         };
         let mut docs = format!(
-            "Native binding to {}.\n\nResolved by {resolution}",
+            "Native binding to {}.\nResolved by {resolution}",
             linked(&binding.target, source_link)
         );
         let matching: Vec<_> = detours
@@ -666,6 +666,8 @@ impl Native {
         assert!(class.contains("private: int Value;"));
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.contains("Overwritten by [`call_detour`](file:"));
+        assert!(binding.contains(".\nResolved by "));
+        assert!(!binding.contains(".\n\nResolved by "));
         assert!(binding.contains("Detours apply only when installed and enabled;"));
         assert!(binding.contains("Keep the receiver alive."));
         assert!(binding.contains("const FString& Native::Call() const { return Value; }"));
