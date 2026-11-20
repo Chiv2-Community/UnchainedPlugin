@@ -16,10 +16,10 @@ fn binding_documentation(
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let resolution = resolution_documentation(resolver, require_resolver);
     let documentation = format!(
-        "Overrides in-game calls to [`{native_name}`](Self::{name}), \
-         after resolving it with {resolution}.\n\n\
+        "Overrides in-game calls to [`{native_name}`](Self::{name}).\n\
+         ```rust\n{signature};\n```\n\
          Invoking `{native_name}` in this project directly skips this detour.\n\n\
-         ```rust\n{signature};\n```"
+         Native method resolved by {resolution}."
     );
     Ok(syn::LitStr::new(&documentation, name.span()))
 }
@@ -317,15 +317,17 @@ mod tests {
         ).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(documentation(&descriptor.attrs).is_empty());
-        assert!(docs.starts_with("Overrides in-game calls to [`Native::Call`](Self::Call),"));
+        assert!(docs.starts_with("Overrides in-game calls to [`Native::Call`](Self::Call)."));
         assert!(docs.contains("pub(crate) unsafe fn Call<'a>("));
         assert!(docs.contains("self: *const Self"));
         assert!(docs.contains("Result: &'a mut FString"));
         assert!(docs.contains("-> &'a mut FString"));
-        assert!(docs.contains("after resolving it with [`Native__Call`](self::Native__Call)."));
+        assert!(docs.contains("Native method resolved by [`Native__Call`](self::Native__Call)."));
         assert!(docs.contains("Invoking `Native::Call` in this project directly skips this detour."));
         assert!(docs.contains("Existing native safety note."));
         assert!(!docs.contains("impl Native"));
+        assert!(docs.find("```rust").unwrap() < docs.find("Invoking").unwrap());
+        assert!(docs.find("Invoking").unwrap() < docs.find("Native method resolved by").unwrap());
     }
 
     #[test]
@@ -337,7 +339,7 @@ mod tests {
             quote!(GetPost_Example), &function, &syn::parse_quote!(Client), false,
         ).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(docs.contains("after resolving it with `GetPost_Example` (offset-registry key;"));
+        assert!(docs.contains("Native method resolved by `GetPost_Example` (offset-registry key;"));
         assert!(!docs.contains("](GetPost_Example)"));
     }
 
