@@ -52,7 +52,7 @@ pub(crate) fn module_directory(header: &Path, root: &Path) -> PathBuf {
     header.parent().unwrap_or(root).to_path_buf()
 }
 
-fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
+fn function_declarator(node: Node<'_>) -> Option<Node<'_>> {
     let mut declarator = node.child_by_field_name("declarator")?;
     while declarator.kind() != "function_declarator" {
         declarator = declarator.child_by_field_name("declarator").or_else(|| {
@@ -63,13 +63,88 @@ fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
             found
         })?;
     }
-    let name = declarator.child_by_field_name("declarator")?;
+    Some(declarator)
+}
+
+fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
+    let name = function_declarator(node)?.child_by_field_name("declarator")?;
     Some(
         source[name.byte_range()]
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect(),
     )
+}
+
+// Compare source-level types, not Rust ABI arguments (which may include sret).
+fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
+    fn tokens(node: Node<'_>, source: &str, skip: Option<usize>, out: &mut Vec<String>) {
+        if Some(node.start_byte()) == skip || node.kind() == "comment" {
+            return;
+        }
+        if node.child_count() == 0 {
+            out.push(source[node.byte_range()].to_owned());
+        } else {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                tokens(child, source, skip, out);
+            }
+        }
+    }
+
+    let declarator = function_declarator(node)?;
+    let parameters = declarator.child_by_field_name("parameters")?;
+    let mut key = Vec::new();
+    let mut cursor = parameters.walk();
+    for parameter in parameters.children(&mut cursor) {
+        if matches!(parameter.kind(), "(" | ")" | "," | "comment") {
+            continue;
+        }
+        if parameter.kind() == "..." {
+            key.push(vec!["...".to_owned()]);
+            continue;
+        }
+        let mut name = parameter.child_by_field_name("declarator");
+        while let Some(node) = name {
+            // Complex callable declarators need a richer type model.
+            if node.kind() == "function_declarator" {
+                return None;
+            }
+            if node.kind() == "identifier" {
+                break;
+            }
+            name = node.child_by_field_name("declarator").or_else(|| {
+                let mut cursor = node.walk();
+                let found = node.named_children(&mut cursor).find(|child| {
+                    child.kind() == "identifier" || child.kind().ends_with("_declarator")
+                });
+                found
+            });
+        }
+        let mut parameter_key = Vec::new();
+        let mut cursor = parameter.walk();
+        for child in parameter.children(&mut cursor) {
+            if child.kind() == "=" {
+                break;
+            }
+            tokens(
+                child,
+                source,
+                name.map(|node| node.start_byte()),
+                &mut parameter_key,
+            );
+        }
+        key.push(parameter_key);
+    }
+    let mut qualifiers = Vec::new();
+    let mut cursor = declarator.walk();
+    for child in declarator.named_children(&mut cursor) {
+        if matches!(child.kind(), "type_qualifier" | "ref_qualifier") {
+            tokens(child, source, None, &mut qualifiers);
+        }
+    }
+    key.push(qualifiers);
+    Some(key)
 }
 
 fn qualified_name(node: Node<'_>, source: &str) -> Option<String> {
@@ -197,11 +272,19 @@ pub fn find_class(root: &Path, header: &Path, target: &str) -> Result<Option<Imp
     }))
 }
 
-fn definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec<(usize, String)>) {
+fn definitions(
+    node: Node<'_>,
+    source: &str,
+    target: &str,
+    overload: Option<&Vec<Vec<String>>>,
+    found: &mut Vec<(usize, String)>,
+) {
     if node.kind() == "function_definition" {
         if !node.has_error() && node.child_by_field_name("body").is_some() {
             if let Some(name) = qualified_name(node, source) {
-                if name == target || name.ends_with(&format!("::{target}")) {
+                if (name == target || name.ends_with(&format!("::{target}")))
+                    && overload.is_none_or(|key| overload_key(node, source).as_ref() == Some(key))
+                {
                     let declaration = node
                         .parent()
                         .filter(|parent| parent.kind() == "template_declaration")
@@ -217,7 +300,7 @@ fn definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec<(usiz
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        definitions(child, source, target, found);
+        definitions(child, source, target, overload, found);
     }
 }
 
@@ -226,6 +309,11 @@ pub fn find_implementation(
     header: &Path,
     target: &str,
 ) -> Result<Option<Implementation>> {
+    let (target, selector) = target
+        .split_once('(')
+        .map_or((target, None), |(name, parameters)| {
+            (name.trim(), Some(parameters))
+        });
     anyhow::ensure!(
         target
             .rsplit_once("::")
@@ -237,6 +325,23 @@ pub fn find_implementation(
     cpp_files(&module_directory(&header, &root), &mut files)?;
     let mut parser = CppParser::new();
     parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
+    let overload = if let Some(selector) = selector {
+        let source = format!("void selected({selector} {{}}");
+        let tree = parser
+            .parse(&source, None)
+            .context("C++ parsing was cancelled")?;
+        anyhow::ensure!(
+            !tree.root_node().has_error(),
+            "Invalid C++ overload selector"
+        );
+        let function = tree
+            .root_node()
+            .named_child(0)
+            .context("Missing overload selector")?;
+        Some(overload_key(function, &source).context("Unsupported C++ overload selector")?)
+    } else {
+        None
+    };
     let target = if let Some(owner) = target.strip_suffix("::Destructor") {
         format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
     } else {
@@ -262,7 +367,13 @@ pub fn find_implementation(
             .parse(parser_input(&source), None)
             .context("C++ parsing was cancelled")?;
         let mut found = Vec::new();
-        definitions(tree.root_node(), &source, &target, &mut found);
+        definitions(
+            tree.root_node(),
+            &source,
+            &target,
+            overload.as_ref(),
+            &mut found,
+        );
         implementations.extend(found.into_iter().map(|(line, code)| Implementation {
             path: path.clone(),
             line,
@@ -369,6 +480,74 @@ struct Native { int* Call() const { return nullptr; } };
             .unwrap()
             .code
             .contains("return TextData->GetDisplayString();"));
+    }
+
+    #[test]
+    fn selects_overloads_by_cpp_parameter_types() {
+        let fixture = Fixture::new();
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            r#"
+Text Native::Call(const String& Value) { return copy(Value); }
+Text Native::Call(String&& Value) { return move(Value); }
+Text Native::Call(Text Value) { return Value; }
+Text Native::Call(const String* Value, int Count = 0) { return pointer(Value); }
+Text Native::Call(int Count, ...) { return variadic(Count); }
+"#,
+        );
+        for (selector, body) in [
+            ("const String&", "copy(Value)"),
+            ("String &&", "move(Value)"),
+            ("Text", "return Value;"),
+            ("const String *, int", "pointer(Value)"),
+            ("int, ...", "variadic(Count)"),
+        ] {
+            let found = fixture
+                .find(&format!("Native::Call({selector})"))
+                .unwrap_or_else(|| panic!("No match for {selector}"));
+            assert!(found.code.contains(body), "{selector}: {}", found.code);
+        }
+        assert!(fixture.find("Native::Call").is_none());
+        assert!(fixture.find("Native::Call(String&)").is_none());
+        assert!(fixture.find("Native::Call()").is_none());
+        assert!(fixture.find("Native::Call(int)").is_none());
+    }
+
+    #[test]
+    fn selects_cv_ref_overloads_but_rejects_duplicate_definitions() {
+        let fixture = Fixture::new();
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "int Native::Call() { return 1; }\nint Native::Call() const { return 2; }\nint Native::Call() && { return 3; }",
+        );
+        assert!(fixture
+            .find("Native::Call()")
+            .unwrap()
+            .code
+            .contains("return 1;"));
+        assert!(fixture
+            .find("Native::Call() const")
+            .unwrap()
+            .code
+            .contains("return 2;"));
+        assert!(fixture
+            .find("Native::Call() &&")
+            .unwrap()
+            .code
+            .contains("return 3;"));
+        fixture.write(
+            "Source/Test/Private/Other.cpp",
+            "int Native::Call() const { return 4; }",
+        );
+        assert!(fixture.find("Native::Call() const").is_none());
+        assert!(find_implementation(
+            &fixture.0,
+            Path::new("Source/Test/Public/Native.h"),
+            "Native::Call(broken("
+        )
+        .is_err());
     }
 
     #[test]

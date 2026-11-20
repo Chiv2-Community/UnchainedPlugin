@@ -32,6 +32,7 @@ struct NativeType {
 
 struct Binding {
     target: String,
+    overload: Option<String>,
     resolver: String,
     request: bool,
     notes: String,
@@ -430,6 +431,10 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                             };
                             bindings.push(Binding {
                                 target: format!("{native_owner}::{}", method.sig.ident),
+                                overload: notes(&method.attrs)
+                                    .lines()
+                                    .find_map(|line| line.strip_prefix("Native overload: "))
+                                    .map(|selector| selector.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
                                 request: binding.path().segments.last().unwrap().ident
                                     == "bind_resolved_request_function",
@@ -536,7 +541,11 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         }
         let implementation = native_implementation(
             binding.source.as_ref(),
-            &binding.target,
+            &format!(
+                "{}{}",
+                binding.target,
+                binding.overload.as_deref().unwrap_or("")
+            ),
             false,
             &mut watches,
         );
@@ -646,7 +655,7 @@ mod tests {
         .unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Private/Native.cpp"),
-            "const FString& Native::Call() const { return Value; }",
+            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }",
         )
         .unwrap();
         fs::write(root.join("src/Chivalry2/Native.rs"), r#"//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Native.h>.
@@ -660,6 +669,7 @@ define_pattern_resolver!(Native__Call, ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? 
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
+    /// Native overload: `() const`
     #[bind_resolved_func(Native__Call)]
     pub unsafe fn Call(&self) -> &FString {}
 }

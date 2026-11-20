@@ -66,6 +66,7 @@ impl FText {
     pub unsafe fn ToString<'a>(&'a self) -> &'a FString {}
 
     /// Uses caller-provided return storage.
+    /// Native overload: `(const FString&)`
     ///
     /// # Safety
     /// Output must be uninitialized writable native FText storage. String must

@@ -91,6 +91,20 @@ configuration performs source lookup or substitution. Hover method, type, and
 detour symbols; macro names themselves retain generic macro documentation.
 Build-only generation, parsing, and developer examples live in
 `build/unchained-native-docs`; root `build.rs` delegates to `build/mod.rs`.
+
+For overloaded C++ functions, add a binding doc line:
+
+```rust
+/// Native overload: `(const FString&)`
+```
+
+The source matcher compares C++
+parameter types and trailing cv/ref qualifiers, ignoring parameter names and
+default values. It does not infer C++ overloads from lowered Rust ABI arguments.
+Ambiguous matches remain unavailable. The `native-implementation` example also
+accepts selectors in `--target 'FText::AsCultureInvariant(const FString&)'`.
+Use the source's type spelling; typedef equivalence and complex callable
+parameter declarators are not resolved.
 Local roots enable inline C++ implementations and complete native type
 definitions. Unconfigured roots show the configuration note; unavailable
 definitions show `No cpp sources available`.
