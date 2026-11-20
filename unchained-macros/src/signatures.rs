@@ -419,7 +419,7 @@ macro_rules! generate_stub {
 
         #[cfg(feature="dev")]
         CREATE_HOOK!($name, (arg0: *mut c_void), {
-            crate::sdebug!["Triggered!"];
+            crate::sdebug!("Stub hook {} called", stringify!($name));
         });
     };
 }

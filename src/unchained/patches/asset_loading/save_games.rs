@@ -9,7 +9,7 @@ pub(crate) unsafe fn load_game_from_slot_detour<'a>(
     slot: &'a FString,
     index: i32,
 ) -> *mut USaveGame {
-    sdebug!("Triggered! {}", slot);
+    sdebug!("Loading save game from slot {} (user index {})", slot, index);
     unsafe { UGameplayStatics::load_game_from_slot(slot, index) }
 }
 
@@ -19,6 +19,6 @@ pub(crate) unsafe fn save_game_to_slot_detour<'a>(
     slot: &'a FString,
     index: i32,
 ) -> bool {
-    sdebug!("Triggered! {}", slot);
+    sdebug!("Saving game to slot {} (user index {})", slot, index);
     unsafe { UGameplayStatics::save_game_to_slot(game, slot, index) }
 }
