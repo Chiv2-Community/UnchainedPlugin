@@ -65,7 +65,7 @@ mod binding_tests {
         let expected = [
             "APlayerState__GetPlayerName", "ATBLGameMode__BroadcastLocalizedChat",
             "FLargeMemoryReader__FLargeMemoryReader", "FLargeMemoryReader__Destructor", "FName__FName",
-            "FString__AppendChars", "FText__AsCultureInvariant", "FText__Release",
+            "FString__AppendChars", "FText__AsCultureInvariant", "FText__Destructor",
             "FText__ToString", "UGameplayStatics__GetAllActorsOfClass", "UAssetManager__GetAssetRegistry",
             "UClass__GetDefaultObject", "UTBLSystemLibrary__GetTBLGameMode", "UWorld__InternalGetNetMode",
             "UWorld__SpawnActor", "StaticFindObject", "StaticLoadObject",

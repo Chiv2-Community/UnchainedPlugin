@@ -191,8 +191,8 @@ Keep the resolver declaration separate, then bind a method to its type:
 #[unchained_macros::runtime_bindings]
 impl FText {
     /// Safety: self owns a live native shared reference, released exactly once.
-    #[unchained_macros::bind_resolved_func(FText__Release)]
-    pub unsafe fn Release(&mut self) {}
+    #[unchained_macros::bind_resolved_func(FText__Destructor)]
+    pub unsafe fn Destructor(self: *mut Self) {}
 }
 ```
 

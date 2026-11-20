@@ -28,7 +28,8 @@ define_custom_resolver!(FText__AsCultureInvariant, {
         .ensure_one()
 });
 
-define_pattern_resolver!(FText__Release, [
+// FText::~FText shares this entry with identical shared-reference destructors.
+define_pattern_resolver!(FText__Destructor, [
     "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
 ]);
 
@@ -75,12 +76,12 @@ impl FText {
     #[bind_resolved_func(self::FText__AsCultureInvariant)]
     unsafe fn AsCultureInvariant(output: *mut Self, string: &FString) -> *mut Self {}
 
-    /// Release the native thread-safe shared reference (control block at +8).
+    /// Destroy native text, releasing its thread-safe shared reference (control block at +8).
     ///
     /// # Safety
     /// Self must own a live native shared reference, released exactly once.
-    #[bind_resolved_func(self::FText__Release)]
-    pub unsafe fn Release(self: *mut Self) {}
+    #[bind_resolved_func(self::FText__Destructor)]
+    pub unsafe fn Destructor(self: *mut Self) {}
 }
 
 /// One owned culture-invariant native text reference. Its display string is
@@ -139,7 +140,7 @@ impl Drop for InvariantText {
         // Startup initializes the process-lifetime bindings. This owner holds
         // exactly one reference; borrowed native FText values never run this.
         unsafe {
-            (&raw mut self.text).Release();
+            (&raw mut self.text).Destructor();
         }
     }
 }
