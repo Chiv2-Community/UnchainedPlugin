@@ -1,4 +1,4 @@
-//! Native sources: TBL/Source/TBL/UI/UserFeedbackAndBugReportsLibrary.h/.cpp (shipping PDB).
+//! Native sources: TBL/Source/TBL/UI/UserFeedbackAndBugReportsLibrary.h/.cpp.
 
 define_pattern_resolver!(UUserFeedbackAndBugReportsLibrary__GetGameInfo, {
     STEAM: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC b0 01 00 00 45 33 FF"],

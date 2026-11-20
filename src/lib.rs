@@ -387,8 +387,6 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
 
     #[cfg(feature="with_pdb")]
     {
-        // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";
-        // tools::pdb_scan::list_functions_with_addresses(pdb_file, exe.base_address).expect("Failed to list functions");
         // swarn!("{:#?}", globals());
     }
 

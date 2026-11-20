@@ -1,4 +1,4 @@
-//! Native sources: TBL/Source/TBL/TBLTypes.h/.cpp (shipping PDB).
+//! Native sources: TBL/Source/TBL/TBLTypes.h/.cpp.
 
 use crate::Chivalry2::Engine::{AActor, FName, FVector, UObject};
 use crate::Chivalry2::TBL::EKillReason::EKillReason;

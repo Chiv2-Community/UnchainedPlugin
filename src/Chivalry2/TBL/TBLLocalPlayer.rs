@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLLocalPlayer.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLLocalPlayer.h.
 
 // Console command permissions.
 define_pattern_resolver![UTBLLocalPlayer__Exec, {

@@ -1,4 +1,4 @@
-//! Native sources: TBL/Source/TBL/TBLUtilityLibrary.h/.cpp (shipping PDB).
+//! Native sources: TBL/Source/TBL/TBLUtilityLibrary.h/.cpp.
 
 use crate::Chivalry2::Engine::FString;
 

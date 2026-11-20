@@ -1,5 +1,5 @@
 //! Native source: Engine/Source/Runtime/Engine/Classes/Kismet/AssemblyBlueprint.h.
-//! Chivalry engine-fork addition; header path and layout verified against shipping PDB.
+//! Chivalry engine-fork addition.
 
 unsafe impl crate::Chivalry2::Engine::UObjectType for UAssemblyBlueprint {
     const CLASS_NAME: &'static str = "AssemblyBlueprint";

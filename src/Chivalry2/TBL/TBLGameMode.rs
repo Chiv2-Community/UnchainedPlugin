@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLGameMode.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLGameMode.h.
 
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::FText;

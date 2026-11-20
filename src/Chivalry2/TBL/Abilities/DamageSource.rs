@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/Abilities/DamageSource.h (shipping PDB).
+//! Native source: TBL/Source/TBL/Abilities/DamageSource.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

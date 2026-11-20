@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLCharacter.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLCharacter.h.
 
 use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::*;

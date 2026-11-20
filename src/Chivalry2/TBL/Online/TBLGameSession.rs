@@ -1,4 +1,4 @@
-//! Native sources: TBL/Source/TBL/Online/TBLGameSession.h/.cpp (shipping PDB).
+//! Native sources: TBL/Source/TBL/Online/TBLGameSession.h/.cpp.
 
 // ATBLGameSession::ApproveLogin(const FString&), retained without a binding.
 define_pattern_resolver!(ATBLGameSession__ApproveLogin, [

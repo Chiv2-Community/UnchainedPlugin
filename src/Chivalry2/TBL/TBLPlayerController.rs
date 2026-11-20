@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLPlayerController.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLPlayerController.h.
 
 use crate::Chivalry2::Engine::FPrimaryAssetId;
 use crate::Chivalry2::Engine::FString;
@@ -21,7 +21,7 @@ pub struct FOwnershipResponse {
     pub(crate) level: i32,
 }
 
-// Shipping PDB: ATBLPlayerController::ClientReceiveChat_Implementation, RVA 0x1861f00.
+// Targets ATBLPlayerController::ClientReceiveChat_Implementation.
 define_pattern_resolver!(
     ATBLPlayerController__ClientReceiveChat_Implementation,
     ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
@@ -35,7 +35,7 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
         "40 55 56 41 54 41 55 41 56 41 57 48 8D AC 24 B8",
         "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 FD" // EGS 2.11.4
         ], // STEAM
-    OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]// PDB
+    OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]
 });
 
 define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
@@ -61,7 +61,7 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
     STEAM: ["48 89 54 24 10 53 ?? 57 41 54 48 83 EC 78"], // STEAM
     // From Sigga
     // Did the function change?
-    OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
+    OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"],
 });
 
 define_pattern_resolver!(ATBLPlayerController__ClientReceiveLocalizedChat_Implementation, [

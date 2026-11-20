@@ -1,5 +1,5 @@
 //! SDK declaration: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h>.
-//! Shipping PDB attributes this type to StatsComponent.generated.h; original header ownership is unresolved.
+//! Original header ownership is unresolved; the type is attributed to StatsComponent.generated.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

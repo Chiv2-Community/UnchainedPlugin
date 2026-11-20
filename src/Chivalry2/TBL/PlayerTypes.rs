@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/PlayerTypes.h (shipping PDB: EFaction line 11, EChatType line 28).
+//! Native source: TBL/Source/TBL/PlayerTypes.h.
 
 #![allow(non_snake_case)]
 use std::str::FromStr;

@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h (shipping PDB).
+//! Native source: TBL/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h.
 
 use crate::Chivalry2::Engine::FSoftObjectPath;
 use crate::Chivalry2::Engine::FString;
@@ -46,7 +46,7 @@ impl FMapSpecificLoadingScreenConfigData {
 }
 
 /// Rust adapter for GetDataForMap's non-DemoMode key normalization.
-/// Shipping PDB build: 0x14397d860; strip through the last '/', then from the first '?'.
+/// Strip through the last '/', then from the first '?'.
 pub(crate) fn normalize_map_key(raw: &str) -> &str {
     let name = raw.rsplit('/').next().unwrap_or(raw);
     name.split('?').next().unwrap_or(name)

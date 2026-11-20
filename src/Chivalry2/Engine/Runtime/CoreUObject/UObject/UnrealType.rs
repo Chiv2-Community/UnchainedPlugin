@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::*;
 
 /// UE 4.25 native property metadata.
 ///
-/// Shipping PDB type 0x4F5A8: size 0x78; field list 0x4F591.
+/// Native size: 0x78.
 #[repr(C)]
 pub struct FProperty {
     pub field: FField,
@@ -24,7 +24,7 @@ pub struct FProperty {
 
 const _: () = assert!(std::mem::offset_of!(FProperty, offset_internal) == 0x4C);
 
-/// Native array-property metadata (PDB type 0x51477, size 0x88).
+/// Native array-property metadata (size 0x88).
 #[repr(C)]
 pub struct FArrayProperty {
     pub property: FProperty,
@@ -43,7 +43,7 @@ impl FArrayProperty {
     }
 }
 
-/// Native struct-property metadata (PDB type 0x51ADD, size 0x80).
+/// Native struct-property metadata (size 0x80).
 #[repr(C)]
 pub struct FStructProperty {
     pub property: FProperty,

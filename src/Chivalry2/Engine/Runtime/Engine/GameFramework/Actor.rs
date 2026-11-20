@@ -1,6 +1,6 @@
 //! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Actor.h>.
 
-// Native PDB: AActor 0x258; APawn/AController add INavAgentInterface at +0x258.
+// Native AActor size: 0x258; APawn/AController add INavAgentInterface at +0x258.
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct AActor {

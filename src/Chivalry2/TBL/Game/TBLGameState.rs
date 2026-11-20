@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/Game/TBLGameState.h (shipping PDB).
+//! Native source: TBL/Source/TBL/Game/TBLGameState.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

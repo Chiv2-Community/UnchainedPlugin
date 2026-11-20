@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLEngine.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLEngine.h.
 
 #[cfg(feature = "server_registration")]
 define_pattern_resolver!(

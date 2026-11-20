@@ -1,4 +1,4 @@
-//! Native sources: TBL/Source/TBL; original header owners recovered from the shipping PDB.
+//! Native sources: TBL/Source/TBL.
 
 pub use Abilities::DamageSource::*;
 pub use DeathDamageTakenEvent::*;

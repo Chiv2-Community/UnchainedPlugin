@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLSystemLibrary.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLSystemLibrary.h.
 
 use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::TBL::ATBLGameMode;

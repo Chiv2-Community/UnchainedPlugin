@@ -1,4 +1,4 @@
-//! Native source: TBL/Source/TBL/TBLGameInstance.h (shipping PDB).
+//! Native source: TBL/Source/TBL/TBLGameInstance.h.
 
 use crate::Chivalry2::Engine::FLinearColor;
 use crate::Chivalry2::Engine::FText;
