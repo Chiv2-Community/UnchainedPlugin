@@ -1,12 +1,12 @@
 //! Detours and instruction patches grouped by plugin purpose.
 
-pub mod admin_control;
 pub mod auth_token_cleanup;
 pub mod backend_hooks;
 pub mod config_overrides;
 pub mod custom_loading_screens;
 pub mod damage_events;
 pub mod diagnostics;
+pub mod enable_console_commands;
 pub mod frontend_patches;
 pub mod hosting;
 #[cfg(feature = "loose_assets")]
