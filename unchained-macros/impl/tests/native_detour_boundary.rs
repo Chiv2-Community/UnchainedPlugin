@@ -36,6 +36,8 @@ fn cfg(attrs: &[Attribute]) -> String {
         .iter()
         .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"))
         .map(|a| a.to_token_stream().to_string())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -45,16 +47,45 @@ fn scan(
     bindings: &mut BTreeMap<String, Binding>,
     detours: &mut BTreeMap<String, (String, String)>,
 ) {
+    scan_with_cfg(path, bindings, detours, &[]);
+}
+
+fn scan_with_cfg(
+    path: &Path,
+    bindings: &mut BTreeMap<String, Binding>,
+    detours: &mut BTreeMap<String, (String, String)>,
+    inherited: &[Attribute],
+) {
+    let index = std::fs::read_to_string(path.join("mod.rs"))
+        .ok()
+        .map(|source| syn::parse_file(&source).unwrap());
+    let mut inherited = inherited.to_vec();
+    if let Some(index) = &index {
+        inherited.extend(index.attrs.clone());
+    }
     for entry in std::fs::read_dir(path).unwrap() {
         let path = entry.unwrap().path();
+        let mut module_attrs = inherited.clone();
+        let name = if path.is_dir() { path.file_name() } else { path.file_stem() }
+            .unwrap().to_str().unwrap();
+        if let Some(index) = &index {
+            for item in &index.items {
+                if let Item::Mod(module) = item {
+                    if module.ident == name {
+                        module_attrs.extend(module.attrs.clone());
+                    }
+                }
+            }
+        }
         if path.is_dir() {
-            scan(&path, bindings, detours);
+            scan_with_cfg(&path, bindings, detours, &module_attrs);
             continue;
         }
         if path.extension().is_none_or(|e| e != "rs") {
             continue;
         }
         let file = syn::parse_file(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        module_attrs.extend(file.attrs);
         for item in file.items {
             match item {
                 Item::Impl(item) => {
@@ -91,7 +122,11 @@ fn scan(
                                         Binding {
                                             resolver,
                                             signature: signature(&function.sig),
-                                            cfg: cfg(&function.attrs),
+                                            cfg: cfg(&[
+                                                module_attrs.clone(),
+                                                item.attrs.clone(),
+                                                function.attrs.clone(),
+                                            ].concat()),
                                         }
                                     )
                                     .is_none(),
@@ -124,7 +159,10 @@ fn scan(
                         .unwrap_or_else(|| "ACTIVE".into());
                     assert!(
                         detours
-                            .insert(target, (condition, cfg(&function.attrs)))
+                            .insert(target, (condition, cfg(&[
+                                module_attrs.clone(),
+                                function.attrs.clone(),
+                            ].concat())))
                             .is_none(),
                         "duplicate detached target"
                     );

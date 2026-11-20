@@ -1,15 +1,11 @@
 //! Optional loose-file loading outside mounted paks.
 
-#[cfg(feature = "loose_assets")]
 use crate::chivalry2::engine::{
     FPakEntry, FPakFile, FPakListEntry, FPakPlatformFile, FString, TArray, TCHAR,
 };
-#[cfg(feature = "loose_assets")]
 use widestring::U16CStr;
-#[cfg(feature = "loose_assets")]
 use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
 
-#[cfg(feature = "loose_assets")]
 #[unchained_macros::bind_func_detour(FPakPlatformFile::find_file_in_pak_files)]
 pub(crate) unsafe fn find_file_in_pak_files_detour(
     this: *mut FPakPlatformFile,
@@ -31,7 +27,6 @@ pub(crate) unsafe fn find_file_in_pak_files_detour(
     unsafe { this.find_file_in_pak_files(Filename, OutPakFile, OutEntry) }
 }
 
-#[cfg(feature = "loose_assets")]
 #[unchained_macros::bind_func_detour(FPakPlatformFile::find_file_in_pak_files_static)]
 pub(crate) unsafe fn find_file_in_pak_files_static_detour(
     this_ptr: *mut TArray<FPakListEntry>,
@@ -55,7 +50,6 @@ pub(crate) unsafe fn find_file_in_pak_files_static_detour(
     }
 }
 
-#[cfg(feature = "loose_assets")]
 #[unchained_macros::bind_func_detour(FPakPlatformFile::is_non_pak_filename_allowed)]
 pub(crate) unsafe fn is_non_pak_filename_allowed_detour(
     _this: *mut FPakPlatformFile,
