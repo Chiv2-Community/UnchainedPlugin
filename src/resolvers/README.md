@@ -10,7 +10,7 @@ Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Sta
 integration patches live under `src/unchained/patches`.
 Engine paths mirror native source-category/module/header paths, omitting header
 visibility directories. See the [source layout rules](../../docs/engine-sources.md).
-Plugin replacements can live under `src/unchained/detours`, targeting a native
+Plugin replacements live with instruction patches under `src/unchained/patches`, targeting a native
 method with `#[bind_func_detour(Type::method, condition)]`. Organize them by
 plugin purpose, using `main`'s resolver feature groups as the basis, not by
 native class/header paths. See
@@ -56,7 +56,7 @@ What remains here:
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/runtime/engine/engine/game_engine.rs),
   [`UObject::LoadConfig`](../chivalry2/engine/runtime/core_uobject/uobject/object.rs), and
-  [`UNetDriver` patches](../unchained/patches/engine/runtime/engine/engine/net_driver.rs).
+  [`UNetDriver` patches](../unchained/patches/desync/net_mode.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.

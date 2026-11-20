@@ -79,14 +79,16 @@ the detour is stored, its address remains reserved even if activation fails.
 ## Current files
 
 - Model: `src/chivalry2/engine/runtime/online/icmp/icmp.rs`
-- Plugin policy: `src/unchained/detours/networking/ipv6_support.rs`
+- Plugin policy: `src/unchained/patches/networking/ipv6_support.rs`
 - Other native models: `src/chivalry2/{engine,tbl,tbl_loading_screen}/`
 - Native game-plugin ABIs: `src/chivalry2/plugins/`
 - Custom blueprint layouts/adapters: `src/unchained/blueprints/`
-- Replacements: `src/unchained/detours/`, grouped by plugin purpose rather than
+- Replacements and instruction patches: `src/unchained/patches/`, grouped by plugin purpose rather than
   native class/header layout. The groups follow `main`'s resolver organization:
   backend handling, messages, ownership overrides, asset loading, gameplay,
   loading screens, configuration, and lifecycle integration.
+- Detour entry points precede instruction patches, helpers, state, types, and
+  tests within each file, after imports.
 - Plugin-only chat helpers, game-thread jobs, mounted-pak tracking, and override
   state live with the replacements, not on native types.
 - `TBLUtility` and `UGameplay` adapt native namespaces for typed bindings, not

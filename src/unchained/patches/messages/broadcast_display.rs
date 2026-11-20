@@ -81,7 +81,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
     unsafe {
-        crate::unchained::detours::messages::chat::client_message_detour(controller_ptr, &mut console_line, FName::default(), 0.0);
+        crate::unchained::patches::messages::chat::client_message_detour(controller_ptr, &mut console_line, FName::default(), 0.0);
     }
     let [r, g, b, a] = origin_color;
     let origin_color = FLinearColor { r, g, b, a };

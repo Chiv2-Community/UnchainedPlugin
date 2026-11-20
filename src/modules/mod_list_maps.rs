@@ -24,7 +24,7 @@ impl Command<ListModMapsArgs> for ListModMapsCommand {
         let (tx, rx) = tokio::sync::oneshot::channel();
         sinfo!("Querying the Asset Registry for /Game/Mods on the game thread");
 
-        use crate::unchained::detours::unchained_integration::game_thread::run_on_game_thread;
+        use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
         run_on_game_thread(move || {
             let assets = unsafe {
                 use crate::chivalry2::engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};

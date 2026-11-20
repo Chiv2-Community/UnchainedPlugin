@@ -1,5 +1,17 @@
-//! Plugin patches for private integration and startup behavior.
+//! Detours and instruction patches grouped by plugin purpose.
 
-pub mod engine;
-pub mod redpoint_steam_auth;
-pub mod tbl;
+pub mod admin_control;
+pub mod asset_loading;
+pub mod backend_hooks;
+pub mod config_overrides;
+pub mod desync;
+pub mod gameplay;
+pub mod getpost_requests;
+pub mod loading_screens;
+pub mod messages;
+pub mod networking;
+pub mod ownership_overrides;
+pub mod pak_mount;
+pub mod playfab_auth;
+pub mod steam_auth;
+pub mod unchained_integration;

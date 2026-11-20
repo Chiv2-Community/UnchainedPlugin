@@ -81,7 +81,7 @@ use crate::chivalry2::engine::ESpawnActorCollisionHandlingMethod::*;
 //     {},
 //     false,
 //     |args| {
-//         use crate::unchained::detours::unchained_integration::game_thread::run_on_game_thread;
+//         use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
@@ -467,7 +467,7 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::unchained::detours::unchained_integration::game_thread::{
+        use crate::unchained::patches::unchained_integration::game_thread::{
             in_game_thread_job, run_on_game_thread,
         };
         if mod_class.is_null() {

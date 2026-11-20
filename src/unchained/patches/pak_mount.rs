@@ -38,6 +38,9 @@ pub(crate) unsafe fn mount_detour(
     ret
 }
 
+// Filename-comparison branch patch in FPakPlatformFile::Mount.
+CREATE_PATCH!(AuthenticateConsoleCommandCaller, BYTES, &[0xEB]);
+
 /// Snapshot of the mounted pak filenames (absolute paths on Windows).
 pub fn mounted_pak_filenames() -> Vec<String> {
     MOUNTED_PAKS.lock().unwrap().clone()

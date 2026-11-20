@@ -58,7 +58,7 @@ fn detour_entry_points_precede_supporting_items() {
         }
     }
 
-    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/detours"));
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/patches"));
 }
 
 fn signature(sig: &Signature) -> String {
@@ -224,11 +224,28 @@ fn assert_no_legacy(attrs: &[Attribute], path: &Path) {
 }
 
 #[test]
-fn detours_follow_plugin_purposes_not_native_header_paths() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/detours");
+fn patches_follow_plugin_purposes_not_native_header_paths() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/patches");
+    assert!(!root.with_file_name("detours").exists(), "detours belong in patches");
     for old_root in ["engine", "plugins", "tbl", "tbl_loading_screen"] {
-        assert!(!root.join(old_root).exists(), "native hierarchy in detours: {old_root}");
+        assert!(!root.join(old_root).exists(), "native hierarchy in patches: {old_root}");
     }
+    let desync = syn::parse_file(
+        &std::fs::read_to_string(root.join("desync/mod.rs")).unwrap()
+    ).unwrap();
+    let gated_modules: Vec<_> = desync.items.iter().filter_map(|item| {
+        let Item::Mod(module) = item else { return None };
+        if cfg(&module.attrs).is_empty() {
+            return None;
+        }
+        Some((module.ident.to_string(), cfg(&module.attrs)))
+    }).collect();
+    let gate = cfg(&[syn::parse_quote!(#[cfg(feature = "move-autonomous-desync")])]);
+    assert_eq!(
+        gated_modules,
+        [("legacy_tick_actor".into(), gate.clone()), ("movement".into(), gate)],
+        "legacy movement patches must retain their module feature gates",
+    );
     for (path, targets) in [
         ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
         ("desync/blueprint_events.rs", &["UObject::process_event"][..]),
@@ -261,6 +278,24 @@ fn detours_follow_plugin_purposes_not_native_header_paths() {
         for target in targets {
             assert!(actual.iter().any(|actual| actual == target), "{target} belongs in {path}");
         }
+    }
+    for (path, expected) in [
+        ("admin_control/console_permissions.rs", "UTBLLocalPlayer_Exec, BYTES, &[0xEB]"),
+        ("backend_hooks/alternate_backend.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
+        ("desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
+        ("desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
+        ("desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
+        ("pak_mount.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
+        ("steam_auth.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
+        ("unchained_integration/anti_cheat_message.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
+    ] {
+        let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();
+        let actual: Vec<_> = file.items.iter().filter_map(|item| {
+            let Item::Macro(item) = item else { return None };
+            item.mac.path.is_ident("CREATE_PATCH").then(|| item.mac.tokens.to_string())
+        }).collect();
+        let expected = expected.parse::<proc_macro2::TokenStream>().unwrap().to_string();
+        assert_eq!(actual, [expected], "instruction patch changed or misplaced: {path}");
     }
 }
 
