@@ -301,12 +301,12 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::chivalry2::engine::runtime::core_uobject::uobject::uobject_globals` | Native object lookups. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
-| `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, blocked Blueprint events, recursion limits, and listen-server compatibility. |
+| `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, registration shutdown, blocked Blueprint events, recursion limits, and listen-server compatibility. |
 | `UnchainedPlugin::unchained::patches::messages` | Chat capture and broadcast presentation. |
 | `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::unchained::patches::backend_hooks` | Authentication cleanup, server-browser request routing, endpoint overrides, and request-token handling. |
 | `UnchainedPlugin::unchained::patches::frontend_patches` | Frontend startup options and mod asset initialization. |
-| `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, map changes, match state, and shutdown. |
+| `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, map changes, and match state. |
 | `UnchainedPlugin::unchained::patches::networking` | Travel and IPv6 browser/ping compatibility. |
 | `UnchainedPlugin::unchained::patches::pak_mount` | Mounted-pak tracking. |
 | `UnchainedPlugin::unchained::patches::custom_loading_screens` | Map-marker loading-screen injection. |
