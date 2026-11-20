@@ -20,10 +20,41 @@ define_pattern_resolver!(
 );
 
 #[unchained_macros::runtime_bindings]
-pub type FString = TArray<TCHAR>;
+#[derive(Debug, Default)]
+#[repr(C)]
+pub struct FString {
+    data: TArray<TCHAR>,
+}
+
+const _: () = {
+    assert!(std::mem::size_of::<FString>() == 0x10);
+    assert!(std::mem::align_of::<FString>() == 8);
+    assert!(std::mem::offset_of!(FString, data) == 0);
+};
 
 #[unchained_macros::runtime_bindings]
-impl TArray<TCHAR> {
+impl FString {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Native storage length, including the terminator when present.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    pub fn as_ptr(&self) -> *const TCHAR {
+        self.data.as_ptr()
+    }
+
+    pub fn as_slice(&self) -> &[TCHAR] {
+        self.data.as_slice()
+    }
+
     fn trim_trailing_nuls(slice: &[TCHAR]) -> &[TCHAR] {
         let last_non_nul = slice.iter().rposition(|&code_unit| code_unit != 0);
         match last_non_nul {
@@ -38,7 +69,7 @@ impl TArray<TCHAR> {
     #[unchained_macros::bind_resolved_func(self::FString__AppendChars)]
     pub unsafe fn AppendChars(self: *mut Self, text: *const TCHAR, count: i32) {}
 
-    /// Using direct to_string on TArray<TCHAR> (or the FString type) binds a reference to a string
+    /// Using direct to_string binds a reference to a string
     /// in the FString's backing buffer, which is not safe to do in a multithreaded environment.
     /// This function copies the buffer to a new string, which is safe to do in a multithreaded
     /// environment.
@@ -143,7 +174,9 @@ impl FStringCopyError {
 impl From<&str> for FString {
     fn from(value: &str) -> Self {
         let buffer: Vec<TCHAR> = value.encode_utf16().chain(std::iter::once(0)).collect();
-        Self::from(buffer.as_slice())
+        Self {
+            data: TArray::from(buffer.as_slice()),
+        }
     }
 }
 
@@ -151,5 +184,54 @@ impl std::fmt::Display for FString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = FString::trim_trailing_nuls(self.as_slice());
         write!(f, "{}", String::from_utf16_lossy(slice))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_has_distinct_identity_and_native_array_layout() {
+        assert_ne!(
+            std::any::TypeId::of::<FString>(),
+            std::any::TypeId::of::<TArray<TCHAR>>(),
+        );
+        assert_eq!(std::mem::size_of::<FString>(), 0x10);
+        assert_eq!(std::mem::align_of::<FString>(), 8);
+        assert_eq!(std::mem::offset_of!(FString, data), 0);
+    }
+
+    #[test]
+    fn empty_string_needs_no_allocator_and_drops_safely() {
+        let string = FString::new();
+        assert!(string.is_empty());
+        assert_eq!(string.len(), 0);
+        assert!(string.as_ptr().is_null());
+        assert!(string.as_slice().is_empty());
+        assert_eq!(string.to_string(), "");
+    }
+
+    #[test]
+    fn borrowed_native_storage_preserves_utf16_and_terminators() {
+        #[repr(C)]
+        struct Header {
+            data: *const TCHAR,
+            num: i32,
+            max: i32,
+        }
+        let buffer: Vec<TCHAR> = "A🦀".encode_utf16().chain([0, 0]).collect();
+        let header = Header {
+            data: buffer.as_ptr(),
+            num: buffer.len() as i32,
+            max: buffer.len() as i32,
+        };
+        // Borrow engine-layout storage; its Rust fixture retains buffer ownership.
+        let string = unsafe { &*(&raw const header).cast::<FString>() };
+        assert_eq!(string.as_ptr(), buffer.as_ptr());
+        assert_eq!(string.len(), buffer.len());
+        assert_eq!(string.as_slice(), buffer);
+        assert_eq!(string.to_string(), "A🦀");
+        assert_eq!(string.copy_to_string().unwrap(), "A🦀");
     }
 }
