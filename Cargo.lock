@@ -3985,8 +3985,10 @@ name = "unchained-native-docs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.117",
  "toml 0.8.23",
  "tree-sitter",
@@ -4703,8 +4705,6 @@ dependencies = [
  "clap",
  "dotenvy",
  "fs_extra",
- "serde_json",
- "unchained-native-docs",
 ]
 
 [[package]]

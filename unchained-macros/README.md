@@ -89,6 +89,8 @@ The Rust build script generates these documents and the macros include them as
 standard Rustdoc. LSP clients and `cargo doc` receive the same content; no editor
 configuration performs source lookup or substitution. Hover method, type, and
 detour symbols; macro names themselves retain generic macro documentation.
+Build-only generation, parsing, and developer examples live in
+`build/unchained-native-docs`; root `build.rs` delegates to `build/mod.rs`.
 Local roots enable inline C++ implementations and complete native type
 definitions. Unconfigured roots show the configuration note; unavailable
 definitions show `No cpp sources available`.
