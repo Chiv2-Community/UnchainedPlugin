@@ -7,7 +7,7 @@ publish = false
 # Test-only harness: no adapter library and no runtime consumers.
 [[test]]
 name = "cli_args"
-path = "../../src/tools/cli_args.rs"
+path = "cli_args.rs"
 
 [[test]]
 name = "a2s_transport"
