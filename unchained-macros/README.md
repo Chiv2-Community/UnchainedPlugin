@@ -21,7 +21,7 @@ Place the resolver beside its native binding:
 use binary_bloodhound::BinaryMatcher;
 use unchained_macros::define_custom_resolver;
 
-define_custom_resolver!(FText_AsCultureInvariantCopy, {
+define_custom_resolver!(FText__AsCultureInvariant, {
     BinaryMatcher::patterns([
         "41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6",
     ])?
@@ -137,7 +137,7 @@ Keep the resolver declaration separate, then bind a method to its type:
 #[unchained_macros::runtime_bindings]
 impl FText {
     /// Safety: self owns a live native shared reference, released exactly once.
-    #[unchained_macros::bind_resolved_func(FText_Release)]
+    #[unchained_macros::bind_resolved_func(FText__Release)]
     pub unsafe fn Release(&mut self) {}
 }
 ```

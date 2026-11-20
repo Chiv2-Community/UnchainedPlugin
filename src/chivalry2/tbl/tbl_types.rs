@@ -49,7 +49,7 @@ pub struct FDamageTakenEvent {
 
 const _: [(); 0x148] = [(); std::mem::size_of::<FDamageTakenEvent>()];
 
-define_pattern_resolver!(UGameplay_IsDedicatedServer, [
+define_pattern_resolver!(UGameplay__IsDedicatedServer, [
     "48 83 EC 28 48 85 C9 ?? ?? BA 01 00 00 00 ?? ?? ?? ?? ?? 48 85 C0 ?? ?? 48 8B C8 ?? ?? ?? ?? ?? 83 F8 01 0F 94 C0 48",
 ]);
 
@@ -60,6 +60,6 @@ pub struct UGameplay {
 
 #[unchained_macros::runtime_bindings]
 impl UGameplay {
-    #[unchained_macros::bind_resolved_func(UGameplay_IsDedicatedServer)]
+    #[unchained_macros::bind_resolved_func(UGameplay__IsDedicatedServer)]
     pub(crate) unsafe fn IsDedicatedServer(context: *mut UObject) -> bool {}
 }

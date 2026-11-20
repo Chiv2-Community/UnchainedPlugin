@@ -85,8 +85,8 @@ unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String>
         .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
     let registry = IAssetRegistry::asset_registry_interface()?;
     crate::resolvers::require_function_bindings(&[
-        "FLargeMemoryReaderCtor",
-        "FLargeMemoryReaderDtor",
+        "FLargeMemoryReader__FLargeMemoryReader",
+        "FLargeMemoryReader__Destructor",
     ])?;
     let mut storage = std::mem::MaybeUninit::<FLargeMemoryReaderStorage>::zeroed();
     let reader = storage.as_mut_ptr().cast::<FLargeMemoryReader>().FLargeMemoryReader(
@@ -103,7 +103,7 @@ unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String>
     // Inspect before destruction. A valid read ends at the name-table offset,
     // which can be short of TotalSize; only the header/error checks imply failure.
     let outcome = registry_load_outcome(reader);
-    reader.Destruct();
+    reader.Destructor();
     outcome
 }
 

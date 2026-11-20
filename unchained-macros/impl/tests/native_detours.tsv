@@ -1,29 +1,29 @@
 # Target	Resolver	Native signature before extraction	Activation condition	Feature gate
-FString::Find	FStringFind	unsafe fn find_detour (self : * const Self , needle : * const TCHAR , search_case : i32 , search_direction : i32 , start_position : i32 ,) -> i32	|| !cli_args().is_server()	
-FString::ParseIntoArray	FStringParseIntoArray	unsafe fn parse_into_array_detour (self : * const Self , output : * mut TArray < FString > , delimiter : * const TCHAR , cull_empty : bool ,) -> i32	|| !cli_args().is_server()	
+FString::Find	FString__Find	unsafe fn find_detour (self : * const Self , needle : * const TCHAR , search_case : i32 , search_direction : i32 , start_position : i32 ,) -> i32	|| !cli_args().is_server()	
+FString::ParseIntoArray	FString__ParseIntoArray	unsafe fn parse_into_array_detour (self : * const Self , output : * mut TArray < FString > , delimiter : * const TCHAR , cull_empty : bool ,) -> i32	|| !cli_args().is_server()	
 UClass::GetConfigName	GetConfigName	unsafe fn get_config_name_detour (self : * mut Self , storage : * mut crate :: chivalry2 :: engine :: FString ,) -> * mut crate :: chivalry2 :: engine :: FString	|| crate::tools::hook_globals::cli_args().unchained_profile_location.is_some()	
 UObject::LoadConfig	LoadConfig	unsafe fn load_config_detour (self : * mut Self , config_class : * mut UClass , filename : * mut TCHAR , propagation_flags : u32 , property_to_load : * mut c_void ,)	|| cli_args().unchained_profile_location.is_some()	
 UObject::ProcessEvent	ProcessEvent	unsafe fn process_event_detour (self : * mut Self , function : * mut UFunction , params : * mut c_void ,)	|| cli_args().apply_desync_patch	
 FFrame::KismetExecutionMessage	KismetExecutionMessage	unsafe fn kismet_execution_message_detour (text : * const TCHAR , kind : u8 , name : FName ,) -> * mut UObject	ACTIVE	# [cfg (feature = "kismet_log")]
 AGameMode::SetMatchState	SetMatchState	unsafe fn set_match_state_detour (self : * mut Self , state : FName)	ACTIVE	
 UGameEngine::DedicatedServerInit	DedicatedServerInit	unsafe fn dedicated_server_init_detour (context : * const c_void)	ACTIVE	
-ATBLPlayerController::ClientReceiveChat_Implementation	ClientReceiveChat	unsafe fn client_receive_chat_detour (self : * mut Self , sender : * mut ATBLPlayerState , message : * const FString , chat_type : u32 , is_sender_dev : bool , override_color : u32 ,)	ACTIVE	
+ATBLPlayerController::ClientReceiveChat_Implementation	ClientReceiveChat_Implementation	unsafe fn client_receive_chat_detour (self : * mut Self , sender : * mut ATBLPlayerState , message : * const FString , chat_type : u32 , is_sender_dev : bool , override_color : u32 ,)	ACTIVE	
 APlayerController::ClientMessage	ClientMessage	unsafe fn client_message_detour (self : * mut Self , S : * mut FString , Type : FName , MsgLifeTime : f32 ,)	ACTIVE	
 APlayerController::ClientTravelInternal	ClientTravelInternal	unsafe fn client_travel_internal_detour (self : * mut Self , url : * mut FString , travel_type : u8 , seamless : bool , guid : * mut FGuid ,) -> c_void	ACTIVE	
 UGameEngine::Tick	patternsleuth::resolvers::unreal::game_loop::UGameEngineTick	unsafe fn tick_detour (self : * mut Self , delta : f32 , state : u8)	ACTIVE	
-UGameplay::IsDedicatedServer	UGameplay_IsDedicatedServer	unsafe fn is_dedicated_server_detour (context : * mut UObject) -> bool	|| crate::tools::hook_globals::cli_args().playable_listen	
+UGameplay::IsDedicatedServer	UGameplay__IsDedicatedServer	unsafe fn is_dedicated_server_detour (context : * mut UObject) -> bool	|| crate::tools::hook_globals::cli_args().playable_listen	
 UGameplayStatics::LoadGameFromSlot	LoadGameFromSlot	unsafe fn load_game_from_slot_detour < 'a > (slot : & 'a FString , index : i32 ,) -> * mut USaveGame	ACTIVE	
 UGameplayStatics::SaveGameToSlot	SaveGameToSlot	unsafe fn save_game_to_slot_detour < 'a > (game : * mut USaveGame , slot : & 'a FString , index : i32 ,) -> bool	ACTIVE	
-FConsoleOutputDevice::Serialize	ConsoleOutputDevice__Serialize	unsafe fn serialize_detour (self : * mut Self , text : * const TCHAR , verbosity : u8 , category : * const FName ,)	ACTIVE	
-FOnlineAuthPlayFab::EndAuthentication	PlayFabEndAuthentication	unsafe fn end_authentication_detour (self : * const Self , user_id : * const c_void)	ACTIVE	
-FOnlineSessionPlayFab::OnGetCurrentGames	OnGetCurrentGames_	unsafe fn on_get_current_games_detour (self : * mut Self , response : * mut GetCurrentGamesPostResponse , extra : i32 ,)	|| !cli_args().is_server()	
+FConsoleOutputDevice::Serialize	FConsoleOutputDevice__Serialize	unsafe fn serialize_detour (self : * mut Self , text : * const TCHAR , verbosity : u8 , category : * const FName ,)	ACTIVE	
+FOnlineAuthPlayFab::EndAuthentication	FOnlineAuthPlayFab__EndAuthentication	unsafe fn end_authentication_detour (self : * const Self , user_id : * const c_void)	ACTIVE	
+FOnlineSessionPlayFab::OnGetCurrentGames	OnGetCurrentGames	unsafe fn on_get_current_games_detour (self : * mut Self , response : * mut GetCurrentGamesPostResponse , extra : i32 ,)	|| !cli_args().is_server()	
 FOnlineSessionPlayFab::PingSomeServers	PingSomeServers	unsafe fn ping_some_servers_detour (self : * mut Self , max_servers : i32)	|| !cli_args().is_server()	
 OpenAPIClientAPI::GetPost_GetMotd	GetPost_GetMotd	unsafe fn get_post_get_motd_detour (self : * mut Self , result : * mut TSharedPtrIHttpRequest , request : * mut GenericRequest , delegate : * mut c_void ,) -> * mut TSharedPtrIHttpRequest	ACTIVE	
 OpenAPIClientAPI::GetPost_GetCurrentGames	GetPost_GetCurrentGames	unsafe fn get_post_get_current_games_detour (self : * mut Self , result : * mut TSharedPtrIHttpRequest , request : * mut GenericRequest , delegate : * mut c_void ,) -> * mut TSharedPtrIHttpRequest	ACTIVE	
 PlayFabRequestHandler::SendRequest	SendRequest	unsafe fn send_request_detour (storage : * mut TSharedRefIHttpRequest , url : * mut FString , body : * mut FString , key : * mut FString , value : * mut FString ,) -> * mut TSharedRefIHttpRequest	ACTIVE	
-FPakPlatformFile::Mount	PakPlatformFileMount	unsafe fn mount_detour (self : * mut Self , InPakFilename : * const TCHAR , PakOrder : u32 , InPath : * const TCHAR , bLoadIndex : bool ,) -> bool	ACTIVE	
-FPakPlatformFile::FindFileInPakFiles	FindFileInPakFiles_1	unsafe fn find_file_in_pak_files_detour (self : * mut Self , Filename : * const TCHAR , OutPakFile : * mut * mut FPakFile , OutEntry : * mut FPakEntry ,) -> u64	ACTIVE	# [cfg (feature = "loose_assets")]
-FPakPlatformFile::FindFileInPakFiles_Static	FindFileInPakFiles_2	unsafe fn find_file_in_pak_files_static_detour (this_ptr : * mut TArray < FPakListEntry > , Filename : * const TCHAR , OutPakFile : * mut * mut FPakFile , OutEntry : * mut FPakEntry ,) -> u64	ACTIVE	# [cfg (feature = "loose_assets")]
+FPakPlatformFile::Mount	FPakPlatformFile__Mount	unsafe fn mount_detour (self : * mut Self , InPakFilename : * const TCHAR , PakOrder : u32 , InPath : * const TCHAR , bLoadIndex : bool ,) -> bool	ACTIVE	
+FPakPlatformFile::FindFileInPakFiles	FPakPlatformFile__FindFileInPakFiles	unsafe fn find_file_in_pak_files_detour (self : * mut Self , Filename : * const TCHAR , OutPakFile : * mut * mut FPakFile , OutEntry : * mut FPakEntry ,) -> u64	ACTIVE	# [cfg (feature = "loose_assets")]
+FPakPlatformFile::FindFileInPakFiles_Static	FPakPlatformFile__FindFileInPakFiles_Static	unsafe fn find_file_in_pak_files_static_detour (this_ptr : * mut TArray < FPakListEntry > , Filename : * const TCHAR , OutPakFile : * mut * mut FPakFile , OutEntry : * mut FPakEntry ,) -> u64	ACTIVE	# [cfg (feature = "loose_assets")]
 FPakPlatformFile::IsNonPakFilenameAllowed	IsNonPakFilenameAllowed	unsafe fn is_non_pak_filename_allowed_detour (self : * mut Self , _InFilename : * mut FString ,) -> u64	ACTIVE	# [cfg (feature = "loose_assets")]
 ATBLCharacter::OnKilled	ATBLCharacter__OnKilled	unsafe fn on_killed_detour (self : * mut Self , damage_event : * const FDeathDamageTakenEvent ,)	ACTIVE	
 ATBLCharacter::OnDamageTaken	ATBLCharacter__OnDamageTaken	unsafe fn on_damage_taken_detour (self : * mut Self , damage_event : * const FDamageTakenEvent ,)	ACTIVE	
@@ -34,7 +34,7 @@ ATBLPlayerController::GetOwnershipFromPlayerControllerAndState	ATBLPlayerControl
 ATBLPlayerController::CanUseLoadoutItem	ATBLPlayerController__CanUseLoadoutItem	unsafe fn can_use_loadout_item_detour (self : * mut Self , result : * mut FOwnershipResponse , InLoadOutSelection : * mut TSubclassOfULoadoutSelection , InItem : * mut TSubclassOfAInventoryItem ,) -> * mut FOwnershipResponse	ACTIVE	
 ATBLPlayerController::CanUseCharacter	ATBLPlayerController__CanUseCharacter	unsafe fn can_use_character_detour (self : * mut Self , result : * mut FOwnershipResponse , CharacterSubclass : * mut TSubclassOfATBLCharacter ,) -> * mut FOwnershipResponse	ACTIVE	
 ATBLPlayerController::ConditionalInitializeCustomizationOnServer	ATBLPlayerController__ConditionalInitializeCustomizationOnServer	unsafe fn conditional_initialize_customization_on_server_detour (self : * mut Self , player_state : * mut c_void ,) -> c_void	ACTIVE	
-ATBLPlayerController::ClientReceiveLocalizedChat_Implementation	ClientReceiveLocalizedChat	unsafe fn client_receive_localized_chat_detour (self : * mut Self , message : * const FText , channel : u32 ,)	ACTIVE	
+ATBLPlayerController::ClientReceiveLocalizedChat_Implementation	ClientReceiveLocalizedChat_Implementation	unsafe fn client_receive_localized_chat_detour (self : * mut Self , message : * const FText , channel : u32 ,)	ACTIVE	
 FTBLOnlineStats::SetStatInner	SetStatInner	unsafe fn set_stat_inner_detour (self : * mut Self , _p1 : i32 , _p2 : i32)	ACTIVE	
 UMapSpecificLoadingScreenConfig::GetDataForMap	GetDataForMap	unsafe fn get_data_for_map_detour (self : * mut Self , map_name : * mut FString , data : * mut FMapSpecificLoadingScreenConfigData ,)	ACTIVE	
 UTBLGameInstance::LoadFrontEndMap	LoadFrontEndMap	unsafe fn load_front_end_map_detour (self : * mut Self , _url : * mut crate :: chivalry2 :: engine :: FString) -> bool	ACTIVE	
@@ -42,5 +42,5 @@ UTBLGameInstance::OnPreLoadMap	OnPreLoadMap	unsafe fn on_pre_load_map_detour (se
 UTBLGameInstance::OnPostLoadMap	OnPostLoadMap	unsafe fn on_post_load_map_detour (self : * mut Self , world : * mut crate :: chivalry2 :: engine :: UWorld)	ACTIVE	
 UUserFeedbackAndBugReportsLibrary::GetGameInfo	GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: chivalry2 :: engine :: FString , world : * mut crate :: chivalry2 :: engine :: UWorld) -> * mut crate :: chivalry2 :: engine :: FString	ACTIVE	
 TBLUtility::ExecuteConsoleCommand	ExecuteConsoleCommand	unsafe fn execute_console_command_detour (command : * const FString)	ACTIVE	
-UTBLEngine::PreExit	UTBLEnginePreExit	unsafe fn pre_exit_detour (self : * mut Self)	ACTIVE	# [cfg (feature = "server_registration")]
+UTBLEngine::PreExit	UTBLEngine__PreExit	unsafe fn pre_exit_detour (self : * mut Self)	ACTIVE	# [cfg (feature = "server_registration")]
 FUDPPing::UDPEcho	UDPEcho	unsafe fn udp_echo(endpoint: *mut FString, timeout: f32, callback: *mut TFunctionFIcmpEchoResult)	|| !cli_args().is_server()	

@@ -44,6 +44,9 @@ Keep native types and virtual methods under their verified source owner.
 - Windows x64 slots are eight bytes; method declarations advance one slot each.
 - Skip unmodeled entries with explicit offsets; do not fabricate intervening methods.
 - Match C++ method spelling; keep ABI/safety notes rather than duplicate headers.
+- Name native destructor entries `Destructor`, including deleting-destructor
+  thunks; preserve their flags, return type, ownership rules, and slot.
+- Preserve native acronyms: `TBLFoo`, never `TblFoo`.
 - Match receiver mutability and native ABI. Raw mutable receivers use
   `self: *mut Self` when reference guarantees are unavailable.
 - Keep declarations separate from plugin policy, logging hooks, and patches.

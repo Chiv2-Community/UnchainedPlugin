@@ -237,7 +237,7 @@ pub struct UWorld {
 
 impl UWorld {
     pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
-        if world.is_null() || !crate::resolvers::function_is_bound("UWorld__GetMapName") {
+        if world.is_null() {
             return None;
         }
         let mut name = crate::chivalry2::engine::FString::default();

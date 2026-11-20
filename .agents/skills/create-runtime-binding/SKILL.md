@@ -37,8 +37,13 @@ Keep native contracts with their source owners.
 - Reuse existing types; declare only layouts supported by evidence.
 - Keep opaque types opaque. Use raw pointers where Rust borrow guarantees
   cannot be established.
-- Preserve existing aliases, resolver/cache keys, and feature restrictions.
+- Preserve intentional integration aliases and feature restrictions.
+- Update cache/registration consumers when explicitly renaming a resolver.
 - Use C++ method spelling, including acronyms and `GetPost_*` names.
+- Use `Destructor` for native C++ destructors; preserve deleting flags and returns.
+- Keep `TBL` capitalized: `TBLFoo` and `GetTBLGameMode`, not `TblFoo`.
+- Name project-owned resolvers `Class__Method` or `Method`, and value resolvers
+  `Owner__Value` or `Value`; use `Class__Destructor` for destructors.
 - Use descriptive overload suffixes only where Rust cannot share a name.
 - Keep ABI/safety notes; omit comments that only repeat signatures.
 - Keep detours, configuration policy, queues, and patch bytes out of native models.
@@ -50,6 +55,8 @@ Use an empty unsafe method under `runtime_bindings`.
 - Apply `#[unchained_macros::runtime_bindings]` to the native type's inherent impl.
 - Apply `#[unchained_macros::bind_resolved_func(Resolver)]` to the method.
 - Use the declared resolver type path, not a renamed import.
+- `self::ResolverName` selects the current module's resolver; it is optional when
+  unambiguous and is distinct from the type-relative `Self::`.
 - Choose accessible visibility, usually `pub(crate)`.
 - Preserve exact native argument order, widths, returns, and lifetimes.
 - Keep static calls receiver-free. For instance calls, use a verified receiver
@@ -59,6 +66,8 @@ Use an empty unsafe method under `runtime_bindings`.
 - Match surrounding feature gates; do not widen optional native dependencies.
 - Calls use the resolved entry before attachment, then the original trampoline.
   Calling a binding must not invoke its plugin replacement.
+- Do not add per-call readiness preflights unless preserving runtime checks from
+  `main`; required binding initialization belongs to startup.
 
 Existing static-call pattern; reuse the existing declaration rather than
 registering a second copy:

@@ -13,7 +13,7 @@ use unchained_macros::bind_resolved_func;
 use binary_bloodhound::BinaryMatcher;
 
 define_pattern_resolver!(
-    FText_ToString,
+    FText__ToString,
     ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 0B 48 8B 01 48 83 C4 20 5B 48 FF 60 10"]
 );
 
@@ -21,14 +21,14 @@ define_pattern_resolver!(
 // The old prologue also matched FromString; the flags-2 epilogue distinguishes
 // culture-invariant text from FromString's flags-0x12 result. A new cache key
 // prevents reuse of the old resolver's potentially moving-overload address.
-define_custom_resolver!(FText_AsCultureInvariantCopy, {
+define_custom_resolver!(FText__AsCultureInvariant, {
     BinaryMatcher::patterns(["41 83 4E 10 02 4C 8D 5C 24 60 49 8B 5B 20 49 8B C6"])?
         .root_functions()
         .addresses()
         .ensure_one()
 });
 
-define_pattern_resolver!(FText_Release, [
+define_pattern_resolver!(FText__Release, [
     "40 53 48 83 EC 20 48 8B 59 08 48 85 DB 74 38 48 89 7C 24 30 BF FF FF FF FF 8B C7 F0 0F C1 43 08 83 F8 01 75 1D 48 8B 03 48 8B CB FF 10 F0 0F C1 7B 0C 83 FF 01 75 0B 48 8B 03 8B D7 48 8B CB FF 50 08 48 8B 7C 24 30 48 83 C4 20 5B C3"
 ]);
 
@@ -61,7 +61,7 @@ impl FText {
     /// Do not free the result or mutate/invalidate its data (including through
     /// native aliases or culture changes) while the returned borrow is live.
     /// Synchronize native history access for the call, including invariant text.
-    #[bind_resolved_func(self::FText_ToString)]
+    #[bind_resolved_func(self::FText__ToString)]
     pub unsafe fn ToString<'a>(&'a self) -> &'a FString {}
 
     /// Uses caller-provided return storage.
@@ -70,14 +70,14 @@ impl FText {
     /// Output must be uninitialized writable native FText storage. String must
     /// be a valid native string, with the engine allocator/runtime initialized.
     /// The input is copied, not consumed. Output acquires one native reference.
-    #[bind_resolved_func(self::FText_AsCultureInvariantCopy)]
+    #[bind_resolved_func(self::FText__AsCultureInvariant)]
     unsafe fn AsCultureInvariant(output: *mut Self, string: &FString) -> *mut Self {}
 
     /// Release the native thread-safe shared reference (control block at +8).
     ///
     /// # Safety
     /// Self must own a live native shared reference, released exactly once.
-    #[bind_resolved_func(self::FText_Release)]
+    #[bind_resolved_func(self::FText__Release)]
     pub unsafe fn Release(self: *mut Self) {}
 }
 

@@ -44,6 +44,8 @@ Use `bind_func_detour` on an unsafe free function.
 
 - Target `NativeType::Method`; names do not require a `_detour` suffix.
 - Use the binding's C++-spelled method name; plugin detour names remain Rust-style.
+- Native destructor bindings are named `Destructor`; do not simplify their ABI.
+- Preserve `TBL` capitalization in native type and method references.
 - Match every parameter and return type, including hidden storage and lifetimes.
 - Declare an instance receiver explicitly as the first argument.
 - Rust checks compatibility with invariant binding metadata; this does not
@@ -81,6 +83,9 @@ Make original-call and lifetime decisions explicit.
 - Do not call the detour recursively or dispatch through a vtable to reach
   the original; virtual dispatch may re-enter the replacement.
 - Preserve return values unless changing them is the requested policy.
+- Assume required bindings were initialized at startup. Do not add per-call
+  readiness guards unless preserving checks present in `main`, including
+  existing fallible-call macros.
 - Preserve pointer validity, thread affinity, ownership, and callback lifetimes.
 - Do not free engine-owned borrowed buffers or retain pointers beyond validity.
 - Do not let Rust panics unwind through native callers; use appropriate guards

@@ -2,7 +2,7 @@
 
 #[cfg(feature = "server_registration")]
 define_pattern_resolver!(
-    UTBLEnginePreExit,
+    UTBLEngine__PreExit,
     ["40 55 53 41 54 41 55 48 8D 6C 24 A8 48 81 EC 58 01 00 00 4C 8B E9"]
 );
 
@@ -15,6 +15,6 @@ pub struct UTBLEngine {
 #[unchained_macros::runtime_bindings]
 impl UTBLEngine {
     #[cfg(feature = "server_registration")]
-    #[unchained_macros::bind_resolved_func(UTBLEnginePreExit)]
+    #[unchained_macros::bind_resolved_func(UTBLEngine__PreExit)]
     pub(crate) unsafe fn PreExit(self: *mut Self) {}
 }

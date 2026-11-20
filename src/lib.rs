@@ -217,7 +217,7 @@ mod build_info_tests {
             "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry", "GEngine"] {
             assert!(!unresolved.iter().any(|resolver| resolver.name == name));
         }
-        assert!(unresolved.iter().any(|resolver| resolver.name == "FText_AsCultureInvariantCopy"));
+        assert!(unresolved.iter().any(|resolver| resolver.name == "FText__AsCultureInvariant"));
     }
 
     #[test]

@@ -72,12 +72,6 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
     }
     let title = InvariantText::new(title);
     let body = InvariantText::new(body);
-    // Preflight both calls before producing any output; failures use the untouched native path.
-    if !crate::resolvers::function_is_bound("TBLGameInstance_AddChatLine")
-        || !unchained_macros::detour_is_initialized("ClientMessage")
-    {
-        return None;
-    }
     let mut console_line = FString::from(format!("<{channel}>: {raw}").as_str());
     // Use the existing capture hook as well as native console output, exactly once.
     unsafe {
@@ -99,7 +93,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
 }
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() || !crate::resolvers::function_is_bound("FText_ToString") {
+    if text.is_null() || !crate::resolvers::function_is_bound("FText__ToString") {
         return None;
     }
     let string = unsafe { FText::from_ptr(text)?.ToString() };

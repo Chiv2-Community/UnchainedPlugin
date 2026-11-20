@@ -17,6 +17,10 @@ Declare callable native functions separately from plugin behavior.
 - Declare an empty unsafe method with `#[bind_resolved_func(Resolver)]`.
 - Keep static methods receiver-free; preserve instance receivers and hidden ABI arguments.
 - Match C++ method spelling, including acronyms and names such as `GetPost_GetMotd`.
+- Use `Destructor` for native destructors without changing deleting flags or returns.
+- Preserve `TBL` capitalization; name project-owned resolvers `Class__Name` or `Name`.
+- `self::ResolverName` qualifies a module-local resolver; use it when needed to
+  disambiguate imports. It is not a macro requirement.
 - Keep comments about ABI or safety, not duplicate function headers.
 - Use visibility accessible to the replacement.
 - `runtime_bindings` emits invariant signature metadata; it is internal plumbing,
@@ -81,6 +85,8 @@ Call the native binding to invoke the original implementation.
 - Calling the binding from its replacement does not recurse into that replacement.
 - Bypass applies to our hook on that target, not nested callees or third-party patches.
 - To invoke plugin policy deliberately, call the plugin helper explicitly.
+- Assume required bindings are initialized at startup; avoid extra per-call
+  readiness guards unless retaining an existing runtime check from `main`.
 - Generated vtable calls dispatch through the current object table; they do not
   guarantee original-call bypass.
 - Vtable methods are not `bind_func_detour` targets. Resolve a concrete

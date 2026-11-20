@@ -2,7 +2,7 @@
 
 use crate::chivalry2::engine::UObject;
 
-define_pattern_resolver!(UNetDriver_GetNetMode, [
+define_pattern_resolver!(UNetDriver__GetNetMode, [
     "48 83 EC 28 48 8B 01 ?? ?? ?? ?? ?? ?? 84 C0 ?? ?? 33 C0 38 ?? ?? ?? ?? 02 0F 95 C0 FF C0 48 83 C4",
 ]);
 

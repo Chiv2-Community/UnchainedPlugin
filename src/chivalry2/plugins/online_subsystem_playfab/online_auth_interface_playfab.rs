@@ -2,7 +2,7 @@
 
 use std::ffi::c_void;
 
-define_pattern_resolver!(PlayFabEndAuthentication, [
+define_pattern_resolver!(FOnlineAuthPlayFab__EndAuthentication, [
     "48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC F0 00 00 00 45 33 E4 4C 8B E9 44 89 65 6F 48 8B CA 48 8B 02 4C 8B FA 41 8B F4 FF 50 28 84 C0 0F 84 ?? ?? ?? ?? 49 8B 8D E0 00 00 00"
 ]);
 
@@ -22,7 +22,7 @@ impl FOnlineAuthPlayFab {
 
     // Shutdown clears SessionInterface before the auth destructor revokes tickets.
     // Skip EndAuthentication, not the remaining destructor cleanup.
-    #[unchained_macros::bind_resolved_func(PlayFabEndAuthentication)]
+    #[unchained_macros::bind_resolved_func(FOnlineAuthPlayFab__EndAuthentication)]
     pub(crate) unsafe fn EndAuthentication(self: *const Self, user_id: *const c_void) {}
 }
 

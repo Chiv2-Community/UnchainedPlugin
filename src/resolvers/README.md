@@ -35,6 +35,12 @@ plugin detours target those methods from outside the native model.
 Put additional generic bounds on the methods that need them, not separate impls.
 Keep cfg restrictions intact.
 
+- Name project-defined resolvers `Class__Method` or `Method`; use
+  `Owner__Value` or `Value` for globals and `Class__Destructor` for destructors.
+- Preserve C++ spelling and `TBL` capitalization.
+- Keep upstream resolver type names and intentional integration aliases intact.
+- Resolver names are cache keys; update every consumer when explicitly renaming one.
+
 What remains here:
 
 - `mod.rs`: process image base, function-binding initialization/readiness checks,
@@ -68,8 +74,8 @@ Without the macro, a resolver that scans for a certain pattern and returns a sin
 
 ```rust
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct FString_AppendChars(pub u64);
-impl_resolver_singleton!(all, FString_AppendChars, |ctx| async {
+pub struct FString__AppendChars(pub u64);
+impl_resolver_singleton!(all, FString__AppendChars, |ctx| async {
     let patterns = [
         "45 85 C0 0F " // Universal
     ];
@@ -77,13 +83,13 @@ impl_resolver_singleton!(all, FString_AppendChars, |ctx| async {
     let res = join_all(patterns.iter()
         .map(|p| ctx.scan(Pattern::new(p).unwrap()))).await;
 
-    Ok(FString_AppendChars(ensure_one(res.into_iter().flatten())?))
+    Ok(FString__AppendChars(ensure_one(res.into_iter().flatten())?))
 });
 ```
 
 With the `define_pattern_resolver` macro, the code above can be simplified:
 ```rust
-define_pattern_resolver!(FString_AppendChars, [
+define_pattern_resolver!(FString__AppendChars, [
     "45 85 C0 0F" // Universal
 ],
 |ctx, patterns| {
@@ -97,14 +103,14 @@ Some common scan modes are implemented. We can simplify it more like:
 
 
 ```rust 
-define_pattern_resolver!(FString_AppendChars, Simple, [
+define_pattern_resolver!(FString__AppendChars, Simple, [
     "45 85 C0 0F"
 ]);
 ```
 `Simple` mode is default:
 
 ```rust
-define_pattern_resolver!(FString_AppendChars, [
+define_pattern_resolver!(FString__AppendChars, [
     "45 85 C0 0F" 
 ]);
 ```

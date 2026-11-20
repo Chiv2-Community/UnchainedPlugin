@@ -51,7 +51,10 @@ Establish the native contract before writing Rust declarations.
   `UDPEcho`, and `GetPost_GetMotd`, not snake_case.
 - Add descriptive suffixes only to disambiguate overloads, such as
   `FindFileInPakFiles_Static` and `Serialize_WithTime`. Constructors use the
-  type name; destructor adapters use `Destruct` or `DeletingDestructor`.
+  type name; native C++ destructors use `Destructor`.
+- Preserve destructor ABI details, including deleting flags and pointer returns.
+- Preserve native acronyms: use `TBLFoo`, `GetTBLGameMode`, and `UTBLGameInstance`,
+  never `TblFoo` or `GetTblGameMode`.
 - Keep Rust-only helpers and trait implementations idiomatic Rust.
 - Remove comments that only repeat signatures; retain ABI, ownership, safety,
   and source-evidence notes.
@@ -63,6 +66,13 @@ Establish the native contract before writing Rust declarations.
 
 Reuse an existing resolver or declare one beside the binding.
 
+- Name project-defined resolvers after their target: `Class__Method` or `Method`,
+  and `Owner__Value` or `Value` for globals. Use `Class__Destructor` for destructors.
+- Keep native spelling and capitalization, including `TBL` and `GetPost_*`.
+- Upstream patternsleuth resolver types retain their upstream names.
+- Resolver identifiers are cache/registration keys. When explicitly renaming one,
+  update readiness checks, patches, tests, and baseline entries; old cached keys
+  do not initialize the renamed binding.
 - Resolve function entries, not interior instructions, for callable bindings.
 - Wildcard relocations and build-dependent bytes with `??`.
 - Verify each supported build; reject missing or conflicting addresses.
@@ -154,6 +164,8 @@ define_custom_resolver!(ExampleRootFunction, {
 Declare an empty `unsafe fn` inside `#[runtime_bindings] impl Type`.
 
 - Pass the resolver's type path to `bind_resolved_func`; do not rename its import.
+- `self::ResolverName` explicitly selects the current module's resolver.
+  Qualification is optional when unambiguous; `Self::` instead refers to the type.
 - Use visibility accessible to the detour, usually `pub(crate)`.
 - For instance methods, declare `self: *mut Self` or another verified receiver.
 - The generated ABI is Windows x64 `extern "C"`.
@@ -278,6 +290,8 @@ Target the binding method from a functional module under `src/unchained/patches/
 - The macro checks argument types, return types, and lifetime relationships
   against the binding at compile time.
 - Calling the binding invokes the original, bypassing this replacement.
+- Assume startup initialized required bindings. Do not add per-call binding or
+  detour-readiness guards unless preserving a runtime check from `main`.
 - A generated vtable method is not a `bind_func_detour` target. To intercept a
   concrete virtual implementation, resolve its entry and declare a separate
   `runtime_bindings` method. Calling through the vtable may re-enter the hook;

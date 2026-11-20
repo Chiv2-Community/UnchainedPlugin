@@ -24,7 +24,7 @@ define_pattern_resolver!(
 define_pattern_resolver!(OnPostLoadMap,["40 55 53 56 57 41 56 41 57 48 8d ac 24 e8 fc ff ff 48 81 ec 18 04 00 00 48 8b 05 89 e7 09 04 48 33 c4 48 89 85 f0 02 00 00 33 c0 48 8b"]);
 
 define_pattern_resolver!(
-    TBLGameInstance_AddChatLine,
+    UTBLGameInstance__AddChatLine,
     ["48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 49 63 E9 4D 8B F8 4C 8B F2 48 8B F1"]
 );
 
@@ -60,7 +60,7 @@ impl UTBLGameInstance {
     /// # Safety
     /// Self must be live on the engine thread; text and color pointers must
     /// remain valid for the call. No ownership transfers.
-    #[bind_resolved_func(self::TBLGameInstance_AddChatLine)]
+    #[bind_resolved_func(self::UTBLGameInstance__AddChatLine)]
     pub unsafe fn AddChatLine(
         self: *mut Self,
         sender: *const FText,

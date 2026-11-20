@@ -13,19 +13,19 @@ use std::ffi::c_void;
 // The RIP-relative displacement in the `48 8B 05` security-cookie load
 // (immediately followed by `48 33 C4`) is wildcarded so the pattern survives
 // rebuilds.
-define_pattern_resolver!(PakPlatformFileMount, [
+define_pattern_resolver!(FPakPlatformFile__Mount, [
     "4C 8B DC 55 57 49 8D AB 78 FE FF FF 48 81 EC 78 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 30 01 00 00 0F B6 BD B0 01 00 00 33 C0"
 ]);
 
 #[cfg(feature = "loose_assets")]
 define_pattern_resolver!(
-    FindFileInPakFiles_1,
+    FPakPlatformFile__FindFileInPakFiles,
     ["48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 54 41 55 41 56 41 57 48 83 EC 30 33 FF"]
 );
 
 #[cfg(feature = "loose_assets")]
 define_pattern_resolver!(
-    FindFileInPakFiles_2,
+    FPakPlatformFile__FindFileInPakFiles_Static,
     ["48 8B C4 4C 89 48 ?? 4C 89 40 ?? 48 89 48 ?? 55 53 48 8B EC"]
 );
 
@@ -43,7 +43,7 @@ pub struct FPakPlatformFile {
 
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
-    #[unchained_macros::bind_resolved_func(PakPlatformFileMount)]
+    #[unchained_macros::bind_resolved_func(FPakPlatformFile__Mount)]
     pub(crate) unsafe fn Mount(
         self: *mut Self,
         InPakFilename: *const TCHAR,
@@ -54,7 +54,7 @@ impl FPakPlatformFile {
     }
 
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(FindFileInPakFiles_1)]
+    #[unchained_macros::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles)]
     pub(crate) unsafe fn FindFileInPakFiles(
         self: *mut Self,
         Filename: *const TCHAR,
@@ -65,7 +65,7 @@ impl FPakPlatformFile {
 
     // Static overload; receives the pak-list array rather than a platform-file object.
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(FindFileInPakFiles_2)]
+    #[unchained_macros::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles_Static)]
     pub(crate) unsafe fn FindFileInPakFiles_Static(
         this_ptr: *mut TArray<FPakListEntry>,
         Filename: *const TCHAR,

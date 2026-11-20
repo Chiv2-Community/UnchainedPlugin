@@ -13,7 +13,7 @@ use std::ffi::c_void;
 use unchained_macros::bind_resolved_func;
 
 define_pattern_resolver!(
-    APlayerState_GetPlayerName,
+    APlayerState__GetPlayerName,
     Call,
     ["48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"]
 );
@@ -105,7 +105,7 @@ impl APlayerState {
     /// # Safety
     /// Self must be live on the engine thread; output must be writable native
     /// FString return storage, whose result the caller owns.
-    #[bind_resolved_func(self::APlayerState_GetPlayerName)]
+    #[bind_resolved_func(self::APlayerState__GetPlayerName)]
     pub unsafe fn GetPlayerName<'a>(
         self: *const Self,
         output: &'a mut FString,

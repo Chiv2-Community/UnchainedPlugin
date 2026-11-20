@@ -119,17 +119,17 @@ mod binding_tests {
     fn native_detours_keep_their_registered_names_and_state_access() {
         let expected = [
             "LoadFrontEndMap", "UGameEngineTick", "OnPreLoadMap", "OnPostLoadMap",
-            "SetMatchState", "ExecuteConsoleCommand", "PakPlatformFileMount",
-            "ClientReceiveChat", "BroadcastChat", "ClientMessage",
-            "ClientReceiveLocalizedChat", "ConsoleOutputDevice__Serialize", "GetDataForMap",
+            "SetMatchState", "ExecuteConsoleCommand", "FPakPlatformFile__Mount",
+            "ClientReceiveChat_Implementation", "BroadcastChat", "ClientMessage",
+            "ClientReceiveLocalizedChat_Implementation", "FConsoleOutputDevice__Serialize", "GetDataForMap",
             "ATBLPlayerController__GetOwnershipFromPlayerControllerAndState",
             "ATBLPlayerController__CanUseLoadoutItem", "ATBLPlayerController__CanUseCharacter",
             "ATBLPlayerController__ConditionalInitializeCustomizationOnServer",
-            "DedicatedServerInit", "ProcessEvent", "UGameplay_IsDedicatedServer",
-            "PlayFabEndAuthentication", "LoadGameFromSlot", "SaveGameToSlot",
+            "DedicatedServerInit", "ProcessEvent", "UGameplay__IsDedicatedServer",
+            "FOnlineAuthPlayFab__EndAuthentication", "LoadGameFromSlot", "SaveGameToSlot",
             "ATBLGameMode__PreLogin", "ATBLGameMode__Logout", "SendRequest", "SetStatInner",
-            "OnGetCurrentGames_", "PingSomeServers", "FStringFind", "UDPEcho",
-            "FStringParseIntoArray", "GetConfigName", "LoadConfig", "GetGameInfo",
+            "OnGetCurrentGames", "PingSomeServers", "FString__Find", "UDPEcho",
+            "FString__ParseIntoArray", "GetConfigName", "LoadConfig", "GetGameInfo",
             "GetPost_GetMotd", "GetPost_GetCurrentGames", "ClientTravelInternal",
         ];
         for name in expected {
@@ -155,8 +155,8 @@ mod binding_tests {
     #[test]
     fn colocated_patches_keep_their_resolvers_and_registration() {
         let expected = [
-            "UTBLLocalPlayer_Exec", "AuthenticateConsoleCommandCaller",
-            "AllowAlternateBackend", "EACAntiCheatMesssage", "UNetDriver_GetNetMode",
+            "UTBLLocalPlayer__Exec", "AuthenticateConsoleCommandCaller",
+            "AllowAlternateBackend", "EACAntiCheatMesssage", "UNetDriver__GetNetMode",
             "RedpointSteamSkipTokenCheck",
             #[cfg(feature = "move-autonomous-desync")]
             "MoveAutonomous",
@@ -174,13 +174,13 @@ mod binding_tests {
     #[test]
     fn call_only_resolvers_are_bindings_not_detours() {
         let expected = [
-            "APlayerState_GetPlayerName", "BroadcastLocalizedChat",
-            "FLargeMemoryReaderCtor", "FLargeMemoryReaderDtor", "FNameCtorWchar",
-            "FString_AppendChars", "FText_AsCultureInvariantCopy", "FText_Release",
-            "FText_ToString", "GetAllActorsOfClass", "GetAssetRegistry",
+            "APlayerState__GetPlayerName", "BroadcastLocalizedChat",
+            "FLargeMemoryReader__FLargeMemoryReader", "FLargeMemoryReader__Destructor", "FName__FName",
+            "FString__AppendChars", "FText__AsCultureInvariant", "FText__Release",
+            "FText__ToString", "GetAllActorsOfClass", "GetAssetRegistry",
             "GetDefaultObject", "GetTBLGameMode", "InternalGetNetMode",
             "SpawnActor", "StaticFindObject", "StaticLoadObject",
-            "TBLGameInstance_AddChatLine", "UAssetRegistryHelpers__GetAssetRegistry",
+            "UTBLGameInstance__AddChatLine", "UAssetRegistryHelpers__GetAssetRegistry",
             "UWorld__GetMapName",
         ];
         let bindings: std::collections::HashSet<_> =

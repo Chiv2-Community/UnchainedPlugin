@@ -59,6 +59,9 @@ Keep callable native contracts easy to find.
 - Use `mod.rs` as a module index.
 - Keep static calls static; genuine UE globals remain free functions.
 - Preserve C++ method spelling on native bindings and vtable entries.
+- Name native C++ destructors `Destructor`; preserve deleting-thunk ABI details.
+- Preserve acronyms such as `TBL` in native identifiers.
+- Name project-defined method/value resolvers `Class__Name` or `Name`.
 - Keep Rust-only helpers and trait methods in Rust style.
 - Retain ABI/safety/source notes; omit comments that just repeat signatures.
 - Put Rust adapters beside the native types they adapt.

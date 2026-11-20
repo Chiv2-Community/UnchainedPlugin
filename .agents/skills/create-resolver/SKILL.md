@@ -59,7 +59,12 @@ Reuse an existing resolver when it already resolves the verified target.
 - Put new declarations beside the native owner under `src/chivalry2/*`.
 - Follow source-category/header paths; omit `Public`, `Private`, and `Classes`.
 - Add new modules to `mod.rs`; put resolvers before types and bindings.
-- Preserve existing resolver/cache keys and naming conventions.
+- Name project-defined method/value resolvers `Class__Name` or `Name`, matching
+  the target. Destructor resolvers use `Class__Destructor`.
+- Preserve native capitalization: `TBLFoo`, never `TblFoo`.
+- Keep intentional integration aliases and upstream resolver names intact.
+- Resolver identifiers are cache/registration keys. For explicitly requested
+  renames, update every consumer and baseline; expect fresh scans under new keys.
 - If source ownership remains unproven, follow the
   [unresolved-target policy](../../../src/resolvers/README.md); do not fabricate
   a native header or receiver.

@@ -11,7 +11,7 @@ use unchained_macros::bind_resolved_func;
 use widestring::U16CString;
 
 define_pattern_resolver!(
-    FNameCtorWchar,
+    FName__FName,
     Simple,
     ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]
 );
@@ -38,7 +38,7 @@ impl FName {
     /// # Safety
     /// Self must be writable native FName storage, text NUL-terminated UTF-16,
     /// and the engine name table initialized.
-    #[bind_resolved_func(self::FNameCtorWchar)]
+    #[bind_resolved_func(self::FName__FName)]
     pub unsafe fn FName(
         self: *mut Self,
         text: *const crate::chivalry2::engine::TCHAR,

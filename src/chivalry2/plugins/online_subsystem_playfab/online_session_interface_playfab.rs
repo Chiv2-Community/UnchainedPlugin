@@ -3,7 +3,7 @@
 use super::open_api_merged::open_api_client_api::GetCurrentGamesPostResponse;
 
 define_pattern_resolver!(
-    OnGetCurrentGames_,
+    OnGetCurrentGames,
     ["48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 60 FE FF FF"]
 );
 
@@ -18,7 +18,7 @@ pub struct FOnlineSessionPlayFab {
 
 #[unchained_macros::runtime_bindings]
 impl FOnlineSessionPlayFab {
-    #[unchained_macros::bind_resolved_func(OnGetCurrentGames_)]
+    #[unchained_macros::bind_resolved_func(OnGetCurrentGames)]
     pub(crate) unsafe fn OnGetCurrentGames(
         self: *mut Self,
         response: *mut GetCurrentGamesPostResponse,

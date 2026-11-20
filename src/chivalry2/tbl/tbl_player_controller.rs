@@ -23,7 +23,7 @@ pub struct FOwnershipResponse {
 
 // Shipping PDB: ATBLPlayerController::ClientReceiveChat_Implementation, RVA 0x1861f00.
 define_pattern_resolver!(
-    ClientReceiveChat,
+    ClientReceiveChat_Implementation,
     ["40 53 55 57 41 57 48 81 EC B8 00 00 00 41 8B E9 4D 8B F8 48 8B DA 48"]
 );
 
@@ -64,7 +64,7 @@ define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizatio
     OTHER: ["41 54 48 81 EC 80 00 00 00 80 B9 F8 00 00 00 03 4C 8B E1 ?? ?? ?? ?? ?? ?? 80 B9 20 13 00 00 00 ?? ?? ?? ?? ?? ?? 80 B9 21"], // PDB
 });
 
-define_pattern_resolver!(ClientReceiveLocalizedChat, [
+define_pattern_resolver!(ClientReceiveLocalizedChat_Implementation, [
     "48 89 5C 24 18 55 57 41 56 48 81 EC 90 00 00 00 48 8B 99 D0 02 00 00 41 8B E8 4C 8B F2 48 8B F9"
 ]);
 
@@ -85,7 +85,7 @@ pub struct ATBLPlayerController {
 #[unchained_macros::runtime_bindings]
 impl ATBLPlayerController {
     // Targets ClientReceiveChat_Implementation, not the generated RPC wrapper.
-    #[unchained_macros::bind_resolved_func(ClientReceiveChat)]
+    #[unchained_macros::bind_resolved_func(ClientReceiveChat_Implementation)]
     pub(crate) unsafe fn ClientReceiveChat_Implementation(
         self: *mut Self,
         sender: *mut ATBLPlayerState,
@@ -135,7 +135,7 @@ impl ATBLPlayerController {
     ) -> c_void {
     }
 
-    #[unchained_macros::bind_resolved_func(ClientReceiveLocalizedChat)]
+    #[unchained_macros::bind_resolved_func(ClientReceiveLocalizedChat_Implementation)]
     pub(crate) unsafe fn ClientReceiveLocalizedChat_Implementation(
         self: *mut Self,
         message: *const FText,

@@ -38,7 +38,7 @@ pub(crate) unsafe fn find_detour(
     if !this.is_null() && !needle.is_null() {
         let needle_text = unsafe { widestring::U16CStr::from_ptr_str(needle) }.to_string_lossy();
         let endpoint = unsafe { (*this).to_string() };
-        strace!("FStringFind called {endpoint} : {needle_text}");
+        strace!("FString::Find called {endpoint} : {needle_text}");
         if (in_browser || in_ping) && needle_text == ":" && endpoint.matches(':').count() >= 2 {
             if in_browser {
                 strace!("FString::Find: bare IPv6 endpoint {endpoint}, returning -1");

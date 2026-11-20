@@ -307,9 +307,9 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         }
     }
     for (path, expected) in [
-        ("enable_console_commands.rs", "UTBLLocalPlayer_Exec, BYTES, &[0xEB]"),
+        ("enable_console_commands.rs", "UTBLLocalPlayer__Exec, BYTES, &[0xEB]"),
         ("hosting/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
-        ("hosting/desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
+        ("hosting/desync/net_mode.rs", "UNetDriver__GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
         ("hosting/desync/tick_actors.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/tick_actors.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
@@ -400,6 +400,14 @@ fn native_callables_use_cpp_style_names() {
     }
 
     impl VisitMut for CheckNames<'_> {
+        fn visit_ident_mut(&mut self, name: &mut syn::Ident) {
+            assert!(
+                !name.to_string().contains("Tbl"),
+                "{}: {name} must preserve TBL capitalization",
+                self.0.display(),
+            );
+        }
+
         fn visit_item_fn_mut(&mut self, item: &mut syn::ItemFn) {
             self.binding(&item.attrs, &item.sig);
             syn::visit_mut::visit_item_fn_mut(self, item);
@@ -443,6 +451,26 @@ fn native_callables_use_cpp_style_names() {
     }
 
     check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2"));
+}
+
+#[test]
+fn project_binding_resolvers_match_their_targets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/chivalry2");
+    let mut bindings = BTreeMap::new();
+    scan(&root, &mut bindings, &mut BTreeMap::new());
+    for (target, binding) in bindings {
+        let resolver: syn::Path = syn::parse_str(&binding.resolver).unwrap();
+        if resolver.segments.first().unwrap().ident == "patternsleuth" {
+            continue;
+        }
+        let name = resolver.segments.last().unwrap().ident.to_string();
+        let (owner, method) = target.rsplit_once("::").unwrap();
+        assert!(
+            name == method || name == format!("{owner}__{method}"),
+            "{target}: resolver {name} must be Method or Class__Method",
+        );
+        assert!(!name.contains("Tbl"), "{name} must preserve TBL capitalization");
+    }
 }
 
 #[test]

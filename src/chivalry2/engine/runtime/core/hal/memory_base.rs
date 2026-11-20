@@ -19,7 +19,7 @@ pub struct FMalloc {
         /// # Safety
         /// Destroys the allocator even with flags == 0. Never call on borrowed GMalloc.
         /// Flags must match native ownership/allocation mode; the returned pointer is not live.
-        DeletingDestructor(self: *mut Self, flags: u32) -> *mut c_void;
+        Destructor(self: *mut Self, flags: u32) -> *mut c_void;
         /// # Safety
         /// Output must point to a live FOutputDevice; command must be NUL-terminated.
         Exec(self: *mut Self, world: *mut UWorld, command: *const TCHAR, output: *mut FOutputDevice) -> bool;
