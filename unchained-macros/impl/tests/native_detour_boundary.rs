@@ -243,7 +243,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     let gate = cfg(&[syn::parse_quote!(#[cfg(feature = "move-autonomous-desync")])]);
     assert_eq!(
         gated_modules,
-        [("legacy_tick_actor".into(), gate.clone()), ("movement".into(), gate)],
+        [("tick_actors".into(), gate)],
         "legacy movement patches must retain their module feature gates",
     );
     for (path, targets) in [
@@ -309,8 +309,8 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("enable_console_commands.rs", "UTBLLocalPlayer_Exec, BYTES, &[0xEB]"),
         ("hosting/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
         ("hosting/desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
-        ("hosting/desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
-        ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
+        ("hosting/desync/tick_actors.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
+        ("hosting/desync/tick_actors.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
         ("backend_hooks/auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
         ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
