@@ -1,5 +1,5 @@
-//! Native source: Engine/Source/Runtime/Engine/Classes/Kismet/AssemblyBlueprint.h.
-//! Chivalry engine-fork addition.
+//! Native owner: Engine/Source/Runtime/Engine/Classes/Kismet/AssemblyBlueprint.h.
+//! Native source unavailable: this Chivalry engine-fork header is absent from both checkouts.
 
 unsafe impl crate::Chivalry2::Engine::UObjectType for UAssemblyBlueprint {
     const CLASS_NAME: &'static str = "AssemblyBlueprint";

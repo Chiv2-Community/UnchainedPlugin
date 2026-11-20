@@ -1,4 +1,5 @@
-//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineSessionInterfacePlayFab.h.
+//! Native owner: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineSessionInterfacePlayFab.h.
+//! Native source unavailable: this header is absent from both checkouts.
 
 use super::OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse;
 

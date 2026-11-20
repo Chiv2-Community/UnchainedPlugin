@@ -1,4 +1,5 @@
-//! Native source: TBL/Source/TBL/Game/TBLGameState.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameState.h>.
+//! Native owner: TBL/Source/TBL/Game/TBLGameState.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

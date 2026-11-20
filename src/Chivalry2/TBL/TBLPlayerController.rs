@@ -8,20 +8,8 @@ use crate::Chivalry2::Engine::TSubclassOfAInventoryItem;
 use crate::Chivalry2::Engine::TSubclassOfATBLCharacter;
 use crate::Chivalry2::Engine::TSubclassOfULoadoutSelection;
 use crate::Chivalry2::TBL::ATBLPlayerState;
+use crate::Chivalry2::TBL::FOwnershipResponse;
 use std::os::raw::c_void;
-
-#[unchained_macros::runtime_bindings]
-#[repr(C)]
-#[derive(Debug)]
-#[allow(non_snake_case)]
-pub struct FOwnershipResponse {
-    pub(crate) owned: bool,
-    crowns: i32,
-    gold: i32,
-    usdCents: i32,
-    levelType: u8,
-    pub(crate) level: i32,
-}
 
 // Targets ATBLPlayerController::ClientReceiveChat_Implementation.
 define_pattern_resolver!(

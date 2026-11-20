@@ -1,4 +1,5 @@
-//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineAuthInterfacePlayFab.h.
+//! Native owner: TBL/Plugins/OnlineSubsystemPlayFab/Source/OnlineSubsystemPlayFab/Public/OnlineAuthInterfacePlayFab.h.
+//! Native source unavailable: this header is absent from both checkouts.
 
 use std::ffi::c_void;
 

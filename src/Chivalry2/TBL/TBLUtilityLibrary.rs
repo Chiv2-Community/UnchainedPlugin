@@ -1,4 +1,6 @@
-//! Native sources: TBL/Source/TBL/TBLUtilityLibrary.h/.cpp.
+//! Native owner: TBL/Source/TBL/TBLUtilityLibrary.h/.cpp.
+//! Native source unavailable: the SDK's TBLUtilityLibrary.h declares UTBLUtilityLibrary,
+//! not the TBLUtility namespace or ExecuteConsoleCommand.
 
 use crate::Chivalry2::Engine::FString;
 

@@ -1,4 +1,5 @@
-//! Native source: TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h.
+//! Native owner: TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h.
+//! Native source unavailable: this header is absent from both checkouts.
 
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::TSharedPtrIHttpRequest;

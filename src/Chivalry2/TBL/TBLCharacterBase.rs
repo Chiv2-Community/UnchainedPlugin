@@ -1,4 +1,5 @@
-//! Native source: TBL/Source/TBL/TBLCharacterBase.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacterBase.h>.
+//! Native owner: TBL/Source/TBL/TBLCharacterBase.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

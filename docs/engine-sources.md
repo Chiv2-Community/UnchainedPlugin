@@ -10,7 +10,7 @@
 
 ## Native ownership
 
-Organize native declarations by their original source owner.
+Organize native declarations by verified source/header paths.
 
 - `src/Chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
 - `src/Chivalry2/TBL/`: native TBL owners.
@@ -18,13 +18,15 @@ Organize native declarations by their original source owner.
 - `src/Chivalry2/Plugins/`: native game-plugin headers, including private headers.
 - Identify the owner in the file's opening source comment.
 - Use native source and shipping PDB evidence where available.
-- Do not treat generated per-type SDK filenames as original header ownership.
+- Link the header that defines a declaration, not one that only references it.
+- SDK header paths can differ from original shipping ownership; preserve supported
+  original paths as notes, not placement constraints.
 - Keep native layouts, signatures, resolvers, and bindings with their owners.
 - Establish resolver ownership before choosing a native path; do not guess a header.
 
 ### Source links
 
-Binding files use one explicit source link:
+Binding files with available native sources use one explicit source link:
 
 ```rust
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h>.
@@ -32,7 +34,8 @@ Binding files use one explicit source link:
 
 Use the corresponding UE header URL for engine bindings. Keep original ownership
 paths in a separate `Native owner:` note when SDK paths differ. Do not invent
-links for declarations absent from either source tree.
+links for declarations absent from either source tree; state
+`Native source unavailable:` instead. Directory-index `mod.rs` files are exempt.
 
 The Rust build-time documentation generator reads only `Native source:`. It
 remaps the repository root using `[env]` settings in `.cargo/config.toml`:

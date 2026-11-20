@@ -1,4 +1,5 @@
-//! Native sources: TBL/Source/TBL/Online/TBLGameSession.h/.cpp.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameSession.h>.
+//! Native owner: TBL/Source/TBL/Online/TBLGameSession.h/.cpp.
 
 // ATBLGameSession::ApproveLogin(const FString&), retained without a binding.
 define_pattern_resolver!(ATBLGameSession__ApproveLogin, [

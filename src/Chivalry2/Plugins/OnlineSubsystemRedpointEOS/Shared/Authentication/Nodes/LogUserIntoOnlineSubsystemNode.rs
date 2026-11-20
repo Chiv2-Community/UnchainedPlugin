@@ -1,4 +1,5 @@
-//! Native header: OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.h.
+//! Native owner: OnlineSubsystemRedpointEOS/Shared/Authentication/Nodes/LogUserIntoOnlineSubsystemNode.h.
+//! Native source unavailable: this header is absent from both checkouts.
 //! <https://docs.redpoint.games/docs/auth/write_your_own_authentication_graph/#loguserintoonlinesubsystemnode>
 
 // Steam EXE SHA-256 prefix d82b5eaa122aaee1:

@@ -1,4 +1,5 @@
-//! Native source: TBL/Source/TBL/Abilities/DamageSource.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DamageSource.h>.
+//! Native owner: TBL/Source/TBL/Abilities/DamageSource.h.
 
 #![allow(non_snake_case)]
 use crate::Chivalry2::Engine::*;

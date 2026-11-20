@@ -1,4 +1,5 @@
-//! Native source: TBL/Source/TBL/TBLLocalPlayer.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLLocalPlayer.h>.
+//! Native owner: TBL/Source/TBL/TBLLocalPlayer.h.
 
 // Console command permissions.
 define_pattern_resolver![UTBLLocalPlayer__Exec, {

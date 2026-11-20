@@ -1,4 +1,5 @@
-//! Native source: TBL/Source/TBL/Animation/TBLCharacterAnimInstance.h.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacterAnimInstance.h>.
+//! Native owner: TBL/Source/TBL/Animation/TBLCharacterAnimInstance.h.
 
 // Legacy cache key: the pattern identifies UTBLCharacterAnimInstance::StartAttack,
 // not AActor::TickActor, in an older build.

@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::Runtime::Engine::Kismet::GameplayStatics::UGamepla
 use crate::Chivalry2::Engine::{FFrame, UObject};
 use crate::Chivalry2::Engine::{FName, FString, USaveGame, TCHAR};
 use crate::Chivalry2::TBL::TBLUtilityLibrary::TBLUtility;
-use crate::Chivalry2::TBL::UI::UserFeedbackAndBugReportsLibrary::UUserFeedbackAndBugReportsLibrary;
+use crate::Chivalry2::TBL::UserFeedbackAndBugReportsLibrary::UUserFeedbackAndBugReportsLibrary;
 
 #[unchained_macros::bind_func_detour(UUserFeedbackAndBugReportsLibrary::GetGameInfo)]
 pub(crate) unsafe fn get_game_info_detour(
