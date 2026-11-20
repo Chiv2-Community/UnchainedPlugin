@@ -295,8 +295,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
-| `UnchainedPlugin::unchained::patches::admin_control` | Administrative commands and game diagnostics. |
-| `UnchainedPlugin::unchained::patches::save_games` | Save-game loading and saving. |
+| `UnchainedPlugin::unchained::patches::diagnostics` | Game diagnostics, console commands/output, save games, and optional Blueprint messages. |
 | `UnchainedPlugin::unchained::patches::loose_assets` | Optional loose-asset loading. |
 | `UnchainedPlugin::features::mod_asset_registry` | Mod Asset Registry merging. |
 | `UnchainedPlugin::chivalry2::engine::runtime::core_uobject::uobject::uobject_globals` | Native object lookups. |
@@ -304,7 +303,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
 | `UnchainedPlugin::unchained::patches::hosting` | Blocked Blueprint events, recursion limits, and listen-server compatibility. |
-| `UnchainedPlugin::unchained::patches::messages` | Chat capture, broadcast presentation, native console output, and optional Blueprint messages. |
+| `UnchainedPlugin::unchained::patches::messages` | Chat capture and broadcast presentation. |
 | `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::unchained::patches::server_browser` | Server-browser request routing, endpoint overrides, and request-token handling. |
 | `UnchainedPlugin::unchained::patches::frontend_patches` | Frontend startup options and mod asset initialization. |

@@ -1,4 +1,3 @@
-//! Administrative console execution and game diagnostics.
+//! Administrative console-command permissions.
 
 pub mod console_commands;
-pub mod game_info;

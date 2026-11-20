@@ -1,6 +1,4 @@
-//! Chat capture, broadcast presentation, and console output.
+//! Chat capture and broadcast presentation.
 
 pub mod broadcast_display;
 pub mod chat;
-pub mod console;
-pub mod kismet_log;

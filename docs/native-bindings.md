@@ -86,7 +86,7 @@ the detour is stored, its address remains reserved even if activation fails.
 - Replacements and instruction patches: `src/unchained/patches/`, grouped by plugin purpose rather than
   native class/header layout. The groups follow `main`'s resolver organization:
   backend handling, server-browser requests, messages, ownership overrides,
-  save games, loose assets, gameplay, loading screens, configuration, hosting,
+  diagnostics, loose assets, gameplay, loading screens, configuration, hosting,
   and lifecycle integration.
 - Detour entry points precede instruction patches, helpers, state, types, and
   tests within each file, after imports.

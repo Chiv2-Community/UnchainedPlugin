@@ -280,9 +280,13 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
             "OpenAPIClientAPI::get_post_get_current_games",
             "PlayFabRequestHandler::send_request",
         ][..]),
-        ("save_games.rs", &[
+        ("diagnostics.rs", &[
+            "UUserFeedbackAndBugReportsLibrary::get_game_info",
+            "TBLUtility::execute_console_command",
             "UGameplayStatics::load_game_from_slot",
             "UGameplayStatics::save_game_to_slot",
+            "FConsoleOutputDevice::serialize",
+            "FFrame::kismet_execution_message",
         ][..]),
         ("loose_assets.rs", &[
             "FPakPlatformFile::find_file_in_pak_files",
