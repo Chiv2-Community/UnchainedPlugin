@@ -13,14 +13,15 @@ Attach plugin behavior to a native binding without moving policy into the model.
 
 ## Verify the binding
 
-Load the `create-runtime-binding` skill before creating or changing the target.
+Reuse an existing binding unless it is missing or there is evidence it may be wrong.
 
-- Use the skill tool when available; otherwise read the
-  [runtime binding skill](../create-runtime-binding/SKILL.md).
-- Reuse an existing verified method when possible.
-- For a missing binding, follow that skill and its resolver prerequisite first.
 - Confirm the method path, exact signature, resolver/registry key, feature gates,
   and supported builds.
+- Load `create-runtime-binding` only when no binding exists or there is reason
+  to suspect the existing binding is incorrect. Use the skill tool when available;
+  otherwise read the [runtime binding skill](../create-runtime-binding/SKILL.md).
+- In those cases, follow that skill and its applicable resolver prerequisite
+  before implementing the detour.
 - Do not target a resolver type, wrapper address, or generated vtable method.
   Virtual implementations need a separate resolver-backed binding.
 
