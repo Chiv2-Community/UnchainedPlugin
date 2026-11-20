@@ -56,7 +56,7 @@ What remains here:
 - Native owners that are not established remain free functions, not guessed receivers.
 - Examples: [`UGameEngine`](../chivalry2/engine/runtime/engine/engine/game_engine.rs),
   [`UObject::LoadConfig`](../chivalry2/engine/runtime/core_uobject/uobject/object.rs), and
-  [`UNetDriver` patches](../unchained/patches/desync/net_mode.rs).
+  [`UNetDriver` patches](../unchained/patches/hosting/desync/net_mode.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.

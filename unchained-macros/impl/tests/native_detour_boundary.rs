@@ -231,7 +231,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         assert!(!root.join(old_root).exists(), "native hierarchy in patches: {old_root}");
     }
     let desync = syn::parse_file(
-        &std::fs::read_to_string(root.join("desync/mod.rs")).unwrap()
+        &std::fs::read_to_string(root.join("hosting/desync/mod.rs")).unwrap()
     ).unwrap();
     let gated_modules: Vec<_> = desync.items.iter().filter_map(|item| {
         let Item::Mod(module) = item else { return None };
@@ -248,7 +248,8 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     );
     for (path, targets) in [
         ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
-        ("desync/blueprint_events.rs", &["UObject::process_event"][..]),
+        ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
+        ("hosting/playable_listen.rs", &["UGameplay::is_dedicated_server"][..]),
         ("ownership_overrides.rs", &[
             "ATBLPlayerController::get_ownership_from_player_controller_and_state",
             "ATBLPlayerController::can_use_loadout_item",
@@ -282,9 +283,9 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     for (path, expected) in [
         ("admin_control/console_commands.rs", "UTBLLocalPlayer_Exec, BYTES, &[0xEB]"),
         ("backend_hooks/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
-        ("desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
-        ("desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
-        ("desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
+        ("hosting/desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
+        ("hosting/desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
+        ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("pak_mount.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
         ("steam_auth.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
         ("unchained_integration/anti_cheat_message.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),

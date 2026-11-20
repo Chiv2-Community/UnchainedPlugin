@@ -302,7 +302,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::unchained::patches::backend_hooks` | Ban checks, player connections, requests, and statistics. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
-| `UnchainedPlugin::unchained::patches::desync` | Blocked Blueprint events, recursion limits, and listen-server compatibility. |
+| `UnchainedPlugin::unchained::patches::hosting` | Blocked Blueprint events, recursion limits, and listen-server compatibility. |
 | `UnchainedPlugin::unchained::patches::messages` | Chat capture, broadcast presentation, native console output, and optional Blueprint messages. |
 | `UnchainedPlugin::unchained::patches::gameplay` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::unchained::patches::getpost_requests` | Backend endpoint and request-token overrides. |

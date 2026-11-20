@@ -1,9 +1,8 @@
-//! Blueprint event filtering and listen-server compatibility.
+//! Hosting desync workarounds and Blueprint recursion protection.
 
-pub mod blueprint_events;
 #[cfg(feature = "move-autonomous-desync")]
 pub mod legacy_tick_actor;
-pub mod listen_server;
 #[cfg(feature = "move-autonomous-desync")]
 pub mod movement;
 pub mod net_mode;
+pub mod prevent_stackoverflow;
