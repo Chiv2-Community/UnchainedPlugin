@@ -14,6 +14,7 @@ use url::Url;
 
 pub const CONFIGURATION_NOTE: &str =
     "Configure local source paths in .cargo/config.local.toml to view the implementation inline";
+pub const NO_CPP_SOURCES: &str = "No cpp sources available";
 const ARGON: &str = "https://github.com/Chiv2-Community/ArgonSDK/blob/main";
 const UE: &str = "https://github.com/EpicGames/UnrealEngine/blob/4.25-plus";
 
@@ -263,6 +264,7 @@ fn native_implementation(
 fn append_native(
     docs: &mut String,
     implementation: Option<&cpp::Implementation>,
+    source: Option<&Source>,
     title: &str,
     name: &str,
 ) -> Result<()> {
@@ -273,8 +275,10 @@ fn append_native(
             linked(name, &file_link(&implementation.path, implementation.line)?),
             block("cpp", &implementation.code)
         ));
-    } else {
+    } else if source.is_some_and(|source| source.local.is_none()) {
         docs.push_str(CONFIGURATION_NOTE);
+    } else {
+        docs.push_str(NO_CPP_SOURCES);
     }
     Ok(())
 }
@@ -467,6 +471,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         append_native(
             &mut docs,
             implementation.as_ref(),
+            native.source.as_ref(),
             &format!("Native {} definition", native.label),
             &native.name,
         )?;
@@ -535,6 +540,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         append_native(
             &mut docs,
             implementation.as_ref(),
+            binding.source.as_ref(),
             "Native implementation",
             &binding.target,
         )?;
@@ -553,6 +559,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             append_native(
                 &mut docs,
                 implementation.as_ref(),
+                binding.source.as_ref(),
                 "Native implementation",
                 &binding.target,
             )?;
@@ -591,6 +598,21 @@ mod tests {
     #[test]
     fn code_fences_preserve_embedded_backticks() {
         assert!(block("cpp", "const char* value = \"```\";").starts_with("````cpp"));
+    }
+
+    #[test]
+    fn missing_source_links_do_not_request_local_configuration() {
+        let mut docs = String::new();
+        append_native(
+            &mut docs,
+            None,
+            None,
+            "Native implementation",
+            "Native::Call",
+        )
+        .unwrap();
+        assert!(docs.ends_with(NO_CPP_SOURCES));
+        assert!(!docs.contains(CONFIGURATION_NOTE));
     }
 
     #[test]
@@ -666,7 +688,9 @@ impl Native {
         .unwrap();
         generate(&root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
-        assert!(binding.ends_with(CONFIGURATION_NOTE));
+        assert!(binding.ends_with(NO_CPP_SOURCES));
+        let detour = fs::read_to_string(directory.join("detour-call_detour.md")).unwrap();
+        assert!(detour.ends_with(NO_CPP_SOURCES));
         fs::write(
             root.join(".cargo/config.local.toml"),
             format!("[env]\nUE_SOURCE_LOCATION = {{ value = \"{UE}\", force = true }}\n"),

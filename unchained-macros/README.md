@@ -90,7 +90,8 @@ standard Rustdoc. LSP clients and `cargo doc` receive the same content; no edito
 configuration performs source lookup or substitution. Hover method, type, and
 detour symbols; macro names themselves retain generic macro documentation.
 Local roots enable inline C++ implementations and complete native type
-definitions. Otherwise, docs end with the local-source configuration note.
+definitions. Unconfigured roots show the configuration note; unavailable
+definitions show `No cpp sources available`.
 Header-backed native structs, enums, unions, and aliases also carry
 `#[unchained_macros::runtime_bindings]` directly. On a type, the macro only adds
 source documentation; generic parameters, layouts, derives, and aliases are

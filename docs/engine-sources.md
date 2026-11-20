@@ -69,9 +69,12 @@ structs, enums, unions, and aliases can carry documentation-only type markers.
 Lookup ignores forward declarations and refuses ambiguous definitions.
 Unannotated Rust helpers retain their ordinary documentation.
 
-When local source cannot be displayed, the bottom note is:
+When local paths are not configured, the bottom note is:
 
 > Configure local source paths in .cargo/config.local.toml to view the implementation inline
+
+When a configured source tree has no available definition, or no source header
+is linked, the note is: `No cpp sources available`.
 
 Hover a native method/type or a detour function to view its generated Rustdoc.
 Macro names themselves retain their generic macro documentation. The same
