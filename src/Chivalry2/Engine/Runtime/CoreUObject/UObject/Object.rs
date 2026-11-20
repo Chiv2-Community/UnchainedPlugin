@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Object.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Object.h>.
 
 use crate::Chivalry2::Engine::UClass;
 use crate::Chivalry2::Engine::UFunction;

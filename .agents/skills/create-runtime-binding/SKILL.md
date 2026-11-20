@@ -42,6 +42,8 @@ Keep native contracts with their source owners.
 - Use C++ method spelling, including acronyms and `GetPost_*` names.
 - Use `Destructor` for native C++ destructors; preserve deleting flags and returns.
 - Keep `TBL` capitalized: `TBLFoo` and `GetTBLGameMode`, not `TblFoo`.
+- Use one `Native source: <URL>` module comment for a verified SDK/UE header.
+  Keep differing original paths in `Native owner:`; do not add an `SDK header:` line.
 - Name project-owned method resolvers `Class__Method`, free functions `Function`, and value resolvers
   `Owner__Value` or `Value`; use `Class__Destructor` for destructors.
 - Use descriptive overload suffixes only where Rust cannot share a name.

@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Stack.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Stack.h>.
 
 #[cfg(feature = "kismet_log")]
 use crate::Chivalry2::Engine::FName;

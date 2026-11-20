@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h>.
 
 use crate::Chivalry2::Engine::FName;
 use crate::Chivalry2::Engine::TArray;

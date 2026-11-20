@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/PakFile/Public/IPlatformFilePak.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/PakFile/Public/IPlatformFilePak.h>.
 
 #[cfg(feature = "loose_assets")]
 use crate::Chivalry2::Engine::FString;

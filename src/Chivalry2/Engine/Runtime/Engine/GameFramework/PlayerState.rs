@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerState.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/PlayerState.h>.
 
 use crate::Chivalry2::Engine::APawn;
 use crate::Chivalry2::Engine::FUniqueNetIdRepl;

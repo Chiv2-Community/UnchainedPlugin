@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Public/EngineUtils.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Public/EngineUtils.h>.
 
 use crate::Chivalry2::Engine::FName;
 use crate::Chivalry2::Engine::TCHAR;

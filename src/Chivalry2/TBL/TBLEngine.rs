@@ -1,5 +1,5 @@
-//! Native source: TBL/Source/TBL/TBLEngine.h.
-//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLEngine.h>.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLEngine.h>.
+//! Native owner: TBL/Source/TBL/TBLEngine.h.
 
 #[cfg(feature = "server_registration")]
 define_pattern_resolver!(

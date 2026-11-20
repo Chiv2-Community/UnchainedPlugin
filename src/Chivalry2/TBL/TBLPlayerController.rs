@@ -1,5 +1,5 @@
-//! Native source: TBL/Source/TBL/TBLPlayerController.h.
-//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerController.h>.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLPlayerController.h>.
+//! Native owner: TBL/Source/TBL/TBLPlayerController.h.
 
 use crate::Chivalry2::Engine::FPrimaryAssetId;
 use crate::Chivalry2::Engine::FString;

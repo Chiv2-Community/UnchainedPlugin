@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Internationalization/Text.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Internationalization/Text.h>.
 
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::TCHAR;

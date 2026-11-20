@@ -3,6 +3,7 @@
 ## Contents
 
 - [Native ownership](#native-ownership)
+  - [Source links](#source-links)
 - [Path rules](#path-rules)
 - [Declaration order](#declaration-order)
 - [Plugin behavior](#plugin-behavior)
@@ -20,6 +21,38 @@ Organize native declarations by their original source owner.
 - Do not treat generated per-type SDK filenames as original header ownership.
 - Keep native layouts, signatures, resolvers, and bindings with their owners.
 - Establish resolver ownership before choosing a native path; do not guess a header.
+
+### Source links
+
+Binding files use one explicit source link:
+
+```rust
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h>.
+```
+
+Use the corresponding UE header URL for engine bindings. Keep original ownership
+paths in a separate `Native owner:` note when SDK paths differ. Do not invent
+links for declarations absent from either source tree.
+
+The Neovim native hover reads only `Native source:`. It remaps the repository
+root using Cargo's `[env]` settings in `.cargo/config.toml`:
+
+- `ARGON_SDK_SOURCE_LOCATION`: ArgonSDK `blob/main` by default.
+- `UE_SOURCE_LOCATION`: UnrealEngine `blob/4.25-plus` by default.
+
+Both accept HTTP(S) roots or absolute checkout directories. The checkout root
+must contain `Source/` for ArgonSDK or `Engine/` for UE. Checked-in source URLs
+remain canonical; these settings remap hover links, not ordinary Rustdoc URLs.
+
+For machine-local overrides, copy `.cargo/config.local.toml.example` to
+`.cargo/config.local.toml` and edit the paths. The override file is ignored by
+Git, and the hover reads it automatically. Cargo itself does not auto-load that
+filename; pass `--config .cargo/config.local.toml` when using it with Cargo.
+
+Exported environment variables override configured values unless `force = true`.
+The hover asks Cargo to merge configuration using the project's pinned nightly;
+it does not parse TOML independently. Local links open in Neovim; HTTP(S) links
+open in the browser. Reopen the hover after changing a root.
 
 ## Path rules
 

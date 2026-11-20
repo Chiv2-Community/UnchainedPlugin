@@ -1,0 +1,6 @@
+# Copy to .cargo/config.local.toml and set checkout roots as needed.
+# The native hover reads this file automatically.
+# To use these values in Cargo, pass --config .cargo/config.local.toml.
+[env]
+ARGON_SDK_SOURCE_LOCATION = { value = "/absolute/path/to/ArgonSDK" }
+UE_SOURCE_LOCATION = { value = "/absolute/path/to/UnrealEngine" }

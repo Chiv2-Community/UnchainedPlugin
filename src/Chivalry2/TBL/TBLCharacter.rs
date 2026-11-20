@@ -1,5 +1,5 @@
-//! Native source: TBL/Source/TBL/TBLCharacter.h.
-//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacter.h>.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLCharacter.h>.
+//! Native owner: TBL/Source/TBL/TBLCharacter.h.
 
 use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::*;

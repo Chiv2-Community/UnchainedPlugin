@@ -89,6 +89,9 @@ maximum), and linked detour functions with their full declarations. It also
 works on `bind_resolved_func` attributes. Missing external sources use a labeled
 local-binding link; missing detour references are reported rather than guessed.
 Detours apply only when installed and enabled; direct binding calls bypass them.
+Source links come from a single `Native source:` comment. Configure GitHub or
+local checkout roots with `ARGON_SDK_SOURCE_LOCATION` and `UE_SOURCE_LOCATION`
+in Cargo configuration; see [source links](../docs/engine-sources.md#source-links).
 
 Generated metadata and attachment helpers stay out of those hover spans; inspect
 the expanded macro to view them. Rustdoc links follow the editor's documentation
