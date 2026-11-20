@@ -1,4 +1,5 @@
 //! Native source: TBL/Source/TBL/TBLGameMode.h.
+//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameMode.h>.
 
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::FText;

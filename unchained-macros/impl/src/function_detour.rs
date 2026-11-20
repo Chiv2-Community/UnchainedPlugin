@@ -8,18 +8,12 @@ fn binding_documentation(
     require_resolver: bool,
 ) -> syn::Result<syn::LitStr> {
     let name = &function.sig.ident;
-    let mut declaration = function.clone();
-    declaration.attrs.clear();
-    let source = prettyplease::unparse(&syn::parse2(quote!(#declaration))?);
-    let signature = source.trim_end().strip_suffix("{}")
-        .expect("Native declaration has an empty body").trim_end();
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let resolution = resolution_documentation(resolver, require_resolver);
     let documentation = format!(
-        "Overrides in-game calls to [`{native_name}`](Self::{name}).\n\
-         ```rust\n{signature};\n```\n\
-         Invoking `{native_name}` in this project directly skips this detour.\n\n\
-         Native method resolved by {resolution}."
+        "Native binding to [`{native_name}`](Self::{name}).\n\n\
+         Resolved by {resolution}.\n\n\
+         Direct calls invoke the original implementation, bypassing detours."
     );
     Ok(syn::LitStr::new(&documentation, name.span()))
 }
@@ -304,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn binding_hover_preserves_native_declaration_and_links() {
+    fn binding_hover_identifies_native_method_resolver_and_bypass() {
         let function = syn::parse_quote! {
             /// Existing native safety note.
             pub(crate) unsafe fn Call<'a>(
@@ -317,17 +311,12 @@ mod tests {
         ).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(documentation(&descriptor.attrs).is_empty());
-        assert!(docs.starts_with("Overrides in-game calls to [`Native::Call`](Self::Call)."));
-        assert!(docs.contains("pub(crate) unsafe fn Call<'a>("));
-        assert!(docs.contains("self: *const Self"));
-        assert!(docs.contains("Result: &'a mut FString"));
-        assert!(docs.contains("-> &'a mut FString"));
-        assert!(docs.contains("Native method resolved by [`Native__Call`](self::Native__Call)."));
-        assert!(docs.contains("Invoking `Native::Call` in this project directly skips this detour."));
+        assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
+        assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));
+        assert!(docs.contains("Direct calls invoke the original implementation, bypassing detours."));
         assert!(docs.contains("Existing native safety note."));
         assert!(!docs.contains("impl Native"));
-        assert!(docs.find("```rust").unwrap() < docs.find("Invoking").unwrap());
-        assert!(docs.find("Invoking").unwrap() < docs.find("Native method resolved by").unwrap());
+        assert!(!docs.contains("Overrides in-game calls"));
     }
 
     #[test]
@@ -339,7 +328,7 @@ mod tests {
             quote!(GetPost_Example), &function, &syn::parse_quote!(Client), false,
         ).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(docs.contains("Native method resolved by `GetPost_Example` (offset-registry key;"));
+        assert!(docs.contains("Resolved by `GetPost_Example` (offset-registry key;"));
         assert!(!docs.contains("](GetPost_Example)"));
     }
 

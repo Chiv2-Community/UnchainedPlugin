@@ -1,4 +1,5 @@
 //! Native source: TBL/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h.
+//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h>.
 
 use crate::Chivalry2::Engine::FSoftObjectPath;
 use crate::Chivalry2::Engine::FString;

@@ -1,4 +1,5 @@
 //! Native source: TBL/Source/TBL/TBLGameInstance.h.
+//! SDK header: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLGameInstance.h>.
 
 use crate::Chivalry2::Engine::FLinearColor;
 use crate::Chivalry2::Engine::FText;

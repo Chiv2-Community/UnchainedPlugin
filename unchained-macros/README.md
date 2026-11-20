@@ -82,6 +82,14 @@ signature, a link to the native method, and its resolver name and link.
 Request bindings identify their offset-registry key instead of linking a
 nonexistent resolver type. The detour function's hover links back to the binding.
 Go to definition on the attribute target opens the native source declaration.
+
+Native binding docs identify the binding and resolver. The local Neovim hover
+adds the linked SDK/UE header, the actual resolver declaration (80 characters
+maximum), and linked detour functions with their full declarations. It also
+works on `bind_resolved_func` attributes. Missing external sources use a labeled
+local-binding link; missing detour references are reported rather than guessed.
+Detours apply only when installed and enabled; direct binding calls bypass them.
+
 Generated metadata and attachment helpers stay out of those hover spans; inspect
 the expanded macro to view them. Rustdoc links follow the editor's documentation
 URL handling, which may use docs.rs rather than local source.
