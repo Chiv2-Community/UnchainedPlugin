@@ -3,10 +3,6 @@
 use std::ffi::c_void;
 use unchained_macros::bind_resolved_request_function;
 
-mod resolvers {
-    pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
-}
-
 struct OpenAPIClientAPI {
     value: i32,
 }
@@ -46,7 +42,7 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 #[test]
 fn request_keys_bind_without_corresponding_resolver_types() {
     let mut names = Vec::new();
-    for registration in inventory::iter::<resolvers::FunctionBindingRegistration> {
+    for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
         let binding = registration.binding;
         let address = match binding.name() {
             "GetPost_GetMotd" => get_motd as *const () as usize,

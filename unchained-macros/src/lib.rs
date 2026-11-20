@@ -11,8 +11,16 @@ pub use binding::{FunctionBinding, FunctionBindingRegistration, ValueBinding, Va
 #[doc(hidden)]
 pub use binding::NativeFunction;
 pub use binding::{initialize_value_binding, initialize_value_bindings, is_required_value};
+pub use binding::{initialize_function_bindings, function_is_bound, require_function_bindings};
+pub use registry::{
+    CreateHookFn, HookRegistration, RegistrationPredicate, CreatePatchFn,
+    PatchRegistration, OffsetRegisty,
+};
+pub use platforms::{PlatformType, PLATFORM, current_platform, ResolverPlatform, supports_platform};
 
 mod binding;
+mod registry;
+mod platforms;
 mod patch;
 mod hooks;
 mod signatures;

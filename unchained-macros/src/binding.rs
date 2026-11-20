@@ -100,6 +100,39 @@ pub struct FunctionBindingRegistration {
 
 inventory::collect!(FunctionBindingRegistration);
 
+/// Initialize registered functions from image-relative offsets.
+///
+/// # Safety
+/// Each RVA must identify process-lifetime native code with its binding's ABI
+/// and behavioral contract. Initialize before native calls or detour attachment.
+pub unsafe fn initialize_function_bindings(
+    base: usize,
+    offsets: &std::collections::HashMap<String, u64>,
+) -> Result<(), String> {
+    for registration in inventory::iter::<FunctionBindingRegistration> {
+        let binding = registration.binding;
+        let offset = offsets.get(binding.name())
+            .ok_or_else(|| format!("No address found for native binding {}", binding.name()))?;
+        unsafe { binding.initialize(base, *offset)?; }
+    }
+    Ok(())
+}
+
+pub fn function_is_bound(name: &str) -> bool {
+    inventory::iter::<FunctionBindingRegistration>.into_iter()
+        .any(|registration| registration.binding.name() == name && registration.binding.address().is_some())
+}
+
+/// Preserve fallible helper behavior before native binding initialization.
+pub fn require_function_bindings(names: &[&str]) -> Result<(), String> {
+    for name in names {
+        if !function_is_bound(name) {
+            return Err(format!("Native binding {name} is not initialized"));
+        }
+    }
+    Ok(())
+}
+
 /// Publish the original trampoline to every initialized alias of an entry.
 ///
 /// # Safety

@@ -2,18 +2,7 @@
 #![feature(arbitrary_self_types_pointers)]
 #![allow(non_snake_case)]
 
-mod resolvers {
-    pub static BASE_ADDR: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 1);
-    pub struct HookRegistration {
-        pub name: &'static str,
-        pub hook_fn: unsafe fn(
-            std::collections::HashMap<String, u64>,
-            bool,
-        ) -> Result<Option<usize>, Box<dyn std::error::Error>>,
-        pub condition: fn() -> bool,
-    }
-    inventory::collect!(HookRegistration);
-}
+const BASE: usize = 1;
 
 mod model {
     pub struct DetachedAdd;
@@ -150,9 +139,9 @@ unsafe extern "C" fn request_target(value: i32) -> i32 {
 
 #[test]
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
-    let base = *resolvers::BASE_ADDR;
+    let base = BASE;
     assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
-    assert!(unsafe { __unchained_attach_plugin_add(Default::default(), true) }.is_err());
+    assert!(unsafe { __unchained_attach_plugin_add(base, Default::default(), true) }.is_err());
     for (binding, address) in [
         (
             Native::__UNCHAINED_BINDING_zero.binding(),
@@ -191,7 +180,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             binding.initialize(base, (address - base) as u64).unwrap();
         }
     }
-    let registration = inventory::iter::<resolvers::HookRegistration>
+    let registration = inventory::iter::<unchained_macros::HookRegistration>
         .into_iter()
         .find(|r| r.hook_fn as usize == __unchained_attach_plugin_add as *const () as usize)
         .unwrap();
@@ -201,12 +190,12 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
     assert!((registration.condition)());
     unsafe {
         assert_eq!(Native::add(7), 10);
-        (registration.hook_fn)(Default::default(), true).unwrap();
-        __unchained_attach_plugin_borrow(Default::default(), true).unwrap();
-        __unchained_attach_plugin_storage(Default::default(), true).unwrap();
-        __unchained_attach_plugin_global_off(Default::default(), false).unwrap();
-        __unchained_attach_plugin_zero(Default::default(), true).unwrap();
-        __unchained_attach_plugin_request(Default::default(), true).unwrap();
+        (registration.hook_fn)(base, Default::default(), true).unwrap();
+        __unchained_attach_plugin_borrow(base, Default::default(), true).unwrap();
+        __unchained_attach_plugin_storage(base, Default::default(), true).unwrap();
+        __unchained_attach_plugin_global_off(base, Default::default(), false).unwrap();
+        __unchained_attach_plugin_zero(base, Default::default(), true).unwrap();
+        __unchained_attach_plugin_request(base, Default::default(), true).unwrap();
         assert_eq!(Native::zero(), 17);
         assert_eq!(
             std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(),
@@ -226,8 +215,8 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert_eq!(Native::add(7), 10);
         assert_eq!(Native::alias(7), 10);
         assert_eq!(ADD_CALLS.load(Ordering::SeqCst), 1);
-        assert!(__unchained_attach_duplicate(Default::default(), true).is_err());
-        assert!(__unchained_attach_aliased(Default::default(), true).is_err());
+        assert!(__unchained_attach_duplicate(base, Default::default(), true).is_err());
+        assert!(__unchained_attach_aliased(base, Default::default(), true).is_err());
 
         let native = Native { value: 42 };
         let borrow_call =
@@ -258,11 +247,11 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             5
         );
 
-        let legacy_registration = inventory::iter::<resolvers::HookRegistration>
+        let legacy_registration = inventory::iter::<unchained_macros::HookRegistration>
             .into_iter()
             .find(|r| r.hook_fn as usize == __unchained_attach_legacy_detour as *const () as usize)
             .unwrap();
-        (legacy_registration.hook_fn)(
+        (legacy_registration.hook_fn)(base,
             std::collections::HashMap::from([(
                 "DetachedLegacy".into(),
                 (legacy_target as *const () as usize - base) as u64,
@@ -275,7 +264,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             std::hint::black_box(legacy_target as unsafe extern "C" fn(i32) -> i32)(1),
             506
         );
-        assert!(__unchained_attach_conflicts_with_legacy(Default::default(), true).is_err());
+        assert!(__unchained_attach_conflicts_with_legacy(base, Default::default(), true).is_err());
 
         let original_address = Native::__UNCHAINED_BINDING_add.binding().address();
         __UNCHAINED_HOOK_plugin_add

@@ -29,7 +29,7 @@ pub(crate) fn send_ingame_message_with_world(
         {
             return;
         }
-        if let Err(error) = crate::resolvers::require_function_bindings(&[
+        if let Err(error) = unchained_macros::require_function_bindings(&[
             "GetTBLGameMode",
             "BroadcastLocalizedChat",
         ]) {

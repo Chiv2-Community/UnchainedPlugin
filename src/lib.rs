@@ -6,7 +6,6 @@ pub use unchained_macros::*;
 
 #[macro_use]
 pub mod logging;
-mod resolvers;
 pub mod scan;
 pub mod tools;
 pub mod Chivalry2;
@@ -40,7 +39,6 @@ use crate::features::rcon::handle_rcon;
 use crate::features::server_browser::registration::Registration;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
-use self::resolvers::PlatformType;
 
 
 
@@ -167,7 +165,7 @@ impl BuildInfo {
         resolvers_in
             .into_iter()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
-            .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
+            .filter(|resolver| unchained_macros::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -224,7 +222,7 @@ mod build_info_tests {
     fn incomplete_cache_requires_normal_rescan() {
         let required: Vec<_> = resolvers()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
-            .filter(|resolver| resolvers::supports_platform(resolver.name, PlatformType::STEAM))
+            .filter(|resolver| unchained_macros::supports_platform(resolver.name, PlatformType::STEAM))
             .collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
@@ -365,8 +363,8 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                     return bi as *const BuildInfo;
                 }
                 let offsets = bi.offsets.clone();
-                unsafe { resolvers::initialize_value_bindings(*resolvers::BASE_ADDR, &offsets); }
-                if let Err(error) = unsafe { resolvers::initialize_function_bindings(&offsets) } {
+                unsafe { unchained_macros::initialize_value_bindings(*unchained::startup::BASE_ADDR, &offsets); }
+                if let Err(error) = unsafe { unchained_macros::initialize_function_bindings(*unchained::startup::BASE_ADDR, &offsets) } {
                     serror!("Failed to bind native functions: {}", error);
                     std::process::exit(-67);
                 }
@@ -610,8 +608,8 @@ pub fn attach_hooks(
 
     let platform = crate::get_current_platform();
     // inventory::iter finds everything submitted via CREATE_HOOK!
-    for hook in inventory::iter::<resolvers::HookRegistration> {
-        if !resolvers::supports_platform(hook.name, platform) {
+    for hook in inventory::iter::<unchained_macros::HookRegistration> {
+        if !unchained_macros::supports_platform(hook.name, platform) {
             continue;
         }
         let cond = (hook.condition)();
@@ -621,7 +619,7 @@ pub fn attach_hooks(
             // continue;
         }
 
-        match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
+        match unsafe { (hook.hook_fn)(*unchained::startup::BASE_ADDR, offsets.clone(), cond) } {
             Ok(_) => sinfo!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);
@@ -638,13 +636,13 @@ pub fn attach_hooks(
 /// The base program address of the running application will be used.
 pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
     let platform = crate::get_current_platform();
-    for p in inventory::iter::<resolvers::PatchRegistration> {
-        if !resolvers::supports_platform(p.name, platform) {
+    for p in inventory::iter::<unchained_macros::PatchRegistration> {
+        if !unchained_macros::supports_platform(p.name, platform) {
             continue;
         }
         // Run the condition check
         if (p.enabled_fn)() {
-            match unsafe { (p.patch_fn)(offsets.clone()) } {
+            match unsafe { (p.patch_fn)(*unchained::startup::BASE_ADDR, offsets.clone()) } {
                 Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
                 Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }

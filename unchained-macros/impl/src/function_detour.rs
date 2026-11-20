@@ -198,12 +198,13 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe fn #attach(
+            base_address: usize,
             _offsets: ::std::collections::HashMap<String, u64>, auto_activate: bool,
         ) -> Result<Option<usize>, Box<dyn ::std::error::Error>> {
             let binding = #target.binding();
             let address = binding.entry_address()
                 .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?.get();
-            let offset = address.checked_sub(*crate::resolvers::BASE_ADDR)
+            let offset = address.checked_sub(base_address)
                 .ok_or("Native detour address precedes the module")?;
             if #hook.get().is_some() { return Err(::retour::Error::AlreadyInitialized.into()); }
             let claim = ::unchained_macros::__private::claim_detour_address(address)?;
@@ -221,7 +222,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
         #(#cfg)*
         ::inventory::submit! {
-            crate::resolvers::HookRegistration {
+            ::unchained_macros::HookRegistration {
                 name: #target.name(), hook_fn: #attach, condition: #condition_fn,
             }
         }
@@ -255,6 +256,9 @@ mod tests {
         assert!(text.contains("Native :: __UNCHAINED_BINDING_call"));
         assert!(text.contains("NativeFunction"));
         assert!(text.contains("publish_function_trampolines"));
+        assert!(text.contains("unchained_macros :: HookRegistration"));
+        assert!(text.contains("base_address : usize"));
+        assert!(!text.contains("crate :: resolvers"));
         assert!(!text.contains("PhantomData"));
         assert!(!text.contains("unsafe fn feature ("));
         syn::parse2::<syn::File>(expanded).unwrap();

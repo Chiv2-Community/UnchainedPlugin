@@ -128,7 +128,7 @@ pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 inventory::submit! {
-    crate::resolvers::OffsetRegisty {
+    unchained_macros::OffsetRegisty {
         name: "CreateHttpRequest Get*Post hooks",
         map: || STRING_TO_ROOT_FN.read().unwrap().clone(),
     }
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn only_functional_request_hooks_are_registered() {
-        let mut keys: Vec<_> = inventory::iter::<crate::resolvers::HookRegistration>
+        let mut keys: Vec<_> = inventory::iter::<unchained_macros::HookRegistration>
             .into_iter()
             .map(|registration| registration.name)
             .filter(|name| name.starts_with("GetPost_"))
@@ -368,7 +368,7 @@ mod tests {
                 assert_eq!(first.0, BASE + 0x1000);
             })
         });
-        let registry = inventory::iter::<crate::resolvers::OffsetRegisty>
+        let registry = inventory::iter::<unchained_macros::OffsetRegisty>
             .into_iter()
             .find(|registry| registry.name == "CreateHttpRequest Get*Post hooks")
             .unwrap();

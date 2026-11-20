@@ -1,4 +1,42 @@
-use super::PlatformType;
+//! Storefront selection and explicit resolver restrictions.
+
+use std::sync::OnceLock;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+#[allow(clippy::upper_case_acronyms)]
+pub enum PlatformType {
+    EGS,
+    STEAM,
+    XBOX,
+    OTHER,
+}
+
+pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
+
+pub fn current_platform() -> PlatformType {
+    *PLATFORM.get().expect("Platform not initialized")
+}
+
+impl std::fmt::Display for PlatformType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::str::FromStr for PlatformType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_uppercase().as_str() {
+            "EGS" => Ok(PlatformType::EGS),
+            "STEAM" => Ok(PlatformType::STEAM),
+            "XBOX" => Ok(PlatformType::XBOX),
+            "OTHER" => Ok(PlatformType::OTHER),
+            _ => Err(()),
+        }
+    }
+}
 
 /// Explicit platform restriction shared by a resolver and its hooks and patches.
 pub struct ResolverPlatform {
@@ -19,7 +57,8 @@ pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unchained_macros::signature::Call_signature;
+    use crate::{define_pattern_resolver, define_single_platform_pattern_resolver};
+    use crate::signature::Call_signature;
     use patternsleuth::resolvers::ensure_one;
     define_single_platform_pattern_resolver!(STEAM, TestSteamOnly, ["AA BB"]);
 
@@ -35,6 +74,7 @@ mod tests {
     define_pattern_resolver!(TestShared, ["11 22"]);
 
     mod nested {
+        use crate::define_pattern_resolver;
         define_pattern_resolver!(TestNestedPlatform, {
             STEAM: ["AA BB"],
             OTHER: ["CC DD"]
@@ -50,7 +90,7 @@ mod tests {
     #[test]
     fn platform_resolvers_register_from_nested_modules() {
         for name in ["TestNestedPlatform", "TestNestedSimplePlatform"] {
-            assert!(crate::resolvers().any(|resolver| resolver.name == name));
+            assert!(patternsleuth::resolvers::resolvers().any(|resolver| resolver.name == name));
         }
     }
 

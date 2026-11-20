@@ -8,22 +8,8 @@ extern crate unchained_macros;
 // Distinct black-box tags keep optimized fixture entry points from being folded
 // together. Each test must own a different patch target, even for identical ABIs.
 
-// The macro consumer supplies startup registration. A synthetic nonzero base
-// keeps these tests independent of the plugin and exercises address overflow.
-mod resolvers {
-    pub use unchained_macros::FunctionBindingRegistration;
-    pub static BASE_ADDR: std::sync::LazyLock<usize> = std::sync::LazyLock::new(|| 1);
-
-    pub struct HookRegistration {
-        pub name: &'static str,
-        pub hook_fn: unsafe fn(
-            std::collections::HashMap<String, u64>, bool,
-        ) -> Result<Option<usize>, Box<dyn std::error::Error>>,
-        pub condition: fn() -> bool,
-    }
-
-    inventory::collect!(HookRegistration);
-}
+// A synthetic nonzero base exercises image-relative offsets and overflow.
+const BASE: usize = 1;
 
 CREATE_HOOK!(TestVoidBasic, (value: i32), {});
 
@@ -72,7 +58,7 @@ mod request_methods {
 
     #[test]
     fn request_key_detours_attach_without_resolver_types_and_preserve_original_calls() {
-        let base = *crate::resolvers::BASE_ADDR;
+        let base = crate::BASE;
         let offsets = std::collections::HashMap::from([
             ("GetPost_TestInventory".into(), (inventory_target as *const () as usize - base) as u64),
             ("GetPost_TestDisabled".into(), (disabled_target as *const () as usize - base) as u64),
@@ -81,13 +67,13 @@ mod request_methods {
         let mut client = Client { value: 40 };
         let pointer = &raw mut client;
         assert!(std::panic::catch_unwind(|| unsafe { pointer.get_post_test_inventory(1) }).is_err());
-        let direct = inventory::iter::<crate::resolvers::FunctionBindingRegistration>.into_iter()
+        let direct = inventory::iter::<unchained_macros::FunctionBindingRegistration>.into_iter()
             .find(|registration| registration.binding.name() == "GetPost_TestDirect").unwrap();
         unsafe { direct.binding.initialize(base, offsets["GetPost_TestDirect"]).unwrap(); }
         for name in ["GetPost_TestInventory", "GetPost_TestDisabled"] {
-            let registration = inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+            let registration = inventory::iter::<unchained_macros::HookRegistration>.into_iter()
                 .find(|registration| registration.name == name).unwrap();
-            unsafe { (registration.hook_fn)(offsets.clone(), true).unwrap(); }
+            unsafe { (registration.hook_fn)(base, offsets.clone(), true).unwrap(); }
         }
         assert!(unchained_macros::detour_is_enabled("GetPost_TestInventory"));
         assert!(unchained_macros::detour_is_initialized("GetPost_TestDisabled"));
@@ -102,7 +88,7 @@ mod request_methods {
             assert_eq!(client.get_post_test_disabled(1), 43);
             assert_eq!(client.get_post_test_disabled_detour(1), 63);
         }
-        assert!(!inventory::iter::<crate::resolvers::HookRegistration>.into_iter()
+        assert!(!inventory::iter::<unchained_macros::HookRegistration>.into_iter()
             .any(|registration| registration.name == "GetPost_Excluded"));
     }
 }
@@ -160,14 +146,14 @@ mod resolved_detours {
 
     #[test]
     fn registered_attributes_attach_and_call_trampolines() {
-        let base = *crate::resolvers::BASE_ADDR;
+        let base = crate::BASE;
         let offsets = std::collections::HashMap::from([
             ("AttributeAdd".into(), (add_target as *const () as usize - base) as u64),
             ("AttributeBorrow".into(), (borrow_target as *const () as usize - base) as u64),
             ("AttributeZero".into(), (zero_target as *const () as usize - base) as u64),
             ("AttributeGlobalOff".into(), (off_target as *const () as usize - base) as u64),
         ]);
-        let registration = |name| inventory::iter::<crate::resolvers::HookRegistration>
+        let registration = |name| inventory::iter::<unchained_macros::HookRegistration>
             .into_iter().find(|r| r.name == name).unwrap();
         let add_registration = registration("AttributeAdd");
         assert!(!(add_registration.condition)());
@@ -178,14 +164,14 @@ mod resolved_detours {
             assert!(!unchained_macros::detour_is_enabled("AttributeAdd"));
             assert!(!unchained_macros::detour_is_initialized("MissingDetour"));
             assert!(std::panic::catch_unwind(|| add(5)).is_err());
-            assert!((add_registration.hook_fn)(Default::default(), true).is_err());
-            assert!((add_registration.hook_fn)(
+            assert!((add_registration.hook_fn)(base, Default::default(), true).is_err());
+            assert!((add_registration.hook_fn)(base,
                 std::collections::HashMap::from([("AttributeAdd".into(), u64::MAX)]), true,
             ).is_err());
-            (add_registration.hook_fn)(offsets.clone(), true).unwrap();
-            (registration("AttributeBorrow").hook_fn)(offsets.clone(), true).unwrap();
-            (registration("AttributeZero").hook_fn)(offsets.clone(), true).unwrap();
-            (registration("AttributeGlobalOff").hook_fn)(offsets.clone(), false).unwrap();
+            (add_registration.hook_fn)(base, offsets.clone(), true).unwrap();
+            (registration("AttributeBorrow").hook_fn)(base, offsets.clone(), true).unwrap();
+            (registration("AttributeZero").hook_fn)(base, offsets.clone(), true).unwrap();
+            (registration("AttributeGlobalOff").hook_fn)(base, offsets.clone(), false).unwrap();
             assert!(unchained_macros::detour_is_initialized("AttributeAdd"));
             assert!(unchained_macros::detour_is_enabled("AttributeAdd"));
             assert!(unchained_macros::detour_is_initialized("AttributeGlobalOff"));
@@ -194,7 +180,7 @@ mod resolved_detours {
             let zero_call = std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32);
             assert_eq!(add_call(5), 18);
             assert_eq!(add(5), 8);
-            assert!((add_registration.hook_fn)(offsets, true).is_err());
+            assert!((add_registration.hook_fn)(base, offsets, true).is_err());
             assert_eq!(zero_call(), 18);
             assert_eq!(zero(), 17);
             assert!(!__UNCHAINED_HOOK_borrow_detour.get().unwrap().is_enabled());
@@ -319,7 +305,7 @@ mod runtime_binding_methods {
 
     #[test]
     fn impl_detours_generate_suffix_stripped_trampoline_methods() {
-        let base = *crate::resolvers::BASE_ADDR;
+        let base = crate::BASE;
         let offsets = std::collections::HashMap::from([
             ("MethodAdd".into(), (add_target as *const () as usize - base) as u64),
             ("MethodBorrow".into(), (borrow_target as *const () as usize - base) as u64),
@@ -331,9 +317,9 @@ mod runtime_binding_methods {
         ]);
         for name in ["MethodAdd", "MethodBorrow", "MethodRaw", "OtherAdd",
             "MethodMutBorrow", "MethodArgBorrow", "MethodMake"] {
-            let registration = inventory::iter::<crate::resolvers::HookRegistration>
+            let registration = inventory::iter::<unchained_macros::HookRegistration>
                 .into_iter().find(|r| r.name == name).unwrap();
-            unsafe { (registration.hook_fn)(offsets.clone(), true).unwrap(); }
+            unsafe { (registration.hook_fn)(base, offsets.clone(), true).unwrap(); }
         }
         let mut native = Native { value: 10 };
         unsafe {
@@ -404,14 +390,14 @@ unsafe extern "C" fn mut_borrowed_target(value: &mut i32) -> &mut i32 {
 fn lifetime_hooks_preserve_borrows_and_disabled_original_calls() {
     let _: for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32 = TestBorrowed_detour_fkt;
     let _: for<'a> unsafe extern "C" fn(&'a mut i32) -> &'a mut i32 = TestMutBorrowed_detour_fkt;
-    let base = *crate::resolvers::BASE_ADDR;
+    let base = crate::BASE;
     let offsets = std::collections::HashMap::from([
         ("TestBorrowed".into(), (borrowed_target as *const () as usize - base) as u64),
         ("TestMutBorrowed".into(), (mut_borrowed_target as *const () as usize - base) as u64),
     ]);
     unsafe {
-        attach_TestBorrowed(offsets.clone(), true).unwrap();
-        attach_TestMutBorrowed(offsets, true).unwrap();
+        attach_TestBorrowed(base, offsets.clone(), true).unwrap();
+        attach_TestMutBorrowed(base, offsets, true).unwrap();
         assert!(!o_TestBorrowed.get().unwrap().is_enabled());
         assert!(!o_TestMutBorrowed.get().unwrap().is_enabled());
         let input = 17;

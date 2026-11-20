@@ -10,7 +10,8 @@ use crate::Chivalry2::Engine::UWorld;
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
-use crate::{resolvers::{PLATFORM, PlatformType}, tools::cli_args::CLIArgs};
+use unchained_macros::{PLATFORM, PlatformType};
+use crate::tools::cli_args::CLIArgs;
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 use parking_lot::RwLock;
 use patternsleuth::resolvers::unreal::{
@@ -195,7 +196,7 @@ pub fn init_globals() -> Result<(), String> {
     PLATFORM.set(platform).expect("Platform already set");
     sinfo!(
         "Platform: {} base_addr: '0x{:x?}'",
-        platform, *crate::resolvers::BASE_ADDR
+        platform, *crate::unchained::startup::BASE_ADDR
     );
 
     // Load CLI ARGS
@@ -204,11 +205,11 @@ pub fn init_globals() -> Result<(), String> {
     // initialization that has not run the cached preinit binding pass.
     let gmalloc = exe.resolve(GMalloc::resolver())
         .unwrap_or_else(|error| panic!("Required native value GMalloc could not be resolved: {error}"));
-    unsafe { crate::resolvers::initialize_value_binding("GMalloc",
+    unsafe { unchained_macros::initialize_value_binding("GMalloc",
         usize::try_from(gmalloc.0).expect("GMalloc address does not fit a pointer")); }
     let guobject_array = exe.resolve(GUObjectArray::resolver())
         .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
-    unsafe { crate::resolvers::initialize_value_binding("GUObjectArray",
+    unsafe { unchained_macros::initialize_value_binding("GUObjectArray",
         usize::try_from(guobject_array.0).expect("GUObjectArray address does not fit a pointer")); }
     let result = panic::catch_unwind(|| {
         let resolution = exe.resolve(DllHookResolution::resolver())

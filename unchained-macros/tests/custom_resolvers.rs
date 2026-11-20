@@ -11,18 +11,21 @@ const BASE: u64 = 0x1_4000_0000;
 const TEXT: u64 = BASE + 0x1000;
 static EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 
-mod resolvers {
-    #[derive(Clone, Copy)]
-    pub enum PlatformType { Steam, Egs, Other }
+use unchained_macros::{PlatformType, PLATFORM};
 
-    thread_local! {
-        pub static PLATFORM: std::cell::Cell<PlatformType> =
-            const { std::cell::Cell::new(PlatformType::Other) };
+// Storefront selection is process-wide and immutable. Isolate each selection.
+fn initialize_platform(platform: PlatformType) -> bool {
+    if std::env::var_os("UNCHAINED_PLATFORM_FIXTURE").is_some() {
+        PLATFORM.set(platform).unwrap();
+        return true;
     }
-
-    pub fn current_platform() -> PlatformType {
-        PLATFORM.get()
-    }
+    let thread = std::thread::current();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", thread.name().unwrap(), "--nocapture"])
+        .env("UNCHAINED_PLATFORM_FIXTURE", "1")
+        .status().unwrap();
+    assert!(status.success());
+    false
 }
 
 define_custom_resolver!(RootAddress, {
@@ -45,9 +48,9 @@ define_custom_resolver!(InvalidPattern, BinaryMatcher::patterns(["not hex"])?.en
 
 define_custom_resolver!(PlatformAddress, |platform| {
     let pattern = match platform {
-        resolvers::PlatformType::Steam => "AA BB",
-        resolvers::PlatformType::Egs => "11 22",
-        resolvers::PlatformType::Other => "not hex",
+        PlatformType::STEAM => "AA BB",
+        PlatformType::EGS => "11 22",
+        PlatformType::XBOX | PlatformType::OTHER => "not hex",
     };
     BinaryMatcher::patterns([pattern])?.ensure_one()
 });
@@ -106,16 +109,16 @@ fn arbitrary_matchers_share_the_resolver_cache_and_preserve_u64_addresses() {
     assert_eq!(EVALUATIONS.load(Ordering::SeqCst), 1);
 }
 
-#[test_case::test_case(resolvers::PlatformType::Steam, TEXT + 0x10; "steam")]
-#[test_case::test_case(resolvers::PlatformType::Egs, TEXT; "egs")]
-fn platform_factory_selects_the_matching_signature(platform: resolvers::PlatformType, expected: u64) {
-    resolvers::PLATFORM.set(platform);
+#[test_case::test_case(PlatformType::STEAM, TEXT + 0x10; "steam")]
+#[test_case::test_case(PlatformType::EGS, TEXT; "egs")]
+fn platform_factory_selects_the_matching_signature(platform: PlatformType, expected: u64) {
+    if !initialize_platform(platform) { return; }
     assert_eq!(image(&[0x10]).resolve(PlatformAddress::resolver()).unwrap().0, expected);
 }
 
 #[test]
 fn platform_factory_construction_errors_keep_resolver_context() {
-    resolvers::PLATFORM.set(resolvers::PlatformType::Other);
+    if !initialize_platform(PlatformType::OTHER) { return; }
     let error = image(&[]).resolve(PlatformAddress::resolver()).unwrap_err().to_string();
     assert!(error.contains("PlatformAddress"), "{error}");
     assert!(error.contains("invalid pattern"), "{error}");

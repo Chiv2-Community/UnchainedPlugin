@@ -1,15 +1,26 @@
 # unchained-macros
 
-Owns generic hook/detour generation, original-call helpers, memory-patch
-registration and signature-resolver macros.
+Owns generic hook/detour generation, original-call helpers, native binding
+initialization, runtime registries, storefront filtering, and resolver macros.
 
-Runtime types and macro invocations stay in the plugin. These macros refer to
-the consuming plugin's private modules through `crate::`; references to other
-macros use `$crate::` to reach this library. Feature checks remain at the call
-site. The plugin imports and re-exports these macros from its crate root.
+Native declarations and macro invocations stay in the plugin. Generated
+registrations reference this crate directly, not a consumer `resolvers` module.
+Feature checks remain at the call site.
 
-Logging, rich text, gameplay-specific macros and the procedural attributes in
-`sleuth_macros` remain unchanged. Plugin tests exercise generated hook
+## Runtime support
+
+- `HookRegistration`, `PatchRegistration`, and `OffsetRegisty` own the inventories.
+- `initialize_function_bindings(base, &offsets)` and
+  `initialize_value_bindings(base, &offsets)` initialize native bindings.
+- Hook and patch callbacks take the executable base as their first argument.
+  The host discovers that base; this crate does not query Windows.
+- `PLATFORM` stores the host-selected storefront once. `current_platform()`
+  and `supports_platform(name, platform)` serve resolver and startup filtering.
+- Patch operations still use the consumer's `crate::tools::memtools` backend.
+- See the [resolver reference](resolvers.md).
+
+Logging, rich text, and gameplay-specific macros stay in the plugin; other
+procedural attributes stay in `sleuth_macros`. Tests exercise generated hook
 signatures and lifetime-aware attachment against local fixture functions,
 not game functions.
 
@@ -46,15 +57,15 @@ Use the platform-aware form to select a matcher at resolution time:
 ```rust,ignore
 define_custom_resolver!(PlatformFunction, |platform| {
     let pattern = match platform {
-        crate::resolvers::PlatformType::STEAM => "AA BB",
-        crate::resolvers::PlatformType::EGS => "CC DD",
+        unchained_macros::PlatformType::STEAM => "AA BB",
+        unchained_macros::PlatformType::EGS => "CC DD",
         _ => return Err(patternsleuth::resolvers::ResolveError::new_msg("Unsupported platform")),
     };
     BinaryMatcher::patterns([pattern])?.ensure_one()
 });
 ```
 
-The body receives `crate::resolvers::current_platform()` and may use `?`.
+The body receives `unchained_macros::current_platform()` and may use `?`.
 It still must produce one `u64` address. This selects matcher behavior; it
 does not register a platform restriction for hooks or patches.
 
@@ -97,15 +108,15 @@ impl MyType {
   lifetimes for standalone borrowed results.
 - Native ABI is `extern "C"`; signatures must match the resolved native function.
   Native calls must not unwind through the detour.
-- The consuming crate supplies `retour`, `inventory`, and the plugin's resolver
-  registration types, as with `CREATE_HOOK!`.
+- The consuming crate supplies `retour` and `inventory`, as with `CREATE_HOOK!`.
+  Registration types come from this crate.
 
 Direct empty unsafe stubs use `#[bind_resolved_func(Resolver)]`.
 
 `detour_is_initialized("Resolver")` and `detour_is_enabled("Resolver")` expose
 generated detour state without exposing storage. Unknown names return `false`.
-Use initialization checks before optional native calls; disabled detours still
-provide their original trampoline.
+Disabled detours still provide their original trampoline.
+Assume startup initialized required bindings.
 
 ## Required native values
 

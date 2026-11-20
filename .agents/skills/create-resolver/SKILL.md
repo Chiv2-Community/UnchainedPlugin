@@ -9,7 +9,7 @@ Find the verified native target, then resolve its address reproducibly.
 
 - Follow [Creating game hooks](../../../CONTRIBUTING.md#creating-game-hooks)
   and the [native source layout](../../../docs/engine-sources.md).
-- Read the [resolver reference](../../../src/resolvers/README.md) and nearby
+- Read the [resolver reference](../../../unchained-macros/resolvers.md) and nearby
   implementations before choosing a scan strategy.
 - This skill locates addresses; binding declarations and plugin behavior are
   separate work.
@@ -66,7 +66,7 @@ Reuse an existing resolver when it already resolves the verified target.
 - Resolver identifiers are cache/registration keys. For explicitly requested
   renames, update every consumer and baseline; expect fresh scans under new keys.
 - If source ownership remains unproven, follow the
-  [unresolved-target policy](../../../src/resolvers/README.md); do not fabricate
+  [native ownership guidance](../../../unchained-macros/resolvers.md); do not fabricate
   a native header or receiver.
 - Choose the narrowest verified search:
   - `Simple`: one unique byte-pattern address.

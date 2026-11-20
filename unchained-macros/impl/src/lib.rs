@@ -128,10 +128,10 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     });
     function.block = Box::new(syn::parse2(quote!({
         #resolver_type_check
-        static #binding: crate::resolvers::FunctionBinding =
-            crate::resolvers::FunctionBinding::new(#resolver_name);
+        static #binding: ::unchained_macros::FunctionBinding =
+            ::unchained_macros::FunctionBinding::new(#resolver_name);
         ::inventory::submit! {
-            crate::resolvers::FunctionBindingRegistration { binding: &#binding }
+            ::unchained_macros::FunctionBindingRegistration { binding: &#binding }
         }
         let #native: unsafe extern "C" fn(#(#types),*) #output = unsafe {
             ::core::mem::transmute(#binding.address()
@@ -214,10 +214,10 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
     function.block = Box::new(syn::parse2(quote!({
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-        static #binding: crate::resolvers::ValueBinding =
-            crate::resolvers::ValueBinding::new(#resolver_name);
+        static #binding: ::unchained_macros::ValueBinding =
+            ::unchained_macros::ValueBinding::new(#resolver_name);
         ::inventory::submit! {
-            crate::resolvers::ValueBindingRegistration { binding: &#binding }
+            ::unchained_macros::ValueBindingRegistration { binding: &#binding }
         }
         fn __require_copy<T: ::core::marker::Copy>() {}
         __require_copy::<#ty>();

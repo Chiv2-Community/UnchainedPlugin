@@ -145,7 +145,7 @@ Use BinaryBloodhound to compose searches and recover function entries.
 - Use `|platform| { ... }` for platform-dependent matcher construction.
   This selects the search; it does not register a platform restriction.
 - For inline async scans or mixed-mode resolvers, see the
-  [resolver reference](src/resolvers/README.md#macros).
+  [resolver reference](unchained-macros/resolvers.md#macros).
 - See [custom resolver examples](unchained-macros/README.md#custom-resolvers)
   for error handling and platform-aware searches.
 

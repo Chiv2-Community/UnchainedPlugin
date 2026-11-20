@@ -1,8 +1,8 @@
 
-# Chiv 2 Resolvers
+# Native resolvers
 
 For the resolver → native binding → plugin detour workflow, see
-[Creating game hooks](../../CONTRIBUTING.md#creating-game-hooks).
+[Creating game hooks](../CONTRIBUTING.md#creating-game-hooks).
 
 Resolver definitions and native bindings live beside their native owners under
 `src/Chivalry2/TBL` and `TBLLoadingScreen` (game modules), `src/Chivalry2/Engine` (UE 4.25-plus modules),
@@ -12,15 +12,15 @@ recovered. Generated per-type SDK splits do not establish original header owners
 Custom blueprint layouts and adapters live under `src/unchained/blueprints`. Startup and
 integration patches live under `src/unchained/patches`.
 Engine paths mirror native source-category/module/header paths, omitting header
-visibility directories. See the [source layout rules](../../docs/engine-sources.md).
+visibility directories. See the [source layout rules](../docs/engine-sources.md).
 Plugin replacements live with instruction patches under `src/unchained/patches`, targeting a native
 method with `#[bind_func_detour(Type::Method, condition)]`. Organize them by
 plugin purpose, using `main`'s resolver feature groups as the basis, not by
 native class/header paths. See
-[native bindings and plugin detours](../../docs/native-bindings.md).
+[native bindings and plugin detours](../docs/native-bindings.md).
 All production detours use this split.
-This directory contains shared registration, platform filtering, and tests;
-do not add forwarding handlers here.
+Shared registration, binding initialization, and platform filtering live in
+`unchained-macros`; native resolver declarations stay with their owners.
 
 Native source order:
 
@@ -40,13 +40,16 @@ Keep cfg restrictions intact.
 - Keep upstream resolver type names and intentional integration aliases intact.
 - Resolver names are cache keys; update every consumer when explicitly renaming one.
 
-What remains here:
+Runtime support:
 
-- `mod.rs`: process image base, function-binding initialization/readiness checks,
-  hook/patch/offset inventories, and plugin registration invariants.
-- `platforms.rs`: platform restrictions and filtering tests.
-- Reusable macros, typed signatures, and native hook tests:
-  [`unchained-macros`](../../unchained-macros).
+- [`src/registry.rs`](src/registry.rs): hook, patch, and offset inventories.
+- [`src/binding.rs`](src/binding.rs): native binding initialization and state.
+- [`src/platforms.rs`](src/platforms.rs): storefront selection and restrictions.
+- The plugin discovers its executable base in
+  [`startup.rs`](../src/unchained/startup.rs) and passes it to binding initialization,
+  hook attachment, and patch callbacks.
+- Plugin registration invariants remain in
+  [`native_bindings_tests.rs`](../src/unchained/native_bindings_tests.rs).
 
 - Native methods use `#[runtime_bindings] impl Type` and
   `#[bind_resolved_func(Resolver)] unsafe fn name(...) {}`.
@@ -57,9 +60,9 @@ What remains here:
 - Native resolvers stay with their owners; `CREATE_PATCH!` belongs in the relevant
   functional module under `src/unchained/patches`.
 - Native owners that are not established remain free functions, not guessed receivers.
-- Examples: [`UGameEngine`](../Chivalry2/Engine/Runtime/Engine/Engine/GameEngine.rs),
-  [`UObject::LoadConfig`](../Chivalry2/Engine/Runtime/CoreUObject/UObject/Object.rs), and
-  [`UNetDriver` patches](../unchained/patches/hosting/desync/net_mode.rs).
+- Examples: [`UGameEngine`](../src/Chivalry2/Engine/Runtime/Engine/Engine/GameEngine.rs),
+  [`UObject::LoadConfig`](../src/Chivalry2/Engine/Runtime/CoreUObject/UObject/Object.rs), and
+  [`UNetDriver` patches](../src/unchained/patches/hosting/desync/net_mode.rs).
 
 ## Macros
 The `define_pattern_resolver` macro eliminates overhead when defining resolvers.
@@ -164,9 +167,9 @@ define_pattern_resolver!(GetMotd3, {
 
 
 ### Relevant files
-- [Resolver macros](../../unchained-macros/src/signatures.rs)
-- [Typed signatures](../../unchained-macros/src/signature.rs)
-- [Native hook tests](../../unchained-macros/tests/native_hooks.rs)
+- [Resolver macros](src/signatures.rs)
+- [Typed signatures](src/signature.rs)
+- [Native hook tests](tests/native_hooks.rs)
 
 ### Notes
 - Runtime platform names are `STEAM`, `EGS`, `XBOX`, and `OTHER`.

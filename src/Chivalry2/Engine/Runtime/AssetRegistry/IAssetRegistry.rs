@@ -46,7 +46,7 @@ impl IAssetRegistry {
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = AssetRegistryScriptInterface::new();
-        crate::resolvers::require_function_bindings(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
+        unchained_macros::require_function_bindings(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
         UAssetRegistryHelpers::GetAssetRegistry(&mut registry);
         registry.asset_registry()
     }

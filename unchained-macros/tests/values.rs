@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
 use unchained_macros::{bind_resolver_value, initialize_value_binding, initialize_value_bindings, ValueBinding};
 
 mod resolvers {
-    pub use unchained_macros::{ValueBinding, ValueBindingRegistration};
     pub struct Count;
     pub struct Allocator;
     pub struct Objects;

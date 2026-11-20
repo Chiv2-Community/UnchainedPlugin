@@ -3,7 +3,6 @@
 use unchained_macros::bind_resolved_func;
 
 mod resolvers {
-    pub use unchained_macros::{FunctionBinding, FunctionBindingRegistration};
     pub struct Read;
     pub struct Write;
     pub struct RawRead;
@@ -61,7 +60,7 @@ unsafe extern "C" fn return_storage<'a>(value: *const Native, output: &'a mut i3
 }
 
 fn initialize() {
-    for registration in inventory::iter::<resolvers::FunctionBindingRegistration> {
+    for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
         let address = match registration.binding.name() {
             "Read" | "RawRead" => read as *const () as usize,
             "Write" | "RawWrite" => write as *const () as usize,
@@ -100,7 +99,7 @@ fn uninitialized_binding_fails_before_native_call() {
 
 #[test]
 fn binding_initialization_is_idempotent_but_not_rebindable() {
-    let binding = resolvers::FunctionBinding::new("example");
+    let binding = unchained_macros::FunctionBinding::new("example");
     assert!(binding.address().is_none());
     // This local, unregistered binding is never invoked as native code.
     unsafe { binding.initialize(10, 20).unwrap(); }
@@ -127,7 +126,7 @@ fn generated_bindings_preserve_receiver_and_return_storage_lifetimes() {
 #[test_case::test_case(0, 1; "missing module")]
 #[test_case::test_case(usize::MAX, 1; "address overflow")]
 fn invalid_initialization_leaves_binding_uninitialized(base: usize, offset: u64) {
-    let binding = resolvers::FunctionBinding::new("invalid");
+    let binding = unchained_macros::FunctionBinding::new("invalid");
     assert!(unsafe { binding.initialize(base, offset) }.is_err());
     assert!(binding.address().is_none());
 }

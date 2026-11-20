@@ -93,7 +93,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
 }
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() || !crate::resolvers::function_is_bound("FText__ToString") {
+    if text.is_null() || !unchained_macros::function_is_bound("FText__ToString") {
         return None;
     }
     let string = unsafe { FText::from_ptr(text)?.ToString() };

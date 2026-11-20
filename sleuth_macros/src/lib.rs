@@ -101,9 +101,9 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
             let mut sigs: Vec<&str> = vec![#(#global_patterns),*];
             sigs.extend_from_slice(&[#(#priority_strings),*]);
             
-            match crate::resolvers::current_platform() {
-                crate::resolvers::PlatformType::STEAM => sigs.extend_from_slice(&[#(#steam_patterns),*]),
-                crate::resolvers::PlatformType::EGS => sigs.extend_from_slice(&[#(#egs_patterns),*]),
+            match ::unchained_macros::current_platform() {
+                ::unchained_macros::PlatformType::STEAM => sigs.extend_from_slice(&[#(#steam_patterns),*]),
+                ::unchained_macros::PlatformType::EGS => sigs.extend_from_slice(&[#(#egs_patterns),*]),
                 _ => {}
             }
 
@@ -229,9 +229,9 @@ pub fn custom_resolver(_args: TokenStream, input: TokenStream) -> TokenStream {
                         factory: |ctx| {
                             Box::pin(async move {
                                 let mut active_sigs: Vec<&str> = vec![#(#global_patterns),*];
-                                match crate::resolvers::current_platform() {
-                                    crate::resolvers::PlatformType::STEAM => active_sigs.extend_from_slice(&[#(#steam_patterns),*]),
-                                    crate::resolvers::PlatformType::EGS => active_sigs.extend_from_slice(&[#(#egs_patterns),*]),
+                                match ::unchained_macros::current_platform() {
+                                    ::unchained_macros::PlatformType::STEAM => active_sigs.extend_from_slice(&[#(#steam_patterns),*]),
+                                    ::unchained_macros::PlatformType::EGS => active_sigs.extend_from_slice(&[#(#egs_patterns),*]),
                                     _ => {}
                                 }
 

@@ -355,11 +355,12 @@ fn expand_function(
             #(#cfg)*
             #[allow(non_snake_case)]
             unsafe fn #attach(
+                base_address: usize,
                 offsets: ::std::collections::HashMap<String, u64>, auto_activate: bool,
             ) -> Result<Option<usize>, Box<dyn ::std::error::Error>> {
                 let offset = usize::try_from(*offsets.get(#name)
                     .ok_or_else(|| format!("No address found for {}", #name))?)?;
-                let address = (*crate::resolvers::BASE_ADDR).checked_add(offset)
+                let address = base_address.checked_add(offset)
                     .ok_or("Native detour address overflow")?;
                 if address == 0 { return Err("Native detour address is null".into()); }
                 if #hook.get().is_some() {
@@ -381,7 +382,7 @@ fn expand_function(
             }
             #(#cfg)*
             ::inventory::submit! {
-                crate::resolvers::HookRegistration {
+                ::unchained_macros::HookRegistration {
                     name: #name, hook_fn: #attach, condition: #condition_fn,
                 }
             }

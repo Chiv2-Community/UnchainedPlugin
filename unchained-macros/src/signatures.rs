@@ -80,7 +80,7 @@ macro_rules! define_pocess {
                 // print!("PART RESULT: {:?}", offset);
                 results.push(offset);
             }
-            ensure_one(results.into_iter().flatten())
+            ::patternsleuth::resolvers::ensure_one(results.into_iter().flatten())
         })
     }};
 
@@ -148,9 +148,9 @@ macro_rules! define_pocess {
 macro_rules! define_single_platform_pattern_resolver {
     ($platform:ident, $name:ident, $($resolver:tt)+) => {
         inventory::submit! {
-            crate::resolvers::ResolverPlatform {
+            $crate::ResolverPlatform {
                 name: stringify!($name),
-                platform: crate::resolvers::PlatformType::$platform,
+                platform: $crate::PlatformType::$platform,
             }
         }
         $crate::define_pattern_resolver!($name, $($resolver)+);
@@ -170,40 +170,40 @@ macro_rules! define_pattern_resolver {
     // Called with Mode (Process) specified
     //  (NAME, MODE, LIST)
     ($name:ident, $mode:ident, [ $( $pattern:expr ),+ $(,)? ]) => {
-        define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let patterns = [ $( $pattern ),+ ];
 
-            define_pocess!(@emit_body $name, $mode, ctx, patterns)
+            $crate::define_pocess!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
     // Called with a body block
     // (NAME, LIST, |ctx, patterns| { CODE } )
     ($name:ident, [ $( $pattern:expr ),+ $(,)? ], |$ctx:ident, $patterns:ident| $body:block) => {
-        define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
             let $patterns = [ $( $pattern ),+ ];
 
-            define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
+            $crate::define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
         });
     };
 
     // Called with Mode (Process) specified
     //  (NAME, MODE, DICT)
     ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let platform = crate::resolvers::current_platform();
+            let platform = $crate::current_platform();
             let mut patterns: Vec<_> = Vec::new();
-            for var in [platform, crate::resolvers::PlatformType::OTHER] {
+            for var in [platform, $crate::PlatformType::OTHER] {
                 // println!("Testing {}", stringify!($name));
                 let pattern_part: &[_] = match var {
                     $(
-                        crate::resolvers::PlatformType::$platform => &[ $( $pattern ),+ ],
+                        $crate::PlatformType::$platform => &[ $( $pattern ),+ ],
                     )+
                     _ => &[],
                 };
@@ -211,23 +211,23 @@ macro_rules! define_pattern_resolver {
                 patterns.extend_from_slice(pattern_part);
             }
             // println!("combined {:?}", patterns);
-            define_pocess!(@emit_body $name, $mode, ctx, patterns)
+            $crate::define_pocess!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
     // Called with a body block
     //  (NAME, MODE, DICT)
     ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
-        define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
-            let platform = crate::resolvers::current_platform();
+            let platform = $crate::current_platform();
             let mut $patterns: Vec<_> = Vec::new();
-            for var in [platform, crate::resolvers::PlatformType::OTHER] {
+            for var in [platform, $crate::PlatformType::OTHER] {
                 // println!("Testing {}", stringify!($name));
                 let pattern_part: &[_] = match var {
                     $(
-                        crate::resolvers::PlatformType::$platform => &[ $( $pattern ),+ ],
+                        $crate::PlatformType::$platform => &[ $( $pattern ),+ ],
                     )+
                     _ => &[],
                 };
@@ -236,7 +236,7 @@ macro_rules! define_pattern_resolver {
             }
             // println!("combined {:?}", patterns);
 
-            define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
+            $crate::define_pocess!(@emit_process_inline $name, |ctx, patterns| $body)
         });
     };
 
@@ -248,7 +248,7 @@ macro_rules! define_pattern_resolver {
     //     function_first_signature("4C 89")
     // ]];
     ($name:ident,[ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ]) => {
-            define_pattern_resolver![$name, MultiCall,
+            $crate::define_pattern_resolver![$name, MultiCall,
                 [ $( $call_type ($pattern) ),+ ]
             ];
     };
@@ -262,7 +262,7 @@ macro_rules! define_pattern_resolver {
     //     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
     // });
     ($name:ident, { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($name, MultiCall, {
+        $crate::define_pattern_resolver!($name, MultiCall, {
             $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
         });
     };
@@ -275,7 +275,7 @@ macro_rules! define_pattern_resolver {
     //         "4C 89"
     //     ]);
     ($name:ident, [ $( $pattern:expr ),+ $(,)? ]) => {
-        define_pattern_resolver![$name, Simple,
+        $crate::define_pattern_resolver![$name, Simple,
             [ $( $pattern ),+ ]
         ];
     };
@@ -289,7 +289,7 @@ macro_rules! define_pattern_resolver {
     //     STEAM: ["4C 89 | ?? ?? ?? ?? BE EF"]
     // });
     ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        define_pattern_resolver!($name, Simple, {
+        $crate::define_pattern_resolver!($name, Simple, {
             $( $platform : [ $( $pattern ),+ ] ),+
         });
     };

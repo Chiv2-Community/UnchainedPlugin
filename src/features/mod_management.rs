@@ -186,7 +186,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
     if class_ptr.is_null() {
         return None;
     }
-    crate::resolvers::require_function_bindings(&["GetDefaultObject"]).ok()?;
+    unchained_macros::require_function_bindings(&["GetDefaultObject"]).ok()?;
     let cdo_new = class_ptr.GetDefaultObject(true);
     if cdo_new.is_null() {
         return None;
@@ -209,7 +209,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 /// is of another class.
 fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
     let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
-    crate::resolvers::require_function_bindings(&["StaticLoadObject"])?;
+    unchained_macros::require_function_bindings(&["StaticLoadObject"])?;
     Ok(unsafe { crate::Chivalry2::Engine::StaticLoadObject(
         object_class,
         std::ptr::null_mut(),
@@ -426,7 +426,7 @@ impl ModManager {
 
         let mut res_arr = TArray::<*mut UObject>::default();
         
-        crate::resolvers::require_function_bindings(&["GetAllActorsOfClass"])?;
+        unchained_macros::require_function_bindings(&["GetAllActorsOfClass"])?;
         unsafe { UGameplayStatics::GetAllActorsOfClass(
             world.as_uobject(),
             mod_base_class,
@@ -496,7 +496,7 @@ impl ModManager {
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
-        if let Err(error) = crate::resolvers::require_function_bindings(&["SpawnActor"]) {
+        if let Err(error) = unchained_macros::require_function_bindings(&["SpawnActor"]) {
             serror!("Cannot spawn mod actor: {}", error);
             return;
         }
@@ -526,7 +526,7 @@ impl ModManager {
             swarn!("globals.world missing; skipping spawn confirmation chat");
             return;
         };
-        if let Err(error) = crate::resolvers::require_function_bindings(&[
+        if let Err(error) = unchained_macros::require_function_bindings(&[
             "GetTBLGameMode", "BroadcastLocalizedChat",
         ]) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
