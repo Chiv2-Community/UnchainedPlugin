@@ -44,6 +44,7 @@ pub struct FText {
     flags: u32,
 }
 
+#[unchained_macros::runtime_bindings]
 impl FText {
     /// Borrow native text without acquiring a shared reference.
     ///

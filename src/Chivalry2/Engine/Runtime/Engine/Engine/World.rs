@@ -238,6 +238,7 @@ pub struct UWorld {
     pub _final_padding: [u8; 0x68],
 }
 
+#[unchained_macros::runtime_bindings]
 impl UWorld {
     pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
         if world.is_null() {

@@ -13,6 +13,7 @@ pub struct UAssetRegistryHelpers {
     _private: (),
 }
 
+#[unchained_macros::runtime_bindings]
 impl UAssetRegistryHelpers {
     /// UAssetRegistryHelpers::GetAssetRegistry, with explicit hidden return storage.
     ///

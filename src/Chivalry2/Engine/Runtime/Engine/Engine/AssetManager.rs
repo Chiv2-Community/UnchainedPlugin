@@ -16,6 +16,7 @@ pub struct UAssetManager {
     _opaque: [u8; 0],
 }
 
+#[unchained_macros::runtime_bindings]
 impl UAssetManager {
     /// # Safety
     /// Self must be a live native asset manager; call on the engine thread.

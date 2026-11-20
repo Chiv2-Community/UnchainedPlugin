@@ -63,6 +63,7 @@ pub struct APlayerState {
     pub _padding_last: [u8; 0x10],
 }
 
+#[unchained_macros::runtime_bindings]
 impl APlayerState {
     /// # Safety
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.

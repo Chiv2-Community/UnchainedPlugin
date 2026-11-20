@@ -33,6 +33,7 @@ pub struct FName {
     pub number: u32,
 }
 
+#[unchained_macros::runtime_bindings]
 impl FName {
     /// Call the constructor through the entry, never a
     /// copied trampoline: UE4SS may patch this entry after plugin initialization.

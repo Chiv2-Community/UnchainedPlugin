@@ -37,6 +37,7 @@ pub struct FLargeMemoryReader {
     _opaque: [u8; 0],
 }
 
+#[unchained_macros::runtime_bindings]
 impl FLargeMemoryReader {
     /// Native constructor; flags=0 borrows the data.
     ///
