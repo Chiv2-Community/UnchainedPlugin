@@ -6,8 +6,35 @@ Results apply to these commits, not subsequent cleanup.
 
 Subsequent cleanup integrated as `8926985` removes the per-hook offset-map
 clones and consolidates detour registrations. `9641a7d` removes redundant typed
-detour wrappers. Neither change was included in these timings. The C++ lookup
-and globals-batching findings below remain open.
+detour wrappers. Neither change was included in these timings.
+
+## Optimization follow-up
+
+`cd90f42` batches startup globals and function resolution into one context.
+`6450f40` indexes C++ module definitions once per documentation generation.
+Native-source edits still start a fresh index; no persistent cache is trusted.
+
+Fresh local measurements against `817d58d`:
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| Local-source documentation, median of three runs | 34.887 s | 16.776 s |
+| Six globals, median of five resolver workloads | 1.190 s | 0.708 s |
+
+- Documentation used the same unoptimized host example, source checkouts, and
+  reused output directories. Ranges: 34.653–37.460 s before; 16.755–16.806 s after.
+  All 241 Markdown documents were byte-identical.
+- The scanner harness used the same installed Steam PE and dependency revision,
+  two Rayon threads, and CPU affinity `10,11`. All six targets resolved; ranges:
+  1.175–1.194 s separately, 0.703–0.726 s together. These are resolver workloads,
+  not live startup or hook-installation timings.
+- Memory tradeoff: Linux peak generator RSS rose from about 23 MiB to 361 MiB.
+  Index data contains selected snippets and header declarations, not retained
+  syntax trees. Further memory optimization remains worthwhile.
+- These are local, nonexclusive CPU measurements. Source generation still runs
+  on ordinary source rebuilds; no complete build-speed comparison is claimed.
+- Follow-up evidence: `/home/jbarber/.cache/opencode/pr47-index-*` and
+  `pr47-batched-globals-benchmark.log`.
 
 ## Resolver measurements
 
