@@ -69,6 +69,9 @@ Use an empty unsafe method under `runtime_bindings`.
 - Keep static calls receiver-free. For instance calls, use a verified receiver
   such as `self: *mut Self`.
 - Declare hidden C++ ABI arguments explicitly; macros do not infer them.
+- Mark verified indirect-by-value object parameters `#[native_by_value]` on
+  their `*mut T` ABI storage. This is source-selection metadata, not a copy or
+  ownership operation; ordinary pointers must not carry it.
 - Document pointer validity, ownership, threading, and callback-lifetime obligations.
 - Match surrounding feature gates; do not widen optional native dependencies.
 - Calls use the resolved entry before attachment, then the original trampoline.
@@ -83,9 +86,9 @@ registering a second copy:
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
-        endpoint: *mut FString,
+        endpoint: *const FString,
         timeout: f32,
-        callback: *mut TFunctionFIcmpEchoResult,
+        #[native_by_value] callback: *mut FIcmpEchoResultCallback,
     ) {}
 }
 ```

@@ -118,6 +118,11 @@ fn signature(sig: &Signature) -> String {
     let mut sig = sig.clone();
     sig.ident = syn::parse_quote!(native);
     sig.inputs.pop_punct();
+    for argument in &mut sig.inputs {
+        if let syn::FnArg::Typed(argument) = argument {
+            argument.attrs.retain(|attribute| !attribute.path().is_ident("native_by_value"));
+        }
+    }
     sig.to_token_stream().to_string()
 }
 
@@ -199,10 +204,11 @@ fn scan_with_cfg(
                             let Some(attr) = attribute(&function.attrs, name) else {
                                 continue;
                             };
-                            // Only descriptor-enabled bindings can be detached targets.
-                            if attribute(&item.attrs, "runtime_bindings").is_none() {
-                                continue;
-                            }
+                            assert!(
+                                attribute(&item.attrs, "runtime_bindings").is_some(),
+                                "{owner}::{} needs impl-level runtime_bindings metadata",
+                                function.sig.ident,
+                            );
                             let key = format!("{owner}::{}", function.sig.ident);
                             let resolver = args(attr)[0].to_token_stream().to_string();
                             assert!(

@@ -144,11 +144,29 @@ fn validate_binding(function: &ItemFn) -> syn::Result<()> {
     Ok(())
 }
 
+fn consume_native_parameter_metadata(signature: &mut syn::Signature) -> syn::Result<()> {
+    for argument in &mut signature.inputs {
+        let FnArg::Typed(argument) = argument else { continue };
+        let annotations: Vec<_> = argument.attrs.iter()
+            .filter(|attribute| attribute.path().is_ident("native_by_value")).collect();
+        if annotations.is_empty() { continue; }
+        if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_))
+            || !matches!(argument.ty.as_ref(), Type::Ptr(pointer) if pointer.mutability.is_some())
+        {
+            return Err(syn::Error::new_spanned(annotations[0],
+                "#[native_by_value] requires one bare annotation on verified *mut T ABI storage"));
+        }
+        argument.attrs.retain(|attribute| !attribute.path().is_ident("native_by_value"));
+    }
+    Ok(())
+}
+
 fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
     let resolver = resolver_path(args)?;
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let mut function: ItemFn = syn::parse2(item)?;
     validate_binding(&function)?;
+    consume_native_parameter_metadata(&mut function.sig)?;
     let signature = &function.sig;
     let (arguments, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|argument| {
         match argument {
@@ -278,6 +296,25 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn indirect_by_value_metadata_is_checked_and_consumed() {
+        let mut signature: syn::Signature = syn::parse_quote! {
+            unsafe fn Call(#[native_by_value] callback: *mut Callback)
+        };
+        super::consume_native_parameter_metadata(&mut signature).unwrap();
+        let syn::FnArg::Typed(argument) = &signature.inputs[0] else { unreachable!() };
+        assert!(argument.attrs.is_empty());
+        assert!(matches!(argument.ty.as_ref(), syn::Type::Ptr(pointer) if pointer.mutability.is_some()));
+        for mut signature in [
+            syn::parse_quote!(unsafe fn Call(#[native_by_value] value: *const Callback)),
+            syn::parse_quote!(unsafe fn Call(#[native_by_value] value: &mut Callback)),
+            syn::parse_quote!(unsafe fn Call(#[native_by_value()] value: *mut Callback)),
+            syn::parse_quote!(unsafe fn Call(#[native_by_value] #[native_by_value] value: *mut Callback)),
+        ] {
+            assert!(super::consume_native_parameter_metadata(&mut signature).is_err());
+        }
+    }
+
     #[test]
     fn runtime_type_markers_preserve_declarations_and_generate_no_registration() {
         use quote::ToTokens;

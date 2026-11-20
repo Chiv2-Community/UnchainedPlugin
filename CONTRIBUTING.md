@@ -180,7 +180,7 @@ Static UDP-ping binding, with an opaque callback type:
 use crate::Chivalry2::Engine::FString;
 use std::ffi::c_void;
 
-pub type TFunctionFIcmpEchoResult = c_void;
+pub type FIcmpEchoResultCallback = c_void;
 
 pub struct FUDPPing {
     _private: (),
@@ -190,9 +190,9 @@ pub struct FUDPPing {
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
-        endpoint: *mut FString,
+        endpoint: *const FString,
         timeout: f32,
-        callback: *mut TFunctionFIcmpEchoResult,
+        #[native_by_value] callback: *mut FIcmpEchoResultCallback,
     ) {}
 }
 ```
@@ -311,14 +311,14 @@ Target the binding method from a functional module under `src/unchained/patches/
 Alternative replacement for the existing UDP hook:
 
 ```rust
-use crate::Chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
+use crate::Chivalry2::Engine::{FString, FUDPPing, FIcmpEchoResultCallback};
 use crate::tools::hook_globals::cli_args;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
-    endpoint: *mut FString,
+    endpoint: *const FString,
     timeout: f32,
-    callback: *mut TFunctionFIcmpEchoResult,
+    callback: *mut FIcmpEchoResultCallback,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
     unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };

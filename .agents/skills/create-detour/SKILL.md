@@ -51,6 +51,9 @@ Use `bind_func_detour` on an unsafe free function.
 - Declare an instance receiver explicitly as the first argument.
 - Rust checks compatibility with invariant binding metadata; this does not
   establish the native ABI's correctness.
+- For an intentional mutable-raw-pointer adapter to a const native parameter,
+  annotate the detour's `*mut T` parameter with `#[native_const]`. This does not
+  authorize writes through a native const argument or relax other type checks.
 - Default activation is `ACTIVE`. Add a noncapturing condition only when needed.
 - Conditions run at attachment and also require global auto-activation.
   Put per-call decisions in the body.
@@ -61,14 +64,14 @@ Use `bind_func_detour` on an unsafe free function.
 Alternative to the existing UDP replacement; do not install both:
 
 ```rust
-use crate::Chivalry2::Engine::{FString, FUDPPing, TFunctionFIcmpEchoResult};
+use crate::Chivalry2::Engine::{FString, FUDPPing, FIcmpEchoResultCallback};
 use crate::tools::hook_globals::cli_args;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
-    endpoint: *mut FString,
+    endpoint: *const FString,
     timeout: f32,
-    callback: *mut TFunctionFIcmpEchoResult,
+    callback: *mut FIcmpEchoResultCallback,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
     unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };

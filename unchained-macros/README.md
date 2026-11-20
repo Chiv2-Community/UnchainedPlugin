@@ -93,17 +93,29 @@ configuration performs source lookup or substitution. Hover method, type, and
 detour symbols; macro names themselves retain generic macro documentation.
 Build-only generation, parsing, and developer examples live in
 `build/unchained-native-docs`; root `build.rs` delegates to `build/mod.rs`.
+Each generation shares a module/file index and caches extracted C++ declarations,
+discarding syntax trees after indexing. The cache is build-local, so native source
+edits are read again on the next generation.
 
-For overloaded C++ functions, add a binding doc line:
+Ambiguous C++ names are filtered using the binding's parameter types and receiver
+constness. Native alias names, pointer/reference constness, primitive widths,
+and generic type arguments participate. Pointer/reference and indirect-by-value
+forms can remain indistinguishable; the matcher never selects the first match.
+For a verified by-value native object lowered to a `*mut T` ABI parameter, mark
+the binding parameter `#[native_by_value]`. This records existing indirection;
+it does not copy the object, transfer ownership, or change generated ABI types.
+Unmarked raw pointers are not guessed to be by-value objects.
+
+For lowering that cannot be inferred, such as explicit hidden return storage,
+provide an exact source-level selector:
 
 ```rust
 /// Native overload: `(const FString&)`
 ```
 
-The source matcher compares C++
-parameter types and trailing cv/ref qualifiers, ignoring parameter names and
-default values. It does not infer C++ overloads from lowered Rust ABI arguments.
-Ambiguous matches remain unavailable. The `native-implementation` example also
+Explicit selectors compare C++ parameter types and trailing cv/ref qualifiers,
+ignoring parameter names and default values. Ambiguous matches remain unavailable.
+The `native-implementation` example also
 accepts selectors in `--target 'FText::AsCultureInvariant(const FString&)'`.
 Use the source's type spelling; typedef equivalence and complex callable
 parameter declarators are not resolved.
@@ -220,6 +232,24 @@ unsafe fn read<'a>(value: &'a Native) -> &'a Native {
 
 Native validity, aliasing, thread affinity and patch synchronization remain
 unsafe obligations. Keep raw pointers where reference guarantees are unknown.
+
+A detour may explicitly adapt a mutable raw parameter to a const native entry:
+
+```rust,ignore
+#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho)]
+unsafe fn ping(
+    #[native_const] endpoint: *mut FString,
+    timeout: f32,
+    callback: *mut FIcmpEchoResultCallback,
+) {
+    unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
+}
+```
+
+`#[native_const]` requires `*mut T`. The native adapter receives `*const T` and
+casts only that raw pointer before calling the detour. Pointee types, remaining
+parameters, returns, and lifetime checks remain exact. This grants no permission
+to modify an originally const object.
 
 Run `cargo test -p unchained-macros -p unchained-macros-impl` for declaration
 validation and direct-call fixtures. The fixtures call real `extern "C"`

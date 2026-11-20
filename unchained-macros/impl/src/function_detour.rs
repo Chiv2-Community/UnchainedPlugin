@@ -93,6 +93,7 @@ pub(super) fn expand_binding(
         }
     });
     let mut expanded = function.clone();
+    super::consume_native_parameter_metadata(&mut expanded.sig)?;
     attach_native_documentation(&mut expanded.attrs, &format!("binding-{resolver_name}"), &documentation);
     expanded.block = Box::new(syn::parse2(quote!({
         #resolver_check
@@ -167,7 +168,33 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     );
     let key = format!("detour-{}", function.sig.ident);
     attach_native_documentation(&mut function.attrs, &key, &documentation);
-    let signature = super::detour::concrete_signature(&function, None)?;
+    let mut signature = super::detour::concrete_signature(&function, None)?;
+    let mut arguments = Vec::new();
+    for (local, native) in function.sig.inputs.iter_mut().zip(&mut signature.inputs) {
+        let (FnArg::Typed(local), FnArg::Typed(native)) = (local, native) else {
+            unreachable!()
+        };
+        let Pat::Ident(parameter) = &*local.pat else { unreachable!() };
+        let name = &parameter.ident;
+        let annotations: Vec<_> = local.attrs.iter().filter(|attr| attr.path().is_ident("native_const")).collect();
+        if annotations.is_empty() {
+            arguments.push(quote!(#name));
+            continue;
+        }
+        if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
+            return Err(syn::Error::new_spanned(annotations[0], "use one bare #[native_const] annotation"));
+        }
+        let Type::Ptr(pointer) = &mut *native.ty else {
+            return Err(syn::Error::new_spanned(&native.ty, "#[native_const] requires a *mut T detour parameter"));
+        };
+        if pointer.mutability.take().is_none() {
+            return Err(syn::Error::new_spanned(pointer, "#[native_const] requires a *mut T detour parameter"));
+        }
+        pointer.const_token = Some(Default::default());
+        local.attrs.retain(|attr| !attr.path().is_ident("native_const"));
+        native.attrs.retain(|attr| !attr.path().is_ident("native_const"));
+        arguments.push(quote!(#name.cast_mut()));
+    }
     let native = native_type(&signature)?;
     let ident = &function.sig.ident;
     let hook = format_ident!("__UNCHAINED_HOOK_{}", ident, span = Span::mixed_site());
@@ -222,7 +249,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
-            unsafe { #ident(#(#names),*) }
+            unsafe { #ident(#(#arguments),*) }
         }
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -266,6 +293,40 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_const_adapts_only_the_annotated_raw_pointer() {
+        let expanded = expand(
+            quote!(Native::Call),
+            quote!(unsafe fn replacement(#[native_const] value: *mut u32, other: *mut u8) {}),
+        ).unwrap();
+        let file = syn::parse2::<syn::File>(expanded).unwrap();
+        let functions: Vec<_> = file.items.iter().filter_map(|item| {
+            if let syn::Item::Fn(function) = item { Some(function) } else { None }
+        }).collect();
+        let local = functions.iter().find(|f| f.sig.ident == "replacement").unwrap();
+        let native = functions.iter().find(|f| f.sig.ident == "__unchained_replacement_replacement").unwrap();
+        let FnArg::Typed(local_arg) = &local.sig.inputs[0] else { unreachable!() };
+        let FnArg::Typed(native_arg) = &native.sig.inputs[0] else { unreachable!() };
+        assert!(local_arg.attrs.is_empty());
+        assert_eq!(local_arg.ty.to_token_stream().to_string(), "* mut u32");
+        assert_eq!(native_arg.ty.to_token_stream().to_string(), "* const u32");
+        assert!(native.block.to_token_stream().to_string().contains("value . cast_mut ()"));
+        assert_eq!(native.sig.inputs[1].to_token_stream().to_string(), "other : * mut u8");
+    }
+
+    #[test]
+    fn native_const_rejects_non_mutable_raw_pointers_and_invalid_annotations() {
+        for function in [
+            quote!(unsafe fn replacement(#[native_const] value: &mut u32) {}),
+            quote!(unsafe fn replacement(#[native_const] value: *const u32) {}),
+            quote!(unsafe fn replacement(#[native_const] value: u32) {}),
+            quote!(unsafe fn replacement(#[native_const()] value: *mut u32) {}),
+            quote!(unsafe fn replacement(#[native_const] #[native_const] value: *mut u32) {}),
+        ] {
+            assert!(expand(quote!(Native::Call), function).is_err());
+        }
+    }
 
     #[test]
     fn conditions_preserve_status_aliases_and_custom_predicates() {

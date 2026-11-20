@@ -43,4 +43,4 @@ UTBLGameInstance::OnPostLoadMap	UTBLGameInstance__OnPostLoadMap	unsafe fn on_pos
 UUserFeedbackAndBugReportsLibrary::GetGameInfo	UUserFeedbackAndBugReportsLibrary__GetGameInfo	unsafe fn get_game_info_detour (storage : * mut crate :: Chivalry2 :: Engine :: FString , world : * mut crate :: Chivalry2 :: Engine :: UWorld) -> * mut crate :: Chivalry2 :: Engine :: FString	ACTIVE	
 TBLUtility::ExecuteConsoleCommand	TBLUtility__ExecuteConsoleCommand	unsafe fn execute_console_command_detour (command : * const FString)	ACTIVE	
 UTBLEngine::PreExit	UTBLEngine__PreExit	unsafe fn pre_exit_detour (self : * mut Self)	ACTIVE	# [cfg (feature = "server_registration")]
-FUDPPing::UDPEcho	FUDPPing__UDPEcho	unsafe fn udp_echo(endpoint: *mut FString, timeout: f32, callback: *mut TFunctionFIcmpEchoResult)	|| !cli_args().is_server()	
+FUDPPing::UDPEcho	FUDPPing__UDPEcho	unsafe fn udp_echo(endpoint: *const FString, timeout: f32, callback: *mut FIcmpEchoResultCallback)	|| !cli_args().is_server()	

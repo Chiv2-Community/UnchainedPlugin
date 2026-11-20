@@ -1,6 +1,6 @@
 //! IPv6 compatibility for browser endpoint parsing and native UDP pings.
 
-use crate::Chivalry2::Engine::Runtime::Online::ICMP::Icmp::{FUDPPing, TFunctionFIcmpEchoResult};
+use crate::Chivalry2::Engine::Runtime::Online::ICMP::Icmp::{FUDPPing, FIcmpEchoResultCallback};
 use crate::Chivalry2::Engine::{FString, TArray, TCHAR};
 use crate::Chivalry2::Plugins::OnlineSubsystemPlayFab::OnlineSessionInterfacePlayFab::*;
 use crate::Chivalry2::Plugins::OnlineSubsystemPlayFab::OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse;
@@ -9,9 +9,9 @@ use std::cell::Cell;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn ipv6_udp_echo(
-    endpoint: *mut FString,
+    #[native_const] endpoint: *mut FString,
     timeout: f32,
-    callback: *mut TFunctionFIcmpEchoResult,
+    callback: *mut FIcmpEchoResultCallback,
 ) {
     if !endpoint.is_null() {
         let text = unsafe { (*endpoint).to_string() };

@@ -38,9 +38,9 @@ Existing static UDP-ping binding:
 impl FUDPPing {
     #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
-        endpoint: *mut FString,
+        endpoint: *const FString,
         timeout: f32,
-        callback: *mut TFunctionFIcmpEchoResult,
+        #[native_by_value] callback: *mut FIcmpEchoResultCallback,
     ) {}
 }
 ```
@@ -55,6 +55,9 @@ Target the native binding from a functional module under `src/unchained/patches/
 - Names need no `_detour` suffix.
 - The compiler checks argument types, returns, and lifetime relationships against
   the binding. It does not verify the ABI against the binary.
+- On a `*mut T` replacement parameter, `#[native_const]` explicitly adapts a
+  native `*const T` argument. It changes only raw-pointer mutability, not pointee
+  type or the caller's access permissions. Other signature checks remain exact.
 - Activation defaults to `ACTIVE`; custom conditions run at attachment.
 - Activation also requires global auto-activation.
 - State queries and diagnostics use the binding's resolver/request-key name.
@@ -67,9 +70,9 @@ Alternative to the existing UDP replacement:
 ```rust
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
-    endpoint: *mut FString,
+    endpoint: *const FString,
     timeout: f32,
-    callback: *mut TFunctionFIcmpEchoResult,
+    callback: *mut FIcmpEchoResultCallback,
 ) {
     sdebug!("UDP ping requested with timeout {}", timeout);
     unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };

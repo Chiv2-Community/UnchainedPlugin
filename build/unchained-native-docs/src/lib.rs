@@ -1,5 +1,6 @@
 //! Build-time native documentation shared by all Rustdoc/LSP clients.
 pub mod cpp;
+pub mod signature;
 
 use anyhow::{Context, Result};
 use proc_macro2::{Span, TokenTree};
@@ -41,6 +42,7 @@ struct Binding {
     source: Option<Source>,
     link: String,
     signature: String,
+    parameter_types: Option<signature::BindingSignature>,
 }
 
 struct Detour {
@@ -244,6 +246,7 @@ fn native_implementation(
     class: bool,
     watches: &mut BTreeSet<PathBuf>,
     sources: &mut cpp::SourceIndex,
+    parameter_types: Option<&signature::BindingSignature>,
 ) -> Option<cpp::Implementation> {
     let (root, header) = source?.local.as_ref()?;
     watches.insert(root.join(header));
@@ -254,7 +257,7 @@ fn native_implementation(
         sources.find_class(root, header, target).ok().flatten()
     } else {
         sources
-            .find_implementation(root, header, target)
+            .find_implementation_for_binding(root, header, target, parameter_types)
             .ok()
             .flatten()
     }
@@ -431,6 +434,8 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     .join(method.sig.span())
                                     .unwrap_or(method.sig.span())
                             };
+                            let parameter_types =
+                                signature::BindingSignature::from_rust(&method.sig, native_owner);
                             bindings.push(Binding {
                                 target: format!("{native_owner}::{}", method.sig.ident),
                                 overload: documentation
@@ -454,6 +459,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                 source: file_source.clone(),
                                 link: file_link(&path, method.sig.ident.span().start().line)?,
                                 signature: format!("{};", text(&source, signature_span).trim()),
+                                parameter_types,
                             });
                         }
                     }
@@ -505,6 +511,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             true,
             &mut watches,
             &mut sources,
+            None,
         );
         append_native(
             &mut docs,
@@ -581,6 +588,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             false,
             &mut watches,
             &mut sources,
+            binding.parameter_types.as_ref(),
         );
         let mut implementation_name = &binding.target;
         let mut implementation_title = "Native implementation";
@@ -592,6 +600,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                     false,
                     &mut watches,
                     &mut sources,
+                    binding.parameter_types.as_ref(),
                 );
                 if related.is_some() {
                     implementation = related;
@@ -711,7 +720,7 @@ mod tests {
         )
         .unwrap();
         fs::write(root.join("cpp/Engine/Source/Test/Public/Native.h"),
-            "class Native : public Base { public: const FString& Call() const; private: int Value; };").unwrap();
+            "class Native : public Base { public: const FString& Call() const; static void Typed(const FString& Address, float Timeout, Delegate Result) { Forward(Result); } private: int Value; };").unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Public/Faction.h"),
             "enum class Faction : unsigned char { First, Second };",
@@ -719,7 +728,7 @@ mod tests {
         .unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Private/Native.cpp"),
-            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }\nvoid Native::Rpc_Implementation() { HandleMessage(); }\nvoid Native::Plain_Implementation() { NotTheBoundFunction(); }",
+            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }\nvoid Native::Rpc_Implementation() { HandleMessage(); }\nvoid Native::Plain_Implementation() { NotTheBoundFunction(); }\nvoid Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }",
         )
         .unwrap();
         fs::write(root.join("src/Chivalry2/Native.rs"), r#"//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Native.h>.
@@ -733,6 +742,7 @@ define_pattern_resolver!(Native__Call, ["40 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? 
 define_pattern_resolver!(Native__Other, ["40 53"]);
 define_pattern_resolver!(Native__Rpc, ["40 54"]);
 define_pattern_resolver!(Native__Plain, ["40 55"]);
+define_pattern_resolver!(Native__Typed, ["40 56"]);
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
@@ -747,6 +757,8 @@ impl Native {
     pub unsafe fn Rpc(&self) {}
     #[bind_resolved_func(Native__Plain)]
     pub unsafe fn Plain(&self) {}
+    #[bind_resolved_func(Native__Typed)]
+    pub unsafe fn Typed(address: *const FString, timeout: f32, #[native_by_value] callback: *mut Callback) {}
 }
 "#).unwrap();
         fs::write(
@@ -805,6 +817,10 @@ impl Native {
         let plain = fs::read_to_string(directory.join("binding-Native__Plain.md")).unwrap();
         assert!(plain.ends_with(NO_CPP_SOURCES));
         assert!(!plain.contains("NotTheBoundFunction"));
+        let typed = fs::read_to_string(directory.join("binding-Native__Typed.md")).unwrap();
+        assert!(typed.contains("void Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }"));
+        assert!(!typed.contains("Native overload:"));
+        assert!(!typed.contains("Forward(Result)"));
         let cpp = root.join("cpp/Engine/Source/Test/Private/Native.cpp");
         fs::write(
             &cpp,

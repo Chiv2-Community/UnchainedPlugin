@@ -2,6 +2,8 @@
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
+# Empty final TSV columns are intentional.
+unchained-macros/impl/tests/native_detours.tsv whitespace=-blank-at-eol
 
 ###############################################################################
 # Set default behavior for command prompt diff.

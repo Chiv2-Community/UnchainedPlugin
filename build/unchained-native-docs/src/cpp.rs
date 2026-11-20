@@ -386,6 +386,28 @@ fn parse_source(source: &str) -> Result<Tree> {
 }
 
 fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) {
+    if matches!(node.kind(), "type_definition" | "alias_declaration") && !node.has_error() {
+        if let Some(name) = node
+            .child_by_field_name("name")
+            .or_else(|| node.child_by_field_name("declarator"))
+            .filter(|name| matches!(name.kind(), "identifier" | "type_identifier"))
+        {
+            let repeats_tag = node
+                .child_by_field_name("type")
+                .and_then(|ty| ty.child_by_field_name("name"))
+                .is_some_and(|tag| source[tag.byte_range()] == source[name.byte_range()]);
+            if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source)
+                .filter(|_| !repeats_tag)
+            {
+                found.push(Definition {
+                    name,
+                    line: node.start_position().row + 1,
+                    range: node.byte_range(),
+                    overload: None,
+                });
+            }
+        }
+    }
     if matches!(
         node.kind(),
         "class_specifier" | "struct_specifier" | "union_specifier" | "enum_specifier"
@@ -515,6 +537,16 @@ impl SourceIndex {
         header: &Path,
         target: &str,
     ) -> Result<Option<Implementation>> {
+        self.find_implementation_for_binding(root, header, target, None)
+    }
+
+    pub fn find_implementation_for_binding(
+        &mut self,
+        root: &Path,
+        header: &Path,
+        target: &str,
+        binding: Option<&crate::signature::BindingSignature>,
+    ) -> Result<Option<Implementation>> {
         let (target, selector) = target
             .split_once('(')
             .map_or((target, None), |(name, parameters)| {
@@ -564,7 +596,12 @@ impl SourceIndex {
                                 .as_ref()
                                 .is_none_or(|key| definition.overload.as_ref() == Some(key))
                     })
-                    .map(|definition| definition.implementation(&header, source)),
+                    .map(|definition| {
+                        (
+                            definition.overload.clone(),
+                            definition.implementation(&header, source),
+                        )
+                    }),
             );
         }
         self.index_module(&module, method)?;
@@ -581,11 +618,24 @@ impl SourceIndex {
                             .as_ref()
                             .is_none_or(|key| function.definition.overload.as_ref() == Some(key))
                 })
-                .map(|function| function.implementation.clone()),
+                .map(|function| {
+                    (
+                        function.definition.overload.clone(),
+                        function.implementation.clone(),
+                    )
+                }),
         );
+        if overload.is_none() && implementations.len() > 1 {
+            if let Some(binding) = binding {
+                implementations
+                    .retain(|(key, _)| key.as_ref().is_some_and(|key| binding.matches(key)));
+            }
+        }
         // Never choose an overload or preprocessor branch by directory order.
         Ok(if implementations.len() == 1 {
-            implementations.pop()
+            implementations
+                .pop()
+                .map(|(_, implementation)| implementation)
         } else {
             None
         })
@@ -825,6 +875,87 @@ struct Native { int* Call() const { return nullptr; } };
             .unwrap()
             .code
             .contains("return TextData->GetDisplayString();"));
+    }
+
+    #[test]
+    fn binding_parameters_select_callback_overload_without_manual_selector() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h",
+            "class TEST_API Native { public: static void Call(const String& Address, float Timeout, Delegate Result) { Forward(Result); } };");
+        fixture.write("Source/Test/Private/Native.cpp",
+            "void Native::Call(const String& Address, float Timeout, Callback Result) { Send(Result); }");
+        let signature = crate::signature::BindingSignature::from_rust(
+            &syn::parse_quote! {
+            unsafe fn Call(address: *const String, timeout: f32, #[native_by_value] callback: *mut Callback)
+            },
+            "Native",
+        )
+        .unwrap();
+        let mut index = SourceIndex::new();
+        let found = index
+            .find_implementation_for_binding(&fixture.0, header, "Native::Call", Some(&signature))
+            .unwrap()
+            .unwrap();
+        assert!(found.path.ends_with("Native.cpp"));
+        assert!(found.code.contains("Send(Result)"));
+        let wrong = crate::signature::BindingSignature::from_rust(
+            &syn::parse_quote! {
+            unsafe fn Call(address: *mut String, timeout: f32, #[native_by_value] callback: *mut Callback)
+            },
+            "Native",
+        )
+        .unwrap();
+        assert!(index
+            .find_implementation_for_binding(&fixture.0, header, "Native::Call", Some(&wrong))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn pointer_and_reference_lowering_does_not_choose_an_ambiguous_overload() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "void Native::Call(const String& Value) {}\nvoid Native::Call(const String* Value) {}",
+        );
+        let signature = crate::signature::BindingSignature::from_rust(
+            &syn::parse_quote! {
+                unsafe fn Call(value: *const String)
+            },
+            "Native",
+        )
+        .unwrap();
+        assert!(SourceIndex::new()
+            .find_implementation_for_binding(&fixture.0, header, "Native::Call", Some(&signature))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn extracts_native_typedefs_and_using_aliases() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            "typedef Function<void(Result)> Callback;\nusing Alias = Array<Element>;",
+        );
+        for (name, definition) in [
+            ("Callback", "typedef Function<void(Result)> Callback;"),
+            ("Alias", "using Alias = Array<Element>;"),
+        ] {
+            assert_eq!(
+                find_class(&fixture.0, header, name).unwrap().unwrap().code,
+                definition
+            );
+        }
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            "typedef struct Tagged { int Value; } Tagged;",
+        );
+        assert!(find_class(&fixture.0, header, "Tagged").unwrap().is_some());
     }
 
     #[test]
