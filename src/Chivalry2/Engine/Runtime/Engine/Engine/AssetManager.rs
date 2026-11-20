@@ -10,6 +10,7 @@ define_pattern_resolver!(
 );
 
 /// Opaque native asset manager. No Rust allocation or layout is assumed.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UAssetManager {
     _opaque: [u8; 0],

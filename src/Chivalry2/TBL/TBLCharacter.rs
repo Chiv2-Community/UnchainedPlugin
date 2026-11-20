@@ -19,6 +19,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for ATBLCharacter {
     const CLASS_NAME: &'static str = "TBLCharacter";
 }
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct ATBLCharacter {
     #[inherit]

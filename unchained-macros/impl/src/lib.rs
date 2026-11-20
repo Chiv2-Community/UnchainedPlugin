@@ -47,11 +47,51 @@ pub fn bind_resolved_request_function_detour(args: TokenStream, item: TokenStrea
         .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
-/// Expose typed direct bindings and expand legacy detours in a concrete impl.
+/// Mark a native type for source documentation, or expose bindings in a concrete impl.
+///
+/// Type annotations preserve the declaration and add documentation only.
 #[proc_macro_attribute]
 pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
-    detour::expand_impl(args.into(), item.into())
+    expand_runtime_bindings(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+fn expand_runtime_bindings(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    if !args.is_empty() {
+        return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
+    }
+    let mut declaration: syn::Item = syn::parse2(item.clone())?;
+    let (name, attributes) = match &mut declaration {
+        syn::Item::Impl(_) => return detour::expand_impl(args, item),
+        syn::Item::Struct(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Enum(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Union(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Type(item) => (&item.ident, &mut item.attrs),
+        _ => return Err(syn::Error::new_spanned(declaration, "runtime_bindings requires a native type or concrete inherent impl")),
+    };
+    let documentation = syn::LitStr::new(
+        &format!("Native type `{name}`. See the module's native source header."),
+        name.span(),
+    );
+    attach_native_documentation(attributes, &format!("type-{name}"), &documentation);
+    Ok(quote!(#declaration))
+}
+
+fn attach_native_documentation(attributes: &mut Vec<syn::Attribute>, key: &str, fallback: &syn::LitStr) {
+    let generated = std::env::var_os("UNCHAINED_NATIVE_DOCS_DIR")
+        .map(std::path::PathBuf::from)
+        .map(|directory| directory.join(format!("{key}.md")))
+        .filter(|path| path.is_file());
+    if let Some(path) = generated {
+        // The generated document already contains the declaration's safety/source notes.
+        attributes.retain(|attribute| !matches!(&attribute.meta,
+            syn::Meta::NameValue(value) if attribute.path().is_ident("doc")
+                && matches!(&value.value, syn::Expr::Lit(value) if matches!(value.lit, syn::Lit::Str(_)))));
+        let path = syn::LitStr::new(&path.to_string_lossy(), fallback.span());
+        attributes.insert(0, syn::parse_quote!(#[doc = ::core::include_str!(#path)]));
+    } else {
+        attributes.insert(0, syn::parse_quote!(#[doc = #fallback]));
+    }
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
@@ -146,6 +186,11 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     if !function.attrs.iter().any(|attribute| attribute.path().is_ident("inline")) {
         function.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
+    let documentation = syn::LitStr::new(
+        &format!("Native binding `{}`. Direct calls invoke the original implementation, bypassing detours.", function.sig.ident),
+        function.sig.ident.span(),
+    );
+    attach_native_documentation(&mut function.attrs, &format!("binding-{resolver_name}"), &documentation);
     Ok(quote!(#function))
 }
 
@@ -237,6 +282,37 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn runtime_type_markers_preserve_declarations_and_generate_no_registration() {
+        use quote::ToTokens;
+        for tokens in [
+            quote::quote!(#[repr(C)] pub struct Native<T, const N: usize> where T: Copy { value: [T; N] }),
+            quote::quote!(#[repr(u8)] pub enum Native { First, Second }),
+            quote::quote!(#[repr(C)] pub union Native<T: Copy> { value: T, raw: usize }),
+            quote::quote!(pub type Native<T> = *mut T;),
+        ] {
+            let original: syn::Item = syn::parse2(tokens.clone()).unwrap();
+            let expanded = super::expand_runtime_bindings(quote::quote!(), tokens).unwrap();
+            assert!(!expanded.to_string().contains("inventory"));
+            let mut actual: syn::Item = syn::parse2(expanded).unwrap();
+            let attributes = match &mut actual {
+                syn::Item::Struct(item) => &mut item.attrs,
+                syn::Item::Enum(item) => &mut item.attrs,
+                syn::Item::Union(item) => &mut item.attrs,
+                syn::Item::Type(item) => &mut item.attrs,
+                _ => unreachable!(),
+            };
+            assert!(attributes.remove(0).to_token_stream().to_string().contains("Native type"));
+            assert_eq!(actual.to_token_stream().to_string(), original.to_token_stream().to_string());
+        }
+    }
+
+    #[test]
+    fn runtime_type_markers_reject_arguments_and_non_type_items() {
+        assert!(super::expand_runtime_bindings(quote::quote!(Other), quote::quote!(struct Native;)).is_err());
+        assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(fn helper() {})).is_err());
+        assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(trait Native {})).is_err());
+    }
     use super::*;
 
     #[test]

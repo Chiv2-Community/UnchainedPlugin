@@ -1,7 +1,8 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystemUtils/Source/OnlineSubsystemUtils/Classes/IpConnection.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Plugins/Online/OnlineSubsystemUtils/Source/OnlineSubsystemUtils/Classes/IpConnection.h>.
 
 use crate::Chivalry2::Engine::*;
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UIpConnection {
     pub base: UObject,

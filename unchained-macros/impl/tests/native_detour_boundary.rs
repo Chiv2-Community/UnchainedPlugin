@@ -17,6 +17,47 @@ fn attribute<'a>(attrs: &'a [Attribute], name: &str) -> Option<&'a Attribute> {
         .find(|a| a.path().segments.last().unwrap().ident == name)
 }
 
+#[test]
+fn header_backed_native_types_have_runtime_documentation_markers() {
+    fn check(directory: &Path) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") { continue; }
+            let source = std::fs::read_to_string(&path).unwrap();
+            if !source.lines().take_while(|line| line.starts_with("//!")).any(|line| line.contains(".h")) {
+                continue;
+            }
+            for item in syn::parse_file(&source).unwrap().items {
+                let (name, attrs) = match item {
+                    Item::Struct(item) => (item.ident.to_string(), item.attrs),
+                    Item::Enum(item) => (item.ident.to_string(), item.attrs),
+                    Item::Union(item) => (item.ident.to_string(), item.attrs),
+                    Item::Type(item) => (item.ident.to_string(), item.attrs),
+                    _ => continue,
+                };
+                // Rust-only adapters, traversal helpers, errors, and ABI callback aliases.
+                let adapter = name.starts_with("Fn") || [
+                    "FTextRaw", "SubsystemContext", "RequestFunctions", "ObjectIndex",
+                    "FoundProperty", "StructArrayError", "StructArrayMetadata", "ObjectIterator",
+                    "ScriptArrayError", "FScriptArrayView", "DbgTSparseArrayData", "FStringCopyError",
+                    "FMallocHandle", "InvariantText", "CriticalSectionGuard", "TMapView",
+                    "FLargeMemoryReaderStorage",
+                ].contains(&name.as_str());
+                assert_eq!(
+                    attribute(&attrs, "runtime_bindings").is_some(), !adapter,
+                    "{}: {name} must distinguish native types from Rust-only adapters",
+                    path.display(),
+                );
+            }
+        }
+    }
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/Chivalry2"));
+}
+
 fn args(attr: &Attribute) -> Vec<Expr> {
     attr.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)
         .unwrap()

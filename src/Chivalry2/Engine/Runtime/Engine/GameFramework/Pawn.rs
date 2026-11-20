@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Pawn.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/Pawn.h>.
 
 use crate::Chivalry2::Engine::*;
 
@@ -10,6 +10,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for APawn {
 
 /// Character
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct APawn {
     #[inherit]

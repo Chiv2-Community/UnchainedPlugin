@@ -8,6 +8,7 @@ define_pattern_resolver!(
 );
 
 /// Engine-owned subclass. No native fields or Rust construction are exposed.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UTBLEngine {
     _opaque: [u8; 0],

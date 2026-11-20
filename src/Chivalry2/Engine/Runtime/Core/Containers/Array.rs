@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Array.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Array.h>.
 
 #![allow(private_interfaces)]
 use crate::Chivalry2::Engine::*;
@@ -7,6 +7,7 @@ use std::alloc::Layout;
 
 use crate::globals;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct TArray<T> {

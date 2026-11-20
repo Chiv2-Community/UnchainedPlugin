@@ -9,6 +9,7 @@ define_pattern_resolver!(
 );
 
 /// Rust adapter for the native TBLUtility namespace, not a UObject class.
+#[unchained_macros::runtime_bindings]
 pub struct TBLUtility {
     _private: (),
 }

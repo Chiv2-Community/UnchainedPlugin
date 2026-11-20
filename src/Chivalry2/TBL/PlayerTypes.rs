@@ -6,6 +6,7 @@ use strum::Display;
 
 // Chat type enum
 // FIXME: More compact, wtf is this
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 #[allow(clippy::upper_case_acronyms)]
@@ -123,6 +124,7 @@ impl TryFrom<u8> for EChatType {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EFaction {

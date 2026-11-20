@@ -30,6 +30,7 @@ define_pattern_resolver!(
 );
 
 /// Opaque native game instance. Only live engine-owned pointers are valid.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UTBLGameInstance {
     _opaque: [u8; 0],

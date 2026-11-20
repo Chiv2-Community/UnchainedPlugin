@@ -1,7 +1,8 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/Tuple.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Templates/Tuple.h>.
 
 use std::fmt::Debug;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Debug)]
 #[repr(C)]
 pub(crate) struct TTuple<A, B> {

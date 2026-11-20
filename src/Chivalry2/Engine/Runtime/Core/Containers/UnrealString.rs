@@ -19,6 +19,7 @@ define_pattern_resolver!(
     ["44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"]
 );
 
+#[unchained_macros::runtime_bindings]
 pub type FString = TArray<TCHAR>;
 
 #[unchained_macros::runtime_bindings]

@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/Blueprint.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/Blueprint.h>.
 
 use crate::Chivalry2::Engine::*;
 
@@ -6,6 +6,7 @@ use crate::Chivalry2::Engine::UClass;
 
 use std::ffi::c_void;
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct UBlueprint {
     #[inherit]

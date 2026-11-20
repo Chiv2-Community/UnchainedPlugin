@@ -1,7 +1,8 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Serialization/Archive.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Serialization/Archive.h>.
 
 /// Borrowed archive header; only native constructors may initialize it.
 // Steam/EGS FLargeMemoryReader table 0x14499be88; UE Serialization/Archive.h.
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FArchive {

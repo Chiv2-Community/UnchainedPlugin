@@ -6,6 +6,7 @@ use crate::Chivalry2::TBL::UDamageSource;
 use std::os::raw::c_void;
 
 /// Native TBLTypes.h:984; layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x148`).
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FDamageTakenEvent {
@@ -55,6 +56,7 @@ define_pattern_resolver!(UGameplay__IsDedicatedServer, [
 ]);
 
 /// Rust adapter for the native UGameplay namespace, not a UObject class.
+#[unchained_macros::runtime_bindings]
 pub struct UGameplay {
     _private: (),
 }

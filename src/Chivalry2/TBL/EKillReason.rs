@@ -1,9 +1,10 @@
-//! SDK declaration: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/EKillReason.h>.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/EKillReason.h>.
 //! The original native header owner is unresolved; retain this location pending evidence.
 
 #![allow(non_snake_case)]
 use strum::Display;
 
+#[unchained_macros::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum EKillReason {

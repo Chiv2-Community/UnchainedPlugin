@@ -54,6 +54,11 @@ Keep native contracts with their source owners.
 
 Use an empty unsafe method under `runtime_bindings`.
 
+- Mark header-backed native structs, enums, unions, and aliases with
+  `#[unchained_macros::runtime_bindings]`, including generic/layout-only types.
+  Type annotations add documentation only; they do not register callables.
+  Put the marker before layout/code-generation attributes and retain their order.
+  Do not mark Rust-only adapters, guards, views, errors, or callback aliases.
 - Apply `#[unchained_macros::runtime_bindings]` to the native type's inherent impl.
 - Apply `#[unchained_macros::bind_resolved_func(Resolver)]` to the method.
 - Use the declared resolver type path, not a renamed import.

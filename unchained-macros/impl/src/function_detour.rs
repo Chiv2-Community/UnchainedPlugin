@@ -95,7 +95,7 @@ pub(super) fn expand_binding(
         }
     });
     let mut expanded = function.clone();
-    expanded.attrs.insert(0, syn::parse_quote!(#[doc = #documentation]));
+    attach_native_documentation(&mut expanded.attrs, &format!("binding-{resolver_name}"), &documentation);
     expanded.block = Box::new(syn::parse2(quote!({
         #resolver_check
         let native: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
@@ -170,7 +170,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ),
         function.sig.ident.span(),
     );
-    function.attrs.insert(0, syn::parse_quote!(#[doc = #documentation]));
+    let key = format!("detour-{}", function.sig.ident);
+    attach_native_documentation(&mut function.attrs, &key, &documentation);
     let signature = super::detour::concrete_signature(&function, None)?;
     let native = native_type(&signature)?;
     let ident = &function.sig.ident;

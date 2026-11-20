@@ -35,6 +35,7 @@ unsafe impl UObjectType for APlayerState {
     const CLASS_NAME: &'static str = "PlayerState";
 }
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct APlayerState {
     #[inherit]

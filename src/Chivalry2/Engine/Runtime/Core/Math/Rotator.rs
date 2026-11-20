@@ -1,5 +1,6 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Rotator.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Rotator.h>.
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct FRotator {

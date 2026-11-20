@@ -11,6 +11,7 @@ define_pattern_resolver!(FOnlineSessionPlayFab__PingSomeServers, [
     "4C 8B DC 49 89 4B 08 55 56 41 55 49 8D AB 38 FE FF FF 48 81 EC B0 02 00 00 4C 8D A9 40 03 00 00 48 8B F1"
 ]);
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FOnlineSessionPlayFab {
     _opaque: [u8; 0],

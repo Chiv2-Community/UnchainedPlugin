@@ -5,6 +5,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for UAssemblyBlueprint {
     const CLASS_NAME: &'static str = "AssemblyBlueprint";
 }
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct UAssemblyBlueprint {
     #[inherit]

@@ -1,9 +1,10 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/OnlineReplStructs.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/GameFramework/OnlineReplStructs.h>.
 
 use crate::Chivalry2::Engine::*;
 
 use std::os::raw::c_void;
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FUniqueNetIdRepl {
     pub(crate) vtable: *const usize,       // 0x0000

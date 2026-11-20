@@ -8,6 +8,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for UDamageSource {
 }
 
 /// Native damage-source prefix through Name; later fields are omitted.
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct UDamageSource {
     #[inherit]

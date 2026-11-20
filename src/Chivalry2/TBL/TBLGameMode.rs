@@ -27,6 +27,7 @@ define_pattern_resolver!(ATBLGameMode__BroadcastChat, [
     "48 85 D2 0F 84 3E 04 00 00 48 8B C4 4C 89 40 18 48 89 48 08 55 41 55 41 56 41 57 48 8D 68 A9 48"
 ]);
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct ATBLGameMode {

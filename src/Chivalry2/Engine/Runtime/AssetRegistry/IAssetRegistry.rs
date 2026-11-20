@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/IAssetRegistry.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/AssetRegistry/Public/IAssetRegistry.h>.
 
 use crate::Chivalry2::Engine::FArchive;
 use crate::Chivalry2::Engine::FName;
@@ -11,6 +11,7 @@ use crate::Chivalry2::Engine::UAssetRegistryHelpers;
 
 /// Native interface subobject, not the enclosing UObject.
 // Steam/EGS table 0x144d73648; UE AssetRegistry/Public/IAssetRegistry.h.
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct IAssetRegistry {

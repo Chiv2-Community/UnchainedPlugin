@@ -10,6 +10,7 @@ define_pattern_resolver!(
 );
 
 /// Static native ping helpers; no instance layout is assumed.
+#[unchained_macros::runtime_bindings]
 pub struct FUDPPing {
     _private: (),
 }
@@ -28,4 +29,5 @@ impl FUDPPing {
 }
 
 /// Opaque `TFunction<void(FIcmpEchoResult)>`; passed only through native pointers.
+#[unchained_macros::runtime_bindings]
 pub type TFunctionFIcmpEchoResult = c_void;

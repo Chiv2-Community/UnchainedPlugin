@@ -16,6 +16,7 @@ define_pattern_resolver!(
     ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]
 );
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u32)]
 pub enum EFindName {
@@ -24,6 +25,7 @@ pub enum EFindName {
     ReplaceNotSafeForThreading,
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct FName {
@@ -81,6 +83,7 @@ impl std::fmt::Debug for FName {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct FNameEntryId {

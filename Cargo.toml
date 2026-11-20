@@ -4,7 +4,7 @@ version = "1.0.1"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "unchained-macros", "unchained-macros/impl", "xtask", "tests/backend-integration"]
+members = [".", "sleuth_macros", "unchained-macros", "unchained-macros/impl", "unchained-native-docs", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
@@ -47,6 +47,7 @@ lto = false
 
 
 [build-dependencies]
+unchained-native-docs = { path = "unchained-native-docs" }
 embed-resource = "3.0"
 git2 = { version = "0.21", default-features = false }
 

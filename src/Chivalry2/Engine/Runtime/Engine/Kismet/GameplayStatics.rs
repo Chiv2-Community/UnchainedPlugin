@@ -16,6 +16,7 @@ define_pattern_resolver!(
 define_pattern_resolver!(UGameplayStatics__SaveGameToSlot,["48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 40 48 8B DA 33 F6 48 8D 54 24 30 48 89 74 24 30 48 89 74 24 38 41"]);
 
 /// Static native helpers only; this is not a UObject instance layout.
+#[unchained_macros::runtime_bindings]
 pub struct UGameplayStatics {
     _private: (),
 }

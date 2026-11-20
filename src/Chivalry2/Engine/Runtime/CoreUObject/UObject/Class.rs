@@ -12,6 +12,7 @@ define_pattern_resolver!(UClass__GetConfigName, [
 
 define_pattern_resolver!(UClass__GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UClass {
     // pub _padding_base: [u8; 0xB0],                // 0x0000
@@ -109,6 +110,7 @@ impl UClass {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UField {
@@ -116,6 +118,7 @@ pub struct UField {
     pub next: *const UField,
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FStructBaseChain {
@@ -132,6 +135,7 @@ pub struct FoundProperty {
     pub type_name: String,
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UStruct {
@@ -212,6 +216,7 @@ impl UStruct {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UFunction {

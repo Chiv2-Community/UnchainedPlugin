@@ -36,6 +36,7 @@ define_pattern_resolver!(
 );
 
 /// Opaque engine-owned platform-file implementation; no Rust layout is assumed.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FPakPlatformFile {
     _opaque: [u8; 0],
@@ -83,9 +84,12 @@ impl FPakPlatformFile {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 pub type FPakFile = c_void;
 
+#[unchained_macros::runtime_bindings]
 pub type FPakEntry = c_void;
 
 // FPakPlatformFile::FPakListEntry.
+#[unchained_macros::runtime_bindings]
 pub type FPakListEntry = c_void;

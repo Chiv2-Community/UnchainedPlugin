@@ -23,6 +23,7 @@ define_pattern_resolver!(
 );
 
 /// Partial native controller layout through Player; later fields are omitted.
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct APlayerController {

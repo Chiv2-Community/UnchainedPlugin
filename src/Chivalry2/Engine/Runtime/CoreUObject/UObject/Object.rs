@@ -19,6 +19,7 @@ define_pattern_resolver!(
     ["40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC F0 00 00 00 48 8D 6C 24 30 48 89 9D 18 01"]
 );
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct UObject {

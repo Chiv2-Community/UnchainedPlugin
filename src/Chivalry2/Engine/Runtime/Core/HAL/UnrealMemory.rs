@@ -1,10 +1,11 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/UnrealMemory.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/UnrealMemory.h>.
 
 use ::windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 
 use ::windows::Win32::System::Threading::GetCurrentProcess;
 
 /// Rust adapters for native memory access; no instance layout is assumed.
+#[unchained_macros::runtime_bindings]
 pub struct FMemory {
     _private: (),
 }

@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/MemoryBase.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/HAL/MemoryBase.h>.
 
 use crate::Chivalry2::Engine::FGenericMemoryStats;
 use crate::Chivalry2::Engine::FOutputDevice;
@@ -10,6 +10,7 @@ use std::ptr::NonNull;
 
 // UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
 // Confirmed against symbolized Binned2 and Steam/EGS vtable 0x144982A90.
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FMalloc {

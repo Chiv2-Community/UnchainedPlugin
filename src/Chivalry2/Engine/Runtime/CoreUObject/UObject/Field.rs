@@ -1,9 +1,10 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Field.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/Field.h>.
 
 use crate::Chivalry2::Engine::*;
 
 use std::ffi::c_void;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FFieldClass {
@@ -12,6 +13,7 @@ pub struct FFieldClass {
     pub(crate) name: FName,
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FFieldVariant {
@@ -19,6 +21,7 @@ pub struct FFieldVariant {
     b_is_uobject: bool,
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FField {

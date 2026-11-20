@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectArray.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectArray.h>.
 
 use crate::Chivalry2::Engine::Runtime::Core::Windows::WindowsCriticalSection::CriticalSectionGuard;
 use crate::Chivalry2::Engine::Runtime::Core::Windows::WindowsCriticalSection::FWindowsCriticalSection;
@@ -10,14 +10,17 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 type ObjectIndex = i32;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectCreateListener;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectDeleteListener;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectArray {
@@ -127,6 +130,7 @@ impl<'a> Iterator for ObjectIterator<'a> {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FChunkedFixedUObjectArray {
@@ -160,6 +164,7 @@ impl FChunkedFixedUObjectArray {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectItem {

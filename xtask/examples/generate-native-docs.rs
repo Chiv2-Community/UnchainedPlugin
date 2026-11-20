@@ -1,0 +1,10 @@
+use anyhow::Result;
+use std::path::Path;
+
+fn main() -> Result<()> {
+    let output = std::env::args_os()
+        .nth(1)
+        .expect("Expected an output directory");
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    unchained_native_docs::generate(manifest, Path::new(&output))
+}

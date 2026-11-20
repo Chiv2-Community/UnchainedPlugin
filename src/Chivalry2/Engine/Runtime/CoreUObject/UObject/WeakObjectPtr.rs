@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/WeakObjectPtr.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/WeakObjectPtr.h>.
 
 use crate::Chivalry2::Engine::*;
 
@@ -10,6 +10,7 @@ use crate::globals;
 
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct FWeakObjectPtr {

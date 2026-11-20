@@ -8,6 +8,7 @@ define_pattern_resolver!(FOnlineAuthPlayFab__EndAuthentication, [
 
 // Current Steam/Epic layouts, verified against the native session getter:
 // FOnlineAuthPlayFab::PlayFabSubsystem (+0xe0), SessionInterface.Object (+0x140).
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FOnlineAuthPlayFab {
     padding: [u8; 0xe0],

@@ -1,4 +1,4 @@
-//! SDK declaration: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h>.
+//! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/DeathDamageTakenEvent.h>.
 //! Original header ownership is unresolved; the type is attributed to StatsComponent.generated.h.
 
 #![allow(non_snake_case)]
@@ -8,6 +8,7 @@ use crate::Chivalry2::TBL::EKillReason::EKillReason;
 use std::os::raw::c_void;
 
 /// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x160`).
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FDeathDamageTakenEvent {

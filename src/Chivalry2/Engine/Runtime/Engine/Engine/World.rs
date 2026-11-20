@@ -35,6 +35,7 @@ define_pattern_resolver!(
 
 // FName helpers
 
+#[unchained_macros::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ESpawnActorNameMode {
@@ -45,6 +46,7 @@ pub enum ESpawnActorNameMode {
 }
 
 // Spawning actors
+#[unchained_macros::runtime_bindings]
 #[repr(C, align(8))]
 pub struct FActorSpawnParameters {
     // 0x00: FName (Name) - Size 0x8
@@ -126,6 +128,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for UWorld {
     const CLASS_NAME: &'static str = "World";
 }
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UWorld {
     // 0x0000 -> 0x0028: Inherited from UObject

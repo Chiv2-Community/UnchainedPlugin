@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/NetDriver.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/NetDriver.h>.
 
 use crate::Chivalry2::Engine::UObject;
 
@@ -7,6 +7,7 @@ define_pattern_resolver!(UNetDriver__GetNetMode, [
 ]);
 
 /// Partial UNetDriver layout; fields after ServerConnection are omitted.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UNetDriver {
     pub base: UObject,

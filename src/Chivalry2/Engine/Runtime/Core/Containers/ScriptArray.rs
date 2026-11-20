@@ -1,8 +1,9 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/ScriptArray.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/ScriptArray.h>.
 
 use std::marker::PhantomData;
 
 /// Heap-allocated native array storage. Borrow only; never frees its buffer.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FScriptArray {
     data: *const u8,

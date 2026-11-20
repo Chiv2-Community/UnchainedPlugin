@@ -6,6 +6,7 @@ define_pattern_resolver!(FTBLOnlineStats__SetStatInner, [
 ]);
 
 /// Opaque native statistics object. Do not construct in Rust.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FTBLOnlineStats {
     _opaque: [u8; 0],

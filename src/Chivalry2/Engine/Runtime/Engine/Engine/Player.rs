@@ -1,8 +1,9 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/Player.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/Player.h>.
 
 use crate::Chivalry2::Engine::*;
 
 /// Native UPlayer prefix; sufficient for UObject class checks.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UPlayer {
     pub base: UObject,

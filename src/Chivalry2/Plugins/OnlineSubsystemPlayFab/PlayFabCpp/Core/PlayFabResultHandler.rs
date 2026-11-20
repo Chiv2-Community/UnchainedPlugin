@@ -8,6 +8,7 @@ define_pattern_resolver!(PlayFabRequestHandler__SendRequest, [
 ]);
 
 /// Static request helpers; the return-storage argument is not a receiver.
+#[unchained_macros::runtime_bindings]
 pub struct PlayFabRequestHandler {
     _private: (),
 }

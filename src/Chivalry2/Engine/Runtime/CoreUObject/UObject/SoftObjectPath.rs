@@ -1,9 +1,10 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/SoftObjectPath.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/SoftObjectPath.h>.
 
 use crate::Chivalry2::Engine::*;
 
 // SoftClassPath
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FSoftObjectPath {

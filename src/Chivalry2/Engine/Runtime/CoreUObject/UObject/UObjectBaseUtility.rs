@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectBaseUtility.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectBaseUtility.h>.
 
 use crate::Chivalry2::Engine::*;
 use crate::globals;
@@ -6,6 +6,7 @@ use crate::globals;
 pub type FnUObjectBaseUtilityGetPathName =
     unsafe extern "system" fn(&UObjectBase, Option<&UObject>, &mut FString);
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct UObjectBaseUtility {

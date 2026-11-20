@@ -7,6 +7,7 @@ define_pattern_resolver!(UUserFeedbackAndBugReportsLibrary__GetGameInfo, {
 });
 
 /// Static native helpers only; this is not a UObject instance layout.
+#[unchained_macros::runtime_bindings]
 pub struct UUserFeedbackAndBugReportsLibrary {
     _private: (),
 }

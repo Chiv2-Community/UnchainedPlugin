@@ -25,6 +25,7 @@ define_custom_resolver!(CreateHttpRequest, {
 });
 
 /// Common native prefix for Get*Post request parameters.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct GenericRequest {
@@ -32,6 +33,7 @@ pub struct GenericRequest {
     pub token: FString,
 }
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct OpenAPIClientAPI {
@@ -392,4 +394,5 @@ mod tests {
 }
 
 // OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse.
+#[unchained_macros::runtime_bindings]
 pub type GetCurrentGamesPostResponse = c_void;

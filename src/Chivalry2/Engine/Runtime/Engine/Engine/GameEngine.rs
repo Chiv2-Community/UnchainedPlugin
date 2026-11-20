@@ -11,6 +11,7 @@ define_pattern_resolver!(DedicatedServerInit, [
 ]);
 
 /// Opaque engine-owned game engine; no Rust layout is assumed.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UGameEngine {
     _opaque: [u8; 0],

@@ -1,10 +1,11 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/BitArray.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/BitArray.h>.
 
 #![allow(private_interfaces)]
 use crate::Chivalry2::Engine::*;
 
 use std::fmt::Debug;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Debug)]
 #[repr(C)]
 pub(crate) struct TBitArray {
@@ -28,6 +29,7 @@ impl TBitArray {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub(crate) struct FBitReference<'data> {

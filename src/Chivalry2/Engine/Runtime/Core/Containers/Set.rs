@@ -1,10 +1,11 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Set.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/Set.h>.
 
 #![allow(private_interfaces)]
 use crate::Chivalry2::Engine::*;
 
 use std::fmt::Debug;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Debug)]
 #[repr(C)]
 pub(crate) struct TSetElement<V> {
@@ -19,6 +20,7 @@ impl<K: UEHash, V> UEHash for TSetElement<TTuple<K, V>> {
     }
 }
 
+#[unchained_macros::runtime_bindings]
 #[derive(Default, Clone, Copy)]
 #[repr(C)]
 pub struct FSetElementId {
@@ -39,6 +41,7 @@ impl Debug for FSetElementId {
 
 /// Read-only view of an engine `TSet<T>`. Only ever used through a reference
 /// into live engine memory; Rust never constructs, mutates or drops one.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct TSet<T> {
     pub(crate) elements: TSparseArray<TSetElement<T>>,

@@ -10,6 +10,7 @@ use crate::Chivalry2::Engine::TSubclassOfULoadoutSelection;
 use crate::Chivalry2::TBL::ATBLPlayerState;
 use std::os::raw::c_void;
 
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 #[allow(non_snake_case)]
@@ -73,6 +74,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for ATBLPlayerController {
     const CLASS_NAME: &'static str = "TBLPlayerController";
 }
 
+#[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct ATBLPlayerController {

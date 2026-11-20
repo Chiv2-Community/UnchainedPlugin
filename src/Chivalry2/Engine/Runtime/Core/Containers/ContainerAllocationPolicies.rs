@@ -1,9 +1,10 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/ContainerAllocationPolicies.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Containers/ContainerAllocationPolicies.h>.
 
 #![allow(private_interfaces)]
 
 use std::fmt::Debug;
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub(crate) struct TInlineAllocator<const N: usize, V> {

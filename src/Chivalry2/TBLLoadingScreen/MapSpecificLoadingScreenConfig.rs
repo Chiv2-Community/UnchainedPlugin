@@ -17,6 +17,7 @@ impl FTextRaw {
 }
 
 /// Layout recovered from Ghidra; filled or moved into engine-owned arrays.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct FMapSpecificLoadingScreenConfigData {
     pub(crate) map_name: FString,
@@ -66,6 +67,7 @@ define_pattern_resolver!(
 
 /// Prefix of `UMapSpecificLoadingScreenConfig`. Only ever used through a pointer
 /// to the live engine object, never constructed or dropped in Rust.
+#[unchained_macros::runtime_bindings]
 #[repr(C)]
 pub struct UMapSpecificLoadingScreenConfig {
     _uobject: [u8; 0x28],

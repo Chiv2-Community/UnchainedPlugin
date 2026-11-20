@@ -77,29 +77,28 @@ New production hooks declare a native binding under `#[runtime_bindings]` in
 [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for resolver choices,
 binding declarations, replacement examples, and validation.
 
-Hover `Type::Method` inside `bind_func_detour` to see the full native binding
-signature, a link to the native method, and its resolver name and link.
-Request bindings identify their offset-registry key instead of linking a
-nonexistent resolver type. The detour function's hover links back to the binding.
-Go to definition on the attribute target opens the native source declaration.
-
-Native binding docs identify the binding and resolver. The local Neovim hover
-adds the linked SDK/UE header, the actual resolver declaration (80 characters
-maximum), and linked detour functions with their full declarations. It also
-works on `bind_resolved_func` attributes. Missing external sources use a labeled
-local-binding link; missing detour references are reported rather than guessed.
+Native binding docs identify the SDK/UE source, resolver, its declaration
+(80 characters maximum), and linked detours with their complete declarations.
+Detour function docs show their linked binding and full native signature.
+Request bindings identify their offset-registry key, not a nonexistent resolver.
 Detours apply only when installed and enabled; direct binding calls bypass them.
 Source links come from a single `Native source:` comment. Configure GitHub or
 local checkout roots with `ARGON_SDK_SOURCE_LOCATION` and `UE_SOURCE_LOCATION`
 in Cargo configuration; see [source links](../docs/engine-sources.md#source-links).
-With local roots, both hover layouts append the parsed C++ implementation.
-Otherwise, they end with the local-source configuration note.
-Hovering a class with a `runtime_bindings` impl shows its full native C++ class
-definition from the linked local header.
+The Rust build script generates these documents and the macros include them as
+standard Rustdoc. LSP clients and `cargo doc` receive the same content; no editor
+configuration performs source lookup or substitution. Hover method, type, and
+detour symbols; macro names themselves retain generic macro documentation.
+Local roots enable inline C++ implementations and complete native type
+definitions. Otherwise, docs end with the local-source configuration note.
+Header-backed native structs, enums, unions, and aliases also carry
+`#[unchained_macros::runtime_bindings]` directly. On a type, the macro only adds
+source documentation; generic parameters, layouts, derives, and aliases are
+unchanged. Callable registration still belongs to concrete inherent impls.
+Rust-only views, guards, errors, and callback aliases are not native type markers.
 
 Generated metadata and attachment helpers stay out of those hover spans; inspect
-the expanded macro to view them. Rustdoc links follow the editor's documentation
-URL handling, which may use docs.rs rather than local source.
+the expanded macro to view them. Link-opening behavior belongs to the editor.
 
 An installed, enabled detour intercepts native game-code calls. Calling the Rust
 native binding invokes the original implementation, not the replacement.

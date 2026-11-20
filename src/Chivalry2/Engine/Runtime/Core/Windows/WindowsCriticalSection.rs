@@ -1,4 +1,4 @@
-//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Windows/WindowsCriticalSection.h>.
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Windows/WindowsCriticalSection.h>.
 
 use std::cell::UnsafeCell;
 
@@ -8,6 +8,7 @@ use ::windows::Win32::System::Threading::{
     EnterCriticalSection, LeaveCriticalSection, CRITICAL_SECTION,
 };
 
+#[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FWindowsCriticalSection(UnsafeCell<CRITICAL_SECTION>);

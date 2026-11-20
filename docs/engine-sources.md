@@ -34,49 +34,51 @@ Use the corresponding UE header URL for engine bindings. Keep original ownership
 paths in a separate `Native owner:` note when SDK paths differ. Do not invent
 links for declarations absent from either source tree.
 
-The Neovim native hover reads only `Native source:`. It remaps the repository
-root using Cargo's `[env]` settings in `.cargo/config.toml`:
+The Rust build-time documentation generator reads only `Native source:`. It
+remaps the repository root using `[env]` settings in `.cargo/config.toml`:
 
 - `ARGON_SDK_SOURCE_LOCATION`: ArgonSDK `blob/main` by default.
 - `UE_SOURCE_LOCATION`: UnrealEngine `blob/4.25-plus` by default.
 
 Both accept HTTP(S) roots or absolute checkout directories. The checkout root
-must contain `Source/` for ArgonSDK or `Engine/` for UE. Checked-in source URLs
-remain canonical; these settings remap hover links, not ordinary Rustdoc URLs.
+must contain `Source/` for ArgonSDK or `Engine/` for UE. The macros emit standard
+Rustdoc, including the remapped links and source excerpts. No editor-specific
+substitution is used.
 
 For machine-local overrides, copy `.cargo/config.local.toml.example` to
 `.cargo/config.local.toml` and edit the paths. The override file is ignored by
-Git, and the hover reads it automatically. Cargo itself does not auto-load that
-filename; pass `--config .cargo/config.local.toml` when using it with Cargo.
+Git, and the Rust documentation generator reads it automatically. No additional
+Cargo arguments or editor configuration are required for native documentation.
 
-Exported environment variables override configured values unless `force = true`.
-The hover asks Cargo to merge configuration using the project's pinned nightly;
-it does not parse TOML independently. Local links open in Neovim; HTTP(S) links
-open in the browser. Reopen the hover after changing a root.
+Local values override the checked-in GitHub defaults. Non-default exported
+environment values take precedence unless `force = true`. Cargo tracks changes
+to configuration, Rust declarations, and local native sources. Rebuild after
+changing them; editors that run Cargo build scripts refresh the same Rustdoc.
+Link-opening behavior is provided by the editor, not custom project mappings.
 
-With a local root, both binding and detour hovers append the native implementation
-as C++. A host-only Cargo example uses Tree-sitter C++ dev dependencies; these
-are not linked into the plugin. The helper searches the linked header and C++
-files in its owning module without compiling engine code or fetching sources.
+With a local root, binding and detour docs append the native implementation as
+C++. `unchained-native-docs` uses Tree-sitter C++ as a host build dependency; it
+is not linked into the plugin. It searches the linked header and C++ files in
+its owning module without compiling engine code or fetching native sources.
 It requires a unique definition; ambiguous overloads and declarations alone are
 not displayed.
 
-Hover a class with a `runtime_bindings` impl to see its complete C++ definition
-from the linked header, including base classes, members, and inline methods.
-This also works on the impl's type name, the attribute, and imported class names.
-Class lookup ignores forward declarations and refuses ambiguous definitions.
-Unannotated Rust classes retain their ordinary hover.
+Types annotated with `runtime_bindings` receive their complete C++ definition
+from the linked header, including bases, members, and inline methods. Generic
+structs, enums, unions, and aliases can carry documentation-only type markers.
+Lookup ignores forward declarations and refuses ambiguous definitions.
+Unannotated Rust helpers retain their ordinary documentation.
 
-The first lookup builds the helper asynchronously. While loading, or when no
-implementation can be displayed, the bottom note is:
+When local source cannot be displayed, the bottom note is:
 
 > Configure local source paths in .cargo/config.local.toml to view the implementation inline
 
-The implementation's source link and `gd`/`gD` open its local file. To test the
-parser independently:
+Hover a native method/type or a detour function to view its generated Rustdoc.
+Macro names themselves retain their generic macro documentation. The same
+content is available through LSP and `cargo doc`. To test generation and parsing:
 
 ```sh
-cargo test --locked -p xtask --example native-implementation
+cargo test --locked -p unchained-native-docs
 ```
 
 ## Path rules
