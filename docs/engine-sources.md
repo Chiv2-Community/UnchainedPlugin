@@ -25,7 +25,7 @@ Organize native declarations by their original source owner.
 
 Mirror source categories, modules, and header directories.
 
-- Omit `Engine/Source`, `Public`, `Private`, and `Classes`.
+- Omit `Source`, `Public`, `Private`, and `Classes`.
 - Preserve native casing in module names, directories, and header basenames,
   including `Runtime`, `ThirdParty`, `CoreUObject`, and `TBL`.
 - Keep the Rust root `chivalry2` lowercase. For example:
