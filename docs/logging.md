@@ -299,10 +299,9 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::unchained::patches::loose_assets` | Optional loose-asset loading. |
 | `UnchainedPlugin::features::mod_asset_registry` | Mod Asset Registry merging. |
 | `UnchainedPlugin::chivalry2::engine::runtime::core_uobject::uobject::uobject_globals` | Native object lookups. |
-| `UnchainedPlugin::unchained::patches::backend_hooks` | Ban checks, player connections, and statistics. |
 | `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
 | `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
-| `UnchainedPlugin::unchained::patches::hosting` | Blocked Blueprint events, recursion limits, and listen-server compatibility. |
+| `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, blocked Blueprint events, recursion limits, and listen-server compatibility. |
 | `UnchainedPlugin::unchained::patches::messages` | Chat capture and broadcast presentation. |
 | `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
 | `UnchainedPlugin::unchained::patches::server_browser` | Server-browser request routing, endpoint overrides, and request-token handling. |

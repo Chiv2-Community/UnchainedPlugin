@@ -1,4 +1,3 @@
-//! Player admission, connection lifecycle, and statistics.
+//! Backend statistics policy.
 
-pub mod connections;
 pub mod stats;
