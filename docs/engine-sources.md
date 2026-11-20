@@ -54,6 +54,25 @@ The hover asks Cargo to merge configuration using the project's pinned nightly;
 it does not parse TOML independently. Local links open in Neovim; HTTP(S) links
 open in the browser. Reopen the hover after changing a root.
 
+With a local root, both binding and detour hovers append the native implementation
+as C++. A host-only Cargo example uses Tree-sitter C++ dev dependencies; these
+are not linked into the plugin. The helper searches the linked header and C++
+files in its owning module without compiling engine code or fetching sources.
+It requires a unique definition; ambiguous overloads and declarations alone are
+not displayed.
+
+The first lookup builds the helper asynchronously. While loading, or when no
+implementation can be displayed, the bottom note is:
+
+> Configure local source paths in .cargo/config.local.toml to view the implementation inline
+
+The implementation's source link and `gd`/`gD` open its local file. To test the
+parser independently:
+
+```sh
+cargo test --locked -p xtask --example native-implementation
+```
+
 ## Path rules
 
 Mirror source categories, modules, and header directories.
