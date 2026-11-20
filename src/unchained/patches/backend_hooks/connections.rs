@@ -129,6 +129,8 @@ pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut
         .publish(GameEvent::LeaveEvent(Leave { name: leave_name }));
 }
 
+CREATE_PATCH!(AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]);
+
 /// Extracts a value from UE4 options strings of the form `?Key1=Val1?Key2=Val2`.
 fn extract_option_value<'a>(options: &'a str, key: &str) -> Option<&'a str> {
     let search = format!("?{}=", key);

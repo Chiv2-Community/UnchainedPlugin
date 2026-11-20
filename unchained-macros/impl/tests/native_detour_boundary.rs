@@ -281,7 +281,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     }
     for (path, expected) in [
         ("admin_control/console_commands.rs", "UTBLLocalPlayer_Exec, BYTES, &[0xEB]"),
-        ("backend_hooks/alternate_backend.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
+        ("backend_hooks/connections.rs", "AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]"),
         ("desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
         ("desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
