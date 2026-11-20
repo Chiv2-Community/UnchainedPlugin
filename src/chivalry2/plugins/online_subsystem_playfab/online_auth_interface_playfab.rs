@@ -54,7 +54,7 @@ mod tests {
         };
         // The guard must return without calling the uninitialized trampoline.
         unsafe {
-            crate::unchained::patches::auth_token_cleanup::end_authentication_detour(&raw const auth, std::ptr::null());
+            crate::unchained::patches::backend_hooks::auth_token_cleanup::end_authentication_detour(&raw const auth, std::ptr::null());
         }
     }
 }

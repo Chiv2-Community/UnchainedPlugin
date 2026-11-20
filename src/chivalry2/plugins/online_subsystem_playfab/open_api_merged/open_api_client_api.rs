@@ -168,7 +168,7 @@ mod tests {
         let client = std::ptr::null_mut::<OpenAPIClientAPI>();
         let request = std::ptr::null_mut::<GenericRequest>();
         let result = unsafe {
-            crate::unchained::patches::server_browser::with_backend_request(
+            crate::unchained::patches::backend_hooks::server_browser::with_backend_request(
                 client,
                 request,
                 || panic!("must not call native code"),

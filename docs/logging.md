@@ -304,7 +304,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, blocked Blueprint events, recursion limits, and listen-server compatibility. |
 | `UnchainedPlugin::unchained::patches::messages` | Chat capture and broadcast presentation. |
 | `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::unchained::patches::server_browser` | Server-browser request routing, endpoint overrides, and request-token handling. |
+| `UnchainedPlugin::unchained::patches::backend_hooks` | Authentication cleanup, server-browser request routing, endpoint overrides, and request-token handling. |
 | `UnchainedPlugin::unchained::patches::frontend_patches` | Frontend startup options and mod asset initialization. |
 | `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, map changes, match state, and shutdown. |
 | `UnchainedPlugin::unchained::patches::networking` | Travel and IPv6 browser/ping compatibility. |

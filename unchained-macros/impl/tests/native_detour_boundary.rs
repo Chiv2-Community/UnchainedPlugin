@@ -249,7 +249,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
     for (path, targets) in [
         ("config_overrides.rs", &["UObject::load_config", "UClass::get_config_name"][..]),
         ("frontend_patches.rs", &["UTBLGameInstance::load_front_end_map"][..]),
-        ("auth_token_cleanup.rs", &["FOnlineAuthPlayFab::end_authentication"][..]),
+        ("backend_hooks/auth_token_cleanup.rs", &["FOnlineAuthPlayFab::end_authentication"][..]),
         ("custom_loading_screens.rs", &["UMapSpecificLoadingScreenConfig::get_data_for_map"][..]),
         ("damage_events.rs", &["ATBLCharacter::on_killed", "ATBLCharacter::on_damage_taken"][..]),
         ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
@@ -275,7 +275,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
             "FOnlineSessionPlayFab::ping_some_servers",
         ][..]),
         ("pak_mount.rs", &["FPakPlatformFile::mount"][..]),
-        ("server_browser.rs", &[
+        ("backend_hooks/server_browser.rs", &[
             "OpenAPIClientAPI::get_post_get_motd",
             "OpenAPIClientAPI::get_post_get_current_games",
             "PlayFabRequestHandler::send_request",
@@ -312,7 +312,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
         ("enable_console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
-        ("auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
+        ("backend_hooks/auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
         ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
     ] {
         let file = syn::parse_file(&std::fs::read_to_string(root.join(path)).unwrap()).unwrap();
