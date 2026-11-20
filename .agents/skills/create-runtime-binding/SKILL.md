@@ -1,0 +1,107 @@
+---
+name: create-runtime-binding
+description: Declare a verified Chivalry 2 native runtime binding under src/chivalry2, including instance/static ABIs, request-registry bindings, native globals, and vtable methods. Use when exposing a native function for direct calls or a plugin detour.
+---
+
+# Creating a runtime binding
+
+Expose a verified native target without adding plugin policy to its model.
+
+- Follow [native bindings](../../../CONTRIBUTING.md#declare-a-native-binding),
+  [vtable methods](../../../CONTRIBUTING.md#declare-vtable-methods), and
+  [source layout](../../../docs/engine-sources.md).
+- Read [binding and trampoline contracts](../../../docs/native-bindings.md).
+
+## Resolve the prerequisite
+
+Load the `create-resolver` skill before creating or changing an address resolver.
+
+- Use the skill tool when available; otherwise read the
+  [resolver skill](../create-resolver/SKILL.md).
+- Reuse a verified existing resolver rather than introducing duplicate scans.
+- Require evidence from the latest target binary for new ABI assumptions.
+- Confirm target identity, native owner, static/instance status, parameters,
+  hidden return storage, and return convention.
+- Stop and request evidence when the ABI is uncertain; a successful scan alone
+  does not establish a callable signature.
+
+## Place the declaration
+
+Keep native contracts with their source owners.
+
+- Use the appropriate `src/chivalry2/{engine,tbl,tbl_loading_screen,plugins}/*`
+  module, not a plugin-policy directory.
+- Preserve `runtime`, `third_party`, and native header paths; omit visibility
+  directories. Add new modules to `mod.rs`.
+- Put source evidence/imports first, then resolvers, then native types and impls.
+- Reuse existing types; declare only layouts supported by evidence.
+- Keep opaque types opaque. Use raw pointers where Rust borrow guarantees
+  cannot be established.
+- Preserve existing aliases, resolver/cache keys, and feature restrictions.
+- Keep detours, configuration policy, queues, and patch bytes out of native models.
+
+## Declare the callable binding
+
+Use an empty unsafe method under `runtime_bindings`.
+
+- Apply `#[unchained_macros::runtime_bindings]` to the native type's inherent impl.
+- Apply `#[unchained_macros::bind_resolved_func(Resolver)]` to the method.
+- Use the declared resolver type path, not a renamed import.
+- Choose accessible visibility, usually `pub(crate)`.
+- Preserve exact native argument order, widths, returns, and lifetimes.
+- Keep static calls receiver-free. For instance calls, use a verified receiver
+  such as `self: *mut Self`.
+- Declare hidden C++ ABI arguments explicitly; macros do not infer them.
+- Document pointer validity, ownership, threading, and callback-lifetime obligations.
+- Match surrounding feature gates; do not widen optional native dependencies.
+- Calls use the resolved entry before attachment, then the original trampoline.
+  Calling a binding must not invoke its plugin replacement.
+
+Existing static-call pattern; reuse the existing declaration rather than
+registering a second copy:
+
+```rust
+#[unchained_macros::runtime_bindings]
+impl FUDPPing {
+    #[unchained_macros::bind_resolved_func(UDPEcho)]
+    pub(crate) unsafe fn udp_echo(
+        endpoint: *mut FString,
+        timeout: f32,
+        callback: *mut TFunctionFIcmpEchoResult,
+    ) {}
+}
+```
+
+## Handle other native targets
+
+Choose the binding mechanism that matches the address source.
+
+- **Patternsleuth:** pass the full resolver type path to `bind_resolved_func`.
+- **Request registry:** use `bind_resolved_request_function(Key)` under
+  `runtime_bindings`. Verify the producer supplies that exact key as an RVA in
+  `OffsetRegisty`; do not put an absolute address into the registry.
+- **Globals:** use `bind_resolver_value(Resolver, Address)` for an inline object's
+  address or `Value` to read a `Copy` value from a slot. These are not detour targets.
+- **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.
+  Load `create-vtable`, or read the [vtable skill](../create-vtable/SKILL.md),
+  before creating or extending a table declaration.
+  - Verify the vptr location and byte offsets; Windows x64 slots are eight bytes.
+  - Use `#[inherit]` on the verified embedded base rather than adding another vptr.
+  - Generated calls use the current vtable; they do not supply binding metadata
+    for `bind_func_detour` or guarantee original-call bypass.
+  - To detour a concrete virtual implementation, resolve its entry and declare
+    a separate resolver-backed method.
+
+## Validate and hand off
+
+Check native correctness separately from Rust signature compatibility.
+
+- Compile the binding on the supported Windows target.
+- Test affected feature combinations, including disabled optional features.
+- Add behavioral, layout, ownership, or resolver tests where applicable.
+- Do not add tests consisting only of typed function-pointer assignments.
+- Run the contributor guide's boundary checks.
+- Report the module/method path, resolver or registry key, verified ABI,
+  feature gates, evidence, and test results.
+- A binding alone does not need a detour-baseline row. Add that row when a new
+  production detour is introduced.
