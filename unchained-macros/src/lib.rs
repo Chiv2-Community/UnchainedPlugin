@@ -1,10 +1,10 @@
 //! Hook, detour, patch and signature macros for the plugin.
 mod detour;
-pub use detour::{DetourBindingRegistration, detour_is_initialized, detour_is_enabled};
+pub use detour::{detour_is_initialized, detour_is_enabled};
 
 pub use unchained_macros_impl::{
-    bind_resolved_func, bind_resolved_func_detour, bind_resolver_value, runtime_bindings,
-    bind_resolved_request_function, bind_resolved_request_function_detour,
+    bind_resolved_func, bind_resolver_value, runtime_bindings,
+    bind_resolved_request_function,
     bind_func_detour,
 };
 pub use binding::{FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
@@ -22,7 +22,6 @@ mod binding;
 mod registry;
 mod platforms;
 mod patch;
-mod hooks;
 mod signatures;
 pub mod signature;
 mod custom_resolver;

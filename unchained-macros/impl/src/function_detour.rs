@@ -54,8 +54,7 @@ pub(super) fn expand_binding(
     self_ty: &Type,
     require_resolver: bool,
 ) -> syn::Result<(ItemFn, syn::ImplItemConst, Tokens)> {
-    // Keep declaration validation shared with standalone/legacy bindings.
-    super::expand_binding(args.clone(), quote!(#function), require_resolver)?;
+    super::validate_binding(function)?;
     let resolver = resolver_path(args)?;
     let documentation = binding_documentation(function, self_ty, &resolver, require_resolver);
     if !require_resolver {
@@ -145,9 +144,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
     let method = target.segments.last_mut().unwrap();
     method.ident = format_ident!("__UNCHAINED_BINDING_{}", method.ident, span = Span::mixed_site());
-    let mut stub = function.clone();
-    stub.block = Box::new(syn::parse_quote!({}));
-    super::expand_binding(quote!(TypeCheck), quote!(#stub), false)?;
+    super::validate_native_signature(&function.sig)?;
     if function
         .sig
         .inputs
@@ -244,7 +241,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #[allow(non_snake_case)]
         unsafe fn #attach(
             base_address: usize,
-            _offsets: ::std::collections::HashMap<String, u64>, auto_activate: bool,
+            auto_activate: bool,
         ) -> Result<Option<usize>, Box<dyn ::std::error::Error>> {
             let binding = #target.binding();
             let address = binding.entry_address()
@@ -269,12 +266,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ::inventory::submit! {
             ::unchained_macros::HookRegistration {
                 name: #target.name(), hook_fn: #attach, condition: #condition_fn,
-            }
-        }
-        #(#cfg)*
-        ::inventory::submit! {
-            ::unchained_macros::DetourBindingRegistration {
-                name: #target.name(),
                 initialized: || #hook.get().is_some(),
                 enabled: || #hook.get().is_some_and(|hook| hook.is_enabled()),
             }
@@ -285,6 +276,30 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conditions_preserve_status_aliases_and_custom_predicates() {
+        for (condition, expected) in [
+            (quote!(ACTIVE), quote!(|| true)),
+            (quote!(INACTIVE), quote!(|| false)),
+            (quote!(CALLED), quote!(|| false)),
+            (quote!(DISABLED), quote!(|| false)),
+            (quote!(|| enabled()), quote!(|| enabled())),
+        ] {
+            let expanded = expand(
+                quote!(Native::call, #condition),
+                quote!(unsafe fn replacement() {}),
+            ).unwrap();
+            let file = syn::parse2::<syn::File>(expanded).unwrap();
+            let condition = file.items.iter().find_map(|item| match item {
+                syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" =>
+                    Some(&function.block),
+                _ => None,
+            }).unwrap();
+            let expected: syn::Block = syn::parse2(quote!({ (#expected)() })).unwrap();
+            assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
+        }
+    }
 
     fn documentation(attributes: &[syn::Attribute]) -> String {
         attributes.iter().filter_map(|attribute| {

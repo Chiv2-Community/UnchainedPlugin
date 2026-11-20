@@ -2,13 +2,15 @@
 
 use std::collections::HashMap;
 
-pub type CreateHookFn = unsafe fn(usize, HashMap<String, u64>, bool)
+pub type CreateHookFn = unsafe fn(usize, bool)
     -> Result<Option<usize>, Box<dyn std::error::Error>>;
 
 pub struct HookRegistration {
     pub name: &'static str,
     pub hook_fn: CreateHookFn,
     pub condition: fn() -> bool,
+    pub initialized: fn() -> bool,
+    pub enabled: fn() -> bool,
 }
 
 pub type RegistrationPredicate = fn() -> bool;

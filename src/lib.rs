@@ -369,7 +369,7 @@ fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
                     std::process::exit(-67);
                 }
                 apply_patches(offsets.clone());
-                if let Err(e) = attach_hooks(offsets.clone()) {
+                if let Err(e) = attach_hooks() {
                     serror!("Failed to attach hooks: {}", e);
                     std::process::exit(-67);
                 }
@@ -599,25 +599,16 @@ pub fn world_init() {
 }
 
 /// The base program address of the running application will be used.
-pub fn attach_hooks(
-    offsets: HashMap<String, u64>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
 
     let platform = crate::get_current_platform();
-    // inventory::iter finds everything submitted via CREATE_HOOK!
     for hook in inventory::iter::<unchained_macros::HookRegistration> {
         if !unchained_macros::supports_platform(hook.name, platform) {
             continue;
         }
         let cond = (hook.condition)();
-        if !cond {
-            // swarn!("inactive hook: {}", hook.name);
-            // Inactive hooks initialize but don't enable the detour
-            // continue;
-        }
-
-        match unsafe { (hook.hook_fn)(*unchained::startup::BASE_ADDR, offsets.clone(), cond) } {
+        match unsafe { (hook.hook_fn)(*unchained::startup::BASE_ADDR, cond) } {
             Ok(_) => sinfo!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);

@@ -10,7 +10,6 @@ mod model {
     pub struct DetachedBorrow;
     pub struct DetachedStorage;
     pub struct DetachedGlobalOff;
-    pub struct DetachedLegacy;
     pub struct DetachedZero;
 
     #[repr(C)]
@@ -30,8 +29,6 @@ mod model {
         pub unsafe fn storage<'a>(self: *const Self, out: &'a mut i32) -> &'a mut i32 {}
         #[bind_resolved_func(DetachedGlobalOff)]
         pub unsafe fn global_off(value: i32) -> i32 {}
-        #[bind_resolved_func(DetachedLegacy)]
-        pub unsafe fn legacy(value: i32) -> i32 {}
         #[bind_resolved_func(DetachedZero)]
         pub unsafe fn zero() -> i32 {}
         #[bind_resolved_request_function(GetPost_Detached)]
@@ -82,11 +79,6 @@ unsafe fn plugin_global_off(value: i32) -> i32 {
     unsafe { Native::global_off(value) + 400 }
 }
 
-#[unchained_macros::bind_func_detour(Native::legacy)]
-unsafe fn conflicts_with_legacy(value: i32) -> i32 {
-    unsafe { Native::legacy(value) }
-}
-
 #[unchained_macros::bind_func_detour(Native::zero)]
 unsafe fn plugin_zero() -> i32 {
     unsafe { Native::zero() + 1 }
@@ -95,11 +87,6 @@ unsafe fn plugin_zero() -> i32 {
 #[unchained_macros::bind_func_detour(Native::request)]
 unsafe fn plugin_request(value: i32) -> i32 {
     unsafe { Native::request(value) + 600 }
-}
-
-#[unchained_macros::bind_resolved_func_detour(model::DetachedLegacy)]
-unsafe fn legacy_detour(value: i32) -> i32 {
-    unsafe { legacy(value) + 500 }
 }
 
 #[cfg(any())]
@@ -124,11 +111,6 @@ unsafe extern "C" fn global_off_target(value: i32) -> i32 {
     std::hint::black_box(value) + 4
 }
 #[inline(never)]
-unsafe extern "C" fn legacy_target(value: i32) -> i32 {
-    std::hint::black_box(value) + 5
-}
-
-#[inline(never)]
 unsafe extern "C" fn zero_target() -> i32 {
     std::hint::black_box(17)
 }
@@ -141,7 +123,10 @@ unsafe extern "C" fn request_target(value: i32) -> i32 {
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
     let base = BASE;
     assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
-    assert!(unsafe { __unchained_attach_plugin_add(base, Default::default(), true) }.is_err());
+    assert!(unsafe { __unchained_attach_plugin_add(base, true) }.is_err());
+    assert!(!unchained_macros::detour_is_initialized("DetachedAdd"));
+    assert!(!unchained_macros::detour_is_enabled("MissingDetour"));
+    assert!(!unchained_macros::detour_is_initialized("MissingDetour"));
     for (binding, address) in [
         (
             Native::__UNCHAINED_BINDING_zero.binding(),
@@ -171,10 +156,6 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             Native::__UNCHAINED_BINDING_global_off.binding(),
             global_off_target as *const () as usize,
         ),
-        (
-            Native::__UNCHAINED_BINDING_legacy.binding(),
-            legacy_target as *const () as usize,
-        ),
     ] {
         unsafe {
             binding.initialize(base, (address - base) as u64).unwrap();
@@ -190,12 +171,13 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
     assert!((registration.condition)());
     unsafe {
         assert_eq!(Native::add(7), 10);
-        (registration.hook_fn)(base, Default::default(), true).unwrap();
-        __unchained_attach_plugin_borrow(base, Default::default(), true).unwrap();
-        __unchained_attach_plugin_storage(base, Default::default(), true).unwrap();
-        __unchained_attach_plugin_global_off(base, Default::default(), false).unwrap();
-        __unchained_attach_plugin_zero(base, Default::default(), true).unwrap();
-        __unchained_attach_plugin_request(base, Default::default(), true).unwrap();
+        assert!((registration.hook_fn)(usize::MAX, true).is_err());
+        (registration.hook_fn)(base, true).unwrap();
+        __unchained_attach_plugin_borrow(base, true).unwrap();
+        __unchained_attach_plugin_storage(base, true).unwrap();
+        __unchained_attach_plugin_global_off(base, false).unwrap();
+        __unchained_attach_plugin_zero(base, true).unwrap();
+        __unchained_attach_plugin_request(base, true).unwrap();
         assert_eq!(Native::zero(), 17);
         assert_eq!(
             std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(),
@@ -207,6 +189,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             607
         );
         assert!(unchained_macros::detour_is_enabled("DetachedAdd"));
+        assert!(unchained_macros::detour_is_initialized("DetachedBorrow"));
         assert!(!unchained_macros::detour_is_enabled("DetachedBorrow"));
         assert!(!unchained_macros::detour_is_enabled("DetachedGlobalOff"));
         let call = std::hint::black_box(add_target as unsafe extern "C" fn(i32) -> i32);
@@ -215,8 +198,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert_eq!(Native::add(7), 10);
         assert_eq!(Native::alias(7), 10);
         assert_eq!(ADD_CALLS.load(Ordering::SeqCst), 1);
-        assert!(__unchained_attach_duplicate(base, Default::default(), true).is_err());
-        assert!(__unchained_attach_aliased(base, Default::default(), true).is_err());
+        assert!(__unchained_attach_duplicate(base, true).is_err());
+        assert!(__unchained_attach_aliased(base, true).is_err());
+        assert!(__unchained_attach_plugin_add(base, true).is_err());
 
         let native = Native { value: 42 };
         let borrow_call =
@@ -247,25 +231,6 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             5
         );
 
-        let legacy_registration = inventory::iter::<unchained_macros::HookRegistration>
-            .into_iter()
-            .find(|r| r.hook_fn as usize == __unchained_attach_legacy_detour as *const () as usize)
-            .unwrap();
-        (legacy_registration.hook_fn)(base,
-            std::collections::HashMap::from([(
-                "DetachedLegacy".into(),
-                (legacy_target as *const () as usize - base) as u64,
-            )]),
-            true,
-        )
-        .unwrap();
-        assert_eq!(Native::legacy(1), 6);
-        assert_eq!(
-            std::hint::black_box(legacy_target as unsafe extern "C" fn(i32) -> i32)(1),
-            506
-        );
-        assert!(__unchained_attach_conflicts_with_legacy(base, Default::default(), true).is_err());
-
         let original_address = Native::__UNCHAINED_BINDING_add.binding().address();
         __UNCHAINED_HOOK_plugin_add
             .get()
@@ -273,6 +238,8 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             .disable()
             .unwrap();
         assert_eq!(call(7), 10);
+        assert!(!unchained_macros::detour_is_enabled("DetachedAdd"));
+        assert!(unchained_macros::detour_is_initialized("DetachedAdd"));
         assert_eq!(Native::add(7), 10);
         assert_eq!(
             Native::__UNCHAINED_BINDING_add.binding().address(),
@@ -284,11 +251,6 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             .disable()
             .unwrap();
         __UNCHAINED_HOOK_plugin_storage
-            .get()
-            .unwrap()
-            .disable()
-            .unwrap();
-        __UNCHAINED_HOOK_legacy_detour
             .get()
             .unwrap()
             .disable()

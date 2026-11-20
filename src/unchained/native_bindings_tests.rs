@@ -24,8 +24,10 @@ mod binding_tests {
         for name in expected {
             assert_eq!(inventory::iter::<HookRegistration>.into_iter()
                 .filter(|hook| hook.name == name).count(), 1, "Hook {name}");
-            assert_eq!(inventory::iter::<unchained_macros::DetourBindingRegistration>.into_iter()
-                .filter(|hook| hook.name == name).count(), 1, "State access for {name}");
+            let hook = inventory::iter::<HookRegistration>.into_iter()
+                .find(|hook| hook.name == name).unwrap();
+            assert_eq!(detour_is_initialized(name), (hook.initialized)());
+            assert_eq!(detour_is_enabled(name), (hook.enabled)());
         }
         assert_eq!(crate::resolvers().filter(|resolver| resolver.name == "UTBLSystemLibrary__GetTBLGameMode").count(), 1);
     }

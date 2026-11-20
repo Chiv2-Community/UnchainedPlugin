@@ -1,20 +1,13 @@
-/// State access for legacy and method-targeted detours.
-pub struct DetourBindingRegistration {
-    pub name: &'static str,
-    pub initialized: fn() -> bool,
-    pub enabled: fn() -> bool,
-}
-
-inventory::collect!(DetourBindingRegistration);
+use crate::HookRegistration;
 
 pub fn detour_is_initialized(name: &str) -> bool {
-    inventory::iter::<DetourBindingRegistration>
+    inventory::iter::<HookRegistration>
         .into_iter()
         .any(|binding| binding.name == name && (binding.initialized)())
 }
 
 pub fn detour_is_enabled(name: &str) -> bool {
-    inventory::iter::<DetourBindingRegistration>
+    inventory::iter::<HookRegistration>
         .into_iter()
         .any(|binding| binding.name == name && (binding.enabled)())
 }
@@ -23,7 +16,7 @@ use std::sync::Mutex;
 
 static CLAIMED_ADDRESSES: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
 
-/// Reservation shared by legacy and method-targeted detours.
+/// Reservation retained by an attached detour.
 #[doc(hidden)]
 pub struct DetourAddressClaim {
     address: usize,

@@ -56,7 +56,7 @@ Use `bind_func_detour` on an unsafe free function.
   Put per-call decisions in the body.
 - Only one detour may own a native address; extend an existing replacement
   rather than installing a duplicate.
-- Do not use legacy `CREATE_HOOK!` or `bind_resolved_func_detour`.
+- Call the native binding for original-call bypass; do not generate a second binding.
 
 Alternative to the existing UDP replacement; do not install both:
 

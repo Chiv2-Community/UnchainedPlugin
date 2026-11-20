@@ -32,8 +32,8 @@ Resolve a native address, declare its binding, then attach a plugin replacement.
 - **Resolver and binding:** `src/Chivalry2/*`, beside the native owner.
 - **Detour and instruction patches:** `src/unchained/patches/*`, grouped by purpose.
 - **Logging-only hooks:** `src/unchained/patches/diagnostics.rs`.
-- Use `runtime_bindings` and `bind_func_detour`, not legacy `CREATE_HOOK!` or
-  `bind_resolved_func_detour`.
+- Use `runtime_bindings` and `bind_func_detour`; call the native binding for
+  original-call bypass.
 
 ### Find the native owner and ABI
 

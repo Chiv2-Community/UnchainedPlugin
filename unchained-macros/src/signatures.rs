@@ -295,20 +295,6 @@ macro_rules! define_pattern_resolver {
     };
 }
 
-#[macro_export]
-macro_rules! define_process {
-    ($src:ident, $name:ident, $body:block) => {
-        async fn $name(
-            ctx: &patternsleuth::resolvers::AsyncContext<'_>,
-            patterns: Vec<patternsleuth::scanner::Pattern>
-        ) -> patternsleuth::resolvers::Result<$src> {
-            let result: Vec<usize> = Vec::new();
-            $body
-            Ok($src(ensure_one(result)?))
-        }
-    };
-}
-
 // #[derive(Debug, Clone, Copy)]
 // pub enum SignatureKind {
 //     Call,
@@ -405,21 +391,5 @@ macro_rules! wrap_process_macro {
                 }
             );
         }
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! generate_stub {
-    ( $name:ident ) => {
-        // $name
-        #[cfg(feature="dev")]
-        define_pattern_resolver!($name, [
-            "4C"
-        ]);
-
-        #[cfg(feature="dev")]
-        CREATE_HOOK!($name, (arg0: *mut c_void), {
-            crate::sdebug!("Stub hook {} called", stringify!($name));
-        });
     };
 }

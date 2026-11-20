@@ -1,6 +1,6 @@
 # unchained-macros
 
-Owns generic hook/detour generation, original-call helpers, native binding
+Owns generic detour generation, native binding
 initialization, runtime registries, storefront filtering, and resolver macros.
 
 Native declarations and macro invocations stay in the plugin. Generated
@@ -14,6 +14,8 @@ Feature checks remain at the call site.
   `initialize_value_bindings(base, &offsets)` initialize native bindings.
 - Hook and patch callbacks take the executable base as their first argument.
   The host discovers that base; this crate does not query Windows.
+- Hook callbacks use initialized bindings, not offset maps. Hook registration
+  also provides initialized/enabled state queries.
 - `PLATFORM` stores the host-selected storefront once. `current_platform()`
   and `supports_platform(name, platform)` serve resolver and startup filtering.
 - Patch operations still use the consumer's `crate::tools::memtools` backend.
@@ -120,39 +122,13 @@ the expanded macro to view them. Link-opening behavior belongs to the editor.
 An installed, enabled detour intercepts native game-code calls. Calling the Rust
 native binding invokes the original implementation, not the replacement.
 
-## Legacy resolved function detours
+## Detour conditions and state
 
-The following API remains for compatibility tests, not new production hooks.
-
-```rust,ignore
-#[unchained_macros::runtime_bindings]
-impl MyType {
-    #[bind_resolved_func_detour(MyResolver, ACTIVE)]
-    fn foo_detour(&mut self, value: i32) -> i32 {
-        unsafe { self.foo(value) + 1 }
-    }
-}
-```
-
-- Registers with the existing hook inventory; the resolver remains separately declared.
-- The optional condition defaults to `ACTIVE`. Accepts `ACTIVE`, `INACTIVE`,
+- `bind_func_detour` defaults to `ACTIVE`. Accepts `ACTIVE`, `INACTIVE`,
   `CALLED`, `DISABLED`, or a noncapturing closure/function returning `bool`.
 - Activation requires both the global activation flag and the condition at attachment.
-- Detour names must end with `_detour`. Stripping that suffix generates the
-  unsafe original method: `foo_detour` generates `foo`, never `foo_original`.
-  An existing associated item named `foo` is a compile error.
-- The original has the same visibility, arguments and result as the detour.
-  It calls the trampoline, even when disabled, and panics before attachment.
-- `runtime_bindings` supports non-generic inherent impls, borrowed/raw `Self`
-  receivers, associated functions, and explicit per-call lifetimes. Borrowed
-  methods preserve receiver-based return lifetime elision.
-- Standalone functions use the detour attribute without `runtime_bindings`,
-  with the same suffix rule: `foo_detour` generates `foo`. Use explicit
-  lifetimes for standalone borrowed results.
-- Native ABI is `extern "C"`; signatures must match the resolved native function.
-  Native calls must not unwind through the detour.
-- The consuming crate supplies `retour` and `inventory`, as with `CREATE_HOOK!`.
-  Registration types come from this crate.
+- The consuming crate supplies `retour` and `inventory`.
+- Native calls must not unwind through the detour.
 
 Direct empty unsafe stubs use `#[bind_resolved_func(Resolver)]`.
 
@@ -219,11 +195,14 @@ to live in a separate crate. Runtime binding state stays in `unchained-macros`.
 
 ## Lifetime-aware hooks
 
-Hooks use retour's `lifetime_detour!` with static `OnceLock` storage. To preserve
-borrow relationships, supply lifetimes before the full hook configuration:
+Detours use retour's `lifetime_detour!` with static `OnceLock` storage. Preserve
+borrow relationships in both the native binding and replacement:
 
 ```rust,ignore
-CREATE_HOOK!(Read, for<'a>, ACTIVE, PRE, &'a Value, (value: &'a Value), {});
+#[unchained_macros::bind_func_detour(Native::Read, INACTIVE)]
+unsafe fn read<'a>(value: &'a Native) -> &'a Native {
+    unsafe { value.Read() }
+}
 ```
 
 Native validity, aliasing, thread affinity and patch synchronization remain

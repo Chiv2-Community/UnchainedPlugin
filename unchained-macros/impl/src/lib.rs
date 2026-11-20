@@ -22,13 +22,6 @@ pub fn bind_resolved_request_function(args: TokenStream, item: TokenStream) -> T
         .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
-/// Register a `_detour` function and generate its suffix-stripped trampoline caller.
-#[proc_macro_attribute]
-pub fn bind_resolved_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
-    detour::expand(args.into(), item.into())
-        .unwrap_or_else(|error| error.to_compile_error()).into()
-}
-
 /// Register a replacement for a typed method binding, not a resolver.
 ///
 /// Hover the target method in this attribute to inspect its native declaration,
@@ -37,13 +30,6 @@ pub fn bind_resolved_func_detour(args: TokenStream, item: TokenStream) -> TokenS
 #[proc_macro_attribute]
 pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     function_detour::expand(args.into(), item.into())
-        .unwrap_or_else(|error| error.to_compile_error()).into()
-}
-
-/// Register a request-key detour and generate its suffix-stripped trampoline.
-#[proc_macro_attribute]
-pub fn bind_resolved_request_function_detour(args: TokenStream, item: TokenStream) -> TokenStream {
-    detour::expand_request(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
@@ -114,11 +100,7 @@ fn expand_request(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     expand_binding(quote!(#key), item, false)
 }
 
-fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
-    let resolver = resolver_path(args)?;
-    let resolver_name = resolver.segments.last().unwrap().ident.to_string();
-    let mut function: ItemFn = syn::parse2(item)?;
-    let signature = &function.sig;
+fn validate_native_signature(signature: &syn::Signature) -> syn::Result<()> {
     if signature.unsafety.is_none() {
         return Err(syn::Error::new_spanned(signature, "native resolver bindings require unsafe fn"));
     }
@@ -129,12 +111,6 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     {
         return Err(syn::Error::new_spanned(signature, "native bindings must be non-generic (except lifetimes), non-async Rust functions"));
     }
-    if !function.block.stmts.is_empty() {
-        return Err(syn::Error::new_spanned(&function.block, "native binding bodies must be empty"));
-    }
-
-    let mut types = Vec::new();
-    let mut arguments = Vec::new();
     for argument in &signature.inputs {
         match argument {
             FnArg::Receiver(receiver) => {
@@ -146,9 +122,6 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
                 if !matches!(element, Type::Path(path) if path.path.is_ident("Self")) {
                     return Err(syn::Error::new_spanned(receiver, "native receivers must point to Self"));
                 }
-                let ty = &receiver.ty;
-                arguments.push(quote!(self));
-                types.push(quote!(#ty));
             }
             FnArg::Typed(argument) => {
                 let Pat::Ident(name) = argument.pat.as_ref() else {
@@ -157,13 +130,36 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
                 if name.by_ref.is_some() || name.subpat.is_some() {
                     return Err(syn::Error::new_spanned(name, "native parameters must use plain identifiers"));
                 }
-                let name = &name.ident;
-                let ty = &argument.ty;
-                arguments.push(quote!(#name));
-                types.push(quote!(#ty));
             }
         }
     }
+    Ok(())
+}
+
+fn validate_binding(function: &ItemFn) -> syn::Result<()> {
+    validate_native_signature(&function.sig)?;
+    if !function.block.stmts.is_empty() {
+        return Err(syn::Error::new_spanned(&function.block, "native binding bodies must be empty"));
+    }
+    Ok(())
+}
+
+fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
+    let resolver = resolver_path(args)?;
+    let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+    let mut function: ItemFn = syn::parse2(item)?;
+    validate_binding(&function)?;
+    let signature = &function.sig;
+    let (arguments, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|argument| {
+        match argument {
+            FnArg::Receiver(receiver) => (quote!(self), &receiver.ty),
+            FnArg::Typed(argument) => {
+                let Pat::Ident(name) = argument.pat.as_ref() else { unreachable!() };
+                let name = &name.ident;
+                (quote!(#name), &argument.ty)
+            }
+        }
+    }).unzip();
     let output = &signature.output;
     let binding = syn::Ident::new("__UNCHAINED_BINDING", Span::mixed_site());
     let native = syn::Ident::new("__unchained_native", Span::mixed_site());

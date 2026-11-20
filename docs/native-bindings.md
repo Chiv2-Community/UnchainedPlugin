@@ -103,8 +103,8 @@ Initialize bindings and publish trampolines before enabling replacements.
 4. Enable replacements only after publication.
 
 - Only one detour may own a native address.
-- Aliases and legacy registrations share address reservations; duplicate attachment
-  fails rather than silently chaining hooks.
+- Aliases share address reservations; duplicate attachment fails rather than
+  silently chaining hooks.
 - Failed construction releases its reservation.
 - A stored detour retains its reservation even if activation fails.
 - Atomic publication does not make concurrent attachment safe; a caller may
