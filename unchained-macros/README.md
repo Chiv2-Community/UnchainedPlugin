@@ -94,6 +94,8 @@ local checkout roots with `ARGON_SDK_SOURCE_LOCATION` and `UE_SOURCE_LOCATION`
 in Cargo configuration; see [source links](../docs/engine-sources.md#source-links).
 With local roots, both hover layouts append the parsed C++ implementation.
 Otherwise, they end with the local-source configuration note.
+Hovering a class with a `runtime_bindings` impl shows its full native C++ class
+definition from the linked local header.
 
 Generated metadata and attachment helpers stay out of those hover spans; inspect
 the expanded macro to view them. Rustdoc links follow the editor's documentation

@@ -61,6 +61,12 @@ files in its owning module without compiling engine code or fetching sources.
 It requires a unique definition; ambiguous overloads and declarations alone are
 not displayed.
 
+Hover a class with a `runtime_bindings` impl to see its complete C++ definition
+from the linked header, including base classes, members, and inline methods.
+This also works on the impl's type name, the attribute, and imported class names.
+Class lookup ignores forward declarations and refuses ambiguous definitions.
+Unannotated Rust classes retain their ordinary hover.
+
 The first lookup builds the helper asynchronously. While loading, or when no
 implementation can be displayed, the bottom note is:
 

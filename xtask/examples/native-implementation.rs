@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use tree_sitter::{Node, Parser as CppParser};
 
 #[derive(Parser)]
@@ -16,6 +16,14 @@ struct Args {
     header: PathBuf,
     #[arg(long)]
     target: String,
+    #[arg(long, value_enum, default_value = "implementation")]
+    kind: LookupKind,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum LookupKind {
+    Implementation,
+    Class,
 }
 
 #[derive(Debug)]
@@ -27,7 +35,10 @@ struct Implementation {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let result = find_implementation(&args.root, &args.header, &args.target)?;
+    let result = match args.kind {
+        LookupKind::Implementation => find_implementation(&args.root, &args.header, &args.target)?,
+        LookupKind::Class => find_class(&args.root, &args.header, &args.target)?,
+    };
     let output = result.map(|implementation| {
         serde_json::json!({
             "path": implementation.path,
@@ -93,6 +104,10 @@ fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
 
 fn qualified_name(node: Node<'_>, source: &str) -> Option<String> {
     let name = declarator_name(node, source)?;
+    scoped_name(node, name, source)
+}
+
+fn scoped_name(node: Node<'_>, name: String, source: &str) -> Option<String> {
     let mut scopes = Vec::new();
     let mut parent = node.parent();
     while let Some(node) = parent {
@@ -112,6 +127,101 @@ fn qualified_name(node: Node<'_>, source: &str) -> Option<String> {
     scopes.reverse();
     scopes.push(name);
     Some(scopes.join("::"))
+}
+
+fn parser_input(source: &str) -> Vec<u8> {
+    let mut input = source.as_bytes().to_vec();
+    // Unreal's export annotations are not C++ keywords. Keep original byte offsets.
+    for (offset, _) in source.match_indices("_API") {
+        let end = offset + 4;
+        let identifier = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        if source[end..].starts_with(identifier) {
+            continue;
+        }
+        let start = source[..offset]
+            .rfind(|c: char| !identifier(c))
+            .map_or(0, |index| {
+                index + source[index..].chars().next().unwrap().len_utf8()
+            });
+        let prefix = source[..start].trim_end();
+        let keyword = prefix.rsplit(|c: char| !identifier(c)).next().unwrap_or("");
+        if matches!(keyword, "class" | "struct") {
+            input[start..end].fill(b' ');
+        }
+    }
+    input
+}
+
+fn class_definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec<(usize, String)>) {
+    if matches!(node.kind(), "class_specifier" | "struct_specifier") {
+        if let (Some(name), Some(body)) = (
+            node.child_by_field_name("name"),
+            node.child_by_field_name("body"),
+        ) {
+            let closed = body
+                .child(body.child_count().saturating_sub(1))
+                .is_some_and(|end| end.kind() == "}" && !end.is_missing());
+            if closed {
+                if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source)
+                {
+                    if name == target || name.ends_with(&format!("::{target}")) {
+                        let declaration = node
+                            .parent()
+                            .filter(|parent| parent.kind() == "template_declaration")
+                            .unwrap_or(node);
+                        let mut end = declaration.end_byte();
+                        let suffix = &source[end..];
+                        let whitespace = suffix.len() - suffix.trim_start().len();
+                        if suffix[whitespace..].starts_with(';') {
+                            end += whitespace + 1;
+                        }
+                        found.push((
+                            declaration.start_position().row + 1,
+                            source[declaration.start_byte()..end].to_owned(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        class_definitions(child, source, target, found);
+    }
+}
+
+fn native_header(root: &Path, header: &Path) -> Result<(PathBuf, PathBuf)> {
+    let root = root.canonicalize().context("Cannot open source root")?;
+    let header = root
+        .join(header)
+        .canonicalize()
+        .context("Cannot open native header")?;
+    anyhow::ensure!(
+        header.starts_with(&root),
+        "Native header is outside the source root"
+    );
+    Ok((root, header))
+}
+
+fn find_class(root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
+    let (_, header) = native_header(root, header)?;
+    let source = fs::read_to_string(&header)?;
+    let mut parser = CppParser::new();
+    parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
+    let tree = parser
+        .parse(parser_input(&source), None)
+        .context("C++ parsing was cancelled")?;
+    let mut found = Vec::new();
+    class_definitions(tree.root_node(), &source, target, &mut found);
+    if found.len() != 1 {
+        return Ok(None);
+    }
+    let (line, code) = found.pop().unwrap();
+    Ok(Some(Implementation {
+        path: header,
+        line,
+        code,
+    }))
 }
 
 fn definitions(node: Node<'_>, source: &str, target: &str, found: &mut Vec<(usize, String)>) {
@@ -145,15 +255,7 @@ fn find_implementation(root: &Path, header: &Path, target: &str) -> Result<Optio
             .is_some_and(|(owner, method)| !owner.is_empty() && !method.is_empty()),
         "Expected a Class::Method target"
     );
-    let root = root.canonicalize().context("Cannot open source root")?;
-    let header = root
-        .join(header)
-        .canonicalize()
-        .context("Cannot open native header")?;
-    anyhow::ensure!(
-        header.starts_with(&root),
-        "Native header is outside the source root"
-    );
+    let (root, header) = native_header(root, header)?;
     let mut files = BTreeSet::from([header.clone()]);
     cpp_files(&module_directory(&header, &root), &mut files)?;
     let mut parser = CppParser::new();
@@ -180,7 +282,7 @@ fn find_implementation(root: &Path, header: &Path, target: &str) -> Result<Optio
             )
         })?;
         let tree = parser
-            .parse(&source, None)
+            .parse(parser_input(&source), None)
             .context("C++ parsing was cancelled")?;
         let mut found = Vec::new();
         definitions(tree.root_node(), &source, &target, &mut found);
@@ -374,5 +476,72 @@ struct Native { int* Call() const { return nullptr; } };
         )
         .unwrap()
         .is_none());
+    }
+
+    #[test]
+    fn extracts_complete_exported_class_with_bases_and_members() {
+        let fixture = Fixture::new();
+        let class = r#"class TEST_API Native final : public Base, public Interface {
+    GENERATED_BODY()
+public:
+    UFUNCTION(BlueprintCallable)
+    void Call();
+    int Inline() const { return 42; }
+private:
+    UPROPERTY()
+    int Value;
+};"#;
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            &format!("class Native;\nUCLASS(Blueprintable)\n{class}\nstruct Other {{}};"),
+        );
+        let found = find_class(
+            &fixture.0,
+            Path::new("Source/Test/Public/Native.h"),
+            "Native",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(found.code, class);
+        assert_eq!(found.line, 3);
+    }
+
+    #[test]
+    fn class_lookup_supports_qualified_names_and_templates() {
+        let fixture = Fixture::new();
+        fixture.write(
+            "Source/Test/Public/Native.h",
+            "namespace Game {\ntemplate<class T> struct Native { T Value; };\n}",
+        );
+        let found = find_class(
+            &fixture.0,
+            Path::new("Source/Test/Public/Native.h"),
+            "Game::Native",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(found.code, "template<class T> struct Native { T Value; };");
+    }
+
+    #[test]
+    fn class_lookup_refuses_forward_incomplete_and_ambiguous_definitions() {
+        let fixture = Fixture::new();
+        for source in [
+            "class Native;",
+            "class Native { int Value;",
+            "namespace A { class Native {}; } namespace B { class Native {}; }",
+        ] {
+            fixture.write("Source/Test/Public/Native.h", source);
+            assert!(
+                find_class(
+                    &fixture.0,
+                    Path::new("Source/Test/Public/Native.h"),
+                    "Native"
+                )
+                .unwrap()
+                .is_none(),
+                "{source}"
+            );
+        }
     }
 }
