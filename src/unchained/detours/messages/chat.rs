@@ -55,12 +55,6 @@ pub(crate) unsafe fn broadcast_chat_detour(
     }
 }
 
-pub(crate) fn has_authority() -> bool {
-    crate::globals()
-        .world()
-        .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() })
-}
-
 #[unchained_macros::bind_func_detour(APlayerController::client_message)]
 pub(crate) unsafe fn client_message_detour(
     this: *mut APlayerController,
@@ -82,6 +76,12 @@ pub(crate) unsafe fn client_message_detour(
     unsafe {
         this.client_message(S, Type, MsgLifeTime);
     }
+}
+
+pub(crate) fn has_authority() -> bool {
+    crate::globals()
+        .world()
+        .is_some_and(|world| unsafe { !(*world).authority_game_mode.is_null() })
 }
 
 /// # Safety

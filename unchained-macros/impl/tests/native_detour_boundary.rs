@@ -24,6 +24,43 @@ fn args(attr: &Attribute) -> Vec<Expr> {
         .collect()
 }
 
+#[test]
+fn detour_entry_points_precede_supporting_items() {
+    fn check(path: &Path) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                check(&path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).unwrap();
+            let file = syn::parse_file(&source).unwrap();
+            let mut supporting_item_seen = false;
+            for item in file.items {
+                match item {
+                    Item::Use(_) if !supporting_item_seen => {}
+                    Item::Fn(function)
+                        if attribute(&function.attrs, "bind_func_detour").is_some() =>
+                    {
+                        assert!(
+                            !supporting_item_seen,
+                            "{}: detour {} follows supporting code",
+                            path.display(),
+                            function.sig.ident,
+                        );
+                    }
+                    _ => supporting_item_seen = true,
+                }
+            }
+        }
+    }
+
+    check(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/unchained/detours"));
+}
+
 fn signature(sig: &Signature) -> String {
     let mut sig = sig.clone();
     sig.ident = syn::parse_quote!(native);

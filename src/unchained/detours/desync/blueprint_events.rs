@@ -10,6 +10,68 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
+#[unchained_macros::bind_func_detour(UObject::process_event, || cli_args().apply_desync_patch)]
+pub(crate) unsafe fn process_event_detour(
+    this: *mut UObject,
+    function: *mut UFunction,
+    params: *mut c_void,
+) {
+    let object = this;
+    if function.is_null() {
+        return unsafe { this.process_event(function, params) };
+    }
+
+    let index = process_event_function_index(function);
+
+    // handle known problematic functions
+    if process_event_is_blocked(function, index) {
+        let should_log =
+            PROCESS_EVENT_BLOCK_LOGGED.with(|logged| logged.borrow_mut().insert(index));
+
+        if should_log {
+            let (_, func_name) = process_event_names(std::ptr::null_mut(), function);
+
+            swarn!("Blocked ProcessEvent: {}", func_name);
+        }
+
+        return;
+    }
+
+    // recursion depth check
+    let depth = PROCESS_EVENT_DEPTH.with(|d| d.get());
+
+    if depth >= PROCESS_EVENT_MAX_DEPTH {
+        let should_log = PROCESS_EVENT_DEPTH_LOGGED.with(|logged| {
+            if logged.get() {
+                false
+            } else {
+                logged.set(true);
+                true
+            }
+        });
+
+        // log this once (per thread)
+        if should_log {
+            let (class_name, func_name) = process_event_names(object, function);
+
+            serror!(
+                "Depth limit {} reached at {}::{}; dropping event",
+                PROCESS_EVENT_MAX_DEPTH,
+                class_name,
+                func_name
+            );
+        }
+
+        return;
+    }
+
+    // track nested
+    PROCESS_EVENT_DEPTH.with(|d| d.set(depth + 1));
+    let _depth_guard = ProcessEventDepthGuard;
+
+    unsafe { this.process_event(function, params) }
+}
+
 #[inline]
 fn process_event_function_index(function: *mut UFunction) -> u32 {
     unsafe {
@@ -83,68 +145,6 @@ fn process_event_is_blocked(function: *mut UFunction, index: u32) -> bool {
         cache.borrow_mut().insert(index, blocked);
         blocked
     })
-}
-
-#[unchained_macros::bind_func_detour(UObject::process_event, || cli_args().apply_desync_patch)]
-pub(crate) unsafe fn process_event_detour(
-    this: *mut UObject,
-    function: *mut UFunction,
-    params: *mut c_void,
-) {
-    let object = this;
-    if function.is_null() {
-        return unsafe { this.process_event(function, params) };
-    }
-
-    let index = process_event_function_index(function);
-
-    // handle known problematic functions
-    if process_event_is_blocked(function, index) {
-        let should_log =
-            PROCESS_EVENT_BLOCK_LOGGED.with(|logged| logged.borrow_mut().insert(index));
-
-        if should_log {
-            let (_, func_name) = process_event_names(std::ptr::null_mut(), function);
-
-            swarn!("Blocked ProcessEvent: {}", func_name);
-        }
-
-        return;
-    }
-
-    // recursion depth check
-    let depth = PROCESS_EVENT_DEPTH.with(|d| d.get());
-
-    if depth >= PROCESS_EVENT_MAX_DEPTH {
-        let should_log = PROCESS_EVENT_DEPTH_LOGGED.with(|logged| {
-            if logged.get() {
-                false
-            } else {
-                logged.set(true);
-                true
-            }
-        });
-
-        // log this once (per thread)
-        if should_log {
-            let (class_name, func_name) = process_event_names(object, function);
-
-            serror!(
-                "Depth limit {} reached at {}::{}; dropping event",
-                PROCESS_EVENT_MAX_DEPTH,
-                class_name,
-                func_name
-            );
-        }
-
-        return;
-    }
-
-    // track nested
-    PROCESS_EVENT_DEPTH.with(|d| d.set(depth + 1));
-    let _depth_guard = ProcessEventDepthGuard;
-
-    unsafe { this.process_event(function, params) }
 }
 
 // PROCESSEVENT FILTERING

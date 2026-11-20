@@ -7,6 +7,34 @@ use crate::chivalry2::engine::FString;
 use crate::chivalry2::tbl_loading_screen::map_specific_loading_screen_config::*;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+#[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::get_data_for_map)]
+pub(crate) unsafe fn get_data_for_map_detour(
+    this: *mut UMapSpecificLoadingScreenConfig,
+    map_name: *mut FString,
+    data: *mut FMapSpecificLoadingScreenConfigData,
+) {
+    let this_ptr = this;
+    // The key must be read before the call: the callee mutates and frees `map_name`.
+    let extra = LoadingScreen::lookup(&(*map_name).to_string());
+    if let Some(extra) = &extra {
+        add_entry_guarded(this_ptr, extra);
+        swarn![
+            "Extra loading screen config for {} is now present",
+            extra.map
+        ];
+    }
+    unsafe {
+        this.get_data_for_map(map_name, data);
+    }
+    if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
+        apply_texture_fallback(&*this_ptr, &mut *data, extra);
+        swarn![
+            "Extra loading screen texture for {} is now applied",
+            extra.map
+        ];
+    }
+}
+
 fn has_entry(config: &UMapSpecificLoadingScreenConfig, key: &str) -> bool {
     config
         .configs
@@ -35,34 +63,6 @@ unsafe fn add_entry(config: &mut UMapSpecificLoadingScreenConfig, extra: &Loadin
         extra.map,
         config.configs.len()
     ];
-}
-
-#[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::get_data_for_map)]
-pub(crate) unsafe fn get_data_for_map_detour(
-    this: *mut UMapSpecificLoadingScreenConfig,
-    map_name: *mut FString,
-    data: *mut FMapSpecificLoadingScreenConfigData,
-) {
-    let this_ptr = this;
-    // The key must be read before the call: the callee mutates and frees `map_name`.
-    let extra = LoadingScreen::lookup(&(*map_name).to_string());
-    if let Some(extra) = &extra {
-        add_entry_guarded(this_ptr, extra);
-        swarn![
-            "Extra loading screen config for {} is now present",
-            extra.map
-        ];
-    }
-    unsafe {
-        this.get_data_for_map(map_name, data);
-    }
-    if let (true, Some(extra)) = (cfg!(feature = "loading_screen_texture_fallback"), &extra) {
-        apply_texture_fallback(&*this_ptr, &mut *data, extra);
-        swarn![
-            "Extra loading screen texture for {} is now applied",
-            extra.map
-        ];
-    }
 }
 
 /// A per-map loading screen to inject into

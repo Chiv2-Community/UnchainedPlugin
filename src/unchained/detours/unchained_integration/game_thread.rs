@@ -6,15 +6,6 @@ use crate::commands::NATIVE_COMMAND_QUEUE;
 use ::windows::Win32::System::Memory::IsBadReadPtr;
 use std::sync::{Mutex, Once};
 
-pub fn run_on_game_thread<F: FnOnce() + Send + 'static>(job: F) {
-    sdebug!("Task added to job queue");
-    JOB_QUEUE.lock().unwrap().push(Box::new(job));
-}
-
-pub fn in_game_thread_job() -> bool {
-    IN_TICK.with(|flag| flag.get())
-}
-
 #[unchained_macros::bind_func_detour(UGameEngine::tick)]
 pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) {
     unsafe {
@@ -64,6 +55,15 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
         }
     }
     IN_TICK.with(|flag| flag.set(false));
+}
+
+pub fn run_on_game_thread<F: FnOnce() + Send + 'static>(job: F) {
+    sdebug!("Task added to job queue");
+    JOB_QUEUE.lock().unwrap().push(Box::new(job));
+}
+
+pub fn in_game_thread_job() -> bool {
+    IN_TICK.with(|flag| flag.get())
 }
 
 type GameThreadJob = Box<dyn FnOnce() + Send>;
