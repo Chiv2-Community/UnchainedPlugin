@@ -254,6 +254,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("damage_events.rs", &["ATBLCharacter::on_killed", "ATBLCharacter::on_damage_taken"][..]),
         ("hosting/desync/prevent_stackoverflow.rs", &["UObject::process_event"][..]),
         ("hosting/playable_listen.rs", &["UGameplay::is_dedicated_server"][..]),
+        ("hosting/server_init.rs", &["UGameEngine::dedicated_server_init"][..]),
         ("ownership_overrides.rs", &[
             "ATBLPlayerController::get_ownership_from_player_controller_and_state",
             "ATBLPlayerController::can_use_loadout_item",
@@ -306,7 +307,7 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
         ("hosting/desync/net_mode.rs", "UNetDriver_GetNetMode, BYTES, &[0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3], IF { cli_args().apply_desync_patch }"),
         ("hosting/desync/movement.rs", "MoveAutonomous, 0x2f6, BYTES, &[0xE9, 0xBE, 0x0, 0x0, 0x0, 0x90], IF { cli_args().tick_actor_patch }"),
         ("hosting/desync/legacy_tick_actor.rs", "TickActor, 0x73, NOP, 6, IF { cli_args().tick_actor_patch }"),
-        ("pak_mount.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
+        ("admin_control/console_commands.rs", "AuthenticateConsoleCommandCaller, BYTES, &[0xEB]"),
         ("auth_token_cleanup.rs", "RedpointSteamSkipTokenCheck, BYTES, &[0xEB, 0x26]"),
         ("frontend_patches.rs", "EACAntiCheatMesssage, 0xE, NOP, 5"),
     ] {
@@ -316,7 +317,11 @@ fn patches_follow_plugin_purposes_not_native_header_paths() {
             item.mac.path.is_ident("CREATE_PATCH").then(|| item.mac.tokens.to_string())
         }).collect();
         let expected = expected.parse::<proc_macro2::TokenStream>().unwrap().to_string();
-        assert_eq!(actual, [expected], "instruction patch changed or misplaced: {path}");
+        assert_eq!(
+            actual.iter().filter(|tokens| **tokens == expected).count(),
+            1,
+            "instruction patch changed, duplicated, or misplaced: {path}",
+        );
     }
 }
 

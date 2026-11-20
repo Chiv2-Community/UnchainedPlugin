@@ -8,6 +8,11 @@ use crate::chivalry2::engine::UObjectType;
 use crate::chivalry2::engine::*;
 use std::ffi::c_void;
 
+define_pattern_resolver!(
+    AuthenticateConsoleCommandCaller,
+    ["74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"]
+);
+
 define_pattern_resolver!(ClientMessage, [
     "4C 8B DC 48 83 EC 58 33 C0 49 89 5B 08 49 89 73 18 49 8B D8 49 89 43 C8 48 8B F1 49 89 43 D0 49 89 43 D8 49 8D 43"
 ]);

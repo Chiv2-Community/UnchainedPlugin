@@ -27,7 +27,6 @@ pub mod tbl_character_base;
 pub mod tbl_engine;
 pub mod tbl_game_instance;
 pub mod tbl_game_mode;
-pub mod tbl_game_module;
 pub mod tbl_local_player;
 pub mod tbl_player_controller;
 pub mod tbl_player_state;

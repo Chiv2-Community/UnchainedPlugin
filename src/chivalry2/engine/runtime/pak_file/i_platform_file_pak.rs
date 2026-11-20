@@ -8,19 +8,6 @@ use crate::chivalry2::engine::TCHAR;
 
 use std::ffi::c_void;
 
-// Legacy key for FPakPlatformFile::Mount's filename-comparison branch, not
-// console authentication. Installed Steam RVA 0x2fc8e07 (Mount + 0xB7).
-define_pattern_resolver!(
-    AuthenticateConsoleCommandCaller,
-    ["74 ?? 40 32 FF E9 ?? ?? ?? ?? 49 8B 4D"]
-);
-
-// Legacy cache key retained: shipping PDB verifies this is the static
-// FPakPlatformFile::BroadcastPakChunkSignatureCheckFailure at RVA 0x2e371b0.
-define_pattern_resolver!(DedicatedServerInit, [
-    "41 56 48 83 EC 30 48 89 6C 24 48 48 89 74 24 50 48 89 7C 24 28 4C 89 7C 24 20 4C 8B F9 ?? ?? ?? ?? ?? 48 8B C8 4C 8B F0"
-]);
-
 // Signature source: owner-provided pattern for `FPakPlatformFile::Mount`
 // on the new build (`FUN_142fc8d50`; confirmed = the call site's `bool Mount(const TCHAR*, uint32, const TCHAR*, bool)`).
 // The RIP-relative displacement in the `48 8B 05` security-cookie load
@@ -54,20 +41,8 @@ pub struct FPakPlatformFile {
     _opaque: [u8; 0],
 }
 
-/// Opaque native declaration from IPlatformFilePak.h; no field layout assumed.
-#[repr(C)]
-pub struct FPakChunkSignatureCheckFailedData {
-    _opaque: [u8; 0],
-}
-
 #[unchained_macros::runtime_bindings]
 impl FPakPlatformFile {
-    #[unchained_macros::bind_resolved_func(DedicatedServerInit)]
-    pub(crate) unsafe fn broadcast_pak_chunk_signature_check_failure(
-        data: *const FPakChunkSignatureCheckFailedData,
-    ) {
-    }
-
     #[unchained_macros::bind_resolved_func(PakPlatformFileMount)]
     pub(crate) unsafe fn mount(
         self: *mut Self,
