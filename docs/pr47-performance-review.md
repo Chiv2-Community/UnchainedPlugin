@@ -28,13 +28,46 @@ Fresh local measurements against `817d58d`:
   two Rayon threads, and CPU affinity `10,11`. All six targets resolved; ranges:
   1.175–1.194 s separately, 0.703–0.726 s together. These are resolver workloads,
   not live startup or hook-installation timings.
-- Memory tradeoff: Linux peak generator RSS rose from about 23 MiB to 361 MiB.
-  Index data contains selected snippets and header declarations, not retained
-  syntax trees. Further memory optimization remains worthwhile.
+- Corrected memory measurement: isolated Linux generator processes used
+  23,172–23,468 KiB peak RSS before indexing and 28,752–28,920 KiB at `89ce59a`.
+  An isolated build of exact `6450f40` used 28,468 KiB (16.930 s).
+  The earlier 361 MiB claim did not reproduce and is withdrawn. Its cause is
+  unproven; child/build RSS contamination is only a hypothesis. Index data
+  contains selected snippets and header declarations, not retained syntax trees.
 - These are local, nonexclusive CPU measurements. Source generation still runs
   on ordinary source rebuilds; no complete build-speed comparison is claimed.
 - Follow-up evidence: `/home/jbarber/.cache/opencode/pr47-index-*` and
   `pr47-batched-globals-benchmark.log`.
+
+### Qualified-owner filtering
+
+Module planning now retains qualified native targets instead of method names
+alone. Before parsing, candidate files must contain both the method and a plain
+owner identifier. Namespace blocks and inline definitions remain eligible;
+unfamiliar owner spellings fall back to method-only filtering. Definition and
+overload matching remain authoritative. Qualified cache keys also preserve
+late requests for another owner sharing an indexed method.
+
+Against `89ce59a`, three alternating direct-process samples after one warm-up:
+
+| Local-source generator | Before | After |
+| --- | ---: | ---: |
+| Median elapsed time | 16.717 s | 10.368 s |
+| Elapsed range | 16.692–16.723 s | 10.330–10.417 s |
+| Peak RSS range | 28,632–28,800 KiB | 28,280–28,456 KiB |
+| C++ parses, separate instrumented run | 626 | 251 |
+| Header parses, separate instrumented run | 94 | 94 |
+
+Median time fell 38.0%; all 241 generated documents were byte-identical,
+including both instrumented outputs. Timed binaries were uninstrumented,
+unoptimized host examples with the same locked dependency versions. Each used
+the current Rust sources, local UE `4.25-plus`/ArgonSDK checkouts, and reused
+output directories. Elapsed time used a monotonic clock around each executable;
+Linux `wait4` supplied that process's peak RSS, not cumulative Cargo/build-child
+usage. Compilation was outside the timed process. CPU allocation was
+nonexclusive; these are generator measurements, not whole-build timings.
+Evidence and reproduction script:
+`/home/jbarber/.cache/opencode/pr47-opt-fix/`.
 
 ## Resolver measurements
 

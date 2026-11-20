@@ -19,6 +19,7 @@ struct SourceFile {
     declarations: Option<Declarations>,
 }
 
+#[derive(Clone)]
 struct Definition {
     name: String,
     line: usize,
@@ -106,15 +107,15 @@ impl SourceIndex {
         self.requests
             .entry(module_directory(&header, &root))
             .or_default()
-            .insert(method_name(target));
+            .insert(implementation_target(target));
         Ok(())
     }
 
-    fn index_module(&mut self, module: &Path, method: &str) -> Result<()> {
+    fn index_module(&mut self, module: &Path, target: &str) -> Result<()> {
         self.requests
             .entry(module.to_owned())
             .or_default()
-            .insert(method.to_owned());
+            .insert(target.to_owned());
         if let std::collections::btree_map::Entry::Vacant(entry) =
             self.modules.entry(module.to_owned())
         {
@@ -129,19 +130,22 @@ impl SourceIndex {
         let mut pending: BTreeMap<_, std::result::Result<Vec<IndexedFunction>, String>> = self
             .requests[module]
             .iter()
-            .filter(|method| !indexed.functions.contains_key(*method))
-            .map(|method| (method.clone(), Ok(Vec::new())))
+            .filter(|target| !indexed.functions.contains_key(*target))
+            .map(|target| (target.clone(), Ok(Vec::new())))
             .collect();
         if pending.is_empty() {
             return Ok(());
         }
-        let wanted: BTreeSet<_> = pending.keys().cloned().collect();
+        let wanted: BTreeSet<_> = pending
+            .keys()
+            .map(|target| target.rsplit("::").next().unwrap().to_owned())
+            .collect();
         for path in &indexed.files {
             let bytes =
                 fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
             if !pending
                 .keys()
-                .any(|method| memchr::memmem::find(&bytes, method.as_bytes()).is_some())
+                .any(|target| may_contain_implementation(&bytes, target))
             {
                 continue;
             }
@@ -157,19 +161,21 @@ impl SourceIndex {
                 Ok(found) => {
                     let source = std::str::from_utf8(&bytes).unwrap();
                     for definition in found {
-                        let method = definition.name.rsplit("::").next().unwrap();
-                        if let Some(Ok(functions)) = pending.get_mut(method) {
-                            let implementation = definition.implementation(path, source);
-                            functions.push(IndexedFunction {
-                                definition,
-                                implementation,
-                            });
+                        for (target, functions) in &mut pending {
+                            if definition.matches(target) {
+                                if let Ok(functions) = functions {
+                                    functions.push(IndexedFunction {
+                                        implementation: definition.implementation(path, source),
+                                        definition: definition.clone(),
+                                    });
+                                }
+                            }
                         }
                     }
                 }
                 Err(error) => {
-                    for (method, functions) in &mut pending {
-                        if memchr::memmem::find(&bytes, method.as_bytes()).is_some() {
+                    for (target, functions) in &mut pending {
+                        if may_contain_implementation(&bytes, target) {
                             *functions = Err(error.to_string());
                         }
                     }
@@ -185,13 +191,29 @@ impl SourceIndex {
     }
 }
 
-fn method_name(target: &str) -> String {
+fn implementation_target(target: &str) -> String {
     let target = target.split('(').next().unwrap().trim();
     if let Some(owner) = target.strip_suffix("::Destructor") {
-        format!("~{}", owner.rsplit("::").next().unwrap())
+        format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
     } else {
-        target.rsplit("::").next().unwrap().to_owned()
+        target.to_owned()
     }
+}
+
+fn may_contain_implementation(bytes: &[u8], target: &str) -> bool {
+    let (owner, method) = target.rsplit_once("::").unwrap_or(("", target));
+    if memchr::memmem::find(bytes, method.as_bytes()).is_none() {
+        return false;
+    }
+    // Namespace blocks and inline definitions need not spell Owner::Method.
+    // Only require a plain owner identifier; unfamiliar spellings scan broadly.
+    let owner = owner.rsplit("::").next().unwrap();
+    let plain_identifier = !owner.is_empty()
+        && owner
+            .bytes()
+            .enumerate()
+            .all(|(i, c)| c == b'_' || c.is_ascii_alphabetic() || (i > 0 && c.is_ascii_digit()));
+    !plain_identifier || memchr::memmem::find(bytes, owner.as_bytes()).is_some()
 }
 
 fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
@@ -575,11 +597,7 @@ impl SourceIndex {
         } else {
             None
         };
-        let target = if let Some(owner) = target.strip_suffix("::Destructor") {
-            format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
-        } else {
-            target.to_owned()
-        };
+        let target = implementation_target(target);
         let method = target.rsplit("::").next().unwrap();
         let mut implementations = Vec::new();
         self.load(&header)?;
@@ -604,8 +622,8 @@ impl SourceIndex {
                     }),
             );
         }
-        self.index_module(&module, method)?;
-        let functions = self.modules[&module].functions[method]
+        self.index_module(&module, &target)?;
+        let functions = self.modules[&module].functions[&target]
             .as_ref()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         implementations.extend(
@@ -719,8 +737,8 @@ mod tests {
         assert_eq!(index.files.len(), 1);
         let module = index.modules.values().next().unwrap();
         assert_eq!(module.functions.len(), 2);
-        assert_eq!(module.functions["Call"].as_ref().unwrap().len(), 1);
-        assert_eq!(module.functions["Other"].as_ref().unwrap().len(), 1);
+        assert_eq!(module.functions["Native::Call"].as_ref().unwrap().len(), 1);
+        assert_eq!(module.functions["Native::Other"].as_ref().unwrap().len(), 1);
         assert_eq!(
             index
                 .files
@@ -755,6 +773,130 @@ mod tests {
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn shared_method_names_keep_planned_and_late_owners_independent() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/First.cpp",
+            "namespace Game { int First::Call() { return 1; } }",
+        );
+        fixture.write(
+            "Source/Test/Private/Second.cpp",
+            "namespace Game { struct Second { int Call() { return 2; } }; }",
+        );
+        fixture.write(
+            "Source/Test/Private/Third.cpp",
+            "int Game::Third::Call() { return 3; }",
+        );
+        for planned in [false, true] {
+            let mut index = SourceIndex::new();
+            if planned {
+                index
+                    .plan_implementation(&fixture.0, header, "Game::First::Call()")
+                    .unwrap();
+                index
+                    .plan_implementation(&fixture.0, header, "Second::Call")
+                    .unwrap();
+            }
+            for (target, body) in [
+                ("Game::First::Call", "return 1;"),
+                ("Second::Call", "return 2;"),
+                ("Game::Third::Call", "return 3;"),
+            ] {
+                assert!(index
+                    .find_implementation(&fixture.0, header, target)
+                    .unwrap()
+                    .unwrap()
+                    .code
+                    .contains(body));
+            }
+            // Planning after a previous lookup must also extend the owner set.
+            index
+                .plan_implementation(&fixture.0, header, "Third::Call")
+                .unwrap();
+            assert!(index
+                .find_implementation(&fixture.0, header, "Third::Call")
+                .unwrap()
+                .is_some());
+        }
+    }
+
+    #[test]
+    fn shared_method_errors_only_affect_candidate_owners() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() {}");
+        fs::write(
+            fixture.0.join("Source/Test/Private/Other.cpp"),
+            b"\xff Other::Call",
+        )
+        .unwrap();
+        let mut index = SourceIndex::new();
+        for target in ["Native::Call", "Other::Call"] {
+            index
+                .plan_implementation(&fixture.0, header, target)
+                .unwrap();
+        }
+        assert!(index
+            .find_implementation(&fixture.0, header, "Native::Call")
+            .unwrap()
+            .is_some());
+        assert!(index
+            .find_implementation(&fixture.0, header, "Other::Call")
+            .is_err());
+    }
+
+    #[test]
+    fn planned_destructors_and_template_owners_keep_native_matches() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "namespace Game { Native::~Native() {} }\n\
+             template<> int Box < int > :: Call() { return 7; }",
+        );
+        let mut index = SourceIndex::new();
+        for target in ["Game::Native::Destructor()", "Box<int>::Call()"] {
+            index
+                .plan_implementation(&fixture.0, header, target)
+                .unwrap();
+        }
+        assert_eq!(
+            index
+                .find_implementation(&fixture.0, header, "Game::Native::Destructor")
+                .unwrap()
+                .unwrap()
+                .code,
+            "Native::~Native() {}"
+        );
+        assert!(index
+            .find_implementation(&fixture.0, header, "Box<int>::Call")
+            .unwrap()
+            .unwrap()
+            .code
+            .contains("return 7;"));
+        assert_eq!(index.modules.values().next().unwrap().functions.len(), 2);
+    }
+
+    #[test]
+    fn owner_prefilter_falls_back_for_non_identifier_spellings() {
+        assert!(may_contain_implementation(b"Call", "Box< int >::Call"));
+        assert!(may_contain_implementation(b"Call", "Nativé::Call"));
+        assert!(!may_contain_implementation(b"Other::Call", "Native::Call"));
+        assert!(may_contain_implementation(
+            b"namespace Game { struct Native { void Call() {} }; }",
+            "Game::Native::Call"
+        ));
+        assert!(may_contain_implementation(
+            b"Native::~Native() {}",
+            &implementation_target("Native::Destructor()")
+        ));
     }
 
     #[test]
