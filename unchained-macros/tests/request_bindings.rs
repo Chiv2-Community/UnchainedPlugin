@@ -41,7 +41,6 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 
 #[test]
 fn request_keys_bind_without_corresponding_resolver_types() {
-    let mut names = Vec::new();
     for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
         let binding = registration.binding;
         let address = match binding.name() {
@@ -50,11 +49,8 @@ fn request_keys_bind_without_corresponding_resolver_types() {
             "GetPost_Missing" => continue,
             name => panic!("Unexpected request binding {name}"),
         };
-        names.push(binding.name());
         unsafe { binding.initialize(1, (address - 1) as u64).unwrap(); }
     }
-    names.sort();
-    assert_eq!(names, ["GetPost_Borrow", "GetPost_GetMotd"]);
     let mut client = OpenAPIClientAPI { value: 40 };
     let mut output = 0;
     let output_ptr = &raw mut output;

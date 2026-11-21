@@ -41,7 +41,7 @@ pub fn expand(item: TokenStream) -> syn::Result<TokenStream> {
             let name = &item.ident;
             let proxy = format_ident!("{}Global", name);
             let vis = &item.vis;
-            let cfg: Vec<_> = item.attrs.iter().filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr")).collect();
+            let cfg: Vec<_> = super::cfg_attributes(&item.attrs).collect();
             let mut methods = Vec::new();
             for field in &item.fields {
                 for attribute in &field.attrs {
@@ -86,10 +86,8 @@ pub fn expand(item: TokenStream) -> syn::Result<TokenStream> {
                 syn::ImplItem::Fn(method) if !matches!(method.vis, syn::Visibility::Inherited) => Some(forward(method, name)),
                 _ => None,
             }).collect::<syn::Result<Vec<_>>>()?;
-            let cfg: Vec<_> = item.attrs.iter()
-                .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"))
-                .cloned().collect();
-            let item = super::detour::expand_impl(TokenStream::new(), quote!(#item))?;
+            let cfg: Vec<_> = super::cfg_attributes(&item.attrs).cloned().collect();
+            let item = super::bindings::expand_impl(TokenStream::new(), quote!(#item))?;
             Ok(quote!(#item #(#cfg)* impl #proxy { #(#methods)* }))
         }
         item => Err(syn::Error::new_spanned(item, "global forwarding requires a native struct or inherent impl")),
@@ -145,10 +143,7 @@ fn forward(method: &syn::ImplItemFn, target: &syn::Ident) -> syn::Result<TokenSt
         Ok(&name.ident)
     }).collect::<syn::Result<Vec<_>>>()?;
     let name = &method.sig.ident;
-    let attrs = method.attrs.iter().filter(|attribute| {
-        !attribute.path().segments.last().is_some_and(|segment|
-            segment.ident == "bind_resolved_func" || segment.ident == "bind_resolved_request_function")
-    });
+    let attrs = method.attrs.iter().filter(|attribute| !super::is_binding_attribute(attribute));
     let vis = &method.vis;
     Ok(quote! {
         #(#attrs)*

@@ -54,15 +54,15 @@ fn select<'a>(
     available: &[&'static NamedResolver],
 ) -> Result<Vec<&'static NamedResolver>, String> {
     names.into_iter().collect::<BTreeSet<_>>().into_iter().map(|name| {
-        let local: Vec<_> = declared.iter().copied().filter(|resolver| resolver.name == name).collect();
-        let candidates: Vec<_> = if local.is_empty() {
-            available.iter().copied().filter(|resolver| resolver.name == name).collect()
+        let candidates = if declared.iter().any(|resolver| resolver.name == name) {
+            declared
         } else {
-            local
+            available
         };
-        match candidates.as_slice() {
-            [resolver] => Ok(*resolver),
-            [] => Err(format!("Required startup resolver {name} is not registered")),
+        let mut matches = candidates.iter().copied().filter(|resolver| resolver.name == name);
+        match (matches.next(), matches.next()) {
+            (Some(resolver), None) => Ok(resolver),
+            (None, _) => Err(format!("Required startup resolver {name} is not registered")),
             _ => Err(format!("Required startup resolver {name} is ambiguous")),
         }
     }).collect()

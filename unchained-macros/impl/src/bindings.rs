@@ -2,32 +2,7 @@ use super::*;
 use quote::format_ident;
 use syn::fold::Fold;
 use syn::visit_mut::VisitMut;
-use syn::{parse::Parse, parse::ParseStream, Expr, Token};
-
-pub(super) struct Arguments {
-    pub resolver: Path,
-    pub condition: Expr,
-}
-
-impl Parse for Arguments {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let resolver = input.parse()?;
-        let condition = if input.is_empty() {
-            syn::parse_quote!(ACTIVE)
-        } else {
-            input.parse::<Token![,]>()?;
-            if input.is_empty() {
-                syn::parse_quote!(ACTIVE)
-            } else {
-                input.parse()?
-            }
-        };
-        if !input.is_empty() {
-            input.parse::<Token![,]>()?;
-        }
-        Ok(Self { resolver, condition })
-    }
-}
+use syn::Token;
 
 pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     if !args.is_empty() {
@@ -54,10 +29,9 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut helpers = Vec::new();
     for item in &mut implementation.items {
         let syn::ImplItem::Fn(method) = item else { continue };
-        let attributes: Vec<_> = method.attrs.iter().enumerate().filter(|(_, attr)|
-            attr.path().segments.last().is_some_and(|s|
-                s.ident == "bind_resolved_func" || s.ident == "bind_resolved_request_function")
-        ).map(|(index, _)| index).collect();
+        let attributes: Vec<_> = method.attrs.iter().enumerate()
+            .filter(|(_, attribute)| is_binding_attribute(attribute))
+            .map(|(index, _)| index).collect();
         if attributes.is_empty() { continue; }
         if attributes.len() != 1 {
             return Err(syn::Error::new_spanned(method, "duplicate or conflicting native binding attributes"));
@@ -65,7 +39,12 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         let attribute = method.attrs.remove(attributes[0]);
         let require_resolver = attribute.path().segments.last().unwrap().ident == "bind_resolved_func";
         let args = attribute.meta.require_list()?.tokens.clone();
-        let function: ItemFn = syn::parse2(quote!(#method))?;
+        let function = ItemFn {
+            attrs: method.attrs.clone(),
+            vis: method.vis.clone(),
+            sig: method.sig.clone(),
+            block: Box::new(method.block.clone()),
+        };
         let (expanded, descriptor, helper) = super::function_detour::expand_binding(
             args, &function, self_ty, require_resolver,
         )?;
@@ -77,13 +56,15 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         {
             return Err(syn::Error::new_spanned(descriptor, "generated binding metadata conflicts with an associated item"));
         }
-        *method = syn::parse2(quote!(#expanded))?;
+        method.attrs = expanded.attrs;
+        method.vis = expanded.vis;
+        method.sig = expanded.sig;
+        method.block = *expanded.block;
         descriptors.push(syn::ImplItem::Const(descriptor));
         helpers.push(helper);
     }
     implementation.items.extend(descriptors);
-    let cfg: Vec<_> = implementation.attrs.iter()
-        .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr")).collect();
+    let cfg: Vec<_> = cfg_attributes(&implementation.attrs).collect();
     // Isolate helper names without changing module paths or method visibility.
     Ok(quote! {
         #(#cfg)*
@@ -196,21 +177,6 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> s
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn request_bindings_use_registry_keys_without_marker_types() {
-        let expanded = expand_impl(quote!(), quote! {
-            impl Client {
-                #[bind_resolved_request_function(GetPost_GetPlayerInventory)]
-                pub unsafe fn inventory(self: *mut Self, value: i32) -> i32 {}
-            }
-        }).unwrap();
-        let text = expanded.to_string();
-        assert!(text.contains("\"GetPost_GetPlayerInventory\""));
-        assert!(text.contains("__UNCHAINED_BINDING_inventory"));
-        assert!(!text.contains("PhantomData < GetPost_GetPlayerInventory >"));
-        syn::parse2::<syn::File>(expanded).unwrap();
-    }
 
     #[test]
     fn rejects_duplicate_bindings_and_metadata_collisions() {

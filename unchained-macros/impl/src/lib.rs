@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::quote;
 use syn::{FnArg, GenericParam, ItemFn, Pat, Path, ReturnType, Type};
-mod detour;
+mod bindings;
 mod function_detour;
 mod global;
 
@@ -57,7 +57,7 @@ fn expand_runtime_bindings(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
     let mut declaration: syn::Item = syn::parse2(item.clone())?;
     let (name, attributes) = match &mut declaration {
-        syn::Item::Impl(_) => return detour::expand_impl(args, item),
+        syn::Item::Impl(_) => return bindings::expand_impl(args, item),
         syn::Item::Struct(item) => (&item.ident, &mut item.attrs),
         syn::Item::Enum(item) => (&item.ident, &mut item.attrs),
         syn::Item::Union(item) => (&item.ident, &mut item.attrs),
@@ -104,9 +104,17 @@ fn request_key(path: &Path) -> syn::Result<()> {
 }
 
 fn expand_request(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    let key = resolver_path(args)?;
-    request_key(&key)?;
-    expand_binding(quote!(#key), item, false)
+    expand_binding(args, item, false)
+}
+
+fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::Attribute> {
+    attributes.iter().filter(|attribute|
+        attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr"))
+}
+
+fn is_binding_attribute(attribute: &syn::Attribute) -> bool {
+    attribute.path().segments.last().is_some_and(|segment|
+        segment.ident == "bind_resolved_func" || segment.ident == "bind_resolved_request_function")
 }
 
 fn validate_native_signature(signature: &syn::Signature) -> syn::Result<()> {
@@ -172,6 +180,9 @@ fn consume_native_parameter_metadata(signature: &mut syn::Signature) -> syn::Res
 
 fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
     let resolver = resolver_path(args)?;
+    if !require_resolver_type {
+        request_key(&resolver)?;
+    }
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let mut function: ItemFn = syn::parse2(item)?;
     validate_binding(&function)?;
@@ -336,6 +347,7 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     #[test]
     fn indirect_by_value_metadata_is_checked_and_consumed() {
         let mut signature: syn::Signature = syn::parse_quote! {
@@ -386,30 +398,6 @@ mod tests {
         assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(fn helper() {})).is_err());
         assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(trait Native {})).is_err());
     }
-    use super::*;
-
-    #[test]
-    fn request_bindings_use_registry_keys_without_resolver_types() {
-        let expanded = expand_request(quote!(GetPost_GetMotd),
-            quote!(pub unsafe fn get_post_get_motd(self: *mut Self, value: i32) -> i32 {})).unwrap();
-        let text = expanded.to_string();
-        assert!(text.contains("\"GetPost_GetMotd\""));
-        assert!(text.contains("FunctionBindingRegistration"));
-        assert!(!text.contains("PhantomData"));
-        syn::parse2::<ItemFn>(expanded).unwrap();
-    }
-
-    #[test]
-    fn request_bindings_reuse_native_signature_validation() {
-        for declaration in [
-            quote!(pub fn request() {}),
-            quote!(pub unsafe fn request() { panic!() }),
-            quote!(pub unsafe fn request<T>(value: T) {}),
-        ] {
-            assert!(expand_request(quote!(GetPost_GetMotd), declaration).is_err());
-        }
-    }
-
     #[test]
     fn request_bindings_reject_non_request_keys() {
         for key in [quote!(GetPost_), quote!(CreateHttpRequest), quote!(module::GetPost_GetMotd),
@@ -426,7 +414,12 @@ mod tests {
     #[test_case::test_case(quote!(async unsafe fn release(&mut self) {}), "non-async"; "async method")]
     #[test_case::test_case(quote!(unsafe fn release((a, b): (u8, u8)) {}), "plain identifiers"; "destructured argument")]
     fn rejects_unsupported_native_declarations(item: Tokens, message: &str) {
-        assert!(expand(quote!(Release), item).unwrap_err().to_string().contains(message));
+        for error in [
+            expand(quote!(Release), item.clone()).unwrap_err(),
+            expand_request(quote!(GetPost_Fixture), item).unwrap_err(),
+        ] {
+            assert!(error.to_string().contains(message), "{error}");
+        }
     }
 
     #[test]

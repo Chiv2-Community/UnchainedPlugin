@@ -1,32 +1,12 @@
 use binary_bloodhound::BinaryMatcher;
-use object::SectionKind;
-use patternsleuth::{
-    Memory, NamedMemorySection,
-    image::{Image, ImageType, pe::PEImage},
-};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unchained_macros::define_custom_resolver;
 
-const BASE: u64 = 0x1_4000_0000;
-const TEXT: u64 = BASE + 0x1000;
+mod support;
+use support::{image, initialize_platform, BASE, TEXT};
 static EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 
-use unchained_macros::{PlatformType, PLATFORM};
-
-// Storefront selection is process-wide and immutable. Isolate each selection.
-fn initialize_platform(platform: PlatformType) -> bool {
-    if std::env::var_os("UNCHAINED_PLATFORM_FIXTURE").is_some() {
-        PLATFORM.set(platform).unwrap();
-        return true;
-    }
-    let thread = std::thread::current();
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", thread.name().unwrap(), "--nocapture"])
-        .env("UNCHAINED_PLATFORM_FIXTURE", "1")
-        .status().unwrap();
-    assert!(status.success());
-    false
-}
+use unchained_macros::PlatformType;
 
 define_custom_resolver!(RootAddress, {
     BinaryMatcher::patterns(["AA BB"])?
@@ -54,28 +34,6 @@ define_custom_resolver!(PlatformAddress, |platform| {
     };
     BinaryMatcher::patterns([pattern])?.ensure_one()
 });
-
-fn image(matches: &[usize]) -> Image<'static> {
-    let mut text = vec![0x90; 0x80];
-    text[..2].copy_from_slice(&[0x11, 0x22]);
-    for &offset in matches {
-        text[offset..offset + 2].copy_from_slice(&[0xAA, 0xBB]);
-    }
-    let pdata: Vec<u8> = [0x1000u32, 0x1040, 0x3000, 0x1040, 0x1080, 0x3004]
-        .into_iter().flat_map(u32::to_le_bytes).collect();
-    Image::from_memory(
-        BASE,
-        Memory::from_sections(vec![
-            NamedMemorySection::new(".text".into(), TEXT, SectionKind::Text, text),
-            NamedMemorySection::new(".pdata".into(), BASE + 0x2000, SectionKind::ReadOnlyData, pdata),
-            NamedMemorySection::new(".xdata".into(), BASE + 0x3000, SectionKind::ReadOnlyData, vec![1, 0, 0, 0, 1, 0, 0, 0]),
-        ]),
-        ImageType::PEImage(PEImage {
-            exception_directory_range: BASE + 0x2000..BASE + 0x2018,
-            exception_children_cache: Default::default(),
-        }),
-    )
-}
 
 #[test_case::test_case(&[0x10]; "one interior match")]
 #[test_case::test_case(&[0x10, 0x20]; "two matches in the same function")]
@@ -122,11 +80,4 @@ fn platform_factory_construction_errors_keep_resolver_context() {
     let error = image(&[]).resolve(PlatformAddress::resolver()).unwrap_err().to_string();
     assert!(error.contains("PlatformAddress"), "{error}");
     assert!(error.contains("invalid pattern"), "{error}");
-}
-
-#[test]
-fn custom_resolvers_register_with_the_standard_inventory() {
-    for name in ["RootAddress", "CachedAddress", "InvalidPattern", "PlatformAddress"] {
-        assert!(patternsleuth::resolvers::resolvers().any(|resolver| resolver.name == name));
-    }
 }

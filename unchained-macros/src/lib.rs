@@ -1,4 +1,4 @@
-//! Hook, detour, patch and signature macros for the plugin.
+//! Native binding, detour, patch, and resolver support.
 mod detour;
 pub use detour::{detour_is_initialized, detour_is_enabled};
 

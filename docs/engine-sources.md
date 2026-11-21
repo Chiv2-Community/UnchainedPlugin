@@ -4,6 +4,7 @@
 
 - [Native ownership](#native-ownership)
   - [Source links](#source-links)
+  - [Overload selection](#overload-selection)
 - [Path rules](#path-rules)
 - [Declaration order](#declaration-order)
 - [Plugin behavior](#plugin-behavior)
@@ -43,8 +44,8 @@ links for declarations absent from either source tree; state
 The Rust build-time documentation generator reads only `Native source:`. It
 remaps the repository root using `[env]` settings in `.cargo/config.toml`:
 
-- `ARGON_SDK_SOURCE_LOCATION`: Absolute file path indicating Argon SDK source location
-- `UE_SOURCE_LOCATION`: Absolute file path indecating UE 4.25-plus source location
+- `ARGON_SDK_SOURCE_LOCATION`: ArgonSDK repository root.
+- `UE_SOURCE_LOCATION`: UE 4.25-plus repository root.
 
 Both accept HTTP(S) roots or absolute checkout directories. The checkout root
 must contain `Source/` for ArgonSDK or `Engine/` for UE. The macros emit standard
@@ -89,6 +90,44 @@ content is available through LSP and `cargo doc`. To test generation and parsing
 ```sh
 cargo test --locked -p unchained-native-docs
 ```
+
+Generation lives in `build/unchained-native-docs`; root `build.rs` delegates to
+`build/mod.rs`. A build-local module/file index shares extracted declarations,
+not syntax trees. Rebuilding reads changed native sources; no persistent index
+is trusted.
+
+### Overload selection
+
+The generator matches binding parameter types and receiver constness, including
+native aliases, primitive widths, pointer/reference constness, and generic
+arguments. It never chooses the first ambiguous definition.
+
+For a verified by-value native object lowered to `*mut T` ABI storage, annotate
+the binding parameter `#[native_by_value]`. This records existing indirection:
+it does not copy the object, transfer ownership, or change the generated ABI.
+Unmarked pointers are not assumed to be by-value objects.
+
+For lowering that cannot be inferred, including hidden return storage, use an
+exact source-level selector:
+
+```rust
+/// Native overload: `(const FString&)`
+```
+
+Selectors match C++ parameter types and trailing cv/ref qualifiers, ignoring
+parameter names and defaults. Use source spelling; typedef equivalence and
+complex callable declarators are not resolved. The `native-implementation`
+example accepts selectors such as `--target 'FText::AsCultureInvariant(const FString&)'`.
+
+A verified generated RPC wrapper may name its related body:
+
+```rust
+/// Native RPC implementation: `APlayerController::ClientMessage_Implementation`
+```
+
+If the wrapper body is unavailable, docs label this **Related RPC implementation**.
+It does not rename, retarget, or bypass the bound wrapper. An available wrapper
+body takes precedence; `_Implementation` is never inferred automatically.
 
 ## Path rules
 

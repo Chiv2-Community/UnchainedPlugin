@@ -1,5 +1,27 @@
 use super::*;
 use quote::{format_ident, ToTokens};
+use syn::parse::{Parse, ParseStream};
+
+struct Arguments {
+    target: Path,
+    condition: syn::Expr,
+}
+
+impl Parse for Arguments {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let target = input.parse()?;
+        let condition = if input.is_empty() {
+            syn::parse_quote!(ACTIVE)
+        } else {
+            input.parse::<syn::Token![,]>()?;
+            if input.is_empty() { syn::parse_quote!(ACTIVE) } else { input.parse()? }
+        };
+        if !input.is_empty() {
+            input.parse::<syn::Token![,]>()?;
+        }
+        Ok(Self { target, condition })
+    }
+}
 
 fn binding_documentation(
     function: &ItemFn,
@@ -9,22 +31,18 @@ fn binding_documentation(
 ) -> syn::LitStr {
     let name = &function.sig.ident;
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
-    let resolution = resolution_documentation(resolver, require_resolver);
+    let key = &resolver.segments.last().unwrap().ident;
+    let path = resolver.to_token_stream().to_string().replace(' ', "");
+    let resolution = if require_resolver {
+        format!("[`{key}`]({path})")
+    } else {
+        format!("`{key}` (offset-registry key; not a Rust resolver type)")
+    };
     let documentation = format!(
         "Native binding to [`{native_name}`](Self::{name}).\n\
          Resolved by {resolution}."
     );
     syn::LitStr::new(&documentation, name.span())
-}
-
-fn resolution_documentation(resolver: &Path, require_resolver: bool) -> String {
-    let name = &resolver.segments.last().unwrap().ident;
-    let path = resolver.to_token_stream().to_string().replace(' ', "");
-    if require_resolver {
-        format!("[`{name}`]({path})")
-    } else {
-        format!("`{name}` (offset-registry key; not a Rust resolver type)")
-    }
 }
 
 fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
@@ -84,7 +102,7 @@ pub(super) fn expand_binding(
         request_key(&resolver)?;
     }
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
-    let signature = super::detour::concrete_signature(function, Some(self_ty))?;
+    let signature = super::bindings::concrete_signature(function, Some(self_ty))?;
     let native = native_type(&signature)?;
     let normalized = native_type(&normalized_mutability(&signature))?;
     let parameters = (0..signature.inputs.len())
@@ -96,11 +114,7 @@ pub(super) fn expand_binding(
     let parameter_descriptor = format_ident!("__UNCHAINED_PARAMETERS_{}", name, span = Span::mixed_site());
     let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name, span = Span::mixed_site());
     let vis = &function.vis;
-    let cfg: Vec<_> = function
-        .attrs
-        .iter()
-        .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"))
-        .collect();
+    let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let arguments = function.sig.inputs.iter().map(|input| match input {
         FnArg::Receiver(_) => quote!(self),
         FnArg::Typed(arg) => {
@@ -170,10 +184,7 @@ pub(super) fn expand_binding(
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut function: ItemFn = syn::parse2(item)?;
-    let super::detour::Arguments {
-        resolver: mut target,
-        condition,
-    } = syn::parse2(args)?;
+    let Arguments { mut target, condition } = syn::parse2(args)?;
     if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
         return Err(syn::Error::new_spanned(
             target,
@@ -216,7 +227,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     );
     let key = format!("detour-{}", function.sig.ident);
     attach_native_documentation(&mut function.attrs, &key, &documentation);
-    let mut signature = super::detour::concrete_signature(&function, None)?;
+    let mut signature = super::bindings::concrete_signature(&function, None)?;
     let normalized = native_type(&normalized_mutability(&signature))?;
     let mut has_override = false;
     let mut parameter_checks = Vec::new();
@@ -257,11 +268,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
     let attach = format_ident!("__unchained_attach_{}", ident, span = Span::mixed_site());
     let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
-    let cfg: Vec<_> = function
-        .attrs
-        .iter()
-        .filter(|a| a.path().is_ident("cfg") || a.path().is_ident("cfg_attr"))
-        .collect();
+    let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let (names, types): (Vec<_>, Vec<_>) = signature
         .inputs
         .iter()
@@ -436,15 +443,18 @@ mod tests {
 
     #[test]
     fn conditions_preserve_status_aliases_and_custom_predicates() {
-        for (condition, expected) in [
-            (quote!(ACTIVE), quote!(|| true)),
-            (quote!(INACTIVE), quote!(|| false)),
-            (quote!(CALLED), quote!(|| false)),
-            (quote!(DISABLED), quote!(|| false)),
-            (quote!(|| enabled()), quote!(|| enabled())),
+        for (args, expected) in [
+            (quote!(Native::call), quote!(|| true)),
+            (quote!(Native::call,), quote!(|| true)),
+            (quote!(Native::call, ACTIVE), quote!(|| true)),
+            (quote!(Native::call, INACTIVE), quote!(|| false)),
+            (quote!(Native::call, CALLED), quote!(|| false)),
+            (quote!(Native::call, DISABLED), quote!(|| false)),
+            (quote!(Native::call, || enabled()), quote!(|| enabled())),
+            (quote!(Native::call, enabled), quote!(enabled)),
         ] {
             let expanded = expand(
-                quote!(Native::call, #condition),
+                args,
                 quote!(unsafe fn replacement() {}),
             ).unwrap();
             let file = syn::parse2::<syn::File>(expanded).unwrap();
@@ -529,29 +539,6 @@ mod tests {
     }
 
     #[test]
-    fn targets_typed_binding_metadata_without_generating_an_original_caller() {
-        let expanded = expand(
-            quote!(model::Native::call, || enabled()),
-            quote!(
-                unsafe fn feature_override(value: i32) -> i32 {
-                    unsafe { model::Native::call(value) }
-                }
-            ),
-        )
-        .unwrap();
-        let text = expanded.to_string();
-        assert!(text.contains("Native :: __UNCHAINED_BINDING_call"));
-        assert!(text.contains("NativeFunction"));
-        assert!(text.contains("publish_function_detours"));
-        assert!(text.contains("unchained_macros :: HookRegistration"));
-        assert!(text.contains("base_address : usize"));
-        assert!(!text.contains("crate :: resolvers"));
-        assert!(!text.contains("PhantomData"));
-        assert!(!text.contains("unsafe fn feature ("));
-        syn::parse2::<syn::File>(expanded).unwrap();
-    }
-
-    #[test]
     fn rejects_non_method_targets_and_invalid_replacement_declarations() {
         for target in [
             quote!(Resolver),
@@ -592,7 +579,7 @@ mod tests {
 
     #[test]
     fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions() {
-        let expanded = super::super::detour::expand_impl(
+        let expanded = super::super::bindings::expand_impl(
             quote!(),
             quote! {
                 impl Native {

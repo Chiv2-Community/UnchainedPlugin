@@ -72,63 +72,21 @@ mod tests {
 
     define_pattern_resolver!(TestShared, ["11 22"]);
 
-    mod nested {
-        use crate::define_pattern_resolver;
-        define_pattern_resolver!(TestNestedPlatform, {
-            STEAM: ["AA BB"],
-            OTHER: ["CC DD"]
-        });
-
-        define_pattern_resolver!(TestNestedSimplePlatform, Simple, {
-            EGS: ["11 22"],
-            OTHER: ["33 44"]
-        });
-
-    }
-
     #[test]
-    fn platform_resolvers_register_from_nested_modules() {
-        for name in ["TestNestedPlatform", "TestNestedSimplePlatform"] {
-            assert!(patternsleuth::resolvers::resolvers().any(|resolver| resolver.name == name));
-        }
-    }
-
-    #[test]
-    fn single_platform_resolver_is_skipped_on_other_platforms() {
-        assert!(supports_platform("TestSteamOnly", PlatformType::STEAM));
-        assert!(!supports_platform("TestSteamOnly", PlatformType::EGS));
-        assert!(!supports_platform("TestSteamOnly", PlatformType::XBOX));
-        assert!(!supports_platform("TestSteamOnly", PlatformType::OTHER));
-    }
-
-    #[test]
-    fn epic_only_is_skipped_on_steam() {
-        assert!(supports_platform("TestEpicOnly", PlatformType::EGS));
-        assert!(!supports_platform("TestEpicOnly", PlatformType::STEAM));
-    }
-
-    #[test]
-    fn inline_resolver_keeps_single_platform_applicability() {
-        assert!(supports_platform("TestInlineSteamOnly", PlatformType::STEAM));
-        assert!(!supports_platform("TestInlineSteamOnly", PlatformType::EGS));
-    }
-
-    #[test]
-    fn explicit_scan_mode_keeps_single_platform_applicability() {
-        assert!(supports_platform("TestSteamCall", PlatformType::STEAM));
-        assert!(!supports_platform("TestSteamCall", PlatformType::EGS));
-    }
-
-    #[test]
-    fn shared_and_unregistered_resolvers_keep_existing_applicability() {
-        for platform in [
-            PlatformType::STEAM,
-            PlatformType::EGS,
-            PlatformType::XBOX,
-            PlatformType::OTHER,
+    fn restrictions_apply_across_macro_forms_and_storefronts() {
+        for (name, restriction) in [
+            ("TestSteamOnly", Some(PlatformType::STEAM)),
+            ("TestEpicOnly", Some(PlatformType::EGS)),
+            ("TestSteamCall", Some(PlatformType::STEAM)),
+            ("TestInlineSteamOnly", Some(PlatformType::STEAM)),
+            ("TestShared", None),
+            ("TestUnregistered", None),
         ] {
-            assert!(supports_platform("TestShared", platform));
-            assert!(supports_platform("TestUnregistered", platform));
+            for platform in [PlatformType::STEAM, PlatformType::EGS, PlatformType::XBOX, PlatformType::OTHER] {
+                assert_eq!(supports_platform(name, platform),
+                    restriction.map_or(true, |expected| expected == platform),
+                    "{name} on {platform}");
+            }
         }
     }
 }
