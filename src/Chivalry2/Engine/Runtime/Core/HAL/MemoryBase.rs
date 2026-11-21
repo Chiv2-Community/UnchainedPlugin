@@ -4,9 +4,7 @@ use crate::Chivalry2::Engine::FGenericMemoryStats;
 use crate::Chivalry2::Engine::FOutputDevice;
 use crate::Chivalry2::Engine::UWorld;
 use crate::Chivalry2::Engine::TCHAR;
-use std::alloc::Layout;
 use std::ffi::c_void;
-use std::ptr::NonNull;
 
 /// Read UE's current allocator from its resolved pointer slot.
 ///
@@ -17,7 +15,7 @@ use std::ptr::NonNull;
     patternsleuth::resolvers::unreal::gmalloc::GMalloc,
     Value
 )]
-pub(crate) unsafe fn GMalloc() -> *mut FMalloc {}
+pub unsafe fn GMalloc() -> *mut FMalloc {}
 
 // UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
 // Confirmed against symbolized Binned2 and Steam/EGS vtable 0x144982A90.
@@ -72,40 +70,6 @@ unsafe impl Sync for FMalloc {}
 
 unsafe impl Send for FMalloc {}
 
-// Preserve the native object's provenance: a reference to its header would not
-// permit allocator implementations to access mutable state beyond that header.
-#[derive(Clone, Copy, Debug)]
-pub struct FMallocHandle(NonNull<FMalloc>);
-
-impl FMallocHandle {
-    pub(crate) fn global() -> Self {
-        // The value binding rejects an unresolved slot or null allocator pointer.
-        Self(unsafe { NonNull::new_unchecked(GMalloc()) })
-    }
-
-    /// Safety: The layout must be correct for the type being allocated.
-    /// The allocator must be initialized and valid.
-    #[inline(always)]
-    pub unsafe fn malloc(self, layout: Layout) -> *mut c_void {
-        self.0.as_ptr().Malloc(layout.size(), layout.align() as u32)
-    }
-    /// Safety: `original` must have been allocated by this allocator.
-    /// The layout must be correct for the new allocation.
-    #[inline(always)]
-    pub unsafe fn realloc(self, original: *mut c_void, layout: Layout) -> *mut c_void {
-        self.0
-            .as_ptr()
-            .Realloc(original, layout.size(), layout.align() as u32)
-    }
-    /// Safety: `original` must have been allocated by this allocator and not yet freed.
-    #[inline(always)]
-    pub unsafe fn free(self, original: *mut c_void) {
-        if !original.is_null() {
-            self.0.as_ptr().Free(original)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,7 +80,7 @@ mod tests {
         let mut native = FMalloc {
             vtable: std::ptr::null(),
         };
-        let allocator = FMallocHandle(NonNull::from(&mut native));
+        let allocator = &raw mut native;
         let mut array = unsafe { TArray::<u16>::with_capacity_in(0, allocator) };
         unsafe { array.reserve_in(0, allocator) };
         assert!(array.as_ptr().is_null());
@@ -130,7 +94,7 @@ mod tests {
         let mut native = FMalloc {
             vtable: std::ptr::null(),
         };
-        let allocator = FMallocHandle(NonNull::from(&mut native));
+        let allocator = &raw mut native;
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
             TArray::<u16>::with_capacity_in(i32::MAX as usize + 1, allocator)
         }));

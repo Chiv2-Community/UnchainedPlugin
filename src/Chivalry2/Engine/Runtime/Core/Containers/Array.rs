@@ -19,7 +19,7 @@ impl<T> TArray<T> {
     ///
     /// # Safety
     /// `allocator` must be the engine allocator that owns this array's buffer.
-    pub(crate) unsafe fn push_in(&mut self, value: T, allocator: FMallocHandle) {
+    pub(crate) unsafe fn push_in(&mut self, value: T, allocator: *mut FMalloc) {
         let required = self.num.checked_add(1).expect("TArray length overflow");
         if required > self.max {
             self.grow_in(required as usize, allocator);
@@ -32,7 +32,7 @@ impl<T> TArray<T> {
     /// # Safety
     /// `allocator` must be the engine allocator. Dropping the result requires its
     /// buffer to belong to the currently bound engine allocator.
-    pub(crate) unsafe fn from_slice_in(value: &[T], allocator: FMallocHandle) -> Self
+    pub(crate) unsafe fn from_slice_in(value: &[T], allocator: *mut FMalloc) -> Self
     where
         T: Copy,
     {
@@ -48,23 +48,23 @@ impl<T> TArray<T> {
     /// # Safety
     /// `allocator` must own the returned buffer. Dropping the result requires its
     /// buffer to belong to the currently bound engine allocator.
-    pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: FMallocHandle) -> Self {
+    pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: *mut FMalloc) -> Self {
         if capacity == 0 {
             return Self::new();
         }
         let max = i32::try_from(capacity).expect("TArray capacity overflow");
         let layout = Layout::array::<T>(capacity).expect("Layout error");
-        let data = allocator.malloc(layout).cast::<T>();
+        let data = allocator.Malloc(layout.size(), layout.align() as u32).cast::<T>();
         if data.is_null() {
             std::alloc::handle_alloc_error(layout);
         }
         Self { data, num: 0, max }
     }
 
-    unsafe fn grow_in(&mut self, capacity: usize, allocator: FMallocHandle) {
+    unsafe fn grow_in(&mut self, capacity: usize, allocator: *mut FMalloc) {
         let max = i32::try_from(capacity).expect("TArray capacity overflow");
         let layout = Layout::array::<T>(capacity).expect("Layout error");
-        let data = allocator.realloc(self.data.cast(), layout).cast::<T>();
+        let data = allocator.Realloc(self.data.cast(), layout.size(), layout.align() as u32).cast::<T>();
         if data.is_null() {
             std::alloc::handle_alloc_error(layout);
         }
@@ -74,7 +74,7 @@ impl<T> TArray<T> {
 
     /// # Safety
     /// `allocator` must own this array's buffer.
-    pub(crate) unsafe fn reserve_in(&mut self, additional: usize, allocator: FMallocHandle) {
+    pub(crate) unsafe fn reserve_in(&mut self, additional: usize, allocator: *mut FMalloc) {
         let required = self
             .len()
             .checked_add(additional)
@@ -120,7 +120,7 @@ impl<T> TArray<T> {
         if capacity == 0 {
             return Self::new();
         }
-        unsafe { Self::with_capacity_in(capacity, FMallocHandle::global()) }
+        unsafe { Self::with_capacity_in(capacity, GMalloc()) }
     }
     pub fn len(&self) -> usize {
         self.num.max(0) as usize
@@ -179,7 +179,7 @@ impl<T> TArray<T> {
             .checked_add(additional)
             .expect("TArray length overflow");
         if required_cap > self.capacity() {
-            unsafe { self.reserve_in(additional, FMallocHandle::global()) };
+            unsafe { self.reserve_in(additional, GMalloc()) };
         }
     }
     pub fn push(&mut self, new_value: T) {
@@ -227,7 +227,7 @@ impl<T> Drop for TArray<T> {
                     self.data,
                     self.num as usize,
                 ));
-                FMallocHandle::global().free(self.data.cast());
+                GMalloc().Free(self.data.cast());
             }
         }
     }
@@ -251,6 +251,6 @@ where
         if value.is_empty() {
             return Self::new();
         }
-        unsafe { Self::from_slice_in(value, FMallocHandle::global()) }
+        unsafe { Self::from_slice_in(value, GMalloc()) }
     }
 }

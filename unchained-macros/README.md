@@ -178,6 +178,8 @@ unsafe fn native_guobject_array() -> *const FUObjectArray {}
 - Startup calls `initialize_value_bindings(base, offsets)` before access.
 - Native global accessors belong in the module matching their declaring header;
   `GMalloc` is declared in `HAL/MemoryBase.h`.
+- Use the native allocator methods directly, for example
+  `unsafe { GMalloc().Malloc(size, alignment) }`; no allocator-handle wrapper is required.
 - Binding caches the slot address, not its current contents; binding before
   the engine populates a pointer is permitted.
 - Missing/invalid bindings and null pointer values panic with the resolver name.

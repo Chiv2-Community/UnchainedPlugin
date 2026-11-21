@@ -108,6 +108,8 @@ Choose the binding mechanism that matches the address source.
   address or `Value` to read a `Copy` value from a slot. These are not detour targets.
   Declare native globals as module-level accessors under their declaring header;
   keep Rust convenience adapters separate from the native type's methods.
+  Preserve the native name and pointer type; do not replace the global with an
+  allocator handle, owning reference, or cached copy of the slot's contents.
 - **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.
   Load `create-vtable`, or read the [vtable skill](../create-vtable/SKILL.md),
   before creating or extending a table declaration.
