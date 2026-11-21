@@ -3,7 +3,7 @@ mod detour;
 pub use detour::{detour_is_initialized, detour_is_enabled};
 
 pub use unchained_macros_impl::{
-    bind_resolved_func, bind_resolver_value, runtime_bindings,
+    bind_resolved_func, bind_resolved_value, runtime_bindings,
     bind_resolved_request_function,
 };
 

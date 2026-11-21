@@ -101,7 +101,7 @@ Choose the binding mechanism that matches the address source.
 - **Request registry:** use `bind_resolved_request_function(Key)` under
   `runtime_bindings`. Verify the producer supplies that exact key as an RVA in
   `OffsetRegisty`; do not put an absolute address into the registry.
-- **Globals:** use `bind_resolver_value(Resolver, Address)` for an inline object's
+- **Globals:** use `bind_resolved_value(Resolver, Address)` for an inline object's
   address or `Value` to read a `Copy` value from a slot. These are not detour targets.
 - **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.
   Load `create-vtable`, or read the [vtable skill](../create-vtable/SKILL.md),

@@ -163,11 +163,11 @@ Assume startup initialized required bindings.
 ## Required native values
 
 ```rust,ignore
-#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
+#[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
 unsafe fn native_gmalloc() -> *mut FMalloc {}
 
 // GUObjectArray is an inline object, not a pointer slot.
-#[unchained_macros::bind_resolver_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
+#[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
 unsafe fn native_guobject_array() -> *const FUObjectArray {}
 ```
 

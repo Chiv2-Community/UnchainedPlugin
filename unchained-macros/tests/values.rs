@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
-use unchained_macros::{bind_resolver_value, initialize_value_binding, initialize_value_bindings, ValueBinding};
+use unchained_macros::{bind_resolved_value, initialize_value_binding, initialize_value_bindings, ValueBinding};
 
 mod resolvers {
     pub struct Count;
@@ -16,13 +16,13 @@ static SECOND: i32 = 22;
 struct InlineObject(AtomicI32);
 static OBJECTS: InlineObject = InlineObject(AtomicI32::new(0));
 
-#[bind_resolver_value(resolvers::Objects, Address)]
+#[bind_resolved_value(resolvers::Objects, Address)]
 unsafe fn objects() -> *const InlineObject {}
 
-#[bind_resolver_value(resolvers::Count, Value)]
+#[bind_resolved_value(resolvers::Count, Value)]
 unsafe fn count() -> i32 {}
 
-#[bind_resolver_value(resolvers::Allocator, Value)]
+#[bind_resolved_value(resolvers::Allocator, Value)]
 unsafe fn pointer() -> *const i32 {}
 
 #[test]

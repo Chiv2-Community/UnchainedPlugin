@@ -44,7 +44,7 @@ impl FUObjectArray {
     /// # Safety
     /// Startup must bind the process-lifetime FUObjectArray. Access through the
     /// returned pointer must follow the registry's native synchronization rules.
-    #[unchained_macros::bind_resolver_value(
+    #[unchained_macros::bind_resolved_value(
         patternsleuth::resolvers::unreal::guobject_array::GUObjectArray,
         Address
     )]

@@ -62,7 +62,7 @@ impl FMalloc {
     /// # Safety
     /// Startup must bind UE's process-lifetime allocator slot. Slot changes must not
     /// race with reads; the allocator must remain live for all returned handles.
-    #[unchained_macros::bind_resolver_value(
+    #[unchained_macros::bind_resolved_value(
         patternsleuth::resolvers::unreal::gmalloc::GMalloc,
         Value
     )]

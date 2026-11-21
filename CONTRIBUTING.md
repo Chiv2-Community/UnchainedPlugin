@@ -205,8 +205,8 @@ Other binding sources:
   inside `runtime_bindings`. Populate that exact key in `OffsetRegisty` with
   an RVA, not an absolute address. See the
   [OpenAPI bindings](src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
-- **Native globals:** use `bind_resolver_value(Resolver, Address)` for an inline
-  object's address, or `bind_resolver_value(Resolver, Value)` to read a `Copy`
+- **Native globals:** use `bind_resolved_value(Resolver, Address)` for an inline
+  object's address, or `bind_resolved_value(Resolver, Value)` to read a `Copy`
   value from a slot. These are not detour targets. See
   [native value accessors](unchained-macros/README.md#required-native-values).
 

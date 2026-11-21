@@ -220,7 +220,7 @@ fn resolver_path(args: Tokens) -> syn::Result<Path> {
 /// `Value` reads a Copy value from its slot; `Address` returns an inline object's
 /// raw address without copying it. An explicit mode is required. Pointers must be non-null.
 #[proc_macro_attribute]
-pub fn bind_resolver_value(args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn bind_resolved_value(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_value(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
