@@ -6,7 +6,7 @@
 /// Dictionaries accept fieldless enum keys, never integer discriminants:
 /// ```compile_fail
 /// # fn main() {}
-/// unchained_macros::define_pattern_resolver!(Invalid, select [0u8], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select u8; [0u8], {
 ///     0: ["AA BB"],
 /// });
 /// ```
@@ -16,7 +16,7 @@
 /// # fn main() {}
 /// #[unchained_macros::resolver_selection_key(require = [Read, Write])]
 /// enum Mode { Read, Write }
-/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select Mode; [Mode::Read], {
 ///     Mode::Read: ["AA BB"],
 /// });
 /// ```
@@ -26,7 +26,7 @@
 /// # fn main() {}
 /// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
-/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select Mode; [Mode::Read], {
 ///     Mode::Read: None,
 ///     Mode::Read: ["AA BB"],
 /// });
@@ -37,7 +37,7 @@
 /// # fn main() {}
 /// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
-/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select Mode; [Mode::Read], {
 ///     Mode::Missing: ["AA BB"],
 /// });
 /// ```
@@ -47,7 +47,7 @@
 /// enum Mode { Read }
 /// #[unchained_macros::resolver_selection_key]
 /// enum Other { Read }
-/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select Mode; [Mode::Read], {
 ///     Other::Read: ["AA BB"],
 /// });
 /// ```
@@ -57,7 +57,7 @@
 /// # fn main() {}
 /// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
-/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+/// unchained_macros::define_pattern_resolver!(Invalid, select Mode; [Mode::Read], {
 ///     Mode::Read: ["AA BB"],
 ///     Mode::Read: ["CC DD"],
 /// });
@@ -143,10 +143,14 @@ macro_rules! define_pattern_resolver {
         result
     }};
     // Internal: produce header
-    (@emit_header $name:ident) => {
+    (@emit_type $name:ident, $unrestricted:expr) => {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)]
         pub struct $name(pub u64);
+        impl $crate::ResolverDeclaration for $name {
+            const NAME: &'static str = stringify!($name);
+            const UNRESTRICTED: bool = $unrestricted;
+        }
         $crate::__private::inventory::submit! {
             $crate::DeclaredResolver {
                 resolver: ::patternsleuth::resolvers::NamedResolver {
@@ -154,6 +158,13 @@ macro_rules! define_pattern_resolver {
                     getter: $name::dyn_resolver,
                 },
             }
+        }
+    };
+
+    (@emit_header $name:ident) => {
+        $crate::define_pattern_resolver!(@emit_type $name, true);
+        impl<E: $crate::SelectionKey> $crate::ResolverSelection<E> for $name {
+            const SELECTIONS: &'static [(E, bool)] = &[];
         }
     };
 
@@ -194,11 +205,16 @@ macro_rules! define_pattern_resolver {
     (@new_patterns XrefLast;) => { Vec::<::patternsleuth::scanner::Pattern>::new() };
     (@new_patterns $mode:ident;) => { Vec::<&str>::new() };
 
-    (@restriction $name:ident, { $($key:path: $entry:tt),+ }) => {
+    (@restriction $name:ident, $enum:ty, { $($key:path: $entry:tt),+ }) => {
         const _: () = {
             let keys = [$($key),+];
             keys[0].__unchained_validate_selection(&keys);
         };
+        impl $crate::ResolverSelection<$enum> for $name {
+            const SELECTIONS: &'static [($enum, bool)] = &[
+                $(($key, $crate::define_pattern_resolver!(@enabled $entry))),+
+            ];
+        }
         $crate::__private::inventory::submit! {
             $crate::ResolverRestriction {
                 name: stringify!($name),
@@ -226,9 +242,9 @@ macro_rules! define_pattern_resolver {
         }
     };
 
-    ($name:ident, $mode:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
-        $crate::define_pattern_resolver!(@emit_header $name);
-        $crate::define_pattern_resolver!(@restriction $name, { $($key: $entry),+ });
+    ($name:ident, $mode:ident, select $enum:ty; [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
+        $crate::define_pattern_resolver!(@emit_type $name, true $(&& $crate::define_pattern_resolver!(@enabled $entry))+);
+        $crate::define_pattern_resolver!(@restriction $name, $enum, { $($key: $entry),+ });
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let mut patterns = $crate::define_pattern_resolver!(@new_patterns $mode; $($entry),+,);
@@ -239,9 +255,9 @@ macro_rules! define_pattern_resolver {
         });
     };
 
-    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
-        $crate::define_pattern_resolver!(@emit_header $name);
-        $crate::define_pattern_resolver!(@restriction $name, { $($key: $entry),+ });
+    ($name:ident, select $enum:ty; [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
+        $crate::define_pattern_resolver!(@emit_type $name, true $(&& $crate::define_pattern_resolver!(@enabled $entry))+);
+        $crate::define_pattern_resolver!(@restriction $name, $enum, { $($key: $entry),+ });
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
             let mut $patterns = $crate::define_pattern_resolver!(@new_patterns Inline; $($entry),+,);
@@ -259,8 +275,8 @@ macro_rules! define_pattern_resolver {
         ];
     };
 
-    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
-        $crate::define_pattern_resolver!($name, Simple, select [$($selection),+], {
+    ($name:ident, select $enum:ty; [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
+        $crate::define_pattern_resolver!($name, Simple, select $enum; [$($selection),+], {
             $( $key : $entry ),+
         });
     };

@@ -58,14 +58,10 @@ unsafe fn value() -> *mut u64 {}
 #[unchained_macros::bind_resolved_request_function(GetPost_Fixture)]
 unsafe fn request() {}
 
-mod tools {
-    pub mod memtools {
-        pub unsafe fn nop(_: *mut u8, _: usize) {
-            panic!("selection must not apply patches")
-        }
-    }
+#[unchained_macros::register_patch(PatchFixture)]
+fn fixture_patch(_address: u64) -> unchained_macros::Patch {
+    panic!("selection must not construct or apply patches")
 }
-unchained_macros::CREATE_PATCH!(PatchFixture, NOP, 1);
 
 // Simulate an upstream resolver with the same key as our native declaration.
 mod upstream {

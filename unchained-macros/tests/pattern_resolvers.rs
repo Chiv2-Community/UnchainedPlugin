@@ -30,32 +30,32 @@ mod nested {
     use unchained_macros::define_pattern_resolver;
     use super::support::{Flavor, current_flavor};
 
-    define_pattern_resolver!(Dictionary, select [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(Dictionary, select Flavor; [current_flavor(), Flavor::Shared], {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     });
-    define_pattern_resolver!(InlineDictionary, select [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(InlineDictionary, select Flavor; [current_flavor(), Flavor::Shared], {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
-    define_pattern_resolver!(SelectedOnly, select [current_flavor()], {
+    define_pattern_resolver!(SelectedOnly, select Flavor; [current_flavor()], {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     });
-    define_pattern_resolver!(Ordered, First, select [Flavor::Shared, Flavor::First], {
+    define_pattern_resolver!(Ordered, First, select Flavor; [Flavor::Shared, Flavor::First], {
         Flavor::First: ["AA BB"],
         Flavor::Second: None,
         Flavor::Shared: ["11 22"],
     });
-    define_pattern_resolver!(Disabled, select [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(Disabled, select Flavor; [current_flavor(), Flavor::Shared], {
         Flavor::First: None,
         Flavor::Second: [],
         Flavor::Shared: [super::shared_pattern()],
     });
-    define_pattern_resolver!(DisabledInline, select [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(DisabledInline, select Flavor; [current_flavor(), Flavor::Shared], {
         Flavor::First: None,
         Flavor::Second: [],
         Flavor::Shared: [super::shared_pattern()],
@@ -63,13 +63,13 @@ mod nested {
         super::BODY_EVALUATIONS.fetch_add(1, super::Ordering::SeqCst);
         Ok(patterns.len() as u64)
     });
-    define_pattern_resolver!(AllDisabled, select [Flavor::First], {
+    define_pattern_resolver!(AllDisabled, select Flavor; [Flavor::First], {
         Flavor::First: None, Flavor::Second: None,
     });
-    define_pattern_resolver!(AllDisabledXref, XrefFirst, select [Flavor::First], {
+    define_pattern_resolver!(AllDisabledXref, XrefFirst, select Flavor; [Flavor::First], {
         Flavor::First: None, Flavor::Second: None,
     });
-    define_pattern_resolver!(AllDisabledInline, select [Flavor::First], {
+    define_pattern_resolver!(AllDisabledInline, select Flavor; [Flavor::First], {
         Flavor::First: None, Flavor::Second: None,
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
 }

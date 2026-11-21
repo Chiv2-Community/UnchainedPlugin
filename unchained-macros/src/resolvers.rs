@@ -32,6 +32,17 @@ macro_rules! require_resolver {
 /// Select only required startup roots. Their transitive dependencies remain
 /// resolved by Patternsleuth's shared context. Missing/ambiguous roots fail closed.
 pub fn startup_resolvers() -> Result<Vec<&'static NamedResolver>, String> {
+    startup_resolvers_matching(|_| true)
+}
+
+/// Select scan consumers applicable to a host-defined key. Runtime patch
+/// conditions are deliberately not evaluated while selecting roots.
+pub fn startup_resolvers_for<E: crate::SelectionKey>(selection: E) -> Result<Vec<&'static NamedResolver>, String> {
+    startup_resolvers_matching(|patch| (patch.applies_to)(&selection))
+}
+
+fn startup_resolvers_matching(enabled: impl Fn(&PatchRegistration) -> bool) -> Result<Vec<&'static NamedResolver>, String> {
+    crate::validate_patch_registrations()?;
     let declared: Vec<_> = inventory::iter::<DeclaredResolver>.into_iter()
         .map(|registration| &registration.resolver).collect();
     let available: Vec<_> = patternsleuth::resolvers::resolvers().collect();
@@ -42,7 +53,8 @@ pub fn startup_resolvers() -> Result<Vec<&'static NamedResolver>, String> {
             .chain(inventory::iter::<ValueBindingRegistration>.into_iter()
                 .map(|registration| registration.binding.name()))
             .chain(inventory::iter::<PatchRegistration>.into_iter()
-                .map(|registration| registration.name)),
+                .filter(|registration| enabled(registration))
+                .map(|registration| registration.resolver)),
         &declared,
         &available,
     )

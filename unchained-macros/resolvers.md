@@ -12,7 +12,7 @@ renaming one requires updating every consumer and a fresh scan.
 
 ## Startup roots
 
-`startup_resolvers()` selects roots from compiled bindings and patches, not
+`startup_resolvers_for(key)` selects roots from compiled bindings and applicable patches, not
 Patternsleuth's entire inventory. Declarations alone are not roots; dependencies
 resolve automatically in the shared context.
 
@@ -28,7 +28,7 @@ filtering still apply; existing unrelated cache entries are retained.
 ```rust,ignore
 define_pattern_resolver!(Name, ["AA BB CC"]);             // Simple
 define_pattern_resolver!(Name, Call, ["E8 | ?? ?? ?? ??"]);
-define_pattern_resolver!(Name, select [current_mode(), Mode::Shared], {
+define_pattern_resolver!(Name, select Mode; [current_mode(), Mode::Shared], {
     Mode::Read: ["AA BB"],
     Mode::Write: ["CC DD"],
     Mode::Shared: ["EE FF"],
@@ -54,7 +54,7 @@ shared key or fallback. Duplicate dictionary keys and unknown/mismatched variant
 are compile errors. Use `None` to disable a key, including its hooks/patches:
 
 ```rust,ignore
-define_pattern_resolver!(ReadOnly, select [current_mode(), Mode::Shared], {
+define_pattern_resolver!(ReadOnly, select Mode; [current_mode(), Mode::Shared], {
     Mode::Read: ["AA BB"],
     Mode::Write: None,
     Mode::Shared: ["CC DD"],
@@ -70,6 +70,8 @@ Declare required keys with
 with patterns or `None`; omissions fail at compile time.
 The trait exposes them as `SelectionKey::REQUIRED`.
 Plain pattern lists are selector-independent and apply to every key.
+The enum type after `select` publishes typed resolver availability for
+[compile-time patch compatibility checks](patches.md).
 
 For custom processing, supply expressions and an inline body returning
 `patternsleuth::resolvers::Result<u64>`. The body receives the combined patterns:

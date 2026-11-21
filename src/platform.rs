@@ -47,12 +47,12 @@ impl std::str::FromStr for PlatformType {
 macro_rules! define_pattern_resolver {
     ($name:ident, $mode:ident, { $($key:ident: $entry:tt),+ $(,)? }) => {
         unchained_macros::define_pattern_resolver!($name, $mode,
-            select [$crate::current_platform(), $crate::PlatformType::OTHER],
+            select $crate::PlatformType; [$crate::current_platform(), $crate::PlatformType::OTHER],
             { $($crate::PlatformType::$key: $entry),+ });
     };
     ($name:ident, { $($key:ident: $entry:tt),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block) => {
         unchained_macros::define_pattern_resolver!($name,
-            select [$crate::current_platform(), $crate::PlatformType::OTHER],
+            select $crate::PlatformType; [$crate::current_platform(), $crate::PlatformType::OTHER],
             { $($crate::PlatformType::$key: $entry),+ },
             |$ctx, $patterns| $body);
     };
@@ -60,23 +60,6 @@ macro_rules! define_pattern_resolver {
         define_pattern_resolver!($name, Simple, { $($key: $entry),+ });
     };
     ($($resolver:tt)+) => { unchained_macros::define_pattern_resolver!($($resolver)+); };
-}
-
-#[macro_export]
-macro_rules! CREATE_PATCH_PLATFORM {
-    ($platform:ident, $name:ident $(@ $tag:ident)?, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
-        unchained_macros::CREATE_PATCH!($name $(@ $tag)?, $extra, $op, $val, IF {
-            $crate::PLATFORM.get().is_some_and(|key| *key == $crate::PlatformType::$platform) && $cond
-        });
-    };
-    ($platform:ident, $name:ident $(@ $tag:ident)?, $extra:literal, $op:ident, $val:expr) => {
-        $crate::CREATE_PATCH_PLATFORM!($platform, $name $(@ $tag)?, $extra, $op, $val, IF { true });
-    };
-    ($platform:ident, $name:ident, $op:ident, $val:expr) => {
-        unchained_macros::CREATE_PATCH!($name, $op, $val, IF {
-            $crate::PLATFORM.get().is_some_and(|key| *key == $crate::PlatformType::$platform)
-        });
-    };
 }
 
 #[cfg(test)]

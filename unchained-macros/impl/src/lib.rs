@@ -6,6 +6,15 @@ mod bindings;
 mod function_detour;
 mod global;
 mod selection;
+mod patch;
+
+/// Register a `fn(u64) -> Patch` factory or immutable `Patch` static.
+/// An optional enum variant restricts applicability. Required coverage is grouped
+/// by resolver and excludes selections explicitly disabled by that resolver.
+#[proc_macro_attribute]
+pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
+    patch::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+}
 
 /// Declare a fieldless selection enum with optional `require = [Variant, ...]`.
 /// Supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`, and `Eq`.

@@ -6,12 +6,14 @@ use crate::Chivalry2::Engine::FStringCopyError;
 use crate::Chivalry2::Engine::FUniqueNetIdRepl;
 use crate::Chivalry2::Engine::PlayerFlags;
 use crate::Chivalry2::TBL::ATBLGameMode;
+use crate::Chivalry2::Engine::Runtime::Engine::Engine::GameEngine::AllowAlternateBackend;
 use crate::events::models::{GameEvent, Join, Leave};
 use crate::features::events::EVENT_SYSTEM;
 #[cfg(feature = "server_registration")]
 use crate::features::server_browser::http;
 use crate::tools::hook_globals::cli_args;
 use crate::tools::hook_globals::globals;
+use unchained_macros::{register_patch, Patch};
 
 #[unchained_macros::bind_func_detour(ATBLGameMode::PreLogin)]
 pub(crate) unsafe fn pre_login_detour(
@@ -129,7 +131,8 @@ pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut
         .publish(GameEvent::LeaveEvent(Leave { name: leave_name }));
 }
 
-CREATE_PATCH!(AllowAlternateBackend, 0x4D, BYTES, &[0x90, 0xE9]);
+#[register_patch(AllowAlternateBackend)]
+static ALLOW_ALTERNATE_BACKEND: Patch = Patch::bytes(0x4D, &[0x90, 0xE9]);
 
 /// Extracts a value from UE4 options strings of the form `?Key1=Val1?Key2=Val2`.
 fn extract_option_value<'a>(options: &'a str, key: &str) -> Option<&'a str> {

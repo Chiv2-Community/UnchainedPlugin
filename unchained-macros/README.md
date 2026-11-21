@@ -12,8 +12,10 @@ See [native contracts](../docs/native-bindings.md), the
 
 Startup:
 
-1. `startup_resolvers()` selects compiled binding/patch roots and explicit
+1. `startup_resolvers_for(key)` selects compiled binding/patch roots and explicit
    side-effect providers. Declarations alone do not cause scans.
+   Patch selection is applied without evaluating runtime conditions;
+   `startup_resolvers()` retains the unfiltered inventory view.
 2. Resolve them in one Patternsleuth context; transitive dependencies are automatic.
    Project declarations take precedence over upstream namesakes.
 3. Initialize values and functions from cached/scanned RVAs using
@@ -28,8 +30,8 @@ The host owns selection state and decides which keys contribute patterns.
 
 `ResolvedAddress` publishes addresses once; `FunctionBinding` refers to Retour's
 detour rather than copying its trampoline address. Both binding inventories use
-`BindingRegistration<T>`. Hook/patch callbacks receive the executable base.
-Patch writes use the consumer's `crate::tools::memtools`; generated code also
+`BindingRegistration<T>`. Hooks receive the executable base; patch factories
+receive the resolved native address. Hosts implement `PatchWriter`; generated code also
 requires the consumer's `retour` and `inventory` dependencies.
 
 ## Direct method bindings
@@ -152,7 +154,7 @@ The plugin and BinaryBloodhound share one locked Patternsleuth dependency.
 #[unchained_macros::resolver_selection_key(require = [Read, Write])]
 enum Mode { Read, Write, Shared }
 
-define_pattern_resolver!(ReadEntry, select [current_mode(), Mode::Shared], {
+define_pattern_resolver!(ReadEntry, select Mode; [current_mode(), Mode::Shared], {
     Mode::Read: ["AA BB"],
     Mode::Write: None,
     Mode::Shared: ["EE FF"],
@@ -176,11 +178,28 @@ case. Repeated selections append their patterns again. Restrictions use enum
 type identity and equality, not discriminants. Unknown names remain unrestricted;
 conflicting restrictions or a different key type fail closed.
 
-The host filters scan roots, hooks, and patches with `supports_selection`.
+The host filters resolver applicability with `supports_selection`.
+Explicit patch selections narrow only that patch, not its resolver or other consumers.
 Use `initialize_function_bindings_where` and `initialize_value_bindings_where`
 with the same predicate so disabled bindings stay uninitialized, even with cached
 offsets. Set host state before scanning; the toolkit owns no global selection.
-Use `CREATE_PATCH!(..., IF { ... })` for other host-defined patch conditions.
+Patch factories can return `Patch::bytes(...).when(condition)` for runtime gates.
+
+## Instruction patches
+
+Import the target resolver type. `register_patch` accepts a factory or an
+immutable `Patch` static. An explicit key cannot be disabled by the resolver;
+an unqualified patch requires unrestricted coverage. These checks are compile-time.
+
+```rust,ignore
+#[register_patch(FunctionEntry, Mode::Read)]
+static READ_PATCH: Patch = Patch::bytes(0x4D, &[0x90, 0xE9]);
+```
+
+Inventory IDs are patch item names. Each resolver's patches jointly cover its
+enabled required keys; resolver `None` entries remove those requirements.
+Aggregate coverage and duplicate IDs are validated before scanning or writing.
+See the [patch reference](patches.md) for factories, statics, conditions, and examples.
 
 ## Validation
 

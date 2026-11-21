@@ -3,6 +3,7 @@
 use crate::Chivalry2::TBL::TBLGameInstance::*;
 use crate::tools::hook_globals::cli_args;
 use std::sync::atomic::{AtomicBool, Ordering};
+use unchained_macros::{register_patch, Patch};
 
 #[unchained_macros::bind_func_detour(UTBLGameInstance::LoadFrontEndMap)]
 pub(crate) unsafe fn load_front_end_map_detour(
@@ -43,4 +44,5 @@ pub(crate) unsafe fn load_front_end_map_detour(
 }
 
 // Startup anti-cheat-message patch in UTBLGameInstance::Init.
-CREATE_PATCH!(EACAntiCheatMesssage, 0xE, NOP, 5);
+#[register_patch(EACAntiCheatMesssage)]
+static SUPPRESS_ANTI_CHEAT_MESSAGE: Patch = Patch::nop(0xE, 5);

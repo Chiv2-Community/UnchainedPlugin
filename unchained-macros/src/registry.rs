@@ -12,15 +12,13 @@ pub struct HookRegistration {
     pub detour: fn() -> Option<&'static retour::RawDetour>,
 }
 
-pub type RegistrationPredicate = fn() -> bool;
-pub type CreatePatchFn = unsafe fn(usize, &HashMap<String, u64>)
-    -> Result<(), Box<dyn std::error::Error>>;
-
 pub struct PatchRegistration {
     pub name: &'static str,
-    pub tag: &'static str,
-    pub patch_fn: CreatePatchFn,
-    pub enabled_fn: RegistrationPredicate,
+    pub resolver: &'static str,
+    pub factory: fn(u64) -> crate::Patch,
+    /// Selection applicability only; runtime conditions must not affect scan roots.
+    pub applies_to: fn(&dyn std::any::Any) -> bool,
+    pub validate_group: fn(&[&PatchRegistration]) -> Result<(), String>,
 }
 
 /// A named group of offsets.

@@ -8,16 +8,16 @@ use unchained_macros::{
 #[unchained_macros::resolver_selection_key(require = [Allow, Deny])]
 enum Mode { Allow, Deny }
 
-define_pattern_resolver!(Enabled, select [Mode::Allow], {
+define_pattern_resolver!(Enabled, select Mode; [Mode::Allow], {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
-define_pattern_resolver!(Disabled, select [Mode::Allow], {
+define_pattern_resolver!(Disabled, select Mode; [Mode::Allow], {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
-define_pattern_resolver!(EnabledValue, select [Mode::Allow], {
+define_pattern_resolver!(EnabledValue, select Mode; [Mode::Allow], {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
-define_pattern_resolver!(DisabledValue, select [Mode::Allow], {
+define_pattern_resolver!(DisabledValue, select Mode; [Mode::Allow], {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
 

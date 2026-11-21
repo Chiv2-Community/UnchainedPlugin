@@ -7,6 +7,10 @@ pub use unchained_macros_impl::{
     bind_resolved_request_function, resolver_selection_key,
 };
 
+#[doc = include_str!("../patches.md")]
+pub use unchained_macros_impl::register_patch;
+pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, validate_patch_registrations};
+
 /// Attach a replacement with the native binding's exact signature.
 ///
 /// `#[mutability_override]` permits either outer pointer/reference mutability on
@@ -207,11 +211,11 @@ pub use binding::{initialize_value_bindings, is_required_value};
 pub use binding::{initialize_function_bindings, function_is_bound, require_function_bindings};
 pub use binding::{initialize_function_bindings_where, initialize_value_bindings_where};
 pub use registry::{
-    CreateHookFn, HookRegistration, RegistrationPredicate, CreatePatchFn,
+    CreateHookFn, HookRegistration,
     PatchRegistration, OffsetRegisty,
 };
-pub use selection::{SelectionKey, ResolverRestriction, supports_selection};
-pub use resolvers::{DeclaredResolver, RequiredResolver, startup_resolvers};
+pub use selection::{SelectionKey, ResolverDeclaration, ResolverSelection, ResolverRestriction, supports_selection};
+pub use resolvers::{DeclaredResolver, RequiredResolver, startup_resolvers, startup_resolvers_for};
 
 mod binding;
 mod registry;
@@ -227,7 +231,8 @@ pub mod __private {
     pub use crate::detour::claim_detour_address;
     pub use crate::binding::publish_function_detours;
     pub use crate::custom_resolver::single_address;
-    pub use crate::selection::{selection_key, dictionary_allows};
+    pub use crate::selection::{selection_key, selection_matches, dictionary_allows, resolver_selections};
+    pub use crate::patch::validate_patch_coverage;
     pub use log;
     pub use paste;
 }

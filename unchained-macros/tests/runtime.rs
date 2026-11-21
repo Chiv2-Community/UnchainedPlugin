@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use unchained_macros::{
     bind_resolved_func, function_is_bound, initialize_function_bindings,
-    require_function_bindings, HookRegistration, OffsetRegisty, PatchRegistration,
+    require_function_bindings, HookRegistration, OffsetRegisty,
 };
 
 struct FixtureRead;
@@ -10,27 +10,6 @@ struct FixtureRead;
 unsafe fn read() -> i32 {}
 
 unsafe extern "C" fn fixture() -> i32 { 42 }
-
-// Only the memory-write backend remains consumer-owned.
-mod tools {
-    pub mod memtools {
-        pub unsafe fn patch(address: *mut u8, bytes: &[u8]) {
-            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), address, bytes.len()); }
-        }
-    }
-}
-
-#[unchained_macros::resolver_selection_key]
-enum Mode { Enabled }
-static MODE: std::sync::OnceLock<Mode> = std::sync::OnceLock::new();
-
-unchained_macros::CREATE_PATCH!(FixturePatch, BYTES, &[0x90], IF {
-    MODE.get().is_some_and(|mode| *mode == Mode::Enabled)
-});
-unchained_macros::CREATE_PATCH!(FixturePatch @ Start, BYTES, &[0xAB]);
-unchained_macros::CREATE_PATCH!(FixturePatch @ Offset, 1, BYTES, &[0xCD]);
-unchained_macros::CREATE_PATCH!(FixturePatch @ Conditional, BYTES, &[0xEF], IF { true });
-unchained_macros::CREATE_PATCH!(FixturePatch @ Disabled, 1, BYTES, &[0xFF], IF { false });
 
 inventory::submit! {
     OffsetRegisty {
@@ -53,36 +32,6 @@ fn functions_initialize_with_the_host_supplied_base() {
     assert!(require_function_bindings(&["Unregistered"]).is_err());
     assert_eq!(unsafe { read() }, 42);
     assert_eq!(inventory::iter::<HookRegistration>.into_iter().count(), 0);
-}
-
-#[test]
-fn patches_use_shared_registration_and_the_host_supplied_base() {
-    let registration = inventory::iter::<PatchRegistration>.into_iter()
-        .find(|registration| registration.name == "FixturePatch" && registration.tag == "base").unwrap();
-    assert!(!(registration.enabled_fn)());
-    assert!(MODE.set(Mode::Enabled).is_ok());
-    assert!((registration.enabled_fn)());
-    let mut bytes = [0u8; 4];
-    let base = bytes.as_mut_ptr() as usize;
-    let offsets = HashMap::from([("FixturePatch".to_string(), 2)]);
-    unsafe { (registration.patch_fn)(base, &offsets).unwrap(); }
-    assert_eq!(bytes, [0, 0, 0x90, 0]);
-    for (tag, expected) in [
-        ("Start", [0, 0, 0xAB, 0]),
-        ("Offset", [0, 0, 0xAB, 0xCD]),
-        ("Conditional", [0, 0, 0xEF, 0xCD]),
-        ("Disabled", [0, 0, 0xEF, 0xCD]),
-    ] {
-        let registration = inventory::iter::<PatchRegistration>.into_iter()
-            .find(|registration| registration.name == "FixturePatch" && registration.tag == tag).unwrap();
-        if (registration.enabled_fn)() {
-            unsafe { (registration.patch_fn)(base, &offsets).unwrap(); }
-        }
-        assert_eq!(bytes, expected, "{tag}");
-        let error = unsafe { (registration.patch_fn)(base, &HashMap::new()) }.unwrap_err();
-        assert_eq!(error.to_string(), "Offset for FixturePatch not found");
-    }
-    assert_eq!(offsets["FixturePatch"], 2);
 }
 
 #[test]

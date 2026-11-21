@@ -41,6 +41,16 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         Ok(())
     }).parse2(args)?;
     let required = required.unwrap_or_default();
+    let equality_arms = data.variants.iter().map(|variant| {
+        let name = &variant.ident;
+        let cfg = super::cfg_attributes(&variant.attrs);
+        quote!(#(#cfg)* Self::#name => matches!(other, Self::#name),)
+    }).collect::<Vec<_>>();
+    let name_arms = data.variants.iter().map(|variant| {
+        let name = &variant.ident;
+        let cfg = super::cfg_attributes(&variant.attrs);
+        quote!(#(#cfg)* Self::#name => stringify!(#name),)
+    }).collect::<Vec<_>>();
     let duplicate_checks = data.variants.iter().map(|variant| {
         let name = &variant.ident;
         let cfg = super::cfg_attributes(&variant.attrs);
@@ -75,8 +85,33 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         #declaration
         impl ::unchained_macros::SelectionKey for #name {
             const REQUIRED: &'static [Self] = &[#(Self::#required),*];
+            fn name(self) -> &'static str { match self { #(#name_arms)* } }
         }
         impl #name {
+            #[doc(hidden)]
+            pub const fn __unchained_validate_patch(self, resolver: &[(Self, bool)], patch: &[(Self, bool)]) {
+                let mut index = 0;
+                while index < patch.len() {
+                    if patch[index].1 {
+                        let mut target = 0;
+                        while target < resolver.len() {
+                            assert!(
+                                !patch[index].0.__unchained_key_eq(resolver[target].0) || resolver[target].1,
+                                "patch enables a selection disabled by its resolver"
+                            );
+                            target += 1;
+                        }
+                    }
+                    index += 1;
+                }
+                let _ = self;
+            }
+
+            #[doc(hidden)]
+            pub const fn __unchained_key_eq(self, other: Self) -> bool {
+                match self { #(#equality_arms)* }
+            }
+
             #[doc(hidden)]
             pub const fn __unchained_validate_selection(self, keys: &[Self]) {
                 #(#duplicate_checks)*

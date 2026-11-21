@@ -1,137 +1,200 @@
+//! Patch descriptions, host memory backends, and registration validation.
 
-/// A macro for registering memory patches with support for offsets, tags and conditions.
-///
-///
-/// # Components
-/// - **Name**: The lookup key in the offsets HashMap.
-/// - **Tag**: (Optional) An identifier used to create unique function names when patching the same function multiple times.
-/// - **Extra**: (Optional) A numeric literal offset to add to the base function address.
-/// - **Op**: The operation to perform (`NOP`, `BYTES`, or `WRITE`).
-/// - **Val**: The payload (byte count for `NOP`, `&[u8]` for `BYTES`, or a reference for `WRITE`).
-/// - **IF { block }**: (Optional) A runtime check. The patch only applies if the block returns `true`.
-///
-/// # Examples
-/// 
-/// ```rust,ignore
-/// // 1. Basic usage: NOP 2 bytes at the start of 'PatchSomething'
-/// CREATE_PATCH!(PatchSomething, NOP, 2);
-/// 
-/// // 2. Offset usage: NOP 2 bytes at 'PatchSomething' + 0x10
-/// CREATE_PATCH!(PatchSomething, 0x10, NOP, 2);
-/// 
-/// // 3. Tagged usage: Allows multiple patches on the same function name
-/// CREATE_PATCH!(ProcessInput @ FixX, 0x42, NOP, 3);
-/// CREATE_PATCH!(ProcessInput @ FixY, 0x88, BYTES, &[0x90, 0x90]);
-/// 
-/// // 4. Conditional usage: Only apply if a config flag is set
-/// CREATE_PATCH!(InfiniteSomething, NOP, 5, IF {
-///     crate::config::get().infinite_ammo_enabled
-/// });
-/// 
-/// // 5. Direct Value Write: Change a float constant in memory
-/// CREATE_PATCH!(GlobalMultiplier, WRITE, &1.5f32);
-/// ```
-///
-/// # Note on Testing
-/// These examples are marked `ignore` because they require a host memory-write backend.
-/// and inventory registration which are complex to set up in a doctest.
-///
-/// # Address Calculation
-/// The final target memory address is calculated as:
-/// $Address = BaseAddress + Offset(Name) + Extra$
-/// 
-/// # Internal Generated Code
-/// 
-/// This macro creates a `PatchRegistration` struct that is automatically 
-/// collected via `inventory`. It handles address calculation, identifier generation via `paste!`, 
-/// and maps operations to internal memory tools.
-/// 
-/// For a call like `CREATE_PATCH!(MyFunc, NOP, 1)`, the macro generates:
-/// - A unique function: `pub unsafe fn apply_patch_MyFunc_base(...)`
-/// - An `inventory::submit!` call containing the function pointer and the metadata.
-#[macro_export]
-macro_rules! CREATE_PATCH {
-    ($name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr) => {
-        $crate::CREATE_PATCH!($name @ $tag, $extra, $op, $val, IF { true });
-    };
-    ($name:ident @ $tag:ident, $op:ident, $val:expr) => {
-        $crate::CREATE_PATCH!($name @ $tag, $op, $val, IF { true });
-    };
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use crate::{PatchRegistration, ResolverSelection, SelectionKey};
 
-    // tag + offset + condition
-    // Name @ Suffix, 0x10, NOP, 5, IF { ... }
-    ($name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, $tag, $extra, $op, $val, || $cond);
-    };
-
-    // tag + condition (no offset)
-    // Name @ Suffix, NOP, 5, IF { ... }
-    ($name:ident @ $tag:ident, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, $tag, 0, $op, $val, || $cond);
-    };
-
-    // name + offset + condition (auto-tag via offset)
-    // Name, 0x10, NOP, 5, IF { ... }
-    ($name:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, $extra, $extra, $op, $val, || $cond);
-    };
-
-    // name + condition (no offset, no tag)
-    // Name, NOP, 5, IF { ... }
-    ($name:ident, $op:ident, $val:expr, IF $cond:block) => {
-        $crate::__create_patch_impl!($name, base, 0, $op, $val, || $cond);
-    };
-
-    // no tags
-
-    // default + offset
-    // Name, 0x10, NOP, 5
-    ($name:ident, $extra:literal, $op:ident, $val:expr) => {
-        $crate::__create_patch_impl!($name, $extra, $extra, $op, $val, || true);
-    };
-
-    // default (no offset)
-    // Name, NOP, 5
-    ($name:ident, $op:ident, $val:expr) => {
-        $crate::__create_patch_impl!($name, base, 0, $op, $val, || true);
-    };
+#[derive(Debug, Clone)]
+enum Operation {
+    Bytes(Cow<'static, [u8]>),
+    Nop(usize),
 }
 
-#[macro_export]
-macro_rules! __create_patch_impl {
-    ($name:ident, $suffix:tt, $extra:expr, $op:ident, $val:expr, $cond_fn:expr) => {
-        paste::paste! {
-            #[allow(non_snake_case)]
-            pub unsafe fn [<apply_patch_ $name _ $suffix>](
-                base_address: usize,
-                offsets: &std::collections::HashMap<String, u64>
-            ) -> Result<(), Box<dyn std::error::Error>> {
-                match offsets.get(stringify!($name)) {
-                    None => Err(format!("Offset for {} not found", stringify!($name)).into()),
-                    Some(offset) => {
-                        let addr = (base_address + (*offset as usize) + ($extra as usize)) as *mut u8;
-                        // Map to existing ops (memtools)
-                        $crate::__apply_patch_op!($op, addr, $val);
-                        Ok(())
-                    }
-                }
-            }
+/// A relative memory edit. Factories receive the resolved native address.
+#[derive(Debug, Clone)]
+pub struct Patch {
+    offset: u64,
+    operation: Operation,
+    enabled: bool,
+}
 
-            inventory::submit! {
-                $crate::PatchRegistration {
-                    name: stringify!($name),
-                    tag: stringify!($suffix),
-                    patch_fn: [<apply_patch_ $name _ $suffix>],
-                    enabled_fn: $cond_fn,
-                }
-            }
+impl Patch {
+    pub const fn bytes(offset: u64, bytes: &'static [u8]) -> Self {
+        Self { offset, operation: Operation::Bytes(Cow::Borrowed(bytes)), enabled: true }
+    }
+
+    pub fn owned_bytes(offset: u64, bytes: Vec<u8>) -> Self {
+        Self { offset, operation: Operation::Bytes(Cow::Owned(bytes)), enabled: true }
+    }
+
+    pub const fn nop(offset: u64, count: usize) -> Self {
+        Self { offset, operation: Operation::Nop(count), enabled: true }
+    }
+
+    pub const fn when(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Apply through the host's memory-protection/write backend.
+    ///
+    /// # Safety
+    /// The enabled patch's target range must be valid for its native contract.
+    pub unsafe fn apply<W: PatchWriter>(&self, resolved_address: u64, writer: &mut W) -> Result<bool, String> {
+        if !self.enabled { return Ok(false); }
+        let address = resolved_address.checked_add(self.offset)
+            .ok_or_else(|| "Patch address overflow".to_string())?;
+        match &self.operation {
+            Operation::Bytes(bytes) => unsafe { writer.bytes(address, bytes)?; },
+            Operation::Nop(count) => unsafe { writer.nop(address, *count)?; },
         }
-    };
+        Ok(true)
+    }
 }
 
-#[macro_export]
-macro_rules! __apply_patch_op {
-    (BYTES, $addr:expr, $val:expr) => { crate::tools::memtools::patch($addr, $val) };
-    (NOP, $addr:expr, $val:expr) => { crate::tools::memtools::nop($addr, $val) };
-    (WRITE, $addr:expr, $val:expr) => { crate::tools::memtools::write_ptr($addr as *mut _, $val) };
+/// Host-owned memory protection and write operations.
+pub trait PatchWriter {
+    /// # Safety
+    /// The caller must supply a valid native target range.
+    unsafe fn bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), String>;
+    /// # Safety
+    /// The caller must supply a valid native instruction range.
+    unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct PatchApplication {
+    pub name: &'static str,
+    pub resolver: &'static str,
+    pub applied: bool,
+}
+
+#[doc(hidden)]
+pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
+    _: E, patches: &[&PatchRegistration],
+) -> Result<(), String> {
+    for key in E::REQUIRED {
+        if crate::__private::dictionary_allows(key, R::SELECTIONS)
+            && !patches.iter().any(|patch| (patch.applies_to)(key))
+        {
+            return Err(format!("Patches for resolver {} do not cover required selection {}", R::NAME, key.name()));
+        }
+    }
+    Ok(())
+}
+
+fn validate(patches: &[&PatchRegistration]) -> Result<(), String> {
+    let mut names = BTreeSet::new();
+    let mut groups = BTreeMap::<_, Vec<_>>::new();
+    for patch in patches {
+        if !names.insert(patch.name) {
+            return Err(format!("Duplicate patch name {}", patch.name));
+        }
+        groups.entry(patch.resolver).or_default().push(*patch);
+    }
+    for group in groups.values() {
+        for patch in group {
+            (patch.validate_group)(group)?;
+        }
+    }
+    Ok(())
+}
+
+/// Validate unique patch names and required coverage across each resolver's group.
+/// This does not run factories, conditions, or memory writes.
+pub fn validate_patch_registrations() -> Result<(), String> {
+    validate(&inventory::iter::<PatchRegistration>.into_iter().collect::<Vec<_>>())
+}
+
+/// Validate and resolve every applicable patch before invoking factories/writers.
+/// Factories must describe edits, not modify native memory themselves.
+///
+/// # Safety
+/// Each resolved address and resulting edit must satisfy its native contract.
+/// Earlier writes are not rolled back if a later writer call fails.
+pub unsafe fn apply_registered_patches<E: SelectionKey, W: PatchWriter>(
+    base: u64, offsets: &HashMap<String, u64>, selection: E, writer: &mut W,
+) -> Result<Vec<PatchApplication>, String> {
+    let patches: Vec<_> = inventory::iter::<PatchRegistration>.into_iter().collect();
+    validate(&patches)?;
+    let selected = patches.into_iter().filter(|patch| (patch.applies_to)(&selection))
+        .map(|patch| {
+            if !crate::supports_selection(patch.resolver, selection) {
+                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver));
+            }
+            let offset = offsets.get(patch.resolver)
+                .ok_or_else(|| format!("No address for patch {} resolver {}", patch.name, patch.resolver))?;
+            let address = base.checked_add(*offset).ok_or_else(|| format!("Address overflow for patch {}", patch.name))?;
+            Ok((patch, address))
+        }).collect::<Result<Vec<_>, String>>()?;
+    selected.into_iter().map(|(patch, address)| {
+        let applied = unsafe { (patch.factory)(address).apply(address, writer) }
+            .map_err(|error| format!("Patch {}: {error}", patch.name))?;
+        Ok(PatchApplication { name: patch.name, resolver: patch.resolver, applied })
+    }).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ResolverDeclaration;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Key { First, Second }
+    impl SelectionKey for Key {
+        const REQUIRED: &'static [Self] = &[Self::First, Self::Second];
+        fn name(self) -> &'static str { match self { Self::First => "First", Self::Second => "Second" } }
+    }
+
+    struct Both;
+    impl ResolverDeclaration for Both {
+        const NAME: &'static str = "Both";
+        const UNRESTRICTED: bool = true;
+    }
+    impl ResolverSelection<Key> for Both {
+        const SELECTIONS: &'static [(Key, bool)] = &[];
+    }
+    struct FirstOnly;
+    impl ResolverDeclaration for FirstOnly {
+        const NAME: &'static str = "FirstOnly";
+        const UNRESTRICTED: bool = false;
+    }
+    impl ResolverSelection<Key> for FirstOnly {
+        const SELECTIONS: &'static [(Key, bool)] = &[(Key::Second, false)];
+    }
+
+    fn never_construct(_: u64) -> Patch { panic!("validation must not construct patches") }
+    fn first(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::First) }
+    fn second(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::Second) }
+    fn both(group: &[&PatchRegistration]) -> Result<(), String> {
+        validate_patch_coverage::<Both, _>(Key::First, group)
+    }
+    static FIRST: PatchRegistration = PatchRegistration {
+        name: "first", resolver: "Both", factory: never_construct, applies_to: first, validate_group: both,
+    };
+    static SECOND: PatchRegistration = PatchRegistration {
+        name: "second", resolver: "Both", factory: never_construct, applies_to: second, validate_group: both,
+    };
+    static FIRST_ONLY: PatchRegistration = PatchRegistration {
+        name: "only_first", resolver: "FirstOnly", factory: never_construct, applies_to: first,
+        validate_group: |group| validate_patch_coverage::<FirstOnly, _>(Key::First, group),
+    };
+    static DUPLICATE: PatchRegistration = PatchRegistration {
+        name: "first", resolver: "Both", factory: never_construct, applies_to: second, validate_group: both,
+    };
+    static OTHER_RESOLVER: PatchRegistration = PatchRegistration {
+        name: "other", resolver: "Other", factory: never_construct, applies_to: second, validate_group: both,
+    };
+
+    #[test_case::test_case(&[&FIRST], Some("required selection Second"); "missing enabled selection")]
+    #[test_case::test_case(&[&FIRST, &SECOND], None; "different patch names jointly cover resolver")]
+    #[test_case::test_case(&[&FIRST_ONLY], None; "resolver disables second selection")]
+    #[test_case::test_case(&[&FIRST, &DUPLICATE], Some("Duplicate patch name first"); "duplicate names")]
+    #[test_case::test_case(&[&FIRST, &OTHER_RESOLVER], Some("required selection Second"); "other resolver does not supply coverage")]
+    fn coverage_is_grouped_by_resolver(patches: &[&PatchRegistration], expected: Option<&str>) {
+        match expected {
+            Some(message) => assert!(validate(patches).unwrap_err().contains(message)),
+            None => validate(patches).unwrap(),
+        }
+    }
 }

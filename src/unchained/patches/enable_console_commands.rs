@@ -1,5 +1,12 @@
 //! Administrative console-command permission patches.
 
+use crate::Chivalry2::TBL::TBLLocalPlayer::UTBLLocalPlayer__Exec;
+use crate::Chivalry2::Engine::Runtime::Engine::GameFramework::PlayerController::AuthenticateConsoleCommandCaller;
+use unchained_macros::{register_patch, Patch};
+
 // Console-command permission bypass in UTBLLocalPlayer::Exec.
-CREATE_PATCH!(UTBLLocalPlayer__Exec, BYTES, &[0xEB]);
-CREATE_PATCH!(AuthenticateConsoleCommandCaller, BYTES, &[0xEB]);
+#[register_patch(UTBLLocalPlayer__Exec)]
+static ALLOW_LOCAL_CONSOLE_COMMANDS: Patch = Patch::bytes(0, &[0xEB]);
+
+#[register_patch(AuthenticateConsoleCommandCaller)]
+static ALLOW_AUTHENTICATED_CONSOLE_COMMANDS: Patch = Patch::bytes(0, &[0xEB]);

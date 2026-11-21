@@ -23,16 +23,16 @@ fn selection_attribute_preserves_existing_derives_and_discriminants() {
     assert!(<ExistingDerives as unchained_macros::SelectionKey>::REQUIRED == [ExistingDerives::First]);
 }
 
-define_pattern_resolver!(ReadOnly, select [Mode::Read], {
+define_pattern_resolver!(ReadOnly, select Mode; [Mode::Read], {
     Mode::Read: ["AA BB"], Mode::Write: None, Mode::Shared: None,
 });
-define_pattern_resolver!(WriteOnly, Simple, select [Mode::Write], {
+define_pattern_resolver!(WriteOnly, Simple, select Mode; [Mode::Write], {
     Mode::Read: None, Mode::Write: ["CC DD"], Mode::Shared: None,
 });
-define_pattern_resolver!(ReadCall, Call, select [Mode::Read], {
+define_pattern_resolver!(ReadCall, Call, select Mode; [Mode::Read], {
     Mode::Read: ["E8 | ?? ?? ?? ??"], Mode::Write: None, Mode::Shared: None,
 });
-define_pattern_resolver!(ReadInline, select [Mode::Read], {
+define_pattern_resolver!(ReadInline, select Mode; [Mode::Read], {
     Mode::Read: ["EE FF"], Mode::Write: None, Mode::Shared: None,
 }, |ctx, patterns| {
     let matches = ctx.scan(patternsleuth::scanner::Pattern::new(patterns[0]).unwrap()).await;
@@ -41,7 +41,7 @@ define_pattern_resolver!(ReadInline, select [Mode::Read], {
 define_pattern_resolver!(Unrestricted, ["11 22"]);
 
 use Mode::Read as ReadAlias;
-define_pattern_resolver!(AliasedKey, select [ReadAlias], {
+define_pattern_resolver!(AliasedKey, select Mode; [ReadAlias], {
     ReadAlias: ["AA BB"], Mode::Write: None,
 });
 

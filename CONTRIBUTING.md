@@ -317,8 +317,24 @@ Target the binding method from a functional module under `src/unchained/patches/
 - Preserve native thread, ownership, pointer, and callback-lifetime rules.
 - Do not let Rust panics unwind through native callers.
 - Match binding/replacement feature gates; gate whole modules when appropriate.
-- Keep `CREATE_PATCH!` instruction patches here too; keep resolvers in the native model.
+- Keep `register_patch` instruction patches here too; keep resolvers in the native model.
 - See [binding and trampoline contracts](docs/native-bindings.md).
+
+Instruction patches import their resolver type and use `register_patch` on a
+factory or immutable `Patch` static. An unqualified patch requires an unrestricted
+resolver; an explicit storefront cannot be disabled by the resolver:
+
+```rust
+#[register_patch(AllowAlternateBackend, crate::PlatformType::STEAM)]
+static ALTERNATE_BACKEND_STEAM: Patch = Patch::bytes(0x4D, &[0x90, 0xE9]);
+```
+
+Patch names are item names. Coverage is grouped by resolver: its registered
+patches must jointly cover enabled required storefronts. An EGS `None` resolver
+entry removes the EGS requirement. Coverage is validated before scanning/writing;
+patch selections do not narrow other consumers of the resolver.
+Use `fn patch_name(resolved_address: u64) -> Patch` for address-dependent bytes
+or runtime `.when(condition)` gates. Existing detours inherit resolver availability.
 
 Alternative replacement for the existing UDP hook:
 

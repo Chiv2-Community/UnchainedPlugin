@@ -89,8 +89,8 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     ))
 }
 
-fn resolvers() -> std::vec::IntoIter<&'static NamedResolver> {
-    unchained_macros::startup_resolvers()
+fn resolvers(platform: PlatformType) -> std::vec::IntoIter<&'static NamedResolver> {
+    unchained_macros::startup_resolvers_for(platform)
         .unwrap_or_else(|error| panic!("Invalid startup resolver registration: {error}"))
         .into_iter()
 }
@@ -205,7 +205,7 @@ mod build_info_tests {
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
-        let required: Vec<_> = resolvers()
+        let required: Vec<_> = resolvers(PlatformType::STEAM)
             .filter(|resolver| supports_platform(resolver.name, PlatformType::STEAM))
             .collect();
         let mut info = BuildInfo {
@@ -274,7 +274,7 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
 fn rust_main() {
     let need_rescan = {
         let current = CURRENT_BUILD_INFO.lock().unwrap();
-        current.as_ref().is_none_or(|info| !info.get_unresolved(resolvers().collect()).is_empty())
+        current.as_ref().is_none_or(|info| !info.get_unresolved(resolvers(info.platform).collect()).is_empty())
     };
 
     if need_rescan {
@@ -282,7 +282,7 @@ fn rust_main() {
         load_current_build_info();
         let mut current = CURRENT_BUILD_INFO.lock().unwrap();
         if let Some(bi) = current.as_ref() {
-            match bi.with_scan(resolvers().collect()) {
+            match bi.with_scan(resolvers(bi.platform).collect()) {
                 Ok(scanned) => *current = Some(scanned),
                 Err(error) => serror!("Failed to scan for missing signatures: {}", error),
             }
@@ -326,7 +326,7 @@ fn initialize_native_runtime() {
     let current = CURRENT_BUILD_INFO.lock().unwrap();
     let bi = current.as_ref().expect("Build info must be loaded before native initialization");
     // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
-    if !bi.get_unresolved(resolvers().collect()).is_empty() {
+    if !bi.get_unresolved(resolvers(bi.platform).collect()).is_empty() {
         sinfo!("Missing signatures; deferring initialization until scan and restart");
         return;
     }
@@ -337,7 +337,10 @@ fn initialize_native_runtime() {
         serror!("Failed to bind native functions: {}", error);
         std::process::exit(-67);
     }
-    apply_patches(&bi.offsets);
+    if let Err(error) = apply_patches(&bi.offsets) {
+        serror!("Failed to apply patches: {}", error);
+        std::process::exit(-67);
+    }
     if let Err(error) = attach_hooks() {
         serror!("Failed to attach hooks: {}", error);
         std::process::exit(-67);
@@ -560,21 +563,30 @@ pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// The base program address of the running application will be used.
-pub fn apply_patches(offsets: &HashMap<String, u64>) {
-    let platform = current_platform();
-    for p in inventory::iter::<unchained_macros::PatchRegistration> {
-        if !supports_platform(p.name, platform) {
-            continue;
-        }
-        // Run the condition check
-        if (p.enabled_fn)() {
-            match unsafe { (p.patch_fn)(*unchained::startup::BASE_ADDR, offsets) } {
-                Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
-                Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
-            }
+struct NativePatchWriter;
+
+impl unchained_macros::PatchWriter for NativePatchWriter {
+    unsafe fn bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        unsafe { tools::memtools::patch(address as *mut u8, bytes); }
+        Ok(())
+    }
+    unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String> {
+        unsafe { tools::memtools::nop(address as *mut u8, count); }
+        Ok(())
+    }
+}
+
+/// Apply named patches through the existing native memory-protection backend.
+pub fn apply_patches(offsets: &HashMap<String, u64>) -> Result<(), String> {
+    let results = unsafe { unchained_macros::apply_registered_patches(
+        *unchained::startup::BASE_ADDR as u64, offsets, current_platform(), &mut NativePatchWriter,
+    ) }?;
+    for result in results {
+        if result.applied {
+            sinfo!("[+] Patch Applied: {} ({})", result.name, result.resolver);
         } else {
-            sdebug!("[.] Patch Skipped (Condition not met): {} ({})", p.name, p.tag);
+            sdebug!("[.] Patch Skipped (Condition not met): {} ({})", result.name, result.resolver);
         }
     }
+    Ok(())
 }
