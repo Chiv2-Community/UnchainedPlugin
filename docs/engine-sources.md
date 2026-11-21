@@ -40,8 +40,8 @@ links for declarations absent from either source tree; state
 The Rust build-time documentation generator reads only `Native source:`. It
 remaps the repository root using `[env]` settings in `.cargo/config.toml`:
 
-- `ARGON_SDK_SOURCE_LOCATION`: ArgonSDK `blob/main` by default.
-- `UE_SOURCE_LOCATION`: UnrealEngine `blob/4.25-plus` by default.
+- `ARGON_SDK_SOURCE_LOCATION`: Absolute file path indicating Argon SDK source location
+- `UE_SOURCE_LOCATION`: Absolute file path indecating UE 4.25-plus source location
 
 Both accept HTTP(S) roots or absolute checkout directories. The checkout root
 must contain `Source/` for ArgonSDK or `Engine/` for UE. The macros emit standard

@@ -63,7 +63,7 @@ impl FText {
     /// Do not free the result or mutate/invalidate its data (including through
     /// native aliases or culture changes) while the returned borrow is live.
     /// Synchronize native history access for the call, including invariant text.
-    #[bind_resolved_func(self::FText__ToString)]
+    #[bind_resolved_func(FText__ToString)]
     pub unsafe fn ToString<'a>(&'a self) -> &'a FString {}
 
     /// Uses caller-provided return storage.
@@ -73,14 +73,14 @@ impl FText {
     /// Output must be uninitialized writable native FText storage. String must
     /// be a valid native string, with the engine allocator/runtime initialized.
     /// The input is copied, not consumed. Output acquires one native reference.
-    #[bind_resolved_func(self::FText__AsCultureInvariant)]
+    #[bind_resolved_func(FText__AsCultureInvariant)]
     unsafe fn AsCultureInvariant(output: *mut Self, string: &FString) -> *mut Self {}
 
     /// Destroy native text, releasing its thread-safe shared reference (control block at +8).
     ///
     /// # Safety
     /// Self must own a live native shared reference, released exactly once.
-    #[bind_resolved_func(self::FText__Destructor)]
+    #[bind_resolved_func(FText__Destructor)]
     pub unsafe fn Destructor(self: *mut Self) {}
 }
 
