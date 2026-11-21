@@ -1,5 +1,9 @@
 # PR47 performance review
 
+For the later live client/server comparison against main and published v1.0.1,
+see [the startup profile](pr47-startup-profile.md). The historical workloads below
+use different revisions and methods.
+
 Compared `07749c63267e9edf4ffba0a6de44691b227669e9` (`main`) with
 `c01e1555573f833abc990736c3cfe4b2a65e8a14` (PR47), on Linux.
 Results apply to these commits, not subsequent cleanup.
