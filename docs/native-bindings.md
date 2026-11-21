@@ -55,9 +55,13 @@ Target the native binding from a functional module under `src/unchained/patches/
 - Names need no `_detour` suffix.
 - The compiler checks argument types, returns, and lifetime relationships against
   the binding. It does not verify the ABI against the binary.
-- On a `*mut T` replacement parameter, `#[native_const]` explicitly adapts a
-  native `*const T` argument. It changes only raw-pointer mutability, not pointee
-  type or the caller's access permissions. Other signature checks remain exact.
+- `#[mutability_override]` on a pointer/reference replacement parameter allows
+  either outer mutability, including an exact match, checked against the binding.
+  Pointees, nested mutability, other parameters, returns, and lifetimes stay exact.
+  Raw pointers and references cannot be interchanged. Every intercepted argument
+  must satisfy the detour's validity, aliasing, and write-access contract:
+  `&mut T` requires exclusive access for its entire borrow, even for native `&T`.
+  The annotation does not make shared or read-only memory writable.
 - Activation defaults to `ACTIVE`; custom conditions run at attachment.
 - Activation also requires global auto-activation.
 - State queries and diagnostics use the binding's resolver/request-key name.

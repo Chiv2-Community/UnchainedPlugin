@@ -233,12 +233,12 @@ unsafe fn read<'a>(value: &'a Native) -> &'a Native {
 Native validity, aliasing, thread affinity and patch synchronization remain
 unsafe obligations. Keep raw pointers where reference guarantees are unknown.
 
-A detour may explicitly adapt a mutable raw parameter to a const native entry:
+A detour may explicitly override a parameter's outer pointer/reference mutability:
 
 ```rust,ignore
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho)]
 unsafe fn ping(
-    #[native_const] endpoint: *mut FString,
+    #[mutability_override] endpoint: *mut FString,
     timeout: f32,
     callback: *mut FIcmpEchoResultCallback,
 ) {
@@ -246,11 +246,17 @@ unsafe fn ping(
 }
 ```
 
-`#[native_const]` requires `*mut T`. The native adapter receives `*const T` and
-casts only that raw pointer before calling the detour. Pointee types, remaining
-parameters, returns, and lifetime checks remain exact. This grants no permission
-to modify an originally const object.
+`#[mutability_override]` accepts raw pointers or references. The adapter checks the
+actual native type from binding metadata; either direction and exact matches
+are allowed. Only the annotated outer mutability is adapted. Pointees, nested
+pointer mutability, remaining parameters, returns, and lifetimes remain exact.
+Raw pointers and references cannot be interchanged. Every intercepted call must
+satisfy the detour's validity, aliasing, and write-access contract. In particular,
+`&mut T` requires exclusive access for its entire borrow even when the native
+declaration uses `&T`. The annotation does not make shared or read-only memory
+writable; proving these guarantees is the unsafe detour author's obligation.
+Spell outer pointer/reference types directly in both signatures, not via aliases.
 
 Run `cargo test -p unchained-macros -p unchained-macros-impl` for declaration
-validation and direct-call fixtures. The fixtures call real `extern "C"`
-functions without mocked vtables or detour attachment.
+validation and direct-call fixtures. Windows hook fixtures also attach real
+detours and verify native-entry interception and original-call bypass.

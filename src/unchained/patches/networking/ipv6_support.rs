@@ -9,7 +9,7 @@ use std::cell::Cell;
 
 #[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn ipv6_udp_echo(
-    #[native_const] endpoint: *mut FString,
+    #[mutability_override] endpoint: *mut FString,
     timeout: f32,
     callback: *mut FIcmpEchoResultCallback,
 ) {

@@ -48,6 +48,29 @@ fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
     Ok(quote!(#binder unsafe extern "C" fn(#(#types),*) #output))
 }
 
+fn normalized_mutability(signature: &syn::Signature) -> syn::Signature {
+    let mut signature = signature.clone();
+    for input in &mut signature.inputs {
+        let FnArg::Typed(argument) = input else { unreachable!() };
+        match &mut *argument.ty {
+            Type::Ptr(pointer) => {
+                pointer.mutability = None;
+                pointer.const_token = Some(Default::default());
+            }
+            Type::Reference(reference) => reference.mutability = None,
+            _ => {}
+        }
+    }
+    signature
+}
+
+fn parameter_type(signature: &syn::Signature, index: usize) -> syn::Result<Tokens> {
+    let mut parameter = signature.clone();
+    parameter.inputs = std::iter::once(signature.inputs[index].clone()).collect();
+    parameter.output = syn::ReturnType::Default;
+    native_type(&parameter)
+}
+
 pub(super) fn expand_binding(
     args: Tokens,
     function: &ItemFn,
@@ -63,8 +86,14 @@ pub(super) fn expand_binding(
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let signature = super::detour::concrete_signature(function, Some(self_ty))?;
     let native = native_type(&signature)?;
+    let normalized = native_type(&normalized_mutability(&signature))?;
+    let parameters = (0..signature.inputs.len())
+        .map(|index| parameter_type(&signature, index))
+        .collect::<syn::Result<Vec<_>>>()?;
     let name = &function.sig.ident;
     let descriptor = format_ident!("__UNCHAINED_BINDING_{}", name, span = Span::mixed_site());
+    let normalized_descriptor = format_ident!("__UNCHAINED_MUTABILITY_{}", name, span = Span::mixed_site());
+    let parameter_descriptor = format_ident!("__UNCHAINED_PARAMETERS_{}", name, span = Span::mixed_site());
     let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name, span = Span::mixed_site());
     let vis = &function.vis;
     let cfg: Vec<_> = function
@@ -115,6 +144,17 @@ pub(super) fn expand_binding(
     })?;
     let helper = quote! {
         #(#cfg)*
+        impl #self_ty {
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            #vis const #normalized_descriptor: ::unchained_macros::NativeSignature<#normalized> =
+                ::core::marker::PhantomData;
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            #vis const #parameter_descriptor: (#(::unchained_macros::NativeSignature<#parameters>,)*) =
+                (#(::core::marker::PhantomData::<fn(#parameters) -> #parameters>,)*);
+        }
+        #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #storage: ::unchained_macros::FunctionBinding =
             ::unchained_macros::FunctionBinding::new(#resolver_name);
@@ -139,6 +179,12 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ));
     }
     let native_target = target.clone();
+    let mut normalized_target = target.clone();
+    let normalized_method = normalized_target.segments.last_mut().unwrap();
+    normalized_method.ident = format_ident!("__UNCHAINED_MUTABILITY_{}", normalized_method.ident, span = Span::mixed_site());
+    let mut parameter_target = target.clone();
+    let parameter_method = parameter_target.segments.last_mut().unwrap();
+    parameter_method.ident = format_ident!("__UNCHAINED_PARAMETERS_{}", parameter_method.ident, span = Span::mixed_site());
     // Keep the user's target span on the native method, not its internal descriptor.
     for segment in &mut target.segments {
         segment.ident.set_span(Span::mixed_site());
@@ -169,31 +215,39 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let key = format!("detour-{}", function.sig.ident);
     attach_native_documentation(&mut function.attrs, &key, &documentation);
     let mut signature = super::detour::concrete_signature(&function, None)?;
+    let normalized = native_type(&normalized_mutability(&signature))?;
+    let mut has_override = false;
+    let mut parameter_checks = Vec::new();
+    let parameter_types = (0..signature.inputs.len())
+        .map(|index| parameter_type(&signature, index))
+        .collect::<syn::Result<Vec<_>>>()?;
     let mut arguments = Vec::new();
-    for (local, native) in function.sig.inputs.iter_mut().zip(&mut signature.inputs) {
+    for (index, (local, native)) in function.sig.inputs.iter_mut().zip(&mut signature.inputs).enumerate() {
         let (FnArg::Typed(local), FnArg::Typed(native)) = (local, native) else {
             unreachable!()
         };
         let Pat::Ident(parameter) = &*local.pat else { unreachable!() };
         let name = &parameter.ident;
-        let annotations: Vec<_> = local.attrs.iter().filter(|attr| attr.path().is_ident("native_const")).collect();
+        let annotations: Vec<_> = local.attrs.iter().filter(|attr| attr.path().is_ident("mutability_override")).collect();
         if annotations.is_empty() {
             arguments.push(quote!(#name));
+            let parameter = &parameter_types[index];
+            let index = syn::Index::from(index);
+            parameter_checks.push(quote! {
+                let _: ::unchained_macros::NativeSignature<#parameter> = #parameter_target.#index;
+            });
             continue;
         }
         if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
-            return Err(syn::Error::new_spanned(annotations[0], "use one bare #[native_const] annotation"));
+            return Err(syn::Error::new_spanned(annotations[0], "use one bare #[mutability_override] annotation"));
         }
-        let Type::Ptr(pointer) = &mut *native.ty else {
-            return Err(syn::Error::new_spanned(&native.ty, "#[native_const] requires a *mut T detour parameter"));
+        if !matches!(&*native.ty, Type::Ptr(_) | Type::Reference(_)) {
+            return Err(syn::Error::new_spanned(&native.ty, "#[mutability_override] requires a raw pointer or reference detour parameter"));
         };
-        if pointer.mutability.take().is_none() {
-            return Err(syn::Error::new_spanned(pointer, "#[native_const] requires a *mut T detour parameter"));
-        }
-        pointer.const_token = Some(Default::default());
-        local.attrs.retain(|attr| !attr.path().is_ident("native_const"));
-        native.attrs.retain(|attr| !attr.path().is_ident("native_const"));
-        arguments.push(quote!(#name.cast_mut()));
+        has_override = true;
+        local.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
+        native.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
+        arguments.push(quote!(#name));
     }
     let native = native_type(&signature)?;
     let ident = &function.sig.ident;
@@ -221,6 +275,16 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         .unzip();
     let output = &signature.output;
     let generics = &signature.generics;
+    let signature_check = if has_override {
+        quote! {
+            // Only outer pointer/reference mutability is erased. The complete
+            // invariant signature still checks every lifetime relationship.
+            let _: ::unchained_macros::NativeSignature<#normalized> = #normalized_target;
+            #(#parameter_checks)*
+        }
+    } else {
+        quote! { let _: ::unchained_macros::NativeFunction<#native> = #target; }
+    };
     let condition = match &condition {
         syn::Expr::Path(path) if path.path.is_ident("ACTIVE") => quote!(|| true),
         syn::Expr::Path(path)
@@ -238,7 +302,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         const _: () = {
             let _ = #native_target;
             // Invariant signature metadata makes mismatches compiler errors.
-            let _: ::unchained_macros::NativeFunction<#native> = #target;
+            #signature_check
         };
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -264,10 +328,11 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 .ok_or("Native detour address precedes the module")?;
             if #hook.get().is_some() { return Err(::retour::Error::AlreadyInitialized.into()); }
             let claim = ::unchained_macros::__private::claim_detour_address(address)?;
-            let target: #native = unsafe { ::core::mem::transmute(address) };
+            // Checked outer mutability differences preserve the native ABI.
+            // Reference validity and aliasing remain the detour author's obligation.
             let replacement: #native = #replacement;
             let detour = unsafe { ::retour::RawDetour::new(
-                target as *const (), replacement as *const (),
+                address as *const (), replacement as *const (),
             )? };
             #hook.set(detour).map_err(|_| ::retour::Error::AlreadyInitialized)?;
             let hook = #hook.get().expect("Hook was just initialized");
@@ -295,10 +360,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_const_adapts_only_the_annotated_raw_pointer() {
+    fn mutability_override_checks_only_the_annotated_raw_pointer() {
         let expanded = expand(
             quote!(Native::Call),
-            quote!(unsafe fn replacement(#[native_const] value: *mut u32, other: *mut u8) {}),
+            quote!(unsafe fn replacement(#[mutability_override] value: *mut u32, other: *mut u8) {}),
         ).unwrap();
         let file = syn::parse2::<syn::File>(expanded).unwrap();
         let functions: Vec<_> = file.items.iter().filter_map(|item| {
@@ -310,19 +375,59 @@ mod tests {
         let FnArg::Typed(native_arg) = &native.sig.inputs[0] else { unreachable!() };
         assert!(local_arg.attrs.is_empty());
         assert_eq!(local_arg.ty.to_token_stream().to_string(), "* mut u32");
-        assert_eq!(native_arg.ty.to_token_stream().to_string(), "* const u32");
-        assert!(native.block.to_token_stream().to_string().contains("value . cast_mut ()"));
+        assert_eq!(native_arg.ty.to_token_stream().to_string(), "* mut u32");
+        assert!(native.block.to_token_stream().to_string().contains("replacement (value , other)"));
         assert_eq!(native.sig.inputs[1].to_token_stream().to_string(), "other : * mut u8");
+        let text = file.to_token_stream().to_string();
+        assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
+        assert!(text.contains("__UNCHAINED_PARAMETERS_Call . 1"));
+        assert!(!text.contains("__UNCHAINED_PARAMETERS_Call . 0"));
     }
 
     #[test]
-    fn native_const_rejects_non_mutable_raw_pointers_and_invalid_annotations() {
+    fn normalization_preserves_nested_mutability_lifetimes_and_returns() {
+        let signature = syn::parse_quote! {
+            unsafe fn replacement<'a>(
+                raw: *mut &'a mut u32,
+                shared: &'a &'a mut u32,
+                exclusive: &'a mut *mut u32,
+            ) -> &'a mut u32
+        };
+        let normalized = normalized_mutability(&signature);
+        let expected: syn::Signature = syn::parse_quote! {
+            unsafe fn replacement<'a>(
+                raw: *const &'a mut u32,
+                shared: &'a &'a mut u32,
+                exclusive: &'a *mut u32,
+            ) -> &'a mut u32
+        };
+        assert_eq!(normalized.to_token_stream().to_string(), expected.to_token_stream().to_string());
+    }
+
+    #[test]
+    fn multiple_overrides_accept_both_pointer_and_reference_spellings() {
+        for ty in [quote!(*const u32), quote!(*mut u32), quote!(&u32), quote!(&mut u32)] {
+            let expanded = expand(
+                quote!(Native::Call),
+                quote!(unsafe fn replacement(
+                    #[mutability_override] first: #ty,
+                    #[mutability_override] second: #ty,
+                ) {}),
+            ).unwrap();
+            let text = expanded.to_string();
+            assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
+            assert!(!text.contains("__UNCHAINED_PARAMETERS_Call"));
+            assert!(!text.contains("# [mutability_override]"));
+            syn::parse2::<syn::File>(expanded).unwrap();
+        }
+    }
+
+    #[test]
+    fn mutability_override_rejects_values_and_invalid_annotations() {
         for function in [
-            quote!(unsafe fn replacement(#[native_const] value: &mut u32) {}),
-            quote!(unsafe fn replacement(#[native_const] value: *const u32) {}),
-            quote!(unsafe fn replacement(#[native_const] value: u32) {}),
-            quote!(unsafe fn replacement(#[native_const()] value: *mut u32) {}),
-            quote!(unsafe fn replacement(#[native_const] #[native_const] value: *mut u32) {}),
+            quote!(unsafe fn replacement(#[mutability_override] value: u32) {}),
+            quote!(unsafe fn replacement(#[mutability_override()] value: *mut u32) {}),
+            quote!(unsafe fn replacement(#[mutability_override] #[mutability_override] value: *mut u32) {}),
         ] {
             assert!(expand(quote!(Native::Call), function).is_err());
         }

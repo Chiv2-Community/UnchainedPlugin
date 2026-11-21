@@ -82,6 +82,10 @@ pub struct NativeFunction<F> {
     signature: std::marker::PhantomData<fn(F) -> F>,
 }
 
+/// Invariant signature equality witness; carries no callable address or contract.
+#[doc(hidden)]
+pub type NativeSignature<F> = std::marker::PhantomData<fn(F) -> F>;
+
 impl<F> NativeFunction<F> {
     /// # Safety
     /// Every address published by `binding` must have the native signature `F`.

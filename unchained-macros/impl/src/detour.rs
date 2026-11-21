@@ -69,7 +69,12 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         let (expanded, descriptor, helper) = super::function_detour::expand_binding(
             args, &function, self_ty, require_resolver,
         )?;
-        if !names.insert(descriptor.ident.to_string()) {
+        let normalized_name = format!("__UNCHAINED_MUTABILITY_{}", method.sig.ident);
+        let parameter_name = format!("__UNCHAINED_PARAMETERS_{}", method.sig.ident);
+        if !names.insert(descriptor.ident.to_string())
+            || !names.insert(normalized_name)
+            || !names.insert(parameter_name)
+        {
             return Err(syn::Error::new_spanned(descriptor, "generated binding metadata conflicts with an associated item"));
         }
         *method = syn::parse2(quote!(#expanded))?;
@@ -203,7 +208,7 @@ mod tests {
         let text = expanded.to_string();
         assert!(text.contains("\"GetPost_GetPlayerInventory\""));
         assert!(text.contains("__UNCHAINED_BINDING_inventory"));
-        assert!(!text.contains("PhantomData"));
+        assert!(!text.contains("PhantomData < GetPost_GetPlayerInventory >"));
         syn::parse2::<syn::File>(expanded).unwrap();
     }
 
@@ -217,6 +222,16 @@ mod tests {
             }),
             quote!(impl Native {
                 const __UNCHAINED_BINDING_call: () = ();
+                #[bind_resolved_func(Resolver)]
+                unsafe fn call(&self) {}
+            }),
+            quote!(impl Native {
+                const __UNCHAINED_MUTABILITY_call: () = ();
+                #[bind_resolved_func(Resolver)]
+                unsafe fn call(&self) {}
+            }),
+            quote!(impl Native {
+                const __UNCHAINED_PARAMETERS_call: () = ();
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
             }),

@@ -51,9 +51,14 @@ Use `bind_func_detour` on an unsafe free function.
 - Declare an instance receiver explicitly as the first argument.
 - Rust checks compatibility with invariant binding metadata; this does not
   establish the native ABI's correctness.
-- For an intentional mutable-raw-pointer adapter to a const native parameter,
-  annotate the detour's `*mut T` parameter with `#[native_const]`. This does not
-  authorize writes through a native const argument or relax other type checks.
+- For intentional outer pointer/reference mutability adaptation, annotate that
+  parameter with `#[mutability_override]`. Either direction and exact matches
+  are allowed; the native type is inferred. Pointees, nested mutability, other
+  parameters, returns, and lifetimes stay exact. Do not interchange raw pointers
+  and references. Every native argument must satisfy the detour's validity,
+  aliasing, and write-access contract; `&mut T` requires exclusive access for its
+  entire borrow, even for native `&T`. The annotation does not authorize writes
+  to shared or read-only memory.
 - Default activation is `ACTIVE`. Add a noncapturing condition only when needed.
 - Conditions run at attachment and also require global auto-activation.
   Put per-call decisions in the body.
