@@ -48,8 +48,6 @@ Runtime support:
 - The plugin discovers its executable base in
   [`startup.rs`](../src/unchained/startup.rs) and passes it to binding initialization,
   hook attachment, and patch callbacks.
-- Plugin registration invariants remain in
-  [`native_bindings_tests.rs`](../src/unchained/native_bindings_tests.rs).
 
 - Native methods use `#[runtime_bindings] impl Type` and
   `#[bind_resolved_func(Resolver)] unsafe fn name(...) {}`.
