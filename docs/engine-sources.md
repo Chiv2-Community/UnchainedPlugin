@@ -22,6 +22,9 @@ Organize native declarations by verified source/header paths.
 - SDK header paths can differ from original shipping ownership; preserve supported
   original paths as notes, not placement constraints.
 - Keep native layouts, signatures, resolvers, and bindings with their owners.
+- Mirror used C++ statics/globals as Rust statics with native spelling under
+  their declaring header; `GMalloc` belongs to `HAL/MemoryBase.h`, not
+  `HAL/UnrealMemory.h`. Keep plugin-owned state separate.
 - Establish resolver ownership before choosing a native path; do not guess a header.
 
 ### Source links

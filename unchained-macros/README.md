@@ -164,27 +164,44 @@ Assume startup initialized required bindings.
 
 ```rust,ignore
 #[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
-unsafe fn GMalloc() -> *mut FMalloc {}
+pub static GMalloc: *mut FMalloc;
 
 // GUObjectArray is an inline object, not a pointer slot.
 #[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
-unsafe fn native_guobject_array() -> *const FUObjectArray {}
+pub static GUObjectArray: *mut FUObjectArray;
 ```
 
-- A zero-argument unsafe accessor requires an explicit mode:
-  - `Value` reads a `Copy` value from the resolved slot (GMalloc's pointer).
-  - `Address` returns the resolved address as a raw pointer to an inline global,
-    without reading or copying the object's storage.
+- Mirror every C++ static/global used by the project as a Rust static, with its
+  native name and declaring-header path. This policy does not apply to plugin state.
+- Static pointer declarations require an explicit mode:
+  - `Value` reads the current pointer by value from the resolved slot on every call.
+  - `Address` uses the inline object's address without copying its storage.
+- Opt the target struct into `#[runtime_bindings(global)]` before `cpp_struct`.
+  Forwarders are inferred from its existing `vtable` declarations. For ordinary
+  public inherent methods, also mark their impl `#[runtime_bindings(global)]`.
+  Other native types do not generate proxies.
+- All proxy methods are unsafe, including forwards to safe Rust methods: native
+  storage, lifetime, synchronization, and method contracts remain the caller's duty.
+  Receiver/return lifetime relationships are preserved, including borrowed guards.
 - Startup calls `initialize_value_bindings(base, offsets)` before access.
-- Native global accessors belong in the module matching their declaring header;
+- Native globals belong in the module matching their declaring header;
   `GMalloc` is declared in `HAL/MemoryBase.h`.
 - Use the native allocator methods directly, for example
-  `unsafe { GMalloc().Malloc(size, alignment) }`; no allocator-handle wrapper is required.
+  `unsafe { GMalloc.Malloc(size, alignment) }` or `unsafe { GUObjectArray.objects() }`.
+  `unsafe { GMalloc.as_ptr() }` supplies a raw pointer for APIs that require one;
+  do not retain it across native allocator replacement.
 - Binding caches the slot address, not its current contents; binding before
   the engine populates a pointer is permitted.
 - Missing/invalid bindings and null pointer values panic with the resolver name.
   Zero scalar values remain valid. Access never returns `Option` or `Result`.
 - The caller must uphold native layout, lifetime and synchronization requirements.
+- The generated proxy owns no native object, exposes no `Deref`/`DerefMut`, and
+  never borrows UE's mutable pointer slot. Resolved addresses use the existing
+  atomic registry, without locks. Ordinary native pointer writes must not race
+  with slot reads; publishing the address atomically does not synchronize C++ writes.
+- Legacy zero-argument unsafe accessors remain supported for generic `Copy`
+  values (`Value`) and raw inline addresses (`Address`). Scalars are not given
+  implicit arithmetic or object-method forwarding.
 
 ## Direct method bindings
 

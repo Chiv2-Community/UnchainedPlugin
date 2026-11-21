@@ -24,6 +24,10 @@ Reuse an existing binding unless it is missing or there is evidence it may be wr
   before implementing the detour.
 - Do not target a resolver type, wrapper address, or generated vtable method.
   Virtual implementations need a separate resolver-backed binding.
+- Access used native globals through matching Rust statics, e.g.
+  `unsafe { GMalloc.Malloc(size, alignment) }`, not `Globals` accessors or cached
+  pointers. Keep their native names/header placement and native synchronization
+  obligations. This policy does not turn plugin-owned state into native globals.
 
 ## Choose the functional module
 

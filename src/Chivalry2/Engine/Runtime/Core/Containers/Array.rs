@@ -120,7 +120,7 @@ impl<T> TArray<T> {
         if capacity == 0 {
             return Self::new();
         }
-        unsafe { Self::with_capacity_in(capacity, GMalloc()) }
+        unsafe { Self::with_capacity_in(capacity, GMalloc.as_ptr()) }
     }
     pub fn len(&self) -> usize {
         self.num.max(0) as usize
@@ -179,7 +179,7 @@ impl<T> TArray<T> {
             .checked_add(additional)
             .expect("TArray length overflow");
         if required_cap > self.capacity() {
-            unsafe { self.reserve_in(additional, GMalloc()) };
+            unsafe { self.reserve_in(additional, GMalloc.as_ptr()) };
         }
     }
     pub fn push(&mut self, new_value: T) {
@@ -227,7 +227,7 @@ impl<T> Drop for TArray<T> {
                     self.data,
                     self.num as usize,
                 ));
-                GMalloc().Free(self.data.cast());
+                GMalloc.Free(self.data.cast());
             }
         }
     }
@@ -251,6 +251,6 @@ where
         if value.is_empty() {
             return Self::new();
         }
-        unsafe { Self::from_slice_in(value, GMalloc()) }
+        unsafe { Self::from_slice_in(value, GMalloc.as_ptr()) }
     }
 }

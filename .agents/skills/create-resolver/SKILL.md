@@ -64,6 +64,10 @@ Reuse an existing resolver when it already resolves the verified target.
   Destructor resolvers use `Class__Destructor`.
 - Preserve native capitalization: `TBLFoo`, never `TblFoo`.
 - Keep intentional integration aliases and upstream resolver names intact.
+- Mirror used C++ statics/globals as Rust static bindings under their declaring
+  header, preserving native names. Use `bind_resolved_value(..., Value)` for
+  pointer slots or `Address` for inline objects; keep the shared startup registry.
+  Resolve/cache the address, never a replaceable pointer slot's contents.
 - Resolver identifiers are cache/registration keys. For explicitly requested
   renames, update every consumer; expect fresh scans under new keys.
 - If source ownership remains unproven, follow the

@@ -3,6 +3,7 @@
 ## Contents
 
 - [Native model](#native-model)
+- [Native statics](#native-statics)
 - [Plugin replacement](#plugin-replacement)
 - [Original-call contract](#original-call-contract)
 - [Attachment lifecycle](#attachment-lifecycle)
@@ -44,6 +45,25 @@ impl FUDPPing {
     ) {}
 }
 ```
+
+## Native statics
+
+Mirror C++ static/global access for every native global used by this project.
+
+- Preserve native spelling and the declaring header, e.g. `GMalloc` in
+  `HAL/MemoryBase.rs`, `GUObjectArray` in `UObject/UObjectArray.rs`.
+- Declare `#[bind_resolved_value(Resolver, Value)] pub static GMalloc: *mut FMalloc;`.
+  Use `Address` instead for inline native storage such as `GUObjectArray`.
+- Opt the target into `runtime_bindings(global)`; forwarding signatures come from
+  existing vtable declarations or a similarly marked public inherent impl.
+- Call `unsafe { GMalloc.Malloc(size, alignment) }`, not an accessor function.
+  Every call loads the current pointer by value, including after UE replaces it.
+- Binding stores only the resolved address. It adds no locks, cached allocator,
+  ownership, `Deref`, or `DerefMut`. Raw native receivers retain pointer provenance.
+- Native storage/lifetime/method contracts and synchronization remain required.
+  Atomic address publication does not make ordinary C++ pointer writes atomic.
+  Inline registry guards still acquire the engine's critical section.
+- Keep plugin-owned state separate; see [macro usage](../unchained-macros/README.md#required-native-values).
 
 ## Plugin replacement
 

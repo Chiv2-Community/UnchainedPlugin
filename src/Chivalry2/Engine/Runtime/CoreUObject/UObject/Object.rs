@@ -6,7 +6,6 @@ use crate::Chivalry2::Engine::UStruct;
 use crate::Chivalry2::Engine::UWorld;
 use crate::Chivalry2::Engine::TCHAR;
 use crate::Chivalry2::Engine::*;
-use crate::globals;
 use std::ffi::c_void;
 use widestring::U16CString;
 
@@ -64,7 +63,7 @@ impl UObject {
     /// Engine globals must be initialized. Call on the game thread while object
     /// destruction/GC cannot race this check; this does not pin the object.
     pub unsafe fn is_live(object: *const Self) -> bool {
-        !object.is_null() && globals().guobject_array_unchecked().is_live(object.cast())
+        !object.is_null() && GUObjectArray.is_live(object.cast())
     }
 
     /// Borrow a currently registered native object after a liveness check.

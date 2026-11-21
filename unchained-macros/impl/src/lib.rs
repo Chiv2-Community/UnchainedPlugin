@@ -4,6 +4,7 @@ use quote::quote;
 use syn::{FnArg, GenericParam, ItemFn, Pat, Path, ReturnType, Type};
 mod detour;
 mod function_detour;
+mod global;
 
 /// Bind an unsafe Rust method/function to a separately declared named resolver.
 ///
@@ -35,7 +36,8 @@ pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Mark a native type for source documentation, or expose bindings in a concrete impl.
 ///
-/// Type annotations preserve the declaration and add documentation only.
+/// Type annotations add documentation only unless `global` opts into static
+/// forwarding from the existing vtable or public inherent method declarations.
 #[proc_macro_attribute]
 pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_runtime_bindings(args.into(), item.into())
@@ -43,6 +45,13 @@ pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand_runtime_bindings(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    if args.to_string() == "global" {
+        if matches!(syn::parse2::<syn::Item>(item.clone())?, syn::Item::Struct(_)) {
+            let item = expand_runtime_bindings(Tokens::new(), item)?;
+            return global::expand(item);
+        }
+        return global::expand(item);
+    }
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
     }
@@ -216,9 +225,10 @@ fn resolver_path(args: Tokens) -> syn::Result<Path> {
     Ok(resolver)
 }
 
-/// Bind a required native global to a zero-argument unsafe accessor.
-/// `Value` reads a Copy value from its slot; `Address` returns an inline object's
-/// raw address without copying it. An explicit mode is required. Pointers must be non-null.
+/// Bind a native global as a static with generated unsafe method forwarding.
+/// `Value` reloads the pointer slot on each call; `Address` uses inline storage.
+/// Targets opt in with `runtime_bindings(global)`. Legacy scalar accessors remain
+/// available; neither form borrows a mutable native pointer slot.
 #[proc_macro_attribute]
 pub fn bind_resolved_value(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_value(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
@@ -240,6 +250,35 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         return Err(syn::Error::new(Span::call_site(), "unexpected native value binding arguments"));
     }
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+    if let Ok(declaration) = syn::parse2::<syn::ForeignItemStatic>(item.clone()) {
+        if !matches!(declaration.mutability, syn::StaticMutability::None) {
+            return Err(syn::Error::new_spanned(declaration, "native global bindings must not be static mut"));
+        }
+        let Type::Ptr(pointer) = declaration.ty.as_ref() else {
+            return Err(syn::Error::new_spanned(&declaration.ty, "static global bindings require a raw native pointer type"));
+        };
+        if pointer.mutability.is_none() {
+            return Err(syn::Error::new_spanned(pointer, "static method forwarding requires *mut T; use an unsafe accessor for read-only values"));
+        }
+        let target = &pointer.elem;
+        let name = &declaration.ident;
+        let vis = &declaration.vis;
+        let attributes = &declaration.attrs;
+        let indirect = !address;
+        return Ok(quote! {
+            #(#attributes)*
+            #[allow(non_upper_case_globals)]
+            #vis static #name: <#target as ::unchained_macros::NativeGlobalTarget>::Global = {
+                let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
+                static BINDING: ::unchained_macros::ValueBinding =
+                    ::unchained_macros::ValueBinding::new(#resolver_name);
+                ::inventory::submit! {
+                    ::unchained_macros::ValueBindingRegistration { binding: &BINDING }
+                }
+                <#target as ::unchained_macros::NativeGlobalTarget>::Global::new(&BINDING, #indirect)
+            };
+        });
+    }
     let mut function: ItemFn = syn::parse2(item)?;
     let signature = &function.sig;
     if signature.unsafety.is_none() {

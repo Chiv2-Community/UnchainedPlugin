@@ -6,8 +6,6 @@ use std::ops::Deref;
 
 use std::sync::atomic::Ordering;
 
-use crate::globals;
-
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 
 #[unchained_macros::runtime_bindings]
@@ -27,9 +25,7 @@ impl FWeakObjectPtr {
             object_index: index,
             // serial allocation performs only atomic operations
             object_serial_number: unsafe {
-                globals()
-                    .guobject_array_unchecked()
-                    .allocate_serial_number(index)
+                GUObjectArray.allocate_serial_number(index)
             },
         }
     }

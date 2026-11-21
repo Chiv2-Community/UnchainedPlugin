@@ -50,6 +50,12 @@ Keep native types and virtual methods under their verified source owner.
 - Match receiver mutability and native ABI. Raw mutable receivers use
   `self: *mut Self` when reference guarantees are unavailable.
 - Keep declarations separate from plugin policy, logging hooks, and patches.
+- Used C++ statics/globals must have matching Rust static bindings under their
+  declaring header. Opt their native target into `runtime_bindings(global)`
+  before `cpp_struct`; forwarders derive from this vtable, not another signature
+  list. `GMalloc.Malloc(...)` reloads the current native pointer each call.
+  Preserve raw receivers and native lifetime/synchronization requirements;
+  do not borrow the mutable pointer slot or cache its pointee.
 
 Existing `FUniqueNetId` pattern; extend the actual declaration rather than
 creating another copy:

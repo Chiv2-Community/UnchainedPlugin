@@ -10,6 +10,17 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 type ObjectIndex = i32;
 
+/// Address of UE's inline object registry; never copy its native storage.
+///
+/// # Safety
+/// Startup must bind the process-lifetime FUObjectArray. Access through the
+/// static must follow the registry's native synchronization rules.
+#[unchained_macros::bind_resolved_value(
+    patternsleuth::resolvers::unreal::guobject_array::GUObjectArray,
+    Address
+)]
+pub static GUObjectArray: *mut FUObjectArray;
+
 #[unchained_macros::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
@@ -20,7 +31,7 @@ pub struct FUObjectCreateListener;
 #[repr(C)]
 pub struct FUObjectDeleteListener;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros::runtime_bindings(global)]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectArray {
@@ -38,18 +49,8 @@ pub struct FUObjectArray {
     master_serial_number: AtomicI32,
 }
 
+#[unchained_macros::runtime_bindings(global)]
 impl FUObjectArray {
-    /// Address of UE's inline object registry; never copy its native storage.
-    ///
-    /// # Safety
-    /// Startup must bind the process-lifetime FUObjectArray. Access through the
-    /// returned pointer must follow the registry's native synchronization rules.
-    #[unchained_macros::bind_resolved_value(
-        patternsleuth::resolvers::unreal::guobject_array::GUObjectArray,
-        Address
-    )]
-    pub(crate) unsafe fn native_guobject_array() -> *const FUObjectArray {}
-
     pub fn objects(&self) -> CriticalSectionGuard<'_, '_, FChunkedFixedUObjectArray> {
         CriticalSectionGuard::lock(&self.obj_objects_critical, &self.obj_objects)
     }

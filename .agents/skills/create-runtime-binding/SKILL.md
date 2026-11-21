@@ -104,12 +104,20 @@ Choose the binding mechanism that matches the address source.
 - **Request registry:** use `bind_resolved_request_function(Key)` under
   `runtime_bindings`. Verify the producer supplies that exact key as an RVA in
   `OffsetRegisty`; do not put an absolute address into the registry.
-- **Globals:** use `bind_resolved_value(Resolver, Address)` for an inline object's
-  address or `Value` to read a `Copy` value from a slot. These are not detour targets.
-  Declare native globals as module-level accessors under their declaring header;
-  keep Rust convenience adapters separate from the native type's methods.
-  Preserve the native name and pointer type; do not replace the global with an
-  allocator handle, owning reference, or cached copy of the slot's contents.
+- **Globals:** mirror every C++ static/global used here as a Rust static under its
+  declaring header, preserving native spelling. Use
+  `#[bind_resolved_value(Resolver, Value)] pub static GMalloc: *mut FMalloc;`
+  for pointer slots; use `Address` for inline storage such as `GUObjectArray`.
+  Opt the target struct into `runtime_bindings(global)` before `cpp_struct` to
+  infer forwards from existing vtable declarations; mark an ordinary public
+  inherent impl similarly. Do not duplicate native signature lists.
+  Call `unsafe { GMalloc.Malloc(size, alignment) }`; each call reloads the
+  current pointer by value. Use unsafe `as_ptr()` only for APIs needing a pointer.
+  No owning handle, cached pointee, slot borrow, `DerefMut`, or binding lock.
+  Native lifetime, aliasing and synchronization rules remain required; atomic
+  address publication does not synchronize ordinary C++ pointer writes.
+  Inline registry guards retain native locks. These are not detour targets.
+  Keep plugin-owned state separate. `GMalloc` belongs in `HAL/MemoryBase.rs`.
 - **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.
   Load `create-vtable`, or read the [vtable skill](../create-vtable/SKILL.md),
   before creating or extending a table declaration.

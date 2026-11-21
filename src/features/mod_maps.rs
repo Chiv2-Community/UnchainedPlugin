@@ -545,12 +545,11 @@ pub fn register_filtered_assets_sync() {
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
         let outcome = unsafe {
-            use crate::Chivalry2::Engine::{GMalloc, FString, IAssetRegistry, TArray};
+            use crate::Chivalry2::Engine::{FString, IAssetRegistry, TArray};
             IAssetRegistry::asset_registry_interface().map(|registry| {
-                let allocator = GMalloc();
                 let mut files = TArray::<FString>::default();
                 for file in batch {
-                    files.push_in(FString::from(file.as_str()), allocator);
+                    files.push(FString::from(file.as_str()));
                 }
                 registry.ScanFilesSynchronous(&files, false);
             })

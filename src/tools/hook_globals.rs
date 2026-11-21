@@ -10,22 +10,8 @@ use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
 use crate::tools::cli_args::CLIArgs;
-use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 use parking_lot::RwLock;
 
-
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct SyncFUObjectArray(&'static FUObjectArray);
-unsafe impl Sync for SyncFUObjectArray {}
-unsafe impl Send for SyncFUObjectArray {}
-
-impl std::ops::Deref for SyncFUObjectArray {
-    type Target = FUObjectArray;
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
 
 /// Pointer wrapper for things like world, gamemode
 #[repr(transparent)]
@@ -54,8 +40,6 @@ use std::sync::OnceLock;
 #[derive(Debug)]
 
 pub struct Globals {
-    // Use the wrapper here to satisfy the Sync requirement
-    guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
     pub main_thread_id: std::thread::ThreadId,
     pub world: RwLock<SyncPtr<UWorld>>,
     #[cfg(feature="server_registration")]
@@ -82,15 +66,6 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
-    pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
-        self.guobject_array.lock()
-    }
-    /// # Safety
-    /// Caller must ensure no concurrent mutable access to the object array.
-    pub unsafe fn guobject_array_unchecked(&self) -> &FUObjectArray {
-        // deref ptr to SyncFUObjectArray, then deref to FUObjectArray
-        &( *self.guobject_array.data_ptr() )
-    }
     pub fn world(&self) -> Option<*mut UWorld> {
         let ptr = self.world.read().0;
         if ptr.is_null() { None } else { Some(ptr) }
@@ -107,13 +82,7 @@ pub fn init_globals() {
         unchained_macros::current_platform(), *crate::unchained::startup::BASE_ADDR
     );
 
-    // Preinit initializes all native bindings before plugin state is constructed.
-    let guobject_array: &'static FUObjectArray =
-        unsafe { &*crate::Chivalry2::Engine::FUObjectArray::native_guobject_array() };
-
     let globals_instance = Globals {
-        // Wrap the reference in our Sync-promising struct
-        guobject_array: parking_lot::FairMutex::new(SyncFUObjectArray(guobject_array)),
         main_thread_id: std::thread::current().id(),
         world: RwLock::new(SyncPtr::default()),
         #[cfg(feature="server_registration")]

@@ -205,10 +205,15 @@ Other binding sources:
   inside `runtime_bindings`. Populate that exact key in `OffsetRegisty` with
   an RVA, not an absolute address. See the
   [OpenAPI bindings](src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
-- **Native globals:** use `bind_resolved_value(Resolver, Address)` for an inline
-  object's address, or `bind_resolved_value(Resolver, Value)` to read a `Copy`
-  value from a slot. These are not detour targets. See
-  [native value accessors](unchained-macros/README.md#required-native-values).
+- **Native globals:** mirror every C++ static/global used here as a Rust static,
+  with native spelling and declaring-header placement. Use
+  `bind_resolved_value(Resolver, Address)` for inline storage, or `Value` for a
+  pointer slot reloaded on every call. Opt the native target into
+  `runtime_bindings(global)` to infer unsafe forwards from existing declarations:
+  `unsafe { GMalloc.Malloc(size, alignment) }`. No owning handles, slot borrows,
+  cached pointees, or binding locks. Native synchronization still applies.
+  These are not detour targets; plugin-owned state is separate. See
+  [native statics](unchained-macros/README.md#required-native-values).
 
 ### Declare vtable methods
 

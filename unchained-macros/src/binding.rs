@@ -153,9 +153,42 @@ pub unsafe fn publish_function_trampolines(entry: usize, trampoline: usize) -> R
     Ok(())
 }
 
-/// Required native data address. Binding failures are fatal; accessors read
+/// Required native data address. Binding failures are fatal; generated access reads
 /// slot contents or return an inline object's address without copying it.
 pub struct ValueBinding(FunctionBinding);
+
+/// Opt-in native types with generated static method forwarding.
+pub trait NativeGlobalTarget {
+    type Global;
+}
+
+/// Address metadata only; never caches a native pointer slot's contents.
+#[doc(hidden)]
+pub struct NativeGlobalPointer {
+    binding: &'static ValueBinding,
+    indirect: bool,
+}
+
+impl NativeGlobalPointer {
+    pub const fn new(binding: &'static ValueBinding, indirect: bool) -> Self {
+        Self { binding, indirect }
+    }
+
+    /// # Safety
+    /// The native slot/object must be live and correctly typed. Slot reads must
+    /// not race with native writes. The binding's atomic address publication does
+    /// not make ordinary C++ pointer writes atomic.
+    pub unsafe fn as_ptr<T>(&self) -> *mut T {
+        let address = self.binding.address();
+        let pointer = if self.indirect {
+            unsafe { (address as *const *mut T).read() }
+        } else {
+            address as *mut T
+        };
+        assert!(!pointer.is_null(), "Required native value {} is null; the engine must initialize it before access", self.binding.name());
+        pointer
+    }
+}
 
 impl ValueBinding {
     pub const fn new(name: &'static str) -> Self { Self(FunctionBinding::new(name)) }
@@ -172,7 +205,7 @@ impl ValueBinding {
     ///
     /// # Safety
     /// The resolved slot must remain readable with the declared value's layout
-    /// for every accessor call; native writes must be synchronized with reads.
+    /// for every access; native writes must be synchronized with reads.
     pub unsafe fn initialize(&self, base: usize, offset: u64) {
         unsafe { self.0.initialize(base, offset) }.unwrap_or_else(|error| {
             panic!("Failed to bind required native value {}: {error}", self.name())

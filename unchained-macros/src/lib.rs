@@ -202,6 +202,7 @@ pub use unchained_macros_impl::bind_func_detour;
 pub use binding::{FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
 #[doc(hidden)]
 pub use binding::{NativeFunction, NativeSignature};
+pub use binding::{NativeGlobalPointer, NativeGlobalTarget};
 pub use binding::{initialize_value_bindings, is_required_value};
 pub use binding::{initialize_function_bindings, function_is_bound, require_function_bindings};
 pub use registry::{

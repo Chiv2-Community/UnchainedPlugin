@@ -10,16 +10,17 @@ use std::ffi::c_void;
 ///
 /// # Safety
 /// Startup must bind the slot. Reads must not race with native writes, and the
-/// allocator must remain live while callers use the returned pointer.
+/// current allocator must remain live throughout each forwarded call.
+/// Atomic binding publication does not synchronize native pointer replacement.
 #[unchained_macros::bind_resolved_value(
     patternsleuth::resolvers::unreal::gmalloc::GMalloc,
     Value
 )]
-pub unsafe fn GMalloc() -> *mut FMalloc {}
+pub static GMalloc: *mut FMalloc;
 
 // UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
 // Confirmed against symbolized Binned2 and Steam/EGS vtable 0x144982A90.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros::runtime_bindings(global)]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FMalloc {
