@@ -119,10 +119,12 @@ Check native correctness separately from Rust signature compatibility.
 
 - Compile the binding on the supported Windows target.
 - Test affected feature combinations, including disabled optional features.
-- Add behavioral, layout, ownership, or resolver tests where applicable.
-- Do not add tests consisting only of typed function-pointer assignments.
-- Run the contributor guide's boundary checks.
+- Test Rust helper behavior, such as conversion, traversal, collection operations,
+  and ownership handling, where applicable.
+- Do not add native signature, layout, slot, registration, resolver, or binding
+  contract tests, including typed function-pointer assignments and snapshots.
+- Verify native contracts with source/binary evidence, not synthetic fixtures
+  that merely repeat the declaration.
+- Do not recreate native-binding boundary guards or baseline tables.
 - Report the module/method path, resolver or registry key, verified ABI,
   feature gates, evidence, and test results.
-- A binding alone does not need a detour-baseline row. Add that row when a new
-  production detour is introduced.

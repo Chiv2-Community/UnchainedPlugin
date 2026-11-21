@@ -116,14 +116,16 @@ Generated virtual methods are unsafe calls through the current object's table.
 
 ## Validate
 
-Test dispatch and layout without patching the live game.
+Verify native slots and layout from binary evidence; compile the declaration.
 
 - Compile on the supported Windows target with affected features on and off.
-- Check object/base offsets and relevant native slot offsets.
-- Use local fixture tables and native-call stubs to test slot selection,
-  receiver forwarding, arguments, and results.
-- Test inherited dispatch when adding inherited slots.
-- Do not add tests consisting only of typed function-pointer assignments.
-- Run relevant native-model tests and the contributor guide's boundary checks.
+- Verify object/base offsets, slot targets, and inherited receiver adjustments
+  against the identified binary.
+- Do not add tests asserting native layouts, slot offsets, signatures, pointer
+  forwarding, or binding metadata, including synthetic vtables and typed
+  function-pointer assignments.
+- Test actual Rust helper or plugin behavior where applicable. Keep generic
+  vtable-code-generation tests separate from production native declarations.
+- Do not recreate native-binding boundary guards or baseline tables.
 - Report binary identity, source/module path, slot byte offsets, ABI evidence,
   tests, and unsupported variants.

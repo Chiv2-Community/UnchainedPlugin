@@ -65,7 +65,7 @@ Reuse an existing resolver when it already resolves the verified target.
 - Preserve native capitalization: `TBLFoo`, never `TblFoo`.
 - Keep intentional integration aliases and upstream resolver names intact.
 - Resolver identifiers are cache/registration keys. For explicitly requested
-  renames, update every consumer and baseline; expect fresh scans under new keys.
+  renames, update every consumer; expect fresh scans under new keys.
 - If source ownership remains unproven, follow the
   [native ownership guidance](../../../unchained-macros/resolvers.md); do not fabricate
   a native header or receiver.
@@ -107,8 +107,11 @@ Prove the search identifies the intended entry in the target builds.
   Use isolated fixtures or scratch outputs rather than deleting user caches.
 - Check match counts and inspect the resolved function independently.
 - Test supported storefront/build variants; report unavailable variants explicitly.
-- Add resolver fixtures for valid, missing, and ambiguous matches.
-- Run relevant resolver tests and the contributor guide's boundary/build checks.
+- Do not add fixtures or snapshots that validate individual game resolver
+  patterns, addresses, keys, registrations, or native signatures.
+- Keep generic scanner/matcher algorithm tests; they do not establish a game's
+  native contract. Validate individual resolvers with fresh binary scans.
+- Run the contributor guide's Windows build checks with affected features.
 - Report the resolver key, native module path, binary identity, entry/RVA,
   selection evidence, ABI findings, and validation limits.
 - Do not claim latest-build or cross-platform support from an older binary alone.

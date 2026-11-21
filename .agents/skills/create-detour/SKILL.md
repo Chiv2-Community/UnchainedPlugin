@@ -103,18 +103,13 @@ Make original-call and lifetime decisions explicit.
 
 ## Validate
 
-Test the behavior and keep the production hook inventory reviewed.
+Test plugin behavior; verify native contracts against the target binary.
 
-- Add a reviewed row to `unchained-macros/impl/tests/native_detours.tsv` for each
-  new production detour: target, resolver, native signature, condition, and gate.
 - Add behavioral tests for the new policy and relevant error/disabled paths.
-- Do not add redundant typed function-pointer assignment tests.
-- Run the boundary guard:
-
-  ```sh
-  cargo test --locked -p unchained-macros-impl --test native_detour_boundary
-  ```
-
+- Do not add tests or snapshots asserting production native signatures, layouts,
+  resolver keys, binding metadata, hook inventories, or declaration locations.
+- Do not recreate native-binding boundary guards or baseline tables.
+- Keep generic macro behavior tests separate from production native declarations.
 - Build/test the Windows target with affected optional features on and off.
 - Validate resolution and behavior in supported game builds; report limits.
 - Report changed module paths, original-call behavior, activation/gates, and tests.
