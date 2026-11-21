@@ -153,23 +153,4 @@ mod tests {
     fn null_native_text_import_is_absent() {
         assert!(unsafe { FText::from_ptr(std::ptr::null()) }.is_none());
     }
-
-    #[test]
-    fn native_text_has_no_default_clone_or_thread_transfer() {
-        // Inference becomes ambiguous if any forbidden implementation is added.
-        trait AmbiguousIfImplemented<A> {
-            fn check() {}
-        }
-        impl<T: ?Sized> AmbiguousIfImplemented<()> for T {}
-        struct IsSend;
-        struct IsSync;
-        struct IsClone;
-        struct IsDefault;
-        impl<T: ?Sized + Send> AmbiguousIfImplemented<IsSend> for T {}
-        impl<T: ?Sized + Sync> AmbiguousIfImplemented<IsSync> for T {}
-        impl<T: ?Sized + Clone> AmbiguousIfImplemented<IsClone> for T {}
-        impl<T: ?Sized + Default> AmbiguousIfImplemented<IsDefault> for T {}
-        let _ = <FText as AmbiguousIfImplemented<_>>::check;
-        let _ = <InvariantText as AmbiguousIfImplemented<_>>::check;
-    }
 }

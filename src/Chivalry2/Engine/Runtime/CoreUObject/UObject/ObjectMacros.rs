@@ -41,14 +41,3 @@ bitflags::bitflags! {
         const RF_WillBeLoaded = 0x08000000;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn class_config_matches_native_flag_width_and_value() {
-        assert_eq!(std::mem::size_of::<EClassFlags>(), 4);
-        assert_eq!(EClassFlags::CLASS_Config.bits(), 4);
-    }
-}

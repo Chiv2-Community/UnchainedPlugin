@@ -108,3 +108,17 @@ pub(crate) unsafe fn with_backend_request(
         Err(panic) => std::panic::resume_unwind(panic),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_request_pointers_do_not_call_native_code_or_prepare_overrides() {
+        let client = std::ptr::null_mut::<OpenAPIClientAPI>();
+        let request = std::ptr::null_mut::<GenericRequest>();
+        let result =
+            unsafe { with_backend_request(client, request, || panic!("must not call native code")) };
+        assert!(result.is_null());
+    }
+}

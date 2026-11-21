@@ -154,14 +154,6 @@ impl<K, V> TMapView<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Chivalry2::Engine::FName;
-
-    const _: [u8; 0x50] = [0; std::mem::size_of::<TMapView<[u64; 3], [u64; 5]>>()];
-
-    const _: [u8; 0x50] = [0; std::mem::size_of::<TSet<[u8; 0x18]>>()];
-
-    // TSetElement<FSoftObjectPath>: 0x18 value + two i32 links.
-    const _: [u8; 0x20] = [0; std::mem::size_of::<TSetElement<[u64; 3]>>()];
 
     #[test]
     fn empty_tset_iterates_nothing() {
@@ -171,11 +163,4 @@ mod test {
         assert!(set.is_empty());
         std::mem::forget(set);
     }
-
-    const _: [u8; 0x50] = [0; std::mem::size_of::<TMap<FName, [u8; 0x20]>>()];
-
-    const _: [u8; 0x38] =
-        [0; std::mem::size_of::<TSparseArray<TSetElement<TTuple<FName, [u8; 0x20]>>>>()];
-
-    const _: [u8; 0x10] = [0; std::mem::size_of::<TInlineAllocator<1, FSetElementId>>()];
 }

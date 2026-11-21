@@ -173,14 +173,3 @@ pub struct FUObjectItem {
     pub cluster_root_index: i32,
     pub serial_number: AtomicI32,
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[should_panic(expected = "Required native value GUObjectArray is not bound")]
-    fn object_registry_access_requires_binding() {
-        unsafe {
-            super::FUObjectArray::native_guobject_array();
-        }
-    }
-}

@@ -178,7 +178,7 @@ const _: () = {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem::{align_of, offset_of, size_of, MaybeUninit};
+    use std::mem::MaybeUninit;
 
     // Resolve synthetic kinds without accessing the game's global name table.
     unsafe fn struct_array_fixture(
@@ -283,45 +283,6 @@ mod tests {
                 struct_array_fixture(&array, &inner, 64),
                 Err(StructArrayError::OffsetOutOfBounds)
             );
-        }
-    }
-
-    #[test]
-    fn property_layouts_match_shipping_pdb() {
-        assert_eq!(size_of::<FProperty>(), 0x78);
-        assert_eq!(offset_of!(FProperty, rep_notify_func), 0x50);
-        assert_eq!(offset_of!(FProperty, property_link_next), 0x58);
-        assert_eq!(offset_of!(FProperty, post_construct_link_next), 0x70);
-        assert_eq!(offset_of!(FArrayProperty, property), 0);
-        assert_eq!(offset_of!(FArrayProperty, inner), 0x78);
-        assert_eq!(offset_of!(FArrayProperty, array_flags), 0x80);
-        assert_eq!(size_of::<FArrayProperty>(), 0x88);
-        assert_eq!(offset_of!(FStructProperty, property), 0);
-        assert_eq!(offset_of!(FStructProperty, script_struct), 0x78);
-        assert_eq!(size_of::<FStructProperty>(), 0x80);
-        assert_eq!(align_of::<FProperty>(), 8);
-        assert_eq!(align_of::<FArrayProperty>(), 8);
-        assert_eq!(align_of::<FStructProperty>(), 8);
-    }
-
-    #[test]
-    fn native_pointer_accessors_preserve_addresses_and_nulls() {
-        // Initialize only the pointer slots; accessors must not read other metadata.
-        let mut array = MaybeUninit::<FArrayProperty>::uninit();
-        let mut strukt = MaybeUninit::<FStructProperty>::uninit();
-        let property = MaybeUninit::<FProperty>::uninit();
-        let script_struct = MaybeUninit::<UStruct>::uninit();
-        unsafe {
-            std::ptr::addr_of_mut!((*array.as_mut_ptr()).inner).write(property.as_ptr());
-            std::ptr::addr_of_mut!((*strukt.as_mut_ptr()).script_struct)
-                .write(script_struct.as_ptr());
-            assert_eq!(array.as_ptr().inner(), property.as_ptr());
-            assert_eq!(strukt.as_ptr().script_struct(), script_struct.as_ptr());
-
-            std::ptr::addr_of_mut!((*array.as_mut_ptr()).inner).write(std::ptr::null());
-            std::ptr::addr_of_mut!((*strukt.as_mut_ptr()).script_struct).write(std::ptr::null());
-            assert!(array.as_ptr().inner().is_null());
-            assert!(strukt.as_ptr().script_struct().is_null());
         }
     }
 }

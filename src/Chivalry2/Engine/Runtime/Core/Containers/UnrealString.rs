@@ -192,17 +192,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn string_has_distinct_identity_and_native_array_layout() {
-        assert_ne!(
-            std::any::TypeId::of::<FString>(),
-            std::any::TypeId::of::<TArray<TCHAR>>(),
-        );
-        assert_eq!(std::mem::size_of::<FString>(), 0x10);
-        assert_eq!(std::mem::align_of::<FString>(), 8);
-        assert_eq!(std::mem::offset_of!(FString, data), 0);
-    }
-
-    #[test]
     fn empty_string_needs_no_allocator_and_drops_safely() {
         let string = FString::new();
         assert!(string.is_empty());

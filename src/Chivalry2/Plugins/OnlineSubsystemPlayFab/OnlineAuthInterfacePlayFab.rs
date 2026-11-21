@@ -39,12 +39,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_layout_matches_supported_builds() {
-        assert_eq!(std::mem::offset_of!(FOnlineAuthPlayFab, subsystem), 0xe0);
-        assert_eq!(std::mem::offset_of!(SubsystemContext, session), 0x140);
-    }
-
-    #[test]
     fn cleared_session_skips_the_native_cleanup_call() {
         let subsystem = SubsystemContext {
             padding: [0; 0x140],

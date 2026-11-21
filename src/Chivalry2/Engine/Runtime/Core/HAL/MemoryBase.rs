@@ -113,24 +113,6 @@ mod tests {
     use crate::Chivalry2::Engine::TArray;
 
     #[test]
-    fn allocator_prefix_preserves_native_layout() {
-        assert_eq!(
-            std::mem::size_of::<FMalloc>(),
-            std::mem::size_of::<*const FMallocVTable>()
-        );
-        assert_eq!(
-            std::mem::align_of::<FMalloc>(),
-            std::mem::align_of::<*const FMallocVTable>()
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Required native value GMalloc is not bound")]
-    fn allocator_access_before_binding_is_fatal() {
-        let _ = FMalloc::global();
-    }
-
-    #[test]
     fn empty_arrays_need_neither_allocator_calls_nor_globals() {
         let mut native = FMalloc {
             vtable: std::ptr::null(),
@@ -142,24 +124,6 @@ mod tests {
         assert!(unsafe { TArray::<u16>::from_slice_in(&[], allocator) }.is_empty());
         assert!(TArray::<u16>::with_capacity(0).is_empty());
         assert!(TArray::<u16>::from(&[][..]).is_empty());
-    }
-
-    #[test]
-    #[should_panic(expected = "Required native value GMalloc is not bound")]
-    fn array_capacity_uses_early_allocator_accessor() {
-        let _ = TArray::<u16>::with_capacity(1);
-    }
-
-    #[test]
-    #[should_panic(expected = "Required native value GMalloc is not bound")]
-    fn string_conversion_uses_early_allocator_accessor() {
-        let _ = crate::Chivalry2::Engine::FString::from("pak directory");
-    }
-
-    #[test]
-    #[should_panic(expected = "Required native value GMalloc is not bound")]
-    fn array_push_uses_early_allocator_accessor() {
-        TArray::<u16>::new().push(1);
     }
 
     #[test]

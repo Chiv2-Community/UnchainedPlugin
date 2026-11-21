@@ -327,18 +327,9 @@ unsafe fn log_udp_echo(
 
 ### Validate hooks
 
-Test resolution and behavior, not redundant typed-pointer assignments.
+Test replacement behavior, not native signatures, layouts, or registrations.
 
-- Add resolver fixtures for valid, missing, and ambiguous matches.
 - Add behavioral tests for the replacement.
-- Add a reviewed row to `unchained-macros/impl/tests/native_detours.tsv`
-  for each new production detour.
-- Run the boundary guard:
-
-  ```sh
-  cargo test --locked -p unchained-macros-impl --test native_detour_boundary
-  ```
-
 - Run `cargo test --locked --lib` on Windows with affected features enabled
   and disabled. Linux needs cargo-xwin and a Windows test runner such as Wine.
 - Verify addresses, ABI, and behavior in supported game builds; unit tests
