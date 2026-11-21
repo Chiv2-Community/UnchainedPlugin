@@ -18,14 +18,14 @@ impl Command<ListModsArgs> for ListModsCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: ListModsArgs, _command: &CommandRequest) {
-        use crate::{resolvers::unchained_integration::run_on_game_thread};
         let mm_lock = || globals().mod_manager.lock().unwrap();
 
         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
             let (tx, rx) = mpsc::channel();
             sinfo!("Starting scan!");
 
-            run_on_game_thread(move || {
+        use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
+        run_on_game_thread(move || {
                 if let Some(mm) = mm_lock().as_ref() {
                     mm.scan_asset_registry();
                     let _ = tx.send(());

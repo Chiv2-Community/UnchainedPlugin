@@ -167,7 +167,7 @@ with these fields:
 Closures use their enclosing function. Missing function metadata displays `???`.
 Defaults use `{fn:<16}`: left-aligned with a minimum width of 16 characters.
 `{sm}` abbreviates parent segments by word initials:
-`UnchainedPlugin::resolvers::messages` becomes `UP::r::messages`.
+`UnchainedPlugin::features::native_chat` becomes `UP::f::native_chat`.
 Both fields support log4rs nesting, escaping, alignment, and truncation.
 The extensions apply to `pattern` and `palette` encoders in console, file, and
 rolling-file appenders.
@@ -295,18 +295,21 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::modules::mod_list` | Mod-list scans. |
 | `UnchainedPlugin::modules::vote` | Vote cancellation. |
 | `UnchainedPlugin::modules::votes` | Vote actions. |
-| `UnchainedPlugin::resolvers::admin_control` | Native administration commands. |
-| `UnchainedPlugin::resolvers::asset_loading` | Save-game loading and saving. |
-| `UnchainedPlugin::resolvers::asset_registry` | Asset and object lookups. |
-| `UnchainedPlugin::resolvers::backend_hooks` | Ban checks, player connections, and departures. |
-| `UnchainedPlugin::resolvers::config_overrides` | Profile selection in verbose builds. |
-| `UnchainedPlugin::resolvers::desync` | Blocked events and dedicated-server compatibility. |
-| `UnchainedPlugin::resolvers::etc_hooks` | Travel, game calls, and verbose override warnings. |
-| `UnchainedPlugin::resolvers::gameplay` | Combat validation and damage/kill TRACE details. |
-| `UnchainedPlugin::resolvers::getpost_requests` | Backend request handling. |
-| `UnchainedPlugin::resolvers::messages` | Native console output and invalid native chat channels. |
-| `UnchainedPlugin::resolvers::messages::kismet_log` | Blueprint execution messages in `kismet_log` builds. |
-| `UnchainedPlugin::resolvers::unchained_integration` | Engine startup, game-thread jobs, maps, and match state. |
+| `UnchainedPlugin::unchained::patches::diagnostics` | Game diagnostics, console commands/output, save games, and optional Blueprint messages. |
+| `UnchainedPlugin::unchained::patches::loose_assets` | Optional loose-asset loading. |
+| `UnchainedPlugin::features::mod_asset_registry` | Mod Asset Registry merging. |
+| `UnchainedPlugin::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectGlobals` | Native object lookups. |
+| `UnchainedPlugin::features::config_overrides` | Profile selection in verbose builds. |
+| `UnchainedPlugin::unchained::patches::config_overrides` | Profile-specific native config loading. |
+| `UnchainedPlugin::unchained::patches::hosting` | Ban checks, player connections, registration shutdown, blocked Blueprint events, recursion limits, and listen-server compatibility. |
+| `UnchainedPlugin::unchained::patches::messages` | Chat capture and broadcast presentation. |
+| `UnchainedPlugin::unchained::patches::damage_events` | Combat validation and damage/kill TRACE details. |
+| `UnchainedPlugin::unchained::patches::backend_hooks` | Authentication cleanup, server-browser request routing, endpoint overrides, and request-token handling. |
+| `UnchainedPlugin::unchained::patches::frontend_patches` | Frontend startup options and mod asset initialization. |
+| `UnchainedPlugin::unchained::patches::unchained_integration` | Game-thread jobs, map changes, and match state. |
+| `UnchainedPlugin::unchained::patches::networking` | Travel and IPv6 browser/ping compatibility. |
+| `UnchainedPlugin::unchained::patches::pak_mount` | Mounted-pak tracking. |
+| `UnchainedPlugin::unchained::patches::custom_loading_screens` | Map-marker loading-screen injection. |
 | `UnchainedPlugin::scan` | Signatures, builds, and discovered offsets. |
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |

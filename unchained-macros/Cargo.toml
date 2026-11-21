@@ -1,0 +1,20 @@
+[package]
+name = "unchained-macros"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+binary_bloodhound = { workspace = true }
+unchained-macros-impl = { path = "impl" }
+inventory = "0.3.14"
+patternsleuth = { workspace = true }
+serde = { workspace = true }
+paste = "1.0"
+log = "0.4"
+
+[dev-dependencies]
+object = "0.32.2"
+test-case = "3.3"
+
+[target.'cfg(windows)'.dev-dependencies]
+retour = { version = "=0.4.0-alpha.4" }

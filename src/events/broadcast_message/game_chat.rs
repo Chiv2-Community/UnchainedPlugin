@@ -57,7 +57,7 @@ impl Subscriber<BroadcastMessage> for InGameChatBroadcastSubscriber {
     }
 
     async fn on_event(&mut self, event: &BroadcastMessage) {
-        crate::game::chivalry2::send_ingame_message(Self::encode(event), None);
+        crate::features::native_chat::send_ingame_message(Self::encode(event), None);
     }
 }
 

@@ -2,27 +2,33 @@ use std::sync::Mutex;
 #[allow(unused_imports)]
 use widestring::U16CString;
 use crate::features::Mod;
-use crate::game::chivalry2::EChatType;
-use crate::game::engine::{FActorSpawnParameters, FRotator, FText, TSoftClassPtr, get_assets_by_class};
-use crate::game::unchained::{ArgonSDKModBase, DA_ModMarker_C, UModLoaderSettings_C, V2MarkerOffsets};
-#[allow(unused_imports)]
-use crate::resolvers::asset_registry::o_FNameCtorWchar;
+use crate::Chivalry2::TBL::{UTBLSystemLibrary, EChatType::EChatType};
+use crate::Chivalry2::Engine::FActorSpawnParameters;
+use crate::Chivalry2::Engine::FRotator;
+use crate::Chivalry2::Engine::TSoftClassPtr;
+use crate::Chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry};
+use crate::unchained::blueprints::mod_assets::ArgonSDKModBase;
+use crate::unchained::blueprints::mod_assets::DA_ModMarker_C;
+use crate::unchained::blueprints::mod_assets::UModLoaderSettings_C;
+use crate::unchained::blueprints::mod_assets::V2MarkerOffsets;
 use crate::tools::hook_globals::cli_args;
 #[cfg(feature="mod_management")]
 use crate::tools::hook_globals::globals;
-use crate::ue::{AsUObject, FString, FVector, TArray, UClass, UObject};
-use crate::resolvers::{asset_registry::*, asset_loading::*};
+use crate::Chivalry2::Engine::AsUObject;
+use crate::Chivalry2::Engine::FString;
+use crate::Chivalry2::Engine::FVector;
+use crate::Chivalry2::Engine::TArray;
+use crate::Chivalry2::Engine::UClass;
+use crate::Chivalry2::Engine::UObject;
+use crate::Chivalry2::Engine::UGameplayStatics;
 #[allow(unused_imports)]
 use serde::Serialize;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
-use crate::game::engine::get_uobject_from_path;
+
 use std::collections::{HashMap, HashSet};
-use crate::resolvers::etc_hooks::*;
-use crate::game::engine::ESpawnActorCollisionHandlingMethod::*;
-use crate::resolvers::admin_control::o_FText_AsCultureInvariant;
-use crate::resolvers::messages::o_BroadcastLocalizedChat;
+use crate::Chivalry2::Engine::ESpawnActorCollisionHandlingMethod::*;
 
 
 
@@ -47,7 +53,7 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 //             let mut mods: Vec<&Mod> = mod_map.values().collect();
 //             mods.sort_by(|a, b| a.name.cmp(&b.name));
 //             unsafe {
-//                 // let obj = get_uobject_from_path(args.first().unwrap(), false);
+//                 // let obj = UObject::get_uobject_from_path(args.first().unwrap(), false);
 //                 let id = args.first().unwrap().parse::<usize>().expect("Not a valid number");
 //                 if id > mods.len() {
 //                     sinfo!("{:#?}", mods);
@@ -56,7 +62,7 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 //                 }
 //                 let cur_mod = mods.get(id).expect("Not a valid mod");
 //                 sinfo!("Spawning {} {}", id, cur_mod.name);
-//                 let obj = get_uobject_from_path(cur_mod.object_path.as_str(), false);
+//                 let obj = UObject::get_uobject_from_path(cur_mod.object_path.as_str(), false);
 //                 if !obj.is_null() {
 //                     let mod_class = (&*obj).uobject_base_utility.uobject_base.class_private;
 //                     mm.spawn_mod_actor(obj as *mut UClass);
@@ -75,7 +81,7 @@ use crate::resolvers::messages::o_BroadcastLocalizedChat;
 //     {},
 //     false,
 //     |args| {
-//         use crate::{resolvers::unchained_integration::run_on_game_thread};
+//         use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
 //         let mm_lock = || globals().mod_manager.lock().unwrap();
 
 //         if mm_lock().as_ref().is_some_and(|mm| mm.get_available().is_empty()) {
@@ -155,9 +161,17 @@ const MOD_MARKER_V2_CLASS: &str = "DA_ModMarker_V2_C";
 /// Object paths of every asset of `class_name` in the Asset Registry. A failed
 /// query means no marker of that class is installed, which is not an error.
 unsafe fn marker_object_paths(class_name: &str) -> Vec<String> {
-    let Ok(assets) = get_assets_by_class(class_name.into()) else {
+    let Ok(registry) = IAssetRegistry::asset_registry_interface() else {
         return Vec::new();
     };
+    let mut assets = TArray::<FAssetData>::default();
+    if !registry.GetAssetsByClass(
+        FName::with_type(class_name, EFindName::Find),
+        &mut assets,
+        true,
+    ) {
+        return Vec::new();
+    }
     assets
         .as_slice()
         .iter()
@@ -172,14 +186,15 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
     if class_ptr.is_null() {
         return None;
     }
-    let cdo_new = CALL_ORIGINAL_SAFE!(GetDefaultObject(class_ptr, true)).ok()?;
+    unchained_macros::require_function_bindings(&["UClass__GetDefaultObject"]).ok()?;
+    let cdo_new = class_ptr.GetDefaultObject(true);
     if cdo_new.is_null() {
         return None;
     }
 
     let cdo = &*(cdo_new as *mut ArgonSDKModBase);
     let class_obj = &(*class_ptr).ustruct.ufield.uobject;
-    let asset_path = class_obj.uobject_base_utility.uobject_base.get_path_name(None);
+    let asset_path = class_obj.uobject_base_utility.get_path_name(None);
 
     let mod_entry = Mod {
         name: cdo.mod_name.to_string(),
@@ -194,7 +209,8 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 /// is of another class.
 fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UObject, String> {
     let wide_path = U16CString::from_str(path).map_err(|error| error.to_string())?;
-    CALL_ORIGINAL_SAFE!(StaticLoadObject(
+    unchained_macros::require_function_bindings(&["StaticLoadObject"])?;
+    Ok(unsafe { crate::Chivalry2::Engine::StaticLoadObject(
         object_class,
         std::ptr::null_mut(),
         wide_path.as_ptr(),
@@ -203,7 +219,7 @@ fn load_object_of_class(object_class: *mut UClass, path: &str) -> Result<*mut UO
         std::ptr::null_mut(),
         false,
         std::ptr::null_mut()
-    ))
+    ) })
 }
 
 /// Combines both marker scans; a mod actor listed by both versions keeps its
@@ -251,7 +267,7 @@ impl ModManager {
     /// Get Mod base class for Actor lookup
     pub fn get_mod_base_class(&self) -> *mut UClass {
         let base_class_name = "/Game/Mods/ArgonSDK/Mods/ArgonSDKModBase.ArgonSDKModBase_C"; 
-        let base_class_ptr = unsafe { get_uobject_from_path(base_class_name, false) as *mut UClass };
+        let base_class_ptr = unsafe { UObject::get_uobject_from_path(base_class_name, false) as *mut UClass };
 
         match base_class_ptr.is_null() {
             true => std::ptr::null_mut(),
@@ -296,7 +312,7 @@ impl ModManager {
     unsafe fn scan_v1_markers(&self) -> HashMap<String, Mod> {
         let mut found: HashMap<String, Mod> = HashMap::new();
         for path in marker_object_paths(MOD_MARKER_V1_CLASS) {
-            let mobj = get_uobject_from_path(&path, true);
+            let mobj = UObject::get_uobject_from_path(&path, true);
             if mobj.is_null() { continue; }
 
             let mod_struct = mobj as *mut DA_ModMarker_C;
@@ -317,7 +333,7 @@ impl ModManager {
         if marker_paths.is_empty() {
             return found;
         }
-        let class_type = get_uobject_from_path("/Script/CoreUObject.Class", false) as *mut UClass;
+        let class_type = UObject::get_uobject_from_path("/Script/CoreUObject.Class", false) as *mut UClass;
         if class_type.is_null() {
             serror!("Class type not found; cannot resolve V2 marker mod classes");
             return found;
@@ -329,7 +345,7 @@ impl ModManager {
         // verbose line per marker.
         let mut marker_summary: Vec<String> = Vec::new();
         for path in &marker_paths {
-            let marker = get_uobject_from_path(path, true);
+            let marker = UObject::get_uobject_from_path(path, true);
             if marker.is_null() {
                 swarn!("Could not load V2 marker {}", path);
                 continue;
@@ -410,11 +426,12 @@ impl ModManager {
 
         let mut res_arr = TArray::<*mut UObject>::default();
         
-        CALL_ORIGINAL_SAFE!(GetAllActorsOfClass(
+        unchained_macros::require_function_bindings(&["UGameplayStatics__GetAllActorsOfClass"])?;
+        unsafe { UGameplayStatics::GetAllActorsOfClass(
             world.as_uobject(),
             mod_base_class,
             &mut res_arr
-        ))?;
+        ); }
 
         let actors = res_arr.as_slice();
         
@@ -427,7 +444,7 @@ impl ModManager {
                 let class_ptr = (*raw_ptr).uobject_base_utility.uobject_base.class_private;
                 if !class_ptr.is_null() {
                     let asset_path = (*class_ptr).ustruct.ufield.uobject
-                        .uobject_base_utility.uobject_base
+                        .uobject_base_utility
                         .get_path_name(None);
                     
                     active_mods_local.insert(asset_path);
@@ -450,8 +467,9 @@ impl ModManager {
     /// Spawning needs the game thread; when called from another thread this
     /// queues itself and returns before the actor exists.
     pub unsafe fn spawn_mod_actor(&self, mod_class: *mut UClass) {
-        use crate::resolvers::unchained_integration::{in_game_thread_job, run_on_game_thread};
-
+        use crate::unchained::patches::unchained_integration::game_thread::{
+            in_game_thread_job, run_on_game_thread,
+        };
         if mod_class.is_null() {
             serror!("mod class was null; skipping actor spawn");
             return;
@@ -478,19 +496,16 @@ impl ModManager {
         let mut rot: FRotator = FRotator::ZERO;
         let mut params: FActorSpawnParameters = FActorSpawnParameters::new().
             with_spawn_mode(AdjustIfPossibleButAlwaysSpawn);
-        let new_actor = match CALL_ORIGINAL_SAFE!(SpawnActor(
-            world,
+        if let Err(error) = unchained_macros::require_function_bindings(&["UWorld__SpawnActor"]) {
+            serror!("Cannot spawn mod actor: {}", error);
+            return;
+        }
+        let new_actor = world.SpawnActor(
             mod_class,
             &mut loc,
             &mut rot,
             &mut params
-        )) {
-            Ok(actor) => actor,
-            Err(error) => {
-                serror!("Cannot spawn mod actor: {}", error);
-                return;
-            }
-        };
+        );
 
         unsafe {
             let actor_obj = new_actor as *mut UObject;
@@ -505,35 +520,25 @@ impl ModManager {
     }
 
     /// Best-effort admin chat after a spawn; every step may be unavailable
-    /// (no world, no game mode in the menu, detour not installed).
+    /// (no world, no game mode in the menu, binding not initialized).
     fn broadcast_spawn_confirmation(&self) {
         let Some(world) = globals().world() else {
             swarn!("globals.world missing; skipping spawn confirmation chat");
             return;
         };
-        let mut txt = FText::default();
-        let mut message = FString::from("Spawned new Mod from console");
-        let converted = CALL_ORIGINAL_SAFE!(FText_AsCultureInvariant(&mut txt, &mut message));
-        // The engine may take ownership of the string (by-value overload), so
-        // don't free it a second time; at worst this leaks a short string.
-        std::mem::forget(message);
-        let text = match converted {
-            Ok(text) if !text.is_null() => text,
-            _ => {
-                swarn!("FText conversion unavailable; skipping spawn confirmation chat");
-                return;
-            }
-        };
-        let game_mode = match CALL_ORIGINAL_SAFE!(GetTBLGameMode(world.as_uobject())) {
-            Ok(game_mode) if !game_mode.is_null() => game_mode,
-            _ => {
-                swarn!("No game mode; skipping spawn confirmation chat");
-                return;
-            }
-        };
-        if let Err(error) = CALL_ORIGINAL_SAFE!(BroadcastLocalizedChat(game_mode, text, EChatType::Admin)) {
+        if let Err(error) = unchained_macros::require_function_bindings(&[
+            "UTBLSystemLibrary__GetTBLGameMode", "ATBLGameMode__BroadcastLocalizedChat",
+        ]) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
+            return;
         }
+        let text = crate::Chivalry2::Engine::InvariantText::new("Spawned new Mod from console");
+        let game_mode = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
+        if game_mode.is_null() {
+            swarn!("No game mode; skipping spawn confirmation chat");
+            return;
+        }
+        unsafe { game_mode.BroadcastLocalizedChat(text.as_ptr(), EChatType::Admin); }
     }
 
     pub fn destroy_mod_actor(&self, _actor_ptr: *mut UObject) {
@@ -554,8 +559,12 @@ impl ModManager {
     pub fn update_save_game(&self) {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
-        let mut settings_fstring = FString::from(settings_file);
-        let save_game_ptr = TRY_CALL_ORIGINAL!(LoadGameFromSlot(&mut settings_fstring, 0)) ;
+        let settings_fstring = FString::from(settings_file);
+        if !unchained_macros::detour_is_initialized("UGameplayStatics__LoadGameFromSlot") {
+            swarn!("Detour LoadGameFromSlot is not initialized. Skipping.");
+            return;
+        }
+        let save_game_ptr = unsafe { UGameplayStatics::LoadGameFromSlot(&settings_fstring, 0) };
         if save_game_ptr.is_null() {
             serror!("save game is null");
             return;
@@ -568,7 +577,7 @@ impl ModManager {
         // Loading with a Class filter rejects ordinary assets as well as stale paths.
         let server_mods = cli_args().server_mods.as_deref();
         let class_type = if server_mods.is_some_and(|mods| !mods.is_empty()) {
-            let class_type = unsafe { get_uobject_from_path("/Script/CoreUObject.Class", false) };
+            let class_type = unsafe { UObject::get_uobject_from_path("/Script/CoreUObject.Class", false) };
             if class_type.is_null() {
                 serror!("Class type not found; cannot validate any mods");
             }
@@ -602,7 +611,11 @@ impl ModManager {
         // live-world actor scan is unreliable at init (world may be None and
         // the mod actors are not spawned yet).
         self.set_active_paths(enabled);
-        let res = TRY_CALL_ORIGINAL!(SaveGameToSlot(save_game_ptr, &mut settings_fstring, 0));
+        if !unchained_macros::detour_is_initialized("UGameplayStatics__SaveGameToSlot") {
+            swarn!("Detour SaveGameToSlot is not initialized. Skipping.");
+            return;
+        }
+        let res = unsafe { UGameplayStatics::SaveGameToSlot(save_game_ptr, &settings_fstring, 0) };
         if res {
             sinfo!("Modloader settings saved: {res}");
         }

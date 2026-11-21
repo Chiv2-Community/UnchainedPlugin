@@ -453,7 +453,8 @@ pub fn auto_register_all_assets() {
     log_registered_markers();
     // Reading the map markers loads their assets, so it runs as its own game
     // thread job on a later tick rather than inside the registration call.
-    crate::resolvers::unchained_integration::run_on_game_thread(|| {
+    use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
+    run_on_game_thread(|| {
         unsafe { crate::features::map_markers::scan_map_markers() };
     });
 }
@@ -468,8 +469,21 @@ fn log_registered_markers() {
         .iter()
         .map(|class_name| {
             // A failed query means the registry has no asset of that class.
-            let count = unsafe { crate::game::engine::get_assets_by_class(class_name.to_string()) }
-                .map(|assets| assets.len())
+            let count = unsafe {
+                use crate::Chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+                IAssetRegistry::asset_registry_interface().map(|registry| {
+                    let mut assets = TArray::<FAssetData>::default();
+                    if registry.GetAssetsByClass(
+                        FName::with_type(class_name, EFindName::Find),
+                        &mut assets,
+                        true,
+                    ) {
+                        assets.len()
+                    } else {
+                        0
+                    }
+                })
+            }
                 .unwrap_or(0);
             format!("{count} {class_name}")
         })
@@ -530,7 +544,17 @@ pub fn register_filtered_assets_sync() {
     let chunk = crate::cli_args().mod_map_batch;
     let mut registered = 0usize;
     for (i, batch) in registration_batches(&file_paths, chunk).iter().enumerate() {
-        if let Err(e) = unsafe { crate::game::engine::scan_files_synchronous(batch) } {
+        let outcome = unsafe {
+            use crate::Chivalry2::Engine::{FString, IAssetRegistry, TArray};
+            IAssetRegistry::asset_registry_interface().map(|registry| {
+                let mut files = TArray::<FString>::default();
+                for file in batch {
+                    files.push(FString::from(file.as_str()));
+                }
+                registry.ScanFilesSynchronous(&files, false);
+            })
+        };
+        if let Err(e) = outcome {
             serror!("Synchronous filtered batch {} failed: {}", i, e);
             return;
         }
@@ -593,7 +617,8 @@ fn filter_mounted_paks(mounted: &[String]) -> Vec<PathBuf> {
 /// paks. Falls back to a `Content/Paks` scan if no mounts were captured (e.g. the
 /// `Mount` resolver isn't populated yet).
 fn discovery_pak_paths() -> Vec<PathBuf> {
-    let mounted = crate::resolvers::pak_mount::mounted_pak_filenames();
+    use crate::unchained::patches::pak_mount::mounted_pak_filenames;
+    let mounted = mounted_pak_filenames();
     let fallback = || {
         default_paks_dir().and_then(|d| list_pak_files(&d).ok()).unwrap_or_default()
     };

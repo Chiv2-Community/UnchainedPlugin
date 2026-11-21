@@ -9,7 +9,7 @@ fn rva_to_va(rva: u32, module_base: usize) -> usize {
     module_base + rva as usize
 }
 
-/// List all functions in the PDB with their RVA and VA
+/// List all functions in the symbol file with their RVA and VA.
 pub fn list_functions_with_addresses(pdb_path: &str, module_base: usize) -> pdb::Result<()> {
     let file = File::open(pdb_path)?;
     let mut pdb = PDB::open(file)?;
@@ -45,7 +45,7 @@ pub fn get_function_name_from_rva(pdb_path: &str, target_rva: u32) -> pdb::Resul
             if data.function {
                 let rva = data.offset.to_rva(&address_map).unwrap_or_default();
 
-                // PDB does not store sizes reliably, so assume exact match for now
+                // Symbol sizes are unreliable, so assume an exact match for now.
                 if rva == pdb::Rva(target_rva) {
                     return Ok(Some(data.name.to_string().into()));
                 }

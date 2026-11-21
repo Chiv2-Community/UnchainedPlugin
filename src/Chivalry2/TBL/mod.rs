@@ -1,0 +1,39 @@
+//! Native sources: TBL/Source/TBL.
+
+pub use DamageSource::*;
+pub use DamageTakenEvent::FDamageTakenEvent;
+pub use DeathDamageTakenEvent::*;
+pub use OwnershipResponse::FOwnershipResponse;
+pub use TBLCharacter::*;
+pub use TBLCharacterBase::*;
+pub use TBLGameInstance::UTBLGameInstance;
+pub use TBLGameMode::ATBLGameMode;
+pub use TBLGameState::*;
+pub use TBLPlayerController::*;
+pub use TBLPlayerState::*;
+pub use TBLSystemLibrary::UTBLSystemLibrary;
+
+pub mod DamageSource;
+pub mod DamageTakenEvent;
+pub mod DeathDamageTakenEvent;
+pub mod EChatType;
+pub mod EFaction;
+pub mod EKillReason;
+pub mod OwnershipResponse;
+pub mod TBLCharacter;
+#[cfg(feature = "move-autonomous-desync")]
+pub mod TBLCharacterAnimInstance;
+pub mod TBLCharacterBase;
+pub mod TBLEngine;
+pub mod TBLGameInstance;
+pub mod TBLGameMode;
+pub mod TBLGameSession;
+pub mod TBLGameState;
+pub mod TBLLocalPlayer;
+pub mod TBLOnlineStats;
+pub mod TBLPlayerController;
+pub mod TBLPlayerState;
+pub mod TBLSystemLibrary;
+pub mod TBLTypes;
+pub mod TBLUtilityLibrary;
+pub mod UserFeedbackAndBugReportsLibrary;

@@ -5,12 +5,13 @@
 //! / description), plus a `DefaultLoadingScreen` for rows without their own.
 //! `Held` rows are kept in the marker but not shipped, so they are excluded here.
 //! [`scan_map_markers`] reads every marker in the Asset Registry into
-//! [`map_marker_cache`]; `resolvers::loading_screens` looks maps up there.
+//! [`map_marker_cache`]; `unchained::patches::custom_loading_screens` looks maps up there.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use crate::game::unchained::{MapMarkerOffsets, MapMarkerRow};
+use crate::unchained::blueprints::mod_assets::MapMarkerOffsets;
+use crate::unchained::blueprints::mod_assets::MapMarkerRow;
 
 /// Asset Registry class name of the V2 map marker.
 pub const MAP_MARKER_V2_CLASS: &str = "DA_MapMarker_V2_C";
@@ -136,13 +137,24 @@ pub fn map_marker_cache() -> &'static MapMarkerCache {
 /// Must run on the game thread, after mod assets were registered.
 pub unsafe fn scan_map_markers() -> usize {
     // A failed query means no map marker is installed.
-    let marker_paths: Vec<String> = match crate::game::engine::get_assets_by_class(MAP_MARKER_V2_CLASS.into()) {
-        Ok(assets) => assets
-            .as_slice()
-            .iter()
-            .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
-            .map(|asset| asset.ObjectPath.to_string())
-            .collect(),
+    use crate::Chivalry2::Engine::{EFindName, FAssetData, FName, IAssetRegistry, TArray};
+    let marker_paths: Vec<String> = match IAssetRegistry::asset_registry_interface() {
+        Ok(registry) => {
+            let mut assets = TArray::<FAssetData>::default();
+            if registry.GetAssetsByClass(
+                FName::with_type(MAP_MARKER_V2_CLASS, EFindName::Find),
+                &mut assets,
+                true,
+            ) {
+                assets.as_slice()
+                    .iter()
+                    .filter(|asset| asset.ObjectPath.comparison_index.value != 0)
+                    .map(|asset| asset.ObjectPath.to_string())
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        }
         Err(_) => Vec::new(),
     };
 
@@ -151,7 +163,7 @@ pub unsafe fn scan_map_markers() -> usize {
     // Offsets are per class; every map marker normally shares one class.
     let mut offsets_by_class: HashMap<usize, Option<MapMarkerOffsets>> = HashMap::new();
     for marker_path in &marker_paths {
-        let marker = crate::game::engine::get_uobject_from_path(marker_path, true);
+        let marker = crate::Chivalry2::Engine::UObject::get_uobject_from_path(marker_path, true);
         if marker.is_null() {
             crate::swarn!("Could not load map marker {}", marker_path);
             continue;

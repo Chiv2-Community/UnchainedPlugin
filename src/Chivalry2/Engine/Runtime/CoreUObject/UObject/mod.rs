@@ -1,0 +1,41 @@
+//! UE 4.25-plus: <https://github.com/EpicGames/UnrealEngine/tree/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject>.
+
+pub mod Class;
+pub mod CoreNet;
+pub mod CoreOnline;
+pub mod Field;
+pub mod Object;
+pub mod ObjectMacros;
+pub mod PrimaryAssetId;
+pub mod Script;
+pub mod ScriptInterface;
+pub mod SoftObjectPath;
+pub mod SoftObjectPtr;
+pub mod Stack;
+pub mod UnrealType;
+pub mod UObjectArray;
+pub mod UObjectBase;
+pub mod UObjectBaseUtility;
+pub mod UObjectGlobals;
+pub mod UObjectThreadContext;
+pub mod WeakObjectPtr;
+
+pub use self::Class::*;
+pub use self::CoreNet::*;
+pub use self::CoreOnline::*;
+pub use self::Field::*;
+pub use self::Object::*;
+pub use self::ObjectMacros::*;
+pub use self::PrimaryAssetId::*;
+pub use self::Script::*;
+pub use self::ScriptInterface::*;
+pub use self::SoftObjectPath::*;
+pub use self::SoftObjectPtr::*;
+pub use self::Stack::*;
+pub use self::UnrealType::*;
+pub use self::UObjectArray::*;
+pub use self::UObjectBase::*;
+pub use self::UObjectBaseUtility::*;
+pub use self::UObjectGlobals::*;
+pub use self::UObjectThreadContext::*;
+pub use self::WeakObjectPtr::*;

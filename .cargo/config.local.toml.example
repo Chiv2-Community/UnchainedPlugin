@@ -1,0 +1,4 @@
+# Copy to .cargo/config.local.toml and set checkout roots to enable cpp source information on hover.
+[env]
+ARGON_SDK_SOURCE_LOCATION = { value = "/absolute/path/to/ArgonSDK" }
+UE_SOURCE_LOCATION = { value = "/absolute/path/to/UnrealEngine" }

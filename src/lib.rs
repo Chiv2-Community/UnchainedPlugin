@@ -1,14 +1,15 @@
 #![cfg_attr(feature = "server_registration", feature(ip))]
+#![feature(arbitrary_self_types_pointers)]
+#[macro_use]
+extern crate unchained_macros;
+pub use unchained_macros::*;
 
 #[macro_use]
 pub mod logging;
-#[macro_use]
-pub mod macros;
-mod resolvers;
 pub mod scan;
 pub mod tools;
-mod ue;
-pub mod game;
+pub mod Chivalry2;
+mod unchained;
 pub mod features;
 pub mod commands;
 #[cfg(windows)]
@@ -38,7 +39,6 @@ use crate::features::rcon::handle_rcon;
 use crate::features::server_browser::registration::Registration;
 use crate::tools::hook_globals::{cli_args, globals, init_globals, CLI_ARGS};
 use serenity::all::ChannelId;
-use self::resolvers::PlatformType;
 
 
 
@@ -88,8 +88,14 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
 static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
     HashSet::from([
         "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
-        "EngineVersionStrings", "EngineVersion", "A", "UtilStringExtractor",
-        "ConsoleManagerSingleton", "KismetSystemLibrary", "UGameplayStaticsSaveGameToMemory",
+        "EngineVersionStrings", "EngineVersion",
+        "ConsoleManagerSingleton", "UGameplayStaticsSaveGameToMemory",
+        // No binding or globals-collector consumer needs the engine pointer.
+        "GEngine",
+        // Metadata is not an address cache entry. Its unused custom-version
+        // dependency is also excluded from startup scanning.
+        "StaticCustomVersions", "BuildChangeList", "InternalProjectName",
+        "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry",
         // (sigs populated in the resolver file as of this build; nothing pending)
     ])
 );
@@ -159,7 +165,7 @@ impl BuildInfo {
         resolvers_in
             .into_iter()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
-            .filter(|resolver| resolvers::supports_platform(resolver.name, self.platform))
+            .filter(|resolver| unchained_macros::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -167,11 +173,7 @@ impl BuildInfo {
 
     pub fn with_scan(&self, all_resolvers: Vec<&'static NamedResolver>) -> Result<Self> {
         scan::scan(self.platform, self.get_unresolved(all_resolvers))
-            .map(|new_offsets| {
-                let mut all_offsets = self.offsets.clone();
-                all_offsets.extend(new_offsets);
-                self.with_offsets(all_offsets)
-            })
+            .map(|new_offsets| self.with_additional_offsets(new_offsets))
     }
 
     pub fn with_offsets(&self, offsets: HashMap<String, u64>) -> Self {
@@ -198,10 +200,25 @@ mod build_info_tests {
     use super::*;
 
     #[test]
+    fn unused_and_metadata_resolvers_do_not_require_address_cache_entries() {
+        let info = BuildInfo {
+            plugin_version: String::new(), build: 0, file_hash: 0,
+            name: String::new(), platform: PlatformType::STEAM, path: String::new(),
+            offsets: HashMap::new(),
+        };
+        let unresolved = info.get_unresolved(resolvers().collect());
+        for name in ["StaticCustomVersions", "BuildChangeList", "InternalProjectName",
+            "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry", "GEngine"] {
+            assert!(!unresolved.iter().any(|resolver| resolver.name == name));
+        }
+        assert!(unresolved.iter().any(|resolver| resolver.name == "FText__AsCultureInvariant"));
+    }
+
+    #[test]
     fn incomplete_cache_requires_normal_rescan() {
         let required: Vec<_> = resolvers()
             .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
-            .filter(|resolver| resolvers::supports_platform(resolver.name, PlatformType::STEAM))
+            .filter(|resolver| unchained_macros::supports_platform(resolver.name, PlatformType::STEAM))
             .collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
@@ -269,16 +286,20 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
 fn rust_main() {
     let need_rescan = {
         let current = CURRENT_BUILD_INFO.lock().unwrap();
-        current.is_none() || current.as_ref().unwrap().get_unresolved(resolvers().collect()).len() > 0
+        current.as_ref().is_none_or(|info| !info.get_unresolved(resolvers().collect()).is_empty())
     };
 
     if need_rescan {
         sinfo!("Missing signatures detected, scanning...");
-        // Rescan and update build info
-        let _ = load_current_build_info(true);
-
-        // Save the updated build info
-        if let Some(bi) = CURRENT_BUILD_INFO.lock().unwrap().as_ref() {
+        load_current_build_info();
+        let mut current = CURRENT_BUILD_INFO.lock().unwrap();
+        if let Some(bi) = current.as_ref() {
+            match bi.with_scan(resolvers().collect()) {
+                Ok(scanned) => *current = Some(scanned),
+                Err(error) => serror!("Failed to scan for missing signatures: {}", error),
+            }
+        }
+        if let Some(bi) = current.as_ref() {
             if let Err(e) = bi.save() {
                 serror!("Failed to save build info: {}", e);
             } else {
@@ -295,84 +316,45 @@ fn rust_main() {
     sinfo!("Unchained Sleuth initialized.");
 }
 
-fn get_current_platform() -> PlatformType {
-    match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-        true => PlatformType::EGS,
-        false => PlatformType::STEAM,
-    }
-}
-
-fn load_current_build_info(scan_missing: bool) -> *const BuildInfo {
-
+fn load_current_build_info() {
     let mut current = CURRENT_BUILD_INFO.lock().unwrap();
-
-    sdebug!("Loading current build info, scan_missing={}", scan_missing);
-
     if current.is_none() {
         let file_path = env::current_exe()
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_default();
 
         let crc32 = crc32_from_file(&file_path).expect("Failed to compute CRC");
-        let platform = get_current_platform();
-
-        *current = Some(BuildInfo::load_or_create(crc32, platform));
+        *current = Some(BuildInfo::load_or_create(crc32, current_platform()));
     }
+}
 
-
-    if let (true, Some(bi)) = (scan_missing, current.as_ref()) {
-        sinfo!("Scanning for missing signatures");
-        match bi.with_scan(resolvers().collect()) {
-            Ok(bi_with_scan_results) => *current = Some(bi_with_scan_results),
-            Err(e) => serror!("Failed to scan for missing signatures: {}", e)
-        }
-    }
-
+fn initialize_native_runtime() {
     static APPLIED: AtomicBool = AtomicBool::new(false);
-
-    // Apply patches and hooks if we have build info and haven't applied yet
-    // Only apply when not scanning (i.e., during preinit)
-    if !scan_missing && !APPLIED.load(Ordering::Relaxed) {
-        match current.as_ref() {
-            None => sdebug!("No current BuildInfo"),
-            Some(bi) => {
-                // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
-                if !bi.get_unresolved(resolvers().collect()).is_empty() {
-                    sinfo!("Missing signatures; deferring initialization until scan and restart");
-                    return bi as *const BuildInfo;
-                }
-                let offsets = bi.offsets.clone();
-                if let Some(offset) = offsets.get("GMalloc") {
-                    unsafe { ue::set_gmalloc_slot(*resolvers::BASE_ADDR + *offset as usize) };
-                }
-                apply_patches(offsets.clone());
-                if let Err(e) = attach_hooks(offsets.clone()) {
-                    serror!("Failed to attach hooks: {}", e);
-                    std::process::exit(-67);
-                }
-                APPLIED.store(true, Ordering::Relaxed);
-                sinfo!("Applied patches and hooks in preinit");
-            },
-        }
-    }
-    else if scan_missing {
-        swarn!("Skipping patch application during scan");
-    }
-    else {
+    if APPLIED.load(Ordering::Relaxed) {
         swarn!("Patches already applied");
+        return;
     }
 
-    #[cfg(feature="with_pdb")]
-    {
-        // let pdb_file = r"U:\Games\Chivalry2_c\TBL\Binaries\Win64\Chivalry2-Win64-Shipping.pdb";
-        // tools::pdb_scan::list_functions_with_addresses(pdb_file, exe.base_address).expect("Failed to list functions");
-        // swarn!("{:#?}", globals());
+    let current = CURRENT_BUILD_INFO.lock().unwrap();
+    let bi = current.as_ref().expect("Build info must be loaded before native initialization");
+    // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
+    if !bi.get_unresolved(resolvers().collect()).is_empty() {
+        sinfo!("Missing signatures; deferring initialization until scan and restart");
+        return;
     }
 
-    current
-        .as_ref()
-        .map(|bi| bi as *const BuildInfo)
-        .unwrap_or(std::ptr::null())
+    unsafe { unchained_macros::initialize_value_bindings(*unchained::startup::BASE_ADDR, &bi.offsets); }
+    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings(*unchained::startup::BASE_ADDR, &bi.offsets) } {
+        serror!("Failed to bind native functions: {}", error);
+        std::process::exit(-67);
+    }
+    apply_patches(&bi.offsets);
+    if let Err(error) = attach_hooks() {
+        serror!("Failed to attach hooks: {}", error);
+        std::process::exit(-67);
+    }
+    APPLIED.store(true, Ordering::Relaxed);
+    sinfo!("Applied patches and hooks in preinit");
 }
 
 use crate::events::models::{ChatSource, ChatType, GameChatMessage};
@@ -399,39 +381,27 @@ fn preinit_rustlib() {
         serror!("CLI args already initialized!");
     }
 
-    // Load build info without scanning
-    let _ = load_current_build_info(false);
+    let platform = if env::args().any(|arg| arg == "-epicapp=Peppermint") {
+        PlatformType::EGS
+    } else {
+        PlatformType::STEAM
+    };
+    PLATFORM.set(platform).expect("Platform already set");
+    load_current_build_info();
+    initialize_native_runtime();
 }
 
-// Initialize Logger and Globals
+// Initialize plugin globals on the worker thread.
 fn init_rustlib() {
     logging::console::print_banner();
-    init_globals().expect("Failed to init globals!");
+    init_globals();
 }
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
 
 fn postinit_rustlib() {
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
-    // crate::features::events::init_event_system();
     unsafe { seh::install() };
-    // #[cfg(feature="cli_commands")]
-    // spawn_cli_handler();
-    // #[cfg(feature="rcon_commands")]
-    // std::thread::spawn(|| {
-    //     handle_rcon();
-    // });
-
-    // #[cfg(feature="mod_management")]
-    // {
-    //     use crate::features::mod_management::ModManager;
-
-    //     let mm = Arc::new(ModManager::new());
-    //     let mut global_mm = globals().mod_manager.lock().unwrap();
-    //     *global_mm = Some(Arc::clone(&mm));
-    // }
-    
-    // let args = &cli_args();
 
     #[cfg(feature="cli_commands")]
     {
@@ -558,11 +528,12 @@ pub fn world_init() {
         // idempotent regardless of which site fires first.
         // Jobs run in queue order, so this is queued before the mod scan below:
         // the scan must see the markers this registers.
-        crate::resolvers::unchained_integration::run_on_game_thread(|| {
+        use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
+        run_on_game_thread(|| {
             crate::features::mod_maps::auto_register_all_assets();
         });
 
-        resolvers::unchained_integration::run_on_game_thread(move || {
+        run_on_game_thread(move || {
             sinfo!("Mod scans in progress");
             mm.scan_asset_registry();
             mm.update_save_game();
@@ -577,25 +548,16 @@ pub fn world_init() {
 }
 
 /// The base program address of the running application will be used.
-pub fn attach_hooks(
-    offsets: HashMap<String, u64>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
 
-    let platform = crate::get_current_platform();
-    // inventory::iter finds everything submitted via CREATE_HOOK!
-    for hook in inventory::iter::<resolvers::HookRegistration> {
-        if !resolvers::supports_platform(hook.name, platform) {
+    let platform = current_platform();
+    for hook in inventory::iter::<unchained_macros::HookRegistration> {
+        if !unchained_macros::supports_platform(hook.name, platform) {
             continue;
         }
         let cond = (hook.condition)();
-        if !cond {
-            // swarn!("inactive hook: {}", hook.name);
-            // Inactive hooks initialize but don't enable the detour
-            // continue;
-        }
-
-        match unsafe { (hook.hook_fn)(offsets.clone(), cond) } {
+        match unsafe { (hook.hook_fn)(*unchained::startup::BASE_ADDR, cond) } {
             Ok(_) => sinfo!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);
@@ -610,15 +572,15 @@ pub fn attach_hooks(
 }
 
 /// The base program address of the running application will be used.
-pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
-    let platform = crate::get_current_platform();
-    for p in inventory::iter::<resolvers::PatchRegistration> {
-        if !resolvers::supports_platform(p.name, platform) {
+pub fn apply_patches(offsets: &HashMap<String, u64>) {
+    let platform = current_platform();
+    for p in inventory::iter::<unchained_macros::PatchRegistration> {
+        if !unchained_macros::supports_platform(p.name, platform) {
             continue;
         }
         // Run the condition check
         if (p.enabled_fn)() {
-            match unsafe { (p.patch_fn)(offsets.clone()) } {
+            match unsafe { (p.patch_fn)(*unchained::startup::BASE_ADDR, offsets) } {
                 Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
                 Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }

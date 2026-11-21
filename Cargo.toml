@@ -4,9 +4,12 @@ version = "1.0.1"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
+members = [".", "sleuth_macros", "unchained-macros", "unchained-macros/impl", "build/unchained-native-docs", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
+binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
+# Share Bloodhound's scan context; Cargo.lock pins this branch to a commit.
+patternsleuth = { git = "https://github.com/Jacoby6000/patternsleuth", branch = "feature/memory-testkit", features = ["process-internal", "serde-resolvers", "image-pe"] }
 clap = { version = "4.5.0", features = ["derive"] }
 censor = "0.3.0"
 serde = { version = "1.0.195", features = ["derive"] }
@@ -44,6 +47,7 @@ lto = false
 
 
 [build-dependencies]
+unchained-native-docs = { path = "build/unchained-native-docs" }
 embed-resource = "3.0"
 git2 = { version = "0.21", default-features = false }
 
@@ -62,7 +66,6 @@ default = [
         "server_registration",
         "mod_management",
         "discord_integration",
-        # "request_dummy_hooks",
         "syslog-client",
         # "config_overrides_verbose_hooks",
         # "map_profiles",
@@ -71,7 +74,6 @@ serde-resolvers = []
 image-elf = []
 dev = []
 syslog-client = [  ]
-request_dummy_hooks = [] # Enable Get*Post dummy hooks
 kismet_log = [] # Dump kismetexecutionmessage logs
 with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
@@ -88,11 +90,13 @@ loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/f
 
 
 [dependencies]
+unchained-macros = { path = "unchained-macros" }
+rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "45459669b4e6807ed6fba96bb225a097a65a34a8" }
 backon = { workspace = true, optional = true }
 server-browser-client = { workspace = true }
 server-browser-client-sdk = { workspace = true }
-# patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
-patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
+binary_bloodhound = { workspace = true }
+patternsleuth = { workspace = true }
 anyhow = "1.0.79"
 # Pak index reads for off-thread mod-map discovery. The crates.io `repak`
 # crate is an unrelated name-squatter; use trumank/repak.
@@ -124,9 +128,9 @@ reqwest = { workspace = true }
 get_if_addrs = "0.5"
 # discord<
 async-trait = "0.1"
-# pdb loading (local tests)
+# Symbol-file loading (local tests)
 pdb = { version = "0.8.0", optional = true }
-retour = { version = "=0.4.0-alpha.4", features = ["static-detour"]}
+retour = { version = "=0.4.0-alpha.4" }
 clap = { workspace = true } # cli arg parsing
 winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser", "excpt"] }
 windows = { version = "0.52.0", features = ["Win32_Foundation",
@@ -162,9 +166,9 @@ emojis = "0.6"
 unicode-segmentation = "1.12"
 
 [dev-dependencies]
+object = "0.32.2"
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 [patch.crates-io]
-# Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.
-# retour = { path = "vendor/retour" }
-retour = { git = "https://github.com/Chiv2-Community/retour-rs", rev = "61e6cb966c040ace5e5f4ab9964cdae60f7ce0e1" }
+# Lifetime-aware detours; pin the published fork commit for reproducible builds.
+retour = { git = "https://github.com/Chiv2-Community/retour-rs", rev = "7c34b70b60115041bd18ec636cdba9f6d2e97c35" }

@@ -1,9 +1,10 @@
 
 use crate::commands::Command;
 use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
-use crate::game::chivalry2::{ATBLGameMode, PlayerFlags};
-use crate::resolvers::etc_hooks::o_GetTBLGameMode;
-use crate::ue::AsUObject;
+use crate::Chivalry2::TBL::ATBLGameMode;
+use crate::Chivalry2::Engine::PlayerFlags;
+use crate::Chivalry2::TBL::UTBLSystemLibrary;
+use crate::Chivalry2::Engine::AsUObject;
 use async_trait::async_trait;
 use clap::Parser;
 use itertools::Itertools;
@@ -19,11 +20,10 @@ impl Command<GameInfoArgs> for GameInfoCommand {
     fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
     fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
     async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
-        use crate::{resolvers::unchained_integration::run_on_game_thread};
-
+        use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
         run_on_game_thread(move || {
             if let Some(world) = crate::globals().world() {
-                let game_ptr: *mut ATBLGameMode = CALL_ORIGINAL!(GetTBLGameMode(world.as_uobject()));
+                let game_ptr = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
 
                 let game = unsafe { game_ptr.as_mut() };
                 if let Some(g) = &game {

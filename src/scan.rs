@@ -4,15 +4,14 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use crate::resolvers::{self, PLATFORM, PlatformType, current_platform};
+use unchained_macros::{PLATFORM, PlatformType};
 
 pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
 
-    if PLATFORM.get().is_none() {
-        let _ = PLATFORM.set(platform);
-    } else if PLATFORM.get().unwrap() != &platform {
-        anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, current_platform());
+    let running_platform = *PLATFORM.get_or_init(|| platform);
+    if running_platform != platform {
+        anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, running_platform);
     }
 
     if resolvers_to_scan.is_empty() {
@@ -60,9 +59,12 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
+        if unchained_macros::is_required_value(resolver.name) && !offsets.contains_key(resolver.name) {
+            panic!("Required native value {} could not be resolved: {resolution:?}", resolver.name);
+        }
     }
 
-    for p in inventory::iter::<resolvers::OffsetRegisty> {
+    for p in inventory::iter::<unchained_macros::OffsetRegisty> {
         let map: HashMap<String, u64> = (p.map)();
         sinfo!("Offset Registry '{}': {} entries", p.name, map.len());
         for (k, v) in map.iter() {
