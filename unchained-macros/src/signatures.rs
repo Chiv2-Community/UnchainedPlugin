@@ -5,23 +5,47 @@
 ///
 /// Dictionaries accept fieldless enum keys, never integer discriminants:
 /// ```compile_fail
+/// # fn main() {}
 /// unchained_macros::define_pattern_resolver!(Invalid, select [0u8], {
 ///     0: ["AA BB"],
 /// });
 /// ```
 ///
+/// Required selections must be explicit, including disabled selections:
+/// ```compile_fail
+/// # fn main() {}
+/// #[unchained_macros::resolver_selection_key(require = [Read, Write])]
+/// enum Mode { Read, Write }
+/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+///     Mode::Read: ["AA BB"],
+/// });
+/// ```
+///
+/// A `None` entry still participates in duplicate-key checks:
+/// ```compile_fail
+/// # fn main() {}
+/// #[unchained_macros::resolver_selection_key]
+/// enum Mode { Read }
+/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+///     Mode::Read: None,
+///     Mode::Read: ["AA BB"],
+/// });
+/// ```
+///
 /// Unknown variants and mixed enum types are rejected:
 /// ```compile_fail
-/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// # fn main() {}
+/// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
 /// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
 ///     Mode::Missing: ["AA BB"],
 /// });
 /// ```
 /// ```compile_fail
-/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// # fn main() {}
+/// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
-/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// #[unchained_macros::resolver_selection_key]
 /// enum Other { Read }
 /// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
 ///     Other::Read: ["AA BB"],
@@ -30,7 +54,8 @@
 ///
 /// Duplicate dictionary keys are rejected:
 /// ```compile_fail
-/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// # fn main() {}
+/// #[unchained_macros::resolver_selection_key]
 /// enum Mode { Read }
 /// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
 ///     Mode::Read: ["AA BB"],
@@ -153,12 +178,47 @@ macro_rules! define_pattern_resolver {
         });
     };
 
-    // Consumers supply the ordered keys, including any shared key explicitly.
-    (@selected_patterns $patterns:ident, [$($selection:expr),+], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        for key in [$($crate::__private::selection_key($selection)),+] {
-            #[deny(unreachable_patterns)]
+    (@enabled None) => { false };
+    (@enabled [$($pattern:expr),* $(,)?]) => { true };
+    (@patterns None) => { &[] };
+    (@patterns [$($pattern:expr),* $(,)?]) => { &[$($pattern),*] };
+    // Empty dictionaries still need a concrete type, even when disabled.
+    (@new_patterns $mode:ident; None, $($rest:tt)*) => {
+        $crate::define_pattern_resolver!(@new_patterns $mode; $($rest)*)
+    };
+    (@new_patterns $mode:ident; [], $($rest:tt)*) => {
+        $crate::define_pattern_resolver!(@new_patterns $mode; $($rest)*)
+    };
+    (@new_patterns $mode:ident; [$($pattern:expr),+ $(,)?], $($rest:tt)*) => { Vec::new() };
+    (@new_patterns XrefFirst;) => { Vec::<::patternsleuth::scanner::Pattern>::new() };
+    (@new_patterns XrefLast;) => { Vec::<::patternsleuth::scanner::Pattern>::new() };
+    (@new_patterns $mode:ident;) => { Vec::<&str>::new() };
+
+    (@restriction $name:ident, { $($key:path: $entry:tt),+ }) => {
+        const _: () = {
+            let keys = [$($key),+];
+            keys[0].__unchained_validate_selection(&keys);
+        };
+        $crate::__private::inventory::submit! {
+            $crate::ResolverRestriction {
+                name: stringify!($name),
+                matches: |key| $crate::__private::dictionary_allows(key, &[
+                    $(($key, $crate::define_pattern_resolver!(@enabled $entry))),+
+                ]),
+            }
+        }
+    };
+
+    // The first key controls applicability; later keys only contribute patterns.
+    (@selected_patterns $name:ident, $patterns:ident, [$($selection:expr),+], { $( $key:path : $entry:tt ),+ $(,)? }) => {
+        let selections = [$($crate::__private::selection_key($selection)),+];
+        if !$crate::supports_selection(stringify!($name), selections[0]) {
+            return Err(::patternsleuth::resolvers::ResolveError::new_msg(format!(
+                "Resolver {} is disabled for the selected key", stringify!($name))));
+        }
+        for key in selections {
             let part: &[_] = match key {
-                $( $key => &[ $( $pattern ),+ ], )+
+                $( $key => $crate::define_pattern_resolver!(@patterns $entry), )+
                 #[allow(unreachable_patterns)]
                 _ => &[],
             };
@@ -166,25 +226,27 @@ macro_rules! define_pattern_resolver {
         }
     };
 
-    ($name:ident, $mode:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    ($name:ident, $mode:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
         $crate::define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@restriction $name, { $($key: $entry),+ });
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
-            let mut patterns: Vec<_> = Vec::new();
-            $crate::define_pattern_resolver!(@selected_patterns patterns, [$($selection),+], {
-                $( $key: [ $( $pattern ),+ ] ),+
+            let mut patterns = $crate::define_pattern_resolver!(@new_patterns $mode; $($entry),+,);
+            $crate::define_pattern_resolver!(@selected_patterns $name, patterns, [$($selection),+], {
+                $( $key: $entry ),+
             });
             $crate::define_pattern_resolver!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
-    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
+    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
         $crate::define_pattern_resolver!(@emit_header $name);
+        $crate::define_pattern_resolver!(@restriction $name, { $($key: $entry),+ });
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
-            let mut $patterns: Vec<_> = Vec::new();
-            $crate::define_pattern_resolver!(@selected_patterns $patterns, [$($selection),+], {
-                $( $key: [ $( $pattern ),+ ] ),+
+            let mut $patterns = $crate::define_pattern_resolver!(@new_patterns Inline; $($entry),+,);
+            $crate::define_pattern_resolver!(@selected_patterns $name, $patterns, [$($selection),+], {
+                $( $key: $entry ),+
             });
             $crate::define_pattern_resolver!(@emit_process_inline $name, |ctx, patterns| $body)
         });
@@ -197,9 +259,9 @@ macro_rules! define_pattern_resolver {
         ];
     };
 
-    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : $entry:tt ),+ $(,)? }) => {
         $crate::define_pattern_resolver!($name, Simple, select [$($selection),+], {
-            $( $key : [ $( $pattern ),+ ] ),+
+            $( $key : $entry ),+
         });
     };
 }

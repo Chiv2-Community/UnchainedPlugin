@@ -142,33 +142,45 @@ is cached, not matcher provenance.
 
 `define_custom_resolver!(Name, with(expression), |context| { ... })` evaluates
 host-supplied context when resolving and permits `?`. This selects matching
-behavior, not a restriction. Use `define_selected_pattern_resolver!` to restrict
-a resolver and its hooks/patches to an enum key.
+behavior, not a restriction. Enum-keyed pattern dictionaries register their own
+applicability; `Key: None` disables that key.
 The plugin and BinaryBloodhound share one locked Patternsleuth dependency.
 
 ## Consumer-defined selections
 
 ```rust,ignore
-#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key(require = [Read, Write])]
 enum Mode { Read, Write, Shared }
 
 define_pattern_resolver!(ReadEntry, select [current_mode(), Mode::Shared], {
     Mode::Read: ["AA BB"],
-    Mode::Write: ["CC DD"],
+    Mode::Write: None,
     Mode::Shared: ["EE FF"],
 });
-define_selected_pattern_resolver!(Mode::Read, ReadOnly, ["AA BB"]);
 ```
 
-`SelectionKey` rejects non-enums, fields, and generic parameters. Rust checks
+`resolver_selection_key` supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`,
+and `Eq` (without duplicating existing derives). It rejects non-enums, fields,
+and generic parameters. Rust checks
 variant names and enum types; duplicate dictionary keys are compile errors.
-The ordered selection list is explicit: no key is a built-in fallback or shared
-case. Repeated selections append their patterns again.
+`SelectionKey::REQUIRED` exposes the required enum values. Omitting a
+required key is a compile error; explicitly use patterns or `None`.
 
-Restrictions use enum type identity and equality, not integer discriminants.
-Unknown names remain unrestricted; conflicting restrictions or a different key
-type fail closed. Set host state before scanning; the toolkit owns no global
-selection. Use `CREATE_PATCH!(..., IF { ... })` for host-defined patch conditions.
+The first selection controls applicability. `None` disables the resolver before
+pattern construction or inline execution, regardless of later shared keys.
+`[]` stays enabled and contributes no local patterns. Omitted optional keys stay
+enabled and contribute nothing. Plain pattern lists apply to every selection.
+
+The ordered selection list is explicit: no key is a built-in fallback or shared
+case. Repeated selections append their patterns again. Restrictions use enum
+type identity and equality, not discriminants. Unknown names remain unrestricted;
+conflicting restrictions or a different key type fail closed.
+
+The host filters scan roots, hooks, and patches with `supports_selection`.
+Use `initialize_function_bindings_where` and `initialize_value_bindings_where`
+with the same predicate so disabled bindings stay uninitialized, even with cached
+offsets. Set host state before scanning; the toolkit owns no global selection.
+Use `CREATE_PATCH!(..., IF { ... })` for other host-defined patch conditions.
 
 ## Validation
 

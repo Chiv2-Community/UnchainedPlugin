@@ -7,10 +7,11 @@ mod function_detour;
 mod global;
 mod selection;
 
-/// Validate a consumer-defined, non-generic fieldless selection enum.
-#[proc_macro_derive(SelectionKey)]
-pub fn derive_selection_key(item: TokenStream) -> TokenStream {
-    selection::expand(item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+/// Declare a fieldless selection enum with optional `require = [Variant, ...]`.
+/// Supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`, and `Eq`.
+#[proc_macro_attribute]
+pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStream {
+    selection::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
 /// Bind an unsafe Rust method/function to a separately declared named resolver.

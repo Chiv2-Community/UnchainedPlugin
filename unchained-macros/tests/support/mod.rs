@@ -5,7 +5,8 @@ use patternsleuth::{
 };
 use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key(require = [First, Second])]
+#[derive(Debug)]
 pub enum Flavor { First, Second, Shared }
 
 static FLAVOR: OnceLock<Flavor> = OnceLock::new();

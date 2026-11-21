@@ -4,6 +4,15 @@ use object::SectionKind;
 use patternsleuth::{NamedMemorySection, image::Image, scanner::Pattern};
 use support::{BASE, TEXT, image, initialize_selection, Flavor};
 use unchained_macros::define_pattern_resolver;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static PATTERN_EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
+static BODY_EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
+
+fn shared_pattern() -> &'static str {
+    PATTERN_EVALUATIONS.fetch_add(1, Ordering::SeqCst);
+    "11 22"
+}
 
 define_pattern_resolver!(Unique, ["AA BB", "11 22"]);
 define_pattern_resolver!(First, First, ["AA BB", "11 22"]);
@@ -38,8 +47,59 @@ mod nested {
     });
     define_pattern_resolver!(Ordered, First, select [Flavor::Shared, Flavor::First], {
         Flavor::First: ["AA BB"],
+        Flavor::Second: None,
         Flavor::Shared: ["11 22"],
     });
+    define_pattern_resolver!(Disabled, select [current_flavor(), Flavor::Shared], {
+        Flavor::First: None,
+        Flavor::Second: [],
+        Flavor::Shared: [super::shared_pattern()],
+    });
+    define_pattern_resolver!(DisabledInline, select [current_flavor(), Flavor::Shared], {
+        Flavor::First: None,
+        Flavor::Second: [],
+        Flavor::Shared: [super::shared_pattern()],
+    }, |_ctx, patterns| {
+        super::BODY_EVALUATIONS.fetch_add(1, super::Ordering::SeqCst);
+        Ok(patterns.len() as u64)
+    });
+    define_pattern_resolver!(AllDisabled, select [Flavor::First], {
+        Flavor::First: None, Flavor::Second: None,
+    });
+    define_pattern_resolver!(AllDisabledXref, XrefFirst, select [Flavor::First], {
+        Flavor::First: None, Flavor::Second: None,
+    });
+    define_pattern_resolver!(AllDisabledInline, select [Flavor::First], {
+        Flavor::First: None, Flavor::Second: None,
+    }, |_ctx, patterns| { Ok(patterns.len() as u64) });
+}
+
+#[test]
+fn all_none_dictionaries_compile_and_cannot_resolve() {
+    let image = image(&[]);
+    assert!(image.resolve(nested::AllDisabled::resolver()).unwrap_err().to_string().contains("disabled"));
+    assert!(image.resolve(nested::AllDisabledXref::resolver()).unwrap_err().to_string().contains("disabled"));
+    assert!(image.resolve(nested::AllDisabledInline::resolver()).unwrap_err().to_string().contains("disabled"));
+}
+
+#[test_case::test_case(Flavor::First, false; "none overrides shared patterns")]
+#[test_case::test_case(Flavor::Second, true; "empty list retains shared patterns")]
+fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, enabled: bool) {
+    if !initialize_selection(flavor) { return; }
+    assert_eq!(unchained_macros::supports_selection("Disabled", flavor), enabled);
+    assert_eq!(unchained_macros::supports_selection("DisabledInline", flavor), enabled);
+    let image = image(&[]);
+    let standard = image.resolve(nested::Disabled::resolver());
+    let inline = image.resolve(nested::DisabledInline::resolver());
+    if enabled {
+        assert_eq!(standard.unwrap().0, TEXT);
+        assert_eq!(inline.unwrap().0, 1);
+    } else {
+        assert!(standard.unwrap_err().to_string().contains("disabled"));
+        assert!(inline.unwrap_err().to_string().contains("disabled"));
+    }
+    assert_eq!(PATTERN_EVALUATIONS.load(Ordering::SeqCst), if enabled { 2 } else { 0 });
+    assert_eq!(BODY_EVALUATIONS.load(Ordering::SeqCst), usize::from(enabled));
 }
 
 #[test]

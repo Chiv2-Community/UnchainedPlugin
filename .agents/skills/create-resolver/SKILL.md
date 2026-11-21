@@ -89,8 +89,10 @@ Reuse an existing resolver when it already resolves the verified target.
 - For callable bindings, return a function entry, not an interior match.
 - Platform dictionaries combine current-platform patterns with `OTHER`;
   `OTHER` is not a fallback.
-- Use `define_single_platform_pattern_resolver!` for explicit storefront
-  restrictions. Platform-aware custom searches alone do not restrict installation.
+- Dictionaries must explicitly include required `STEAM` and `EGS` entries.
+  Use `PLATFORM: None` to disable that storefront, including hooks/patches.
+  Use `[]` only for enabled shared-pattern coverage. Platform-aware custom
+  searches alone do not restrict installation.
 - Use the [custom resolver examples](../../../unchained-macros/README.md#custom-resolvers)
   for composition and error handling.
 

@@ -20,7 +20,7 @@ mod tools {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key]
 enum Mode { Enabled }
 static MODE: std::sync::OnceLock<Mode> = std::sync::OnceLock::new();
 

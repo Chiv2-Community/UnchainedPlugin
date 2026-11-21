@@ -1,21 +1,49 @@
-use unchained_macros::{
-    define_pattern_resolver, define_selected_pattern_resolver, supports_selection,
-};
+use unchained_macros::{define_pattern_resolver, supports_selection};
 
-#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key(require = [Read, Write])]
 enum Mode { Read, Write, Shared }
 
-#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key]
 enum Other { Read }
 
-define_selected_pattern_resolver!(Mode::Read, ReadOnly, ["AA BB"]);
-define_selected_pattern_resolver!(Mode::Write, WriteOnly, Simple, ["CC DD"]);
-define_selected_pattern_resolver!(Mode::Read, ReadCall, Call, ["E8 | ?? ?? ?? ??"]);
-define_selected_pattern_resolver!(Mode::Read, ReadInline, ["EE FF"], |ctx, patterns| {
+#[unchained_macros::resolver_selection_key(require = [First])]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum ExistingDerives { First = 7 }
+
+#[unchained_macros::resolver_selection_key]
+#[derive(Clone)]
+enum PartialDerives { First }
+
+#[test]
+fn selection_attribute_preserves_existing_derives_and_discriminants() {
+    assert_eq!(ExistingDerives::First as u8, 7);
+    assert_eq!(ExistingDerives::First, ExistingDerives::First);
+    assert!(PartialDerives::First == PartialDerives::First);
+    assert!(<ExistingDerives as unchained_macros::SelectionKey>::REQUIRED == [ExistingDerives::First]);
+}
+
+define_pattern_resolver!(ReadOnly, select [Mode::Read], {
+    Mode::Read: ["AA BB"], Mode::Write: None, Mode::Shared: None,
+});
+define_pattern_resolver!(WriteOnly, Simple, select [Mode::Write], {
+    Mode::Read: None, Mode::Write: ["CC DD"], Mode::Shared: None,
+});
+define_pattern_resolver!(ReadCall, Call, select [Mode::Read], {
+    Mode::Read: ["E8 | ?? ?? ?? ??"], Mode::Write: None, Mode::Shared: None,
+});
+define_pattern_resolver!(ReadInline, select [Mode::Read], {
+    Mode::Read: ["EE FF"], Mode::Write: None, Mode::Shared: None,
+}, |ctx, patterns| {
     let matches = ctx.scan(patternsleuth::scanner::Pattern::new(patterns[0]).unwrap()).await;
     patternsleuth::resolvers::ensure_one(matches)
 });
 define_pattern_resolver!(Unrestricted, ["11 22"]);
+
+use Mode::Read as ReadAlias;
+define_pattern_resolver!(AliasedKey, select [ReadAlias], {
+    ReadAlias: ["AA BB"], Mode::Write: None,
+});
 
 #[test_case::test_matrix(
     [
@@ -36,6 +64,14 @@ fn restrictions_apply_across_macro_forms(
 }
 
 #[test]
+fn required_variants_accept_aliases_and_optional_keys_remain_optional() {
+    assert!(<Mode as unchained_macros::SelectionKey>::REQUIRED == [Mode::Read, Mode::Write]);
+    assert!(supports_selection("AliasedKey", Mode::Read));
+    assert!(supports_selection("AliasedKey", Mode::Shared));
+    assert!(!supports_selection("AliasedKey", Mode::Write));
+}
+
+#[test]
 fn different_enum_types_do_not_match_equal_discriminants() {
     assert!(!supports_selection("ReadOnly", Other::Read));
     assert!(supports_selection("Unrestricted", Other::Read));
@@ -44,13 +80,13 @@ fn different_enum_types_do_not_match_equal_discriminants() {
 inventory::submit! {
     unchained_macros::ResolverRestriction {
         name: "Conflicting",
-        matches: |key| unchained_macros::__private::selection_matches(key, Mode::Read),
+        matches: |key| unchained_macros::__private::dictionary_allows(key, &[(Mode::Read, true), (Mode::Write, false), (Mode::Shared, false)]),
     }
 }
 inventory::submit! {
     unchained_macros::ResolverRestriction {
         name: "Conflicting",
-        matches: |key| unchained_macros::__private::selection_matches(key, Mode::Write),
+        matches: |key| unchained_macros::__private::dictionary_allows(key, &[(Mode::Read, false), (Mode::Write, true), (Mode::Shared, false)]),
     }
 }
 

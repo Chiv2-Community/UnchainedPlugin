@@ -120,9 +120,11 @@ Select patterns for each storefront build.
 - The adapters in [`src/platform.rs`](src/platform.rs) own storefront selection.
   The current platform's patterns and `OTHER` are combined.
 - `OTHER` is shared coverage, not a fallback after failed matches.
-- Pattern selection does not restrict hook installation.
-- Use `define_single_platform_pattern_resolver!` to restrict a resolver and
-  its hooks/patches to one platform.
+- Each dictionary must explicitly include `STEAM` and `EGS`, as required by
+  the enum's `#[resolver_selection_key(require = [STEAM, EGS])]` configuration.
+- Use `PLATFORM: None` to disable scanning, bindings, hooks, and patches for that
+  storefront, even when `OTHER` has patterns. `[]` stays enabled with shared
+  patterns only. Plain pattern lists apply to all storefronts.
 
 ```rust
 define_pattern_resolver!(ExampleFunction, {
@@ -131,9 +133,12 @@ define_pattern_resolver!(ExampleFunction, {
     OTHER: ["48 8B C4 48 89 58 ??"]
 });
 
-define_single_platform_pattern_resolver!(STEAM, ExampleSteamOnly, [
-    "48 89 5C 24 ?? 57"
-]);
+define_pattern_resolver!(ExampleSteamOnly, {
+    STEAM: ["48 89 5C 24 ?? 57"],
+    EGS: None,
+    XBOX: None,
+    OTHER: None,
+});
 ```
 
 #### Custom searches

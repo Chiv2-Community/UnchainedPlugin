@@ -48,14 +48,28 @@ Xref modes ignore later patterns. Verify reference ordering; they do not require
 a unique function candidate.
 
 Selection dictionaries take a consumer-defined, non-generic fieldless enum
-deriving `SelectionKey`, `Copy`, and `Eq`. They append matches in the explicit
+annotated with `resolver_selection_key`. They append matches in the explicit
 selection-list order. Missing keys contribute nothing; there is no implicit
 shared key or fallback. Duplicate dictionary keys and unknown/mismatched variants
-are compile errors. To restrict scanning and installation explicitly:
+are compile errors. Use `None` to disable a key, including its hooks/patches:
 
 ```rust,ignore
-define_selected_pattern_resolver!(Mode::Read, ReadOnly, ["AA BB"]);
+define_pattern_resolver!(ReadOnly, select [current_mode(), Mode::Shared], {
+    Mode::Read: ["AA BB"],
+    Mode::Write: None,
+    Mode::Shared: ["CC DD"],
+});
 ```
+
+The first selected key determines applicability; `None` overrides shared
+patterns and prevents inline execution. `[]` means enabled with no local
+patterns. Omitted optional keys remain enabled and contribute no patterns.
+
+Declare required keys with
+`#[resolver_selection_key(require = [Read, Write])]`. Every dictionary must include those keys
+with patterns or `None`; omissions fail at compile time.
+The trait exposes them as `SelectionKey::REQUIRED`.
+Plain pattern lists are selector-independent and apply to every key.
 
 For custom processing, supply expressions and an inline body returning
 `patternsleuth::resolvers::Result<u64>`. The body receives the combined patterns:

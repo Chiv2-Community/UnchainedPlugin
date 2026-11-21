@@ -331,8 +331,9 @@ fn initialize_native_runtime() {
         return;
     }
 
-    unsafe { unchained_macros::initialize_value_bindings(*unchained::startup::BASE_ADDR, &bi.offsets); }
-    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings(*unchained::startup::BASE_ADDR, &bi.offsets) } {
+    let enabled = |name: &str| supports_platform(name, bi.platform);
+    unsafe { unchained_macros::initialize_value_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled); }
+    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled) } {
         serror!("Failed to bind native functions: {}", error);
         std::process::exit(-67);
     }

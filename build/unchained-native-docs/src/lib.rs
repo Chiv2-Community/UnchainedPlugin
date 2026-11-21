@@ -378,7 +378,6 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                             part.ident.to_string().as_str(),
                             "define_pattern_resolver"
                                 | "define_custom_resolver"
-                                | "define_single_platform_pattern_resolver"
                         )
                     }) =>
                 {
@@ -391,11 +390,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                 TokenTree::Ident(name) => Some(name.to_string()),
                                 _ => None,
                             });
-                    let index = usize::from(
-                        item.mac.path.segments.last().unwrap().ident
-                            == "define_single_platform_pattern_resolver",
-                    );
-                    if let Some(name) = identifiers.nth(index) {
+                    if let Some(name) = identifiers.next() {
                         anyhow::ensure!(
                             resolvers
                                 .insert(

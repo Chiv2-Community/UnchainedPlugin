@@ -164,7 +164,22 @@ pub unsafe fn initialize_function_bindings(
     base: usize,
     offsets: &std::collections::HashMap<String, u64>,
 ) -> Result<(), String> {
-    for registration in inventory::iter::<FunctionBindingRegistration> {
+    unsafe { initialize_function_bindings_where(base, offsets, |_| true) }
+}
+
+/// Initialize only bindings accepted by the host's applicability predicate.
+/// Rejected bindings remain unbound, even if cached offsets exist.
+///
+/// # Safety
+/// The contracts of [`initialize_function_bindings`] apply to accepted bindings.
+pub unsafe fn initialize_function_bindings_where(
+    base: usize,
+    offsets: &std::collections::HashMap<String, u64>,
+    enabled: impl Fn(&str) -> bool,
+) -> Result<(), String> {
+    for registration in inventory::iter::<FunctionBindingRegistration>.into_iter()
+        .filter(|registration| enabled(registration.binding.name()))
+    {
         let binding = registration.binding;
         let offset = offsets.get(binding.name())
             .ok_or_else(|| format!("No address found for native binding {}", binding.name()))?;
@@ -251,7 +266,22 @@ inventory::collect!(ValueBindingRegistration);
 /// Each resolved slot must satisfy its generated accessor's type/lifetime and
 /// synchronization contract. This binds addresses, not their current contents.
 pub unsafe fn initialize_value_bindings(base: usize, offsets: &std::collections::HashMap<String, u64>) {
-    for registration in inventory::iter::<ValueBindingRegistration> {
+    unsafe { initialize_value_bindings_where(base, offsets, |_| true); }
+}
+
+/// Initialize only values accepted by the host's applicability predicate.
+/// Rejected values remain unbound, even if cached offsets exist.
+///
+/// # Safety
+/// The contracts of [`initialize_value_bindings`] apply to accepted bindings.
+pub unsafe fn initialize_value_bindings_where(
+    base: usize,
+    offsets: &std::collections::HashMap<String, u64>,
+    enabled: impl Fn(&str) -> bool,
+) {
+    for registration in inventory::iter::<ValueBindingRegistration>.into_iter()
+        .filter(|registration| enabled(registration.binding.name()))
+    {
         let binding = registration.binding;
         let offset = offsets.get(binding.name()).unwrap_or_else(|| {
             panic!("Required native value {} could not be resolved; no offset is available", binding.name())

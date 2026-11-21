@@ -2,7 +2,8 @@
 
 use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, unchained_macros::SelectionKey)]
+#[unchained_macros::resolver_selection_key(require = [STEAM, EGS])]
+#[derive(Debug, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 #[allow(clippy::upper_case_acronyms)]
 pub enum PlatformType {
@@ -44,33 +45,21 @@ impl std::str::FromStr for PlatformType {
 
 // Preserve native declarations' syntax; active + OTHER is plugin policy.
 macro_rules! define_pattern_resolver {
-    ($name:ident, $mode:ident, { $($key:ident: [$($pattern:expr),+ $(,)?]),+ $(,)? }) => {
+    ($name:ident, $mode:ident, { $($key:ident: $entry:tt),+ $(,)? }) => {
         unchained_macros::define_pattern_resolver!($name, $mode,
             select [$crate::current_platform(), $crate::PlatformType::OTHER],
-            { $($crate::PlatformType::$key: [$($pattern),+]),+ });
+            { $($crate::PlatformType::$key: $entry),+ });
     };
-    ($name:ident, { $($key:ident: [$($pattern:expr),+ $(,)?]),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block) => {
+    ($name:ident, { $($key:ident: $entry:tt),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block) => {
         unchained_macros::define_pattern_resolver!($name,
             select [$crate::current_platform(), $crate::PlatformType::OTHER],
-            { $($crate::PlatformType::$key: [$($pattern),+]),+ },
+            { $($crate::PlatformType::$key: $entry),+ },
             |$ctx, $patterns| $body);
     };
-    ($name:ident, { $($key:ident: [$($pattern:expr),+ $(,)?]),+ $(,)? }) => {
-        define_pattern_resolver!($name, Simple, { $($key: [$($pattern),+]),+ });
+    ($name:ident, { $($key:ident: $entry:tt),+ $(,)? }) => {
+        define_pattern_resolver!($name, Simple, { $($key: $entry),+ });
     };
     ($($resolver:tt)+) => { unchained_macros::define_pattern_resolver!($($resolver)+); };
-}
-
-macro_rules! define_single_platform_pattern_resolver {
-    ($platform:ident, $name:ident, $($resolver:tt)+) => {
-        unchained_macros::__private::inventory::submit! {
-            unchained_macros::ResolverRestriction {
-                name: stringify!($name),
-                matches: |key| unchained_macros::__private::selection_matches(key, $crate::PlatformType::$platform),
-            }
-        }
-        define_pattern_resolver!($name, $($resolver)+);
-    };
 }
 
 #[macro_export]
@@ -94,8 +83,12 @@ macro_rules! CREATE_PATCH_PLATFORM {
 mod tests {
     use super::*;
 
-    define_single_platform_pattern_resolver!(STEAM, FixtureSteamOnly, ["AA BB"]);
-    define_single_platform_pattern_resolver!(EGS, FixtureEpicCall, Call, ["E8 | ?? ?? ?? ??"]);
+    define_pattern_resolver!(FixtureSteamOnly, {
+        STEAM: ["AA BB"], EGS: None, XBOX: None, OTHER: None,
+    });
+    define_pattern_resolver!(FixtureEpicCall, Call, {
+        EGS: ["E8 | ?? ?? ?? ??"], STEAM: None, XBOX: None, OTHER: None,
+    });
 
     #[test_case::test_matrix(
         [("FixtureSteamOnly", Some(PlatformType::STEAM)), ("FixtureEpicCall", Some(PlatformType::EGS)), ("FixtureShared", None)],
