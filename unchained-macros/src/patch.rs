@@ -51,6 +51,13 @@
 /// - An `inventory::submit!` call containing the function pointer and the metadata.
 #[macro_export]
 macro_rules! CREATE_PATCH {
+    ($name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr) => {
+        $crate::CREATE_PATCH!($name @ $tag, $extra, $op, $val, IF { true });
+    };
+    ($name:ident @ $tag:ident, $op:ident, $val:expr) => {
+        $crate::CREATE_PATCH!($name @ $tag, $op, $val, IF { true });
+    };
+
     // tag + offset + condition
     // Name @ Suffix, 0x10, NOP, 5, IF { ... }
     ($name:ident @ $tag:ident, $extra:literal, $op:ident, $val:expr, IF $cond:block) => {
@@ -97,7 +104,7 @@ macro_rules! __create_patch_impl {
             #[allow(non_snake_case)]
             pub unsafe fn [<apply_patch_ $name _ $suffix>](
                 base_address: usize,
-                offsets: std::collections::HashMap<String, u64>
+                offsets: &std::collections::HashMap<String, u64>
             ) -> Result<(), Box<dyn std::error::Error>> {
                 match offsets.get(stringify!($name)) {
                     None => Err(format!("Offset for {} not found", stringify!($name)).into()),

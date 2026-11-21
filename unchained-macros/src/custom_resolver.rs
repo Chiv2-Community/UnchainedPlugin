@@ -7,14 +7,23 @@
 /// `PlatformType` from `current_platform()` when the resolver runs.
 /// The body may use `?`, just like the matcher-expression form.
 ///
+/// A single-address matcher is accepted:
+/// ```
+/// # fn main() {}
+/// unchained_macros::define_custom_resolver!(One,
+///     binary_bloodhound::BinaryMatcher::address(1).ensure_one());
+/// ```
+///
 /// Variable-cardinality matchers are rejected:
-/// ```compile_fail
+/// ```compile_fail,E0308
+/// # fn main() {}
 /// unchained_macros::define_custom_resolver!(Many,
 ///     binary_bloodhound::BinaryMatcher::candidates([1, 2]));
 /// ```
 ///
 /// The final value must be an address:
-/// ```compile_fail
+/// ```compile_fail,E0308
+/// # fn main() {}
 /// unchained_macros::define_custom_resolver!(NotAddress,
 ///     binary_bloodhound::BinaryMatcher::address(1).map(|_| "text").ensure_one());
 /// ```

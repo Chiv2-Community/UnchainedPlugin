@@ -15,7 +15,7 @@ struct Native {
 #[runtime_bindings]
 impl Native {
     #[bind_resolved_func(Add)]
-    unsafe fn add(value: i32) -> i32 {}
+    unsafe fn add(native: i32) -> i32 {}
 
     #[bind_resolved_func(Borrow)]
     unsafe fn borrow(&self) -> &i32 {}

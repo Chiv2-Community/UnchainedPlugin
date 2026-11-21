@@ -86,12 +86,13 @@ fn notes(attrs: &[Attribute]) -> String {
 
 fn text(source: &str, span: Span) -> &str {
     let offset = |position: proc_macro2::LineColumn| {
-        source
-            .split_inclusive('\n')
+        let mut lines = source.split_inclusive('\n');
+        let preceding = lines.by_ref()
             .take(position.line.saturating_sub(1))
-            .map(str::len)
-            .sum::<usize>()
-            + position.column
+            .map(str::len).sum::<usize>();
+        let line = lines.next().unwrap_or("");
+        preceding + line.char_indices().nth(position.column)
+            .map_or(line.len(), |(byte, _)| byte)
     };
     &source[offset(span.start())..offset(span.end())]
 }
@@ -683,6 +684,25 @@ mod tests {
     #[test]
     fn code_fences_preserve_embedded_backticks() {
         assert!(block("cpp", "const char* value = \"```\";").starts_with("````cpp"));
+    }
+
+    #[test]
+    fn generated_detours_preserve_unicode_source_spans() {
+        let root = std::env::temp_dir().join(format!("native-doc-unicode-{}", std::process::id()));
+        fs::create_dir_all(root.join("src/Chivalry2")).unwrap();
+        fs::create_dir_all(root.join("src/unchained/patches")).unwrap();
+        fs::write(root.join("src/Chivalry2/Native.rs"),
+            "impl Native { #[bind_resolved_func(Native__Call)] unsafe fn Call() {} }").unwrap();
+        for payload in ["λ", "λλλλλλλλλλλλλλλλλλλλ", "日本語 /* λ */"] {
+            let declaration = format!(
+                "#[bind_func_detour(Native::Call)] unsafe fn unicode_detour() {{ /* λ */ trace!(\"{payload}\"); }}"
+            );
+            fs::write(root.join("src/unchained/patches/Test.rs"), &declaration).unwrap();
+            generate(&root, &root.join("out")).unwrap();
+            let docs = fs::read_to_string(root.join("out/native-docs/binding-Native__Call.md")).unwrap();
+            assert!(docs.contains(&declaration), "{docs}");
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

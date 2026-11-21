@@ -56,7 +56,7 @@ macro_rules! define_pocess {
     (@emit_body $name:ident, Call, $ctx:ident, $patterns:ident) => {{
         use patternsleuth::MemoryTrait;
         $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
-            let res = futures::future::join_all($patterns.iter().map(|p| $ctx.scan(patternsleuth::scanner::Pattern::new(p).unwrap()))).await;
+            let res = ::patternsleuth::resolvers::futures::future::join_all($patterns.iter().map(|p| $ctx.scan(patternsleuth::scanner::Pattern::new(p).unwrap()))).await;
 
             patternsleuth::resolvers::try_ensure_one(
                 res.iter()
@@ -380,6 +380,15 @@ macro_rules! define_signature_fn {
 // creates Simple_signature fn
 #[macro_export]
 macro_rules! wrap_process_macro {
+    (@patterns XrefFirst, $patterns:ident) => {
+        $crate::wrap_process_macro!(@patterns XrefLast, $patterns)
+    };
+    (@patterns XrefLast, $patterns:ident) => {
+        $patterns.iter().map(|pattern|
+            ::patternsleuth::scanner::Pattern::new(pattern).unwrap()
+        ).collect::<Vec<_>>()
+    };
+    (@patterns $mode:ident, $patterns:ident) => { $patterns };
     ($fn_name:ident) => {
         $crate::__private::paste::paste! {
             $crate::define_signature_fn!(
@@ -387,7 +396,9 @@ macro_rules! wrap_process_macro {
                 // SignatureKind::Function,
                 |ctx, patterns| {
                     use $crate::signature::DefaultResult;
-                    $crate::define_pocess!(@emit_body DefaultResult, Simple, ctx, patterns)
+                    let ctx = &ctx;
+                    let patterns = $crate::wrap_process_macro!(@patterns $fn_name, patterns);
+                    $crate::define_pocess!(@emit_body DefaultResult, $fn_name, ctx, patterns)
                 }
             );
         }

@@ -78,11 +78,15 @@ unsafe extern "C" fn original_shared(value: &Native) -> &i32 {
 
 #[inline(never)]
 unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
-    &std::hint::black_box(value).0
+    // Keep this target semantically distinct from original_shared under ICF.
+    let value = std::hint::black_box(value);
+    value.0 += 2;
+    &value.0
 }
 
 #[test]
 fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
+    assert_ne!(original_shared as *const (), original_exclusive as *const ());
     unsafe {
         Native::__UNCHAINED_BINDING_borrowed.binding()
             .initialize(1, original_borrowed as *const () as u64 - 1).unwrap();
@@ -110,13 +114,13 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
         assert_eq!(*shared_call(pointer), 43);
         assert_eq!(*exclusive_call(pointer), 43);
         assert_eq!(*Native::shared_read(&value), 43);
-        assert_eq!(*Native::exclusive_read(&mut value), 43);
+        assert_eq!(*Native::exclusive_read(&mut value), 45);
         __UNCHAINED_HOOK_borrowed.get().unwrap().disable().unwrap();
         __UNCHAINED_HOOK_shared_read.get().unwrap().disable().unwrap();
         __UNCHAINED_HOOK_exclusive_read.get().unwrap().disable().unwrap();
         let pointer = &raw mut value;
-        assert_eq!(*shared_call(pointer), 43);
-        assert_eq!(*exclusive_call(pointer), 43);
+        assert_eq!(*shared_call(pointer), 45);
+        assert_eq!(*exclusive_call(pointer), 47);
     }
 }
 

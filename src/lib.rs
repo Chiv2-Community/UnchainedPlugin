@@ -631,7 +631,7 @@ pub fn apply_patches(offsets: std::collections::HashMap<String, u64>) {
         }
         // Run the condition check
         if (p.enabled_fn)() {
-            match unsafe { (p.patch_fn)(*unchained::startup::BASE_ADDR, offsets.clone()) } {
+            match unsafe { (p.patch_fn)(*unchained::startup::BASE_ADDR, &offsets) } {
                 Ok(_) => sinfo!("[+] Patch Applied: {} ({})", p.name, p.tag),
                 Err(e) => serror!("[-] Patch Failed: {} ({}) -> {}", p.name, p.tag, e),
             }

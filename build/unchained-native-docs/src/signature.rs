@@ -118,15 +118,16 @@ fn type_name(ty: &Type, owner: &str) -> Option<String> {
             }
             Some(canonical(&name).to_owned())
         }
-        Type::Ptr(pointer) => Some(format!(
-            "{}{}*",
-            if pointer.mutability.is_some() {
-                ""
+        Type::Ptr(pointer) => {
+            let pointee = type_name(&pointer.elem, owner)?;
+            Some(if pointer.mutability.is_some() {
+                format!("{pointee}*")
+            } else if pointee.ends_with('*') {
+                format!("{pointee}const*")
             } else {
-                "const"
-            },
-            type_name(&pointer.elem, owner)?
-        )),
+                format!("const{pointee}*")
+            })
+        }
         Type::Paren(ty) => type_name(&ty.elem, owner),
         Type::Group(ty) => type_name(&ty.elem, owner),
         _ => None,

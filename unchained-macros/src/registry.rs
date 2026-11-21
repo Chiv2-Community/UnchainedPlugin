@@ -14,7 +14,7 @@ pub struct HookRegistration {
 }
 
 pub type RegistrationPredicate = fn() -> bool;
-pub type CreatePatchFn = unsafe fn(usize, HashMap<String, u64>)
+pub type CreatePatchFn = unsafe fn(usize, &HashMap<String, u64>)
     -> Result<(), Box<dyn std::error::Error>>;
 
 pub struct PatchRegistration {

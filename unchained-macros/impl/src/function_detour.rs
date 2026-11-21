@@ -122,15 +122,16 @@ pub(super) fn expand_binding(
         }
     });
     let mut expanded = function.clone();
+    let native_call = format_ident!("__unchained_native_call", span = Span::mixed_site());
     super::consume_native_parameter_metadata(&mut expanded.sig)?;
     attach_native_documentation(&mut expanded.attrs, &format!("binding-{resolver_name}"), &documentation);
     expanded.block = Box::new(syn::parse2(quote!({
         #resolver_check
-        let native: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
+        let #native_call: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
             ::core::mem::transmute(#storage.address()
                 .expect(concat!("Native binding ", #resolver_name, " is not initialized")).get())
         };
-        unsafe { native(#(#arguments),*) }
+        unsafe { #native_call(#(#arguments),*) }
     }))?);
     if !expanded.attrs.iter().any(|a| a.path().is_ident("inline")) {
         expanded.attrs.push(syn::parse_quote!(#[inline(always)]));

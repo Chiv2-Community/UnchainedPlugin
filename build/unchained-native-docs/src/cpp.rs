@@ -663,6 +663,24 @@ impl SourceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_pointer_qualifiers_select_the_correct_implementation() {
+        let fixture = Fixture::new();
+        let header = Path::new("Source/Test/Public/Native.h");
+        fixture.write("Source/Test/Public/Native.h", "struct Native {};");
+        fixture.write("Source/Test/Private/Native.cpp",
+            "void Native::Call(FString* const** Value) { Correct(); }\n\
+             void Native::Call(const FString*** Value) { Wrong(); }");
+        let signature = crate::signature::BindingSignature::from_rust(
+            &syn::parse_quote! { unsafe fn Call(value: *mut *const *mut FString) },
+            "Native",
+        ).unwrap();
+        let selected = SourceIndex::new()
+            .find_implementation_for_binding(&fixture.0, header, "Native::Call", Some(&signature))
+            .unwrap().unwrap();
+        assert!(selected.code.contains("Correct()"), "Selected {}", selected.code);
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);

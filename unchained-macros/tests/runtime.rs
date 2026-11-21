@@ -22,6 +22,10 @@ mod tools {
 }
 
 unchained_macros::CREATE_PATCH_PLATFORM!(STEAM, FixturePatch, BYTES, &[0x90]);
+unchained_macros::CREATE_PATCH!(FixturePatch @ Start, BYTES, &[0xAB]);
+unchained_macros::CREATE_PATCH!(FixturePatch @ Offset, 1, BYTES, &[0xCD]);
+unchained_macros::CREATE_PATCH!(FixturePatch @ Conditional, BYTES, &[0xEF], IF { true });
+unchained_macros::CREATE_PATCH!(FixturePatch @ Disabled, 1, BYTES, &[0xFF], IF { false });
 
 inventory::submit! {
     OffsetRegisty {
@@ -49,15 +53,31 @@ fn functions_initialize_with_the_host_supplied_base() {
 #[test]
 fn patches_use_shared_registration_and_the_host_supplied_base() {
     let registration = inventory::iter::<PatchRegistration>.into_iter()
-        .find(|registration| registration.name == "FixturePatch").unwrap();
+        .find(|registration| registration.name == "FixturePatch" && registration.tag == "base").unwrap();
     assert!(!(registration.enabled_fn)());
     PLATFORM.set(PlatformType::STEAM).unwrap();
     assert!((registration.enabled_fn)());
     let mut bytes = [0u8; 4];
     let base = bytes.as_mut_ptr() as usize;
     let offsets = HashMap::from([("FixturePatch".to_string(), 2)]);
-    unsafe { (registration.patch_fn)(base, offsets).unwrap(); }
+    unsafe { (registration.patch_fn)(base, &offsets).unwrap(); }
     assert_eq!(bytes, [0, 0, 0x90, 0]);
+    for (tag, expected) in [
+        ("Start", [0, 0, 0xAB, 0]),
+        ("Offset", [0, 0, 0xAB, 0xCD]),
+        ("Conditional", [0, 0, 0xEF, 0xCD]),
+        ("Disabled", [0, 0, 0xEF, 0xCD]),
+    ] {
+        let registration = inventory::iter::<PatchRegistration>.into_iter()
+            .find(|registration| registration.name == "FixturePatch" && registration.tag == tag).unwrap();
+        if (registration.enabled_fn)() {
+            unsafe { (registration.patch_fn)(base, &offsets).unwrap(); }
+        }
+        assert_eq!(bytes, expected, "{tag}");
+        let error = unsafe { (registration.patch_fn)(base, &HashMap::new()) }.unwrap_err();
+        assert_eq!(error.to_string(), "Offset for FixturePatch not found");
+    }
+    assert_eq!(offsets["FixturePatch"], 2);
 }
 
 #[test]
