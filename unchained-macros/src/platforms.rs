@@ -72,21 +72,22 @@ mod tests {
 
     define_pattern_resolver!(TestShared, ["11 22"]);
 
-    #[test]
-    fn restrictions_apply_across_macro_forms_and_storefronts() {
-        for (name, restriction) in [
+    #[test_case::test_matrix(
+        [
             ("TestSteamOnly", Some(PlatformType::STEAM)),
             ("TestEpicOnly", Some(PlatformType::EGS)),
             ("TestSteamCall", Some(PlatformType::STEAM)),
             ("TestInlineSteamOnly", Some(PlatformType::STEAM)),
             ("TestShared", None),
             ("TestUnregistered", None),
-        ] {
-            for platform in [PlatformType::STEAM, PlatformType::EGS, PlatformType::XBOX, PlatformType::OTHER] {
-                assert_eq!(supports_platform(name, platform),
-                    restriction.map_or(true, |expected| expected == platform),
-                    "{name} on {platform}");
-            }
-        }
+        ],
+        [PlatformType::STEAM, PlatformType::EGS, PlatformType::XBOX, PlatformType::OTHER]
+    )]
+    fn restrictions_apply_across_macro_forms_and_storefronts(
+        (name, restriction): (&str, Option<PlatformType>), platform: PlatformType,
+    ) {
+        assert_eq!(supports_platform(name, platform),
+            restriction.map_or(true, |expected| expected == platform),
+            "{name} on {platform}");
     }
 }

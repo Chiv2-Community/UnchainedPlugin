@@ -178,35 +178,31 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> s
 mod tests {
     use super::*;
 
-    #[test]
-    fn rejects_duplicate_bindings_and_metadata_collisions() {
-        for implementation in [
-            quote!(impl Native {
+    #[test_case::test_case(quote!(), quote!(impl Native {
                 #[bind_resolved_func(Resolver)]
                 #[bind_resolved_request_function(GetPost_Example)]
                 unsafe fn call(&self) {}
-            }),
-            quote!(impl Native {
+            }); "duplicate bindings")]
+    #[test_case::test_case(quote!(), quote!(impl Native {
                 const __UNCHAINED_BINDING_call: () = ();
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
-            }),
-            quote!(impl Native {
+            }); "binding collision")]
+    #[test_case::test_case(quote!(), quote!(impl Native {
                 const __UNCHAINED_MUTABILITY_call: () = ();
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
-            }),
-            quote!(impl Native {
+            }); "mutability collision")]
+    #[test_case::test_case(quote!(), quote!(impl Native {
                 const __UNCHAINED_PARAMETERS_call: () = ();
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
-            }),
-            quote!(impl<T> Native<T> {}),
-            quote!(impl Trait for Native {}),
-        ] {
-            assert!(expand_impl(quote!(), implementation).is_err());
-        }
-        assert!(expand_impl(quote!(unexpected), quote!(impl Native {})).is_err());
+            }); "parameters collision")]
+    #[test_case::test_case(quote!(), quote!(impl<T> Native<T> {}); "generic impl")]
+    #[test_case::test_case(quote!(), quote!(impl Trait for Native {}); "trait impl")]
+    #[test_case::test_case(quote!(unexpected), quote!(impl Native {}); "arguments")]
+    fn rejects_invalid_binding_impls(args: Tokens, implementation: Tokens) {
+        assert!(expand_impl(args, implementation).is_err());
     }
 
     #[test]

@@ -412,60 +412,50 @@ mod tests {
         assert_eq!(normalized.to_token_stream().to_string(), expected.to_token_stream().to_string());
     }
 
-    #[test]
-    fn multiple_overrides_accept_both_pointer_and_reference_spellings() {
-        for ty in [quote!(*const u32), quote!(*mut u32), quote!(&u32), quote!(&mut u32)] {
-            let expanded = expand(
-                quote!(Native::Call),
-                quote!(unsafe fn replacement(
-                    #[mutability_override] first: #ty,
-                    #[mutability_override] second: #ty,
-                ) {}),
-            ).unwrap();
-            let text = expanded.to_string();
-            assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
-            assert!(!text.contains("__UNCHAINED_PARAMETERS_Call"));
-            assert!(!text.contains("# [mutability_override]"));
-            syn::parse2::<syn::File>(expanded).unwrap();
-        }
+    #[test_case::test_case(quote!(*const u32); "const pointer")]
+    #[test_case::test_case(quote!(*mut u32); "mutable pointer")]
+    #[test_case::test_case(quote!(&u32); "shared reference")]
+    #[test_case::test_case(quote!(&mut u32); "mutable reference")]
+    fn multiple_overrides_accept_both_pointer_and_reference_spellings(ty: Tokens) {
+        let expanded = expand(
+            quote!(Native::Call),
+            quote!(unsafe fn replacement(
+                #[mutability_override] first: #ty,
+                #[mutability_override] second: #ty,
+            ) {}),
+        ).unwrap();
+        let text = expanded.to_string();
+        assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
+        assert!(!text.contains("__UNCHAINED_PARAMETERS_Call"));
+        assert!(!text.contains("# [mutability_override]"));
+        syn::parse2::<syn::File>(expanded).unwrap();
     }
 
-    #[test]
-    fn mutability_override_rejects_values_and_invalid_annotations() {
-        for function in [
-            quote!(unsafe fn replacement(#[mutability_override] value: u32) {}),
-            quote!(unsafe fn replacement(#[mutability_override()] value: *mut u32) {}),
-            quote!(unsafe fn replacement(#[mutability_override] #[mutability_override] value: *mut u32) {}),
-        ] {
-            assert!(expand(quote!(Native::Call), function).is_err());
-        }
+    #[test_case::test_case(quote!(unsafe fn replacement(#[mutability_override] value: u32) {}); "value")]
+    #[test_case::test_case(quote!(unsafe fn replacement(#[mutability_override()] value: *mut u32) {}); "arguments")]
+    #[test_case::test_case(quote!(unsafe fn replacement(#[mutability_override] #[mutability_override] value: *mut u32) {}); "duplicate")]
+    fn mutability_override_rejects_values_and_invalid_annotations(function: Tokens) {
+        assert!(expand(quote!(Native::Call), function).is_err());
     }
 
-    #[test]
-    fn conditions_preserve_status_aliases_and_custom_predicates() {
-        for (args, expected) in [
-            (quote!(Native::call), quote!(|| true)),
-            (quote!(Native::call,), quote!(|| true)),
-            (quote!(Native::call, ACTIVE), quote!(|| true)),
-            (quote!(Native::call, INACTIVE), quote!(|| false)),
-            (quote!(Native::call, CALLED), quote!(|| false)),
-            (quote!(Native::call, DISABLED), quote!(|| false)),
-            (quote!(Native::call, || enabled()), quote!(|| enabled())),
-            (quote!(Native::call, enabled), quote!(enabled)),
-        ] {
-            let expanded = expand(
-                args,
-                quote!(unsafe fn replacement() {}),
-            ).unwrap();
-            let file = syn::parse2::<syn::File>(expanded).unwrap();
-            let condition = file.items.iter().find_map(|item| match item {
-                syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" =>
-                    Some(&function.block),
-                _ => None,
-            }).unwrap();
-            let expected: syn::Block = syn::parse2(quote!({ (#expected)() })).unwrap();
-            assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
-        }
+    #[test_case::test_case(quote!(Native::call), quote!(|| true); "default")]
+    #[test_case::test_case(quote!(Native::call,), quote!(|| true); "trailing comma")]
+    #[test_case::test_case(quote!(Native::call, ACTIVE), quote!(|| true); "active")]
+    #[test_case::test_case(quote!(Native::call, INACTIVE), quote!(|| false); "inactive")]
+    #[test_case::test_case(quote!(Native::call, CALLED), quote!(|| false); "called")]
+    #[test_case::test_case(quote!(Native::call, DISABLED), quote!(|| false); "disabled")]
+    #[test_case::test_case(quote!(Native::call, || enabled()), quote!(|| enabled()); "closure")]
+    #[test_case::test_case(quote!(Native::call, enabled), quote!(enabled); "function")]
+    fn conditions_preserve_status_aliases_and_custom_predicates(args: Tokens, expected: Tokens) {
+        let expanded = expand(args, quote!(unsafe fn replacement() {})).unwrap();
+        let file = syn::parse2::<syn::File>(expanded).unwrap();
+        let condition = file.items.iter().find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" =>
+                Some(&function.block),
+            _ => None,
+        }).unwrap();
+        let expected: syn::Block = syn::parse2(quote!({ (#expected)() })).unwrap();
+        assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
     }
 
     fn documentation(attributes: &[syn::Attribute]) -> String {
@@ -538,43 +528,21 @@ mod tests {
         assert!(docs.contains("Invoking `model::Native::Call` in this project directly skips this detour."));
     }
 
-    #[test]
-    fn rejects_non_method_targets_and_invalid_replacement_declarations() {
-        for target in [
-            quote!(Resolver),
-            quote!(Type::<u8>::call),
-            quote!(Type::call::<u8>),
-        ] {
-            assert!(expand(
-                target,
-                quote!(
-                    unsafe fn replacement() {}
-                )
-            )
-            .is_err());
-        }
-        for declaration in [
-            quote!(
-                fn replacement() {}
-            ),
-            quote!(
-                unsafe fn replacement<T>(value: T) {}
-            ),
-            quote!(
-                async unsafe fn replacement() {}
-            ),
-            quote!(
-                unsafe extern "C" fn replacement() {}
-            ),
-            quote!(
-                unsafe fn replacement(&self) {}
-            ),
-            quote!(
-                unsafe fn replacement<'a: 'static>(value: &'a i32) {}
-            ),
-        ] {
-            assert!(expand(quote!(Type::call), declaration).is_err());
-        }
+    #[test_case::test_case(quote!(Resolver); "non method")]
+    #[test_case::test_case(quote!(Type::<u8>::call); "generic type")]
+    #[test_case::test_case(quote!(Type::call::<u8>); "generic method")]
+    fn rejects_non_method_targets(target: Tokens) {
+        assert!(expand(target, quote!(unsafe fn replacement() {})).is_err());
+    }
+
+    #[test_case::test_case(quote!(fn replacement() {}); "safe")]
+    #[test_case::test_case(quote!(unsafe fn replacement<T>(value: T) {}); "generic")]
+    #[test_case::test_case(quote!(async unsafe fn replacement() {}); "async")]
+    #[test_case::test_case(quote!(unsafe extern "C" fn replacement() {}); "explicit ABI")]
+    #[test_case::test_case(quote!(unsafe fn replacement(&self) {}); "receiver")]
+    #[test_case::test_case(quote!(unsafe fn replacement<'a: 'static>(value: &'a i32) {}); "lifetime bound")]
+    fn rejects_invalid_replacement_declarations(declaration: Tokens) {
+        assert!(expand(quote!(Type::call), declaration).is_err());
     }
 
     #[test]

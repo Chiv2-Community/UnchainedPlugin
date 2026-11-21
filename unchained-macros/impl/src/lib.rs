@@ -357,69 +357,71 @@ mod tests {
         let syn::FnArg::Typed(argument) = &signature.inputs[0] else { unreachable!() };
         assert!(argument.attrs.is_empty());
         assert!(matches!(argument.ty.as_ref(), syn::Type::Ptr(pointer) if pointer.mutability.is_some()));
-        for mut signature in [
-            syn::parse_quote!(unsafe fn Call(#[native_by_value] value: *const Callback)),
-            syn::parse_quote!(unsafe fn Call(#[native_by_value] value: &mut Callback)),
-            syn::parse_quote!(unsafe fn Call(#[native_by_value()] value: *mut Callback)),
-            syn::parse_quote!(unsafe fn Call(#[native_by_value] #[native_by_value] value: *mut Callback)),
-        ] {
-            assert!(super::consume_native_parameter_metadata(&mut signature).is_err());
-        }
     }
 
-    #[test]
-    fn runtime_type_markers_preserve_declarations_and_generate_no_registration() {
+    #[test_case::test_case(syn::parse_quote!(unsafe fn Call(#[native_by_value] value: *const Callback)); "const pointer")]
+    #[test_case::test_case(syn::parse_quote!(unsafe fn Call(#[native_by_value] value: &mut Callback)); "reference")]
+    #[test_case::test_case(syn::parse_quote!(unsafe fn Call(#[native_by_value()] value: *mut Callback)); "arguments")]
+    #[test_case::test_case(syn::parse_quote!(unsafe fn Call(#[native_by_value] #[native_by_value] value: *mut Callback)); "duplicate")]
+    fn indirect_by_value_metadata_rejects_invalid_annotations(mut signature: syn::Signature) {
+        assert!(super::consume_native_parameter_metadata(&mut signature).is_err());
+    }
+
+    #[test_case::test_case(quote!(#[repr(C)] pub struct Native<T, const N: usize> where T: Copy { value: [T; N] }); "struct")]
+    #[test_case::test_case(quote!(#[repr(u8)] pub enum Native { First, Second }); "enum")]
+    #[test_case::test_case(quote!(#[repr(C)] pub union Native<T: Copy> { value: T, raw: usize }); "union")]
+    #[test_case::test_case(quote!(pub type Native<T> = *mut T;); "alias")]
+    fn runtime_type_markers_preserve_declarations_and_generate_no_registration(tokens: Tokens) {
         use quote::ToTokens;
-        for tokens in [
-            quote::quote!(#[repr(C)] pub struct Native<T, const N: usize> where T: Copy { value: [T; N] }),
-            quote::quote!(#[repr(u8)] pub enum Native { First, Second }),
-            quote::quote!(#[repr(C)] pub union Native<T: Copy> { value: T, raw: usize }),
-            quote::quote!(pub type Native<T> = *mut T;),
-        ] {
-            let original: syn::Item = syn::parse2(tokens.clone()).unwrap();
-            let expanded = super::expand_runtime_bindings(quote::quote!(), tokens).unwrap();
-            assert!(!expanded.to_string().contains("inventory"));
-            let mut actual: syn::Item = syn::parse2(expanded).unwrap();
-            let attributes = match &mut actual {
-                syn::Item::Struct(item) => &mut item.attrs,
-                syn::Item::Enum(item) => &mut item.attrs,
-                syn::Item::Union(item) => &mut item.attrs,
-                syn::Item::Type(item) => &mut item.attrs,
-                _ => unreachable!(),
-            };
-            assert!(attributes.remove(0).to_token_stream().to_string().contains("Native type"));
-            assert_eq!(actual.to_token_stream().to_string(), original.to_token_stream().to_string());
-        }
+        let original: syn::Item = syn::parse2(tokens.clone()).unwrap();
+        let expanded = super::expand_runtime_bindings(quote!(), tokens).unwrap();
+        assert!(!expanded.to_string().contains("inventory"));
+        let mut actual: syn::Item = syn::parse2(expanded).unwrap();
+        let attributes = match &mut actual {
+            syn::Item::Struct(item) => &mut item.attrs,
+            syn::Item::Enum(item) => &mut item.attrs,
+            syn::Item::Union(item) => &mut item.attrs,
+            syn::Item::Type(item) => &mut item.attrs,
+            _ => unreachable!(),
+        };
+        assert!(attributes.remove(0).to_token_stream().to_string().contains("Native type"));
+        assert_eq!(actual.to_token_stream().to_string(), original.to_token_stream().to_string());
     }
 
-    #[test]
-    fn runtime_type_markers_reject_arguments_and_non_type_items() {
-        assert!(super::expand_runtime_bindings(quote::quote!(Other), quote::quote!(struct Native;)).is_err());
-        assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(fn helper() {})).is_err());
-        assert!(super::expand_runtime_bindings(quote::quote!(), quote::quote!(trait Native {})).is_err());
-    }
-    #[test]
-    fn request_bindings_reject_non_request_keys() {
-        for key in [quote!(GetPost_), quote!(CreateHttpRequest), quote!(module::GetPost_GetMotd),
-            quote!("GetPost_GetMotd"), quote!(GetPost_GetMotd<u8>)]
-        {
-            assert!(expand_request(key, quote!(pub unsafe fn request() {})).is_err());
-        }
+    #[test_case::test_case(quote!(Other), quote!(struct Native;); "arguments")]
+    #[test_case::test_case(quote!(), quote!(fn helper() {}); "function")]
+    #[test_case::test_case(quote!(), quote!(trait Native {}); "trait")]
+    fn runtime_type_markers_reject_arguments_and_non_type_items(args: Tokens, item: Tokens) {
+        assert!(super::expand_runtime_bindings(args, item).is_err());
     }
 
-    #[test_case::test_case(quote!(fn release(&mut self) {}), "require unsafe"; "safe function")]
-    #[test_case::test_case(quote!(unsafe fn release(self) {}), "borrowed or raw-pointer"; "by value receiver")]
-    #[test_case::test_case(quote!(unsafe fn release(&mut self) { panic!() }), "must be empty"; "nonempty body")]
-    #[test_case::test_case(quote!(unsafe fn release<T>(&mut self, value: T) {}), "non-generic"; "generic method")]
-    #[test_case::test_case(quote!(async unsafe fn release(&mut self) {}), "non-async"; "async method")]
-    #[test_case::test_case(quote!(unsafe fn release((a, b): (u8, u8)) {}), "plain identifiers"; "destructured argument")]
-    fn rejects_unsupported_native_declarations(item: Tokens, message: &str) {
-        for error in [
-            expand(quote!(Release), item.clone()).unwrap_err(),
-            expand_request(quote!(GetPost_Fixture), item).unwrap_err(),
-        ] {
-            assert!(error.to_string().contains(message), "{error}");
-        }
+    #[test_case::test_case(quote!(GetPost_); "empty suffix")]
+    #[test_case::test_case(quote!(CreateHttpRequest); "wrong prefix")]
+    #[test_case::test_case(quote!(module::GetPost_GetMotd); "qualified")]
+    #[test_case::test_case(quote!("GetPost_GetMotd"); "literal")]
+    #[test_case::test_case(quote!(GetPost_GetMotd<u8>); "generic")]
+    fn request_bindings_reject_non_request_keys(key: Tokens) {
+        assert!(expand_request(key, quote!(pub unsafe fn request() {})).is_err());
+    }
+
+    #[test_case::test_matrix(
+        [
+            (quote!(fn release(&mut self) {}), "require unsafe"),
+            (quote!(unsafe fn release(self) {}), "borrowed or raw-pointer"),
+            (quote!(unsafe fn release(&mut self) { panic!() }), "must be empty"),
+            (quote!(unsafe fn release<T>(&mut self, value: T) {}), "non-generic"),
+            (quote!(async unsafe fn release(&mut self) {}), "non-async"),
+            (quote!(unsafe fn release((a, b): (u8, u8)) {}), "plain identifiers"),
+        ],
+        [true, false]
+    )]
+    fn rejects_unsupported_native_declarations((item, message): (Tokens, &str), request: bool) {
+        let error = if request {
+            expand_request(quote!(GetPost_Fixture), item)
+        } else {
+            expand(quote!(Release), item)
+        }.unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
     }
 
     #[test]
@@ -428,16 +430,14 @@ mod tests {
         assert!(expand_value(quote!(NativeValue<u8>, Value), quote!(unsafe fn value() -> u32 {})).is_err());
     }
 
-    #[test]
-    fn rejects_invalid_value_binding_modes() {
-        assert!(expand_value(quote!(Objects, Address), quote!(unsafe fn objects() -> u32 {}))
-            .unwrap_err().to_string().contains("raw pointer return type"));
-        assert!(expand_value(quote!(Objects, unknown), quote!(unsafe fn objects() -> *const u32 {})).is_err());
-        assert!(expand_value(quote!(Objects, Address, Address), quote!(unsafe fn objects() -> *const u32 {})).is_err());
-        assert!(expand_value(quote!(Objects), quote!(unsafe fn objects() -> *const u32 {}))
-            .unwrap_err().to_string().contains("explicit Value or Address"));
-        assert!(expand_value(quote!(Objects, address), quote!(unsafe fn objects() -> *const u32 {}))
-            .unwrap_err().to_string().contains("expected Value or Address"));
+    #[test_case::test_case(quote!(Objects, Address), quote!(unsafe fn objects() -> u32 {}), "raw pointer return type"; "scalar address")]
+    #[test_case::test_case(quote!(Objects, unknown), quote!(unsafe fn objects() -> *const u32 {}), "expected Value or Address"; "unknown mode")]
+    #[test_case::test_case(quote!(Objects, Address, Address), quote!(unsafe fn objects() -> *const u32 {}), "unexpected native value binding arguments"; "extra mode")]
+    #[test_case::test_case(quote!(Objects), quote!(unsafe fn objects() -> *const u32 {}), "explicit Value or Address"; "missing mode")]
+    #[test_case::test_case(quote!(Objects, address), quote!(unsafe fn objects() -> *const u32 {}), "expected Value or Address"; "lowercase mode")]
+    fn rejects_invalid_value_binding_modes(args: Tokens, item: Tokens, message: &str) {
+        let error = expand_value(args, item).unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
     }
 
     #[test_case::test_case(quote!(fn value() -> u32 {}), "require unsafe"; "safe accessor")]

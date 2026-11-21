@@ -74,20 +74,20 @@ fn initialize() {
     }
 }
 
-#[test]
-fn generated_bindings_forward_receivers_arguments_and_returns() {
+#[test_case::test_case(-100; "negative")]
+#[test_case::test_case(0; "zero")]
+#[test_case::test_case(100; "positive")]
+fn generated_bindings_forward_receivers_arguments_and_returns(value: i32) {
     initialize();
-    for value in [-100, 0, 100] {
-        let mut native = Native { value };
-        unsafe {
-            assert_eq!(native.read(7), value + 7);
-            native.write(value + 1);
-            assert_eq!(native.value, value + 1);
-            assert_eq!((&raw const native).raw_read(3), value + 4);
-            (&raw mut native).raw_write(value + 2);
-            assert_eq!(native.value, value + 2);
-            assert_eq!(Native::add(value, 5), value + 5);
-        }
+    let mut native = Native { value };
+    unsafe {
+        assert_eq!(native.read(7), value + 7);
+        native.write(value + 1);
+        assert_eq!(native.value, value + 1);
+        assert_eq!((&raw const native).raw_read(3), value + 4);
+        (&raw mut native).raw_write(value + 2);
+        assert_eq!(native.value, value + 2);
+        assert_eq!(Native::add(value, 5), value + 5);
     }
 }
 
