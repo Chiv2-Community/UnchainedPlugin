@@ -12,7 +12,7 @@ renaming one requires updating every consumer and a fresh scan.
 
 ## Startup roots
 
-`startup_resolvers_for(key)` selects roots from compiled bindings and applicable patches, not
+`startup_resolvers(&snapshot)` selects roots from compiled bindings and applicable patches, not
 Patternsleuth's entire inventory. Declarations alone are not roots; dependencies
 resolve automatically in the shared context.
 
@@ -28,10 +28,10 @@ filtering still apply; existing unrelated cache entries are retained.
 ```rust,ignore
 define_pattern_resolver!(Name, ["AA BB CC"]);             // Simple
 define_pattern_resolver!(Name, Call, ["E8 | ?? ?? ?? ??"]);
-define_pattern_resolver!(Name, select Mode; [current_mode(), Mode::Shared], {
+define_pattern_resolver!(Name, {
     Mode::Read: ["AA BB"],
     Mode::Write: ["CC DD"],
-    Mode::Shared: ["EE FF"],
+    Mode::Other: ["EE FF"],
 });
 ```
 
@@ -48,33 +48,37 @@ Xref modes ignore later patterns. Verify reference ordering; they do not require
 a unique function candidate.
 
 Selection dictionaries take a consumer-defined, non-generic fieldless enum
-annotated with `resolver_selection_key`. They append matches in the explicit
-selection-list order. Missing keys contribute nothing; there is no implicit
-shared key or fallback. Duplicate dictionary keys and unknown/mismatched variants
-are compile errors. Use `None` to disable a key, including its hooks/patches:
+annotated with `resolver_selection_key`, plus a `ResolverSelector` implementation
+that supplies `current()`. Qualified keys identify that provider.
+Use `fallback = Other` on the attribute to generate a terminal fallback, or
+override `fallback(self)` for longer chains. The snapshot freezes the chain and
+rejects cycles. Duplicate keys, empty lists, and unknown/mismatched variants are
+compile errors. Use `None` to disable a key, including its hooks/patches:
 
 ```rust,ignore
-define_pattern_resolver!(ReadOnly, select Mode; [current_mode(), Mode::Shared], {
+define_pattern_resolver!(ReadOnly, {
     Mode::Read: ["AA BB"],
     Mode::Write: None,
-    Mode::Shared: ["CC DD"],
+    Mode::Other: ["CC DD"],
 });
 ```
 
-The first selected key determines applicability; `None` overrides shared
-patterns and prevents inline execution. `[]` means enabled with no local
-patterns. Omitted optional keys remain enabled and contribute no patterns.
+Only a missing dictionary key advances to fallback. The first declared entry
+wins; `None` stops resolution and prevents inline execution. A declared list
+that fails to match the binary does not fall back. Exhausting the chain disables
+the resolver for that selection.
 
 Declare required keys with
-`#[resolver_selection_key(require = [Read, Write])]`. Every dictionary must include those keys
-with patterns or `None`; omissions fail at compile time.
+`#[resolver_selection_key(require = [Read, Write], fallback = Other)]`.
+Every dictionary must include required keys with nonempty patterns or `None`;
+omissions fail at compile time, even if a fallback exists.
 The trait exposes them as `SelectionKey::REQUIRED`.
 Plain pattern lists are selector-independent and apply to every key.
-The enum type after `select` publishes typed resolver availability for
+The qualified enum keys publish typed resolver availability for
 [compile-time patch compatibility checks](patches.md).
 
 For custom processing, supply expressions and an inline body returning
-`patternsleuth::resolvers::Result<u64>`. The body receives the combined patterns:
+`patternsleuth::resolvers::Result<u64>`. The body receives the chosen entry's patterns:
 
 ```rust,ignore
 define_pattern_resolver!(Name, ["AA BB"], |ctx, patterns| {

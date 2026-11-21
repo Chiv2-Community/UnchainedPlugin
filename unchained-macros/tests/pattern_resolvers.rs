@@ -28,62 +28,62 @@ define_pattern_resolver!(LastReference, XrefLast, [
 
 mod nested {
     use unchained_macros::define_pattern_resolver;
-    use super::support::{Flavor, current_flavor};
+    use super::support::Flavor;
 
-    define_pattern_resolver!(Dictionary, select Flavor; [current_flavor(), Flavor::Shared], {
+    #[unchained_macros::resolver_selection_key(fallback = Declared)]
+    enum Fallback { Missing, Declared }
+    impl unchained_macros::ResolverSelector for Fallback {
+        fn current() -> Self { Self::Missing }
+    }
+
+    define_pattern_resolver!(Dictionary, {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     });
-    define_pattern_resolver!(InlineDictionary, select Flavor; [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(InlineDictionary, {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
-    define_pattern_resolver!(SelectedOnly, select Flavor; [current_flavor()], {
-        Flavor::First: ["AA BB"],
-        Flavor::Second: ["CC DD"],
-        Flavor::Shared: ["11 22"],
+    define_pattern_resolver!(Ordered, First, {
+        Fallback::Declared: ["11 22"],
     });
-    define_pattern_resolver!(Ordered, First, select Flavor; [Flavor::Shared, Flavor::First], {
-        Flavor::First: ["AA BB"],
-        Flavor::Second: None,
-        Flavor::Shared: ["11 22"],
-    });
-    define_pattern_resolver!(Disabled, select Flavor; [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(Disabled, {
         Flavor::First: None,
-        Flavor::Second: [],
+        Flavor::Second: [super::shared_pattern()],
         Flavor::Shared: [super::shared_pattern()],
     });
-    define_pattern_resolver!(DisabledInline, select Flavor; [current_flavor(), Flavor::Shared], {
+    define_pattern_resolver!(DisabledInline, {
         Flavor::First: None,
-        Flavor::Second: [],
+        Flavor::Second: [super::shared_pattern()],
         Flavor::Shared: [super::shared_pattern()],
     }, |_ctx, patterns| {
         super::BODY_EVALUATIONS.fetch_add(1, super::Ordering::SeqCst);
         Ok(patterns.len() as u64)
     });
-    define_pattern_resolver!(AllDisabled, select Flavor; [Flavor::First], {
+    define_pattern_resolver!(AllDisabled, {
         Flavor::First: None, Flavor::Second: None,
     });
-    define_pattern_resolver!(AllDisabledXref, XrefFirst, select Flavor; [Flavor::First], {
+    define_pattern_resolver!(AllDisabledXref, XrefFirst, {
         Flavor::First: None, Flavor::Second: None,
     });
-    define_pattern_resolver!(AllDisabledInline, select Flavor; [Flavor::First], {
+    define_pattern_resolver!(AllDisabledInline, {
         Flavor::First: None, Flavor::Second: None,
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
 }
 
 #[test]
 fn all_none_dictionaries_compile_and_cannot_resolve() {
+    if !initialize_selection(Flavor::First) { return; }
     let image = image(&[]);
     assert!(image.resolve(nested::AllDisabled::resolver()).unwrap_err().to_string().contains("disabled"));
     assert!(image.resolve(nested::AllDisabledXref::resolver()).unwrap_err().to_string().contains("disabled"));
     assert!(image.resolve(nested::AllDisabledInline::resolver()).unwrap_err().to_string().contains("disabled"));
 }
 
-#[test_case::test_case(Flavor::First, false; "none overrides shared patterns")]
-#[test_case::test_case(Flavor::Second, true; "empty list retains shared patterns")]
+#[test_case::test_case(Flavor::First, false; "none overrides fallback patterns")]
+#[test_case::test_case(Flavor::Second, true; "explicit list stays enabled")]
 fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, enabled: bool) {
     if !initialize_selection(flavor) { return; }
     assert_eq!(unchained_macros::supports_selection("Disabled", flavor), enabled);
@@ -145,28 +145,14 @@ fn xref_modes_select_root_functions_from_only_the_first_pattern() {
     assert!(missing.resolve(LastReference::resolver()).is_err());
 }
 
-#[test_case::test_case(Flavor::First; "active and shared matches are ambiguous")]
-#[test_case::test_case(Flavor::Second; "shared pattern supplies the only match")]
-#[test_case::test_case(Flavor::Shared; "repeated selections append again")]
-fn selection_dictionary_combines_explicit_keys(flavor: Flavor) {
-    if !initialize_selection(flavor) { return; }
-    let image = image(&[0x10]);
-    assert_eq!(image.resolve(nested::InlineDictionary::resolver()).unwrap().0, 2);
-    let result = image.resolve(nested::Dictionary::resolver());
-    if flavor == Flavor::First {
-        assert!(result.is_err());
-    } else {
-        assert_eq!(result.unwrap().0, TEXT);
-    }
-}
-
 #[test_case::test_case(Flavor::First, Some(TEXT + 0x10); "first only")]
-#[test_case::test_case(Flavor::Second, None; "no implicit shared key")]
-#[test_case::test_case(Flavor::Shared, Some(TEXT); "explicit shared key")]
-fn selection_dictionary_uses_only_explicit_keys(flavor: Flavor, expected: Option<u64>) {
+#[test_case::test_case(Flavor::Second, None; "failed scan does not fall back")]
+#[test_case::test_case(Flavor::Shared, Some(TEXT); "explicit fallback key")]
+fn selection_dictionary_uses_first_declared_key(flavor: Flavor, expected: Option<u64>) {
     if !initialize_selection(flavor) { return; }
     let image = image(&[0x10]);
-    let result = image.resolve(nested::SelectedOnly::resolver());
+    assert_eq!(image.resolve(nested::InlineDictionary::resolver()).unwrap().0, 1);
+    let result = image.resolve(nested::Dictionary::resolver());
     match expected {
         Some(address) => assert_eq!(result.unwrap().0, address),
         None => assert!(result.is_err()),

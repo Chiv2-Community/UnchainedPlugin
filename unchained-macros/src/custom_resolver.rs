@@ -29,6 +29,22 @@
 /// ```
 #[macro_export]
 macro_rules! define_custom_resolver {
+    // Adapt a dependency's address resolver without string-based inventory lookup.
+    ($name:ident, delegate $resolver:path $(,)?) => {
+        $crate::__pattern_resolver!(@emit_header $name);
+        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
+            Ok(Self(ctx.resolve(<$resolver>::resolver()).await?.0))
+        });
+    };
+    ($name:ident, using $selector:ty, |$key:ident| $matcher:expr $(,)?) => {
+        $crate::__private::inventory::submit! { $crate::__private::SelectorProvider::of::<$selector>() }
+        $crate::__pattern_resolver!(@emit_header $name);
+        ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
+            let snapshot = $crate::__private::context_snapshot(ctx).await?;
+            let $key = snapshot.get::<$selector>().map_err(::patternsleuth::resolvers::ResolveError::new_msg)?;
+            Ok(Self($crate::__private::single_address(($matcher).resolve(ctx).await?)))
+        });
+    };
     ($name:ident, with($selection:expr), |$key:ident| $matcher:expr $(,)?) => {
         $crate::define_custom_resolver!($name, {
             let $key = $selection;
@@ -36,7 +52,7 @@ macro_rules! define_custom_resolver {
         });
     };
     ($name:ident, $matcher:expr $(,)?) => {
-        $crate::define_pattern_resolver!(@emit_header $name);
+        $crate::__pattern_resolver!(@emit_header $name);
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             Ok(Self($crate::__private::single_address(($matcher).resolve(ctx).await?)))
         });

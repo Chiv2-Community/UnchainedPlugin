@@ -7,9 +7,12 @@ pub use unchained_macros_impl::{
     bind_resolved_request_function, resolver_selection_key,
 };
 
+#[doc = include_str!("../resolver-declarations.md")]
+pub use unchained_macros_impl::define_pattern_resolver;
+
 #[doc = include_str!("../patches.md")]
 pub use unchained_macros_impl::register_patch;
-pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, validate_patch_registrations};
+pub use patch::{Patch, PatchWriter, WriteValue, PatchApplication, apply_registered_patches, validate_patch_registrations};
 
 /// Attach a replacement with the native binding's exact signature.
 ///
@@ -31,7 +34,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -46,7 +49,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -61,7 +64,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -76,7 +79,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -91,7 +94,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -104,7 +107,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -119,7 +122,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -132,7 +135,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -148,7 +151,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -163,7 +166,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -177,7 +180,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -192,7 +195,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 ///
 /// ```compile_fail
 /// use unchained_macros::{runtime_bindings, bind_func_detour};
-/// struct Resolver;
+/// # unchained_macros::define_pattern_resolver!(Resolver, ["AA"]);
 /// struct Native;
 /// #[runtime_bindings]
 /// impl Native {
@@ -203,7 +206,7 @@ pub use patch::{Patch, PatchWriter, PatchApplication, apply_registered_patches, 
 /// unsafe fn replacement(#[mutability_override] value: &mut u32, other: &mut u32) {}
 /// ```
 pub use unchained_macros_impl::bind_func_detour;
-pub use binding::{ResolvedAddress, FunctionBinding, BindingRegistration, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
+pub use binding::{ResolvedAddress, FunctionBinding, FunctionSource, BindingRegistration, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
 #[doc(hidden)]
 pub use binding::{NativeFunction, NativeSignature};
 pub use binding::{NativeGlobalPointer, NativeGlobalTarget};
@@ -214,8 +217,9 @@ pub use registry::{
     CreateHookFn, HookRegistration,
     PatchRegistration, OffsetRegisty,
 };
-pub use selection::{SelectionKey, ResolverDeclaration, ResolverSelection, ResolverRestriction, supports_selection};
-pub use resolvers::{DeclaredResolver, RequiredResolver, startup_resolvers, startup_resolvers_for};
+pub use selection::{SelectionKey, ResolverSelector, SelectorSnapshot, SelectorIdentity,
+    ResolverDeclaration, ResolverSelection, ResolverFilter, supports_selection};
+pub use resolvers::{ResolverDescriptor, DeclaredResolver, RequiredResolver, startup_resolvers};
 
 mod binding;
 mod registry;
@@ -231,7 +235,8 @@ pub mod __private {
     pub use crate::detour::claim_detour_address;
     pub use crate::binding::publish_function_detours;
     pub use crate::custom_resolver::single_address;
-    pub use crate::selection::{selection_key, selection_matches, dictionary_allows, resolver_selections};
+    pub use crate::selection::{selection_key, selection_matches, dictionary_allows, dictionary_lookup, resolver_selections};
+    pub use crate::selection::{SelectorProvider, selector_type, context_snapshot};
     pub use crate::patch::validate_patch_coverage;
     pub use log;
     pub use paste;

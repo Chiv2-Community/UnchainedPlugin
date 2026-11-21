@@ -48,27 +48,44 @@ impl ResolvedAddress {
     }
 }
 
-/// Resolved entry and optional Retour-owned original-call trampoline.
+/// Address source for a native function.
+pub enum FunctionSource {
+    /// A scan root with its own selection policy.
+    Resolver(&'static crate::ResolverDescriptor),
+    /// A cache key populated by a separately required offset provider.
+    ProviderOffset(&'static str),
+}
+
+/// Native target name, address source, and optional original-call trampoline.
 pub struct FunctionBinding {
+    name: &'static str,
     target: ResolvedAddress,
     detour: OnceLock<&'static retour::RawDetour>,
-    resolver: bool,
+    source: FunctionSource,
 }
 
 impl FunctionBinding {
-    pub const fn new(name: &'static str) -> Self {
-        Self { target: ResolvedAddress::new(name), detour: OnceLock::new(), resolver: true }
+    pub const fn new(name: &'static str, resolver: &'static crate::ResolverDescriptor) -> Self {
+        Self { name, target: ResolvedAddress::new(resolver.named.name), detour: OnceLock::new(), source: FunctionSource::Resolver(resolver) }
     }
 
     /// An address supplied by an offset provider, not a named resolver type.
-    pub const fn from_offset_key(name: &'static str) -> Self {
-        Self { target: ResolvedAddress::new(name), detour: OnceLock::new(), resolver: false }
+    pub const fn from_offset_key(name: &'static str, key: &'static str) -> Self {
+        Self { name, target: ResolvedAddress::new(key), detour: OnceLock::new(), source: FunctionSource::ProviderOffset(key) }
     }
 
-    pub const fn name(&self) -> &'static str { self.target.name() }
+    /// Native target name, independent of the resolver's cache key.
+    pub const fn name(&self) -> &'static str { self.name }
 
-    pub(crate) fn resolver_name(&self) -> Option<&'static str> {
-        self.resolver.then_some(self.name())
+    pub const fn source(&self) -> &FunctionSource { &self.source }
+
+    pub const fn offset_key(&self) -> &'static str { self.target.name() }
+
+    pub fn supports(&self, snapshot: &crate::SelectorSnapshot) -> bool {
+        match self.source {
+            FunctionSource::Resolver(resolver) => resolver.supports(snapshot),
+            FunctionSource::ProviderOffset(_) => true,
+        }
     }
 
     /// Original-call address, bypassing this target's registered replacement.
@@ -175,22 +192,23 @@ pub unsafe fn initialize_function_bindings(
 pub unsafe fn initialize_function_bindings_where(
     base: usize,
     offsets: &std::collections::HashMap<String, u64>,
-    enabled: impl Fn(&str) -> bool,
+    enabled: impl Fn(&FunctionBinding) -> bool,
 ) -> Result<(), String> {
     for registration in inventory::iter::<FunctionBindingRegistration>.into_iter()
-        .filter(|registration| enabled(registration.binding.name()))
+        .filter(|registration| enabled(registration.binding))
     {
         let binding = registration.binding;
-        let offset = offsets.get(binding.name())
-            .ok_or_else(|| format!("No address found for native binding {}", binding.name()))?;
+        let offset = offsets.get(binding.offset_key())
+            .ok_or_else(|| format!("No address found for native binding {} (key {})", binding.name(), binding.offset_key()))?;
         unsafe { binding.initialize(base, *offset)?; }
     }
     Ok(())
 }
 
+/// Query publication by resolver/provider offset key, not detour name.
 pub fn function_is_bound(name: &str) -> bool {
     inventory::iter::<FunctionBindingRegistration>.into_iter()
-        .any(|registration| registration.binding.name() == name && registration.binding.address().is_some())
+        .any(|registration| registration.binding.offset_key() == name && registration.binding.address().is_some())
 }
 
 /// Preserve fallible helper behavior before native binding initialization.

@@ -77,7 +77,8 @@ mod upstream {
     });
 }
 
-#[bind_resolved_func(upstream::ExternalFixture)]
+define_custom_resolver!(ExternalFixture, delegate upstream::ExternalFixture);
+#[bind_resolved_func(ExternalFixture)]
 unsafe fn external() {}
 
 #[cfg(any())]
@@ -86,7 +87,7 @@ unsafe fn disabled() {}
 
 #[test]
 fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
-    let roots = unchained_macros::startup_resolvers().unwrap();
+    let roots = unchained_macros::startup_resolvers(&unchained_macros::SelectorSnapshot::default()).unwrap();
     let names: Vec<_> = roots.iter().map(|root| root.name).collect();
     assert_eq!(names, ["BoundFixture", "ExternalFixture", "MethodResolver", "PatchFixture", "SideEffectFixture", "ValueFixture"]);
     let image = Image::from_memory(

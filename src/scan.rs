@@ -4,15 +4,12 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use crate::{PLATFORM, PlatformType};
+use unchained_macros::SelectorSnapshot;
 
-pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
+pub fn scan(snapshot: &SelectorSnapshot, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
 
-    let running_platform = *PLATFORM.get_or_init(|| platform);
-    if running_platform != platform {
-        anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, running_platform);
-    }
+    snapshot.validate_registered().map_err(anyhow::Error::msg)?;
 
     if resolvers_to_scan.is_empty() {
         sinfo!("All signatures already found");
@@ -38,7 +35,7 @@ pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolve
     sdebug!("GAME '{:?}' '{:x?}'", game_name, exe.base_address);
 
     let resolution = tracing::info_span!("scan", game = game_name)
-        .in_scope(|| exe.resolve_many(&dyn_resolvers));
+        .in_scope(|| snapshot.resolve_many(&exe, &dyn_resolvers));
 
     // get Names and offsets from resolution
     let mut offsets = HashMap::new();

@@ -30,7 +30,7 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
         serror!("IsBadReadPtr UGameEngineTick");
         return;
     }
-    if !unchained_macros::detour_is_enabled("UGameEngineTick") {
+    if !unchained_macros::detour_is_enabled("tick_detour") {
         serror!("Disabled UGameEngineTick");
         return;
     }

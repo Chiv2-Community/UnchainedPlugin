@@ -7,17 +7,20 @@ use unchained_macros::{
 
 #[unchained_macros::resolver_selection_key(require = [Allow, Deny])]
 enum Mode { Allow, Deny }
+impl unchained_macros::ResolverSelector for Mode {
+    fn current() -> Self { Self::Allow }
+}
 
-define_pattern_resolver!(Enabled, select Mode; [Mode::Allow], {
+define_pattern_resolver!(Enabled, {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
-define_pattern_resolver!(Disabled, select Mode; [Mode::Allow], {
+define_pattern_resolver!(Disabled, {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
-define_pattern_resolver!(EnabledValue, select Mode; [Mode::Allow], {
+define_pattern_resolver!(EnabledValue, {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
-define_pattern_resolver!(DisabledValue, select Mode; [Mode::Allow], {
+define_pattern_resolver!(DisabledValue, {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
 
@@ -46,8 +49,9 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
         offsets.insert("DisabledValue".into(), (&raw const VALUE) as u64 - 1);
     }
     let applicable = |name: &str| supports_selection(name, Mode::Allow);
+    let snapshot = unchained_macros::SelectorSnapshot::from_selection(Mode::Allow).unwrap();
     unsafe {
-        initialize_function_bindings_where(1, &offsets, applicable).unwrap();
+        initialize_function_bindings_where(1, &offsets, |binding| binding.supports(&snapshot)).unwrap();
         initialize_value_bindings_where(1, &offsets, applicable);
         assert_eq!(enabled(), 42);
         assert_eq!(enabled_value(), 7);

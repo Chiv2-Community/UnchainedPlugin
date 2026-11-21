@@ -8,6 +8,9 @@ use crate::Chivalry2::Engine::UEHash;
 
 use widestring::U16CString;
 
+unchained_macros::define_custom_resolver!(FNameToString,
+    delegate patternsleuth::resolvers::unreal::fname::FNameToString);
+
 define_pattern_resolver!(
     FName__FName,
     Simple,
@@ -36,7 +39,7 @@ impl FName {
     /// # Safety
     /// The engine name table must be initialized and output must be writable.
     #[unchained_macros::bind_resolved_func(
-        patternsleuth::resolvers::unreal::fname::FNameToString
+        self::FNameToString
     )]
     pub unsafe fn ToString(&self, output: &mut FString) {}
 

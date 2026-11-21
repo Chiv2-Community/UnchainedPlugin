@@ -40,6 +40,18 @@ pub unsafe fn write_ptr<T>(addr: *mut T, value: T) {
     protect(addr as *mut u8, size, old);
 }
 
+/// Copy a typed value's raw representation, including possibly uninitialized padding.
+///
+/// # Safety
+/// Both ranges must be valid and nonoverlapping; the destination must satisfy
+/// the original value type's alignment and native lifetime contract.
+pub unsafe fn write_raw(addr: *mut u8, source: *const u8, size: usize) {
+    if size == 0 { return; }
+    let old = protect(addr, size, PAGE_EXECUTE_READWRITE);
+    ptr::copy_nonoverlapping(source, addr, size);
+    protect(addr, size, old);
+}
+
 /// Read a value from memory.
 pub unsafe fn read_ptr<T: Copy>(addr: *const T) -> T {
     ptr::read(addr)

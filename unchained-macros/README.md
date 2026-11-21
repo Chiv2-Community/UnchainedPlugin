@@ -12,27 +12,43 @@ See [native contracts](../docs/native-bindings.md), the
 
 Startup:
 
-1. `startup_resolvers_for(key)` selects compiled binding/patch roots and explicit
-   side-effect providers. Declarations alone do not cause scans.
-   Patch selection is applied without evaluating runtime conditions;
-   `startup_resolvers()` retains the unfiltered inventory view.
-2. Resolve them in one Patternsleuth context; transitive dependencies are automatic.
-   Project declarations take precedence over upstream namesakes.
-3. Initialize values and functions from cached/scanned RVAs using
-   `initialize_value_bindings(base, &offsets)` and
-   `initialize_function_bindings(base, &offsets)`.
-4. Apply patches and attach detours before enabling replacements.
+1. Initialize project selector state, then call `SelectorSnapshot::capture_registered()`.
+   Each provider is read once; values and fallback chains are frozen.
+2. `startup_resolvers(&snapshot)` selects compiled binding/patch roots and explicit
+   side-effect providers. It validates coverage and selector availability without
+   evaluating patch factories or runtime conditions.
+3. Resolve roots with `snapshot.resolve_many(&image, &factories)`. Transitive
+   dependencies share the context snapshot; project declarations override upstream namesakes.
+4. Include the complete `snapshot.cache_key()` in cache identity and validate it
+   when loading. A file-name hash alone is not sufficient.
+5. Use `binding.supports(&snapshot)` with `initialize_function_bindings_where`;
+   value initialization still uses `snapshot.supports_resolver(name)`.
+   Pass the same snapshot to `apply_registered_patches` and use it for hook filtering.
 
 Use `require_resolver!(Name)` for a scan that populates an offset map or other
 required side effects. Request-key bindings need their provider registered this way.
-`supports_selection(name, key)` applies typed, consumer-defined restrictions.
-The host owns selection state and decides which keys contribute patterns.
+The host owns selector state. Different resolvers may use different providers;
+there is no project-global enum in the toolkit.
 
 `ResolvedAddress` publishes addresses once; `FunctionBinding` refers to Retour's
 detour rather than copying its trampoline address. Both binding inventories use
 `BindingRegistration<T>`. Hooks receive the executable base; patch factories
 receive the resolved native address. Hosts implement `PatchWriter`; generated code also
 requires the consumer's `retour` and `inventory` dependencies.
+
+Generated resolvers expose `ResolverDeclaration::DESCRIPTOR`: a stable
+`ResolverDescriptor` containing Patternsleuth's `NamedResolver` and an optional
+selection filter. Scans and consumers use the same frozen policy.
+`FunctionBinding` records the native target name separately from its resolver
+cache key. `FunctionSource` distinguishes a resolver descriptor from a provider
+offset key. `HookRegistration` references that binding and names the Rust detour.
+`PatchRegistration` names the patch item and references its resolver descriptor.
+
+Adapt a dependency's single-address tuple resolver without changing its scan:
+
+```rust,ignore
+define_custom_resolver!(ExternalName, delegate dependency::ExternalName);
+```
 
 ## Direct method bindings
 
@@ -78,8 +94,8 @@ See the [attachment lifecycle](../docs/native-bindings.md#attachment-lifecycle).
 - Defaults to `ACTIVE`. `INACTIVE`, `CALLED`, and `DISABLED` mean passive attachment.
   A noncapturing closure/function may supply a runtime condition.
 - Activation requires both global auto-activation and the condition at attachment.
-- `detour_is_initialized("Resolver")` and `detour_is_enabled("Resolver")` query
-  Retour's state. Unknown names return `false`.
+- `detour_is_initialized("read")` and `detour_is_enabled("read")` query
+  Retour's state by Rust detour function name. Unknown names return `false`.
 - Native calls must not unwind through the detour.
 
 ## Lifetime-aware hooks
@@ -142,22 +158,28 @@ The matcher must take no input and produce exactly one `u64` address.
 Construction/evaluation errors retain resolver context; only the final address
 is cached, not matcher provenance.
 
-`define_custom_resolver!(Name, with(expression), |context| { ... })` evaluates
-host-supplied context when resolving and permits `?`. This selects matching
-behavior, not a restriction. Enum-keyed pattern dictionaries register their own
-applicability; `Key: None` disables that key.
+`define_custom_resolver!(Name, using Selector, |value| { ... })` reads its value
+from the context snapshot and permits `?`. The explicit `with(expression)` form
+still accepts arbitrary host context, but does not automatically track it for caches.
+Any address-affecting selector should use a registered provider.
+Custom context chooses matching behavior, not an installation restriction;
+enum-keyed pattern dictionaries register applicability through `Key: None`.
 The plugin and BinaryBloodhound share one locked Patternsleuth dependency.
 
 ## Consumer-defined selections
 
 ```rust,ignore
-#[unchained_macros::resolver_selection_key(require = [Read, Write])]
-enum Mode { Read, Write, Shared }
+#[unchained_macros::resolver_selection_key(require = [Read, Write], fallback = Other)]
+enum Mode { Read, Write, Other }
 
-define_pattern_resolver!(ReadEntry, select Mode; [current_mode(), Mode::Shared], {
+impl ResolverSelector for Mode {
+    fn current() -> Self { current_mode() }
+}
+
+define_pattern_resolver!(ReadEntry, {
     Mode::Read: ["AA BB"],
     Mode::Write: None,
-    Mode::Shared: ["EE FF"],
+    Mode::Other: ["EE FF"],
 });
 ```
 
@@ -166,23 +188,28 @@ and `Eq` (without duplicating existing derives). It rejects non-enums, fields,
 and generic parameters. Rust checks
 variant names and enum types; duplicate dictionary keys are compile errors.
 `SelectionKey::REQUIRED` exposes the required enum values. Omitting a
-required key is a compile error; explicitly use patterns or `None`.
+required key is a compile error; explicitly use a nonempty pattern list or `None`.
+The `fallback = Other` option supplies a default `ResolverSelector::fallback(self)`:
+other variants return `Some(Other)` and `Other` returns `None`. Override the method
+for longer chains. Cycles are rejected when capturing a snapshot.
 
-The first selection controls applicability. `None` disables the resolver before
-pattern construction or inline execution, regardless of later shared keys.
-`[]` stays enabled and contributes no local patterns. Omitted optional keys stay
-enabled and contribute nothing. Plain pattern lists apply to every selection.
+The first declared entry on the frozen chain wins. Only missing keys advance to
+fallback; failed scans do not. `None` disables resolution before constructing
+patterns or running inline bodies. Empty lists are compile errors.
+Plain pattern lists apply to every selection.
 
-The ordered selection list is explicit: no key is a built-in fallback or shared
-case. Repeated selections append their patterns again. Restrictions use enum
-type identity and equality, not discriminants. Unknown names remain unrestricted;
-conflicting restrictions or a different key type fail closed.
+Qualified keys identify the provider, so neither `select` arguments nor host
+wrapper macros are needed. Restrictions use enum type identity, not discriminants.
+Unknown resolver names remain unrestricted; missing providers fail before startup.
 
-The host filters resolver applicability with `supports_selection`.
+The host filters resolver applicability with `snapshot.supports_resolver`.
 Explicit patch selections narrow only that patch, not its resolver or other consumers.
-Use `initialize_function_bindings_where` and `initialize_value_bindings_where`
-with the same predicate so disabled bindings stay uninitialized, even with cached
-offsets. Set host state before scanning; the toolkit owns no global selection.
+Use `initialize_function_bindings_where(..., |binding| binding.supports(&snapshot))`
+and `initialize_value_bindings_where(..., |name| snapshot.supports_resolver(name))`
+so disabled bindings stay uninitialized, even with cached
+offsets. Context clones retain their cached snapshot even when polled on another
+thread. New values require a new session and matching cache identity; native
+bindings still publish addresses once.
 Patch factories can return `Patch::bytes(...).when(condition)` for runtime gates.
 
 ## Instruction patches

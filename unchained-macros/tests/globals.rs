@@ -5,7 +5,7 @@ use unchained_macros::{bind_resolved_value, runtime_bindings, initialize_value_b
 mod resolvers {
     pub struct Allocator;
     pub struct Inline;
-    pub struct Probe;
+    unchained_macros::define_pattern_resolver!(Probe, ["AA"]);
 }
 
 #[runtime_bindings(global)]

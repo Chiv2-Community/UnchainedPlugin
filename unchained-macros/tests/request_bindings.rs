@@ -43,7 +43,9 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 fn request_keys_bind_without_corresponding_resolver_types() {
     for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
         let binding = registration.binding;
-        let address = match binding.name() {
+        assert!(matches!(binding.source(), unchained_macros::FunctionSource::ProviderOffset(key)
+            if *key == binding.offset_key()));
+        let address = match binding.offset_key() {
             "GetPost_GetMotd" => get_motd as *const () as usize,
             "GetPost_Borrow" => borrow as *const () as usize,
             "GetPost_Missing" => continue,

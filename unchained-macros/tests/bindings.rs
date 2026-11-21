@@ -3,14 +3,14 @@
 use unchained_macros::bind_resolved_func;
 
 mod resolvers {
-    pub struct Read;
-    pub struct Write;
-    pub struct RawRead;
-    pub struct RawWrite;
-    pub struct Add;
-    pub struct Missing;
-    pub struct Borrow;
-    pub struct ReturnStorage;
+    unchained_macros::define_pattern_resolver!(Read, ["AA"]);
+    unchained_macros::define_pattern_resolver!(Write, ["AA"]);
+    unchained_macros::define_pattern_resolver!(RawRead, ["AA"]);
+    unchained_macros::define_pattern_resolver!(RawWrite, ["AA"]);
+    unchained_macros::define_pattern_resolver!(Add, ["AA"]);
+    unchained_macros::define_pattern_resolver!(Missing, ["AA"]);
+    unchained_macros::define_pattern_resolver!(Borrow, ["AA"]);
+    unchained_macros::define_pattern_resolver!(ReturnStorage, ["AA"]);
 }
 
 #[repr(C)]
@@ -61,7 +61,7 @@ unsafe extern "C" fn return_storage<'a>(value: *const Native, output: &'a mut i3
 
 fn initialize() {
     for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
-        let address = match registration.binding.name() {
+        let address = match registration.binding.offset_key() {
             "Read" | "RawRead" => read as *const () as usize,
             "Write" | "RawWrite" => write as *const () as usize,
             "Add" => add as *const () as usize,
@@ -99,7 +99,7 @@ fn uninitialized_binding_fails_before_native_call() {
 
 #[test]
 fn binding_initialization_is_idempotent_but_not_rebindable() {
-    let binding = unchained_macros::FunctionBinding::new("example");
+    let binding = unchained_macros::FunctionBinding::new("example", <resolvers::Read as unchained_macros::ResolverDeclaration>::DESCRIPTOR);
     assert!(binding.address().is_none());
     // This local, unregistered binding is never invoked as native code.
     unsafe { binding.initialize(10, 20).unwrap(); }
@@ -126,7 +126,7 @@ fn generated_bindings_preserve_receiver_and_return_storage_lifetimes() {
 #[test_case::test_case(0, 1; "missing module")]
 #[test_case::test_case(usize::MAX, 1; "address overflow")]
 fn invalid_initialization_leaves_binding_uninitialized(base: usize, offset: u64) {
-    let binding = unchained_macros::FunctionBinding::new("invalid");
+    let binding = unchained_macros::FunctionBinding::new("invalid", <resolvers::Read as unchained_macros::ResolverDeclaration>::DESCRIPTOR);
     assert!(unsafe { binding.initialize(base, offset) }.is_err());
     assert!(binding.address().is_none());
 }

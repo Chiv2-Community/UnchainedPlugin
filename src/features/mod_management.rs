@@ -560,7 +560,7 @@ impl ModManager {
         crate::sinfo!("Updating ModLoader settings: {:?}", cli_args().saved_dir_suffix);
         let settings_file = "ModLoader";
         let settings_fstring = FString::from(settings_file);
-        if !unchained_macros::detour_is_initialized("UGameplayStatics__LoadGameFromSlot") {
+        if !unchained_macros::detour_is_initialized("load_game_from_slot_detour") {
             swarn!("Detour LoadGameFromSlot is not initialized. Skipping.");
             return;
         }
@@ -611,7 +611,7 @@ impl ModManager {
         // live-world actor scan is unreliable at init (world may be None and
         // the mod actors are not spawned yet).
         self.set_active_paths(enabled);
-        if !unchained_macros::detour_is_initialized("UGameplayStatics__SaveGameToSlot") {
+        if !unchained_macros::detour_is_initialized("save_game_to_slot_detour") {
             swarn!("Detour SaveGameToSlot is not initialized. Skipping.");
             return;
         }

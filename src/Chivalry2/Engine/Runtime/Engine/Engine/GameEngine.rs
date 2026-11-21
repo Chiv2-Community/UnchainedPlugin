@@ -2,6 +2,9 @@
 
 use std::ffi::c_void;
 
+unchained_macros::define_custom_resolver!(UGameEngineTick,
+    delegate patternsleuth::resolvers::unreal::game_loop::UGameEngineTick);
+
 define_pattern_resolver!(AllowAlternateBackend, [
     "48 8B C4 55 48 8D 68 ?? 48 81 EC C0 00 00 00 48 89 58 ?? 48 89 70 ?? 48 89 78 ?? 4C 89 60 ?? 4C 89 70"
 ]);
@@ -23,7 +26,7 @@ impl UGameEngine {
     pub(crate) unsafe fn DedicatedServerInit(context: *const c_void) {}
 
     #[unchained_macros::bind_resolved_func(
-        patternsleuth::resolvers::unreal::game_loop::UGameEngineTick
+        self::UGameEngineTick
     )]
     pub(crate) unsafe fn Tick(self: *mut Self, delta: f32, state: u8) {}
 }

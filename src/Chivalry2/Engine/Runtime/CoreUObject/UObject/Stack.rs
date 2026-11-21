@@ -10,6 +10,11 @@ use crate::Chivalry2::Engine::*;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 
+unchained_macros::define_custom_resolver!(FFrameStep,
+    delegate patternsleuth::resolvers::unreal::kismet::FFrameStep);
+unchained_macros::define_custom_resolver!(FFrameStepExplicitProperty,
+    delegate patternsleuth::resolvers::unreal::kismet::FFrameStepExplicitProperty);
+
 #[cfg(feature = "kismet_log")]
 define_pattern_resolver!(
     FFrame__KismetExecutionMessage,
@@ -40,7 +45,7 @@ impl FFrame {
     /// # Safety
     /// Frame, context, and result storage must satisfy the current bytecode operation.
     #[unchained_macros::bind_resolved_func(
-        patternsleuth::resolvers::unreal::kismet::FFrameStep
+        self::FFrameStep
     )]
     pub unsafe fn Step(&mut self, context: *mut UObject, result: *mut c_void) {}
 
@@ -49,7 +54,7 @@ impl FFrame {
     /// # Safety
     /// Frame, property, and result storage must describe a valid compiled-in argument.
     #[unchained_macros::bind_resolved_func(
-        patternsleuth::resolvers::unreal::kismet::FFrameStepExplicitProperty
+        self::FFrameStepExplicitProperty
     )]
     pub unsafe fn StepExplicitProperty(
         &mut self,

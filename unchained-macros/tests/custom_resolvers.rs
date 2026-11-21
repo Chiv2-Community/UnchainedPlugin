@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use unchained_macros::define_custom_resolver;
 
 mod support;
-use support::{image, initialize_selection, current_flavor, Flavor, BASE, TEXT};
+use support::{image, initialize_selection, Flavor, BASE, TEXT};
 static EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 
 define_custom_resolver!(RootAddress, {
@@ -24,7 +24,7 @@ define_custom_resolver!(CachedAddress, {
 
 define_custom_resolver!(InvalidPattern, BinaryMatcher::patterns(["not hex"])?.ensure_one());
 
-define_custom_resolver!(SelectedAddress, with(current_flavor()), |flavor| {
+define_custom_resolver!(SelectedAddress, using Flavor, |flavor| {
     let pattern = match flavor {
         Flavor::First => "AA BB",
         Flavor::Second => "11 22",

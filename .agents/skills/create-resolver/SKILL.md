@@ -87,12 +87,13 @@ Reuse an existing resolver when it already resolves the verified target.
     no-input matcher with exactly one `u64` address.
 - Wildcard relocations and build-dependent bytes; retain distinguishing context.
 - For callable bindings, return a function entry, not an interior match.
-- Platform dictionaries combine current-platform patterns with `OTHER`;
-  `OTHER` is not a fallback.
+- Qualify platform dictionary keys with `PlatformType`. The registered provider
+  chooses a frozen value; `fallback = OTHER` advances only for a missing key,
+  never after a failed signature scan.
 - Dictionaries must explicitly include required `STEAM` and `EGS` entries.
   Use `PLATFORM: None` to disable that storefront, including hooks/patches.
-  Use `[]` only for enabled shared-pattern coverage. Platform-aware custom
-  searches alone do not restrict installation.
+  Empty pattern lists are compile errors. Platform-aware custom searches alone
+  do not restrict installation; use `using crate::PlatformType` to read frozen state.
 - Use the [custom resolver examples](../../../unchained-macros/README.md#custom-resolvers)
   for composition and error handling.
 

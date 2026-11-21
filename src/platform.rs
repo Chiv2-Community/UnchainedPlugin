@@ -1,8 +1,9 @@
 //! Storefront ownership and adapters for the generic resolver toolkit.
 
 use std::sync::OnceLock;
+use unchained_macros::ResolverSelector;
 
-#[unchained_macros::resolver_selection_key(require = [STEAM, EGS])]
+#[unchained_macros::resolver_selection_key(require = [STEAM, EGS], fallback = OTHER)]
 #[derive(Debug, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 #[allow(clippy::upper_case_acronyms)]
@@ -16,11 +17,11 @@ pub enum PlatformType {
 pub static PLATFORM: OnceLock<PlatformType> = OnceLock::new();
 
 pub fn current_platform() -> PlatformType {
-    *PLATFORM.get().expect("Platform not initialized")
+    PlatformType::current()
 }
 
-pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
-    unchained_macros::supports_selection(name, platform)
+impl ResolverSelector for PlatformType {
+    fn current() -> Self { *PLATFORM.get().expect("Platform not initialized") }
 }
 
 impl std::fmt::Display for PlatformType {
@@ -40,56 +41,5 @@ impl std::str::FromStr for PlatformType {
             "OTHER" => Ok(Self::OTHER),
             _ => Err(()),
         }
-    }
-}
-
-// Preserve native declarations' syntax; active + OTHER is plugin policy.
-macro_rules! define_pattern_resolver {
-    ($name:ident, $mode:ident, { $($key:ident: $entry:tt),+ $(,)? }) => {
-        unchained_macros::define_pattern_resolver!($name, $mode,
-            select $crate::PlatformType; [$crate::current_platform(), $crate::PlatformType::OTHER],
-            { $($crate::PlatformType::$key: $entry),+ });
-    };
-    ($name:ident, { $($key:ident: $entry:tt),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block) => {
-        unchained_macros::define_pattern_resolver!($name,
-            select $crate::PlatformType; [$crate::current_platform(), $crate::PlatformType::OTHER],
-            { $($crate::PlatformType::$key: $entry),+ },
-            |$ctx, $patterns| $body);
-    };
-    ($name:ident, { $($key:ident: $entry:tt),+ $(,)? }) => {
-        define_pattern_resolver!($name, Simple, { $($key: $entry),+ });
-    };
-    ($($resolver:tt)+) => { unchained_macros::define_pattern_resolver!($($resolver)+); };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    define_pattern_resolver!(FixtureSteamOnly, {
-        STEAM: ["AA BB"], EGS: None, XBOX: None, OTHER: None,
-    });
-    define_pattern_resolver!(FixtureEpicCall, Call, {
-        EGS: ["E8 | ?? ?? ?? ??"], STEAM: None, XBOX: None, OTHER: None,
-    });
-
-    #[test_case::test_matrix(
-        [("FixtureSteamOnly", Some(PlatformType::STEAM)), ("FixtureEpicCall", Some(PlatformType::EGS)), ("FixtureShared", None)],
-        [PlatformType::STEAM, PlatformType::EGS, PlatformType::XBOX, PlatformType::OTHER]
-    )]
-    fn adapters_preserve_storefront_restrictions(
-        (name, restriction): (&str, Option<PlatformType>), platform: PlatformType,
-    ) {
-        assert_eq!(supports_platform(name, platform),
-            restriction.is_none_or(|expected| expected == platform));
-    }
-
-    #[test_case::test_case("steam", PlatformType::STEAM; "steam")]
-    #[test_case::test_case("EgS", PlatformType::EGS; "egs")]
-    #[test_case::test_case("XBOX", PlatformType::XBOX; "xbox")]
-    #[test_case::test_case("OTHER", PlatformType::OTHER; "other")]
-    fn names_and_cache_serialization_remain_compatible(name: &str, expected: PlatformType) {
-        assert_eq!(name.parse::<PlatformType>().unwrap(), expected);
-        assert_eq!(serde_json::to_string(&expected).unwrap(), format!("\"{expected}\""));
     }
 }

@@ -135,7 +135,14 @@ pub(super) fn expand_binding(
             let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
         }
     });
-    let constructor = if require_resolver { quote!(new) } else { quote!(from_offset_key) };
+    let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
+    let initializer = if require_resolver {
+        quote!(::unchained_macros::FunctionBinding::new(
+            #target_name, <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
+        ))
+    } else {
+        quote!(::unchained_macros::FunctionBinding::from_offset_key(#target_name, #resolver_name))
+    };
     let mut expanded = function.clone();
     let native_call = format_ident!("__unchained_native_call", span = Span::mixed_site());
     super::consume_native_parameter_metadata(&mut expanded.sig)?;
@@ -173,7 +180,7 @@ pub(super) fn expand_binding(
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #storage: ::unchained_macros::FunctionBinding =
-            ::unchained_macros::FunctionBinding::#constructor(#resolver_name);
+            #initializer;
         #(#cfg)*
         ::inventory::submit! {
             ::unchained_macros::FunctionBindingRegistration { binding: &#storage }
@@ -356,7 +363,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         ::inventory::submit! {
             ::unchained_macros::HookRegistration {
-                name: #target.name(), hook_fn: #attach, condition: #condition_fn,
+                name: stringify!(#ident), binding: #target.binding(),
+                hook_fn: #attach, condition: #condition_fn,
                 detour: || #hook.get(),
             }
         }

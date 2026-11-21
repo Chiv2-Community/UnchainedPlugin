@@ -16,9 +16,19 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         }
     }
     let mut required = None;
+    let mut fallback = None;
     syn::meta::parser(|meta| {
+        if meta.path.is_ident("fallback") {
+            if fallback.is_some() { return Err(meta.error("duplicate fallback option")); }
+            let key: syn::Ident = meta.value()?.parse()?;
+            if !data.variants.iter().any(|variant| variant.ident == key) {
+                return Err(syn::Error::new_spanned(key, "unknown fallback selection variant"));
+            }
+            fallback = Some(key);
+            return Ok(());
+        }
         if !meta.path.is_ident("require") {
-            return Err(meta.error("expected require = [Variant, ...]"));
+            return Err(meta.error("expected require = [Variant, ...] or fallback = Variant"));
         }
         if required.is_some() {
             return Err(meta.error("duplicate require option"));
@@ -41,6 +51,13 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         Ok(())
     }).parse2(args)?;
     let required = required.unwrap_or_default();
+    let fallback_body = fallback.map_or_else(|| quote!(::core::option::Option::None), |key| quote! {
+        if self.__unchained_key_eq(Self::#key) {
+            ::core::option::Option::None
+        } else {
+            ::core::option::Option::Some(Self::#key)
+        }
+    });
     let equality_arms = data.variants.iter().map(|variant| {
         let name = &variant.ident;
         let cfg = super::cfg_attributes(&variant.attrs);
@@ -86,6 +103,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         impl ::unchained_macros::SelectionKey for #name {
             const REQUIRED: &'static [Self] = &[#(Self::#required),*];
             fn name(self) -> &'static str { match self { #(#name_arms)* } }
+            fn default_fallback(self) -> ::core::option::Option<Self> { #fallback_body }
         }
         impl #name {
             #[doc(hidden)]
@@ -145,6 +163,7 @@ mod tests {
     #[test_case::test_case(quote!(), quote!(enum Key {}); "empty enum")]
     #[test_case::test_case(quote!(require = [First, Second]), quote!(enum Key { First, Second }); "required variants")]
     #[test_case::test_case(quote!(require = []), quote!(enum Key { First }); "no required variants")]
+    #[test_case::test_case(quote!(require = [First], fallback = Second), quote!(enum Key { First, Second }); "default fallback")]
     fn accepts_fieldless_enums(args: TokenStream, item: TokenStream) {
         syn::parse2::<syn::File>(expand(args, item).unwrap()).unwrap();
     }
@@ -167,6 +186,8 @@ mod tests {
     #[test_case::test_case(quote!(require = [First], require = [First]); "duplicate option")]
     #[test_case::test_case(quote!(other = [First]); "unknown option")]
     #[test_case::test_case(quote!(require = First); "not an array")]
+    #[test_case::test_case(quote!(fallback = Missing); "unknown fallback")]
+    #[test_case::test_case(quote!(fallback = First, fallback = First); "duplicate fallback")]
     fn rejects_invalid_required_selections(args: TokenStream) {
         assert!(expand(args, quote!(enum Key { First })).is_err());
     }

@@ -4,7 +4,10 @@ Register a named patch factory or immutable `Patch` static against a resolver ty
 use unchained_macros::{register_patch, Patch};
 #[unchained_macros::resolver_selection_key(require = [First, Second])]
 enum Key { First, Second }
-unchained_macros::define_pattern_resolver!(Target, select Key; [Key::First], {
+impl unchained_macros::ResolverSelector for Key {
+    fn current() -> Self { Self::First }
+}
+unchained_macros::define_pattern_resolver!(Target, {
     Key::First: ["AA BB"], Key::Second: ["CC DD"],
 });
 
@@ -23,14 +26,21 @@ fn main() {
 
 - The item name is the patch ID; names must be unique. Multiple patches may target
   one resolver. Import aliases retain the resolver's original cache key.
+  The registration holds the resolver descriptor, including its selection filter,
+  rather than looking it up by name.
 - Factories are safe `fn(u64) -> Patch` functions receiving the resolved native
   address. Statics require an explicit `: Patch` type and are cloned when used.
 - `Patch::bytes(offset, static_bytes)` and `Patch::nop(offset, count)` are const
   constructors. `owned_bytes` accepts dynamically constructed bytes.
+- `Patch::write(offset, value)` writes a `Copy` value. Const-capable
+  `Patch::write_ref(offset, &STATIC_VALUE)` copies the referenced value, not its address.
+  These retain the old `WRITE` operation; no separate address operation exists.
 - `.when(condition)` disables a descriptor without changing coverage or scan roots.
   Evaluate runtime conditions inside factories, not static initializers.
 - The host implements `PatchWriter` and calls `apply_registered_patches`.
   Its existing memory-protection backend remains responsible for writes.
+  Typed writes copy raw storage without reading potentially uninitialized padding
+  as a byte slice.
 
 ## Coverage
 
@@ -45,7 +55,10 @@ provide or remove coverage, and factories are not evaluated during validation.
 # use unchained_macros::{register_patch, Patch};
 #[unchained_macros::resolver_selection_key(require = [First, Second])]
 enum Key { First, Second }
-unchained_macros::define_pattern_resolver!(Target, select Key; [Key::First], {
+impl unchained_macros::ResolverSelector for Key {
+    fn current() -> Self { Self::First }
+}
+unchained_macros::define_pattern_resolver!(Target, {
     Key::First: ["AA BB"], Key::Second: None,
 });
 #[register_patch(Target, Key::First)]
@@ -66,6 +79,9 @@ writer failures do not roll back earlier writes.
 #[unchained_macros::resolver_selection_key(require = [First, Second])]
 enum Key { First, Second }
 unchained_macros::define_pattern_resolver!(Target, ["AA BB"]);
+impl unchained_macros::ResolverSelector for Key {
+    fn current() -> Self { Self::First }
+}
 #[register_patch(Target, Key::First)]
 static FIRST_ONLY: Patch = Patch::nop(0, 2);
 fn main() {
@@ -83,7 +99,10 @@ A universal patch cannot target a restricted resolver:
 # use unchained_macros::{register_patch, Patch};
 #[unchained_macros::resolver_selection_key]
 enum Key { First, Second }
-unchained_macros::define_pattern_resolver!(Target, select Key; [Key::First], {
+# impl unchained_macros::ResolverSelector for Key {
+#     fn current() -> Self { Self::First }
+# }
+unchained_macros::define_pattern_resolver!(Target, {
     Key::First: ["AA BB"], Key::Second: None,
 });
 #[register_patch(Target)]
@@ -97,7 +116,10 @@ An explicit key cannot be disabled by its resolver:
 # use unchained_macros::{register_patch, Patch};
 #[unchained_macros::resolver_selection_key]
 enum Key { First, Second }
-unchained_macros::define_pattern_resolver!(Target, select Key; [Key::First], {
+# impl unchained_macros::ResolverSelector for Key {
+#     fn current() -> Self { Self::First }
+# }
+unchained_macros::define_pattern_resolver!(Target, {
     Key::First: ["AA BB"], Key::Second: None,
 });
 #[register_patch(Target, Key::Second)]

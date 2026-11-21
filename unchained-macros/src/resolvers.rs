@@ -2,11 +2,25 @@
 
 use std::collections::BTreeSet;
 use patternsleuth::resolvers::NamedResolver;
-use crate::{FunctionBindingRegistration, ValueBindingRegistration, PatchRegistration};
+use crate::{FunctionBindingRegistration, ValueBindingRegistration, PatchRegistration, SelectorSnapshot};
+
+/// Resolver identity and the selection policy used by both consumers and scans.
+pub struct ResolverDescriptor {
+    pub named: NamedResolver,
+    pub filter: Option<crate::ResolverFilter>,
+}
+
+impl ResolverDescriptor {
+    pub const fn unrestricted(named: NamedResolver) -> Self { Self { named, filter: None } }
+
+    pub fn supports(&self, snapshot: &SelectorSnapshot) -> bool {
+        self.filter.as_ref().is_none_or(|filter| snapshot.supports_filter(filter))
+    }
+}
 
 /// A resolver declared by this plugin. Prefer it over an upstream namesake.
 pub struct DeclaredResolver {
-    pub resolver: NamedResolver,
+    pub resolver: &'static ResolverDescriptor,
 }
 
 /// An explicit scan consumer beyond the binding and patch inventories.
@@ -31,33 +45,37 @@ macro_rules! require_resolver {
 
 /// Select only required startup roots. Their transitive dependencies remain
 /// resolved by Patternsleuth's shared context. Missing/ambiguous roots fail closed.
-pub fn startup_resolvers() -> Result<Vec<&'static NamedResolver>, String> {
-    startup_resolvers_matching(|_| true)
-}
-
-/// Select scan consumers applicable to a host-defined key. Runtime patch
-/// conditions are deliberately not evaluated while selecting roots.
-pub fn startup_resolvers_for<E: crate::SelectionKey>(selection: E) -> Result<Vec<&'static NamedResolver>, String> {
-    startup_resolvers_matching(|patch| (patch.applies_to)(&selection))
-}
-
-fn startup_resolvers_matching(enabled: impl Fn(&PatchRegistration) -> bool) -> Result<Vec<&'static NamedResolver>, String> {
+pub fn startup_resolvers(snapshot: &SelectorSnapshot) -> Result<Vec<&'static NamedResolver>, String> {
+    snapshot.validate_registered()?;
     crate::validate_patch_registrations()?;
     let declared: Vec<_> = inventory::iter::<DeclaredResolver>.into_iter()
-        .map(|registration| &registration.resolver).collect();
+        .map(|registration| &registration.resolver.named).collect();
     let available: Vec<_> = patternsleuth::resolvers::resolvers().collect();
-    select(
+    let mut roots = select(
         inventory::iter::<RequiredResolver>.into_iter().map(|root| root.name)
-            .chain(inventory::iter::<FunctionBindingRegistration>.into_iter()
-                .filter_map(|registration| registration.binding.resolver_name()))
             .chain(inventory::iter::<ValueBindingRegistration>.into_iter()
-                .map(|registration| registration.binding.name()))
-            .chain(inventory::iter::<PatchRegistration>.into_iter()
-                .filter(|registration| enabled(registration))
-                .map(|registration| registration.resolver)),
+                .map(|registration| registration.binding.name())),
         &declared,
         &available,
-    )
+    )?;
+    roots.retain(|resolver| snapshot.supports_resolver(resolver.name));
+    roots.extend(inventory::iter::<FunctionBindingRegistration>.into_iter()
+        .filter(|registration| registration.binding.supports(snapshot))
+        .filter_map(|registration| match registration.binding.source() {
+            crate::FunctionSource::Resolver(resolver) => Some(&resolver.named),
+            crate::FunctionSource::ProviderOffset(_) => None,
+        }));
+    roots.extend(inventory::iter::<PatchRegistration>.into_iter()
+        .filter(|registration| snapshot.supports_patch(registration) && registration.resolver.supports(snapshot))
+        .map(|registration| &registration.resolver.named));
+    roots.sort_by_key(|resolver| resolver.name);
+    for pair in roots.windows(2) {
+        if pair[0].name == pair[1].name && !std::ptr::eq(pair[0], pair[1]) {
+            return Err(format!("Required startup resolver {} is ambiguous", pair[0].name));
+        }
+    }
+    roots.dedup_by_key(|resolver| resolver.name);
+    Ok(roots)
 }
 
 fn select<'a>(

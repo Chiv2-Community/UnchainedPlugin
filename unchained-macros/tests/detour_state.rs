@@ -2,6 +2,8 @@ use std::sync::OnceLock;
 use unchained_macros::{detour_is_enabled, detour_is_initialized, HookRegistration};
 
 static HOOK: OnceLock<retour::RawDetour> = OnceLock::new();
+static BINDING: unchained_macros::FunctionBinding =
+    unchained_macros::FunctionBinding::from_offset_key("Fixture::target", "FixtureTarget");
 
 #[inline(never)]
 unsafe extern "C" fn target(value: i32) -> i32 {
@@ -13,6 +15,7 @@ unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
 inventory::submit! {
     HookRegistration {
         name: "FixtureDetour",
+        binding: &BINDING,
         hook_fn: |_, _| unreachable!(),
         condition: || true,
         detour: || HOOK.get(),

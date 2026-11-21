@@ -84,7 +84,9 @@ Target the native binding from a functional module under `src/unchained/patches/
   The annotation does not make shared or read-only memory writable.
 - Activation defaults to `ACTIVE`; custom conditions run at attachment.
 - Activation also requires global auto-activation.
-- State queries and diagnostics use the binding's resolver/request-key name.
+- State queries and hook diagnostics use the Rust detour function name.
+  Each hook references its native binding; that binding keeps the native target
+  name separate from its resolver descriptor or provider offset key.
 - Put logging-only replacements in `diagnostics.rs`.
 - Put all detours after imports, before instruction patches, helpers, state, and tests.
 - Keep plugin queues and override state with plugin behavior, not native types.

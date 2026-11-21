@@ -117,27 +117,28 @@ define_pattern_resolver!(ExampleStringOwner, XrefFirst, [
 Select patterns for each storefront build.
 
 - Names: `STEAM`, `EGS`, `XBOX`, `OTHER`.
-- The adapters in [`src/platform.rs`](src/platform.rs) own storefront selection.
-  The current platform's patterns and `OTHER` are combined.
-- `OTHER` is shared coverage, not a fallback after failed matches.
+- [`src/platform.rs`](src/platform.rs) supplies selector state through
+  `ResolverSelector::current()`. There are no project wrapper macros.
+- `fallback = OTHER` advances only when a dictionary key is absent, not when a
+  declared signature fails to match. The first declared entry wins.
 - Each dictionary must explicitly include `STEAM` and `EGS`, as required by
-  the enum's `#[resolver_selection_key(require = [STEAM, EGS])]` configuration.
+  the enum's `#[resolver_selection_key(require = [STEAM, EGS], fallback = OTHER)]` configuration.
 - Use `PLATFORM: None` to disable scanning, bindings, hooks, and patches for that
-  storefront, even when `OTHER` has patterns. `[]` stays enabled with shared
-  patterns only. Plain pattern lists apply to all storefronts.
+  storefront, even when `OTHER` has patterns. Empty lists are compile errors.
+  Plain pattern lists apply to all storefronts.
 
 ```rust
 define_pattern_resolver!(ExampleFunction, {
-    STEAM: ["48 89 5C 24 ?? 57"],
-    EGS: ["40 53 48 83 EC ??"],
-    OTHER: ["48 8B C4 48 89 58 ??"]
+    PlatformType::STEAM: ["48 89 5C 24 ?? 57"],
+    PlatformType::EGS: ["40 53 48 83 EC ??"],
+    PlatformType::OTHER: ["48 8B C4 48 89 58 ??"]
 });
 
 define_pattern_resolver!(ExampleSteamOnly, {
-    STEAM: ["48 89 5C 24 ?? 57"],
-    EGS: None,
-    XBOX: None,
-    OTHER: None,
+    PlatformType::STEAM: ["48 89 5C 24 ?? 57"],
+    PlatformType::EGS: None,
+    PlatformType::XBOX: None,
+    PlatformType::OTHER: None,
 });
 ```
 
@@ -149,8 +150,8 @@ Use BinaryBloodhound to compose searches and recover function entries.
   `u64` address.
 - Use `.root_functions()` for interior matches, `.addresses()` for address
   values, and `.ensure_one()` to reject missing or conflicting results.
-- Use `with(crate::current_platform()), |platform| { ... }` for
-  platform-dependent matcher construction.
+- Use `using crate::PlatformType, |platform| { ... }` for
+  matcher construction from the frozen selector snapshot.
   This selects the search; it does not register a platform restriction.
 - For inline async scans or mixed-mode resolvers, see the
   [resolver reference](unchained-macros/resolvers.md#macros).

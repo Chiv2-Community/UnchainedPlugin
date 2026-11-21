@@ -1,12 +1,12 @@
 #![cfg(windows)]
 
-struct ConstRead;
-struct MutRead;
-struct ConstMatch;
-struct MutMatch;
-struct Borrowed;
-struct SharedRead;
-struct ExclusiveRead;
+unchained_macros::define_pattern_resolver!(ConstRead, ["AA"]);
+unchained_macros::define_pattern_resolver!(MutRead, ["AA"]);
+unchained_macros::define_pattern_resolver!(ConstMatch, ["AA"]);
+unchained_macros::define_pattern_resolver!(MutMatch, ["AA"]);
+unchained_macros::define_pattern_resolver!(Borrowed, ["AA"]);
+unchained_macros::define_pattern_resolver!(SharedRead, ["AA"]);
+unchained_macros::define_pattern_resolver!(ExclusiveRead, ["AA"]);
 struct Native(i32);
 
 #[unchained_macros::runtime_bindings]

@@ -7,13 +7,16 @@ use unchained_macros::{
 
 #[unchained_macros::resolver_selection_key(require = [First, Second])]
 enum Key { First, Second, Optional }
+impl unchained_macros::ResolverSelector for Key {
+    fn current() -> Self { Self::First }
+}
 
 thread_local! { static FACTORIES: Cell<usize> = const { Cell::new(0) }; }
 
 define_pattern_resolver!(Universal, ["AA BB"]);
 define_pattern_resolver!(RootOnly, ["AA BB"]);
 define_pattern_resolver!(Conditional, ["AA BB"]);
-define_pattern_resolver!(Restricted, select Key; [Key::First], {
+define_pattern_resolver!(Restricted, {
     Key::First: ["AA BB"], Key::Second: None, Key::Optional: None,
 });
 
@@ -48,6 +51,14 @@ use Universal as ImportedResolver;
 #[register_patch(ImportedResolver)]
 static ALIAS: Patch = Patch::bytes(4, &[0x88]);
 
+#[register_patch(Universal)]
+static FLOAT_WRITE: Patch = Patch::write_ref(2, &1.5f32);
+#[register_patch(Universal)]
+fn word_write(_resolved_address: u64) -> Patch {
+    FACTORIES.set(FACTORIES.get() + 1);
+    Patch::write(2, 0x12345678u32)
+}
+
 #[derive(Default)]
 struct Writer(Vec<(u64, Vec<u8>)>);
 
@@ -60,6 +71,12 @@ impl PatchWriter for Writer {
         self.0.push((address, vec![0x90; count]));
         Ok(())
     }
+    unsafe fn write(&mut self, address: u64, value: &unchained_macros::WriteValue) -> Result<(), String> {
+        // This fixture records initialized scalar values only.
+        let bytes = unsafe { std::slice::from_raw_parts(value.as_ptr(), value.size()) };
+        self.0.push((address, bytes.to_vec()));
+        Ok(())
+    }
 }
 
 fn registration(name: &str) -> &'static PatchRegistration {
@@ -68,8 +85,11 @@ fn registration(name: &str) -> &'static PatchRegistration {
 
 #[test]
 fn statics_and_factories_use_patch_names_not_resolver_names() {
-    assert_eq!(registration("ALIAS").resolver, "Universal");
-    assert_eq!(registration("SHARED").resolver, "Universal");
+    assert_eq!(registration("ALIAS").resolver.named.name, "Universal");
+    assert_eq!(registration("SHARED").resolver.named.name, "Universal");
+    assert!(std::ptr::eq(registration("ALIAS").resolver, registration("SHARED").resolver));
+    assert!(std::ptr::eq(registration("ALIAS").resolver,
+        <Universal as unchained_macros::ResolverDeclaration>::DESCRIPTOR));
     let mut writer = Writer::default();
     unsafe {
         (registration("SHARED").factory)(100).apply(100, &mut writer).unwrap();
@@ -87,7 +107,7 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
 fn selection_filtering_and_roots_do_not_construct_patches(key: Key, root_required: bool) {
     FACTORIES.set(0);
     validate_patch_registrations().unwrap();
-    let roots = unchained_macros::startup_resolvers_for(key).unwrap();
+    let roots = unchained_macros::startup_resolvers(&unchained_macros::SelectorSnapshot::from_selection(key).unwrap()).unwrap();
     assert_eq!(roots.iter().any(|resolver| resolver.name == "RootOnly"), root_required);
     assert_eq!(FACTORIES.get(), 0);
     assert!((registration("SHARED").applies_to)(&key));
@@ -95,9 +115,9 @@ fn selection_filtering_and_roots_do_not_construct_patches(key: Key, root_require
     assert!(unchained_macros::supports_selection("Universal", key));
 }
 
-#[test_case::test_case(Key::First, 1; "first")]
-#[test_case::test_case(Key::Second, 2; "second")]
-#[test_case::test_case(Key::Optional, 1; "optional")]
+#[test_case::test_case(Key::First, 2; "first")]
+#[test_case::test_case(Key::Second, 3; "second")]
+#[test_case::test_case(Key::Optional, 2; "optional")]
 fn registered_application_selects_named_patches_and_preserves_conditions(key: Key, expected_factories: usize) {
     FACTORIES.set(0);
     let offsets = HashMap::from([
@@ -105,13 +125,16 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
         ("Conditional".into(), 30), ("Restricted".into(), 40),
     ]);
     let mut writer = Writer::default();
-    let results = unsafe { apply_registered_patches(1000, &offsets, key, &mut writer) }.unwrap();
+    let snapshot = unchained_macros::SelectorSnapshot::from_selection(key).unwrap();
+    let results = unsafe { apply_registered_patches(1000, &offsets, &snapshot, &mut writer) }.unwrap();
     assert!(results.iter().any(|result| result.name == "SHARED" && result.applied));
     assert!(results.iter().any(|result| result.name == "conditional" && !result.applied));
     assert_eq!(results.iter().any(|result| result.name == "ONLY_FIRST"), key == Key::First);
     assert_eq!(results.iter().any(|result| result.name == "second"), key == Key::Second);
     assert_eq!(FACTORIES.get(), expected_factories);
     assert!(writer.0.contains(&(1011, vec![0x77])));
+    assert!(writer.0.contains(&(1012, 1.5f32.to_ne_bytes().to_vec())));
+    assert!(writer.0.contains(&(1012, 0x12345678u32.to_ne_bytes().to_vec())));
     assert!(!writer.0.iter().any(|(address, _)| *address == 1030));
 }
 
@@ -119,7 +142,8 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
 fn missing_addresses_fail_before_factories_or_writes() {
     FACTORIES.set(0);
     let mut writer = Writer::default();
-    let error = unsafe { apply_registered_patches(1000, &HashMap::new(), Key::First, &mut writer) }.unwrap_err();
+    let snapshot = unchained_macros::SelectorSnapshot::from_selection(Key::First).unwrap();
+    let error = unsafe { apply_registered_patches(1000, &HashMap::new(), &snapshot, &mut writer) }.unwrap_err();
     assert!(error.contains("No address for patch"), "{error}");
     assert_eq!(FACTORIES.get(), 0);
     assert!(writer.0.is_empty());

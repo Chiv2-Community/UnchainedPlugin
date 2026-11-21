@@ -2,12 +2,64 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use crate::{PatchRegistration, ResolverSelection, SelectionKey};
+use std::mem::{MaybeUninit, align_of, size_of};
+use crate::{PatchRegistration, ResolverSelection, SelectionKey, SelectorSnapshot};
+
+trait StaticWriteSource: Sync {
+    fn source(&self) -> *const u8;
+}
+impl<T: Copy + Sync> StaticWriteSource for T {
+    fn source(&self) -> *const u8 { (self as *const T).cast() }
+}
+
+#[derive(Clone)]
+enum WriteStorage {
+    Owned(Vec<MaybeUninit<u8>>),
+    Static(&'static dyn StaticWriteSource),
+}
+
+/// An erased Copy value. Raw copying preserves pointer provenance and padding;
+/// backends must not turn potentially uninitialized padding into `&[u8]`.
+#[derive(Clone)]
+pub struct WriteValue {
+    storage: WriteStorage,
+    size: usize,
+    alignment: usize,
+}
+
+impl std::fmt::Debug for WriteValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WriteValue").field("size", &self.size).field("alignment", &self.alignment).finish()
+    }
+}
+
+impl WriteValue {
+    fn owned<T: Copy + 'static>(value: T) -> Self {
+        let mut storage = Vec::<MaybeUninit<u8>>::with_capacity(size_of::<T>());
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                (&value as *const T).cast::<MaybeUninit<u8>>(), storage.as_mut_ptr(), size_of::<T>(),
+            );
+            storage.set_len(size_of::<T>());
+        }
+        Self { storage: WriteStorage::Owned(storage), size: size_of::<T>(), alignment: align_of::<T>() }
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        match &self.storage {
+            WriteStorage::Owned(storage) => storage.as_ptr().cast(),
+            WriteStorage::Static(source) => StaticWriteSource::source(*source),
+        }
+    }
+    pub fn size(&self) -> usize { self.size }
+    pub fn alignment(&self) -> usize { self.alignment }
+}
 
 #[derive(Debug, Clone)]
 enum Operation {
     Bytes(Cow<'static, [u8]>),
     Nop(usize),
+    Write(WriteValue),
 }
 
 /// A relative memory edit. Factories receive the resolved native address.
@@ -31,6 +83,22 @@ impl Patch {
         Self { offset, operation: Operation::Nop(count), enabled: true }
     }
 
+    /// Write a Copy value without interpreting its representation as initialized bytes.
+    pub fn write<T: Copy + 'static>(offset: u64, value: T) -> Self {
+        Self { offset, operation: Operation::Write(WriteValue::owned(value)), enabled: true }
+    }
+
+    /// Const form for statics. Copies the referenced value, not its address.
+    pub const fn write_ref<T: Copy + Sync + 'static>(offset: u64, value: &'static T) -> Self {
+        Self {
+            offset,
+            operation: Operation::Write(WriteValue {
+                storage: WriteStorage::Static(value), size: size_of::<T>(), alignment: align_of::<T>(),
+            }),
+            enabled: true,
+        }
+    }
+
     pub const fn when(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -47,6 +115,12 @@ impl Patch {
         match &self.operation {
             Operation::Bytes(bytes) => unsafe { writer.bytes(address, bytes)?; },
             Operation::Nop(count) => unsafe { writer.nop(address, *count)?; },
+            Operation::Write(value) => {
+                if address % value.alignment() as u64 != 0 {
+                    return Err("Unaligned typed patch address".into());
+                }
+                unsafe { writer.write(address, value)?; }
+            }
         }
         Ok(true)
     }
@@ -60,6 +134,10 @@ pub trait PatchWriter {
     /// # Safety
     /// The caller must supply a valid native instruction range.
     unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String>;
+    /// # Safety
+    /// The destination must be valid, nonoverlapping, and aligned for this value.
+    /// Copy raw storage; its padding need not be initialized.
+    unsafe fn write(&mut self, address: u64, value: &WriteValue) -> Result<(), String>;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -90,9 +168,12 @@ fn validate(patches: &[&PatchRegistration]) -> Result<(), String> {
         if !names.insert(patch.name) {
             return Err(format!("Duplicate patch name {}", patch.name));
         }
-        groups.entry(patch.resolver).or_default().push(*patch);
+        groups.entry(patch.resolver.named.name).or_default().push(*patch);
     }
     for group in groups.values() {
+        if group.iter().any(|patch| !std::ptr::eq(patch.resolver, group[0].resolver)) {
+            return Err(format!("Patches reference different descriptors for resolver {}", group[0].resolver.named.name));
+        }
         for patch in group {
             (patch.validate_group)(group)?;
         }
@@ -112,25 +193,26 @@ pub fn validate_patch_registrations() -> Result<(), String> {
 /// # Safety
 /// Each resolved address and resulting edit must satisfy its native contract.
 /// Earlier writes are not rolled back if a later writer call fails.
-pub unsafe fn apply_registered_patches<E: SelectionKey, W: PatchWriter>(
-    base: u64, offsets: &HashMap<String, u64>, selection: E, writer: &mut W,
+pub unsafe fn apply_registered_patches<W: PatchWriter>(
+    base: u64, offsets: &HashMap<String, u64>, snapshot: &SelectorSnapshot, writer: &mut W,
 ) -> Result<Vec<PatchApplication>, String> {
+    snapshot.validate_registered()?;
     let patches: Vec<_> = inventory::iter::<PatchRegistration>.into_iter().collect();
     validate(&patches)?;
-    let selected = patches.into_iter().filter(|patch| (patch.applies_to)(&selection))
+    let selected = patches.into_iter().filter(|patch| snapshot.supports_patch(patch))
         .map(|patch| {
-            if !crate::supports_selection(patch.resolver, selection) {
-                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver));
+            if !patch.resolver.supports(snapshot) {
+                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver.named.name));
             }
-            let offset = offsets.get(patch.resolver)
-                .ok_or_else(|| format!("No address for patch {} resolver {}", patch.name, patch.resolver))?;
+            let offset = offsets.get(patch.resolver.named.name)
+                .ok_or_else(|| format!("No address for patch {} resolver {}", patch.name, patch.resolver.named.name))?;
             let address = base.checked_add(*offset).ok_or_else(|| format!("Address overflow for patch {}", patch.name))?;
             Ok((patch, address))
         }).collect::<Result<Vec<_>, String>>()?;
     selected.into_iter().map(|(patch, address)| {
         let applied = unsafe { (patch.factory)(address).apply(address, writer) }
             .map_err(|error| format!("Patch {}: {error}", patch.name))?;
-        Ok(PatchApplication { name: patch.name, resolver: patch.resolver, applied })
+        Ok(PatchApplication { name: patch.name, resolver: patch.resolver.named.name, applied })
     }).collect()
 }
 
@@ -150,6 +232,7 @@ mod tests {
     impl ResolverDeclaration for Both {
         const NAME: &'static str = "Both";
         const UNRESTRICTED: bool = true;
+        const DESCRIPTOR: &'static crate::ResolverDescriptor = &BOTH;
     }
     impl ResolverSelection<Key> for Both {
         const SELECTIONS: &'static [(Key, bool)] = &[];
@@ -158,11 +241,21 @@ mod tests {
     impl ResolverDeclaration for FirstOnly {
         const NAME: &'static str = "FirstOnly";
         const UNRESTRICTED: bool = false;
+        const DESCRIPTOR: &'static crate::ResolverDescriptor = &FIRST_DESCRIPTOR;
     }
     impl ResolverSelection<Key> for FirstOnly {
-        const SELECTIONS: &'static [(Key, bool)] = &[(Key::Second, false)];
+        const SELECTIONS: &'static [(Key, bool)] = &[(Key::First, true), (Key::Second, false)];
     }
 
+    fn unused_getter() -> &'static patternsleuth::resolvers::DynResolverFactory { panic!("validation must not scan") }
+    static BOTH: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
+        patternsleuth::resolvers::NamedResolver { name: "Both", getter: unused_getter });
+    static FIRST_DESCRIPTOR: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
+        patternsleuth::resolvers::NamedResolver { name: "FirstOnly", getter: unused_getter });
+    static OTHER: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
+        patternsleuth::resolvers::NamedResolver { name: "Other", getter: unused_getter });
+    static NAMESAKE: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
+        patternsleuth::resolvers::NamedResolver { name: "Both", getter: unused_getter });
     fn never_construct(_: u64) -> Patch { panic!("validation must not construct patches") }
     fn first(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::First) }
     fn second(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::Second) }
@@ -170,20 +263,29 @@ mod tests {
         validate_patch_coverage::<Both, _>(Key::First, group)
     }
     static FIRST: PatchRegistration = PatchRegistration {
-        name: "first", resolver: "Both", factory: never_construct, applies_to: first, validate_group: both,
+        name: "first", resolver: &BOTH, factory: never_construct, applies_to: first, validate_group: both,
+        selector: Some(std::any::TypeId::of::<Key>),
     };
     static SECOND: PatchRegistration = PatchRegistration {
-        name: "second", resolver: "Both", factory: never_construct, applies_to: second, validate_group: both,
+        name: "second", resolver: &BOTH, factory: never_construct, applies_to: second, validate_group: both,
+        selector: Some(std::any::TypeId::of::<Key>),
     };
     static FIRST_ONLY: PatchRegistration = PatchRegistration {
-        name: "only_first", resolver: "FirstOnly", factory: never_construct, applies_to: first,
+        name: "only_first", resolver: &FIRST_DESCRIPTOR, factory: never_construct, applies_to: first,
+        selector: Some(std::any::TypeId::of::<Key>),
         validate_group: |group| validate_patch_coverage::<FirstOnly, _>(Key::First, group),
     };
     static DUPLICATE: PatchRegistration = PatchRegistration {
-        name: "first", resolver: "Both", factory: never_construct, applies_to: second, validate_group: both,
+        name: "first", resolver: &BOTH, factory: never_construct, applies_to: second, validate_group: both,
+        selector: Some(std::any::TypeId::of::<Key>),
     };
     static OTHER_RESOLVER: PatchRegistration = PatchRegistration {
-        name: "other", resolver: "Other", factory: never_construct, applies_to: second, validate_group: both,
+        name: "other", resolver: &OTHER, factory: never_construct, applies_to: second, validate_group: both,
+        selector: Some(std::any::TypeId::of::<Key>),
+    };
+    static CONFLICTING_DESCRIPTOR: PatchRegistration = PatchRegistration {
+        name: "namesake", resolver: &NAMESAKE, factory: never_construct, applies_to: second,
+        selector: Some(std::any::TypeId::of::<Key>), validate_group: both,
     };
 
     #[test_case::test_case(&[&FIRST], Some("required selection Second"); "missing enabled selection")]
@@ -191,6 +293,7 @@ mod tests {
     #[test_case::test_case(&[&FIRST_ONLY], None; "resolver disables second selection")]
     #[test_case::test_case(&[&FIRST, &DUPLICATE], Some("Duplicate patch name first"); "duplicate names")]
     #[test_case::test_case(&[&FIRST, &OTHER_RESOLVER], Some("required selection Second"); "other resolver does not supply coverage")]
+    #[test_case::test_case(&[&FIRST, &CONFLICTING_DESCRIPTOR], Some("different descriptors"); "namesake descriptor does not supply coverage")]
     fn coverage_is_grouped_by_resolver(patches: &[&PatchRegistration], expected: Option<&str>) {
         match expected {
             Some(message) => assert!(validate(patches).unwrap_err().contains(message)),

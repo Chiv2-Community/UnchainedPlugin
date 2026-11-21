@@ -12,11 +12,12 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::ATBLGameState;
 use std::os::raw::c_void;
+use crate::PlatformType;
 
 // Used to set World reference
 define_pattern_resolver!(UWorld__InternalGetNetMode, {
-    EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
-    STEAM: [
+    PlatformType::EGS: ["40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9"], // EGS
+    PlatformType::STEAM: [
         "40 57 48 81 EC 90 00 00 00 48 8B F9 48 8B",
         "40 53 48 81 EC 90 00 00 00 48 8B D9 48 8B 49 38 48 85 C9" // EGS 2.11.4
         ], // STEAM

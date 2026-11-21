@@ -2,10 +2,10 @@
 
 use unchained_macros::{runtime_bindings, NativeFunction};
 
-struct Add;
-struct Borrow;
-struct Storage;
-struct Missing;
+unchained_macros::define_pattern_resolver!(Add, ["AA"]);
+unchained_macros::define_pattern_resolver!(Borrow, ["AA"]);
+unchained_macros::define_pattern_resolver!(Storage, ["AA"]);
+unchained_macros::define_pattern_resolver!(Missing, ["AA"]);
 
 #[repr(C)]
 struct Native {
@@ -56,13 +56,13 @@ fn metadata_preserves_signatures_and_binding_identity() {
     let binding = Native::__UNCHAINED_BINDING_add.binding();
     let registration = inventory::iter::<unchained_macros::FunctionBindingRegistration>
         .into_iter()
-        .find(|r| r.binding.name() == "Add")
+        .find(|r| r.binding.name() == "Native::add")
         .unwrap();
     assert!(std::ptr::eq(binding, registration.binding));
     assert!(
         !inventory::iter::<unchained_macros::FunctionBindingRegistration>
             .into_iter()
-            .any(|r| r.binding.name() == "DoesNotExist")
+            .any(|r| r.binding.offset_key() == "DoesNotExist")
     );
 }
 

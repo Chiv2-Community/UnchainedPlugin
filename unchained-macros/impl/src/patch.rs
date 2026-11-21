@@ -60,12 +60,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         return Err(syn::Error::new_spanned(&declaration, "register each patch item only once"));
     }
     let cfg: Vec<_> = super::cfg_attributes(attributes).collect();
-    let (validation, applicability, coverage) = match selection {
+    let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
             quote!(const _: () = assert!(
                 <#resolver as ::unchained_macros::ResolverDeclaration>::UNRESTRICTED,
                 "universal patch targets a restricted resolver; declare its selection explicitly"
             );),
+            quote!(),
+            quote!(::core::option::Option::None),
             quote!(|_| true),
             quote!(|_| Ok(())),
         ),
@@ -76,6 +78,12 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                     &[(#key, true)],
                 );
             },
+            quote! {
+                ::unchained_macros::__private::inventory::submit! {
+                    ::unchained_macros::__private::SelectorProvider::for_key(#key)
+                }
+            },
+            quote!(::core::option::Option::Some(::unchained_macros::__private::selector_type(#key))),
             quote!(|selection| ::unchained_macros::__private::selection_matches(selection, #key)),
             quote!(|patches| ::unchained_macros::__private::validate_patch_coverage::<#resolver, _>(#key, patches)),
         ),
@@ -83,12 +91,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     Ok(quote! {
         #declaration
         #(#cfg)* #validation
+        #(#cfg)* #provider
         #(#cfg)*
         ::unchained_macros::__private::inventory::submit! {
             ::unchained_macros::PatchRegistration {
                 name: stringify!(#name),
-                resolver: <#resolver as ::unchained_macros::ResolverDeclaration>::NAME,
+                resolver: <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
                 factory: #factory,
+                selector: #selector,
                 applies_to: #applicability,
                 validate_group: #coverage,
             }

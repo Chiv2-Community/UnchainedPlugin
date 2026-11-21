@@ -7,6 +7,13 @@ mod function_detour;
 mod global;
 mod selection;
 mod patch;
+mod resolver;
+
+/// Declare a resolver. Qualified dictionary keys identify their selector provider.
+#[proc_macro]
+pub fn define_pattern_resolver(input: TokenStream) -> TokenStream {
+    resolver::expand(input.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+}
 
 /// Register a `fn(u64) -> Patch` factory or immutable `Patch` static.
 /// An optional enum variant restricts applicability. Required coverage is grouped
@@ -16,7 +23,8 @@ pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
     patch::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
-/// Declare a fieldless selection enum with optional `require = [Variant, ...]`.
+/// Declare a fieldless selection enum with optional `require = [Variant, ...]`
+/// and `fallback = Variant`. The fallback variant itself terminates the chain.
 /// Supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`, and `Eq`.
 #[proc_macro_attribute]
 pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStream {
@@ -221,11 +229,18 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     let resolver_type_check = require_resolver_type.then(|| quote! {
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
     });
-    let constructor = if require_resolver_type { quote!(new) } else { quote!(from_offset_key) };
+    let target_name = signature.ident.to_string();
+    let initializer = if require_resolver_type {
+        quote!(::unchained_macros::FunctionBinding::new(
+            #target_name, <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
+        ))
+    } else {
+        quote!(::unchained_macros::FunctionBinding::from_offset_key(#target_name, #resolver_name))
+    };
     function.block = Box::new(syn::parse2(quote!({
         #resolver_type_check
         static #binding: ::unchained_macros::FunctionBinding =
-            ::unchained_macros::FunctionBinding::#constructor(#resolver_name);
+            #initializer;
         ::inventory::submit! {
             ::unchained_macros::FunctionBindingRegistration { binding: &#binding }
         }

@@ -4,7 +4,7 @@ use unchained_macros::{
     require_function_bindings, HookRegistration, OffsetRegisty,
 };
 
-struct FixtureRead;
+unchained_macros::define_pattern_resolver!(FixtureRead, ["AA"]);
 
 #[bind_resolved_func(FixtureRead)]
 unsafe fn read() -> i32 {}

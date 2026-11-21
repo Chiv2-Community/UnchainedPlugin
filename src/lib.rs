@@ -4,9 +4,8 @@
 extern crate unchained_macros;
 pub use unchained_macros::*;
 
-#[macro_use]
 pub mod platform;
-pub use platform::{PlatformType, PLATFORM, current_platform, supports_platform};
+pub use platform::{PlatformType, PLATFORM, current_platform};
 
 #[macro_use]
 pub mod logging;
@@ -30,7 +29,7 @@ use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use anyhow::{Context, Result};
 use patternsleuth::resolvers::NamedResolver;
 use serde::{Deserialize, Serialize};
@@ -60,11 +59,18 @@ pub struct BuildInfo {
     file_hash: u32,
     name: String,
     platform: PlatformType,
+    #[serde(default)]
+    selectors: Vec<SelectorIdentity>,
     path: String,
     offsets: HashMap<String, u64>,
 }
 
 static CURRENT_BUILD_INFO: Mutex<Option<BuildInfo>> = Mutex::new(None);
+static CURRENT_SELECTORS: OnceLock<SelectorSnapshot> = OnceLock::new();
+
+fn selectors() -> &'static SelectorSnapshot {
+    CURRENT_SELECTORS.get().expect("Selectors must be captured before startup")
+}
 
 /// Offset (relative to the game image base) resolved for `name` in the current
 /// build info, if any.
@@ -81,31 +87,35 @@ fn expand_env_path(path: &str) -> Option<PathBuf> {
     None
 }
 
-fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
+fn get_build_path(crc: u32, platform_type: PlatformType, selectors: &[SelectorIdentity]) -> Option<PathBuf> {
     let platform_str = platform_type.to_string();
+    let selector_crc = crc32c::crc32c(&serde_json::to_vec(selectors).expect("selector identities serialize"));
     expand_env_path(&format!(
-        r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}.build.json",
-        platform_str, crc
+        r"%LOCALAPPDATA%\Chivalry 2\Saved\Config\{}-{:08x}-{:08x}.build.json",
+        platform_str, crc, selector_crc,
     ))
 }
 
-fn resolvers(platform: PlatformType) -> std::vec::IntoIter<&'static NamedResolver> {
-    unchained_macros::startup_resolvers_for(platform)
+fn resolvers(snapshot: &SelectorSnapshot) -> std::vec::IntoIter<&'static NamedResolver> {
+    unchained_macros::startup_resolvers(snapshot)
         .unwrap_or_else(|error| panic!("Invalid startup resolver registration: {error}"))
         .into_iter()
 }
 
 impl BuildInfo {
-    pub fn load_or_create(crc: u32, platform_type: PlatformType) -> Self {
+    pub fn load_or_create(crc: u32, snapshot: &SelectorSnapshot) -> Self {
+        let platform_type = snapshot.get::<PlatformType>().expect("Platform selector is captured");
         let load_result =
-            get_build_path(crc, platform_type)
+            get_build_path(crc, platform_type, snapshot.cache_key())
                 .context("Failed to expand path")
                 .and_then(|path| File::open(path).context("Failed to open build info file"))
                 .map(BufReader::new)
                 .and_then(|reader| serde_json::from_reader(reader).context("Failed to deserialize build info"))
                 .and_then(|result: BuildInfo|
-                    if result.plugin_version == env!("CARGO_PKG_VERSION") { Ok(result) }
-                    else { Err(anyhow::anyhow!("Build info version mismatch")) }
+                    if result.plugin_version == env!("CARGO_PKG_VERSION")
+                        && result.file_hash == crc && result.platform == platform_type
+                        && result.selectors == snapshot.cache_key()
+                    { Ok(result) } else { Err(anyhow::anyhow!("Build info identity mismatch")) }
                 )
                 .map_err(|e| anyhow::anyhow!("Failed to load build info: {}", e));
 
@@ -121,6 +131,7 @@ impl BuildInfo {
                     file_hash: crc,
                     name: "".to_string(),
                     platform: platform_type,
+                    selectors: snapshot.cache_key().to_vec(),
                     path: "".to_string(),
                     offsets: HashMap::new(),
                 }
@@ -130,7 +141,7 @@ impl BuildInfo {
 
 
     pub fn save(&self) -> Result<Self> {
-        let path = get_build_path(self.file_hash, self.platform)
+        let path = get_build_path(self.file_hash, self.platform, &self.selectors)
             .ok_or_else(|| anyhow::anyhow!("Failed to expand path"))?;
         sinfo!("Saving build info to {}", path.to_string_lossy());
 
@@ -156,17 +167,18 @@ impl BuildInfo {
         self.offsets.get(name)
     }
 
-    pub fn get_unresolved(&self, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
+    pub fn get_unresolved(&self, snapshot: &SelectorSnapshot, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
         resolvers_in
             .into_iter()
-            .filter(|resolver| supports_platform(resolver.name, self.platform))
-            .filter(|resolver| !self.offsets.contains_key(resolver.name))
+            .filter(|resolver| snapshot.supports_resolver(resolver.name))
+            .filter(|resolver| self.selectors != snapshot.cache_key() || !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
     }
 
-    pub fn with_scan(&self, all_resolvers: Vec<&'static NamedResolver>) -> Result<Self> {
-        scan::scan(self.platform, self.get_unresolved(all_resolvers))
+    pub fn with_scan(&self, snapshot: &SelectorSnapshot, all_resolvers: Vec<&'static NamedResolver>) -> Result<Self> {
+        anyhow::ensure!(self.selectors == snapshot.cache_key(), "Cannot mix selector snapshots in one address cache");
+        scan::scan(snapshot, self.get_unresolved(snapshot, all_resolvers))
             .map(|new_offsets| self.with_additional_offsets(new_offsets))
     }
 
@@ -193,30 +205,58 @@ impl BuildInfo {
 mod build_info_tests {
     use super::*;
 
+    fn unused_getter() -> &'static patternsleuth::resolvers::DynResolverFactory {
+        panic!("cache identity checks must not scan");
+    }
+    static SYNTHETIC: NamedResolver = NamedResolver { name: "Synthetic", getter: unused_getter };
+
+    #[test_case::test_case(false; "different selector values")]
+    #[test_case::test_case(true; "legacy cache without selector identity")]
+    fn incompatible_selector_caches_require_a_fresh_scan(legacy: bool) {
+        let original = SelectorSnapshot::from_selection(PlatformType::STEAM).unwrap();
+        let snapshot = SelectorSnapshot::from_selection(PlatformType::EGS).unwrap();
+        let mut info = BuildInfo {
+            plugin_version: env!("CARGO_PKG_VERSION").into(), build: 0, file_hash: 1,
+            name: String::new(), platform: PlatformType::STEAM, path: String::new(),
+            offsets: HashMap::from([("Synthetic".into(), 123)]),
+            selectors: original.cache_key().to_vec(),
+        };
+        if legacy {
+            let mut serialized = serde_json::to_value(&info).unwrap();
+            serialized.as_object_mut().unwrap().remove("Selectors");
+            info = serde_json::from_value(serialized).unwrap();
+            assert!(info.selectors.is_empty());
+        }
+        assert_eq!(info.get_unresolved(&snapshot, vec![&SYNTHETIC]).len(), 1);
+        assert!(info.with_scan(&snapshot, vec![&SYNTHETIC]).is_err());
+    }
+
     #[test]
     fn unrelated_cache_entries_do_not_require_scanning() {
+        let snapshot = SelectorSnapshot::from_selection(PlatformType::STEAM).unwrap();
         let info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
             offsets: HashMap::from([("Unrelated".into(), 123)]),
+            selectors: snapshot.cache_key().to_vec(),
         };
-        assert!(info.get_unresolved(Vec::new()).is_empty());
+        assert!(info.get_unresolved(&snapshot, Vec::new()).is_empty());
     }
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
-        let required: Vec<_> = resolvers(PlatformType::STEAM)
-            .filter(|resolver| supports_platform(resolver.name, PlatformType::STEAM))
-            .collect();
+        let snapshot = SelectorSnapshot::from_selection(PlatformType::STEAM).unwrap();
+        let required: Vec<_> = resolvers(&snapshot).collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
             offsets: required.iter().map(|resolver| (resolver.name.to_string(), 1)).collect(),
+            selectors: snapshot.cache_key().to_vec(),
         };
-        assert!(info.get_unresolved(required.clone()).is_empty());
+        assert!(info.get_unresolved(&snapshot, required.clone()).is_empty());
         for resolver in &required {
             info.offsets.remove(resolver.name);
-            let missing = info.get_unresolved(required.clone());
+            let missing = info.get_unresolved(&snapshot, required.clone());
             assert!(!missing.is_empty());
             assert!(missing.iter().all(|missing| missing.name == resolver.name));
             info.offsets.insert(resolver.name.to_string(), 1);
@@ -274,7 +314,7 @@ unsafe extern "system" fn main_thread_adapter(_: *mut std::ffi::c_void) -> u32 {
 fn rust_main() {
     let need_rescan = {
         let current = CURRENT_BUILD_INFO.lock().unwrap();
-        current.as_ref().is_none_or(|info| !info.get_unresolved(resolvers(info.platform).collect()).is_empty())
+        current.as_ref().is_none_or(|info| !info.get_unresolved(selectors(), resolvers(selectors()).collect()).is_empty())
     };
 
     if need_rescan {
@@ -282,7 +322,7 @@ fn rust_main() {
         load_current_build_info();
         let mut current = CURRENT_BUILD_INFO.lock().unwrap();
         if let Some(bi) = current.as_ref() {
-            match bi.with_scan(resolvers(bi.platform).collect()) {
+            match bi.with_scan(selectors(), resolvers(selectors()).collect()) {
                 Ok(scanned) => *current = Some(scanned),
                 Err(error) => serror!("Failed to scan for missing signatures: {}", error),
             }
@@ -312,7 +352,7 @@ fn load_current_build_info() {
             .unwrap_or_default();
 
         let crc32 = crc32_from_file(&file_path).expect("Failed to compute CRC");
-        *current = Some(BuildInfo::load_or_create(crc32, current_platform()));
+        *current = Some(BuildInfo::load_or_create(crc32, selectors()));
     }
 }
 
@@ -326,22 +366,23 @@ fn initialize_native_runtime() {
     let current = CURRENT_BUILD_INFO.lock().unwrap();
     let bi = current.as_ref().expect("Build info must be loaded before native initialization");
     // Scan incomplete caches on the worker thread, outside DllMain's loader lock.
-    if !bi.get_unresolved(resolvers(bi.platform).collect()).is_empty() {
+    let snapshot = selectors();
+    if !bi.get_unresolved(snapshot, resolvers(snapshot).collect()).is_empty() {
         sinfo!("Missing signatures; deferring initialization until scan and restart");
         return;
     }
 
-    let enabled = |name: &str| supports_platform(name, bi.platform);
+    let enabled = |name: &str| snapshot.supports_resolver(name);
     unsafe { unchained_macros::initialize_value_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled); }
-    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled) } {
+    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, |binding| binding.supports(snapshot)) } {
         serror!("Failed to bind native functions: {}", error);
         std::process::exit(-67);
     }
-    if let Err(error) = apply_patches(&bi.offsets) {
+    if let Err(error) = apply_patches(&bi.offsets, snapshot) {
         serror!("Failed to apply patches: {}", error);
         std::process::exit(-67);
     }
-    if let Err(error) = attach_hooks() {
+    if let Err(error) = attach_hooks(snapshot) {
         serror!("Failed to attach hooks: {}", error);
         std::process::exit(-67);
     }
@@ -379,6 +420,8 @@ fn preinit_rustlib() {
         PlatformType::STEAM
     };
     PLATFORM.set(platform).expect("Platform already set");
+    CURRENT_SELECTORS.set(SelectorSnapshot::capture_registered().expect("Failed to capture selector providers"))
+        .expect("Selectors already captured");
     load_current_build_info();
     initialize_native_runtime();
 }
@@ -540,12 +583,11 @@ pub fn world_init() {
 }
 
 /// The base program address of the running application will be used.
-pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
+pub fn attach_hooks(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
 
-    let platform = current_platform();
     for hook in inventory::iter::<unchained_macros::HookRegistration> {
-        if !supports_platform(hook.name, platform) {
+        if !hook.binding.supports(snapshot) {
             continue;
         }
         let cond = (hook.condition)();
@@ -574,12 +616,16 @@ impl unchained_macros::PatchWriter for NativePatchWriter {
         unsafe { tools::memtools::nop(address as *mut u8, count); }
         Ok(())
     }
+    unsafe fn write(&mut self, address: u64, value: &unchained_macros::WriteValue) -> Result<(), String> {
+        unsafe { tools::memtools::write_raw(address as *mut u8, value.as_ptr(), value.size()); }
+        Ok(())
+    }
 }
 
 /// Apply named patches through the existing native memory-protection backend.
-pub fn apply_patches(offsets: &HashMap<String, u64>) -> Result<(), String> {
+pub fn apply_patches(offsets: &HashMap<String, u64>, snapshot: &SelectorSnapshot) -> Result<(), String> {
     let results = unsafe { unchained_macros::apply_registered_patches(
-        *unchained::startup::BASE_ADDR as u64, offsets, current_platform(), &mut NativePatchWriter,
+        *unchained::startup::BASE_ADDR as u64, offsets, snapshot, &mut NativePatchWriter,
     ) }?;
     for result in results {
         if result.applied {
