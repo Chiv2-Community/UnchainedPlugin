@@ -18,8 +18,8 @@ resolve automatically in the shared context.
 
 Add `unchained_macros::require_resolver!(Name)` for required scan side effects,
 such as populating request offsets. Request-key bindings are not resolver types.
-Project declarations override upstream namesakes. Platform and cache filtering
-still apply; existing unrelated cache entries are retained.
+Project declarations override upstream namesakes. Host selection and cache
+filtering still apply; existing unrelated cache entries are retained.
 
 ## Macros
 
@@ -28,10 +28,10 @@ still apply; existing unrelated cache entries are retained.
 ```rust,ignore
 define_pattern_resolver!(Name, ["AA BB CC"]);             // Simple
 define_pattern_resolver!(Name, Call, ["E8 | ?? ?? ?? ??"]);
-define_pattern_resolver!(Name, {
-    STEAM: ["AA BB"],
-    EGS: ["CC DD"],
-    OTHER: ["EE FF"],
+define_pattern_resolver!(Name, select [current_mode(), Mode::Shared], {
+    Mode::Read: ["AA BB"],
+    Mode::Write: ["CC DD"],
+    Mode::Shared: ["EE FF"],
 });
 ```
 
@@ -47,12 +47,14 @@ These are syntax examples, not game signatures.
 Xref modes ignore later patterns. Verify reference ordering; they do not require
 a unique function candidate.
 
-Platform dictionaries append `OTHER` patterns to the active platform's patterns;
-`OTHER` is **not** a fallback. Valid platform names are `STEAM`, `EGS`, `XBOX`,
-and `OTHER`. To restrict scanning and installation explicitly:
+Selection dictionaries take a consumer-defined, non-generic fieldless enum
+deriving `SelectionKey`, `Copy`, and `Eq`. They append matches in the explicit
+selection-list order. Missing keys contribute nothing; there is no implicit
+shared key or fallback. Duplicate dictionary keys and unknown/mismatched variants
+are compile errors. To restrict scanning and installation explicitly:
 
 ```rust,ignore
-define_single_platform_pattern_resolver!(STEAM, SteamOnly, ["AA BB"]);
+define_selected_pattern_resolver!(Mode::Read, ReadOnly, ["AA BB"]);
 ```
 
 For custom processing, supply expressions and an inline body returning
@@ -67,7 +69,7 @@ define_pattern_resolver!(Name, ["AA BB"], |ctx, patterns| {
 });
 ```
 
-The inline-body form also accepts platform dictionaries. Prefer
+The inline-body form also accepts selection dictionaries. Prefer
 [`define_custom_resolver!`](README.md#custom-resolvers) for composed
 BinaryBloodhound matchers producing exactly one address.
 
@@ -78,7 +80,7 @@ BinaryBloodhound matchers producing exactly one address.
 - [`src/custom_resolver.rs`](src/custom_resolver.rs): BinaryBloodhound integration.
 - [`src/binding.rs`](src/binding.rs): address publication and native calls.
 - [`src/registry.rs`](src/registry.rs): hook, patch, and offset inventories.
-- [`src/platforms.rs`](src/platforms.rs): storefront restrictions.
+- [`src/selection.rs`](src/selection.rs): typed consumer-defined restrictions.
 - [`startup.rs`](../src/unchained/startup.rs): host executable-base discovery.
 
 Validate game targets with fresh binary scans, not snapshots asserting production

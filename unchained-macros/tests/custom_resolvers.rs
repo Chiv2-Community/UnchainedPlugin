@@ -3,10 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use unchained_macros::define_custom_resolver;
 
 mod support;
-use support::{image, initialize_platform, BASE, TEXT};
+use support::{image, initialize_selection, current_flavor, Flavor, BASE, TEXT};
 static EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
-
-use unchained_macros::PlatformType;
 
 define_custom_resolver!(RootAddress, {
     BinaryMatcher::patterns(["AA BB"])?
@@ -26,11 +24,11 @@ define_custom_resolver!(CachedAddress, {
 
 define_custom_resolver!(InvalidPattern, BinaryMatcher::patterns(["not hex"])?.ensure_one());
 
-define_custom_resolver!(PlatformAddress, |platform| {
-    let pattern = match platform {
-        PlatformType::STEAM => "AA BB",
-        PlatformType::EGS => "11 22",
-        PlatformType::XBOX | PlatformType::OTHER => "not hex",
+define_custom_resolver!(SelectedAddress, with(current_flavor()), |flavor| {
+    let pattern = match flavor {
+        Flavor::First => "AA BB",
+        Flavor::Second => "11 22",
+        Flavor::Shared => "not hex",
     };
     BinaryMatcher::patterns([pattern])?.ensure_one()
 });
@@ -67,17 +65,17 @@ fn arbitrary_matchers_share_the_resolver_cache_and_preserve_u64_addresses() {
     assert_eq!(EVALUATIONS.load(Ordering::SeqCst), 1);
 }
 
-#[test_case::test_case(PlatformType::STEAM, TEXT + 0x10; "steam")]
-#[test_case::test_case(PlatformType::EGS, TEXT; "egs")]
-fn platform_factory_selects_the_matching_signature(platform: PlatformType, expected: u64) {
-    if !initialize_platform(platform) { return; }
-    assert_eq!(image(&[0x10]).resolve(PlatformAddress::resolver()).unwrap().0, expected);
+#[test_case::test_case(Flavor::First, TEXT + 0x10; "first")]
+#[test_case::test_case(Flavor::Second, TEXT; "second")]
+fn selection_factory_selects_the_matching_signature(flavor: Flavor, expected: u64) {
+    if !initialize_selection(flavor) { return; }
+    assert_eq!(image(&[0x10]).resolve(SelectedAddress::resolver()).unwrap().0, expected);
 }
 
 #[test]
-fn platform_factory_construction_errors_keep_resolver_context() {
-    if !initialize_platform(PlatformType::OTHER) { return; }
-    let error = image(&[]).resolve(PlatformAddress::resolver()).unwrap_err().to_string();
-    assert!(error.contains("PlatformAddress"), "{error}");
+fn selection_factory_construction_errors_keep_resolver_context() {
+    if !initialize_selection(Flavor::Shared) { return; }
+    let error = image(&[]).resolve(SelectedAddress::resolver()).unwrap_err().to_string();
+    assert!(error.contains("SelectedAddress"), "{error}");
     assert!(error.contains("invalid pattern"), "{error}");
 }

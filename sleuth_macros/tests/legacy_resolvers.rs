@@ -8,6 +8,12 @@ use std::sync::Mutex;
 
 static LOGS: Mutex<Vec<(&str, String)>> = Mutex::new(Vec::new());
 
+// Legacy macros consume the host's storefront API.
+#[derive(Clone, Copy)]
+enum PlatformType { STEAM, EGS, OTHER }
+static PLATFORM: std::sync::OnceLock<PlatformType> = std::sync::OnceLock::new();
+fn current_platform() -> PlatformType { *PLATFORM.get().unwrap() }
+
 #[macro_export]
 macro_rules! serror {
     ($($arg:tt)*) => { $crate::LOGS.lock().unwrap().push(("error", format!($($arg)*))) };
@@ -61,9 +67,9 @@ fn LegacyCustom() -> anyhow::Result<usize> {
     assert_eq!(offset, 2usize);
     assert!(should_read_rip4);
     assert_eq!(validate_expected, Some(0xAA));
-    let expected = match unchained_macros::current_platform() {
-        unchained_macros::PlatformType::STEAM => vec!["AA BB", "CC DD"],
-        unchained_macros::PlatformType::EGS => vec!["AA BB", "EE FF"],
+    let expected = match current_platform() {
+        PlatformType::STEAM => vec!["AA BB", "CC DD"],
+        PlatformType::EGS => vec!["AA BB", "EE FF"],
         _ => vec!["AA BB"],
     };
     assert_eq!(active_sigs, expected);
@@ -84,9 +90,12 @@ fn LegacyEarlyError() -> anyhow::Result<usize> {
 }
 
 fn image() -> Image<'static> {
-    unchained_macros::PLATFORM.get_or_init(|| {
-        std::env::var("TEST_LEGACY_PLATFORM").unwrap_or_else(|_| "STEAM".into())
-            .parse().unwrap()
+    PLATFORM.get_or_init(|| {
+        match std::env::var("TEST_LEGACY_PLATFORM").as_deref().unwrap_or("STEAM") {
+            "STEAM" => PlatformType::STEAM,
+            "EGS" => PlatformType::EGS,
+            _ => PlatformType::OTHER,
+        }
     });
     Image::from_memory(
         0x1000,

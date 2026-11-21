@@ -23,7 +23,8 @@ Startup:
 
 Use `require_resolver!(Name)` for a scan that populates an offset map or other
 required side effects. Request-key bindings need their provider registered this way.
-`PLATFORM` and `supports_platform` retain storefront filtering.
+`supports_selection(name, key)` applies typed, consumer-defined restrictions.
+The host owns selection state and decides which keys contribute patterns.
 
 `ResolvedAddress` publishes addresses once; `FunctionBinding` refers to Retour's
 detour rather than copying its trampoline address. Both binding inventories use
@@ -139,10 +140,35 @@ The matcher must take no input and produce exactly one `u64` address.
 Construction/evaluation errors retain resolver context; only the final address
 is cached, not matcher provenance.
 
-`define_custom_resolver!(Name, |platform| { ... })` supplies the current
-`PlatformType` and permits `?`. This selects matching behavior, not a platform
-restriction. Use `define_single_platform_pattern_resolver!` for that restriction.
+`define_custom_resolver!(Name, with(expression), |context| { ... })` evaluates
+host-supplied context when resolving and permits `?`. This selects matching
+behavior, not a restriction. Use `define_selected_pattern_resolver!` to restrict
+a resolver and its hooks/patches to an enum key.
 The plugin and BinaryBloodhound share one locked Patternsleuth dependency.
+
+## Consumer-defined selections
+
+```rust,ignore
+#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+enum Mode { Read, Write, Shared }
+
+define_pattern_resolver!(ReadEntry, select [current_mode(), Mode::Shared], {
+    Mode::Read: ["AA BB"],
+    Mode::Write: ["CC DD"],
+    Mode::Shared: ["EE FF"],
+});
+define_selected_pattern_resolver!(Mode::Read, ReadOnly, ["AA BB"]);
+```
+
+`SelectionKey` rejects non-enums, fields, and generic parameters. Rust checks
+variant names and enum types; duplicate dictionary keys are compile errors.
+The ordered selection list is explicit: no key is a built-in fallback or shared
+case. Repeated selections append their patterns again.
+
+Restrictions use enum type identity and equality, not integer discriminants.
+Unknown names remain unrestricted; conflicting restrictions or a different key
+type fail closed. Set host state before scanning; the toolkit owns no global
+selection. Use `CREATE_PATCH!(..., IF { ... })` for host-defined patch conditions.
 
 ## Validation
 

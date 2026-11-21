@@ -4,7 +4,7 @@ pub use detour::{detour_is_initialized, detour_is_enabled};
 
 pub use unchained_macros_impl::{
     bind_resolved_func, bind_resolved_value, runtime_bindings,
-    bind_resolved_request_function,
+    bind_resolved_request_function, SelectionKey,
 };
 
 /// Attach a replacement with the native binding's exact signature.
@@ -209,12 +209,12 @@ pub use registry::{
     CreateHookFn, HookRegistration, RegistrationPredicate, CreatePatchFn,
     PatchRegistration, OffsetRegisty,
 };
-pub use platforms::{PlatformType, PLATFORM, current_platform, ResolverPlatform, supports_platform};
+pub use selection::{SelectionKey, ResolverRestriction, supports_selection};
 pub use resolvers::{DeclaredResolver, RequiredResolver, startup_resolvers};
 
 mod binding;
 mod registry;
-mod platforms;
+mod selection;
 mod patch;
 mod signatures;
 mod custom_resolver;
@@ -226,6 +226,7 @@ pub mod __private {
     pub use crate::detour::claim_detour_address;
     pub use crate::binding::publish_function_detours;
     pub use crate::custom_resolver::single_address;
+    pub use crate::selection::{selection_key, selection_matches};
     pub use log;
     pub use paste;
 }

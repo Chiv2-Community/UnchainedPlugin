@@ -2,8 +2,8 @@ mod support;
 
 use object::SectionKind;
 use patternsleuth::{NamedMemorySection, image::Image, scanner::Pattern};
-use support::{BASE, TEXT, image, initialize_platform};
-use unchained_macros::{PlatformType, define_pattern_resolver};
+use support::{BASE, TEXT, image, initialize_selection, Flavor};
+use unchained_macros::define_pattern_resolver;
 
 define_pattern_resolver!(Unique, ["AA BB", "11 22"]);
 define_pattern_resolver!(First, First, ["AA BB", "11 22"]);
@@ -19,17 +19,27 @@ define_pattern_resolver!(LastReference, XrefLast, [
 
 mod nested {
     use unchained_macros::define_pattern_resolver;
+    use super::support::{Flavor, current_flavor};
 
-    define_pattern_resolver!(Dictionary, {
-        STEAM: ["AA BB"],
-        EGS: ["CC DD"],
-        OTHER: ["11 22"],
+    define_pattern_resolver!(Dictionary, select [current_flavor(), Flavor::Shared], {
+        Flavor::First: ["AA BB"],
+        Flavor::Second: ["CC DD"],
+        Flavor::Shared: ["11 22"],
     });
-    define_pattern_resolver!(InlineDictionary, {
-        STEAM: ["AA BB"],
-        EGS: ["CC DD"],
-        OTHER: ["11 22"],
+    define_pattern_resolver!(InlineDictionary, select [current_flavor(), Flavor::Shared], {
+        Flavor::First: ["AA BB"],
+        Flavor::Second: ["CC DD"],
+        Flavor::Shared: ["11 22"],
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
+    define_pattern_resolver!(SelectedOnly, select [current_flavor()], {
+        Flavor::First: ["AA BB"],
+        Flavor::Second: ["CC DD"],
+        Flavor::Shared: ["11 22"],
+    });
+    define_pattern_resolver!(Ordered, First, select [Flavor::Shared, Flavor::First], {
+        Flavor::First: ["AA BB"],
+        Flavor::Shared: ["11 22"],
+    });
 }
 
 #[test]
@@ -75,16 +85,31 @@ fn xref_modes_select_root_functions_from_only_the_first_pattern() {
     assert!(missing.resolve(LastReference::resolver()).is_err());
 }
 
-#[test_case::test_case(PlatformType::STEAM; "active and shared matches are ambiguous")]
-#[test_case::test_case(PlatformType::EGS; "shared pattern supplies the only match")]
-fn platform_dictionary_combines_active_and_shared_patterns(platform: PlatformType) {
-    if !initialize_platform(platform) { return; }
+#[test_case::test_case(Flavor::First; "active and shared matches are ambiguous")]
+#[test_case::test_case(Flavor::Second; "shared pattern supplies the only match")]
+#[test_case::test_case(Flavor::Shared; "repeated selections append again")]
+fn selection_dictionary_combines_explicit_keys(flavor: Flavor) {
+    if !initialize_selection(flavor) { return; }
     let image = image(&[0x10]);
     assert_eq!(image.resolve(nested::InlineDictionary::resolver()).unwrap().0, 2);
     let result = image.resolve(nested::Dictionary::resolver());
-    if platform == PlatformType::STEAM {
+    if flavor == Flavor::First {
         assert!(result.is_err());
     } else {
         assert_eq!(result.unwrap().0, TEXT);
     }
+}
+
+#[test_case::test_case(Flavor::First, Some(TEXT + 0x10); "first only")]
+#[test_case::test_case(Flavor::Second, None; "no implicit shared key")]
+#[test_case::test_case(Flavor::Shared, Some(TEXT); "explicit shared key")]
+fn selection_dictionary_uses_only_explicit_keys(flavor: Flavor, expected: Option<u64>) {
+    if !initialize_selection(flavor) { return; }
+    let image = image(&[0x10]);
+    let result = image.resolve(nested::SelectedOnly::resolver());
+    match expected {
+        Some(address) => assert_eq!(result.unwrap().0, address),
+        None => assert!(result.is_err()),
+    }
+    assert_eq!(image.resolve(nested::Ordered::resolver()).unwrap().0, TEXT);
 }

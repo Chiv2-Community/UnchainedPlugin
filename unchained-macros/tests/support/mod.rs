@@ -3,21 +3,30 @@ use patternsleuth::{
     Memory, NamedMemorySection,
     image::{Image, ImageType, pe::PEImage},
 };
-use unchained_macros::{PlatformType, PLATFORM};
+use std::sync::OnceLock;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+pub enum Flavor { First, Second, Shared }
+
+static FLAVOR: OnceLock<Flavor> = OnceLock::new();
+
+pub fn current_flavor() -> Flavor {
+    *FLAVOR.get().expect("fixture selection not initialized")
+}
 
 pub const BASE: u64 = 0x1_4000_0000;
 pub const TEXT: u64 = BASE + 0x1000;
 
-// Each exact child test gets its own immutable storefront selection.
-pub fn initialize_platform(platform: PlatformType) -> bool {
-    if std::env::var_os("UNCHAINED_PLATFORM_FIXTURE").is_some() {
-        PLATFORM.set(platform).unwrap();
+// Each exact child test gets its own immutable selection.
+pub fn initialize_selection(flavor: Flavor) -> bool {
+    if std::env::var_os("UNCHAINED_SELECTION_FIXTURE").is_some() {
+        FLAVOR.set(flavor).unwrap();
         return true;
     }
     let thread = std::thread::current();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", thread.name().unwrap(), "--nocapture"])
-        .env("UNCHAINED_PLATFORM_FIXTURE", "1")
+        .env("UNCHAINED_SELECTION_FIXTURE", "1")
         .status().unwrap();
     assert!(status.success());
     false

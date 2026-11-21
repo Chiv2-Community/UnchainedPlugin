@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use unchained_macros::{
     bind_resolved_func, function_is_bound, initialize_function_bindings,
     require_function_bindings, HookRegistration, OffsetRegisty, PatchRegistration,
-    PlatformType, PLATFORM,
 };
 
 struct FixtureRead;
@@ -21,7 +20,13 @@ mod tools {
     }
 }
 
-unchained_macros::CREATE_PATCH_PLATFORM!(STEAM, FixturePatch, BYTES, &[0x90]);
+#[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+enum Mode { Enabled }
+static MODE: std::sync::OnceLock<Mode> = std::sync::OnceLock::new();
+
+unchained_macros::CREATE_PATCH!(FixturePatch, BYTES, &[0x90], IF {
+    MODE.get().is_some_and(|mode| *mode == Mode::Enabled)
+});
 unchained_macros::CREATE_PATCH!(FixturePatch @ Start, BYTES, &[0xAB]);
 unchained_macros::CREATE_PATCH!(FixturePatch @ Offset, 1, BYTES, &[0xCD]);
 unchained_macros::CREATE_PATCH!(FixturePatch @ Conditional, BYTES, &[0xEF], IF { true });
@@ -55,7 +60,7 @@ fn patches_use_shared_registration_and_the_host_supplied_base() {
     let registration = inventory::iter::<PatchRegistration>.into_iter()
         .find(|registration| registration.name == "FixturePatch" && registration.tag == "base").unwrap();
     assert!(!(registration.enabled_fn)());
-    PLATFORM.set(PlatformType::STEAM).unwrap();
+    assert!(MODE.set(Mode::Enabled).is_ok());
     assert!((registration.enabled_fn)());
     let mut bytes = [0u8; 4];
     let base = bytes.as_mut_ptr() as usize;

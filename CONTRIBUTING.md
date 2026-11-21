@@ -117,7 +117,8 @@ define_pattern_resolver!(ExampleStringOwner, XrefFirst, [
 Select patterns for each storefront build.
 
 - Names: `STEAM`, `EGS`, `XBOX`, `OTHER`.
-- The current platform's patterns and `OTHER` are combined.
+- The adapters in [`src/platform.rs`](src/platform.rs) own storefront selection.
+  The current platform's patterns and `OTHER` are combined.
 - `OTHER` is shared coverage, not a fallback after failed matches.
 - Pattern selection does not restrict hook installation.
 - Use `define_single_platform_pattern_resolver!` to restrict a resolver and
@@ -143,7 +144,8 @@ Use BinaryBloodhound to compose searches and recover function entries.
   `u64` address.
 - Use `.root_functions()` for interior matches, `.addresses()` for address
   values, and `.ensure_one()` to reject missing or conflicting results.
-- Use `|platform| { ... }` for platform-dependent matcher construction.
+- Use `with(crate::current_platform()), |platform| { ... }` for
+  platform-dependent matcher construction.
   This selects the search; it does not register a platform restriction.
 - For inline async scans or mixed-mode resolvers, see the
   [resolver reference](unchained-macros/resolvers.md#macros).

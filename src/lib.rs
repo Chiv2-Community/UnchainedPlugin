@@ -5,6 +5,10 @@ extern crate unchained_macros;
 pub use unchained_macros::*;
 
 #[macro_use]
+pub mod platform;
+pub use platform::{PlatformType, PLATFORM, current_platform, supports_platform};
+
+#[macro_use]
 pub mod logging;
 pub mod scan;
 pub mod tools;
@@ -155,7 +159,7 @@ impl BuildInfo {
     pub fn get_unresolved(&self, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
         resolvers_in
             .into_iter()
-            .filter(|resolver| unchained_macros::supports_platform(resolver.name, self.platform))
+            .filter(|resolver| supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -202,7 +206,7 @@ mod build_info_tests {
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
         let required: Vec<_> = resolvers()
-            .filter(|resolver| unchained_macros::supports_platform(resolver.name, PlatformType::STEAM))
+            .filter(|resolver| supports_platform(resolver.name, PlatformType::STEAM))
             .collect();
         let mut info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
@@ -537,7 +541,7 @@ pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
 
     let platform = current_platform();
     for hook in inventory::iter::<unchained_macros::HookRegistration> {
-        if !unchained_macros::supports_platform(hook.name, platform) {
+        if !supports_platform(hook.name, platform) {
             continue;
         }
         let cond = (hook.condition)();
@@ -559,7 +563,7 @@ pub fn attach_hooks() -> Result<(), Box<dyn std::error::Error>> {
 pub fn apply_patches(offsets: &HashMap<String, u64>) {
     let platform = current_platform();
     for p in inventory::iter::<unchained_macros::PatchRegistration> {
-        if !unchained_macros::supports_platform(p.name, platform) {
+        if !supports_platform(p.name, platform) {
             continue;
         }
         // Run the condition check

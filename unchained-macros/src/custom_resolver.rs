@@ -3,8 +3,8 @@
 /// The matcher must take no input and resolve to `ExactlyOne` `u64` address.
 /// Use `.ensure_one()` to reject missing or ambiguous candidates.
 ///
-/// `define_custom_resolver!(Name, |platform| { ... })` supplies the host-selected
-/// `PlatformType` from `current_platform()` when the resolver runs.
+/// `define_custom_resolver!(Name, with(expression), |selection| { ... })`
+/// evaluates consumer-supplied context when the resolver runs.
 /// The body may use `?`, just like the matcher-expression form.
 ///
 /// A single-address matcher is accepted:
@@ -29,9 +29,9 @@
 /// ```
 #[macro_export]
 macro_rules! define_custom_resolver {
-    ($name:ident, |$platform:ident| $matcher:expr $(,)?) => {
+    ($name:ident, with($selection:expr), |$key:ident| $matcher:expr $(,)?) => {
         $crate::define_custom_resolver!($name, {
-            let $platform = $crate::current_platform();
+            let $key = $selection;
             $matcher
         });
     };

@@ -79,7 +79,7 @@ impl Globals {
 pub fn init_globals() {
     sinfo!(
         "Platform: {} base_addr: '0x{:x?}'",
-        unchained_macros::current_platform(), *crate::unchained::startup::BASE_ADDR
+        crate::current_platform(), *crate::unchained::startup::BASE_ADDR
     );
 
     let globals_instance = Globals {

@@ -1,7 +1,42 @@
 //! Pattern resolver declarations and scan-mode expansion.
 
 /// Define a named native resolver. Declarations are not startup roots until consumed.
-/// See the crate's resolver reference for modes and platform dictionaries.
+/// See the crate's resolver reference for modes and selection dictionaries.
+///
+/// Dictionaries accept fieldless enum keys, never integer discriminants:
+/// ```compile_fail
+/// unchained_macros::define_pattern_resolver!(Invalid, select [0u8], {
+///     0: ["AA BB"],
+/// });
+/// ```
+///
+/// Unknown variants and mixed enum types are rejected:
+/// ```compile_fail
+/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// enum Mode { Read }
+/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+///     Mode::Missing: ["AA BB"],
+/// });
+/// ```
+/// ```compile_fail
+/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// enum Mode { Read }
+/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// enum Other { Read }
+/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+///     Other::Read: ["AA BB"],
+/// });
+/// ```
+///
+/// Duplicate dictionary keys are rejected:
+/// ```compile_fail
+/// #[derive(Clone, Copy, PartialEq, Eq, unchained_macros::SelectionKey)]
+/// enum Mode { Read }
+/// unchained_macros::define_pattern_resolver!(Invalid, select [Mode::Read], {
+///     Mode::Read: ["AA BB"],
+///     Mode::Read: ["CC DD"],
+/// });
+/// ```
 #[macro_export]
 macro_rules! define_pattern_resolver {
     // Simple sig pattern lookup (returns start address)
@@ -118,36 +153,38 @@ macro_rules! define_pattern_resolver {
         });
     };
 
-    // Platform dictionaries share the same active + OTHER expansion.
-    (@platform_patterns $patterns:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        for platform in [$crate::current_platform(), $crate::PlatformType::OTHER] {
-            let part: &[_] = match platform {
-                $( $crate::PlatformType::$platform => &[ $( $pattern ),+ ], )+
+    // Consumers supply the ordered keys, including any shared key explicitly.
+    (@selected_patterns $patterns:ident, [$($selection:expr),+], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        for key in [$($crate::__private::selection_key($selection)),+] {
+            #[deny(unreachable_patterns)]
+            let part: &[_] = match key {
+                $( $key => &[ $( $pattern ),+ ], )+
+                #[allow(unreachable_patterns)]
                 _ => &[],
             };
             $patterns.extend_from_slice(part);
         }
     };
 
-    ($name:ident, $mode:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+    ($name:ident, $mode:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
         $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {
             let mut patterns: Vec<_> = Vec::new();
-            $crate::define_pattern_resolver!(@platform_patterns patterns, {
-                $( $platform: [ $( $pattern ),+ ] ),+
+            $crate::define_pattern_resolver!(@selected_patterns patterns, [$($selection),+], {
+                $( $key: [ $( $pattern ),+ ] ),+
             });
             $crate::define_pattern_resolver!(@emit_body $name, $mode, ctx, patterns)
         });
     };
 
-    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
+    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }, |$ctx:ident, $patterns:ident| $body:block ) => {
         $crate::define_pattern_resolver!(@emit_header $name);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |$ctx| async {
             let mut $patterns: Vec<_> = Vec::new();
-            $crate::define_pattern_resolver!(@platform_patterns $patterns, {
-                $( $platform: [ $( $pattern ),+ ] ),+
+            $crate::define_pattern_resolver!(@selected_patterns $patterns, [$($selection),+], {
+                $( $key: [ $( $pattern ),+ ] ),+
             });
             $crate::define_pattern_resolver!(@emit_process_inline $name, |ctx, patterns| $body)
         });
@@ -160,24 +197,9 @@ macro_rules! define_pattern_resolver {
         ];
     };
 
-    ($name:ident, { $( $platform:ident : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
-        $crate::define_pattern_resolver!($name, Simple, {
-            $( $platform : [ $( $pattern ),+ ] ),+
+    ($name:ident, select [$($selection:expr),+ $(,)?], { $( $key:path : [ $( $pattern:expr ),+ $(,)? ] ),+ $(,)? }) => {
+        $crate::define_pattern_resolver!($name, Simple, select [$($selection),+], {
+            $( $key : [ $( $pattern ),+ ] ),+
         });
-    };
-}
-
-/// Restrict a resolver and its hooks/patches to one platform.
-/// Accepts the same modes and inline bodies as `define_pattern_resolver!`.
-#[macro_export]
-macro_rules! define_single_platform_pattern_resolver {
-    ($platform:ident, $name:ident, $($resolver:tt)+) => {
-        $crate::__private::inventory::submit! {
-            $crate::ResolverPlatform {
-                name: stringify!($name),
-                platform: $crate::PlatformType::$platform,
-            }
-        }
-        $crate::define_pattern_resolver!($name, $($resolver)+);
     };
 }
