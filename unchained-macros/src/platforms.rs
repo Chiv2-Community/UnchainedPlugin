@@ -58,13 +58,12 @@ pub fn supports_platform(name: &str, platform: PlatformType) -> bool {
 mod tests {
     use super::*;
     use crate::{define_pattern_resolver, define_single_platform_pattern_resolver};
-    use crate::signature::Call_signature;
     use patternsleuth::resolvers::ensure_one;
     define_single_platform_pattern_resolver!(STEAM, TestSteamOnly, ["AA BB"]);
 
     define_single_platform_pattern_resolver!(EGS, TestEpicOnly, Simple, ["CC DD"]);
 
-    define_single_platform_pattern_resolver!(STEAM, TestSteamCall, [Call_signature("E8 | ?? ?? ?? ??")]);
+    define_single_platform_pattern_resolver!(STEAM, TestSteamCall, Call, ["E8 | ?? ?? ?? ??"]);
 
     define_single_platform_pattern_resolver!(STEAM, TestInlineSteamOnly, ["EE FF"], |ctx, patterns| {
         let matches = ctx.scan(patternsleuth::scanner::Pattern::new(patterns[0]).unwrap()).await;
@@ -115,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn typed_signature_keeps_single_platform_applicability() {
+    fn explicit_scan_mode_keeps_single_platform_applicability() {
         assert!(supports_platform("TestSteamCall", PlatformType::STEAM));
         assert!(!supports_platform("TestSteamCall", PlatformType::EGS));
     }

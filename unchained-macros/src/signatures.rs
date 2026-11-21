@@ -16,9 +16,6 @@
 
 #[macro_export]
 macro_rules! define_pocess {
-    // Note: After adding a new process, add a MultiCall handler below
-    // e.g. wrap_process_macro!(Simple);
-
     // Simple sig pattern lookup (returns start address)
     (@emit_body $name:ident, Simple, $ctx:ident, $patterns:ident) => {{
         $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
@@ -62,25 +59,6 @@ macro_rules! define_pocess {
                 res.iter()
                     .flatten()
                     .map(|a| -> patternsleuth::resolvers::Result<u64> { Ok($ctx.image().memory.rip4(*a)?) }))
-        })
-    }};
-
-    (@emit_body $name:ident, MultiCall, $ctx:ident, $patterns:ident) => {{
-        // use patternsleuth::MemoryTrait;
-        $crate::define_pocess!(@emit_process_inline $name, |$ctx, $patterns| {
-            let mut results = Vec::new();
-            // FIXME: group sigs by type, run Signature func on multiple
-            for pat in $patterns {
-                // match pat.kind {
-                //     SignatureKind::Call => println!("call"),
-                //     SignatureKind::Function => println!("function"),
-                //     _ => print!("NO MATCH")
-                // }
-                let offset = pat.calculate_offset($ctx).await.map(|r| r.offset());
-                // print!("PART RESULT: {:?}", offset);
-                results.push(offset);
-            }
-            ::patternsleuth::resolvers::ensure_one(results.into_iter().flatten())
         })
     }};
 
@@ -240,33 +218,6 @@ macro_rules! define_pattern_resolver {
         });
     };
 
-    // Multicall Fallbacks (No keyword specified)
-
-    //  (NAME, LIST)
-    // define_pattern_resolver![GetMotdTwoS2, [
-    //     Simple_signature("4C 89"),
-    //     function_first_signature("4C 89")
-    // ]];
-    ($name:ident,[ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ]) => {
-            $crate::define_pattern_resolver![$name, MultiCall,
-                [ $( $call_type ($pattern) ),+ ]
-            ];
-    };
-
-    // //  (NAME, DICT)
-    // define_pattern_resolver!(GetMotdTwoS, {
-    //     EGS: [
-    //         Simple_signature("4C 89"),
-    //         function_first_signature("4C 89")
-    //     ],
-    //     STEAM: [call_signature("4C 89 | ?? ?? ?? ?? BE EF")]
-    // });
-    ($name:ident, { $( $platform:ident : [ $( $call_type:ident ( $pattern:expr ) ),+ $(,)? ] ),+ $(,)? }) => {
-        $crate::define_pattern_resolver!($name, MultiCall, {
-            $( $platform : [ $( $call_type ($pattern) ),+ ] ),+
-        });
-    };
-
     // Fallbacks for cases with no mode specified (assuming Simple)
 
     //  (NAME, LIST)
@@ -292,115 +243,5 @@ macro_rules! define_pattern_resolver {
         $crate::define_pattern_resolver!($name, Simple, {
             $( $platform : [ $( $pattern ),+ ] ),+
         });
-    };
-}
-
-// #[derive(Debug, Clone, Copy)]
-// pub enum SignatureKind {
-//     Call,
-//     Function,
-// }
-
-// // Constructor for FunctionSignature — async closure with some logic
-// pub fn function_signature<'a>(s: &'a str) -> Signature<'a> {
-//     // let sig_clone = s.to_string();
-//     let calc: Arc<
-//     dyn Fn(&AsyncContext<'a>) -> Pin<Box<dyn Future<Output = Result<DefaultResult, ResolveError>> + Send + 'a>>
-//         + Send
-//         + Sync
-//         + 'a,
-//     > = Arc::new(move |ctx: &AsyncContext<'a>| {
-//         let sig = s.to_string();
-//         let ctx = ctx.clone();
-//         let fut = async move {
-//             // TODO: this takes only one sig rn, should be grouped first instead
-//             // println!("CALCULATING OFFSET FOR {}", sig);
-//             let v = &[sig];
-//             define_pocess!(@emit_body DefaultResult, Simple, ctx, v)
-//         };
-//         Box::pin(fut)
-//     });
-//     Signature {
-//         kind: SignatureKind::Function,
-//         offset_calculator: calc,
-//         signature_string: s.to_string(),
-//     }
-// }
-
-// Example: create new handlers using macro below
-// Wrap existing Mode implementation
-// define_signature_fn!(call_signature, SignatureKind::Call,
-//     | ctx, patterns | { define_pocess!(@emit_body DefaultResult, Call, ctx, patterns)}
-// );
-// Wrap Custom implementation
-// define_signature_fn!(function_first_signature, SignatureKind::Call,
-//     | ctx, patterns | {
-//         let futures = ::patternsleuth::resolvers::futures::future::join_all(
-//             patterns.iter()
-//                 .map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
-//         ).await;
-//         // FIXME
-//         Ok(DefaultResult(futures.into_iter().flatten().collect::<Vec<usize>>()[0]))
-//     }
-// );
-#[macro_export]
-macro_rules! define_signature_fn {
-    (
-        $fn_name:ident,
-        // $kind:expr,
-        | $ctx:ident, $patterns:ident| $body:block
-    ) => {
-        #[allow(non_snake_case)]
-
-        pub fn $fn_name<'a>(s: &'a str) -> $crate::signature::Signature<'a> {
-            let calc: $crate::signature::OffsetCalculator<'a> =
-                std::sync::Arc::new(move |ctx| {
-                let sig = s.to_string();
-                let ctx = ctx.clone();
-                let fut = async move {
-                    let v = &[sig];
-                    let $ctx = ctx;
-                    let $patterns = v;
-                    $body
-                };
-                Box::pin(fut)
-            });
-
-            $crate::signature::Signature {
-                // kind: $kind,
-                offset_calculator: calc,
-                signature_string: s.to_string(),
-            }
-        }
-    };
-}
-
-// macro to wrap process definition like this
-// wrap_process_macro!(Simple);
-// creates Simple_signature fn
-#[macro_export]
-macro_rules! wrap_process_macro {
-    (@patterns XrefFirst, $patterns:ident) => {
-        $crate::wrap_process_macro!(@patterns XrefLast, $patterns)
-    };
-    (@patterns XrefLast, $patterns:ident) => {
-        $patterns.iter().map(|pattern|
-            ::patternsleuth::scanner::Pattern::new(pattern).unwrap()
-        ).collect::<Vec<_>>()
-    };
-    (@patterns $mode:ident, $patterns:ident) => { $patterns };
-    ($fn_name:ident) => {
-        $crate::__private::paste::paste! {
-            $crate::define_signature_fn!(
-                [<$fn_name _signature>],
-                // SignatureKind::Function,
-                |ctx, patterns| {
-                    use $crate::signature::DefaultResult;
-                    let ctx = &ctx;
-                    let patterns = $crate::wrap_process_macro!(@patterns $fn_name, patterns);
-                    $crate::define_pocess!(@emit_body DefaultResult, $fn_name, ctx, patterns)
-                }
-            );
-        }
     };
 }

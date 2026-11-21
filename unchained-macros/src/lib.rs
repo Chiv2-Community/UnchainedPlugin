@@ -215,7 +215,6 @@ mod registry;
 mod platforms;
 mod patch;
 mod signatures;
-pub mod signature;
 mod custom_resolver;
 
 #[doc(hidden)]
