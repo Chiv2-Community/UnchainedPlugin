@@ -1,8 +1,10 @@
 # PR47 client/server startup profile
 
-Measured 2026-11-21. The branch removes main's extra warm global-resolution
-pass, but its resolver-cache-cold scan is slower. These are whole-revision
-comparisons, not an isolated measurement of static-global forwarding.
+Measured 2026-11-21. At `3050a5b`, the branch removes main's extra warm
+global-resolution pass, but its resolver-cache-cold scan is slower. The
+[consumer-selected root follow-up](#consumer-selected-startup-roots) below
+reverses that cold-scan regression without changing Patternsleuth.
+These are whole-workload comparisons, not an isolated measurement of static forwarding.
 
 This live-game baseline supplements the older, standalone workloads in
 [pr47-performance-review.md](pr47-performance-review.md).
@@ -146,5 +148,45 @@ The source DLLs are Linux cross-builds, not bit-for-bit Windows CI reproductions
 6. Summarize phase medians and ranges separately from published log windows.
    Exclude failed and sampled attempts. Compare resolver and hook workloads
    before attributing any difference to one implementation change.
+
+## Consumer-selected startup roots
+
+Startup now requests only roots registered by compiled function/method/value
+bindings and instruction patches, plus explicit side-effect providers such as
+`CreateHttpRequest`. Transitive dependencies still share one resolution context.
+The global ignore list is removed. Existing cache entries and platform filtering
+remain intact; project-defined resolvers take precedence over upstream namesakes.
+Patternsleuth, resolver patterns, native ABIs and activation conditions are unchanged.
+
+Fresh main/required-root comparisons use the earlier hardware, default-feature
+MSVC release settings, phase timers and debug logging. Each role completes a
+cold scan and warm validation before further alternating cold runs.
+Milliseconds, median [minimum–maximum], three cold runs per cell:
+
+| Phase | Main client | Required-roots client | Main server | Required-roots server |
+| --- | ---: | ---: | ---: | ---: |
+| `resolve_many` | 558.44 [551.74–631.53] | 315.62 [312.25–366.82] | 616.61 [612.70–687.17] | 313.07 [301.76–331.39] |
+| Complete scan | 612.65 [605.74–676.43] | 349.42 [343.11–424.20] | 674.31 [656.69–735.61] | 347.82 [336.89–363.92] |
+
+- Complete-scan medians are 43% lower on client and 48% lower on server.
+- Required roots: 72 versus main's 105 and the earlier branch's 108.
+  Patterns/batches: 149/3 versus main's 269/4 and the earlier branch's 857/6.
+  This follow-up does **not** include the experimental compact-xref dependency patch.
+- All 98 retained cache entries match the previous full-branch cache, across
+  all six required-root cold runs. Unneeded cache entries are no longer produced
+  by fresh scans; existing cache files are not purged.
+- Both roles initialize successfully from those smaller caches. All 41 branch
+  and 64 main hook callbacks succeed in their respective warm validations.
+  One warm validation per role/variant is not a repeated warm timing baseline.
+- An initial implementation omitted the separate method-macro registration path.
+  Warm validation caught the missing binding; the corrected build and generic
+  regression test cover that path. All incomplete-build runs are excluded.
+- Timed required-root DLL SHA-256:
+  `a72f9ed2e835d1e67d2baf38ff3b6957024a3b4199d1451c8bd6d3ecf44ad6f7`.
+  Main uses the previously recorded `bd6a77ad…` artifact.
+- [Portable timing data](pr47-required-roots-profile.json). Raw logs, cache
+  comparisons and the exact implementation/timing patches remain under
+  `/home/jbarber/.cache/opencode/pr47-required-roots/`; accepted runs are in
+  `verified/`, not the incomplete first attempt's `runs/`.
 
 [release]: https://github.com/Chiv2-Community/UnchainedPlugin/releases/tag/v1.0.1

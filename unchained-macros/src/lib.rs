@@ -210,6 +210,7 @@ pub use registry::{
     PatchRegistration, OffsetRegisty,
 };
 pub use platforms::{PlatformType, PLATFORM, current_platform, ResolverPlatform, supports_platform};
+pub use resolvers::{DeclaredResolver, RequiredResolver, startup_resolvers};
 
 mod binding;
 mod registry;
@@ -217,9 +218,11 @@ mod platforms;
 mod patch;
 mod signatures;
 mod custom_resolver;
+mod resolvers;
 
 #[doc(hidden)]
 pub mod __private {
+    pub use inventory;
     pub use crate::detour::claim_detour_address;
     pub use crate::binding::publish_function_trampolines;
     pub use crate::custom_resolver::single_address;

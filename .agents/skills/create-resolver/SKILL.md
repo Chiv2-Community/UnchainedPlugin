@@ -73,6 +73,10 @@ Reuse an existing resolver when it already resolves the verified target.
 - If source ownership remains unproven, follow the
   [native ownership guidance](../../../unchained-macros/resolvers.md); do not fabricate
   a native header or receiver.
+- Startup roots come from bindings and patches, not every declared resolver.
+  Register side-effect/offset-map providers explicitly with
+  `unchained_macros::require_resolver!(ResolverName)`. Keep transitive dependencies
+  inside the shared Patternsleuth context; do not restore global inventory scans.
 - Choose the narrowest verified search:
   - `Simple`: one unique byte-pattern address.
   - `Call`: follow a rel32 target; place `|` at the displacement.

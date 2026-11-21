@@ -25,6 +25,9 @@ define_custom_resolver!(CreateHttpRequest, {
     })
 });
 
+// Populate the GetPost_* offset map before request bindings initialize.
+unchained_macros::require_resolver!(CreateHttpRequest);
+
 /// Common native prefix for Get*Post request parameters.
 #[unchained_macros::runtime_bindings]
 #[repr(C)]

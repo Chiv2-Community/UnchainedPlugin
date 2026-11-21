@@ -49,6 +49,17 @@ Runtime support:
   [`startup.rs`](../src/unchained/startup.rs) and passes it to binding initialization,
   hook attachment, and patch callbacks.
 
+Startup uses `startup_resolvers()`, not Patternsleuth's complete inventory.
+Function/value bindings and instruction patches register their required resolver
+keys automatically. A declaration alone is not a startup root. Transitive
+dependencies share Patternsleuth's normal resolution context.
+
+For a scan that populates an offset registry or other required side effects,
+add `unchained_macros::require_resolver!(ResolverName)` beside its declaration.
+Request-key bindings are not resolver types; their provider must register this
+explicit root. Project declarations take precedence over upstream namesakes
+with the same cache key. Platform filtering and existing cache entries still apply.
+
 - Native methods use `#[runtime_bindings] impl Type` and
   `#[bind_resolved_func(Resolver)] unsafe fn name(...) {}`.
 - Model calls invoke the original implementation, bypassing replacements.

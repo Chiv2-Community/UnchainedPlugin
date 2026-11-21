@@ -119,6 +119,9 @@ pub(super) fn expand_binding(
     let resolver_check = require_resolver.then(|| {
         quote! {
             let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
+            ::inventory::submit! {
+                ::unchained_macros::RequiredResolver { name: #resolver_name }
+            }
         }
     });
     let mut expanded = function.clone();

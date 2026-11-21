@@ -19,16 +19,16 @@ pub mod modules;
 #[cfg(test)]
 pub mod test_utils;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Duration;
 use std::{env, thread};
 use std::fs::{create_dir_all, File};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
-use patternsleuth::resolvers::{resolvers, NamedResolver};
+use patternsleuth::resolvers::NamedResolver;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer_pretty;
 #[cfg(feature="cli_commands")]
@@ -85,20 +85,11 @@ fn get_build_path(crc: u32, platform_type: PlatformType) -> Option<PathBuf> {
     ))
 }
 
-static RESOLVERS_TO_IGNORE: LazyLock<HashSet<&'static str>> = LazyLock::new(||
-    HashSet::from([
-        "FTextFString", "AESKeys", "FFrameStepViaExec", "BlueprintLibraryInit",
-        "EngineVersionStrings", "EngineVersion",
-        "ConsoleManagerSingleton", "UGameplayStaticsSaveGameToMemory",
-        // No binding or globals-collector consumer needs the engine pointer.
-        "GEngine",
-        // Metadata is not an address cache entry. Its unused custom-version
-        // dependency is also excluded from startup scanning.
-        "StaticCustomVersions", "BuildChangeList", "InternalProjectName",
-        "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry",
-        // (sigs populated in the resolver file as of this build; nothing pending)
-    ])
-);
+fn resolvers() -> std::vec::IntoIter<&'static NamedResolver> {
+    unchained_macros::startup_resolvers()
+        .unwrap_or_else(|error| panic!("Invalid startup resolver registration: {error}"))
+        .into_iter()
+}
 
 impl BuildInfo {
     pub fn load_or_create(crc: u32, platform_type: PlatformType) -> Self {
@@ -164,7 +155,6 @@ impl BuildInfo {
     pub fn get_unresolved(&self, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
         resolvers_in
             .into_iter()
-            .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
             .filter(|resolver| unchained_macros::supports_platform(resolver.name, self.platform))
             .filter(|resolver| !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
@@ -200,24 +190,18 @@ mod build_info_tests {
     use super::*;
 
     #[test]
-    fn unused_and_metadata_resolvers_do_not_require_address_cache_entries() {
+    fn unrelated_cache_entries_do_not_require_scanning() {
         let info = BuildInfo {
             plugin_version: String::new(), build: 0, file_hash: 0,
             name: String::new(), platform: PlatformType::STEAM, path: String::new(),
-            offsets: HashMap::new(),
+            offsets: HashMap::from([("Unrelated".into(), 123)]),
         };
-        let unresolved = info.get_unresolved(resolvers().collect());
-        for name in ["StaticCustomVersions", "BuildChangeList", "InternalProjectName",
-            "EngineVersionFingerprint", "BuildConfiguration", "Stats", "CustomVersionRegistry", "GEngine"] {
-            assert!(!unresolved.iter().any(|resolver| resolver.name == name));
-        }
-        assert!(unresolved.iter().any(|resolver| resolver.name == "FText__AsCultureInvariant"));
+        assert!(info.get_unresolved(Vec::new()).is_empty());
     }
 
     #[test]
     fn incomplete_cache_requires_normal_rescan() {
         let required: Vec<_> = resolvers()
-            .filter(|resolver| !RESOLVERS_TO_IGNORE.contains(resolver.name))
             .filter(|resolver| unchained_macros::supports_platform(resolver.name, PlatformType::STEAM))
             .collect();
         let mut info = BuildInfo {

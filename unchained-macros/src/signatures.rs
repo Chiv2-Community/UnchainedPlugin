@@ -143,6 +143,14 @@ macro_rules! define_pattern_resolver {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)]
         pub struct $name(pub u64);
+        $crate::__private::inventory::submit! {
+            $crate::DeclaredResolver {
+                resolver: ::patternsleuth::resolvers::NamedResolver {
+                    name: stringify!($name),
+                    getter: $name::dyn_resolver,
+                },
+            }
+        }
     };
 
     // Called with Mode (Process) specified

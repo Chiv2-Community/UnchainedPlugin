@@ -19,6 +19,10 @@ Feature checks remain at the call site.
 - `PLATFORM` stores the host-selected storefront once. `current_platform()`
   and `supports_platform(name, platform)` serve resolver and startup filtering.
 - Patch operations still use the consumer's `crate::tools::memtools` backend.
+- `startup_resolvers()` selects binding/patch roots, not every linked resolver.
+  `require_resolver!(Name)` adds explicit side-effect providers. Project resolver
+  declarations take precedence over upstream namesakes; declarations alone do
+  not cause startup scans.
 - See the [resolver reference](resolvers.md).
 
 Logging, rich text, and gameplay-specific macros stay in the plugin; other

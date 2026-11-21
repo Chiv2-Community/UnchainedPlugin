@@ -100,6 +100,7 @@ macro_rules! CREATE_PATCH {
 #[macro_export]
 macro_rules! __create_patch_impl {
     ($name:ident, $suffix:tt, $extra:expr, $op:ident, $val:expr, $cond_fn:expr) => {
+        $crate::require_resolver!($name);
         paste::paste! {
             #[allow(non_snake_case)]
             pub unsafe fn [<apply_patch_ $name _ $suffix>](
