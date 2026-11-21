@@ -80,8 +80,8 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
             quote! {
                 let actual = ctx.image().memory.u8(addr)?;
                 if actual != #expected {
-                    return Err(::patternsleuth::resolvers::ResolveError::Msg(
-                        format!("Validation failed: expected 0x{:02X}, found 0x{:02X}", #expected, actual).into()
+                    return Err(::patternsleuth::resolvers::ResolveError::new_msg(
+                        format!("Validation failed: expected 0x{:02X}, found 0x{:02X}", #expected, actual)
                     ));
                 }
             }
@@ -111,17 +111,17 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
                 sigs.iter().map(|p| ctx.scan(::patternsleuth::scanner::Pattern::new(p).unwrap()))
             ).await;
 
-            let mut addr: usize = if #is_call {
-                ::patternsleuth::resolvers::try_ensure_one::<usize>(
+            let mut addr: u64 = if #is_call {
+                ::patternsleuth::resolvers::try_ensure_one::<u64>(
                     scans.iter().flatten().map(|a| Ok(ctx.image().memory.rip4(*a)?))
                 )?
             } else {
-                ::patternsleuth::resolvers::ensure_one::<usize>(
+                ::patternsleuth::resolvers::ensure_one::<u64>(
                     scans.into_iter().flatten()
                 )?
             };
 
-            addr += #offset_val;
+            addr += #offset_val as u64;
             #rip_logic
             #validation_logic
             
@@ -129,25 +129,34 @@ pub fn resolver(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     } else {
         let block = &input_fn.block;
-        quote! { (async move #block).await }
+        quote! {
+            // Reborrow the context before moving it into the body future.
+            let ctx = &*ctx;
+            (async move #block).await
+        }
     };
 
     let log_level = if is_optional { quote!(sdebug) } else { quote!(serror) };
+    let address_type = if mode == "Simple" || mode == "Call" {
+        quote!(u64)
+    } else {
+        quote!(usize)
+    };
 
     // 5. Final Expansion
     let expanded = quote! {
         #[derive(Debug, Clone, Copy, ::serde::Serialize, ::serde::Deserialize, PartialEq, Eq)]
-        #vis struct #name(pub usize);
+        #vis struct #name(pub u64);
 
         ::patternsleuth::resolvers::impl_resolver_singleton!(
             all,
             #name,
             |ctx| async {
-                let res: ::patternsleuth::resolvers::Result<usize> = {
+                let res: ::patternsleuth::resolvers::Result<#address_type> = {
                     #inner_logic
                 };
 
-                let wrapped = res.map(#name);
+                let wrapped = res.map(|addr| #name(addr as u64));
                 if let Err(e) = &wrapped {
                     crate::#log_level!(
                         "Sleuth: {} failed to resolve: {:?}",
@@ -211,67 +220,35 @@ pub fn custom_resolver(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         #[derive(Debug, Clone, Copy, ::serde::Serialize, ::serde::Deserialize, PartialEq, Eq)]
-        #vis struct #name(pub usize);
+        #vis struct #name(pub u64);
 
-        impl ::patternsleuth::resolvers::Resolution for #name {
-            fn typetag_name(&self) -> &'static str { stringify!(#name) }
-            fn typetag_deserialize(&self) {}
-        }
-        impl ::patternsleuth::resolvers::Singleton for #name {
-            fn get(&self) -> Option<usize> { Some(self.0) }
-        }
+        ::patternsleuth::resolvers::impl_resolver_singleton!(
+            all,
+            #name,
+            |ctx| async {
+                let mut active_sigs: Vec<&str> = vec![#(#global_patterns),*];
+                match ::unchained_macros::current_platform() {
+                    ::unchained_macros::PlatformType::STEAM => active_sigs.extend_from_slice(&[#(#steam_patterns),*]),
+                    ::unchained_macros::PlatformType::EGS => active_sigs.extend_from_slice(&[#(#egs_patterns),*]),
+                    _ => {}
+                }
 
-        impl #name {
-            pub fn resolver() -> &'static ::patternsleuth::resolvers::ResolverFactory<#name> {
-                static GLOBAL: ::std::sync::OnceLock<::patternsleuth::resolvers::ResolverFactory<#name>> = ::std::sync::OnceLock::new();
-                GLOBAL.get_or_init(|| {
-                    ::patternsleuth::resolvers::ResolverFactory {
-                        factory: |ctx| {
-                            Box::pin(async move {
-                                let mut active_sigs: Vec<&str> = vec![#(#global_patterns),*];
-                                match ::unchained_macros::current_platform() {
-                                    ::unchained_macros::PlatformType::STEAM => active_sigs.extend_from_slice(&[#(#steam_patterns),*]),
-                                    ::unchained_macros::PlatformType::EGS => active_sigs.extend_from_slice(&[#(#egs_patterns),*]),
-                                    _ => {}
-                                }
+                let offset: usize = #offset_val;
+                let should_read_rip4: bool = #read_rip4;
+                let validate_expected: Option<u8> = #validate_byte;
 
-                                let offset: usize = #offset_val;
-                                let should_read_rip4: bool = #read_rip4;
-                                let validate_expected: Option<u8> = #validate_byte;
+                // Reborrow the context before moving it into the body future.
+                let ctx = &*ctx;
+                let res: ::patternsleuth::resolvers::Result<usize> = (async move #block)
+                    .await
+                    .map_err(|e| ::patternsleuth::resolvers::ResolveError::new_msg(e.to_string()));
 
-                                // FIX: Convert anyhow::Error to ResolveError::Msg
-                                let res: ::patternsleuth::resolvers::Result<usize> = (async move #block)
-                                    .await
-                                    .map_err(|e| ::patternsleuth::resolvers::ResolveError::Msg(e.to_string().into()));
-                                
-                                let wrapped = res.map(#name);
-                                if let Err(e) = &wrapped {
-                                    crate::serror!("Sleuth: {} failed: {:?}", stringify!(#name), e);
-                                }
-                                wrapped
-                            })
-                        },
-                    }
-                })
+                let wrapped = res.map(|addr| #name(addr as u64));
+                if let Err(e) = &wrapped {
+                    crate::serror!("Sleuth: {} failed: {:?}", stringify!(#name), e);
+                }
+                wrapped
             }
-
-            pub fn dyn_resolver() -> &'static ::patternsleuth::resolvers::DynResolverFactory {
-                static GLOBAL: ::std::sync::OnceLock<::patternsleuth::resolvers::DynResolverFactory> = ::std::sync::OnceLock::new();
-                GLOBAL.get_or_init(|| {
-                    ::patternsleuth::resolvers::DynResolverFactory {
-                        factory: |ctx| Box::pin(async move {
-                            ctx.resolve(Self::resolver()).await.map(|ok| ok as ::std::sync::Arc<dyn ::patternsleuth::resolvers::Resolution>)
-                        }),
-                    }
-                })
-            }
-        }
-
-        ::inventory::submit! {
-            ::patternsleuth::resolvers::NamedResolver {
-                name: stringify!(#name),
-                getter: #name::dyn_resolver,
-            }
-        }
+        );
     })
 }
