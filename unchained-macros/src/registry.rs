@@ -9,8 +9,7 @@ pub struct HookRegistration {
     pub name: &'static str,
     pub hook_fn: CreateHookFn,
     pub condition: fn() -> bool,
-    pub initialized: fn() -> bool,
-    pub enabled: fn() -> bool,
+    pub detour: fn() -> Option<&'static retour::RawDetour>,
 }
 
 pub type RegistrationPredicate = fn() -> bool;

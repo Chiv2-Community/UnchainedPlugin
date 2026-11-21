@@ -3,13 +3,13 @@ use crate::HookRegistration;
 pub fn detour_is_initialized(name: &str) -> bool {
     inventory::iter::<HookRegistration>
         .into_iter()
-        .any(|binding| binding.name == name && (binding.initialized)())
+        .any(|binding| binding.name == name && (binding.detour)().is_some())
 }
 
 pub fn detour_is_enabled(name: &str) -> bool {
     inventory::iter::<HookRegistration>
         .into_iter()
-        .any(|binding| binding.name == name && (binding.enabled)())
+        .any(|binding| binding.name == name && (binding.detour)().is_some_and(retour::RawDetour::is_enabled))
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;

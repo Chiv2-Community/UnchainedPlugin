@@ -119,11 +119,9 @@ pub(super) fn expand_binding(
     let resolver_check = require_resolver.then(|| {
         quote! {
             let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-            ::inventory::submit! {
-                ::unchained_macros::RequiredResolver { name: #resolver_name }
-            }
         }
     });
+    let constructor = if require_resolver { quote!(new) } else { quote!(from_offset_key) };
     let mut expanded = function.clone();
     let native_call = format_ident!("__unchained_native_call", span = Span::mixed_site());
     super::consume_native_parameter_metadata(&mut expanded.sig)?;
@@ -161,7 +159,7 @@ pub(super) fn expand_binding(
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #storage: ::unchained_macros::FunctionBinding =
-            ::unchained_macros::FunctionBinding::new(#resolver_name);
+            ::unchained_macros::FunctionBinding::#constructor(#resolver_name);
         #(#cfg)*
         ::inventory::submit! {
             ::unchained_macros::FunctionBindingRegistration { binding: &#storage }
@@ -342,8 +340,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             let hook = #hook.get().expect("Hook was just initialized");
             // The detour and trampoline are process-lifetime storage, even disabled.
             claim.commit();
-            unsafe { ::unchained_macros::__private::publish_function_trampolines(
-                address, hook.trampoline() as *const () as usize,
+            unsafe { ::unchained_macros::__private::publish_function_detours(
+                address, hook,
             )?; }
             if auto_activate && #condition_fn() { unsafe { hook.enable()?; } }
             Ok(Some(offset))
@@ -352,8 +350,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ::inventory::submit! {
             ::unchained_macros::HookRegistration {
                 name: #target.name(), hook_fn: #attach, condition: #condition_fn,
-                initialized: || #hook.get().is_some(),
-                enabled: || #hook.get().is_some_and(|hook| hook.is_enabled()),
+                detour: || #hook.get(),
             }
         }
     })
@@ -545,7 +542,7 @@ mod tests {
         let text = expanded.to_string();
         assert!(text.contains("Native :: __UNCHAINED_BINDING_call"));
         assert!(text.contains("NativeFunction"));
-        assert!(text.contains("publish_function_trampolines"));
+        assert!(text.contains("publish_function_detours"));
         assert!(text.contains("unchained_macros :: HookRegistration"));
         assert!(text.contains("base_address : usize"));
         assert!(!text.contains("crate :: resolvers"));

@@ -2,13 +2,14 @@
 
 use std::collections::BTreeSet;
 use patternsleuth::resolvers::NamedResolver;
+use crate::{FunctionBindingRegistration, ValueBindingRegistration, PatchRegistration};
 
 /// A resolver declared by this plugin. Prefer it over an upstream namesake.
 pub struct DeclaredResolver {
     pub resolver: NamedResolver,
 }
 
-/// A cache key required by a compiled binding, patch, or explicit scan consumer.
+/// An explicit scan consumer beyond the binding and patch inventories.
 pub struct RequiredResolver {
     pub name: &'static str,
 }
@@ -35,7 +36,13 @@ pub fn startup_resolvers() -> Result<Vec<&'static NamedResolver>, String> {
         .map(|registration| &registration.resolver).collect();
     let available: Vec<_> = patternsleuth::resolvers::resolvers().collect();
     select(
-        inventory::iter::<RequiredResolver>.into_iter().map(|root| root.name),
+        inventory::iter::<RequiredResolver>.into_iter().map(|root| root.name)
+            .chain(inventory::iter::<FunctionBindingRegistration>.into_iter()
+                .filter_map(|registration| registration.binding.resolver_name()))
+            .chain(inventory::iter::<ValueBindingRegistration>.into_iter()
+                .map(|registration| registration.binding.name()))
+            .chain(inventory::iter::<PatchRegistration>.into_iter()
+                .map(|registration| registration.name)),
         &declared,
         &available,
     )

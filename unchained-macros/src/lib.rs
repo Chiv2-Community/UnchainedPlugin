@@ -199,7 +199,7 @@ pub use unchained_macros_impl::{
 /// unsafe fn replacement(#[mutability_override] value: &mut u32, other: &mut u32) {}
 /// ```
 pub use unchained_macros_impl::bind_func_detour;
-pub use binding::{FunctionBinding, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
+pub use binding::{ResolvedAddress, FunctionBinding, BindingRegistration, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
 #[doc(hidden)]
 pub use binding::{NativeFunction, NativeSignature};
 pub use binding::{NativeGlobalPointer, NativeGlobalTarget};
@@ -224,7 +224,7 @@ mod resolvers;
 pub mod __private {
     pub use inventory;
     pub use crate::detour::claim_detour_address;
-    pub use crate::binding::publish_function_trampolines;
+    pub use crate::binding::publish_function_detours;
     pub use crate::custom_resolver::single_address;
     pub use log;
     pub use paste;

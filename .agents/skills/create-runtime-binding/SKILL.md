@@ -114,8 +114,8 @@ Choose the binding mechanism that matches the address source.
   Call `unsafe { GMalloc.Malloc(size, alignment) }`; each call reloads the
   current pointer by value. Use unsafe `as_ptr()` only for APIs needing a pointer.
   No owning handle, cached pointee, slot borrow, `DerefMut`, or binding lock.
-  Native lifetime, aliasing and synchronization rules remain required; atomic
-  address publication does not synchronize ordinary C++ pointer writes.
+   Native lifetime, aliasing and synchronization rules remain required; one-time
+   address publication does not synchronize ordinary C++ pointer writes.
   Inline registry guards retain native locks. These are not detour targets.
   Keep plugin-owned state separate. `GMalloc` belongs in `HAL/MemoryBase.rs`.
 - **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.

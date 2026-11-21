@@ -40,6 +40,9 @@ impl MethodFixture {
     #[bind_resolved_func(MethodResolver)]
     pub unsafe fn call() {}
 
+    #[unchained_macros::bind_resolved_request_function(GetPost_MethodFixture)]
+    pub unsafe fn request() {}
+
     #[cfg(any())]
     #[bind_resolved_func(MissingDisabledMethod)]
     pub unsafe fn disabled() {}
@@ -105,5 +108,5 @@ fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
     assert_eq!(DEPENDENCIES.load(Ordering::SeqCst), 1);
     assert_eq!(SIDE_EFFECTS.load(Ordering::SeqCst), 1);
     // Keep the synthetic binding declarations reachable without invoking native code.
-    let _ = (bound, alias, value, request, external, MethodFixture::call);
+    let _ = (bound, alias, value, request, external, MethodFixture::call, MethodFixture::request);
 }

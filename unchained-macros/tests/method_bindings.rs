@@ -31,8 +31,9 @@ impl Native {
     unsafe fn excluded() {}
 }
 
+#[inline(never)]
 unsafe extern "C" fn add(value: i32) -> i32 {
-    value + 1
+    unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
 unsafe extern "C" fn original_trampoline(value: i32) -> i32 {
     value + 2
@@ -72,13 +73,17 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
     unsafe {
         binding.initialize(1, (entry - 1) as u64).unwrap();
         assert_eq!(Native::add(10), 11);
-        binding
-            .publish_trampoline(original_trampoline as *const () as usize)
-            .unwrap();
-        assert_eq!(Native::add(10), 12);
+        let detour = Box::leak(Box::new(retour::RawDetour::new(
+            add as *const (), original_trampoline as *const (),
+        ).unwrap()));
+        binding.publish_detour(detour).unwrap();
+        detour.enable().unwrap();
+        assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(10), 12);
+        assert_eq!(Native::add(10), 11);
         binding.initialize(1, (entry - 1) as u64).unwrap();
-        assert_eq!(Native::add(10), 12);
-        assert!(binding.publish_trampoline(entry).is_err());
+        assert_eq!(Native::add(10), 11);
+        assert!(binding.publish_detour(detour).is_err());
+        detour.disable().unwrap();
     }
     assert_eq!(binding.entry_address().unwrap().get(), entry);
     assert_ne!(binding.entry_address(), binding.address());
@@ -106,15 +111,17 @@ fn borrowed_receiver_and_return_storage_preserve_ownership() {
 }
 
 #[test]
-fn uninitialized_calls_and_invalid_trampolines_fail_before_native_execution() {
+fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
     assert!(std::panic::catch_unwind(|| unsafe { Native::missing() }).is_err());
     let binding = Native::__UNCHAINED_BINDING_missing.binding();
-    assert!(unsafe { binding.publish_trampoline(add as *const () as usize) }.is_err());
-    let initialized = unchained_macros::FunctionBinding::new("local");
-    unsafe {
-        initialized.initialize(1, 1).unwrap();
+    #[inline(never)]
+    unsafe extern "C" fn unbound_target(value: i32) -> i32 {
+        unsafe { std::ptr::read_volatile(&value) }.wrapping_add(3)
     }
-    assert!(unsafe { initialized.publish_trampoline(0) }.is_err());
+    let detour = Box::leak(Box::new(unsafe { retour::RawDetour::new(
+        unbound_target as *const (), original_trampoline as *const (),
+    ).unwrap() }));
+    assert!(unsafe { binding.publish_detour(detour) }.is_err());
 }
 
 #[test]

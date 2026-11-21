@@ -130,3 +130,17 @@ fn invalid_initialization_leaves_binding_uninitialized(base: usize, offset: u64)
     assert!(unsafe { binding.initialize(base, offset) }.is_err());
     assert!(binding.address().is_none());
 }
+
+#[test]
+fn one_time_address_publication_supports_cross_thread_readers() {
+    static VALUE: usize = 42;
+    let address = (&raw const VALUE) as usize;
+    let binding = unchained_macros::ResolvedAddress::new("SharedFixture");
+    assert!(binding.get().is_none());
+    unsafe { binding.try_initialize(1, (address - 1) as u64).unwrap(); }
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| assert_eq!(binding.get().unwrap().get(), address));
+        }
+    });
+}

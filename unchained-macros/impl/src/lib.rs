@@ -192,14 +192,12 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     let native = syn::Ident::new("__unchained_native", Span::mixed_site());
     let resolver_type_check = require_resolver_type.then(|| quote! {
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-        ::inventory::submit! {
-            ::unchained_macros::RequiredResolver { name: #resolver_name }
-        }
     });
+    let constructor = if require_resolver_type { quote!(new) } else { quote!(from_offset_key) };
     function.block = Box::new(syn::parse2(quote!({
         #resolver_type_check
         static #binding: ::unchained_macros::FunctionBinding =
-            ::unchained_macros::FunctionBinding::new(#resolver_name);
+            ::unchained_macros::FunctionBinding::#constructor(#resolver_name);
         ::inventory::submit! {
             ::unchained_macros::FunctionBindingRegistration { binding: &#binding }
         }
@@ -273,9 +271,6 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             #[allow(non_upper_case_globals)]
             #vis static #name: <#target as ::unchained_macros::NativeGlobalTarget>::Global = {
                 let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-                ::inventory::submit! {
-                    ::unchained_macros::RequiredResolver { name: #resolver_name }
-                }
                 static BINDING: ::unchained_macros::ValueBinding =
                     ::unchained_macros::ValueBinding::new(#resolver_name);
                 ::inventory::submit! {
@@ -322,9 +317,6 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
     function.block = Box::new(syn::parse2(quote!({
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-        ::inventory::submit! {
-            ::unchained_macros::RequiredResolver { name: #resolver_name }
-        }
         static #binding: ::unchained_macros::ValueBinding =
             ::unchained_macros::ValueBinding::new(#resolver_name);
         ::inventory::submit! {

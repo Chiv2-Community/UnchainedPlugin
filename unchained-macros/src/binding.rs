@@ -1,42 +1,100 @@
-use std::{num::NonZeroUsize, sync::atomic::{AtomicUsize, Ordering}};
+use std::{num::NonZeroUsize, sync::OnceLock};
 
-/// Native entry and optional process-lifetime original-function trampoline.
-pub struct FunctionBinding {
+/// One-time publication of a resolved module address, shared by code and data.
+pub struct ResolvedAddress {
     name: &'static str,
-    address: AtomicUsize,
-    trampoline: AtomicUsize,
+    address: OnceLock<NonZeroUsize>,
+}
+
+impl ResolvedAddress {
+    pub const fn new(name: &'static str) -> Self {
+        Self { name, address: OnceLock::new() }
+    }
+
+    pub const fn name(&self) -> &'static str { self.name }
+    pub fn get(&self) -> Option<NonZeroUsize> { self.address.get().copied() }
+
+    /// # Safety
+    /// The address must identify process-lifetime storage/code with the caller's
+    /// native contract. Publish before use; a different address is rejected.
+    pub unsafe fn try_initialize(&self, base: usize, offset: u64) -> Result<(), String> {
+        let address = usize::try_from(offset).ok()
+            .and_then(|offset| base.checked_add(offset))
+            .and_then(NonZeroUsize::new)
+            .filter(|_| base != 0)
+            .ok_or_else(|| format!("Invalid address for native binding {}", self.name))?;
+        match self.address.set(address) {
+            Ok(()) => Ok(()),
+            Err(address) if self.get() == Some(address) => Ok(()),
+            Err(_) => Err(format!("Native binding {} is already initialized at another address", self.name)),
+        }
+    }
+
+    pub fn address(&self) -> usize {
+        self.get().unwrap_or_else(|| {
+            panic!("Required native value {} is not bound; startup must resolve it before access", self.name)
+        }).get()
+    }
+
+    /// Bind required data storage without reading or caching its contents.
+    ///
+    /// # Safety
+    /// The resolved slot must remain readable with the declared layout.
+    /// Native writes must be synchronized with reads.
+    pub unsafe fn initialize(&self, base: usize, offset: u64) {
+        unsafe { self.try_initialize(base, offset) }.unwrap_or_else(|error| {
+            panic!("Failed to bind required native value {}: {error}", self.name)
+        });
+    }
+}
+
+/// Resolved entry and optional Retour-owned original-call trampoline.
+pub struct FunctionBinding {
+    target: ResolvedAddress,
+    detour: OnceLock<&'static retour::RawDetour>,
+    resolver: bool,
 }
 
 impl FunctionBinding {
     pub const fn new(name: &'static str) -> Self {
-        Self { name, address: AtomicUsize::new(0), trampoline: AtomicUsize::new(0) }
+        Self { target: ResolvedAddress::new(name), detour: OnceLock::new(), resolver: true }
     }
 
-    pub const fn name(&self) -> &'static str { self.name }
+    /// An address supplied by an offset provider, not a named resolver type.
+    pub const fn from_offset_key(name: &'static str) -> Self {
+        Self { target: ResolvedAddress::new(name), detour: OnceLock::new(), resolver: false }
+    }
+
+    pub const fn name(&self) -> &'static str { self.target.name() }
+
+    pub(crate) fn resolver_name(&self) -> Option<&'static str> {
+        self.resolver.then_some(self.name())
+    }
 
     /// Original-call address, bypassing this target's registered replacement.
     pub fn address(&self) -> Option<NonZeroUsize> {
-        NonZeroUsize::new(self.trampoline.load(Ordering::Acquire)).or_else(|| self.entry_address())
+        self.detour.get()
+            .and_then(|detour| NonZeroUsize::new(detour.trampoline() as *const () as usize))
+            .or_else(|| self.entry_address())
     }
 
     /// Resolved entry to patch, never the Rust binding wrapper or trampoline.
     pub fn entry_address(&self) -> Option<NonZeroUsize> {
-        NonZeroUsize::new(self.address.load(Ordering::Acquire))
+        self.target.get()
     }
 
     /// Publish before enabling the patch; keep the trampoline alive permanently.
     ///
     /// # Safety
-    /// The trampoline must implement this binding's exact ABI and lifetime
+    /// The detour must target this entry with this binding's exact native
     /// contract. Attachment requires quiescent callers: publishing does not stop
     /// another thread that already loaded the old entry address.
-    pub unsafe fn publish_trampoline(&self, address: usize) -> Result<(), String> {
-        if self.entry_address().is_none() || address == 0 {
-            return Err(format!("Invalid trampoline for native binding {}", self.name));
+    pub unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
+        if self.entry_address().is_none() {
+            return Err(format!("Native binding {} is not initialized", self.name()));
         }
-        self.trampoline.compare_exchange(0, address, Ordering::AcqRel, Ordering::Acquire)
-            .map(|_| ())
-            .map_err(|_| format!("Native binding {} already has a trampoline", self.name))
+        self.detour.set(detour)
+            .map_err(|_| format!("Native binding {} already has a detour", self.name()))
     }
 
     /// Initialize once from the loaded module and its resolved relative offset.
@@ -47,15 +105,7 @@ impl FunctionBinding {
     /// process-lifetime code with their exact ABI and behavioral contract.
     /// Initialize every alias before attaching a detour to that native address.
     pub unsafe fn initialize(&self, base: usize, offset: u64) -> Result<(), String> {
-        let address = usize::try_from(offset).ok()
-            .and_then(|offset| base.checked_add(offset))
-            .filter(|address| base != 0 && *address != 0)
-            .ok_or_else(|| format!("Invalid address for native binding {}", self.name))?;
-        match self.address.compare_exchange(0, address, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => Ok(()),
-            Err(existing) if existing == address => Ok(()),
-            Err(_) => Err(format!("Native binding {} is already initialized at another address", self.name)),
-        }
+        unsafe { self.target.try_initialize(base, offset) }
     }
 }
 
@@ -97,11 +147,12 @@ impl<F> NativeFunction<F> {
     pub const fn name(&self) -> &'static str { self.binding.name() }
 }
 
-/// Generated by direct function-binding attributes; collected without installing a detour.
-pub struct FunctionBindingRegistration {
-    pub binding: &'static FunctionBinding,
+/// References stable binding storage without duplicating its address or name.
+pub struct BindingRegistration<T: 'static> {
+    pub binding: &'static T,
 }
 
+pub type FunctionBindingRegistration = BindingRegistration<FunctionBinding>;
 inventory::collect!(FunctionBindingRegistration);
 
 /// Initialize registered functions from image-relative offsets.
@@ -137,17 +188,17 @@ pub fn require_function_bindings(names: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-/// Publish the original trampoline to every initialized alias of an entry.
+/// Share Retour's detour with every initialized alias of its entry.
 ///
 /// # Safety
 /// Call during quiescent startup before enabling the patch. The trampoline must
 /// satisfy every binding's native contract and remain live for the process.
 #[doc(hidden)]
-pub unsafe fn publish_function_trampolines(entry: usize, trampoline: usize) -> Result<(), String> {
+pub unsafe fn publish_function_detours(entry: usize, detour: &'static retour::RawDetour) -> Result<(), String> {
     for registration in inventory::iter::<FunctionBindingRegistration> {
         let binding = registration.binding;
         if binding.entry_address().is_some_and(|address| address.get() == entry) {
-            unsafe { binding.publish_trampoline(trampoline)?; }
+            unsafe { binding.publish_detour(detour)?; }
         }
     }
     Ok(())
@@ -155,7 +206,7 @@ pub unsafe fn publish_function_trampolines(entry: usize, trampoline: usize) -> R
 
 /// Required native data address. Binding failures are fatal; generated access reads
 /// slot contents or return an inline object's address without copying it.
-pub struct ValueBinding(FunctionBinding);
+pub type ValueBinding = ResolvedAddress;
 
 /// Opt-in native types with generated static method forwarding.
 pub trait NativeGlobalTarget {
@@ -176,7 +227,7 @@ impl NativeGlobalPointer {
 
     /// # Safety
     /// The native slot/object must be live and correctly typed. Slot reads must
-    /// not race with native writes. The binding's atomic address publication does
+    /// not race with native writes. One-time binding publication does
     /// not make ordinary C++ pointer writes atomic.
     pub unsafe fn as_ptr<T>(&self) -> *mut T {
         let address = self.binding.address();
@@ -190,32 +241,7 @@ impl NativeGlobalPointer {
     }
 }
 
-impl ValueBinding {
-    pub const fn new(name: &'static str) -> Self { Self(FunctionBinding::new(name)) }
-
-    pub fn name(&self) -> &'static str { self.0.name() }
-
-    pub fn address(&self) -> usize {
-        self.0.address().unwrap_or_else(|| {
-            panic!("Required native value {} is not bound; startup must resolve it before access", self.name())
-        }).get()
-    }
-
-    /// Bind the data address without dereferencing it. Repeating it is harmless.
-    ///
-    /// # Safety
-    /// The resolved slot must remain readable with the declared value's layout
-    /// for every access; native writes must be synchronized with reads.
-    pub unsafe fn initialize(&self, base: usize, offset: u64) {
-        unsafe { self.0.initialize(base, offset) }.unwrap_or_else(|error| {
-            panic!("Failed to bind required native value {}: {error}", self.name())
-        });
-    }
-}
-
-pub struct ValueBindingRegistration {
-    pub binding: &'static ValueBinding,
-}
+pub type ValueBindingRegistration = BindingRegistration<ValueBinding>;
 
 inventory::collect!(ValueBindingRegistration);
 

@@ -61,7 +61,7 @@ Mirror C++ static/global access for every native global used by this project.
 - Binding stores only the resolved address. It adds no locks, cached allocator,
   ownership, `Deref`, or `DerefMut`. Raw native receivers retain pointer provenance.
 - Native storage/lifetime/method contracts and synchronization remain required.
-  Atomic address publication does not make ordinary C++ pointer writes atomic.
+  One-time address publication does not synchronize ordinary C++ pointer writes.
   Inline registry guards still acquire the engine's critical section.
 - Keep plugin-owned state separate; see [macro usage](../unchained-macros/README.md#required-native-values).
 
@@ -126,7 +126,8 @@ Initialize bindings and publish trampolines before enabling replacements.
 
 1. Resolve and initialize **all** function bindings, including aliases.
 2. Attach detours while plugin binding callers are quiescent.
-3. Publish each trampoline to every binding sharing the native entry.
+3. Publish a reference to the Retour detour to every binding sharing its native
+   entry. Original calls read its trampoline; no second trampoline address is stored.
 4. Enable replacements only after publication.
 
 - Only one detour may own a native address.
@@ -134,6 +135,10 @@ Initialize bindings and publish trampolines before enabling replacements.
   silently chaining hooks.
 - Failed construction releases its reservation.
 - A stored detour retains its reservation even if activation fails.
-- Atomic publication does not make concurrent attachment safe; a caller may
+- One-time publication does not make concurrent attachment safe; a caller may
   already have loaded the old entry.
 - Detours and trampolines live for the process lifetime; unloading is unsupported.
+
+Resolved addresses use `OnceLock`, not manually managed atomic address slots.
+Startup writes once; cross-thread readers still require safe publication.
+Code and data share `ResolvedAddress`; data bindings carry no detour state.

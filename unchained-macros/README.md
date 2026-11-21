@@ -23,6 +23,10 @@ Feature checks remain at the call site.
   `require_resolver!(Name)` adds explicit side-effect providers. Project resolver
   declarations take precedence over upstream namesakes; declarations alone do
   not cause startup scans.
+- `ResolvedAddress` publishes code/data addresses once. `FunctionBinding` holds
+  the optional Retour-owned detour, not a copied trampoline address. Both binding
+  inventories use `BindingRegistration<T>`. Startup requirements come from those
+  existing inventories, not duplicate per-binding root records.
 - See the [resolver reference](resolvers.md).
 
 Logging, rich text, and gameplay-specific macros stay in the plugin; other
@@ -201,8 +205,9 @@ pub static GUObjectArray: *mut FUObjectArray;
 - The caller must uphold native layout, lifetime and synchronization requirements.
 - The generated proxy owns no native object, exposes no `Deref`/`DerefMut`, and
   never borrows UE's mutable pointer slot. Resolved addresses use the existing
-  atomic registry, without locks. Ordinary native pointer writes must not race
-  with slot reads; publishing the address atomically does not synchronize C++ writes.
+  one-time-published registry, without per-call binding locks. Ordinary native
+  pointer writes must not race with slot reads; address publication does not
+  synchronize C++ writes.
 - Legacy zero-argument unsafe accessors remain supported for generic `Copy`
   values (`Value`) and raw inline addresses (`Address`). Scalars are not given
   implicit arithmetic or object-method forwarding.
