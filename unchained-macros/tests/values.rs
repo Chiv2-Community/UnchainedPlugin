@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
-use unchained_macros::{bind_resolved_value, initialize_value_binding, initialize_value_bindings, ValueBinding};
+use unchained_macros::{bind_resolved_value, initialize_value_bindings, ValueBinding};
 
 mod resolvers {
     pub struct Count;
@@ -46,7 +46,7 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
     unsafe {
         // Binding a slot before the engine populates it is permitted.
         initialize_value_bindings(1, &offsets);
-        initialize_value_binding("Count", COUNT.as_ptr() as usize);
+        initialize_value_bindings(1, &offsets);
         assert_eq!(count(), 0); // Zero scalar values are valid.
         COUNT.store(-42, Ordering::Relaxed);
         assert_eq!(count(), -42);
@@ -55,8 +55,6 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
         OBJECTS.0.store(77, Ordering::Relaxed);
         assert_eq!(objects(), &raw const OBJECTS);
         assert_eq!((*objects()).0.load(Ordering::Relaxed), 77);
-        initialize_value_binding("Objects", (&raw const OBJECTS) as usize);
-        assert_eq!(objects(), &raw const OBJECTS);
     }
 
     let failure = std::panic::catch_unwind(|| unsafe { pointer() }).unwrap_err();
@@ -77,12 +75,6 @@ fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
 #[should_panic(expected = "Failed to bind required native value Invalid")]
 fn invalid_required_binding_panics(base: usize, offset: u64) {
     unsafe { ValueBinding::new("Invalid").initialize(base, offset); }
-}
-
-#[test]
-#[should_panic(expected = "Required native value Unknown has no binding declaration")]
-fn undeclared_value_panics_in_standalone_initialization() {
-    unsafe { initialize_value_binding("Unknown", 1); }
 }
 
 #[test]

@@ -106,6 +106,8 @@ Choose the binding mechanism that matches the address source.
   `OffsetRegisty`; do not put an absolute address into the registry.
 - **Globals:** use `bind_resolved_value(Resolver, Address)` for an inline object's
   address or `Value` to read a `Copy` value from a slot. These are not detour targets.
+  Declare native globals as module-level accessors under their declaring header;
+  keep Rust convenience adapters separate from the native type's methods.
 - **Virtual calls:** use `rust_ctables::cpp_struct` and `#[vtable(...)]`.
   Load `create-vtable`, or read the [vtable skill](../create-vtable/SKILL.md),
   before creating or extending a table declaration.

@@ -8,6 +8,17 @@ use std::alloc::Layout;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
+/// Read UE's current allocator from its resolved pointer slot.
+///
+/// # Safety
+/// Startup must bind the slot. Reads must not race with native writes, and the
+/// allocator must remain live while callers use the returned pointer.
+#[unchained_macros::bind_resolved_value(
+    patternsleuth::resolvers::unreal::gmalloc::GMalloc,
+    Value
+)]
+pub(crate) unsafe fn GMalloc() -> *mut FMalloc {}
+
 // UE 4.25-plus 2d1aaeede678: HAL/MemoryBase.h and Misc/Exec.h.
 // Confirmed against symbolized Binned2 and Steam/EGS vtable 0x144982A90.
 #[unchained_macros::runtime_bindings]
@@ -57,23 +68,6 @@ pub struct FMalloc {
     vtable: *const (),
 }
 
-impl FMalloc {
-    // UE global FMalloc* GMalloc. Cache its slot, not the current allocator pointer.
-    /// # Safety
-    /// Startup must bind UE's process-lifetime allocator slot. Slot changes must not
-    /// race with reads; the allocator must remain live for all returned handles.
-    #[unchained_macros::bind_resolved_value(
-        patternsleuth::resolvers::unreal::gmalloc::GMalloc,
-        Value
-    )]
-    unsafe fn native_gmalloc() -> *mut FMalloc {}
-
-    pub(crate) fn global() -> FMallocHandle {
-        // The value binding panics on an unresolved slot or null allocator pointer.
-        FMallocHandle(unsafe { NonNull::new_unchecked(FMalloc::native_gmalloc()) })
-    }
-}
-
 unsafe impl Sync for FMalloc {}
 
 unsafe impl Send for FMalloc {}
@@ -84,6 +78,11 @@ unsafe impl Send for FMalloc {}
 pub struct FMallocHandle(NonNull<FMalloc>);
 
 impl FMallocHandle {
+    pub(crate) fn global() -> Self {
+        // The value binding rejects an unresolved slot or null allocator pointer.
+        Self(unsafe { NonNull::new_unchecked(GMalloc()) })
+    }
+
     /// Safety: The layout must be correct for the type being allocated.
     /// The allocator must be initialized and valid.
     #[inline(always)]

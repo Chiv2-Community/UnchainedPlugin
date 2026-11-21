@@ -201,21 +201,6 @@ pub unsafe fn initialize_value_bindings(base: usize, offsets: &std::collections:
     }
 }
 
-/// Bind one required value from an absolute address, for standalone resolution.
-///
-/// # Safety
-/// The address must satisfy the registered accessor's native-slot contract.
-pub unsafe fn initialize_value_binding(name: &str, address: usize) {
-    let mut found = false;
-    for registration in inventory::iter::<ValueBindingRegistration>.into_iter()
-        .filter(|registration| registration.binding.name() == name)
-    {
-        unsafe { registration.binding.initialize(address, 0); }
-        found = true;
-    }
-    assert!(found, "Required native value {name} has no binding declaration");
-}
-
 pub fn is_required_value(name: &str) -> bool {
     inventory::iter::<ValueBindingRegistration>.into_iter()
         .any(|registration| registration.binding.name() == name)

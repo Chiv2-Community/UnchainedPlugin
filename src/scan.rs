@@ -4,15 +4,14 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use unchained_macros::{PLATFORM, PlatformType, current_platform};
+use unchained_macros::{PLATFORM, PlatformType};
 
 pub fn scan(platform: PlatformType, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
 
-    if PLATFORM.get().is_none() {
-        let _ = PLATFORM.set(platform);
-    } else if PLATFORM.get().unwrap() != &platform {
-        anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, current_platform());
+    let running_platform = *PLATFORM.get_or_init(|| platform);
+    if running_platform != platform {
+        anyhow::bail!("Cannot scan for signatures on platform {:?} while running on {:?}", platform, running_platform);
     }
 
     if resolvers_to_scan.is_empty() {

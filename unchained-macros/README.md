@@ -164,7 +164,7 @@ Assume startup initialized required bindings.
 
 ```rust,ignore
 #[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::gmalloc::GMalloc, Value)]
-unsafe fn native_gmalloc() -> *mut FMalloc {}
+unsafe fn GMalloc() -> *mut FMalloc {}
 
 // GUObjectArray is an inline object, not a pointer slot.
 #[unchained_macros::bind_resolved_value(patternsleuth::resolvers::unreal::guobject_array::GUObjectArray, Address)]
@@ -176,6 +176,8 @@ unsafe fn native_guobject_array() -> *const FUObjectArray {}
   - `Address` returns the resolved address as a raw pointer to an inline global,
     without reading or copying the object's storage.
 - Startup calls `initialize_value_bindings(base, offsets)` before access.
+- Native global accessors belong in the module matching their declaring header;
+  `GMalloc` is declared in `HAL/MemoryBase.h`.
 - Binding caches the slot address, not its current contents; binding before
   the engine populates a pointer is permitted.
 - Missing/invalid bindings and null pointer values panic with the resolver name.

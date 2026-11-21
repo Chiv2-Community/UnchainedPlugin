@@ -5,8 +5,6 @@ use crate::Chivalry2::Engine::*;
 
 use std::alloc::Layout;
 
-use crate::globals;
-
 #[unchained_macros::runtime_bindings]
 #[derive(Debug, Clone)]
 #[repr(C)]
@@ -32,8 +30,8 @@ impl<T> TArray<T> {
     /// Copy a buffer before plugin globals exist.
     ///
     /// # Safety
-    /// `allocator` must be the engine allocator. Transfer the result to the engine
-    /// before dropping it, since `Drop` uses plugin globals.
+    /// `allocator` must be the engine allocator. Dropping the result requires its
+    /// buffer to belong to the currently bound engine allocator.
     pub(crate) unsafe fn from_slice_in(value: &[T], allocator: FMallocHandle) -> Self
     where
         T: Copy,
@@ -48,8 +46,8 @@ impl<T> TArray<T> {
     }
 
     /// # Safety
-    /// `allocator` must own the returned buffer. Transfer it to the engine before
-    /// dropping it if plugin globals are not initialized.
+    /// `allocator` must own the returned buffer. Dropping the result requires its
+    /// buffer to belong to the currently bound engine allocator.
     pub(crate) unsafe fn with_capacity_in(capacity: usize, allocator: FMallocHandle) -> Self {
         if capacity == 0 {
             return Self::new();
@@ -122,7 +120,7 @@ impl<T> TArray<T> {
         if capacity == 0 {
             return Self::new();
         }
-        unsafe { Self::with_capacity_in(capacity, FMalloc::global()) }
+        unsafe { Self::with_capacity_in(capacity, FMallocHandle::global()) }
     }
     pub fn len(&self) -> usize {
         self.num.max(0) as usize
@@ -181,7 +179,7 @@ impl<T> TArray<T> {
             .checked_add(additional)
             .expect("TArray length overflow");
         if required_cap > self.capacity() {
-            unsafe { self.reserve_in(additional, FMalloc::global()) };
+            unsafe { self.reserve_in(additional, FMallocHandle::global()) };
         }
     }
     pub fn push(&mut self, new_value: T) {
@@ -229,7 +227,7 @@ impl<T> Drop for TArray<T> {
                     self.data,
                     self.num as usize,
                 ));
-                globals().gmalloc().free(self.data.cast());
+                FMallocHandle::global().free(self.data.cast());
             }
         }
     }
@@ -253,6 +251,6 @@ where
         if value.is_empty() {
             return Self::new();
         }
-        unsafe { Self::from_slice_in(value, FMalloc::global()) }
+        unsafe { Self::from_slice_in(value, FMallocHandle::global()) }
     }
 }

@@ -3,14 +3,12 @@
 use std::sync::Mutex;
 #[cfg(feature="mod_management")]
 use std::sync::Arc;
-use std::env;
 use crate::Chivalry2::Engine::UWorld;
 
 #[cfg(feature="mod_management")]
 use crate::features::mod_management::ModManager;
 #[cfg(feature="server_registration")]
 use crate::features::server_browser::registration::Registration;
-use unchained_macros::{PLATFORM, PlatformType};
 use crate::tools::cli_args::CLIArgs;
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 use parking_lot::RwLock;
@@ -59,10 +57,6 @@ pub struct Globals {
     // Use the wrapper here to satisfy the Sync requirement
     guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
     pub main_thread_id: std::thread::ThreadId,
-    platform: PlatformType,
-    // base_address: usize,
-    is_server: bool,
-    // pub(crate) cli_args: CLIArgs,
     pub world: RwLock<SyncPtr<UWorld>>,
     #[cfg(feature="server_registration")]
     pub(crate) registration: Mutex<Option<Registration>>,
@@ -88,10 +82,6 @@ pub fn globals_initialized() -> bool {
 
 
 impl Globals {
-    pub fn gmalloc(&self) -> crate::Chivalry2::Engine::FMallocHandle {
-        crate::Chivalry2::Engine::FMalloc::global()
-    }
-
     pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
         self.guobject_array.lock()
     }
@@ -101,15 +91,6 @@ impl Globals {
         // deref ptr to SyncFUObjectArray, then deref to FUObjectArray
         &( *self.guobject_array.data_ptr() )
     }
-    pub fn get_platform(&self) -> PlatformType {
-        self.platform
-    }
-    pub fn is_server(&self) -> bool {
-        self.is_server
-    }
-    // fn args(&self) -> &CLIArgs {
-    //     &self.cli_args
-    // }
     pub fn world(&self) -> Option<*mut UWorld> {
         let ptr = self.world.read().0;
         if ptr.is_null() { None } else { Some(ptr) }
@@ -121,16 +102,9 @@ impl Globals {
 }
 
 pub fn init_globals() {
-    let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
-        true => PlatformType::EGS,
-        false => PlatformType::STEAM,
-    };
-
-    // FIXME: replace old references
-    PLATFORM.set(platform).expect("Platform already set");
     sinfo!(
         "Platform: {} base_addr: '0x{:x?}'",
-        platform, *crate::unchained::startup::BASE_ADDR
+        unchained_macros::current_platform(), *crate::unchained::startup::BASE_ADDR
     );
 
     // Preinit initializes all native bindings before plugin state is constructed.
@@ -141,9 +115,6 @@ pub fn init_globals() {
         // Wrap the reference in our Sync-promising struct
         guobject_array: parking_lot::FairMutex::new(SyncFUObjectArray(guobject_array)),
         main_thread_id: std::thread::current().id(),
-        is_server: false,
-        // cli_args: args,
-        platform,
         world: RwLock::new(SyncPtr::default()),
         #[cfg(feature="server_registration")]
         registration: std::sync::Mutex::new(None),
