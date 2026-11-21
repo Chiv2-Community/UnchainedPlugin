@@ -1,7 +1,6 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h>.
 
 use crate::Chivalry2::Engine::TCHAR;
-use crate::globals;
 
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::UEHash;
@@ -34,6 +33,13 @@ pub struct FName {
 
 #[unchained_macros::runtime_bindings]
 impl FName {
+    /// # Safety
+    /// The engine name table must be initialized and output must be writable.
+    #[unchained_macros::bind_resolved_func(
+        patternsleuth::resolvers::unreal::fname::FNameToString
+    )]
+    pub unsafe fn ToString(&self, output: &mut FString) {}
+
     /// Call the constructor through the entry, never a
     /// copied trampoline: UE4SS may patch this entry after plugin initialization.
     ///
@@ -94,7 +100,7 @@ impl std::fmt::Display for FName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = FString::new();
         unsafe {
-            globals().fname_to_string()(self, &mut string);
+            self.ToString(&mut string);
         };
         write!(f, "{string}")
     }
@@ -112,7 +118,5 @@ impl UEHash for FName {
         self.comparison_index.ue_hash() + self.number
     }
 }
-
-pub type FnFNameToString = unsafe extern "system" fn(&FName, &mut FString);
 
 pub type FnFNameCtorWchar = unsafe extern "system" fn(&mut FName, *const TCHAR, EFindName);

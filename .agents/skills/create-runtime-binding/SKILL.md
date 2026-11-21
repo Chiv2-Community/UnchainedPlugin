@@ -77,6 +77,9 @@ Use an empty unsafe method under `runtime_bindings`.
 - Calls use the resolved entry before attachment, then the original trampoline.
   Calling a binding must not invoke its plugin replacement.
 - Assume startup initialized required bindings.
+- Use the shared preinit binding registry; do not add per-binding startup scans
+  or a separate function-pointer collection in `Globals`.
+- Keep plugin-owned mutable state behind ordinary methods, not native bindings.
 
 Existing static-call pattern; reuse the existing declaration rather than
 registering a second copy:

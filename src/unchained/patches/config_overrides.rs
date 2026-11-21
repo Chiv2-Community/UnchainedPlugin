@@ -58,7 +58,7 @@ pub(crate) unsafe fn load_config_detour(
     let object_path = if this.is_null() {
         None
     } else {
-        let path = unsafe { &*this }.uobject_base_utility.GetPathName(None);
+        let path = unsafe { &*this }.uobject_base_utility.get_path_name(None);
         if path.trim().is_empty() {
             None
         } else {

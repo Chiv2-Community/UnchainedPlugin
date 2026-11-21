@@ -1,10 +1,6 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectBaseUtility.h>.
 
 use crate::Chivalry2::Engine::*;
-use crate::globals;
-
-pub type FnUObjectBaseUtilityGetPathName =
-    unsafe extern "system" fn(&UObjectBase, Option<&UObject>, &mut FString);
 
 #[unchained_macros::runtime_bindings]
 #[rust_ctables::cpp_struct]
@@ -14,15 +10,19 @@ pub struct UObjectBaseUtility {
     pub uobject_base: UObjectBase,
 }
 
+#[unchained_macros::runtime_bindings]
 impl UObjectBaseUtility {
-    pub unsafe fn GetPathName(&self, stop_outer: Option<&UObject>) -> String {
+    /// # Safety
+    /// Self and any stop object must be live; output must be writable native storage.
+    #[unchained_macros::bind_resolved_func(
+        patternsleuth::resolvers::unreal::UObjectBaseUtilityGetPathName
+    )]
+    pub unsafe fn GetPathName(&self, stop_outer: Option<&UObject>, output: &mut FString) {}
+
+    pub unsafe fn get_path_name(&self, stop_outer: Option<&UObject>) -> String {
         let mut string = FString::new();
         unsafe {
-            globals().uobject_base_utility_get_path_name()(
-                &self.uobject_base,
-                stop_outer,
-                &mut string,
-            );
+            self.GetPathName(stop_outer, &mut string);
         }
         string.to_string()
     }

@@ -427,7 +427,7 @@ fn preinit_rustlib() {
 // Initialize Logger and Globals
 fn init_rustlib() {
     logging::console::print_banner();
-    init_globals().expect("Failed to init globals!");
+    init_globals();
 }
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);

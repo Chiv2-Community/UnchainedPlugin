@@ -7,7 +7,6 @@ use crate::Chivalry2::Engine::UObject;
 #[cfg(feature = "kismet_log")]
 use crate::Chivalry2::Engine::TCHAR;
 use crate::Chivalry2::Engine::*;
-use crate::globals;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 
@@ -38,6 +37,26 @@ pub struct FFrame {
 
 #[unchained_macros::runtime_bindings]
 impl FFrame {
+    /// # Safety
+    /// Frame, context, and result storage must satisfy the current bytecode operation.
+    #[unchained_macros::bind_resolved_func(
+        patternsleuth::resolvers::unreal::kismet::FFrameStep
+    )]
+    pub unsafe fn Step(&mut self, context: *mut UObject, result: *mut c_void) {}
+
+    /// Preserves the existing property-pointer ABI.
+    ///
+    /// # Safety
+    /// Frame, property, and result storage must describe a valid compiled-in argument.
+    #[unchained_macros::bind_resolved_func(
+        patternsleuth::resolvers::unreal::kismet::FFrameStepExplicitProperty
+    )]
+    pub unsafe fn StepExplicitProperty(
+        &mut self,
+        result: *mut c_void,
+        property: *const FProperty,
+    ) {}
+
     pub unsafe fn arg<T: Sized>(self: &mut FFrame) -> T {
         let mut value: MaybeUninit<T> = MaybeUninit::zeroed();
         let ptr = value.as_mut_ptr() as *mut _;
@@ -45,9 +64,9 @@ impl FFrame {
         if self.code.is_null() {
             let cur = self.property_chain_for_compiled_in;
             self.property_chain_for_compiled_in = (*cur).next;
-            globals().fframe_step_explicit_property()(self, ptr, cur as *const FProperty);
+            self.StepExplicitProperty(ptr, cur as *const FProperty);
         } else {
-            globals().fframe_step()(self, self.object, ptr);
+            self.Step(self.object, ptr);
         }
 
         value.assume_init()
@@ -63,15 +82,3 @@ impl FFrame {
     ) -> *mut UObject {
     }
 }
-
-pub type FnFFrameStep = unsafe extern "system" fn(
-    stack: &mut crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::Stack::FFrame,
-    *mut UObject,
-    result: *mut c_void,
-);
-
-pub type FnFFrameStepExplicitProperty = unsafe extern "system" fn(
-    stack: &mut crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::Stack::FFrame,
-    result: *mut c_void,
-    property: *const FProperty,
-);

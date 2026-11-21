@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 #[cfg(feature="mod_management")]
 use std::sync::Arc;
-use std::{env, panic};
+use std::env;
 use crate::Chivalry2::Engine::UWorld;
 
 #[cfg(feature="mod_management")]
@@ -14,42 +14,6 @@ use unchained_macros::{PLATFORM, PlatformType};
 use crate::tools::cli_args::CLIArgs;
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectArray::FUObjectArray;
 use parking_lot::RwLock;
-use patternsleuth::resolvers::unreal::{
-    UObjectBaseUtilityGetPathName,
-    fname::FNameToString,
-    gmalloc::GMalloc,
-    guobject_array::GUObjectArray,
-    kismet::{FFrameStep, FFrameStepExplicitProperty},
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-patternsleuth::_impl_try_collector! {
-    #[derive(Debug, PartialEq, Clone)]
-    struct DllHookResolution {
-        fnametostring: FNameToString,
-        fframe_step: FFrameStep,
-        fframe_step_explicit_property: FFrameStepExplicitProperty,
-        uobject_base_utility_get_path_name: UObjectBaseUtilityGetPathName,
-    }
-}
-
-// Stubs to disable unimplemented err
-impl Serialize for DllHookResolution {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        todo!("Serialization not implemented")
-    }
-}
-impl<'de> Deserialize<'de> for DllHookResolution {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        todo!("Deserialization not implemented")
-    }
-}
 
 
 #[repr(transparent)]
@@ -87,40 +51,11 @@ impl<T> Default for SyncPtr<T> {
     fn default() -> Self { Self(std::ptr::null_mut()) }
 }
 
-macro_rules! global_ptr {
-    ($name:ident, $ty:ty) => {
-        pub fn $name(&self) -> Option<*mut $ty> {
-            let ptr = self.$name.read().0;
-            if ptr.is_null() { None } else { Some(ptr) }
-        }
-
-        paste::paste! {
-            pub fn [<set_ $name>](&self, ptr: *mut $ty) {
-                *self.$name.write() = SyncPtr(ptr);
-            }
-        }
-    };
-}
-
-macro_rules! resolution_fn {
-    ($name:ident, $res_field:ident, $ty:ty) => {
-        pub fn $name(&self) -> $ty {
-            let ptr = usize::try_from(self.resolution.$res_field.0)
-                .expect("Resolved native address does not fit a pointer");
-            if ptr == 0 {
-                panic!("Critical: Global resolver '{}' failed to find its target address. Check memory patterns.", stringify!($res_field));
-            }
-            unsafe { std::mem::transmute(ptr) }
-        }
-    };
-}
-
 use std::sync::OnceLock;
 
 #[derive(Debug)]
 
 pub struct Globals {
-    resolution: DllHookResolution,
     // Use the wrapper here to satisfy the Sync requirement
     guobject_array: parking_lot::FairMutex<SyncFUObjectArray>,
     pub main_thread_id: std::thread::ThreadId,
@@ -157,11 +92,6 @@ impl Globals {
         crate::Chivalry2::Engine::FMalloc::global()
     }
 
-    resolution_fn!(fframe_step, fframe_step, crate::Chivalry2::Engine::FnFFrameStep);
-    resolution_fn!(fframe_step_explicit_property, fframe_step_explicit_property, crate::Chivalry2::Engine::FnFFrameStepExplicitProperty);
-    resolution_fn!(fname_to_string, fnametostring, crate::Chivalry2::Engine::FnFNameToString);
-    resolution_fn!(uobject_base_utility_get_path_name, uobject_base_utility_get_path_name, crate::Chivalry2::Engine::FnUObjectBaseUtilityGetPathName);
-
     pub fn guobject_array(&self) -> parking_lot::FairMutexGuard<'_, SyncFUObjectArray> {
         self.guobject_array.lock()
     }
@@ -180,18 +110,22 @@ impl Globals {
     // fn args(&self) -> &CLIArgs {
     //     &self.cli_args
     // }
-    global_ptr!(world, UWorld);
+    pub fn world(&self) -> Option<*mut UWorld> {
+        let ptr = self.world.read().0;
+        if ptr.is_null() { None } else { Some(ptr) }
+    }
+
+    pub fn set_world(&self, ptr: *mut UWorld) {
+        *self.world.write() = SyncPtr(ptr);
+    }
 }
 
-pub fn init_globals() -> Result<(), String> {
+pub fn init_globals() {
     let platform = match env::args().any(|arg| arg == "-epicapp=Peppermint") {
         true => PlatformType::EGS,
         false => PlatformType::STEAM,
     };
 
-    let exe = patternsleuth::process::internal::read_image()
-        .map_err(|e| e.to_string())
-        .expect("failed to read image");
     // FIXME: replace old references
     PLATFORM.set(platform).expect("Platform already set");
     sinfo!(
@@ -199,50 +133,13 @@ pub fn init_globals() -> Result<(), String> {
         platform, *crate::unchained::startup::BASE_ADDR
     );
 
-    // Load CLI ARGS
-    sinfo!("Running resolvers");
-    // Required values are fatal on resolution failure, including standalone
-    // initialization that has not run the cached preinit binding pass.
-    // Share one resolution context so globals and function dependencies scan together.
-    let [gmalloc, guobject_array, resolution]: [_; 3] = exe
-        .resolve_many(&[
-            GMalloc::dyn_resolver,
-            GUObjectArray::dyn_resolver,
-            DllHookResolution::dyn_resolver,
-        ])
-        .try_into()
-        .expect("Global resolver batch must return one result per target");
-    let gmalloc = gmalloc
-        .unwrap_or_else(|error| panic!("Required native value GMalloc could not be resolved: {error}"));
-    unsafe { unchained_macros::initialize_value_binding("GMalloc",
-        usize::try_from(gmalloc.get().expect("GMalloc must resolve a singleton address"))
-            .expect("GMalloc address does not fit a pointer")); }
-    let guobject_array = guobject_array
-        .unwrap_or_else(|error| panic!("Required native value GUObjectArray could not be resolved: {error}"));
-    unsafe { unchained_macros::initialize_value_binding("GUObjectArray",
-        usize::try_from(guobject_array.get().expect("GUObjectArray must resolve a singleton address"))
-            .expect("GUObjectArray address does not fit a pointer")); }
-    let resolution = resolution.map(|value| {
-        value.as_ref().as_any().downcast_ref::<DllHookResolution>()
-            .expect("Global function resolver returned an unexpected type").clone()
-    });
-    let result = panic::catch_unwind(|| resolution.expect("Critical: Could not resolve DLL symbols"));
-
-    let resolution = match result {
-        Ok(res) => res,
-        Err(_) => {
-            serror!("Global initialization failed due to a panic in resolver.");
-            return Err("Global initialization aborted. Check logs.".into());
-        }
-    };
-
+    // Preinit initializes all native bindings before plugin state is constructed.
     let guobject_array: &'static FUObjectArray =
         unsafe { &*crate::Chivalry2::Engine::FUObjectArray::native_guobject_array() };
 
     let globals_instance = Globals {
         // Wrap the reference in our Sync-promising struct
         guobject_array: parking_lot::FairMutex::new(SyncFUObjectArray(guobject_array)),
-        resolution,
         main_thread_id: std::thread::current().id(),
         is_server: false,
         // cli_args: args,
@@ -258,7 +155,6 @@ pub fn init_globals() -> Result<(), String> {
         serror!("Error: Globals already initialized!");
     }
     strace!("{GLOBALS:#?}");
-    Ok(())
 }
 
 #[cfg(test)]

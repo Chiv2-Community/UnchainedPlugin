@@ -194,7 +194,7 @@ unsafe fn mod_from_class(class_ptr: *mut UClass) -> Option<(String, Mod)> {
 
     let cdo = &*(cdo_new as *mut ArgonSDKModBase);
     let class_obj = &(*class_ptr).ustruct.ufield.uobject;
-    let asset_path = class_obj.uobject_base_utility.GetPathName(None);
+    let asset_path = class_obj.uobject_base_utility.get_path_name(None);
 
     let mod_entry = Mod {
         name: cdo.mod_name.to_string(),
@@ -445,7 +445,7 @@ impl ModManager {
                 if !class_ptr.is_null() {
                     let asset_path = (*class_ptr).ustruct.ufield.uobject
                         .uobject_base_utility
-                        .GetPathName(None);
+                        .get_path_name(None);
                     
                     active_mods_local.insert(asset_path);
                 }
