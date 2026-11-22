@@ -3978,6 +3978,7 @@ dependencies = [
  "test-case",
  "unchained-macros-core",
  "unchained-macros-kismet-impl",
+ "unchained-native-docs",
  "windows 0.52.0",
 ]
 

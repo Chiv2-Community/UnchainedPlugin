@@ -14,6 +14,15 @@ struct BindingResolver {
     declaration: Option<Path>,
 }
 
+impl BindingResolver {
+    fn documentation_key(&self, fallback: &str) -> String {
+        let name = self.declaration.as_ref()
+            .map(|path| path.segments.last().unwrap().ident.to_string())
+            .unwrap_or_else(|| fallback.to_owned());
+        format!("binding-{name}")
+    }
+}
+
 impl syn::parse::Parse for BindingResolver {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let path: Path = input.parse()?;
@@ -42,7 +51,8 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         &format!("Native binding `{}`. Direct calls invoke the original implementation, bypassing detours.", function.sig.ident),
         function.sig.ident.span(),
     );
-    let expanded = call_wrapper(&function, &resolver, &binding, storage, &documentation)?;
+    let key = resolver.documentation_key(&function.sig.ident.to_string());
+    let expanded = call_wrapper(&function, &resolver, &binding, storage, &documentation, &key)?;
     Ok(quote!(#expanded))
 }
 
@@ -69,6 +79,7 @@ fn binding_storage(
 
 fn call_wrapper(
     function: &ItemFn, resolver: &BindingResolver, binding: &syn::Ident, setup: Tokens, documentation: &syn::LitStr,
+    documentation_key: &str,
 ) -> syn::Result<ItemFn> {
     let resolver_name = resolver.declaration.as_ref().map(|path| path.segments.last().unwrap().ident.to_string())
         .unwrap_or_else(|| function.sig.ident.to_string());
@@ -98,7 +109,7 @@ fn call_wrapper(
     if !expanded.attrs.iter().any(|attribute| attribute.path().is_ident("inline")) {
         expanded.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
-    attach_native_documentation(&mut expanded.attrs, &format!("binding-{resolver_name}"), documentation);
+    attach_native_documentation(&mut expanded.attrs, documentation_key, documentation);
     Ok(expanded)
 }
 
@@ -144,7 +155,13 @@ pub(crate) fn expand_method(
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
     let backend = &resolver.backend;
-    let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation)?;
+    // Match the native-doc generator's owner/member key, independent of the backend.
+    let owner = match self_ty {
+        Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
+        _ => self_ty.to_token_stream().to_string().replace(' ', ""),
+    };
+    let key = resolver.documentation_key(&format!("{owner}__{name}"));
+    let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation, &key)?;
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
     let (listener_type, listener_storage, hook_storage, listener_setup) =
         listener_dispatch(&signature, &storage, &resolver, &function.attrs)?;

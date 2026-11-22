@@ -99,11 +99,3 @@ pub(crate) unsafe fn load_config_detour(
         this.LoadConfig(config_class, filename, propagation_flags, property_to_load);
     }
 }
-
-#[unchained_macros_core::bind_func_detour(UClass::GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
-pub(crate) unsafe fn get_config_name_detour(
-    this: *mut UClass,
-    storage: *mut crate::Chivalry2::Engine::FString,
-) -> *mut crate::Chivalry2::Engine::FString {
-    unsafe { this.GetConfigName(storage) }
-}

@@ -77,9 +77,13 @@ struct Native;
 impl Native {
     unsafe fn add(value: i32) -> i32 {}
     unsafe fn alias(value: i32) -> i32 {}
-    unsafe fn plain(value: i32) -> i32 {}
     #[cfg(any())]
     unsafe fn excluded() {}
+}
+#[bindings::runtime_bindings]
+impl Native {
+    #[bind_resolved_func(PlainPatch)]
+    unsafe fn plain(value: i32) -> i32 {}
 }
 #[bindings::bind_func_detour(Native::add)]
 unsafe fn replacement(value: i32) -> i32 { unsafe { Native::add(value) + 10 } }
@@ -144,14 +148,19 @@ static SUPPRESSED: Resolver<SuppressedResolver> = Resolver {
 };
 inventory::submit! { &SUPPRESSED as &dyn bindings::__private::ResolverInfo }
 
-// Patch keys remain explicit declarations; native bindings need no marker type.
+// The patch and native binding share one explicit descriptor and resolver cache.
+static PLAIN: Resolver<KismetReflectionResolver> = Resolver {
+    name: "Native__plain",
+    implementation: KismetReflectionResolver::new("/Script/Fixture.Native", "plain"),
+    filter: None,
+};
+inventory::submit! { &PLAIN as &dyn bindings::__private::ResolverInfo }
 struct PlainPatch;
 impl bindings::ResolverDeclaration for PlainPatch {
     type Backend = KismetReflectionResolver;
     const NAME: &'static str = "Native__plain";
     const UNRESTRICTED: bool = true;
-    const DESCRIPTOR: &'static Resolver<Self::Backend> =
-        Native::__UNCHAINED_BINDING_plain.binding().resolver;
+    const DESCRIPTOR: &'static Resolver<Self::Backend> = &PLAIN;
 }
 #[bindings::register_patch(PlainPatch)]
 static EDIT: Patch = Patch::nop(0, 1);
