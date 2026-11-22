@@ -27,7 +27,8 @@ Reflection covers `UGameplayStatics::{GetAllActorsOfClass, LoadGameFromSlot,
 SaveGameToSlot}`, `ATBLCharacter::{OnDamageTaken, OnKilled}`,
 `ATBLPlayerController::{CanUseCharacter, CanUseLoadoutItem}`,
 `UUserFeedbackAndBugReportsLibrary::GetGameInfo`,
-`UTBLSystemLibrary::GetTBLGameMode`, and `UTBLGameInstance::LoadFrontEndMap`.
+`UTBLSystemLibrary::GetTBLGameMode`, `UTBLGameInstance::LoadFrontEndMap`,
+`APlayerState::GetPlayerName`, and `UAssetRegistryHelpers::GetAssetRegistry`.
 Existing detours, native signatures, resolver keys, and activation conditions
 are unchanged. Chat readiness checks query each binding's backend explicitly.
 These bind native C++ bodies, **not** `UFunction::func` as a typed C++ method.
@@ -56,12 +57,23 @@ Read-only inspection of the installed Steam Windows x64 executable:
 | `/Script/TBL.UserFeedbackAndBugReportsLibrary::GetGameInfo` | `0x1cb5140` | `0x1aead90` | Static; FString return storage, world pointer; storage pointer |
 | `/Script/TBL.TBLSystemLibrary::GetTBLGameMode` | `0x1c923f0` | `0x1a3ecd0` | Static; context pointer; game-mode pointer |
 | `/Script/TBL.TBLGameInstance::LoadFrontEndMap` | `0x1c35c90` | `0x1945580` | Instance; receiver, FString pointer; bool in AL |
+| `/Script/Engine.PlayerState::GetPlayerName` | `0x38728b0` | `0x356bb90` | Instance; receiver, FString return storage; storage pointer |
+| `/Script/AssetRegistry.AssetRegistryHelpers::GetAssetRegistry` | `0x2f70b10` | `0x2f569b0` | Static; TScriptInterface return storage; storage pointer |
 
-Each thunk branches between `FFrame::Step` (`RVA 0x1ff40c0`) and
-`StepExplicitProperty` (`RVA 0x1ff40f0`), advances the real frame past parameters,
-and directly calls the listed body. Save/load then release their temporary string;
+The ten parameterized thunks branch between `FFrame::Step` (`RVA 0x1ff40c0`) and
+`StepExplicitProperty` (`RVA 0x1ff40f0`), advance the real frame past parameters,
+and directly call the listed body. Save/load then release their temporary string;
 actor enumeration also handles the output-array reference. The recovered body
 RVAs match the previous signature-backed client cache.
+
+`GetPlayerName` and `GetAssetRegistry` have only reflected return parameters.
+Their thunks advance `FFrame::Code` inline, then call the native body without a
+frame-step call. Resolution selects this mode only when `UFunction::NumParms`
+minus its return parameter is zero, and verifies the inline advancement before
+selecting the native call. The decoder receives `offset_of!(FFrame, code)` from
+the host; it does not infer the native ABI from the metadata.
+`GetPlayerName` retains its native custom-name virtual dispatch. The asset helper
+retains explicit return storage and the returned interface-subobject pointer.
 
 `LoadFrontEndMap` is registered in this binary despite being absent from the
 local SDK header. Shared names such as `OnKilled` occur on multiple classes;
@@ -77,8 +89,8 @@ This ports the address-source mechanism from `feature/exec-thunk-hooks`, not its
 old macros, late-hook inventory, worker-thread fallback, print logging, or identity
 overrides. Virtual/interface receivers and raw exec-thunk bindings remain separate
 work. Do not substitute a shared shipping stub or an exec thunk for a native body.
-Chat's virtual implementations and the no-argument `GetAssetRegistry` helper
-remain scan-backed. Asset-registry interface calls retain rust-ctables dispatch
+Chat's virtual implementations remain scan-backed.
+Asset-registry interface calls retain rust-ctables dispatch
 and their interface-subobject receiver.
 
 ## Validation
@@ -120,3 +132,20 @@ EGS live validation remains unavailable.
 - Bare `--no-default-features` is blocked by existing unconditional Discord
   imports; Discord alone is blocked by unconditional mod-manager consumers.
   Those feature-gating issues are outside this migration.
+
+### No-argument bindings
+
+- Isolated Steam client/server runs used DLL SHA-256
+  `60bc9847c352ef8120aca095d61f7993ba6f7450f68415121efb3dd9eaf5fd15`.
+- Both roles recovered all twelve reflected targets at their previous signature
+  RVAs and attached all 42 hooks without pending runtime initialization.
+  The client exercised the asset-registry helper during frontend loading.
+- Fresh scans preserved 86 remaining baseline offsets plus `FEngineLoopInit`:
+  87 cache entries, 61 roots, pattern batches `[99, 6, 66]`.
+- Host suites: 311 tests passed, including 17 generic decoder tests.
+- Windows tests: 518 plugin tests and 17 decoder tests passed; 20 plugin tests
+  ignored. The reduced-feature plugin suite passed 509 tests, with 20 ignored.
+- Optional-feature compilation, plugin documentation, rendered binding docs,
+  and Kismet crate documentation with warnings denied passed.
+- These checks do not exercise player-name customization in gameplay or establish
+  EGS compatibility.

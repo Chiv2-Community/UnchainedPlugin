@@ -42,4 +42,4 @@ impl unchained_macros_core::AddressResolver for KismetReflectionResolver {
 #[cfg(any(windows, test))]
 mod exec_thunk;
 #[cfg(windows)]
-pub use exec_thunk::native_body;
+pub use exec_thunk::{native_body, ExecThunkParameters};

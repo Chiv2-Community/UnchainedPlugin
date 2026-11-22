@@ -2,6 +2,7 @@
 
 use std::{num::NonZeroUsize, ptr};
 use widestring::U16CString;
+use unchained_macros_kismet::ExecThunkParameters;
 use crate::Chivalry2::Engine::{UClass, UObject, EFunctionFlags, FFrame};
 use crate::Chivalry2::Engine::Runtime::CoreUObject::UObject::UObjectGlobals::StaticFindObject;
 
@@ -25,7 +26,15 @@ pub(crate) unsafe fn resolve_native(owner: &str, member: &str) -> Result<NonZero
     let thunk = unsafe { ptr::addr_of!((*function).func).cast::<usize>().read() };
     let step = FFrame::__UNCHAINED_BINDING_Step.binding().entry_address().ok_or("FFrame::Step is unbound")?.get();
     let explicit = FFrame::__UNCHAINED_BINDING_StepExplicitProperty.binding().entry_address().ok_or("FFrame::StepExplicitProperty is unbound")?.get();
-    let target = unsafe { unchained_macros_kismet::native_body(thunk, *super::startup::BASE_ADDR, step, explicit) }?;
+    let return_parameters = u8::from(unsafe { (*function).return_value_offset } != u16::MAX);
+    let arguments = unsafe { (*function).num_parms }.checked_sub(return_parameters)
+        .ok_or("Invalid reflected parameter count")?;
+    let parameters = if arguments == 0 {
+        ExecThunkParameters::NoArguments { frame_code_offset: std::mem::offset_of!(FFrame, code) }
+    } else {
+        ExecThunkParameters::Stepped
+    };
+    let target = unsafe { unchained_macros_kismet::native_body(thunk, *super::startup::BASE_ADDR, step, explicit, parameters) }?;
     sinfo!("Reflected {}::{}: thunk {:#x}, native {:#x}", owner, member, thunk, target);
     NonZeroUsize::new(target).ok_or_else(|| "Reflected native address is null".into())
 }

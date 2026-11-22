@@ -9,14 +9,6 @@ use crate::Chivalry2::Engine::UObjectType;
 use bitflags::bitflags;
 
 use std::ffi::c_void;
-
-
-define_pattern_resolver!(
-    APlayerState__GetPlayerName,
-    Call,
-    ["48 8D 55 E7 48 8B CB E8 | ?? ?? ?? ?? 83 78 08 00 74"]
-);
-
 bitflags! {
     #[derive(Debug, Clone, Copy)]
     pub struct PlayerFlags: u8 {
@@ -100,13 +92,15 @@ impl APlayerState {
         (self as *const Self).GetPlayerName(&mut name);
         name.to_string()
     }
+}
 
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Engine.PlayerState")]
+impl APlayerState {
     /// Native APlayerState::GetPlayerName, including custom-name handling.
     ///
     /// # Safety
     /// Self must be live on the engine thread; output must be writable native
     /// FString return storage, whose result the caller owns.
-    #[bind_resolved_func(self::APlayerState__GetPlayerName)]
     pub unsafe fn GetPlayerName<'a>(
         self: *const Self,
         output: &'a mut FString,

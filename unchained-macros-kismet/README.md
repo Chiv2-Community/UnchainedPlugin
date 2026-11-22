@@ -37,14 +37,21 @@ impl UGameplayStatics {
 
 ## Decoder limits
 
-`native_body(thunk, module_base, frame_step, frame_step_explicit)` is Windows x64 only.
+`native_body(thunk, module_base, frame_step, frame_step_explicit, parameters)` is Windows x64 only.
 It uses unwind metadata to bound the thunk and checks executable mappings.
-It discovers the first direct call after the last recognized frame-step call.
+`ExecThunkParameters::Stepped` discovers the first direct call after the last
+recognized frame-step call. For functions with no non-return parameters,
+`NoArguments { frame_code_offset }` requires the supported inline
+`Code += (Code != nullptr)` sequence before selecting the first direct call.
+The host supplies the field offset and selects the mode from reflection metadata;
+hidden native return storage is not a reflected argument.
 This is candidate discovery, not ABI verification: independently inspect each
 declaration's thunk and native target before use.
 
 Indirect calls, external/tail branches, invalid instructions, missing unwind
-entries, and thunks without recognized frame stepping fail closed.
+entries, and unsupported parameter handling fail closed. No-argument thunks
+also reject helpers or branches before Code advancement, frame-register replacement,
+branches before the native call, and contradictory frame-step calls.
 Inlined bodies and shipping-folded leaf stubs are unsupported.
 There is **no fallback to the exec thunk**, whose ABI is different.
 Generalized VM argument marshalling and interface/vtable recovery are not included.
