@@ -29,7 +29,9 @@ hook_inventory_for::<Backend>()
 patch_inventory_for::<Backend>()
 ```
 
-Inventory stores erased indexes internally; these functions return typed references.
+Inventory stores trait-object references internally. Traits extend `Any`, so
+typed discovery safely downcasts the same registration without a second erased
+pointer or wrapper struct.
 Selection and required patch coverage do not combine unrelated backend types.
 Patch IDs remain globally unique.
 

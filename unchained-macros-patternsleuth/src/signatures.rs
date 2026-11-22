@@ -79,7 +79,8 @@ macro_rules! __pattern_resolver {
             };
         }
         $crate::__private::inventory::submit! {
-            $crate::__private::ErasedResolverRegistration::new(<$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR)
+            <$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR
+                as &dyn $crate::__private::ResolverInfo
         }
     };
     (@emit_header $name:ident) => {

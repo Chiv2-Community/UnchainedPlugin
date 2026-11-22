@@ -56,8 +56,8 @@ macro_rules! define_offset_resolver {
             const SELECTIONS: &'static [(E, bool)] = &[];
         }
         $crate::__private::inventory::submit! {
-            $crate::__private::ErasedResolverRegistration::new(
-                <$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR)
+            <$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR
+                as &dyn $crate::__private::ResolverInfo
         }
     };
 }

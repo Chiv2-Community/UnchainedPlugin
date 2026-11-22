@@ -15,13 +15,13 @@ unsafe extern "C" fn target(value: i32) -> i32 {
 unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
 
 inventory::submit! {
-    unchained_macros_core::__private::ErasedHookRegistration::new(&HookRegistration {
+    &HookRegistration {
         name: "FixtureDetour",
         binding: &BINDING,
         hook_fn: |_| unreachable!(),
         condition: || true,
         detour: || HOOK.get(),
-    })
+    } as &dyn unchained_macros_core::__private::HookInfo
 }
 
 #[test]

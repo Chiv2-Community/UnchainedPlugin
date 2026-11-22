@@ -22,7 +22,7 @@ impl<R: AddressResolver> Resolver<R> {
 }
 
 #[doc(hidden)]
-pub trait ResolverInfo: Send + Sync {
+pub trait ResolverInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn backend(&self) -> TypeId;
     fn identity(&self) -> *const ();
@@ -35,18 +35,8 @@ impl<R: AddressResolver> ResolverInfo for Resolver<R> {
     fn supports(&self, snapshot: &SelectorSnapshot) -> bool { self.supports(snapshot) }
 }
 
-#[doc(hidden)]
-pub struct ErasedResolverRegistration {
-    pub info: &'static dyn ResolverInfo,
-    value: &'static (dyn Any + Send + Sync),
-}
-impl ErasedResolverRegistration {
-    pub const fn new<R: AddressResolver>(resolver: &'static Resolver<R>) -> Self {
-        Self { info: resolver, value: resolver }
-    }
-}
-inventory::collect!(ErasedResolverRegistration);
+inventory::collect!(&'static dyn ResolverInfo);
 
 pub fn resolver_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static Resolver<R>> {
-    inventory::iter::<ErasedResolverRegistration>.into_iter().filter_map(|entry| entry.value.downcast_ref())
+    inventory::iter::<&'static dyn ResolverInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())
 }

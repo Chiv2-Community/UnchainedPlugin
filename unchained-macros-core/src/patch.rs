@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{MaybeUninit, align_of, size_of};
 use crate::{ResolverSelection, SelectionKey, SelectorSnapshot};
-use crate::registry::{PatchInfo, ErasedPatchRegistration};
+use crate::registry::PatchInfo;
 
 trait StaticWriteSource: Sync {
     fn source(&self) -> *const u8;
@@ -185,7 +185,7 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
 /// Validate unique patch names and required coverage across each resolver's group.
 /// This does not run factories, conditions, or memory writes.
 pub fn validate_patch_registrations() -> Result<(), String> {
-    validate(&inventory::iter::<ErasedPatchRegistration>.into_iter().map(|entry| entry.info).collect::<Vec<_>>())
+    validate(&inventory::iter::<&'static dyn PatchInfo>.into_iter().copied().collect::<Vec<_>>())
 }
 
 /// Validate and resolve every applicable patch before invoking factories/writers.

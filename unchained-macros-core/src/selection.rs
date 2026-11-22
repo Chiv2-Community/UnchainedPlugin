@@ -183,9 +183,8 @@ impl SelectorSnapshot {
                 return Err("Snapshot is missing a registered selector provider".into());
             }
         }
-        for registration in inventory::iter::<crate::registry::ErasedPatchRegistration> {
-            let patch = registration.info;
-            if self.supports_patch(patch) && !patch.resolver().supports(self) {
+        for patch in inventory::iter::<&'static dyn crate::registry::PatchInfo> {
+            if self.supports_patch(*patch) && !patch.resolver().supports(self) {
                 return Err(format!("Patch {} targets unavailable resolver {}", patch.name(), patch.resolver().name()));
             }
         }

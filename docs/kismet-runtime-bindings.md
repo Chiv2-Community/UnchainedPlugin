@@ -171,3 +171,22 @@ EGS live validation remains unavailable.
   `c6e3b05c8eef5dba8cf44b99d79a19fdbd6b61fd0faab22ef708152ee23e0bd6`.
   All twelve reflected addresses, 42 hooks, 61 scan roots, and 87 cache entries
   matched the previous checks. EGS remains unverified.
+
+### Inventory and macro cleanup
+
+- Inventories now store trait-object references directly. `Any` supertraits
+  preserve safe typed downcasts without four duplicate erased-registration
+  structs or duplicate erased pointers.
+- Macro parsing and signature preparation no longer duplicate inherent impls,
+  detour signatures, argument lists, or unused signature checks.
+- Full default Windows expansion retains 332 inventory nodes; tokens match the
+  previous expansion after normalizing inventory representation and build provenance.
+- Host suites passed 323 tests. Windows passed 173 backend tests, 518 default
+  plugin tests, and 509 reduced-feature plugin tests. Optional-feature compilation,
+  plugin docs, and strict macro-crate docs passed.
+- Isolated Steam client/server checks used DLL SHA-256
+  `97d5702f535ad7f6b7d3fadba58cf31740fb1054ab71188c131c72b310e657b9`.
+  Both roles retained all twelve reflected addresses, 42 hooks, 61 scan roots,
+  and 87 cache entries. The server's cold scan exited with the expected restart
+  code `-67` (`189`); its warm run completed runtime initialization.
+  EGS remains unverified.

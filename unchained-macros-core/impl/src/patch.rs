@@ -94,14 +94,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         #(#cfg)* #provider
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            ::unchained_macros_core::__private::ErasedPatchRegistration::new(&::unchained_macros_core::PatchRegistration {
+            &::unchained_macros_core::PatchRegistration {
                 name: stringify!(#name),
                 resolver: <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
                 factory: #factory,
                 selector: #selector,
                 applies_to: #applicability,
                 validate_group: #coverage,
-            })
+            } as &dyn ::unchained_macros_core::__private::PatchInfo
         }
     })
 }

@@ -98,8 +98,8 @@ static FILTERED: Resolver<KismetReflectionResolver> = Resolver {
 static FILTERED_BINDING: bindings::FunctionBinding<KismetReflectionResolver> =
     bindings::FunctionBinding::new("Filtered::call", &FILTERED);
 inventory::submit! {
-    bindings::__private::ErasedFunctionBindingRegistration::new(
-        &bindings::FunctionBindingRegistration { binding: &FILTERED_BINDING })
+    &bindings::FunctionBindingRegistration { binding: &FILTERED_BINDING }
+        as &dyn bindings::__private::FunctionInfo
 }
 
 struct OtherResolver;
@@ -119,16 +119,16 @@ impl AddressResolver for LateResolver {
 static LATE: Resolver<LateResolver> = Resolver { name: "Late", implementation: LateResolver, filter: None };
 static LATE_BINDING: bindings::FunctionBinding<LateResolver> = bindings::FunctionBinding::new("Late::alias", &LATE);
 inventory::submit! {
-    bindings::__private::ErasedFunctionBindingRegistration::new(
-        &bindings::FunctionBindingRegistration { binding: &LATE_BINDING })
+    &bindings::FunctionBindingRegistration { binding: &LATE_BINDING }
+        as &dyn bindings::__private::FunctionInfo
 }
 static OTHER: Resolver<OtherResolver> = Resolver { name: "Native__add", implementation: OtherResolver, filter: None };
 static OTHER_BINDING: bindings::FunctionBinding<OtherResolver> = bindings::FunctionBinding::new("Other::alias", &OTHER);
 inventory::submit! {
-    bindings::__private::ErasedFunctionBindingRegistration::new(
-        &bindings::FunctionBindingRegistration { binding: &OTHER_BINDING })
+    &bindings::FunctionBindingRegistration { binding: &OTHER_BINDING }
+        as &dyn bindings::__private::FunctionInfo
 }
-inventory::submit! { bindings::__private::ErasedResolverRegistration::new(&OTHER) }
+inventory::submit! { &OTHER as &dyn bindings::__private::ResolverInfo }
 
 struct SuppressedResolver;
 impl AddressResolver for SuppressedResolver {
@@ -142,7 +142,7 @@ static SUPPRESSED: Resolver<SuppressedResolver> = Resolver {
         lookup: |key| bindings::__private::dictionary_lookup(key, &[(Mode::Disabled, false)]),
     }),
 };
-inventory::submit! { bindings::__private::ErasedResolverRegistration::new(&SUPPRESSED) }
+inventory::submit! { &SUPPRESSED as &dyn bindings::__private::ResolverInfo }
 
 #[bindings::register_patch(Native__plain)]
 static EDIT: Patch = Patch::nop(0, 1);

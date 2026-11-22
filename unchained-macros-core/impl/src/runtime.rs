@@ -7,9 +7,9 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
     }
-    let mut declaration: syn::Item = syn::parse2(item.clone())?;
+    let mut declaration: syn::Item = syn::parse2(item)?;
     let (name, attributes) = match &mut declaration {
-        syn::Item::Impl(_) => return expand_impl(args, item),
+        syn::Item::Impl(implementation) => return expand_impl(implementation),
         syn::Item::Struct(item) => (&item.ident, &mut item.attrs),
         syn::Item::Enum(item) => (&item.ident, &mut item.attrs),
         syn::Item::Union(item) => (&item.ident, &mut item.attrs),
@@ -24,11 +24,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     Ok(quote!(#declaration))
 }
 
-pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    if !args.is_empty() {
-        return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
-    }
-    let mut implementation: syn::ItemImpl = syn::parse2(item)?;
+fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
     if implementation.trait_.is_some()
         || !implementation.generics.params.is_empty()
         || implementation.generics.where_clause.is_some()
@@ -108,7 +104,7 @@ mod tests {
                 fn helper() -> u32 { 7 }
             }
         };
-        let expanded = expand_impl(quote!(), quote!(#original)).unwrap();
+        let expanded = expand(quote!(), quote!(#original)).unwrap();
         let file: syn::File = syn::parse2(expanded).unwrap();
         let syn::Item::Impl(implementation) = &file.items[0] else { panic!("expected unchanged impl") };
         assert_eq!(implementation.to_token_stream().to_string(), original.to_token_stream().to_string());
@@ -138,7 +134,7 @@ mod tests {
     #[test_case::test_case(quote!(), quote!(impl Trait for Native {}); "trait impl")]
     #[test_case::test_case(quote!(unexpected), quote!(impl Native {}); "arguments")]
     fn rejects_invalid_binding_impls(args: Tokens, implementation: Tokens) {
-        assert!(expand_impl(args, implementation).is_err());
+        assert!(expand(args, implementation).is_err());
     }
 
     #[test_case::test_case(quote!(#[repr(C)] pub struct Native<T, const N: usize> where T: Copy { value: [T; N] }); "struct")]
@@ -172,7 +168,7 @@ mod tests {
 
     #[test]
     fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions() {
-        let expanded = expand_impl(
+        let expanded = expand(
             quote!(),
             quote! {
                 impl Native {
@@ -192,7 +188,7 @@ mod tests {
 
     #[test]
     fn all_signature_metadata_shares_the_original_impl() {
-        let expanded = expand_impl(quote!(), quote! {
+        let expanded = expand(quote!(), quote! {
             impl Native {
                 #[bind_resolved_func(First)]
                 unsafe fn first(value: i32) {}

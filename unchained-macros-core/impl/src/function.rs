@@ -36,8 +36,8 @@ fn binding_storage(
             );
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            ::unchained_macros_core::__private::ErasedFunctionBindingRegistration::new(
-                &::unchained_macros_core::FunctionBindingRegistration { binding: &#name })
+            &::unchained_macros_core::FunctionBindingRegistration { binding: &#name }
+                as &dyn ::unchained_macros_core::__private::FunctionInfo
         }
     }
 }
@@ -101,7 +101,7 @@ pub(crate) fn expand_method(
     validate_binding(function)?;
     let resolver = resolver_path(args)?;
     let documentation = binding_documentation(function, self_ty, &resolver);
-    let signature = concrete_signature(function, Some(self_ty))?;
+    let signature = concrete_signature(function, self_ty);
     let native = native_type(&signature)?;
     let normalized = native_type(&normalized_mutability(&signature))?;
     let parameters = (0..signature.inputs.len())

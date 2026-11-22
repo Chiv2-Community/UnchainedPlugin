@@ -64,8 +64,8 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             }
             #(#implementation_cfg)* #(#cfg)*
             ::unchained_macros_core::__private::inventory::submit! {
-                ::unchained_macros_core::__private::ErasedResolverRegistration::new(
-                    <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR)
+                <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR
+                    as &dyn ::unchained_macros_core::__private::ResolverInfo
             }
         });
         method.attrs.push(syn::parse_quote!(#[bind_resolved_func(#resolver)]));

@@ -87,24 +87,24 @@ fn different_enum_types_do_not_match_equal_discriminants() {
 }
 
 inventory::submit! {
-    unchained_macros_core::__private::ErasedResolverRegistration::new(&unchained_macros_core::Resolver {
+    &unchained_macros_core::Resolver {
         name: "Conflicting",
         implementation: unchained_macros_patternsleuth::PatternsleuthResolver::named(patternsleuth::resolvers::NamedResolver { name: "Conflicting", getter: ReadOnly::dyn_resolver }),
         filter: Some(unchained_macros_core::ResolverFilter {
         selector: std::any::TypeId::of::<Mode>,
         lookup: |key| unchained_macros_core::__private::dictionary_lookup(key, &[(Mode::Read, true), (Mode::Write, false), (Mode::Shared, false)]),
         }),
-    })
+    } as &dyn unchained_macros_core::__private::ResolverInfo
 }
 inventory::submit! {
-    unchained_macros_core::__private::ErasedResolverRegistration::new(&unchained_macros_core::Resolver {
+    &unchained_macros_core::Resolver {
         name: "Conflicting",
         implementation: unchained_macros_patternsleuth::PatternsleuthResolver::named(patternsleuth::resolvers::NamedResolver { name: "Conflicting", getter: ReadOnly::dyn_resolver }),
         filter: Some(unchained_macros_core::ResolverFilter {
         selector: std::any::TypeId::of::<Mode>,
         lookup: |key| unchained_macros_core::__private::dictionary_lookup(key, &[(Mode::Read, false), (Mode::Write, true), (Mode::Shared, false)]),
         }),
-    })
+    } as &dyn unchained_macros_core::__private::ResolverInfo
 }
 
 #[test_case::test_case(Mode::Read; "read")]

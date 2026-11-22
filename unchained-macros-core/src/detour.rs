@@ -1,15 +1,15 @@
-use crate::registry::ErasedHookRegistration;
+use crate::registry::HookInfo;
 
 pub fn detour_is_initialized(name: &str) -> bool {
-    inventory::iter::<ErasedHookRegistration>
+    inventory::iter::<&'static dyn HookInfo>
         .into_iter()
-        .any(|binding| binding.info.name() == name && binding.info.detour().is_some())
+        .any(|binding| binding.name() == name && binding.detour().is_some())
 }
 
 pub fn detour_is_enabled(name: &str) -> bool {
-    inventory::iter::<ErasedHookRegistration>
+    inventory::iter::<&'static dyn HookInfo>
         .into_iter()
-        .any(|binding| binding.info.name() == name && binding.info.detour().is_some_and(retour::RawDetour::is_enabled))
+        .any(|binding| binding.name() == name && binding.detour().is_some_and(retour::RawDetour::is_enabled))
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;

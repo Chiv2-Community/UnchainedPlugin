@@ -5,7 +5,7 @@ use syn::parse::{Parse, ParseStream};
 use crate::{
     common::cfg_attributes,
     docs::attach_native_documentation,
-    signature::{validate_native_signature, concrete_signature, native_type,
+    signature::{validate_native_signature, native_type,
         normalized_mutability, parameter_type},
 };
 
@@ -75,42 +75,26 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     );
     let key = format!("detour-{}", function.sig.ident);
     attach_native_documentation(&mut function.attrs, &key, &documentation);
-    let mut signature = concrete_signature(&function, None)?;
-    let normalized = native_type(&normalized_mutability(&signature))?;
     let mut has_override = false;
-    let mut parameter_checks = Vec::new();
-    let parameter_types = (0..signature.inputs.len())
-        .map(|index| parameter_type(&signature, index))
-        .collect::<syn::Result<Vec<_>>>()?;
-    let mut arguments = Vec::new();
-    for (index, (local, native)) in function.sig.inputs.iter_mut().zip(&mut signature.inputs).enumerate() {
-        let (FnArg::Typed(local), FnArg::Typed(native)) = (local, native) else {
-            unreachable!()
-        };
-        let Pat::Ident(parameter) = &*local.pat else { unreachable!() };
-        let name = &parameter.ident;
+    let mut checked_parameters = Vec::new();
+    for (index, input) in function.sig.inputs.iter_mut().enumerate() {
+        let FnArg::Typed(local) = input else { unreachable!() };
         let annotations: Vec<_> = local.attrs.iter().filter(|attr| attr.path().is_ident("mutability_override")).collect();
         if annotations.is_empty() {
-            arguments.push(quote!(#name));
-            let parameter = &parameter_types[index];
-            let index = syn::Index::from(index);
-            parameter_checks.push(quote! {
-                let _: ::unchained_macros_core::NativeSignature<#parameter> = #parameter_target.#index;
-            });
+            checked_parameters.push(index);
             continue;
         }
         if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
             return Err(syn::Error::new_spanned(annotations[0], "use one bare #[mutability_override] annotation"));
         }
-        if !matches!(&*native.ty, Type::Ptr(_) | Type::Reference(_)) {
-            return Err(syn::Error::new_spanned(&native.ty, "#[mutability_override] requires a raw pointer or reference detour parameter"));
+        if !matches!(&*local.ty, Type::Ptr(_) | Type::Reference(_)) {
+            return Err(syn::Error::new_spanned(&local.ty, "#[mutability_override] requires a raw pointer or reference detour parameter"));
         };
         has_override = true;
         local.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
-        native.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
-        arguments.push(quote!(#name));
     }
-    let native = native_type(&signature)?;
+    let signature = &function.sig;
+    let native = native_type(signature)?;
     let ident = &function.sig.ident;
     let hook = format_ident!("__UNCHAINED_HOOK_{}", ident, span = Span::mixed_site());
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
@@ -133,6 +117,14 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let output = &signature.output;
     let generics = &signature.generics;
     let signature_check = if has_override {
+        let normalized = native_type(&normalized_mutability(signature))?;
+        let parameter_checks = checked_parameters.into_iter().map(|index| {
+            let parameter = parameter_type(signature, index)?;
+            let index = syn::Index::from(index);
+            Ok(quote! {
+                let _: ::unchained_macros_core::NativeSignature<#parameter> = #parameter_target.#index;
+            })
+        }).collect::<syn::Result<Vec<_>>>()?;
         quote! {
             // Only outer pointer/reference mutability is erased. The complete
             // invariant signature still checks every lifetime relationship.
@@ -160,7 +152,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
-            unsafe { #ident(#(#arguments),*) }
+            unsafe { #ident(#(#names),*) }
         }
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -176,11 +168,11 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            ::unchained_macros_core::__private::ErasedHookRegistration::new(&::unchained_macros_core::HookRegistration {
+            &::unchained_macros_core::HookRegistration {
                 name: stringify!(#ident), binding: #target.binding(),
                 hook_fn: #attach, condition: #condition_fn,
                 detour: || #hook.get(),
-            })
+            } as &dyn ::unchained_macros_core::__private::HookInfo
         }
     })
 }

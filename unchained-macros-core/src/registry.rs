@@ -23,7 +23,7 @@ pub struct PatchRegistration<R: AddressResolver> {
 }
 
 #[doc(hidden)]
-pub trait PatchInfo: Send + Sync {
+pub trait PatchInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn resolver(&self) -> &dyn ResolverInfo;
     fn selector(&self) -> Option<fn() -> TypeId>;
@@ -42,7 +42,7 @@ impl<R: AddressResolver> PatchRegistration<R> {
 }
 
 #[doc(hidden)]
-pub trait HookInfo: Send + Sync {
+pub trait HookInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn detour(&self) -> Option<&'static retour::RawDetour>;
 }
@@ -51,28 +51,12 @@ impl<R: AddressResolver> HookInfo for HookRegistration<R> {
     fn detour(&self) -> Option<&'static retour::RawDetour> { (self.detour)() }
 }
 
-#[doc(hidden)]
-pub struct ErasedHookRegistration {
-    pub info: &'static dyn HookInfo,
-    value: &'static (dyn Any + Send + Sync),
-}
-impl ErasedHookRegistration {
-    pub const fn new<R: AddressResolver>(hook: &'static HookRegistration<R>) -> Self { Self { info: hook, value: hook } }
-}
-#[doc(hidden)]
-pub struct ErasedPatchRegistration {
-    pub info: &'static dyn PatchInfo,
-    value: &'static (dyn Any + Send + Sync),
-}
-impl ErasedPatchRegistration {
-    pub const fn new<R: AddressResolver>(patch: &'static PatchRegistration<R>) -> Self { Self { info: patch, value: patch } }
-}
-inventory::collect!(ErasedHookRegistration);
-inventory::collect!(ErasedPatchRegistration);
+inventory::collect!(&'static dyn HookInfo);
+inventory::collect!(&'static dyn PatchInfo);
 
 pub fn hook_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static HookRegistration<R>> {
-    inventory::iter::<ErasedHookRegistration>.into_iter().filter_map(|entry| entry.value.downcast_ref())
+    inventory::iter::<&'static dyn HookInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())
 }
 pub fn patch_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static PatchRegistration<R>> {
-    inventory::iter::<ErasedPatchRegistration>.into_iter().filter_map(|entry| entry.value.downcast_ref())
+    inventory::iter::<&'static dyn PatchInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())
 }

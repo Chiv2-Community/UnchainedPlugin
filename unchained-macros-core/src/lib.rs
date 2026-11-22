@@ -28,10 +28,10 @@ pub mod __private {
     pub use retour;
     pub use log;
     pub use paste;
-    pub use crate::binding::ErasedFunctionBindingRegistration;
+    pub use crate::binding::FunctionInfo;
     pub use crate::detour::{attach_function_detour, claim_detour_address};
-    pub use crate::registry::{ErasedHookRegistration, ErasedPatchRegistration, PatchInfo};
-    pub use crate::resolver::ErasedResolverRegistration;
+    pub use crate::registry::{HookInfo, PatchInfo};
+    pub use crate::resolver::ResolverInfo;
     pub use crate::selection::{SelectorProvider, selector_type, selection_key,
         selection_matches, dictionary_allows, dictionary_lookup, resolver_selections};
     pub use crate::patch::validate_patch_coverage;

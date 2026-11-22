@@ -124,16 +124,11 @@ impl VisitMut for ElidedOutput {
     }
 }
 
-pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> syn::Result<syn::Signature> {
+pub(super) fn concrete_signature(function: &ItemFn, self_ty: &Type) -> syn::Signature {
     let mut native_signature = function.sig.clone();
     let ident = &function.sig.ident;
     // Preserve receiver-based output lifetime elision before making it explicit.
     if let Some(FnArg::Receiver(receiver)) = native_signature.inputs.first_mut() {
-        let self_ty = self_ty.ok_or_else(|| {
-            syn::Error::new_spanned(
-                &*receiver, "detour methods require #[unchained_macros_core::runtime_bindings] on the impl",
-            )
-        })?;
         if let Type::Reference(reference) = receiver.ty.as_mut() {
             let lifetime = reference.lifetime.clone().filter(|l| l.ident != "_")
                 .unwrap_or_else(|| {
@@ -148,7 +143,7 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> s
             reference.lifetime = Some(lifetime.clone());
             ElidedOutput(lifetime).visit_return_type_mut(&mut native_signature.output);
         }
-        let ty = ConcreteSelf(self_ty).fold_type(*receiver.ty.clone());
+        let ty = &receiver.ty;
         let mut receiver_name = "__unchained_this".to_string();
         while function.sig.inputs.iter().any(|input| matches!(input,
             FnArg::Typed(arg) if matches!(arg.pat.as_ref(), Pat::Ident(p) if p.ident == receiver_name)))
@@ -158,10 +153,7 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> s
         let receiver_name = format_ident!("{}", receiver_name);
         native_signature.inputs[0] = syn::parse_quote!(#receiver_name: #ty);
     }
-    if let Some(self_ty) = self_ty {
-        native_signature = ConcreteSelf(self_ty).fold_signature(native_signature);
-    }
-    Ok(native_signature)
+    ConcreteSelf(self_ty).fold_signature(native_signature)
 }
 
 pub(crate) fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
@@ -257,7 +249,7 @@ mod tests {
         let signature = concrete_signature(&syn::parse_quote! {
             unsafe fn call(&self, callback: fn(&u8) -> &u8)
                 -> (&Self, fn(&u8) -> &u8) {}
-        }, Some(&syn::parse_quote!(Native))).unwrap();
+        }, &syn::parse_quote!(Native));
         let expected: syn::Signature = syn::parse_quote! {
             unsafe fn call<'__unchained_receiver>(
                 __unchained_this: &'__unchained_receiver Native,

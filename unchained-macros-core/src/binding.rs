@@ -171,29 +171,19 @@ pub struct BindingRegistration<T: 'static> {
 pub type FunctionBindingRegistration<R> = BindingRegistration<FunctionBinding<R>>;
 
 #[doc(hidden)]
-pub trait FunctionInfo: Send + Sync {
+pub trait FunctionInfo: std::any::Any + Send + Sync {
     fn entry_address(&self) -> Option<NonZeroUsize>;
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
 }
-impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
-    fn entry_address(&self) -> Option<NonZeroUsize> { self.entry_address() }
+impl<R: crate::AddressResolver> FunctionInfo for FunctionBindingRegistration<R> {
+    fn entry_address(&self) -> Option<NonZeroUsize> { self.binding.entry_address() }
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
-        unsafe { self.publish_detour(detour) }
+        unsafe { self.binding.publish_detour(detour) }
     }
 }
-#[doc(hidden)]
-pub struct ErasedFunctionBindingRegistration {
-    pub info: &'static dyn FunctionInfo,
-    value: &'static (dyn std::any::Any + Send + Sync),
-}
-impl ErasedFunctionBindingRegistration {
-    pub const fn new<R: crate::AddressResolver>(registration: &'static FunctionBindingRegistration<R>) -> Self {
-        Self { info: registration.binding, value: registration }
-    }
-}
-inventory::collect!(ErasedFunctionBindingRegistration);
+inventory::collect!(&'static dyn FunctionInfo);
 pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item = &'static FunctionBindingRegistration<R>> {
-    inventory::iter::<ErasedFunctionBindingRegistration>.into_iter().filter_map(|entry| entry.value.downcast_ref())
+    inventory::iter::<&'static dyn FunctionInfo>.into_iter().filter_map(|entry| (*entry as &dyn std::any::Any).downcast_ref())
 }
 
 /// Resolve and publish selected function bindings for one backend.
@@ -247,8 +237,7 @@ pub unsafe fn publish_function_detours(entry: usize, detour: &'static retour::Ra
         return Err(format!("A different trampoline is already published for {entry:#x}"));
     }
     attached.insert(entry, detour);
-    for registration in inventory::iter::<ErasedFunctionBindingRegistration> {
-        let binding = registration.info;
+    for binding in inventory::iter::<&'static dyn FunctionInfo> {
         if binding.entry_address().is_some_and(|address| address.get() == entry) {
             unsafe { binding.publish_detour(detour)?; }
         }
