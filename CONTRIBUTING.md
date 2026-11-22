@@ -211,7 +211,7 @@ Other binding sources:
   with `define_custom_resolver!(Name, delegate upstream::Resolver)` first.
 - **Provider offsets:** declare `define_offset_resolver!(GetPost_GetMotd)`, then
   use `bind_resolved_func(GetPost_GetMotd)` inside `runtime_bindings`.
-  Populate that exact key in `OffsetRegisty` with
+  Populate that exact key in `OffsetProvider` with
   an RVA, not an absolute address. See the
   [OpenAPI bindings](src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
 - **Native globals:** mirror every C++ static/global used here as a Rust static,

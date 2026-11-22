@@ -1,6 +1,13 @@
-use super::*;
-use quote::{format_ident, ToTokens};
+use proc_macro2::{Span, TokenStream as Tokens};
+use quote::{format_ident, quote, ToTokens};
+use syn::{FnArg, ItemFn, Pat, Path, Type};
 use syn::parse::{Parse, ParseStream};
+use crate::{
+    common::cfg_attributes,
+    docs::attach_native_documentation,
+    signature::{validate_native_signature, concrete_signature, native_type,
+        normalized_mutability, parameter_type},
+};
 
 struct Arguments {
     target: Path,
@@ -21,159 +28,6 @@ impl Parse for Arguments {
         }
         Ok(Self { target, condition })
     }
-}
-
-fn binding_documentation(
-    function: &ItemFn,
-    self_ty: &Type,
-    resolver: &Path,
-) -> syn::LitStr {
-    let name = &function.sig.ident;
-    let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
-    let key = &resolver.segments.last().unwrap().ident;
-    let path = resolver.to_token_stream().to_string().replace(' ', "");
-    let resolution = format!("[`{key}`]({path})");
-    let documentation = format!(
-        "Native binding to [`{native_name}`](Self::{name}).\n\
-         Resolved by {resolution}."
-    );
-    syn::LitStr::new(&documentation, name.span())
-}
-
-fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
-    if signature.generics.lifetimes().any(|p| !p.bounds.is_empty()) {
-        return Err(syn::Error::new_spanned(
-            &signature.generics,
-            "native binding lifetimes cannot have bounds",
-        ));
-    }
-    let lifetimes: Vec<_> = signature
-        .generics
-        .lifetimes()
-        .map(|p| &p.lifetime)
-        .collect();
-    let binder = (!lifetimes.is_empty()).then(|| quote!(for<#(#lifetimes),*>));
-    let types = signature.inputs.iter().map(|input| match input {
-        FnArg::Typed(arg) => &arg.ty,
-        _ => unreachable!(),
-    });
-    let output = &signature.output;
-    Ok(quote!(#binder unsafe extern "C" fn(#(#types),*) #output))
-}
-
-fn normalized_mutability(signature: &syn::Signature) -> syn::Signature {
-    let mut signature = signature.clone();
-    for input in &mut signature.inputs {
-        let FnArg::Typed(argument) = input else { unreachable!() };
-        match &mut *argument.ty {
-            Type::Ptr(pointer) => {
-                pointer.mutability = None;
-                pointer.const_token = Some(Default::default());
-            }
-            Type::Reference(reference) => reference.mutability = None,
-            _ => {}
-        }
-    }
-    signature
-}
-
-fn parameter_type(signature: &syn::Signature, index: usize) -> syn::Result<Tokens> {
-    let mut parameter = signature.clone();
-    parameter.inputs = std::iter::once(signature.inputs[index].clone()).collect();
-    parameter.output = syn::ReturnType::Default;
-    native_type(&parameter)
-}
-
-pub(super) fn expand_binding(
-    args: Tokens,
-    function: &ItemFn,
-    self_ty: &Type,
-) -> syn::Result<(ItemFn, syn::ImplItemConst, Tokens)> {
-    super::validate_binding(function)?;
-    let resolver = resolver_path(args)?;
-    let documentation = binding_documentation(function, self_ty, &resolver);
-    let resolver_name = resolver.segments.last().unwrap().ident.to_string();
-    let signature = super::bindings::concrete_signature(function, Some(self_ty))?;
-    let native = native_type(&signature)?;
-    let normalized = native_type(&normalized_mutability(&signature))?;
-    let parameters = (0..signature.inputs.len())
-        .map(|index| parameter_type(&signature, index))
-        .collect::<syn::Result<Vec<_>>>()?;
-    let name = &function.sig.ident;
-    let descriptor = format_ident!("__UNCHAINED_BINDING_{}", name, span = Span::mixed_site());
-    let normalized_descriptor = format_ident!("__UNCHAINED_MUTABILITY_{}", name, span = Span::mixed_site());
-    let parameter_descriptor = format_ident!("__UNCHAINED_PARAMETERS_{}", name, span = Span::mixed_site());
-    let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name, span = Span::mixed_site());
-    let vis = &function.vis;
-    let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
-    let arguments = function.sig.inputs.iter().map(|input| match input {
-        FnArg::Receiver(_) => quote!(self),
-        FnArg::Typed(arg) => {
-            let Pat::Ident(pat) = &*arg.pat else {
-                unreachable!()
-            };
-            let ident = &pat.ident;
-            quote!(#ident)
-        }
-    });
-    let call_types = function.sig.inputs.iter().map(|input| match input {
-        FnArg::Receiver(receiver) => &receiver.ty,
-        FnArg::Typed(argument) => &argument.ty,
-    });
-    let call_output = &function.sig.output;
-    let resolver_check = quote! {
-            let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-    };
-    let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
-    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
-    let initializer = quote!(::unchained_macros_core::FunctionBinding::new(
-        #target_name, <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
-    ));
-    let mut expanded = function.clone();
-    let native_call = format_ident!("__unchained_native_call", span = Span::mixed_site());
-    super::consume_native_parameter_metadata(&mut expanded.sig)?;
-    attach_native_documentation(&mut expanded.attrs, &format!("binding-{resolver_name}"), &documentation);
-    expanded.block = Box::new(syn::parse2(quote!({
-        #resolver_check
-        let #native_call: unsafe extern "C" fn(#(#call_types),*) #call_output = unsafe {
-            ::core::mem::transmute(#storage.address()
-                .expect(concat!("Native binding ", #resolver_name, " is not initialized")).get())
-        };
-        unsafe { #native_call(#(#arguments),*) }
-    }))?);
-    if !expanded.attrs.iter().any(|a| a.path().is_ident("inline")) {
-        expanded.attrs.push(syn::parse_quote!(#[inline(always)]));
-    }
-    let descriptor = syn::parse2(quote! {
-        #(#cfg)*
-        #[doc(hidden)]
-        #[allow(non_upper_case_globals)]
-        #vis const #descriptor: ::unchained_macros_core::NativeFunction<#native, #backend> =
-            unsafe { ::unchained_macros_core::NativeFunction::new(&#storage) };
-    })?;
-    let helper = quote! {
-        #(#cfg)*
-        impl #self_ty {
-            #[doc(hidden)]
-            #[allow(non_upper_case_globals)]
-            #vis const #normalized_descriptor: ::unchained_macros_core::NativeSignature<#normalized> =
-                ::core::marker::PhantomData;
-            #[doc(hidden)]
-            #[allow(non_upper_case_globals)]
-            #vis const #parameter_descriptor: (#(::unchained_macros_core::NativeSignature<#parameters>,)*) =
-                (#(::core::marker::PhantomData::<fn(#parameters) -> #parameters>,)*);
-        }
-        #(#cfg)*
-        #[allow(non_upper_case_globals)]
-        static #storage: ::unchained_macros_core::FunctionBinding<#backend> =
-            #initializer;
-        #(#cfg)*
-        ::inventory::submit! {
-            ::unchained_macros_core::__private::ErasedFunctionBindingRegistration::new(
-                &::unchained_macros_core::FunctionBindingRegistration { binding: &#storage })
-        }
-    };
-    Ok((expanded, descriptor, helper))
 }
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
@@ -198,7 +52,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
     let method = target.segments.last_mut().unwrap();
     method.ident = format_ident!("__UNCHAINED_BINDING_{}", method.ident, span = Span::mixed_site());
-    super::validate_native_signature(&function.sig)?;
+    validate_native_signature(&function.sig)?;
     if function
         .sig
         .inputs
@@ -221,7 +75,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     );
     let key = format!("detour-{}", function.sig.ident);
     attach_native_documentation(&mut function.attrs, &key, &documentation);
-    let mut signature = super::bindings::concrete_signature(&function, None)?;
+    let mut signature = concrete_signature(&function, None)?;
     let normalized = native_type(&normalized_mutability(&signature))?;
     let mut has_override = false;
     let mut parameter_checks = Vec::new();
@@ -347,6 +201,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::docs::documentation;
 
     #[test]
     fn mutability_override_checks_only_the_annotated_raw_pointer() {
@@ -371,26 +226,6 @@ mod tests {
         assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
         assert!(text.contains("__UNCHAINED_PARAMETERS_Call . 1"));
         assert!(!text.contains("__UNCHAINED_PARAMETERS_Call . 0"));
-    }
-
-    #[test]
-    fn normalization_preserves_nested_mutability_lifetimes_and_returns() {
-        let signature = syn::parse_quote! {
-            unsafe fn replacement<'a>(
-                raw: *mut &'a mut u32,
-                shared: &'a &'a mut u32,
-                exclusive: &'a mut *mut u32,
-            ) -> &'a mut u32
-        };
-        let normalized = normalized_mutability(&signature);
-        let expected: syn::Signature = syn::parse_quote! {
-            unsafe fn replacement<'a>(
-                raw: *const &'a mut u32,
-                shared: &'a &'a mut u32,
-                exclusive: &'a *mut u32,
-            ) -> &'a mut u32
-        };
-        assert_eq!(normalized.to_token_stream().to_string(), expected.to_token_stream().to_string());
     }
 
     #[test_case::test_case(quote!(*const u32); "const pointer")]
@@ -437,51 +272,6 @@ mod tests {
         assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
     }
 
-    fn documentation(attributes: &[syn::Attribute]) -> String {
-        attributes.iter().filter_map(|attribute| {
-            if !attribute.path().is_ident("doc") { return None; }
-            let syn::Meta::NameValue(value) = &attribute.meta else { return None };
-            let syn::Expr::Lit(value) = &value.value else { return None };
-            let syn::Lit::Str(value) = &value.lit else { return None };
-            Some(value.value())
-        }).collect::<Vec<_>>().join("\n")
-    }
-
-    #[test]
-    fn binding_hover_identifies_native_method_and_resolver_without_assuming_a_detour() {
-        let function = syn::parse_quote! {
-            /// Existing native safety note.
-            pub(crate) unsafe fn Call<'a>(
-                self: *const Self,
-                Result: &'a mut FString,
-            ) -> &'a mut FString {}
-        };
-        let (binding, descriptor, _) = expand_binding(
-            quote!(self::Native__Call), &function, &syn::parse_quote!(Native),
-        ).unwrap();
-        let docs = documentation(&binding.attrs);
-        assert!(documentation(&descriptor.attrs).is_empty());
-        assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
-        assert!(docs.contains("](Self::Call).\nResolved by "));
-        assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));
-        assert!(!docs.contains("detours"));
-        assert!(docs.contains("Existing native safety note."));
-        assert!(!docs.contains("impl Native"));
-        assert!(!docs.contains("Overrides in-game calls"));
-    }
-
-    #[test]
-    fn binding_hover_links_an_arbitrary_resolver_declaration() {
-        let function = syn::parse_quote! {
-            pub unsafe fn Call(value: i32) -> i32 {}
-        };
-        let (binding, _, _) = expand_binding(
-            quote!(OtherBackend__Call), &function, &syn::parse_quote!(Client),
-        ).unwrap();
-        let docs = documentation(&binding.attrs);
-        assert!(docs.contains("Resolved by [`OtherBackend__Call`](OtherBackend__Call)."));
-    }
-
     #[test]
     fn detour_hover_keeps_existing_docs_and_links_to_the_native_binding() {
         let expanded = expand(
@@ -521,25 +311,5 @@ mod tests {
     #[test_case::test_case(quote!(unsafe fn replacement<'a: 'static>(value: &'a i32) {}); "lifetime bound")]
     fn rejects_invalid_replacement_declarations(declaration: Tokens) {
         assert!(expand(quote!(Type::call), declaration).is_err());
-    }
-
-    #[test]
-    fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions() {
-        let expanded = super::super::bindings::expand_impl(
-            quote!(),
-            quote! {
-                impl Native {
-                    #[cfg(feature = "example")]
-                    #[bind_resolved_func(Resolver)]
-                    pub(crate) unsafe fn call(&self) -> &Self {}
-                }
-            },
-        )
-        .unwrap();
-        let text = expanded.to_string();
-        assert!(text.contains("pub (crate) const __UNCHAINED_BINDING_call"));
-        assert!(text.contains("for < '__unchained_receiver >"));
-        assert!(text.matches("cfg (feature = \"example\")").count() >= 3);
-        syn::parse2::<syn::File>(expanded).unwrap();
     }
 }

@@ -62,7 +62,7 @@ pub fn scan(snapshot: &SelectorSnapshot, resolvers_to_scan: Vec<&'static NamedRe
         }
     }
 
-    for p in inventory::iter::<unchained_macros_patternsleuth::OffsetRegisty> {
+    for p in inventory::iter::<unchained_macros_patternsleuth::OffsetProvider> {
         let map: HashMap<String, u64> = (p.map)();
         sinfo!("Offset Registry '{}': {} entries", p.name, map.len());
         for (k, v) in map.iter() {

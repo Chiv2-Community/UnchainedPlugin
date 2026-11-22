@@ -60,17 +60,17 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     });
     let equality_arms = data.variants.iter().map(|variant| {
         let name = &variant.ident;
-        let cfg = super::cfg_attributes(&variant.attrs);
+        let cfg = crate::common::cfg_attributes(&variant.attrs);
         quote!(#(#cfg)* Self::#name => matches!(other, Self::#name),)
     }).collect::<Vec<_>>();
     let name_arms = data.variants.iter().map(|variant| {
         let name = &variant.ident;
-        let cfg = super::cfg_attributes(&variant.attrs);
+        let cfg = crate::common::cfg_attributes(&variant.attrs);
         quote!(#(#cfg)* Self::#name => stringify!(#name),)
     }).collect::<Vec<_>>();
     let duplicate_checks = data.variants.iter().map(|variant| {
         let name = &variant.ident;
-        let cfg = super::cfg_attributes(&variant.attrs);
+        let cfg = crate::common::cfg_attributes(&variant.attrs);
         quote! {
             #(#cfg)*
             {

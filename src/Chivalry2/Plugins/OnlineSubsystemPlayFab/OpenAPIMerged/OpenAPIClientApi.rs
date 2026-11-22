@@ -137,7 +137,7 @@ pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 inventory::submit! {
-    unchained_macros_patternsleuth::OffsetRegisty {
+    unchained_macros_patternsleuth::OffsetProvider {
         name: "CreateHttpRequest Get*Post hooks",
         map: || STRING_TO_ROOT_FN.read().unwrap().clone(),
     }

@@ -105,7 +105,7 @@ Choose the binding mechanism that matches the address source.
 - **Provider offsets:** declare `define_offset_resolver!(Key)`, then use
   `bind_resolved_func(Key)` under `runtime_bindings`.
   Verify the producer supplies that exact key as an RVA in
-  `OffsetRegisty`; do not put an absolute address into the registry.
+  `OffsetProvider`; do not put an absolute address into the registry.
 - **Globals:** mirror every C++ static/global used here as a Rust static under its
   declaring header, preserving native spelling. Use
   `#[bind_resolved_value(Resolver, Value)] pub static GMalloc: *mut FMalloc;`

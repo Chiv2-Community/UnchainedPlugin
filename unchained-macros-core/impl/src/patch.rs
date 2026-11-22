@@ -59,7 +59,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     {
         return Err(syn::Error::new_spanned(&declaration, "register each patch item only once"));
     }
-    let cfg: Vec<_> = super::cfg_attributes(attributes).collect();
+    let cfg: Vec<_> = crate::common::cfg_attributes(attributes).collect();
     let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
             quote!(const _: () = assert!(

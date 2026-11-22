@@ -28,9 +28,9 @@ impl AddressResolver for PatternsleuthResolver {
 }
 
 pub struct RequiredResolver { pub name: &'static str }
-pub struct OffsetRegisty { pub name: &'static str, pub map: fn() -> HashMap<String, u64> }
+pub struct OffsetProvider { pub name: &'static str, pub map: fn() -> HashMap<String, u64> }
 inventory::collect!(RequiredResolver);
-inventory::collect!(OffsetRegisty);
+inventory::collect!(OffsetProvider);
 
 /// Declare a typed resolver for an RVA supplied by an offset-map provider.
 #[macro_export]

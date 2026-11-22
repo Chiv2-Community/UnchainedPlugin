@@ -1,8 +1,28 @@
-use super::*;
-use quote::{format_ident, ToTokens};
-use syn::fold::Fold;
-use syn::visit_mut::VisitMut;
-use syn::Token;
+use proc_macro2::TokenStream as Tokens;
+use quote::{quote, ToTokens};
+use syn::{ItemFn, Type};
+use crate::{common::{cfg_attributes, is_binding_attribute}, docs::attach_native_documentation, function};
+
+pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    if !args.is_empty() {
+        return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
+    }
+    let mut declaration: syn::Item = syn::parse2(item.clone())?;
+    let (name, attributes) = match &mut declaration {
+        syn::Item::Impl(_) => return expand_impl(args, item),
+        syn::Item::Struct(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Enum(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Union(item) => (&item.ident, &mut item.attrs),
+        syn::Item::Type(item) => (&item.ident, &mut item.attrs),
+        _ => return Err(syn::Error::new_spanned(declaration, "runtime_bindings requires a native type or concrete inherent impl")),
+    };
+    let documentation = syn::LitStr::new(
+        &format!("Native type `{name}`. See the module's native source header."),
+        name.span(),
+    );
+    attach_native_documentation(attributes, &format!("type-{name}"), &documentation);
+    Ok(quote!(#declaration))
+}
 
 pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     if !args.is_empty() {
@@ -56,7 +76,7 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             sig: method.sig.clone(),
             block: Box::new(method.block.clone()),
         };
-        let (expanded, descriptor, helper) = super::function_detour::expand_binding(
+        let (expanded, descriptor, helper) = function::expand_method(
             args, &function, self_ty,
         )?;
         let normalized_name = format!("__UNCHAINED_MUTABILITY_{}", method.sig.ident);
@@ -86,109 +106,10 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     })
 }
 
-struct ConcreteSelf<'a>(&'a Type);
-
-impl Fold for ConcreteSelf<'_> {
-    fn fold_expr_path(&mut self, path: syn::ExprPath) -> syn::ExprPath {
-        if path.qself.is_none()
-            && path.path.segments.len() > 1
-            && path.path.segments.first().is_some_and(|s| s.ident == "Self")
-        {
-            let tail: syn::punctuated::Punctuated<_, Token![::]> =
-                path.path.segments.iter().skip(1).cloned().collect();
-            let concrete = self.0;
-            return syn::parse_quote!(<#concrete>::#tail);
-        }
-        syn::fold::fold_expr_path(self, path)
-    }
-
-    fn fold_type(&mut self, ty: Type) -> Type {
-        if matches!(&ty, Type::Path(path) if path.qself.is_none() && path.path.is_ident("Self")) {
-            return self.0.clone();
-        }
-        if let Type::Path(path) = &ty {
-            if path.qself.is_none()
-                && path.path.segments.first().is_some_and(|s| s.ident == "Self")
-            {
-                let tail: syn::punctuated::Punctuated<_, Token![::]> =
-                    path.path.segments.iter().skip(1).cloned().collect();
-                let concrete = self.0;
-                return syn::parse_quote!(<#concrete>::#tail);
-            }
-        }
-        syn::fold::fold_type(self, ty)
-    }
-}
-
-struct ElidedOutput(syn::Lifetime);
-
-impl VisitMut for ElidedOutput {
-    fn visit_type_bare_fn_mut(&mut self, _: &mut syn::TypeBareFn) {}
-
-    fn visit_parenthesized_generic_arguments_mut(
-        &mut self, _: &mut syn::ParenthesizedGenericArguments,
-    ) {}
-
-    fn visit_lifetime_mut(&mut self, lifetime: &mut syn::Lifetime) {
-        if lifetime.ident == "_" {
-            *lifetime = self.0.clone();
-        }
-    }
-
-    fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
-        if reference.lifetime.is_none()
-            || reference.lifetime.as_ref().is_some_and(|l| l.ident == "_")
-        {
-            reference.lifetime = Some(self.0.clone());
-        }
-        syn::visit_mut::visit_type_reference_mut(self, reference);
-    }
-}
-
-pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> syn::Result<syn::Signature> {
-    let mut native_signature = function.sig.clone();
-    let ident = &function.sig.ident;
-    // Preserve receiver-based output lifetime elision before making it explicit.
-    if let Some(FnArg::Receiver(receiver)) = native_signature.inputs.first_mut() {
-        let self_ty = self_ty.ok_or_else(|| {
-            syn::Error::new_spanned(
-                &*receiver, "detour methods require #[unchained_macros_core::runtime_bindings] on the impl",
-            )
-        })?;
-        if let Type::Reference(reference) = receiver.ty.as_mut() {
-            let lifetime = reference.lifetime.clone().filter(|l| l.ident != "_")
-                .unwrap_or_else(|| {
-                    let mut name = "__unchained_receiver".to_string();
-                    while function.sig.generics.lifetimes().any(|p| p.lifetime.ident == name) {
-                        name.push('_');
-                    }
-                    let lifetime = syn::Lifetime::new(&format!("'{name}"), ident.span());
-                    native_signature.generics.params.push(syn::parse_quote!(#lifetime));
-                    lifetime
-                });
-            reference.lifetime = Some(lifetime.clone());
-            ElidedOutput(lifetime).visit_return_type_mut(&mut native_signature.output);
-        }
-        let ty = ConcreteSelf(self_ty).fold_type(*receiver.ty.clone());
-        let mut receiver_name = "__unchained_this".to_string();
-        while function.sig.inputs.iter().any(|input| matches!(input,
-            FnArg::Typed(arg) if matches!(arg.pat.as_ref(), Pat::Ident(p) if p.ident == receiver_name)))
-        {
-            receiver_name.push('_');
-        }
-        let receiver_name = format_ident!("{}", receiver_name);
-        native_signature.inputs[0] = syn::parse_quote!(#receiver_name: #ty);
-    }
-    if let Some(self_ty) = self_ty {
-        native_signature = ConcreteSelf(self_ty).fold_signature(native_signature);
-    }
-    Ok(native_signature)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn unbound_methods_receive_docs_without_changing_their_code_or_visibility() {
         let expanded = expand_impl(quote!(), quote! {
@@ -246,19 +167,52 @@ mod tests {
         assert!(expand_impl(args, implementation).is_err());
     }
 
-    #[test]
-    fn preserves_receiver_lifetimes_and_nested_callable_elision() {
-        let signature = concrete_signature(&syn::parse_quote! {
-            unsafe fn call(&self, callback: fn(&u8) -> &u8)
-                -> (&Self, fn(&u8) -> &u8) {}
-        }, Some(&syn::parse_quote!(Native))).unwrap();
-        let expected: syn::Signature = syn::parse_quote! {
-            unsafe fn call<'__unchained_receiver>(
-                __unchained_this: &'__unchained_receiver Native,
-                callback: fn(&u8) -> &u8
-            ) -> (&'__unchained_receiver Native, fn(&u8) -> &u8)
-        };
+    #[test_case::test_case(quote!(#[repr(C)] pub struct Native<T, const N: usize> where T: Copy { value: [T; N] }); "struct")]
+    #[test_case::test_case(quote!(#[repr(u8)] pub enum Native { First, Second }); "enum")]
+    #[test_case::test_case(quote!(#[repr(C)] pub union Native<T: Copy> { value: T, raw: usize }); "union")]
+    #[test_case::test_case(quote!(pub type Native<T> = *mut T;); "alias")]
+    fn runtime_type_markers_preserve_declarations_and_generate_no_registration(tokens: Tokens) {
         use quote::ToTokens;
-        assert_eq!(signature.to_token_stream().to_string(), expected.to_token_stream().to_string());
+        let original: syn::Item = syn::parse2(tokens.clone()).unwrap();
+        let expanded = expand(quote!(), tokens).unwrap();
+        assert!(!expanded.to_string().contains("inventory"));
+        let mut actual: syn::Item = syn::parse2(expanded).unwrap();
+        let attributes = match &mut actual {
+            syn::Item::Struct(item) => &mut item.attrs,
+            syn::Item::Enum(item) => &mut item.attrs,
+            syn::Item::Union(item) => &mut item.attrs,
+            syn::Item::Type(item) => &mut item.attrs,
+            _ => unreachable!(),
+        };
+        assert!(attributes.remove(0).to_token_stream().to_string().contains("Native type"));
+        assert_eq!(actual.to_token_stream().to_string(), original.to_token_stream().to_string());
+    }
+
+    #[test_case::test_case(quote!(Other), quote!(struct Native;); "arguments")]
+    #[test_case::test_case(quote!(global), quote!(struct Native;); "removed global forwarding")]
+    #[test_case::test_case(quote!(), quote!(fn helper() {}); "function")]
+    #[test_case::test_case(quote!(), quote!(trait Native {}); "trait")]
+    fn runtime_type_markers_reject_arguments_and_non_type_items(args: Tokens, item: Tokens) {
+        assert!(expand(args, item).is_err());
+    }
+
+    #[test]
+    fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions() {
+        let expanded = expand_impl(
+            quote!(),
+            quote! {
+                impl Native {
+                    #[cfg(feature = "example")]
+                    #[bind_resolved_func(Resolver)]
+                    pub(crate) unsafe fn call(&self) -> &Self {}
+                }
+            },
+        )
+        .unwrap();
+        let text = expanded.to_string();
+        assert!(text.contains("pub (crate) const __UNCHAINED_BINDING_call"));
+        assert!(text.contains("for < '__unchained_receiver >"));
+        assert!(text.matches("cfg (feature = \"example\")").count() >= 3);
+        syn::parse2::<syn::File>(expanded).unwrap();
     }
 }

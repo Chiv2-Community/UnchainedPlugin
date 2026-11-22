@@ -268,8 +268,14 @@ pub struct NativeGlobal<T> {
 }
 
 impl<T> NativeGlobal<T> {
-    pub const fn new(binding: &'static ValueBinding, indirect: bool) -> Self {
-        Self { binding, indirect, marker: std::marker::PhantomData }
+    /// Construct metadata for a slot holding a replaceable native pointer.
+    pub const fn pointer_slot(binding: &'static ValueBinding) -> Self {
+        Self { binding, indirect: true, marker: std::marker::PhantomData }
+    }
+
+    /// Construct metadata for inline native storage without copying it.
+    pub const fn inline(binding: &'static ValueBinding) -> Self {
+        Self { binding, indirect: false, marker: std::marker::PhantomData }
     }
 
     /// Read the current pointer from a `Value` slot, or return an `Address` object's pointer.

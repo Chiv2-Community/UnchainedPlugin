@@ -4,7 +4,7 @@
 #![doc = include_str!("../detours.md")]
 pub use unchained_macros_patternsleuth_impl::define_pattern_resolver;
 pub use context::SelectorSnapshotExt;
-pub use backend::{PatternsleuthResolver, ScanContext, RequiredResolver, OffsetRegisty, startup_resolvers};
+pub use backend::{PatternsleuthResolver, ScanContext, RequiredResolver, OffsetProvider, startup_resolvers};
 
 mod backend;
 mod context;
