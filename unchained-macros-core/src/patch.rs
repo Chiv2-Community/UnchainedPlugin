@@ -235,7 +235,6 @@ mod tests {
         unsafe fn resolve(&self, _: &()) -> Result<std::num::NonZeroUsize, String> { panic!("validation must not resolve") }
     }
     type PatchRegistration = crate::PatchRegistration<Mock>;
-    type ResolverDescriptor = crate::Resolver<Mock>;
 
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Key { First, Second }
@@ -249,7 +248,7 @@ mod tests {
         type Backend = Mock;
         const NAME: &'static str = "Both";
         const UNRESTRICTED: bool = true;
-        const DESCRIPTOR: &'static ResolverDescriptor = &BOTH;
+        const DESCRIPTOR: &'static crate::Resolver<Mock> = &BOTH;
     }
     impl ResolverSelection<Key> for Both {
         const SELECTIONS: &'static [(Key, bool)] = &[];
@@ -259,16 +258,16 @@ mod tests {
         type Backend = Mock;
         const NAME: &'static str = "FirstOnly";
         const UNRESTRICTED: bool = false;
-        const DESCRIPTOR: &'static ResolverDescriptor = &FIRST_DESCRIPTOR;
+        const DESCRIPTOR: &'static crate::Resolver<Mock> = &FIRST_DESCRIPTOR;
     }
     impl ResolverSelection<Key> for FirstOnly {
         const SELECTIONS: &'static [(Key, bool)] = &[(Key::First, true), (Key::Second, false)];
     }
 
-    static BOTH: ResolverDescriptor = ResolverDescriptor { name: "Both", implementation: Mock, filter: None };
-    static FIRST_DESCRIPTOR: ResolverDescriptor = ResolverDescriptor { name: "FirstOnly", implementation: Mock, filter: None };
-    static OTHER: ResolverDescriptor = ResolverDescriptor { name: "Other", implementation: Mock, filter: None };
-    static NAMESAKE: ResolverDescriptor = ResolverDescriptor { name: "Both", implementation: Mock, filter: None };
+    static BOTH: crate::Resolver<Mock> = crate::Resolver { name: "Both", implementation: Mock, filter: None };
+    static FIRST_DESCRIPTOR: crate::Resolver<Mock> = crate::Resolver { name: "FirstOnly", implementation: Mock, filter: None };
+    static OTHER: crate::Resolver<Mock> = crate::Resolver { name: "Other", implementation: Mock, filter: None };
+    static NAMESAKE: crate::Resolver<Mock> = crate::Resolver { name: "Both", implementation: Mock, filter: None };
     fn never_construct(_: u64) -> Patch { panic!("validation must not construct patches") }
     fn first(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::First) }
     fn second(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::Second) }

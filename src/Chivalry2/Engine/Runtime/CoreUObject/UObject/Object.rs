@@ -18,7 +18,7 @@ define_pattern_resolver!(
     ["40 55 56 57 41 54 41 55 41 56 41 57 48 81 EC F0 00 00 00 48 8D 6C 24 30 48 89 9D 18 01"]
 );
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct UObject {
@@ -30,7 +30,7 @@ pub struct UObject {
     pub uobject_base_utility: UObjectBaseUtility,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UObject {
     pub unsafe fn get_uobject_from_path(path: &str, load_if_missing: bool) -> *mut UObject {
         let wide_path = U16CString::from_str(path).unwrap();
@@ -156,7 +156,7 @@ impl UObject {
         false
     }
 
-    #[unchained_macros::bind_resolved_func(UObject__LoadConfig)]
+    #[unchained_macros_core::bind_resolved_func(UObject__LoadConfig)]
     pub(crate) unsafe fn LoadConfig(
         self: *mut Self,
         config_class: *mut UClass,
@@ -166,7 +166,7 @@ impl UObject {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(UObject__ProcessEvent)]
+    #[unchained_macros_core::bind_resolved_func(UObject__ProcessEvent)]
     pub(crate) unsafe fn ProcessEvent(
         self: *mut Self,
         function: *mut UFunction,

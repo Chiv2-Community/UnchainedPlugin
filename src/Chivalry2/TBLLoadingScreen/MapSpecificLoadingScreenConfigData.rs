@@ -15,7 +15,7 @@ impl FTextRaw {
 }
 
 /// Layout recovered from Ghidra; filled or moved into engine-owned arrays.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FMapSpecificLoadingScreenConfigData {
     pub(crate) map_name: FString,

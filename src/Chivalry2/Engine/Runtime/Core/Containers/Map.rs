@@ -7,7 +7,7 @@ use std::fmt::Debug;
 
 use std::collections::HashMap;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct TMap<K: UEHash, V> {
     pub elements: TSparseArray<TSetElement<TTuple<K, V>>>,

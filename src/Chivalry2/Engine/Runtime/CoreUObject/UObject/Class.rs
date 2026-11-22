@@ -12,7 +12,7 @@ define_pattern_resolver!(UClass__GetConfigName, [
 
 define_pattern_resolver!(UClass__GetDefaultObject,["40 53 48 83 EC 20 48 8B 81 18 01 00 00 48 8B D9 48 85 C0 ?? ?? 84 D2 ?? ?? 48 8B 01 ?? ?? ?? ?? ?? ??"]);
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UClass {
     // pub _padding_base: [u8; 0xB0],                // 0x0000
@@ -51,7 +51,7 @@ pub struct UClass {
     pub sparse_class_data_struct: *mut c_void, // 0x0130
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UClass {
     /// Find a reflected function on this class or its superclasses.
     ///
@@ -75,7 +75,7 @@ impl UClass {
         None
     }
 
-    #[unchained_macros::bind_resolved_func(UClass__GetConfigName)]
+    #[unchained_macros_core::bind_resolved_func(UClass__GetConfigName)]
     pub(crate) unsafe fn GetConfigName(
         self: *mut Self,
         storage: *mut crate::Chivalry2::Engine::FString,
@@ -132,7 +132,7 @@ impl UClass {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UField {
@@ -140,7 +140,7 @@ pub struct UField {
     pub next: *const UField,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FStructBaseChain {
@@ -157,7 +157,7 @@ pub struct FoundProperty {
     pub type_name: String,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UStruct {
@@ -238,7 +238,7 @@ impl UStruct {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct UFunction {

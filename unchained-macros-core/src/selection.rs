@@ -18,7 +18,8 @@ use std::sync::Arc;
 /// # impl unchained_macros_core::ResolverSelector for Mode {
 /// #     fn current() -> Self { Self::Read }
 /// # }
-/// assert!(unchained_macros_core::supports_selection("unrestricted", Mode::Read));
+/// let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(Mode::Read).unwrap();
+/// assert!(snapshot.get::<Mode>().unwrap() == Mode::Read);
 /// ```
 ///
 /// ```
@@ -191,12 +192,6 @@ impl SelectorSnapshot {
         Ok(())
     }
 
-    pub fn supports_resolver(&self, name: &str) -> bool {
-        inventory::iter::<crate::resolver::ErasedResolverRegistration>.into_iter()
-            .filter(|declaration| declaration.info.name() == name)
-            .all(|declaration| declaration.info.supports(self))
-    }
-
     pub fn supports_resolver_for<R: crate::AddressResolver>(&self, name: &str) -> bool {
         crate::resolver_inventory_for::<R>().filter(|resolver| resolver.name == name)
             .all(|resolver| resolver.supports(self))
@@ -236,12 +231,6 @@ pub const fn resolver_selections<R: ResolverSelection<E>, E: SelectionKey>(_: E)
 pub struct ResolverFilter {
     pub selector: fn() -> TypeId,
     pub lookup: fn(&dyn Any) -> Option<bool>,
-}
-
-/// Ad hoc single-provider query. Startup should use one frozen `SelectorSnapshot`.
-/// A restriction for a different enum fails closed, never comparing discriminants.
-pub fn supports_selection<E: ResolverSelector>(name: &str, selection: E) -> bool {
-    SelectorSnapshot::from_selection(selection).is_ok_and(|snapshot| snapshot.supports_resolver(name))
 }
 
 #[doc(hidden)]

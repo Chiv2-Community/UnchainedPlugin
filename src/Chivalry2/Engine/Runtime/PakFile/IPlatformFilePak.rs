@@ -36,15 +36,15 @@ define_pattern_resolver!(
 );
 
 /// Opaque engine-owned platform-file implementation; no Rust layout is assumed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FPakPlatformFile {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FPakPlatformFile {
-    #[unchained_macros::bind_resolved_func(FPakPlatformFile__Mount)]
+    #[unchained_macros_core::bind_resolved_func(FPakPlatformFile__Mount)]
     pub(crate) unsafe fn Mount(
         self: *mut Self,
         InPakFilename: *const TCHAR,
@@ -55,7 +55,7 @@ impl FPakPlatformFile {
     }
 
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles)]
+    #[unchained_macros_core::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles)]
     pub(crate) unsafe fn FindFileInPakFiles(
         self: *mut Self,
         Filename: *const TCHAR,
@@ -66,7 +66,7 @@ impl FPakPlatformFile {
 
     // Static overload; receives the pak-list array rather than a platform-file object.
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles_Static)]
+    #[unchained_macros_core::bind_resolved_func(FPakPlatformFile__FindFileInPakFiles_Static)]
     pub(crate) unsafe fn FindFileInPakFiles_Static(
         Paks: *mut TArray<FPakListEntry>,
         Filename: *const TCHAR,
@@ -76,7 +76,7 @@ impl FPakPlatformFile {
     }
 
     #[cfg(feature = "loose_assets")]
-    #[unchained_macros::bind_resolved_func(FPakPlatformFile__IsNonPakFilenameAllowed)]
+    #[unchained_macros_core::bind_resolved_func(FPakPlatformFile__IsNonPakFilenameAllowed)]
     pub(crate) unsafe fn IsNonPakFilenameAllowed(
         self: *mut Self,
         _InFilename: *mut FString,
@@ -84,12 +84,12 @@ impl FPakPlatformFile {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type FPakFile = c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type FPakEntry = c_void;
 
 // FPakPlatformFile::FPakListEntry.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type FPakListEntry = c_void;

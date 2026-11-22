@@ -5,7 +5,7 @@ use crate::events::combat::{CombatActor, DamageSource};
 use crate::events::models::{Damage, GameEvent, Kill};
 use crate::features::events::EVENT_SYSTEM;
 
-#[unchained_macros::bind_func_detour(ATBLCharacter::OnKilled)]
+#[unchained_macros_core::bind_func_detour(ATBLCharacter::OnKilled)]
 pub(crate) unsafe fn on_killed_detour(
     this: *mut ATBLCharacter,
     damage_event: *const FDeathDamageTakenEvent,
@@ -73,7 +73,7 @@ pub(crate) unsafe fn on_killed_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(ATBLCharacter::OnDamageTaken)]
+#[unchained_macros_core::bind_func_detour(ATBLCharacter::OnDamageTaken)]
 pub(crate) unsafe fn on_damage_taken_detour(
     this: *mut ATBLCharacter,
     damage_event: *const FDamageTakenEvent,

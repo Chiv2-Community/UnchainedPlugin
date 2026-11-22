@@ -6,7 +6,7 @@ use strum::Display;
 
 // Chat type enum
 // FIXME: More compact, wtf is this
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 #[allow(clippy::upper_case_acronyms)]

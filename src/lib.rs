@@ -1,8 +1,8 @@
 #![cfg_attr(feature = "server_registration", feature(ip))]
 #![feature(arbitrary_self_types_pointers)]
 #[macro_use]
-extern crate unchained_macros;
-pub use unchained_macros::*;
+extern crate unchained_macros_patternsleuth;
+use unchained_macros_core::{SelectorIdentity, SelectorSnapshot};
 
 pub mod platform;
 pub use platform::{PlatformType, PLATFORM, current_platform};
@@ -97,7 +97,7 @@ fn get_build_path(crc: u32, platform_type: PlatformType, selectors: &[SelectorId
 }
 
 fn resolvers(snapshot: &SelectorSnapshot) -> std::vec::IntoIter<&'static NamedResolver> {
-    unchained_macros::startup_resolvers(snapshot)
+    unchained_macros_patternsleuth::startup_resolvers(snapshot)
         .unwrap_or_else(|error| panic!("Invalid startup resolver registration: {error}"))
         .into_iter()
 }
@@ -374,7 +374,7 @@ fn initialize_native_runtime() {
 
     let enabled = |name: &str| snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(name);
     let context = unchained_macros_patternsleuth::ScanContext::new(*unchained::startup::BASE_ADDR, &bi.offsets);
-    unsafe { unchained_macros::initialize_value_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled); }
+    unsafe { unchained_macros_core::initialize_value_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled); }
     if let Err(error) = unsafe { unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&context, snapshot) } {
         serror!("Failed to bind native functions: {}", error);
         std::process::exit(-67);
@@ -612,7 +612,7 @@ fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &Select
 
 struct NativePatchWriter;
 
-impl unchained_macros::PatchWriter for NativePatchWriter {
+impl unchained_macros_core::PatchWriter for NativePatchWriter {
     unsafe fn bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
         unsafe { tools::memtools::patch(address as *mut u8, bytes); }
         Ok(())
@@ -621,7 +621,7 @@ impl unchained_macros::PatchWriter for NativePatchWriter {
         unsafe { tools::memtools::nop(address as *mut u8, count); }
         Ok(())
     }
-    unsafe fn write(&mut self, address: u64, value: &unchained_macros::WriteValue) -> Result<(), String> {
+    unsafe fn write(&mut self, address: u64, value: &unchained_macros_core::WriteValue) -> Result<(), String> {
         unsafe { tools::memtools::write_raw(address as *mut u8, value.as_ptr(), value.size()); }
         Ok(())
     }

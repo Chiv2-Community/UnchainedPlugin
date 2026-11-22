@@ -7,7 +7,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for AController {
     const CLASS_NAME: &'static str = "Controller";
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct AController {

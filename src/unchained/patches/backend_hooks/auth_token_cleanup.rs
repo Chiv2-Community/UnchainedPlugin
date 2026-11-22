@@ -4,9 +4,9 @@ use crate::Chivalry2::Plugins::OnlineSubsystemPlayFab::OnlineAuthInterfacePlayFa
 use crate::Chivalry2::Plugins::OnlineSubsystemRedpointEOS::Shared::Authentication::Nodes::LogUserIntoOnlineSubsystemNode::FLogUserIntoOnlineSubsystemNode__GetAuthTokenPatchSite;
 use std::ffi::c_void;
 use crate::PlatformType::STEAM;
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
-#[unchained_macros::bind_func_detour(FOnlineAuthPlayFab::EndAuthentication)]
+#[unchained_macros_core::bind_func_detour(FOnlineAuthPlayFab::EndAuthentication)]
 pub(crate) unsafe fn end_authentication_detour(
     this: *const FOnlineAuthPlayFab,
     user_id: *const c_void,

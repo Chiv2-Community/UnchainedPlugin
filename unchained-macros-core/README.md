@@ -51,4 +51,12 @@ original-call bypass does not depend on backend discovery order.
 
 `function_is_bound_for::<Backend>(name)` and
 `selectors.supports_resolver_for::<Backend>(name)` scope name queries to a backend.
-The untyped compatibility queries inspect all backends.
+
+## Native globals
+
+Use `bind_resolved_value(Resolver, Address)` for inline storage, or `Value` for a
+pointer slot reloaded on every call. `runtime_bindings(global)` generates unsafe
+forwards from the target's existing method declarations. Initialize registered
+values with `initialize_value_bindings_where`, filtered by the frozen snapshot.
+Keep native spelling, synchronization, and declaring-header placement; never
+cache the pointee of a replaceable slot.

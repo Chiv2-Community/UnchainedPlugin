@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::{APlayerController, FGuid, FString};
 use crate::tools::hook_globals::globals;
 use std::ffi::c_void;
 
-#[unchained_macros::bind_func_detour(APlayerController::ClientTravelInternal)]
+#[unchained_macros_core::bind_func_detour(APlayerController::ClientTravelInternal)]
 pub(crate) unsafe fn client_travel_internal_detour(
     this: *mut APlayerController,
     url: *mut FString,

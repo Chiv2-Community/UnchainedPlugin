@@ -36,7 +36,7 @@ pub fn get_human_player_count() -> usize {
     game_state.get_human_player_count()
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct ATBLGameState {
     // --- 0x0000 -> 0x0258: AActor + AInfo ---

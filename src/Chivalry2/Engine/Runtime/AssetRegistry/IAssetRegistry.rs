@@ -11,7 +11,7 @@ use crate::Chivalry2::Engine::UAssetRegistryHelpers;
 
 /// Native interface subobject, not the enclosing UObject.
 // Steam/EGS table 0x144d73648; UE AssetRegistry/Public/IAssetRegistry.h.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct IAssetRegistry {
@@ -47,7 +47,7 @@ impl IAssetRegistry {
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = AssetRegistryScriptInterface::new();
-        unchained_macros::require_function_bindings(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
+        unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
         UAssetRegistryHelpers::GetAssetRegistry(&mut registry);
         registry.asset_registry()
     }

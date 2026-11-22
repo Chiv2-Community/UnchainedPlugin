@@ -26,10 +26,13 @@ define_custom_resolver!(CreateHttpRequest, {
 });
 
 // Populate the GetPost_* offset map before request bindings initialize.
-unchained_macros::require_resolver!(CreateHttpRequest);
+unchained_macros_patternsleuth::require_resolver!(CreateHttpRequest);
+
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_GetMotd);
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_GetCurrentGames);
 
 /// Common native prefix for Get*Post request parameters.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct GenericRequest {
@@ -37,18 +40,18 @@ pub struct GenericRequest {
     pub token: FString,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct OpenAPIClientAPI {
     pub url_base: FString,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl OpenAPIClientAPI {
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-    #[unchained_macros::bind_resolved_request_function(GetPost_GetMotd)]
+    #[unchained_macros_core::bind_resolved_func(GetPost_GetMotd)]
     pub unsafe fn GetPost_GetMotd(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
@@ -59,7 +62,7 @@ impl OpenAPIClientAPI {
 
     /// # Safety
     /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-    #[unchained_macros::bind_resolved_request_function(GetPost_GetCurrentGames)]
+    #[unchained_macros_core::bind_resolved_func(GetPost_GetCurrentGames)]
     pub unsafe fn GetPost_GetCurrentGames(
         self: *mut Self,
         result: *mut TSharedPtrIHttpRequest,
@@ -134,7 +137,7 @@ pub static STRING_TO_ROOT_FN: LazyLock<RwLock<HashMap<String, u64>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 inventory::submit! {
-    unchained_macros::OffsetRegisty {
+    unchained_macros_patternsleuth::OffsetRegisty {
         name: "CreateHttpRequest Get*Post hooks",
         map: || STRING_TO_ROOT_FN.read().unwrap().clone(),
     }
@@ -143,5 +146,5 @@ inventory::submit! {
 type RequestFunctions = (u64, HashMap<String, u64>);
 
 // OpenAPIMerged::OpenAPIClientApi::GetCurrentGamesPostResponse.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type GetCurrentGamesPostResponse = c_void;

@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::IAssetRegistry;
 
 /// Native TScriptInterface<IAssetRegistry> return storage; owns neither pointer.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct AssetRegistryScriptInterface {

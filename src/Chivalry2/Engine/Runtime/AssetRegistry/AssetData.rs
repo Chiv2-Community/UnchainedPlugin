@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::FName;
 
 use std::fmt;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]

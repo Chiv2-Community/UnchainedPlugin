@@ -13,15 +13,15 @@ define_pattern_resolver!(UUserFeedbackAndBugReportsLibrary__GetGameInfo, {
 });
 
 /// Static native helpers only; this is not a UObject instance layout.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct UUserFeedbackAndBugReportsLibrary {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UUserFeedbackAndBugReportsLibrary {
     // Static FString return: RCX is caller storage, RDX is world, RAX returns storage.
-    #[unchained_macros::bind_resolved_func(UUserFeedbackAndBugReportsLibrary__GetGameInfo)]
+    #[unchained_macros_core::bind_resolved_func(UUserFeedbackAndBugReportsLibrary__GetGameInfo)]
     pub(crate) unsafe fn GetGameInfo(
         storage: *mut crate::Chivalry2::Engine::FString,
         world: *mut crate::Chivalry2::Engine::UWorld,

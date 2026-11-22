@@ -2,7 +2,7 @@
 
 /// Borrowed archive header; only native constructors may initialize it.
 // Steam/EGS FLargeMemoryReader table 0x14499be88; UE Serialization/Archive.h.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FArchive {

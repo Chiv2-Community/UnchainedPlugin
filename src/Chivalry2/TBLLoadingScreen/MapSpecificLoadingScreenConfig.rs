@@ -19,7 +19,7 @@ define_pattern_resolver!(
 
 /// Prefix of `UMapSpecificLoadingScreenConfig`. Only ever used through a pointer
 /// to the live engine object, never constructed or dropped in Rust.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UMapSpecificLoadingScreenConfig {
     _uobject: [u8; 0x28],
@@ -27,12 +27,12 @@ pub struct UMapSpecificLoadingScreenConfig {
     pub(crate) default_screen: FMapSpecificLoadingScreenConfigData,  // 0x38
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UMapSpecificLoadingScreenConfig {
     //
     // NONE: the callee consumes (frees) its by-value FString arg, so the original
     // must be called exactly once.
-    #[unchained_macros::bind_resolved_func(UMapSpecificLoadingScreenConfig__GetDataForMap)]
+    #[unchained_macros_core::bind_resolved_func(UMapSpecificLoadingScreenConfig__GetDataForMap)]
     pub(crate) unsafe fn GetDataForMap(
         self: *mut Self,
         map_name: *mut FString,

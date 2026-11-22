@@ -4,7 +4,7 @@
 use crate::Chivalry2::TBL::TBLEngine::UTBLEngine;
 
 #[cfg(feature = "server_registration")]
-#[unchained_macros::bind_func_detour(UTBLEngine::PreExit)]
+#[unchained_macros_core::bind_func_detour(UTBLEngine::PreExit)]
 pub(crate) unsafe fn pre_exit_detour(this: *mut UTBLEngine) {
     let result = std::panic::catch_unwind(|| {
         crate::features::tokio_runtime::TOKIO_RUNTIME

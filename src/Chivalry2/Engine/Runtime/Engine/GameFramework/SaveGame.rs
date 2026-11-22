@@ -2,5 +2,5 @@
 
 use std::ffi::c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type USaveGame = c_void;

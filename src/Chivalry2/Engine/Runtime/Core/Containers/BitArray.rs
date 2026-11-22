@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::*;
 
 use std::fmt::Debug;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Default, Debug)]
 #[repr(C)]
 pub(crate) struct TBitArray {
@@ -29,7 +29,7 @@ impl TBitArray {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub(crate) struct FBitReference<'data> {

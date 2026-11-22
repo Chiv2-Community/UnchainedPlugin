@@ -73,7 +73,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for ATBLPlayerController {
     const CLASS_NAME: &'static str = "TBLPlayerController";
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct ATBLPlayerController {
@@ -84,10 +84,10 @@ pub struct ATBLPlayerController {
     pub bPlayerCustomizationReceived: bool,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl ATBLPlayerController {
     // Targets ClientReceiveChat_Implementation, not the generated RPC wrapper.
-    #[unchained_macros::bind_resolved_func(ATBLPlayerController__ClientReceiveChat_Implementation)]
+    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__ClientReceiveChat_Implementation)]
     pub(crate) unsafe fn ClientReceiveChat_Implementation(
         self: *mut Self,
         sender: *mut ATBLPlayerState,
@@ -98,7 +98,7 @@ impl ATBLPlayerController {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         ATBLPlayerController__GetOwnershipFromPlayerControllerAndState
     )]
     pub(crate) unsafe fn GetOwnershipFromPlayerControllerAndState(
@@ -110,7 +110,7 @@ impl ATBLPlayerController {
     ) -> *mut FOwnershipResponse {
     }
 
-    #[unchained_macros::bind_resolved_func(ATBLPlayerController__CanUseLoadoutItem)]
+    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__CanUseLoadoutItem)]
     pub(crate) unsafe fn CanUseLoadoutItem(
         self: *mut Self,
         result: *mut FOwnershipResponse,
@@ -119,7 +119,7 @@ impl ATBLPlayerController {
     ) -> *mut FOwnershipResponse {
     }
 
-    #[unchained_macros::bind_resolved_func(ATBLPlayerController__CanUseCharacter)]
+    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__CanUseCharacter)]
     pub(crate) unsafe fn CanUseCharacter(
         self: *mut Self,
         result: *mut FOwnershipResponse,
@@ -128,7 +128,7 @@ impl ATBLPlayerController {
     }
 
     // The extra legacy player_state argument is not established by the native signature.
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         ATBLPlayerController__ConditionalInitializeCustomizationOnServer
     )]
     pub(crate) unsafe fn ConditionalInitializeCustomizationOnServer(
@@ -137,7 +137,7 @@ impl ATBLPlayerController {
     ) -> c_void {
     }
 
-    #[unchained_macros::bind_resolved_func(ATBLPlayerController__ClientReceiveLocalizedChat_Implementation)]
+    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__ClientReceiveLocalizedChat_Implementation)]
     pub(crate) unsafe fn ClientReceiveLocalizedChat_Implementation(
         self: *mut Self,
         message: *const FText,

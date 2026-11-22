@@ -7,14 +7,14 @@ use std::fmt::Debug;
 
 use crate::Chivalry2::Engine::TArray;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub(crate) union TSparseArrayElementOrFreeListLink<E> {
     pub(crate) element: std::mem::ManuallyDrop<E>,
     pub(crate) list_link: ListLink,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub(crate) struct ListLink {
@@ -22,7 +22,7 @@ pub(crate) struct ListLink {
     pub(crate) prev_free_index: i32,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub(crate) struct TSparseArray<E> {
     pub data: TArray<TSparseArrayElementOrFreeListLink<E>>,

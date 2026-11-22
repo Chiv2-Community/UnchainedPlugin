@@ -1,9 +1,9 @@
 //! Storefront ownership and adapters for the generic resolver toolkit.
 
 use std::sync::OnceLock;
-use unchained_macros::ResolverSelector;
+use unchained_macros_core::ResolverSelector;
 
-#[unchained_macros::resolver_selection_key(require = [STEAM, EGS], fallback = OTHER)]
+#[unchained_macros_core::resolver_selection_key(require = [STEAM, EGS], fallback = OTHER)]
 #[derive(Debug, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 #[allow(clippy::upper_case_acronyms)]

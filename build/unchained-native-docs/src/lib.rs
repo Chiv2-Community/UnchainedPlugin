@@ -37,7 +37,6 @@ struct Binding {
     overload: Option<String>,
     rpc_implementation: Option<String>,
     resolver: String,
-    request: bool,
     notes: String,
     source: Option<Source>,
     link: String,
@@ -378,6 +377,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                             part.ident.to_string().as_str(),
                             "define_pattern_resolver"
                                 | "define_custom_resolver"
+                                | "define_offset_resolver"
                         )
                     }) =>
                 {
@@ -413,8 +413,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         let syn::ImplItem::Fn(method) = method else {
                             continue;
                         };
-                        let binding = attr(&method.attrs, "bind_resolved_func")
-                            .or_else(|| attr(&method.attrs, "bind_resolved_request_function"));
+                        let binding = attr(&method.attrs, "bind_resolved_func");
                         if binding.is_some() || runtime_owner.is_some() {
                             let documentation = notes(&method.attrs);
                             let resolver_name = if let Some(binding) = binding {
@@ -457,8 +456,6 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     })
                                     .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
-                                request: binding.is_some_and(|binding| binding.path().segments.last().unwrap().ident
-                                    == "bind_resolved_request_function"),
                                 notes: documentation
                                     .lines()
                                     .filter(|line| !line.starts_with("Native RPC implementation: "))
@@ -542,19 +539,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             .map(|source| source.url.as_str())
             .unwrap_or(&binding.link);
         let resolver = resolvers.get(&binding.resolver);
-        let resolution = if binding.request {
-            format!(
-                "`{}` (offset-registry key)\n\n{}",
-                binding.resolver,
-                block(
-                    "rust,ignore",
-                    &format!(
-                        "{} (offset-registry key; no resolver declaration)",
-                        binding.resolver
-                    )
-                )
-            )
-        } else if let Some((link, declaration)) = resolver {
+        let resolution = if let Some((link, declaration)) = resolver {
             format!(
                 "{}\n\n{}",
                 linked(&binding.resolver, link),
@@ -770,6 +755,7 @@ define_pattern_resolver!(Native__Other, ["40 53"]);
 define_pattern_resolver!(Native__Rpc, ["40 54"]);
 define_pattern_resolver!(Native__Plain, ["40 55"]);
 define_pattern_resolver!(Native__Typed, ["40 56"]);
+define_offset_resolver!(Native__Provided);
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
@@ -786,6 +772,8 @@ impl Native {
     pub unsafe fn Plain(&self) {}
     #[bind_resolved_func(Native__Typed)]
     pub unsafe fn Typed(address: *const FString, timeout: f32, #[native_by_value] callback: *mut Callback) {}
+    #[bind_resolved_func(Native__Provided)]
+    pub unsafe fn Provided(&self) {}
 }
 "#).unwrap();
         fs::write(
@@ -845,6 +833,9 @@ impl Native {
         assert!(plain.ends_with(NO_CPP_SOURCES));
         assert!(!plain.contains("NotTheBoundFunction"));
         let typed = fs::read_to_string(directory.join("binding-Native__Typed.md")).unwrap();
+        let provided = fs::read_to_string(directory.join("binding-Native__Provided.md")).unwrap();
+        assert!(provided.contains("define_offset_resolver!(Native__Provided)"));
+        assert!(!provided.contains("upstream resolver"));
         assert!(typed.contains("void Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }"));
         assert!(!typed.contains("Native overload:"));
         assert!(!typed.contains("Forward(Result)"));

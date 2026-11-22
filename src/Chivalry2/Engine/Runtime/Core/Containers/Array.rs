@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::*;
 
 use std::alloc::Layout;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct TArray<T> {

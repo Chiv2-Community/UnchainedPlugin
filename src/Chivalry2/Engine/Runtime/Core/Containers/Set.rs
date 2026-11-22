@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::*;
 
 use std::fmt::Debug;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Default, Debug)]
 #[repr(C)]
 pub(crate) struct TSetElement<V> {
@@ -20,7 +20,7 @@ impl<K: UEHash, V> UEHash for TSetElement<TTuple<K, V>> {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Default, Clone, Copy)]
 #[repr(C)]
 pub struct FSetElementId {
@@ -41,7 +41,7 @@ impl Debug for FSetElementId {
 
 /// Read-only view of an engine `TSet<T>`. Only ever used through a reference
 /// into live engine memory; Rust never constructs, mutates or drops one.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct TSet<T> {
     pub(crate) elements: TSparseArray<TSetElement<T>>,

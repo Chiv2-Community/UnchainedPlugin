@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::{
 use widestring::U16CStr;
 use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
 
-#[unchained_macros::bind_func_detour(FPakPlatformFile::FindFileInPakFiles)]
+#[unchained_macros_core::bind_func_detour(FPakPlatformFile::FindFileInPakFiles)]
 pub(crate) unsafe fn find_file_in_pak_files_detour(
     this: *mut FPakPlatformFile,
     filename: *const TCHAR,
@@ -27,7 +27,7 @@ pub(crate) unsafe fn find_file_in_pak_files_detour(
     unsafe { this.FindFileInPakFiles(filename, out_pak_file, out_entry) }
 }
 
-#[unchained_macros::bind_func_detour(FPakPlatformFile::FindFileInPakFiles_Static)]
+#[unchained_macros_core::bind_func_detour(FPakPlatformFile::FindFileInPakFiles_Static)]
 pub(crate) unsafe fn find_file_in_pak_files_static_detour(
     paks: *mut TArray<FPakListEntry>,
     filename: *const TCHAR,
@@ -50,7 +50,7 @@ pub(crate) unsafe fn find_file_in_pak_files_static_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(FPakPlatformFile::IsNonPakFilenameAllowed)]
+#[unchained_macros_core::bind_func_detour(FPakPlatformFile::IsNonPakFilenameAllowed)]
 pub(crate) unsafe fn is_non_pak_filename_allowed_detour(
     _this: *mut FPakPlatformFile,
     _in_filename: *mut FString,

@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 /// Heap-allocated native array storage. Borrow only; never frees its buffer.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FScriptArray {
     data: *const u8,

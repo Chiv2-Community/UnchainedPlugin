@@ -23,7 +23,7 @@ define_pattern_resolver!(
 );
 
 /// Partial native controller layout through Player; later fields are omitted.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct APlayerController {
@@ -32,14 +32,14 @@ pub struct APlayerController {
     pub player: *mut UPlayer, // 0x02D0
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl APlayerController {
     /// Calls the generated RPC wrapper through ProcessEvent, not the implementation directly.
     /// Native RPC implementation: `APlayerController::ClientMessage_Implementation`
     ///
     /// # Safety
     /// Self must be a live controller; S must point to a live native string.
-    #[unchained_macros::bind_resolved_func(APlayerController__ClientMessage)]
+    #[unchained_macros_core::bind_resolved_func(APlayerController__ClientMessage)]
     pub(crate) unsafe fn ClientMessage(
         self: *mut Self,
         S: *mut FString,
@@ -48,7 +48,7 @@ impl APlayerController {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(APlayerController__ClientTravelInternal)]
+    #[unchained_macros_core::bind_resolved_func(APlayerController__ClientTravelInternal)]
     pub(crate) unsafe fn ClientTravelInternal(
         self: *mut Self,
         url: *mut FString,

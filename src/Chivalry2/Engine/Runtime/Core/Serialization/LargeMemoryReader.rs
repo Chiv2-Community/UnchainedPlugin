@@ -30,13 +30,13 @@ pub(crate) struct FLargeMemoryReaderStorage {
 
 /// Opaque native FLargeMemoryReader. Allocate only verified native storage;
 /// this view is distinct from its FArchive base and has no Rust constructor.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FLargeMemoryReader {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FLargeMemoryReader {
     /// Native constructor; flags=0 borrows the data.
     ///

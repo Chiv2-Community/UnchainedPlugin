@@ -3,9 +3,9 @@
 use crate::Chivalry2::TBL::TBLGameInstance::*;
 use crate::tools::hook_globals::cli_args;
 use std::sync::atomic::{AtomicBool, Ordering};
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::LoadFrontEndMap)]
+#[unchained_macros_core::bind_func_detour(UTBLGameInstance::LoadFrontEndMap)]
 pub(crate) unsafe fn load_front_end_map_detour(
     this: *mut UTBLGameInstance,
     _url: *mut crate::Chivalry2::Engine::FString,

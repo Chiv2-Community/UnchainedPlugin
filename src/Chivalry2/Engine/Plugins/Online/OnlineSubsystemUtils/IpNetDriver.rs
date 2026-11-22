@@ -2,7 +2,7 @@
 
 use crate::Chivalry2::Engine::*;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UIpNetDriver {
     pub base: UNetDriver,

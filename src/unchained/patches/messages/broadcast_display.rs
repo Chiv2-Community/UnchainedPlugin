@@ -10,7 +10,7 @@ use crate::Chivalry2::TBL::{EChatType::EChatType, UTBLGameInstance};
 use crate::events::broadcast_message::game_chat::broadcast_parts;
 use std::os::raw::c_void;
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::ClientReceiveLocalizedChat_Implementation)]
+#[unchained_macros_core::bind_func_detour(ATBLPlayerController::ClientReceiveLocalizedChat_Implementation)]
 pub(crate) unsafe fn client_receive_localized_chat_detour(
     this: *mut ATBLPlayerController,
     message: *const FText,
@@ -93,7 +93,7 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
 }
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() || !unchained_macros::function_is_bound("FText__ToString") {
+    if text.is_null() || !unchained_macros_core::function_is_bound_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("FText__ToString") {
         return None;
     }
     let string = unsafe { FText::from_ptr(text)?.ToString() };

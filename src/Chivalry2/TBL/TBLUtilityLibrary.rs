@@ -11,13 +11,13 @@ define_pattern_resolver!(
 );
 
 /// Rust adapter for the native TBLUtility namespace, not a UObject class.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct TBLUtility {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl TBLUtility {
-    #[unchained_macros::bind_resolved_func(TBLUtility__ExecuteConsoleCommand)]
+    #[unchained_macros_core::bind_resolved_func(TBLUtility__ExecuteConsoleCommand)]
     pub(crate) unsafe fn ExecuteConsoleCommand(command: *const FString) {}
 }

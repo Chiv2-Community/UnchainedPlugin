@@ -8,7 +8,7 @@ use crate::Chivalry2::TBLLoadingScreen::MapSpecificLoadingScreenConfig::*;
 use crate::Chivalry2::TBLLoadingScreen::MapSpecificLoadingScreenConfigData::*;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-#[unchained_macros::bind_func_detour(UMapSpecificLoadingScreenConfig::GetDataForMap)]
+#[unchained_macros_core::bind_func_detour(UMapSpecificLoadingScreenConfig::GetDataForMap)]
 pub(crate) unsafe fn get_data_for_map_detour(
     this: *mut UMapSpecificLoadingScreenConfig,
     map_name: *mut FString,

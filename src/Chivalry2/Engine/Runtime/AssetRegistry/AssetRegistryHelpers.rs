@@ -7,12 +7,12 @@ define_pattern_resolver!(UAssetRegistryHelpers__GetAssetRegistry, [
 ]);
 
 /// Static native helpers only; this is not a UObject instance layout.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct UAssetRegistryHelpers {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UAssetRegistryHelpers {
     /// UAssetRegistryHelpers::GetAssetRegistry, with explicit hidden return storage.
     ///

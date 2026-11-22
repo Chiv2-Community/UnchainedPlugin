@@ -63,12 +63,12 @@ macro_rules! __pattern_resolver {
         #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
         #[allow(non_camel_case_types)]
         pub struct $name(pub u64);
-        impl $crate::ResolverDeclaration for $name {
+        impl ::unchained_macros_core::ResolverDeclaration for $name {
             type Backend = $crate::PatternsleuthResolver;
             const NAME: &'static str = stringify!($name);
             const UNRESTRICTED: bool = $unrestricted;
-            const DESCRIPTOR: &'static $crate::ResolverDescriptor = {
-                static DESCRIPTOR: $crate::ResolverDescriptor = $crate::ResolverDescriptor {
+            const DESCRIPTOR: &'static ::unchained_macros_core::Resolver<Self::Backend> = {
+                static DESCRIPTOR: ::unchained_macros_core::Resolver<$crate::PatternsleuthResolver> = ::unchained_macros_core::Resolver {
                     name: stringify!($name),
                     implementation: $crate::PatternsleuthResolver::named(::patternsleuth::resolvers::NamedResolver {
                         name: stringify!($name), getter: $name::dyn_resolver,
@@ -79,12 +79,12 @@ macro_rules! __pattern_resolver {
             };
         }
         $crate::__private::inventory::submit! {
-            $crate::__private::ErasedResolverRegistration::new(<$name as $crate::ResolverDeclaration>::DESCRIPTOR)
+            $crate::__private::ErasedResolverRegistration::new(<$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR)
         }
     };
     (@emit_header $name:ident) => {
         $crate::__pattern_resolver!(@emit_type $name, true, ::core::option::Option::None);
-        impl<E: $crate::SelectionKey> $crate::ResolverSelection<E> for $name {
+        impl<E: ::unchained_macros_core::SelectionKey> ::unchained_macros_core::ResolverSelection<E> for $name {
             const SELECTIONS: &'static [(E, bool)] = &[];
         }
     };
@@ -118,7 +118,7 @@ macro_rules! __pattern_resolver {
             let keys = [$($key),+];
             keys[0].__unchained_validate_selection(&keys);
         };
-        impl $crate::ResolverSelection<$enum> for $name {
+        impl ::unchained_macros_core::ResolverSelection<$enum> for $name {
             const SELECTIONS: &'static [($enum, bool)] = &[
                 $(($key, $crate::__pattern_resolver!(@enabled $entry))),+
             ];
@@ -129,7 +129,7 @@ macro_rules! __pattern_resolver {
     };
     (@selected_patterns $name:ident, $patterns:ident, $ctx:ident, $enum:ty, {$($key:path: $entry:tt),+}) => {
         let snapshot = $crate::__private::context_snapshot($ctx).await?;
-        if !<$name as $crate::ResolverDeclaration>::DESCRIPTOR.supports(&snapshot) {
+        if !<$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR.supports(&snapshot) {
             return Err(::patternsleuth::resolvers::ResolveError::new_msg(format!(
                 "Resolver {} is disabled for the selected key", stringify!($name))));
         }
@@ -164,10 +164,10 @@ macro_rules! __pattern_resolver {
         });
     };
     (@filter $name:ident, $enum:ty) => {
-        ::core::option::Option::Some($crate::ResolverFilter {
+        ::core::option::Option::Some(::unchained_macros_core::ResolverFilter {
             selector: ::std::any::TypeId::of::<$enum>,
             lookup: |key| $crate::__private::dictionary_lookup(
-                key, <$name as $crate::ResolverSelection<$enum>>::SELECTIONS,
+                key, <$name as ::unchained_macros_core::ResolverSelection<$enum>>::SELECTIONS,
             ),
         })
     };

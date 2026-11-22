@@ -3,7 +3,7 @@
 use crate::Chivalry2::Engine::{ENetMode, UObject};
 use crate::Chivalry2::TBL::TBLTypes::UGameplay;
 
-#[unchained_macros::bind_func_detour(UGameplay::IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
+#[unchained_macros_core::bind_func_detour(UGameplay::IsDedicatedServer, || crate::tools::hook_globals::cli_args().playable_listen)]
 pub(crate) unsafe fn is_dedicated_server_detour(context: *mut UObject) -> bool {
     if let Some(world) = crate::tools::hook_globals::globals().world() {
         let mode = unsafe { world.InternalGetNetMode() };

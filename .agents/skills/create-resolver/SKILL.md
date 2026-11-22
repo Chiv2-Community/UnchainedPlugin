@@ -9,7 +9,7 @@ Find the verified native target, then resolve its address reproducibly.
 
 - Follow [Creating game hooks](../../../CONTRIBUTING.md#creating-game-hooks)
   and the [native source layout](../../../docs/engine-sources.md).
-- Read the [resolver reference](../../../unchained-macros/resolvers.md) and nearby
+- Read the [resolver reference](../../../unchained-macros-patternsleuth/resolvers.md) and nearby
   implementations before choosing a scan strategy.
 - This skill locates addresses; binding declarations and plugin behavior are
   separate work.
@@ -71,11 +71,11 @@ Reuse an existing resolver when it already resolves the verified target.
 - Resolver identifiers are cache/registration keys. For explicitly requested
   renames, update every consumer; expect fresh scans under new keys.
 - If source ownership remains unproven, follow the
-  [native ownership guidance](../../../unchained-macros/resolvers.md); do not fabricate
+  [native ownership guidance](../../../unchained-macros-patternsleuth/resolvers.md); do not fabricate
   a native header or receiver.
 - Startup roots come from bindings and patches, not every declared resolver.
   Register side-effect/offset-map providers explicitly with
-  `unchained_macros::require_resolver!(ResolverName)`. Keep transitive dependencies
+  `unchained_macros_patternsleuth::require_resolver!(ResolverName)`. Keep transitive dependencies
   inside the shared Patternsleuth context; do not restore global inventory scans.
 - Choose the narrowest verified search:
   - `Simple`: one unique byte-pattern address.
@@ -94,7 +94,7 @@ Reuse an existing resolver when it already resolves the verified target.
   Use `PLATFORM: None` to disable that storefront, including hooks/patches.
   Empty pattern lists are compile errors. Platform-aware custom searches alone
   do not restrict installation; use `using crate::PlatformType` to read frozen state.
-- Use the [custom resolver examples](../../../unchained-macros/README.md#custom-resolvers)
+- Use the [custom resolver examples](../../../unchained-macros-patternsleuth/resolvers.md#custom-resolvers)
   for composition and error handling.
 
 Example search shape; replace the illustrative pattern with verified bytes:

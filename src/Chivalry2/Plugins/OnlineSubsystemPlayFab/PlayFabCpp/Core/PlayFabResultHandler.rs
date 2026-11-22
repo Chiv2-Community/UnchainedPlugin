@@ -9,14 +9,14 @@ define_pattern_resolver!(PlayFabRequestHandler__SendRequest, [
 ]);
 
 /// Static request helpers; the return-storage argument is not a receiver.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct PlayFabRequestHandler {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl PlayFabRequestHandler {
-    #[unchained_macros::bind_resolved_func(PlayFabRequestHandler__SendRequest)]
+    #[unchained_macros_core::bind_resolved_func(PlayFabRequestHandler__SendRequest)]
     pub(crate) unsafe fn SendRequest(
         storage: *mut TSharedRefIHttpRequest,
         url: *mut FString,

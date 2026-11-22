@@ -3,7 +3,7 @@ mod support;
 use object::SectionKind;
 use patternsleuth::{NamedMemorySection, image::Image, scanner::Pattern};
 use support::{BASE, TEXT, image, initialize_selection, Flavor};
-use unchained_macros::define_pattern_resolver;
+use unchained_macros_patternsleuth::define_pattern_resolver;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static PATTERN_EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
@@ -27,12 +27,12 @@ define_pattern_resolver!(LastReference, XrefLast, [
 ]);
 
 mod nested {
-    use unchained_macros::define_pattern_resolver;
+    use unchained_macros_patternsleuth::define_pattern_resolver;
     use super::support::Flavor;
 
-    #[unchained_macros::resolver_selection_key(fallback = Declared)]
+    #[unchained_macros_core::resolver_selection_key(fallback = Declared)]
     enum Fallback { Missing, Declared }
-    impl unchained_macros::ResolverSelector for Fallback {
+    impl unchained_macros_core::ResolverSelector for Fallback {
         fn current() -> Self { Self::Missing }
     }
 
@@ -86,8 +86,9 @@ fn all_none_dictionaries_compile_and_cannot_resolve() {
 #[test_case::test_case(Flavor::Second, true; "explicit list stays enabled")]
 fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, enabled: bool) {
     if !initialize_selection(flavor) { return; }
-    assert_eq!(unchained_macros::supports_selection("Disabled", flavor), enabled);
-    assert_eq!(unchained_macros::supports_selection("DisabledInline", flavor), enabled);
+    let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(flavor).unwrap();
+    assert_eq!(snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("Disabled"), enabled);
+    assert_eq!(snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("DisabledInline"), enabled);
     let image = image(&[]);
     let standard = image.resolve(nested::Disabled::resolver());
     let inline = image.resolve(nested::DisabledInline::resolver());

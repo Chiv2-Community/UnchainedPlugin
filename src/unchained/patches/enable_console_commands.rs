@@ -2,7 +2,7 @@
 
 use crate::Chivalry2::TBL::TBLLocalPlayer::UTBLLocalPlayer__Exec;
 use crate::Chivalry2::Engine::Runtime::Engine::GameFramework::PlayerController::AuthenticateConsoleCommandCaller;
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
 // Console-command permission bypass in UTBLLocalPlayer::Exec.
 #[register_patch(UTBLLocalPlayer__Exec)]

@@ -3,7 +3,7 @@
 use crate::Chivalry2::Engine::*;
 
 /// Native UPlayer prefix; sufficient for UObject class checks.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UPlayer {
     pub base: UObject,

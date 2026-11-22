@@ -7,7 +7,7 @@ define_pattern_resolver!(UNetDriver__GetNetMode, [
 ]);
 
 /// Partial UNetDriver layout; fields after ServerConnection are omitted.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UNetDriver {
     pub base: UObject,

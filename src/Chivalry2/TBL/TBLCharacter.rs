@@ -19,7 +19,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for ATBLCharacter {
     const CLASS_NAME: &'static str = "TBLCharacter";
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct ATBLCharacter {
     #[inherit]
@@ -246,7 +246,7 @@ pub struct ATBLCharacter {
     pub final_padding: [u8; 0x18],                         // 0x16F8
 } // Size: 0x1710
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl ATBLCharacter {
     /// # Safety
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.
@@ -254,9 +254,9 @@ impl ATBLCharacter {
         APlayerState::from_field(self.last_player_state, "TBLCharacter.LastPlayerState")
     }
 
-    #[unchained_macros::bind_resolved_func(ATBLCharacter__OnKilled)]
+    #[unchained_macros_core::bind_resolved_func(ATBLCharacter__OnKilled)]
     pub(crate) unsafe fn OnKilled(self: *mut Self, damage_event: *const FDeathDamageTakenEvent) {}
 
-    #[unchained_macros::bind_resolved_func(ATBLCharacter__OnDamageTaken)]
+    #[unchained_macros_core::bind_resolved_func(ATBLCharacter__OnDamageTaken)]
     pub(crate) unsafe fn OnDamageTaken(self: *mut Self, damage_event: *const FDamageTakenEvent) {}
 }

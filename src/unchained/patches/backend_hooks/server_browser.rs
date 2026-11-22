@@ -11,7 +11,7 @@ use std::ffi::c_void;
 
 /// # Safety
 /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-#[unchained_macros::bind_func_detour(OpenAPIClientAPI::GetPost_GetMotd)]
+#[unchained_macros_core::bind_func_detour(OpenAPIClientAPI::GetPost_GetMotd)]
 pub unsafe fn get_post_get_motd_detour(
     this: *mut OpenAPIClientAPI,
     result: *mut TSharedPtrIHttpRequest,
@@ -27,7 +27,7 @@ pub unsafe fn get_post_get_motd_detour(
 
 /// # Safety
 /// Arguments must satisfy the request's native ABI and game-thread lifetime rules.
-#[unchained_macros::bind_func_detour(OpenAPIClientAPI::GetPost_GetCurrentGames)]
+#[unchained_macros_core::bind_func_detour(OpenAPIClientAPI::GetPost_GetCurrentGames)]
 pub unsafe fn get_post_get_current_games_detour(
     this: *mut OpenAPIClientAPI,
     result: *mut TSharedPtrIHttpRequest,
@@ -41,7 +41,7 @@ pub unsafe fn get_post_get_current_games_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(PlayFabRequestHandler::SendRequest)]
+#[unchained_macros_core::bind_func_detour(PlayFabRequestHandler::SendRequest)]
 pub(crate) unsafe fn send_request_detour(
     storage: *mut TSharedRefIHttpRequest,
     url: *mut FString,

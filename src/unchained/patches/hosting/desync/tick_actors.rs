@@ -3,7 +3,7 @@
 use crate::tools::hook_globals::cli_args;
 use crate::Chivalry2::TBL::TBLCharacterAnimInstance::TickActor;
 use crate::Chivalry2::Engine::Runtime::Engine::GameFramework::CharacterMovementComponent::UCharacterMovementComponent__MoveAutonomous;
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
 // Preserve existing bytes and activation. An older build identifies the target
 // as StartAttack; the intended behavior of this legacy patch needs validation.

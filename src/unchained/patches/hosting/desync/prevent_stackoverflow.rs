@@ -10,7 +10,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-#[unchained_macros::bind_func_detour(UObject::ProcessEvent, || cli_args().apply_desync_patch)]
+#[unchained_macros_core::bind_func_detour(UObject::ProcessEvent, || cli_args().apply_desync_patch)]
 pub(crate) unsafe fn process_event_detour(
     this: *mut UObject,
     function: *mut UFunction,

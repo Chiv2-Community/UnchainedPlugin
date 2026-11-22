@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use unchained_macros::{
-    bind_resolved_func, bind_resolved_value, define_pattern_resolver,
-    function_is_bound, initialize_function_bindings_where,
-    initialize_value_bindings_where, supports_selection,
-};
+use unchained_macros_core::{bind_resolved_func, bind_resolved_value, function_is_bound_for, initialize_bindings_for, initialize_value_bindings_where};
+use unchained_macros_patternsleuth::{define_pattern_resolver, PatternsleuthResolver, ScanContext};
 
-#[unchained_macros::resolver_selection_key(require = [Allow, Deny])]
+#[unchained_macros_core::resolver_selection_key(require = [Allow, Deny])]
 enum Mode { Allow, Deny }
-impl unchained_macros::ResolverSelector for Mode {
+impl unchained_macros_core::ResolverSelector for Mode {
     fn current() -> Self { Self::Allow }
 }
 
@@ -48,16 +45,16 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
         offsets.insert("Disabled".into(), fixture as *const () as u64 - 1);
         offsets.insert("DisabledValue".into(), (&raw const VALUE) as u64 - 1);
     }
-    let applicable = |name: &str| supports_selection(name, Mode::Allow);
-    let snapshot = unchained_macros::SelectorSnapshot::from_selection(Mode::Allow).unwrap();
+    let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(Mode::Allow).unwrap();
+    let applicable = |name: &str| snapshot.supports_resolver_for::<PatternsleuthResolver>(name);
     unsafe {
-        initialize_function_bindings_where(1, &offsets, |binding| binding.supports(&snapshot)).unwrap();
+        initialize_bindings_for::<PatternsleuthResolver>(&ScanContext::new(1, &offsets), &snapshot).unwrap();
         initialize_value_bindings_where(1, &offsets, applicable);
         assert_eq!(enabled(), 42);
         assert_eq!(enabled_value(), 7);
     }
-    assert!(function_is_bound("Enabled"));
-    assert!(!function_is_bound("Disabled"));
+    assert!(function_is_bound_for::<PatternsleuthResolver>("Enabled"));
+    assert!(!function_is_bound_for::<PatternsleuthResolver>("Disabled"));
     assert!(std::panic::catch_unwind(|| unsafe { disabled() }).is_err());
     assert!(std::panic::catch_unwind(|| unsafe { disabled_value() }).is_err());
 }

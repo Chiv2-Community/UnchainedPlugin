@@ -8,7 +8,7 @@ use crate::Chivalry2::Engine::UEHash;
 
 use widestring::U16CString;
 
-unchained_macros::define_custom_resolver!(FNameToString,
+unchained_macros_patternsleuth::define_custom_resolver!(FNameToString,
     delegate patternsleuth::resolvers::unreal::fname::FNameToString);
 
 define_pattern_resolver!(
@@ -17,7 +17,7 @@ define_pattern_resolver!(
     ["48 89 5C 24 ?? 57 48 83 EC 30 48 8B D9 48 89 54 24 ??"]
 );
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u32)]
 pub enum EFindName {
@@ -26,7 +26,7 @@ pub enum EFindName {
     ReplaceNotSafeForThreading,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Default, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct FName {
@@ -34,11 +34,11 @@ pub struct FName {
     pub number: u32,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FName {
     /// # Safety
     /// The engine name table must be initialized and output must be writable.
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         self::FNameToString
     )]
     pub unsafe fn ToString(&self, output: &mut FString) {}
@@ -92,7 +92,7 @@ impl std::fmt::Debug for FName {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct FNameEntryId {

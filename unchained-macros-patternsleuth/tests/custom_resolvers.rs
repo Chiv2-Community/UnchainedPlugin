@@ -1,6 +1,6 @@
 use binary_bloodhound::BinaryMatcher;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use unchained_macros::define_custom_resolver;
+use unchained_macros_patternsleuth::define_custom_resolver;
 
 mod support;
 use support::{image, initialize_selection, Flavor, BASE, TEXT};

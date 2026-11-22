@@ -19,7 +19,7 @@ define_pattern_resolver!(
     ["44 88 4C 24 20 53 55 56 57 41 55 41 57 48 83 EC 28 48 8B FA 48 8B D9"]
 );
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug, Default)]
 #[repr(C)]
 pub struct FString {
@@ -32,7 +32,7 @@ const _: () = {
     assert!(std::mem::offset_of!(FString, data) == 0);
 };
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FString {
     pub fn new() -> Self {
         Self::default()
@@ -66,7 +66,7 @@ impl FString {
     /// # Safety
     /// Self must be a live writable native string with exclusive access. Text
     /// must contain count readable UTF-16 units; count must be nonnegative.
-    #[unchained_macros::bind_resolved_func(self::FString__AppendChars)]
+    #[unchained_macros_core::bind_resolved_func(self::FString__AppendChars)]
     pub unsafe fn AppendChars(self: *mut Self, text: *const TCHAR, count: i32) {}
 
     /// Using direct to_string binds a reference to a string
@@ -128,7 +128,7 @@ impl FString {
         String::from_utf16(trimmed_utf16).map_err(|_| FStringCopyError::Utf16DecodeFailed)
     }
 
-    #[unchained_macros::bind_resolved_func(FString__Find)]
+    #[unchained_macros_core::bind_resolved_func(FString__Find)]
     pub(crate) unsafe fn Find(
         self: *const Self,
         needle: *const TCHAR,
@@ -138,7 +138,7 @@ impl FString {
     ) -> i32 {
     }
 
-    #[unchained_macros::bind_resolved_func(FString__ParseIntoArray)]
+    #[unchained_macros_core::bind_resolved_func(FString__ParseIntoArray)]
     pub(crate) unsafe fn ParseIntoArray(
         self: *const Self,
         output: *mut TArray<FString>,

@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::atomic::Ordering;
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::OnPreLoadMap)]
+#[unchained_macros_core::bind_func_detour(UTBLGameInstance::OnPreLoadMap)]
 pub(crate) unsafe fn on_pre_load_map_detour(
     this: *mut UTBLGameInstance,
     url: *mut crate::Chivalry2::Engine::FString,
@@ -32,7 +32,7 @@ pub(crate) unsafe fn on_pre_load_map_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(UTBLGameInstance::OnPostLoadMap)]
+#[unchained_macros_core::bind_func_detour(UTBLGameInstance::OnPostLoadMap)]
 pub(crate) unsafe fn on_post_load_map_detour(
     this: *mut UTBLGameInstance,
     world: *mut crate::Chivalry2::Engine::UWorld,

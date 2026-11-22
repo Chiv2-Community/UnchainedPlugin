@@ -13,9 +13,9 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::features::server_browser::http;
 use crate::tools::hook_globals::cli_args;
 use crate::tools::hook_globals::globals;
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::PreLogin)]
+#[unchained_macros_core::bind_func_detour(ATBLGameMode::PreLogin)]
 pub(crate) unsafe fn pre_login_detour(
     this: *mut ATBLGameMode,
     options: *const FString,
@@ -92,7 +92,7 @@ pub(crate) unsafe fn pre_login_detour(
     original_result
 }
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::Logout)]
+#[unchained_macros_core::bind_func_detour(ATBLGameMode::Logout)]
 pub(crate) unsafe fn logout_detour(this: *mut ATBLGameMode, exiting_player: *mut AController) {
     let this_ptr = this;
     strace!(

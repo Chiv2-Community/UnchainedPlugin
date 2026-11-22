@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::UClass;
 
 use std::ffi::c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct UBlueprint {
     #[inherit]

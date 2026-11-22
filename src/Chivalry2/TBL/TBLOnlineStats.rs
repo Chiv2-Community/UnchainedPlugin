@@ -6,15 +6,15 @@ define_pattern_resolver!(FTBLOnlineStats__SetStatInner, [
 ]);
 
 /// Opaque native statistics object. Do not construct in Rust.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FTBLOnlineStats {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FTBLOnlineStats {
     // Preserve the existing ABI and suppression of the native call.
-    #[unchained_macros::bind_resolved_func(FTBLOnlineStats__SetStatInner)]
+    #[unchained_macros_core::bind_resolved_func(FTBLOnlineStats__SetStatInner)]
     pub(crate) unsafe fn SetStatInner(self: *mut Self, _p1: i32, _p2: i32) {}
 }

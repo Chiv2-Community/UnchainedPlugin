@@ -3,7 +3,7 @@
 use crate::Chivalry2::Engine::*;
 
 // Steam/EGS FConsoleOutputDevice table 0x1446d9b40; UE Misc/OutputDevice.h.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 #[derive(Debug)]
 pub struct FOutputDevice {

@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use unchained_macros::{Patch, PatchWriter, WriteValue};
+use unchained_macros_core::{Patch, PatchWriter, WriteValue};
 
 #[derive(Default)]
 struct Writer(usize);

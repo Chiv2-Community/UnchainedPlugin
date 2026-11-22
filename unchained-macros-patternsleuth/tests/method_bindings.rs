@@ -1,11 +1,11 @@
 #![feature(arbitrary_self_types_pointers)]
 
-use unchained_macros::{runtime_bindings, NativeFunction};
+use unchained_macros_core::{runtime_bindings, NativeFunction};
 
-unchained_macros::define_pattern_resolver!(Add, ["AA"]);
-unchained_macros::define_pattern_resolver!(Borrow, ["AA"]);
-unchained_macros::define_pattern_resolver!(Storage, ["AA"]);
-unchained_macros::define_pattern_resolver!(Missing, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(Add, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(Borrow, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(Storage, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(Missing, ["AA"]);
 
 #[repr(C)]
 struct Native {
@@ -48,19 +48,19 @@ unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &
 
 #[test]
 fn metadata_preserves_signatures_and_binding_identity() {
-    let _: NativeFunction<unsafe extern "C" fn(i32) -> i32> = Native::__UNCHAINED_BINDING_add;
-    let _: NativeFunction<for<'a> unsafe extern "C" fn(&'a Native) -> &'a i32> =
+    let _: NativeFunction<unsafe extern "C" fn(i32) -> i32, unchained_macros_patternsleuth::PatternsleuthResolver> = Native::__UNCHAINED_BINDING_add;
+    let _: NativeFunction<for<'a> unsafe extern "C" fn(&'a Native) -> &'a i32, unchained_macros_patternsleuth::PatternsleuthResolver> =
         Native::__UNCHAINED_BINDING_borrow;
-    let _: NativeFunction<for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32> =
+    let _: NativeFunction<for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32, unchained_macros_patternsleuth::PatternsleuthResolver> =
         Native::__UNCHAINED_BINDING_storage;
     let binding = Native::__UNCHAINED_BINDING_add.binding();
-    let registration = unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>()
+    let registration = unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
         .find(|r| r.binding.name() == "Native::add")
         .unwrap();
     assert!(std::ptr::eq(binding, registration.binding));
     assert!(
-        !unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>()
-            .any(|r| r.binding.offset_key() == "DoesNotExist")
+        !unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+            .any(|r| r.binding.resolver_name() == "DoesNotExist")
     );
 }
 
@@ -69,7 +69,7 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
     let binding = Native::__UNCHAINED_BINDING_add.binding();
     let entry = add as *const () as usize;
     unsafe {
-        binding.initialize(1, (entry - 1) as u64).unwrap();
+        binding.initialize_address(std::num::NonZeroUsize::new(entry).unwrap()).unwrap();
         assert_eq!(Native::add(10), 11);
         let detour = Box::leak(Box::new(retour::RawDetour::new(
             add as *const (), original_trampoline as *const (),
@@ -78,7 +78,7 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
         detour.enable().unwrap();
         assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(10), 12);
         assert_eq!(Native::add(10), 11);
-        binding.initialize(1, (entry - 1) as u64).unwrap();
+        binding.initialize_address(std::num::NonZeroUsize::new(entry).unwrap()).unwrap();
         assert_eq!(Native::add(10), 11);
         assert!(binding.publish_detour(detour).is_err());
         detour.disable().unwrap();
@@ -92,11 +92,11 @@ fn borrowed_receiver_and_return_storage_preserve_ownership() {
     unsafe {
         Native::__UNCHAINED_BINDING_borrow
             .binding()
-            .initialize(1, (borrow as *const () as usize - 1) as u64)
+            .initialize_address(std::num::NonZeroUsize::new(borrow as *const () as usize).unwrap())
             .unwrap();
         Native::__UNCHAINED_BINDING_storage
             .binding()
-            .initialize(1, (storage as *const () as usize - 1) as u64)
+            .initialize_address(std::num::NonZeroUsize::new(storage as *const () as usize).unwrap())
             .unwrap();
         let native = Native { value: 42 };
         assert!(std::ptr::eq(native.borrow(), &native.value));
@@ -124,12 +124,12 @@ fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
 
 #[test]
 fn duplicate_native_addresses_are_rejected_and_failed_claims_roll_back() {
-    let claim = unchained_macros::__private::claim_detour_address(0x12345).unwrap();
-    assert!(unchained_macros::__private::claim_detour_address(0x12345).is_err());
+    let claim = unchained_macros_core::__private::claim_detour_address(0x12345).unwrap();
+    assert!(unchained_macros_core::__private::claim_detour_address(0x12345).is_err());
     drop(claim);
-    unchained_macros::__private::claim_detour_address(0x12345)
+    unchained_macros_core::__private::claim_detour_address(0x12345)
         .unwrap()
         .commit();
-    assert!(unchained_macros::__private::claim_detour_address(0x12345).is_err());
-    assert!(unchained_macros::__private::claim_detour_address(0).is_err());
+    assert!(unchained_macros_core::__private::claim_detour_address(0x12345).is_err());
+    assert!(unchained_macros_core::__private::claim_detour_address(0).is_err());
 }

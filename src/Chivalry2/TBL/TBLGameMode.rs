@@ -27,7 +27,7 @@ define_pattern_resolver!(ATBLGameMode__BroadcastChat, [
     "48 85 D2 0F 84 3E 04 00 00 48 8B C4 4C 89 40 18 48 89 48 08 55 41 55 41 56 41 57 48 8D 68 A9 48"
 ]);
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct ATBLGameMode {
@@ -333,9 +333,9 @@ pub struct ATBLGameMode {
     pub auto_balance_with_friends_blocked: bool,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl ATBLGameMode {
-    #[unchained_macros::bind_resolved_func(ATBLGameMode__PreLogin)]
+    #[unchained_macros_core::bind_resolved_func(ATBLGameMode__PreLogin)]
     pub(crate) unsafe fn PreLogin(
         self: *mut Self,
         options: *const FString,
@@ -345,10 +345,10 @@ impl ATBLGameMode {
     ) {
     }
 
-    #[unchained_macros::bind_resolved_func(ATBLGameMode__Logout)]
+    #[unchained_macros_core::bind_resolved_func(ATBLGameMode__Logout)]
     pub(crate) unsafe fn Logout(self: *mut Self, exiting_player: *mut AController) {}
 
-    #[unchained_macros::bind_resolved_func(ATBLGameMode__BroadcastChat)]
+    #[unchained_macros_core::bind_resolved_func(ATBLGameMode__BroadcastChat)]
     pub(crate) unsafe fn BroadcastChat(
         self: *mut Self,
         sender: *mut AActor,

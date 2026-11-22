@@ -29,7 +29,7 @@ pub(crate) fn send_ingame_message_with_world(
         {
             return;
         }
-        if let Err(error) = unchained_macros::require_function_bindings(&[
+        if let Err(error) = unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&[
             "UTBLSystemLibrary__GetTBLGameMode",
             "ATBLGameMode__BroadcastLocalizedChat",
         ]) {

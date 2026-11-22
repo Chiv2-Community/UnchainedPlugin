@@ -8,7 +8,7 @@ use ::windows::Win32::System::Threading::{
     EnterCriticalSection, LeaveCriticalSection, CRITICAL_SECTION,
 };
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FWindowsCriticalSection(UnsafeCell<CRITICAL_SECTION>);

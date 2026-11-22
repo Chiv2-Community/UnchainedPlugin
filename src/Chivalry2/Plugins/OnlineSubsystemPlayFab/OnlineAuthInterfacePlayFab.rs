@@ -9,14 +9,14 @@ define_pattern_resolver!(FOnlineAuthPlayFab__EndAuthentication, [
 
 // Current Steam/Epic layouts, verified against the native session getter:
 // FOnlineAuthPlayFab::PlayFabSubsystem (+0xe0), SessionInterface.Object (+0x140).
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FOnlineAuthPlayFab {
     padding: [u8; 0xe0],
     subsystem: *const SubsystemContext,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FOnlineAuthPlayFab {
     pub(crate) unsafe fn has_session(self: *const Self) -> bool {
         unsafe { !(*(*self).subsystem).session.is_null() }
@@ -24,7 +24,7 @@ impl FOnlineAuthPlayFab {
 
     // Shutdown clears SessionInterface before the auth destructor revokes tickets.
     // Skip EndAuthentication, not the remaining destructor cleanup.
-    #[unchained_macros::bind_resolved_func(FOnlineAuthPlayFab__EndAuthentication)]
+    #[unchained_macros_core::bind_resolved_func(FOnlineAuthPlayFab__EndAuthentication)]
     pub(crate) unsafe fn EndAuthentication(self: *const Self, user_id: *const c_void) {}
 }
 

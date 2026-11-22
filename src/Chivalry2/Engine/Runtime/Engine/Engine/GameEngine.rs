@@ -2,7 +2,7 @@
 
 use std::ffi::c_void;
 
-unchained_macros::define_custom_resolver!(UGameEngineTick,
+unchained_macros_patternsleuth::define_custom_resolver!(UGameEngineTick,
     delegate patternsleuth::resolvers::unreal::game_loop::UGameEngineTick);
 
 define_pattern_resolver!(AllowAlternateBackend, [
@@ -14,18 +14,18 @@ define_pattern_resolver!(DedicatedServerInit, [
 ]);
 
 /// Opaque engine-owned game engine; no Rust layout is assumed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UGameEngine {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UGameEngine {
-    #[unchained_macros::bind_resolved_func(DedicatedServerInit)]
+    #[unchained_macros_core::bind_resolved_func(DedicatedServerInit)]
     pub(crate) unsafe fn DedicatedServerInit(context: *const c_void) {}
 
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         self::UGameEngineTick
     )]
     pub(crate) unsafe fn Tick(self: *mut Self, delta: f32, state: u8) {}

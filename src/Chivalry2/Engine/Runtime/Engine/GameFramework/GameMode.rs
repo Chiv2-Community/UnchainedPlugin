@@ -8,14 +8,14 @@ define_pattern_resolver!(
 );
 
 /// Opaque engine-owned game mode; no Rust layout is assumed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct AGameMode {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl AGameMode {
-    #[unchained_macros::bind_resolved_func(AGameMode__SetMatchState)]
+    #[unchained_macros_core::bind_resolved_func(AGameMode__SetMatchState)]
     pub(crate) unsafe fn SetMatchState(self: *mut Self, state: FName) {}
 }

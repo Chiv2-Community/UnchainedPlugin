@@ -15,23 +15,23 @@ type ObjectIndex = i32;
 /// # Safety
 /// Startup must bind the process-lifetime FUObjectArray. Access through the
 /// static must follow the registry's native synchronization rules.
-#[unchained_macros::bind_resolved_value(
+#[unchained_macros_core::bind_resolved_value(
     patternsleuth::resolvers::unreal::guobject_array::GUObjectArray,
     Address
 )]
 pub static GUObjectArray: *mut FUObjectArray;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectCreateListener;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectDeleteListener;
 
-#[unchained_macros::runtime_bindings(global)]
+#[unchained_macros_core::runtime_bindings(global)]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectArray {
@@ -49,7 +49,7 @@ pub struct FUObjectArray {
     master_serial_number: AtomicI32,
 }
 
-#[unchained_macros::runtime_bindings(global)]
+#[unchained_macros_core::runtime_bindings(global)]
 impl FUObjectArray {
     pub fn objects(&self) -> CriticalSectionGuard<'_, '_, FChunkedFixedUObjectArray> {
         CriticalSectionGuard::lock(&self.obj_objects_critical, &self.obj_objects)
@@ -131,7 +131,7 @@ impl<'a> Iterator for ObjectIterator<'a> {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FChunkedFixedUObjectArray {
@@ -165,7 +165,7 @@ impl FChunkedFixedUObjectArray {
     }
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectItem {

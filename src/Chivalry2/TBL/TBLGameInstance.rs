@@ -30,27 +30,27 @@ define_pattern_resolver!(
 );
 
 /// Opaque native game instance. Only live engine-owned pointers are valid.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UTBLGameInstance {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UTBLGameInstance {
-    #[unchained_macros::bind_resolved_func(UTBLGameInstance__LoadFrontEndMap)]
+    #[unchained_macros_core::bind_resolved_func(UTBLGameInstance__LoadFrontEndMap)]
     pub(crate) unsafe fn LoadFrontEndMap(
         self: *mut Self,
         _url: *mut crate::Chivalry2::Engine::FString,
     ) -> bool {
     }
-    #[unchained_macros::bind_resolved_func(UTBLGameInstance__OnPreLoadMap)]
+    #[unchained_macros_core::bind_resolved_func(UTBLGameInstance__OnPreLoadMap)]
     pub(crate) unsafe fn OnPreLoadMap(
         self: *mut Self,
         url: *mut crate::Chivalry2::Engine::FString,
     ) {
     }
-    #[unchained_macros::bind_resolved_func(UTBLGameInstance__OnPostLoadMap)]
+    #[unchained_macros_core::bind_resolved_func(UTBLGameInstance__OnPostLoadMap)]
     pub(crate) unsafe fn OnPostLoadMap(
         self: *mut Self,
         world: *mut crate::Chivalry2::Engine::UWorld,

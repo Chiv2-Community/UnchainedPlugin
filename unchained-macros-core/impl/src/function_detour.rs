@@ -11,10 +11,10 @@ impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let target = input.parse()?;
         let condition = if input.is_empty() {
-            syn::parse_quote!(ACTIVE)
+            syn::parse_quote!(|| true)
         } else {
             input.parse::<syn::Token![,]>()?;
-            if input.is_empty() { syn::parse_quote!(ACTIVE) } else { input.parse()? }
+            if input.is_empty() { syn::parse_quote!(|| true) } else { input.parse()? }
         };
         if !input.is_empty() {
             input.parse::<syn::Token![,]>()?;
@@ -288,17 +288,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     } else {
         quote! { let _: ::unchained_macros_core::NativeFunction<#native, _> = #target; }
     };
-    let condition = match &condition {
-        syn::Expr::Path(path) if path.path.is_ident("ACTIVE") => quote!(|| true),
-        syn::Expr::Path(path)
-            if ["INACTIVE", "CALLED", "DISABLED"]
-                .iter()
-                .any(|s| path.path.is_ident(s)) =>
-        {
-            quote!(|| false)
-        }
-        _ => quote!(#condition),
-    };
     Ok(quote! {
         #function
         #(#cfg)*
@@ -432,13 +421,11 @@ mod tests {
 
     #[test_case::test_case(quote!(Native::call), quote!(|| true); "default")]
     #[test_case::test_case(quote!(Native::call,), quote!(|| true); "trailing comma")]
-    #[test_case::test_case(quote!(Native::call, ACTIVE), quote!(|| true); "active")]
-    #[test_case::test_case(quote!(Native::call, INACTIVE), quote!(|| false); "inactive")]
-    #[test_case::test_case(quote!(Native::call, CALLED), quote!(|| false); "called")]
-    #[test_case::test_case(quote!(Native::call, DISABLED), quote!(|| false); "disabled")]
+    #[test_case::test_case(quote!(Native::call, || true), quote!(|| true); "enabled")]
+    #[test_case::test_case(quote!(Native::call, || false), quote!(|| false); "disabled")]
     #[test_case::test_case(quote!(Native::call, || enabled()), quote!(|| enabled()); "closure")]
     #[test_case::test_case(quote!(Native::call, enabled), quote!(enabled); "function")]
-    fn conditions_preserve_status_aliases_and_custom_predicates(args: Tokens, expected: Tokens) {
+    fn conditions_default_to_enabled_and_preserve_explicit_predicates(args: Tokens, expected: Tokens) {
         let expanded = expand(args, quote!(unsafe fn replacement() {})).unwrap();
         let file = syn::parse2::<syn::File>(expanded).unwrap();
         let condition = file.items.iter().find_map(|item| match item {

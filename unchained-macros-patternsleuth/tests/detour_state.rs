@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
-use unchained_macros::{detour_is_enabled, detour_is_initialized, HookRegistration};
+use unchained_macros_core::{detour_is_enabled, detour_is_initialized, HookRegistration};
 
 static HOOK: OnceLock<retour::RawDetour> = OnceLock::new();
-static BINDING: unchained_macros::FunctionBinding =
-    unchained_macros::FunctionBinding::new("Fixture::target", &unchained_macros::ResolverDescriptor {
-        name: "FixtureTarget", implementation: unchained_macros::PatternsleuthResolver::offset("FixtureTarget"), filter: None,
+static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patternsleuth::PatternsleuthResolver> =
+    unchained_macros_core::FunctionBinding::new("Fixture::target", &unchained_macros_core::Resolver {
+        name: "FixtureTarget", implementation: unchained_macros_patternsleuth::PatternsleuthResolver::offset("FixtureTarget"), filter: None,
     });
 
 #[inline(never)]
@@ -15,7 +15,7 @@ unsafe extern "C" fn target(value: i32) -> i32 {
 unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
 
 inventory::submit! {
-    unchained_macros::__private::ErasedHookRegistration::new(&HookRegistration {
+    unchained_macros_core::__private::ErasedHookRegistration::new(&HookRegistration {
         name: "FixtureDetour",
         binding: &BINDING,
         hook_fn: |_| unreachable!(),

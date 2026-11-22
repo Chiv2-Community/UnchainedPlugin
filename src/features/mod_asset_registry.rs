@@ -84,7 +84,7 @@ unsafe fn serialize_mod_asset_registry_bytes(bytes: &[u8]) -> Result<(), String>
     let size = i64::try_from(bytes.len())
         .map_err(|_| "ModAssetRegistry.bin is too large for FArchive".to_string())?;
     let registry = IAssetRegistry::asset_registry_interface()?;
-    unchained_macros::require_function_bindings(&[
+    unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&[
         "FLargeMemoryReader__FLargeMemoryReader",
         "FLargeMemoryReader__Destructor",
     ])?;

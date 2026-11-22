@@ -2,8 +2,8 @@
 
 use std::ffi::c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type TSharedRefIHttpRequest = c_void; // TSharedRef<IHttpRequest, 0>
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type TSharedPtrIHttpRequest = c_void; // TSharedPtr<IHttpRequest, 0>

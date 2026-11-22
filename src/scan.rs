@@ -4,7 +4,8 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use unchained_macros::{SelectorSnapshot, SelectorSnapshotExt};
+use unchained_macros_core::SelectorSnapshot;
+use unchained_macros_patternsleuth::SelectorSnapshotExt;
 
 pub fn scan(snapshot: &SelectorSnapshot, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;
@@ -56,12 +57,12 @@ pub fn scan(snapshot: &SelectorSnapshot, resolvers_to_scan: Vec<&'static NamedRe
                 offsets.insert(resolver.name.to_string(), (val-base) & 0xFFFFFFF);
             }
         }
-        if unchained_macros::is_required_value(resolver.name) && !offsets.contains_key(resolver.name) {
+        if unchained_macros_core::is_required_value(resolver.name) && !offsets.contains_key(resolver.name) {
             panic!("Required native value {} could not be resolved: {resolution:?}", resolver.name);
         }
     }
 
-    for p in inventory::iter::<unchained_macros::OffsetRegisty> {
+    for p in inventory::iter::<unchained_macros_patternsleuth::OffsetRegisty> {
         let map: HashMap<String, u64> = (p.map)();
         sinfo!("Offset Registry '{}': {} entries", p.name, map.len());
         for (k, v) in map.iter() {

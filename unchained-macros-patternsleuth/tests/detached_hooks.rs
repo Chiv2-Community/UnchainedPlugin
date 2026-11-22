@@ -2,22 +2,21 @@
 #![feature(arbitrary_self_types_pointers)]
 #![allow(non_snake_case)]
 
-const BASE: usize = 1;
-
 mod model {
-    unchained_macros::define_pattern_resolver!(DetachedAdd, ["AA"]);
-    unchained_macros::define_pattern_resolver!(DetachedAlias, ["AA"]);
-    unchained_macros::define_pattern_resolver!(DetachedBorrow, ["AA"]);
-    unchained_macros::define_pattern_resolver!(DetachedStorage, ["AA"]);
-    unchained_macros::define_pattern_resolver!(DetachedGlobalOff, ["AA"]);
-    unchained_macros::define_pattern_resolver!(DetachedZero, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedAdd, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedAlias, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedBorrow, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedStorage, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedGlobalOff, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(DetachedZero, ["AA"]);
+    unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Detached);
 
     #[repr(C)]
     pub struct Native {
         pub value: i32,
     }
 
-    #[unchained_macros::runtime_bindings]
+    #[unchained_macros_core::runtime_bindings]
     impl Native {
         #[bind_resolved_func(DetachedAdd)]
         pub unsafe fn add(value: i32) -> i32 {}
@@ -31,7 +30,7 @@ mod model {
         pub unsafe fn global_off(value: i32) -> i32 {}
         #[bind_resolved_func(DetachedZero)]
         pub unsafe fn zero() -> i32 {}
-        #[bind_resolved_request_function(GetPost_Detached)]
+        #[bind_resolved_func(GetPost_Detached)]
         pub unsafe fn request(value: i32) -> i32 {}
         #[cfg(any())]
         #[bind_resolved_func(DoesNotExist)]
@@ -45,52 +44,52 @@ static CONDITION: AtomicBool = AtomicBool::new(false);
 static ADD_CALLS: AtomicUsize = AtomicUsize::new(0);
 static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-#[unchained_macros::bind_func_detour(model::Native::add, || CONDITION.load(Ordering::SeqCst))]
+#[unchained_macros_core::bind_func_detour(model::Native::add, || CONDITION.load(Ordering::SeqCst))]
 unsafe fn plugin_add(value: i32) -> i32 {
     ADD_CALLS.fetch_add(1, Ordering::SeqCst);
     unsafe { Native::add(value) + 100 }
 }
 
-#[unchained_macros::bind_func_detour(Native::add)]
+#[unchained_macros_core::bind_func_detour(Native::add)]
 unsafe fn duplicate(value: i32) -> i32 {
     unsafe { Native::add(value) + 200 }
 }
 
-#[unchained_macros::bind_func_detour(Native::alias)]
+#[unchained_macros_core::bind_func_detour(Native::alias)]
 unsafe fn aliased(value: i32) -> i32 {
     unsafe { Native::alias(value) + 300 }
 }
 
-#[unchained_macros::bind_func_detour(Native::borrow, INACTIVE)]
+#[unchained_macros_core::bind_func_detour(Native::borrow, || false)]
 unsafe fn plugin_borrow<'a>(this: &'a Native) -> &'a Native {
     BORROW_CALLS.fetch_add(1, Ordering::SeqCst);
     unsafe { this.borrow() }
 }
 
-#[unchained_macros::bind_func_detour(Native::storage)]
+#[unchained_macros_core::bind_func_detour(Native::storage)]
 unsafe fn plugin_storage<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
     let result = unsafe { this.storage(out) };
     *result += 10;
     result
 }
 
-#[unchained_macros::bind_func_detour(Native::global_off)]
+#[unchained_macros_core::bind_func_detour(Native::global_off)]
 unsafe fn plugin_global_off(value: i32) -> i32 {
     unsafe { Native::global_off(value) + 400 }
 }
 
-#[unchained_macros::bind_func_detour(Native::zero)]
+#[unchained_macros_core::bind_func_detour(Native::zero)]
 unsafe fn plugin_zero() -> i32 {
     unsafe { Native::zero() + 1 }
 }
 
-#[unchained_macros::bind_func_detour(Native::request)]
+#[unchained_macros_core::bind_func_detour(Native::request)]
 unsafe fn plugin_request(value: i32) -> i32 {
     unsafe { Native::request(value) + 600 }
 }
 
 #[cfg(any())]
-#[unchained_macros::bind_func_detour(DoesNotExist::excluded)]
+#[unchained_macros_core::bind_func_detour(DoesNotExist::excluded)]
 unsafe fn excluded() {}
 
 #[inline(never)]
@@ -121,12 +120,11 @@ unsafe extern "C" fn request_target(value: i32) -> i32 {
 
 #[test]
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
-    let base = BASE;
     assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
     assert!(unsafe { __unchained_attach_plugin_add(true) }.is_err());
-    assert!(!unchained_macros::detour_is_initialized("plugin_add"));
-    assert!(!unchained_macros::detour_is_enabled("MissingDetour"));
-    assert!(!unchained_macros::detour_is_initialized("MissingDetour"));
+    assert!(!unchained_macros_core::detour_is_initialized("plugin_add"));
+    assert!(!unchained_macros_core::detour_is_enabled("MissingDetour"));
+    assert!(!unchained_macros_core::detour_is_initialized("MissingDetour"));
     for (binding, address) in [
         (
             Native::__UNCHAINED_BINDING_zero.binding(),
@@ -158,16 +156,16 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         ),
     ] {
         unsafe {
-            binding.initialize(base, (address - base) as u64).unwrap();
+            binding.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap();
         }
     }
-    let registration = unchained_macros::hook_inventory_for::<unchained_macros::PatternsleuthResolver>()
+    let registration = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
         .find(|r| r.hook_fn as usize == __unchained_attach_plugin_add as *const () as usize)
         .unwrap();
     assert_eq!(registration.name, "plugin_add");
     assert!(std::ptr::eq(registration.binding, Native::__UNCHAINED_BINDING_add.binding()));
     assert_eq!(registration.binding.name(), "Native::add");
-    assert_eq!(registration.binding.offset_key(), "DetachedAdd");
+    assert_eq!(registration.binding.resolver_name(), "DetachedAdd");
     assert!(!(registration.condition)());
     CONDITION.store(true, Ordering::SeqCst);
     assert!((registration.condition)());
@@ -189,10 +187,10 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             std::hint::black_box(request_target as unsafe extern "C" fn(i32) -> i32)(1),
             607
         );
-        assert!(unchained_macros::detour_is_enabled("plugin_add"));
-        assert!(unchained_macros::detour_is_initialized("plugin_borrow"));
-        assert!(!unchained_macros::detour_is_enabled("plugin_borrow"));
-        assert!(!unchained_macros::detour_is_enabled("plugin_global_off"));
+        assert!(unchained_macros_core::detour_is_enabled("plugin_add"));
+        assert!(unchained_macros_core::detour_is_initialized("plugin_borrow"));
+        assert!(!unchained_macros_core::detour_is_enabled("plugin_borrow"));
+        assert!(!unchained_macros_core::detour_is_enabled("plugin_global_off"));
         let call = std::hint::black_box(add_target as unsafe extern "C" fn(i32) -> i32);
         assert_eq!(call(7), 110);
         assert_eq!(ADD_CALLS.load(Ordering::SeqCst), 1);
@@ -239,8 +237,8 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             .disable()
             .unwrap();
         assert_eq!(call(7), 10);
-        assert!(!unchained_macros::detour_is_enabled("plugin_add"));
-        assert!(unchained_macros::detour_is_initialized("plugin_add"));
+        assert!(!unchained_macros_core::detour_is_enabled("plugin_add"));
+        assert!(unchained_macros_core::detour_is_initialized("plugin_add"));
         assert_eq!(Native::add(7), 10);
         assert_eq!(
             Native::__UNCHAINED_BINDING_add.binding().address(),

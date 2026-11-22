@@ -22,12 +22,12 @@ define_pattern_resolver![UTBLSystemLibrary__GetTBLGameMode, {
 }];
 
 /// Static native helpers only; this is not a UObject instance layout.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct UTBLSystemLibrary {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UTBLSystemLibrary {
     /// # Safety
     /// Context must be a live native object on the engine thread. The returned

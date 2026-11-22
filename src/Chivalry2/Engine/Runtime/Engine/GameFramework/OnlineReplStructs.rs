@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::*;
 
 use std::os::raw::c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FUniqueNetIdRepl {
     pub(crate) vtable: *const usize,       // 0x0000

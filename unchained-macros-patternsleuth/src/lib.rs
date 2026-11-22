@@ -1,16 +1,15 @@
 #![doc = include_str!("../README.md")]
-pub use unchained_macros_core::*;
-pub use unchained_macros_patternsleuth_impl::{define_pattern_resolver, runtime_bindings, bind_resolved_request_function};
+#![doc = include_str!("../resolver-declarations.md")]
+#![doc = include_str!("../patches.md")]
+#![doc = include_str!("../detours.md")]
+pub use unchained_macros_patternsleuth_impl::define_pattern_resolver;
 pub use context::SelectorSnapshotExt;
-pub use backend::{PatternsleuthResolver, ScanContext, RequiredResolver, OffsetRegisty,
-    startup_resolvers, initialize_function_bindings, initialize_function_bindings_where,
-    apply_registered_patches};
+pub use backend::{PatternsleuthResolver, ScanContext, RequiredResolver, OffsetRegisty, startup_resolvers};
 
 mod backend;
 mod context;
 mod signatures;
 mod custom_resolver;
-pub type ResolverDescriptor = Resolver<PatternsleuthResolver>;
 
 #[doc(hidden)]
 pub mod __private {

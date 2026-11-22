@@ -7,7 +7,7 @@ use crate::Chivalry2::Engine::{
 use crate::Chivalry2::TBL::{ATBLPlayerController, ATBLPlayerState, FOwnershipResponse};
 use std::os::raw::c_void;
 
-#[unchained_macros::bind_func_detour(
+#[unchained_macros_core::bind_func_detour(
     ATBLPlayerController::GetOwnershipFromPlayerControllerAndState
 )]
 pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
@@ -34,7 +34,7 @@ pub(crate) unsafe fn get_ownership_from_player_controller_and_state_detour(
     response
 }
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::CanUseLoadoutItem)]
+#[unchained_macros_core::bind_func_detour(ATBLPlayerController::CanUseLoadoutItem)]
 pub(crate) unsafe fn can_use_loadout_item_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
@@ -52,7 +52,7 @@ pub(crate) unsafe fn can_use_loadout_item_detour(
     response
 }
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::CanUseCharacter)]
+#[unchained_macros_core::bind_func_detour(ATBLPlayerController::CanUseCharacter)]
 pub(crate) unsafe fn can_use_character_detour(
     this: *mut ATBLPlayerController,
     result: *mut FOwnershipResponse,
@@ -66,7 +66,7 @@ pub(crate) unsafe fn can_use_character_detour(
     response
 }
 
-#[unchained_macros::bind_func_detour(
+#[unchained_macros_core::bind_func_detour(
     ATBLPlayerController::ConditionalInitializeCustomizationOnServer
 )]
 pub(crate) unsafe fn conditional_initialize_customization_on_server_detour(

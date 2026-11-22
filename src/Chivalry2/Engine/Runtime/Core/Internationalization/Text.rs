@@ -35,7 +35,7 @@ define_pattern_resolver!(FText__Destructor, [
 /// Opaque native text storage. Borrow native values through `from_ptr`;
 /// construct owned culture-invariant values with `InvariantText::new`.
 /// No zero-filled/default value represents a live UE FText.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C, align(8))]
 pub struct FText {
     text_data: *mut c_void,
@@ -43,7 +43,7 @@ pub struct FText {
     flags: u32,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FText {
     /// Borrow native text without acquiring a shared reference.
     ///

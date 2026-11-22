@@ -17,7 +17,7 @@ use crate::features::events::EVENT_SYSTEM;
 use crate::tools::command_parser::parse_command;
 use regex::Regex;
 
-#[unchained_macros::bind_func_detour(ATBLPlayerController::ClientReceiveChat_Implementation)]
+#[unchained_macros_core::bind_func_detour(ATBLPlayerController::ClientReceiveChat_Implementation)]
 pub(crate) unsafe fn client_receive_chat_detour(
     this: *mut ATBLPlayerController,
     sender: *mut ATBLPlayerState,
@@ -37,7 +37,7 @@ pub(crate) unsafe fn client_receive_chat_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(ATBLGameMode::BroadcastChat)]
+#[unchained_macros_core::bind_func_detour(ATBLGameMode::BroadcastChat)]
 pub(crate) unsafe fn broadcast_chat_detour(
     this: *mut ATBLGameMode,
     sender: *mut AActor,
@@ -55,7 +55,7 @@ pub(crate) unsafe fn broadcast_chat_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(APlayerController::ClientMessage)]
+#[unchained_macros_core::bind_func_detour(APlayerController::ClientMessage)]
 pub(crate) unsafe fn client_message_detour(
     this: *mut APlayerController,
     message: *mut FString,

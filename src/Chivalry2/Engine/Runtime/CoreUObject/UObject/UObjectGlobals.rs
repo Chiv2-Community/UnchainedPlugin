@@ -6,7 +6,7 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::UPackageMap;
 use crate::Chivalry2::Engine::TCHAR;
 
-use unchained_macros::bind_resolved_func;
+use unchained_macros_core::bind_resolved_func;
 
 mod resolvers {
     define_pattern_resolver!(

@@ -2,7 +2,7 @@
 
 use crate::tools::hook_globals::cli_args;
 use crate::Chivalry2::Engine::Runtime::Engine::Engine::NetDriver::UNetDriver__GetNetMode;
-use unchained_macros::{register_patch, Patch};
+use unchained_macros_core::{register_patch, Patch};
 
 #[register_patch(UNetDriver__GetNetMode)]
 fn force_server_net_mode(_resolved_address: u64) -> Patch {

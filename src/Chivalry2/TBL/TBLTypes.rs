@@ -8,13 +8,13 @@ define_pattern_resolver!(UGameplay__IsDedicatedServer, [
 ]);
 
 /// Rust adapter for the native UGameplay namespace, not a UObject class.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct UGameplay {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UGameplay {
-    #[unchained_macros::bind_resolved_func(UGameplay__IsDedicatedServer)]
+    #[unchained_macros_core::bind_resolved_func(UGameplay__IsDedicatedServer)]
     pub(crate) unsafe fn IsDedicatedServer(context: *mut UObject) -> bool {}
 }

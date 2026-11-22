@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicI32, AtomicPtr, Ordering};
-use unchained_macros::{bind_resolved_value, initialize_value_bindings, ValueBinding};
+use unchained_macros_core::{bind_resolved_value, initialize_value_bindings, ValueBinding};
 
 mod resolvers {
     pub struct Count;

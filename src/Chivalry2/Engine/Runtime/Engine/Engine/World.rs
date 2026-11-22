@@ -35,7 +35,7 @@ define_pattern_resolver!(
 
 // FName helpers
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ESpawnActorNameMode {
@@ -46,7 +46,7 @@ pub enum ESpawnActorNameMode {
 }
 
 // Spawning actors
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C, align(8))]
 pub struct FActorSpawnParameters {
     // 0x00: FName (Name) - Size 0x8
@@ -128,7 +128,7 @@ unsafe impl crate::Chivalry2::Engine::UObjectType for UWorld {
     const CLASS_NAME: &'static str = "World";
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UWorld {
     // 0x0000 -> 0x0028: Inherited from UObject
@@ -238,7 +238,7 @@ pub struct UWorld {
     pub _final_padding: [u8; 0x68],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UWorld {
     pub fn get_current_map_name(world: *mut UWorld) -> Option<String> {
         if world.is_null() {

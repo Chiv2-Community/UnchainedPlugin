@@ -16,8 +16,10 @@ renaming one requires updating every consumer and a fresh scan.
 Patternsleuth's entire inventory. Declarations alone are not roots; dependencies
 resolve automatically in the shared context.
 
-Add `unchained_macros::require_resolver!(Name)` for required scan side effects,
-such as populating request offsets. Request-key bindings are not resolver types.
+Add `unchained_macros_patternsleuth::require_resolver!(Name)` for required scan side effects,
+such as populating provider offsets. Declare those keys with
+`define_offset_resolver!(Key)` and bind them through `bind_resolved_func(Key)`.
+Offset-only declarations are typed resolvers but do not add scan roots.
 Project declarations override upstream namesakes. Host selection and cache
 filtering still apply; existing unrelated cache entries are retained.
 
@@ -90,17 +92,32 @@ define_pattern_resolver!(Name, ["AA BB"], |ctx, patterns| {
 ```
 
 The inline-body form also accepts selection dictionaries. Prefer
-[`define_custom_resolver!`](README.md#custom-resolvers) for composed
+[`define_custom_resolver!`](#custom-resolvers) for composed
 BinaryBloodhound matchers producing exactly one address.
+
+## Custom resolvers
+
+The matcher must take no input and produce exactly one `u64` address:
+
+```rust
+use binary_bloodhound::BinaryMatcher;
+unchained_macros_patternsleuth::define_custom_resolver!(Example,
+    BinaryMatcher::address(1).ensure_one());
+```
+
+Use `using SelectorType, |key| ...` to read the frozen context selection.
+Use `delegate upstream::Resolver` to adapt an existing Patternsleuth resolver.
+Both forms retain transitive dependencies in the shared scan context; neither
+requires an independent scan.
 
 ## Runtime support
 
-- [`src/resolvers.rs`](src/resolvers.rs): startup-root selection.
+- [`src/backend.rs`](src/backend.rs): startup roots, scan context, and offset providers.
 - [`src/signatures.rs`](src/signatures.rs): pattern modes and declarations.
 - [`src/custom_resolver.rs`](src/custom_resolver.rs): BinaryBloodhound integration.
-- [`src/binding.rs`](src/binding.rs): address publication and native calls.
-- [`src/registry.rs`](src/registry.rs): hook, patch, and offset inventories.
-- [`src/selection.rs`](src/selection.rs): typed consumer-defined restrictions.
+- [`core binding`](../unchained-macros-core/src/binding.rs): address publication and native calls.
+- [`core registry`](../unchained-macros-core/src/registry.rs): typed hook and patch inventories.
+- [`core selection`](../unchained-macros-core/src/selection.rs): consumer-defined restrictions.
 - [`startup.rs`](../src/unchained/startup.rs): host executable-base discovery.
 
 Validate game targets with fresh binary scans, not snapshots asserting production

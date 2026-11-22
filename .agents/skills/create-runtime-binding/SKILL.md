@@ -55,12 +55,12 @@ Keep native contracts with their source owners.
 Use an empty unsafe method under `runtime_bindings`.
 
 - Mark header-backed native structs, enums, unions, and aliases with
-  `#[unchained_macros::runtime_bindings]`, including generic/layout-only types.
+  `#[unchained_macros_core::runtime_bindings]`, including generic/layout-only types.
   Type annotations add documentation only; they do not register callables.
   Put the marker before layout/code-generation attributes and retain their order.
   Do not mark Rust-only adapters, guards, views, errors, or callback aliases.
-- Apply `#[unchained_macros::runtime_bindings]` to the native type's inherent impl.
-- Apply `#[unchained_macros::bind_resolved_func(Resolver)]` to the method.
+- Apply `#[unchained_macros_core::runtime_bindings]` to the native type's inherent impl.
+- Apply `#[unchained_macros_core::bind_resolved_func(Resolver)]` to the method.
 - Use the declared resolver type path, not a renamed import.
 - `self::ResolverName` selects the current module's resolver; it is optional when
   unambiguous and is distinct from the type-relative `Self::`.
@@ -85,9 +85,9 @@ Existing static-call pattern; reuse the existing declaration rather than
 registering a second copy:
 
 ```rust
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FUDPPing {
-    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
+    #[unchained_macros_core::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
         endpoint: *const FString,
         timeout: f32,
@@ -100,9 +100,11 @@ impl FUDPPing {
 
 Choose the binding mechanism that matches the address source.
 
-- **Patternsleuth:** pass the full resolver type path to `bind_resolved_func`.
-- **Request registry:** use `bind_resolved_request_function(Key)` under
-  `runtime_bindings`. Verify the producer supplies that exact key as an RVA in
+- **Patternsleuth:** pass a typed resolver declaration to `bind_resolved_func`.
+  Adapt upstream resolvers with `define_custom_resolver!(Name, delegate upstream::Resolver)`.
+- **Provider offsets:** declare `define_offset_resolver!(Key)`, then use
+  `bind_resolved_func(Key)` under `runtime_bindings`.
+  Verify the producer supplies that exact key as an RVA in
   `OffsetRegisty`; do not put an absolute address into the registry.
 - **Globals:** mirror every C++ static/global used here as a Rust static under its
   declaring header, preserving native spelling. Use

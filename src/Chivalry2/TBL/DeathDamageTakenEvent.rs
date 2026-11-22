@@ -8,7 +8,7 @@ use crate::Chivalry2::TBL::EKillReason::EKillReason;
 use std::os::raw::c_void;
 
 /// Layout based on `CXXHeaderDump/TBL.hpp` (`Size: 0x160`).
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FDeathDamageTakenEvent {

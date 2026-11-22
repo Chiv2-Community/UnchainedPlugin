@@ -72,7 +72,7 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     /// Native target name, independent of the resolver's cache key.
     pub const fn name(&self) -> &'static str { self.name }
 
-    pub const fn offset_key(&self) -> &'static str { self.target.name() }
+    pub const fn resolver_name(&self) -> &'static str { self.resolver.name }
 
     pub fn supports(&self, snapshot: &crate::SelectorSnapshot) -> bool {
         self.resolver.supports(snapshot)
@@ -104,20 +104,14 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
             .map_err(|_| format!("Native binding {} already has a detour", self.name()))
     }
 
-    /// Initialize once from the loaded module and its resolved relative offset.
-    /// Repeating the same address is harmless; rebinding is rejected.
+    /// Publish a verified native address. Repeating it is harmless; rebinding is rejected.
     ///
     /// # Safety
     /// For bindings used by native callers, the resolved address must identify
     /// process-lifetime code with their exact ABI and behavioral contract.
-    /// Initialize every alias before attaching a detour to that native address.
-    pub unsafe fn initialize(&self, base: usize, offset: u64) -> Result<(), String> {
-        let address = usize::try_from(offset).ok().and_then(|offset| base.checked_add(offset))
-            .filter(|_| base != 0).and_then(NonZeroUsize::new).ok_or("Invalid native function address")?;
-        self.initialize_address(address)
-    }
-
-    fn initialize_address(&self, address: NonZeroUsize) -> Result<(), String> {
+    /// Keep native callers quiescent until initialization and attachment complete.
+    /// Late aliases inherit any trampoline already published for this address.
+    pub unsafe fn initialize_address(&self, address: NonZeroUsize) -> Result<(), String> {
         let attached = ATTACHED_DETOURS.lock().map_err(|_| "Detour publication lock poisoned")?;
         self.target.publish(address)?;
         if let Some(detour) = attached.get(&address.get()) {
@@ -178,14 +172,10 @@ pub type FunctionBindingRegistration<R> = BindingRegistration<FunctionBinding<R>
 
 #[doc(hidden)]
 pub trait FunctionInfo: Send + Sync {
-    fn key(&self) -> &'static str;
-    fn address(&self) -> Option<NonZeroUsize>;
     fn entry_address(&self) -> Option<NonZeroUsize>;
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
 }
 impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
-    fn key(&self) -> &'static str { self.offset_key() }
-    fn address(&self) -> Option<NonZeroUsize> { self.address() }
     fn entry_address(&self) -> Option<NonZeroUsize> { self.entry_address() }
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
         unsafe { self.publish_detour(detour) }
@@ -216,47 +206,29 @@ pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
     context: &R::Context, snapshot: &crate::SelectorSnapshot,
 ) -> Result<(), String> {
     snapshot.validate_registered()?;
-    unsafe { initialize_bindings_for_where::<R>(context, |binding| binding.supports(snapshot)) }
-}
-
-/// Initialize only bindings accepted by the host's applicability predicate.
-/// Rejected bindings remain unbound, even if cached offsets exist.
-///
-/// # Safety
-/// The contracts of [`initialize_bindings_for`] apply to accepted bindings.
-pub unsafe fn initialize_bindings_for_where<R: crate::AddressResolver>(
-    context: &R::Context,
-    enabled: impl Fn(&FunctionBinding<R>) -> bool,
-) -> Result<(), String> {
     let mut resolved = Vec::new();
     for registration in binding_inventory_for::<R>()
-        .filter(|registration| enabled(registration.binding))
+        .filter(|registration| registration.binding.supports(snapshot))
     {
         let binding = registration.binding;
         let address = unsafe { binding.resolver.implementation.resolve(context) }
-            .map_err(|error| format!("Binding {} ({}): {error}", binding.name(), binding.offset_key()))?;
+            .map_err(|error| format!("Binding {} ({}): {error}", binding.name(), binding.resolver_name()))?;
         resolved.push((binding, address));
     }
     for (binding, address) in resolved {
-        binding.initialize_address(address)?;
+        unsafe { binding.initialize_address(address)?; }
     }
     Ok(())
 }
 
-/// Query publication by resolver/provider offset key, not detour name.
-pub fn function_is_bound(name: &str) -> bool {
-    inventory::iter::<ErasedFunctionBindingRegistration>.into_iter()
-        .any(|registration| registration.info.key() == name && registration.info.address().is_some())
-}
-
 pub fn function_is_bound_for<R: crate::AddressResolver>(name: &str) -> bool {
-    binding_inventory_for::<R>().any(|entry| entry.binding.offset_key() == name && entry.binding.address().is_some())
+    binding_inventory_for::<R>().any(|entry| entry.binding.resolver_name() == name && entry.binding.address().is_some())
 }
 
 /// Preserve fallible helper behavior before native binding initialization.
-pub fn require_function_bindings(names: &[&str]) -> Result<(), String> {
+pub fn require_function_bindings_for<R: crate::AddressResolver>(names: &[&str]) -> Result<(), String> {
     for name in names {
-        if !function_is_bound(name) {
+        if !function_is_bound_for::<R>(name) {
             return Err(format!("Native binding {name} is not initialized"));
         }
     }

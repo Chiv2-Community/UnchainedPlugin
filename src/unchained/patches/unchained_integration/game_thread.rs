@@ -6,7 +6,7 @@ use crate::commands::NATIVE_COMMAND_QUEUE;
 use ::windows::Win32::System::Memory::IsBadReadPtr;
 use std::sync::{Mutex, Once};
 
-#[unchained_macros::bind_func_detour(UGameEngine::Tick)]
+#[unchained_macros_core::bind_func_detour(UGameEngine::Tick)]
 pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) {
     unsafe {
         this.Tick(delta, state);
@@ -30,7 +30,7 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
         serror!("IsBadReadPtr UGameEngineTick");
         return;
     }
-    if !unchained_macros::detour_is_enabled("tick_detour") {
+    if !unchained_macros_core::detour_is_enabled("tick_detour") {
         serror!("Disabled UGameEngineTick");
         return;
     }

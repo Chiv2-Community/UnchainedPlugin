@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::TCHAR;
 use std::sync::Mutex;
 use widestring::U16CStr;
 
-#[unchained_macros::bind_func_detour(FPakPlatformFile::Mount)]
+#[unchained_macros_core::bind_func_detour(FPakPlatformFile::Mount)]
 pub(crate) unsafe fn mount_detour(
     this: *mut FPakPlatformFile,
     in_pak_filename: *const TCHAR,

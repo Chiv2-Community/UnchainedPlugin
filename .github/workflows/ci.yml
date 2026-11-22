@@ -74,9 +74,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.build_type }}" == "release" ]; then
-            cargo test --locked --release -p UnchainedPlugin -p unchained-macros -p unchained-macros-core -p unchained-macros-core-impl -p unchained-macros-patternsleuth -p unchained-macros-patternsleuth-impl -p unchained-macros-kismet -p unchained-macros-kismet-impl
+            cargo test --locked --release -p UnchainedPlugin -p unchained-macros-core -p unchained-macros-core-impl -p unchained-macros-patternsleuth -p unchained-macros-patternsleuth-impl -p unchained-macros-kismet -p unchained-macros-kismet-impl
           else
-            cargo test --locked -p UnchainedPlugin -p unchained-macros -p unchained-macros-core -p unchained-macros-core-impl -p unchained-macros-patternsleuth -p unchained-macros-patternsleuth-impl -p unchained-macros-kismet -p unchained-macros-kismet-impl
+            cargo test --locked -p UnchainedPlugin -p unchained-macros-core -p unchained-macros-core-impl -p unchained-macros-patternsleuth -p unchained-macros-patternsleuth-impl -p unchained-macros-kismet -p unchained-macros-kismet-impl
           fi
 
       - name: Check without registration

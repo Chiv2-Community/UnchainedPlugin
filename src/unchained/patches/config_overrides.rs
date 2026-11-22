@@ -7,7 +7,7 @@ use crate::features::config_overrides::{
 use crate::tools::hook_globals::{cli_args, globals_initialized};
 use std::ffi::c_void;
 
-#[unchained_macros::bind_func_detour(UObject::LoadConfig, || cli_args().unchained_profile_location.is_some())]
+#[unchained_macros_core::bind_func_detour(UObject::LoadConfig, || cli_args().unchained_profile_location.is_some())]
 pub(crate) unsafe fn load_config_detour(
     this: *mut UObject,
     config_class: *mut UClass,
@@ -100,7 +100,7 @@ pub(crate) unsafe fn load_config_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(UClass::GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
+#[unchained_macros_core::bind_func_detour(UClass::GetConfigName, || crate::tools::hook_globals::cli_args().unchained_profile_location.is_some())]
 pub(crate) unsafe fn get_config_name_detour(
     this: *mut UClass,
     storage: *mut crate::Chivalry2::Engine::FString,

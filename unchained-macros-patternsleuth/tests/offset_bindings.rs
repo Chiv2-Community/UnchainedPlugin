@@ -1,14 +1,17 @@
 #![feature(arbitrary_self_types_pointers)]
 
 use std::ffi::c_void;
-use unchained_macros::bind_resolved_request_function;
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_GetMotd);
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Borrow);
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Missing);
 
 struct OpenAPIClientAPI {
     value: i32,
 }
 
+#[unchained_macros_core::runtime_bindings]
 impl OpenAPIClientAPI {
-    #[bind_resolved_request_function(GetPost_GetMotd)]
+    #[bind_resolved_func(GetPost_GetMotd)]
     pub unsafe fn get_post_get_motd(
         self: *mut Self,
         result: *mut i32,
@@ -16,10 +19,10 @@ impl OpenAPIClientAPI {
         delegate: *mut c_void,
     ) -> *mut i32 {}
 
-    #[bind_resolved_request_function(GetPost_Borrow)]
+    #[bind_resolved_func(GetPost_Borrow)]
     unsafe fn borrow<'a>(&self, result: &'a mut i32) -> &'a mut i32 {}
 
-    #[bind_resolved_request_function(GetPost_Missing)]
+    #[bind_resolved_func(GetPost_Missing)]
     unsafe fn missing(&self) {}
 }
 
@@ -40,18 +43,18 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 }
 
 #[test]
-fn request_keys_bind_without_corresponding_resolver_types() {
-    for registration in unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>() {
+fn provider_offsets_use_ordinary_typed_resolver_bindings() {
+    for registration in unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>() {
         let binding = registration.binding;
         assert!(binding.resolver.implementation.named.is_none());
-        assert_eq!(binding.resolver.implementation.key, binding.offset_key());
-        let address = match binding.offset_key() {
+        assert_eq!(binding.resolver.implementation.key, binding.resolver_name());
+        let address = match binding.resolver_name() {
             "GetPost_GetMotd" => get_motd as *const () as usize,
             "GetPost_Borrow" => borrow as *const () as usize,
             "GetPost_Missing" => continue,
             name => panic!("Unexpected request binding {name}"),
         };
-        unsafe { binding.initialize(1, (address - 1) as u64).unwrap(); }
+        unsafe { binding.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap(); }
     }
     let mut client = OpenAPIClientAPI { value: 40 };
     let mut output = 0;

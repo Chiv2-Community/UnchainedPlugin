@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::*;
 
 use std::os::raw::c_void;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FSoftObjectPtr {
@@ -29,7 +29,7 @@ impl FSoftObjectPtr {
 
 const _: () = assert!(std::mem::size_of::<FSoftObjectPtr>() == 0x28);
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct TSoftClassPtr<T = c_void> {

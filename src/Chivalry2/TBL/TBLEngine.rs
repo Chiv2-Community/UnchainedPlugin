@@ -8,15 +8,15 @@ define_pattern_resolver!(
 );
 
 /// Engine-owned subclass. No native fields or Rust construction are exposed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct UTBLEngine {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl UTBLEngine {
     #[cfg(feature = "server_registration")]
-    #[unchained_macros::bind_resolved_func(UTBLEngine__PreExit)]
+    #[unchained_macros_core::bind_resolved_func(UTBLEngine__PreExit)]
     pub(crate) unsafe fn PreExit(self: *mut Self) {}
 }

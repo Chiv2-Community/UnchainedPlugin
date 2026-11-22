@@ -2,7 +2,7 @@ mod image;
 pub use image::{BASE, TEXT, image};
 use std::sync::OnceLock;
 
-#[unchained_macros::resolver_selection_key(require = [First, Second], fallback = Shared)]
+#[unchained_macros_core::resolver_selection_key(require = [First, Second], fallback = Shared)]
 #[derive(Debug)]
 pub enum Flavor { First, Second, Shared }
 
@@ -11,7 +11,7 @@ static FLAVOR: OnceLock<Flavor> = OnceLock::new();
 pub fn current_flavor() -> Flavor {
     *FLAVOR.get().expect("fixture selection not initialized")
 }
-impl unchained_macros::ResolverSelector for Flavor {
+impl unchained_macros_core::ResolverSelector for Flavor {
     fn current() -> Self { current_flavor() }
 }
 

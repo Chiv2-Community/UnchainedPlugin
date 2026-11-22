@@ -5,7 +5,7 @@ use unchained_macros_core::PatchState;
 use unchained_macros_kismet::{KismetContext, KismetReflectionResolver};
 use crate::Chivalry2::Engine::Runtime::Launch::LaunchEngineLoop::FEngineLoop;
 
-#[unchained_macros::bind_func_detour(FEngineLoop::Init)]
+#[unchained_macros_core::bind_func_detour(FEngineLoop::Init)]
 unsafe fn engine_loop_init_detour(engine: *mut FEngineLoop) -> i32 {
     unsafe { initialize(); }
     let result = unsafe { engine.Init() };

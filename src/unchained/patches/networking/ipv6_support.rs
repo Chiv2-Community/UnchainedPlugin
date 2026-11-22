@@ -7,7 +7,7 @@ use crate::Chivalry2::Plugins::OnlineSubsystemPlayFab::OpenAPIMerged::OpenAPICli
 use crate::tools::hook_globals::cli_args;
 use std::cell::Cell;
 
-#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn ipv6_udp_echo(
     #[mutability_override] endpoint: *mut FString,
     timeout: f32,
@@ -25,7 +25,7 @@ unsafe fn ipv6_udp_echo(
     unsafe { FUDPPing::UDPEcho(endpoint, timeout, callback) };
 }
 
-#[unchained_macros::bind_func_detour(FString::Find, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FString::Find, || !cli_args().is_server())]
 pub(crate) unsafe fn find_detour(
     this: *const FString,
     needle: *const TCHAR,
@@ -54,7 +54,7 @@ pub(crate) unsafe fn find_detour(
     unsafe { this.Find(needle, search_case, search_direction, start_position) }
 }
 
-#[unchained_macros::bind_func_detour(FString::ParseIntoArray, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FString::ParseIntoArray, || !cli_args().is_server())]
 pub(crate) unsafe fn parse_into_array_detour(
     this: *const FString,
     output: *mut TArray<FString>,
@@ -85,7 +85,7 @@ pub(crate) unsafe fn parse_into_array_detour(
     unsafe { this.ParseIntoArray(output, delimiter, cull_empty) }
 }
 
-#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::OnGetCurrentGames, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FOnlineSessionPlayFab::OnGetCurrentGames, || !cli_args().is_server())]
 pub(crate) unsafe fn on_get_current_games_detour(
     this: *mut FOnlineSessionPlayFab,
     response: *mut GetCurrentGamesPostResponse,
@@ -100,7 +100,7 @@ pub(crate) unsafe fn on_get_current_games_detour(
     }
 }
 
-#[unchained_macros::bind_func_detour(FOnlineSessionPlayFab::PingSomeServers, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FOnlineSessionPlayFab::PingSomeServers, || !cli_args().is_server())]
 pub(crate) unsafe fn ping_some_servers_detour(this: *mut FOnlineSessionPlayFab, max_servers: i32) {
     let already = IN_PING_SOME_SERVERS.with(|state| state.replace(true));
     strace!("PingSomeServers called");

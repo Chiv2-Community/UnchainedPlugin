@@ -5,7 +5,7 @@ use crate::Chivalry2::Engine::*;
 /// UE 4.25 native property metadata.
 ///
 /// Native size: 0x78.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FProperty {
     pub field: FField,
@@ -26,7 +26,7 @@ pub struct FProperty {
 const _: () = assert!(std::mem::offset_of!(FProperty, offset_internal) == 0x4C);
 
 /// Native array-property metadata (size 0x88).
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FArrayProperty {
     pub property: FProperty,
@@ -46,7 +46,7 @@ impl FArrayProperty {
 }
 
 /// Native struct-property metadata (size 0x80).
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub struct FStructProperty {
     pub property: FProperty,

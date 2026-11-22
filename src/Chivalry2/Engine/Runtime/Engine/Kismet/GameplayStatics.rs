@@ -7,7 +7,7 @@ use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::Engine::USaveGame;
 
 /// Static native helpers only; this is not a UObject instance layout.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct UGameplayStatics {
     _private: (),
 }

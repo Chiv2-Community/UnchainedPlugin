@@ -32,7 +32,7 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     for item in &mut implementation.items {
         let syn::ImplItem::Fn(method) = item else { continue };
         if method.attrs.iter().any(|attribute| attribute.path().segments.last().is_some_and(|segment|
-            matches!(segment.ident.to_string().as_str(), "bind_resolved_func" | "bind_resolved_request_function")))
+            segment.ident == "bind_resolved_func"))
         {
             return Err(syn::Error::new_spanned(method, "Kismet methods cannot also declare an address binding"));
         }

@@ -2,7 +2,7 @@
 
 #![allow(non_camel_case_types)]
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 pub enum ENetMode {
     STANDALONE,

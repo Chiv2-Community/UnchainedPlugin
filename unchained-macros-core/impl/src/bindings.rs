@@ -140,7 +140,7 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: Option<&Type>) -> s
     if let Some(FnArg::Receiver(receiver)) = native_signature.inputs.first_mut() {
         let self_ty = self_ty.ok_or_else(|| {
             syn::Error::new_spanned(
-                &*receiver, "detour methods require #[unchained_macros::runtime_bindings] on the impl",
+                &*receiver, "detour methods require #[unchained_macros_core::runtime_bindings] on the impl",
             )
         })?;
         if let Type::Reference(reference) = receiver.ty.as_mut() {

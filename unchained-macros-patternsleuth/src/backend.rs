@@ -32,6 +32,36 @@ pub struct OffsetRegisty { pub name: &'static str, pub map: fn() -> HashMap<Stri
 inventory::collect!(RequiredResolver);
 inventory::collect!(OffsetRegisty);
 
+/// Declare a typed resolver for an RVA supplied by an offset-map provider.
+#[macro_export]
+macro_rules! define_offset_resolver {
+    ($name:ident) => {
+        #[allow(non_camel_case_types)]
+        pub struct $name;
+        impl ::unchained_macros_core::ResolverDeclaration for $name {
+            type Backend = $crate::PatternsleuthResolver;
+            const NAME: &'static str = stringify!($name);
+            const UNRESTRICTED: bool = true;
+            const DESCRIPTOR: &'static ::unchained_macros_core::Resolver<Self::Backend> = {
+                static DESCRIPTOR: ::unchained_macros_core::Resolver<$crate::PatternsleuthResolver> =
+                    ::unchained_macros_core::Resolver {
+                        name: stringify!($name),
+                        implementation: $crate::PatternsleuthResolver::offset(stringify!($name)),
+                        filter: None,
+                    };
+                &DESCRIPTOR
+            };
+        }
+        impl<E: ::unchained_macros_core::SelectionKey> ::unchained_macros_core::ResolverSelection<E> for $name {
+            const SELECTIONS: &'static [(E, bool)] = &[];
+        }
+        $crate::__private::inventory::submit! {
+            $crate::__private::ErasedResolverRegistration::new(
+                <$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR)
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! require_resolver {
     ($name:ident) => {
@@ -78,27 +108,6 @@ fn select<'a>(
         }
     }).collect()
 }
-/// # Safety
-/// The cached offsets must satisfy the selected native declarations' contracts.
-pub unsafe fn initialize_function_bindings(base: usize, offsets: &HashMap<String, u64>) -> Result<(), String> {
-    unsafe { initialize_function_bindings_where(base, offsets, |_| true) }
-}
-/// # Safety
-/// Keep callers quiescent until all aliases and detours are published.
-pub unsafe fn initialize_function_bindings_where(
-    base: usize, offsets: &HashMap<String, u64>, enabled: impl Fn(&FunctionBinding<PatternsleuthResolver>) -> bool,
-) -> Result<(), String> {
-    unsafe { initialize_bindings_for_where::<PatternsleuthResolver>(&ScanContext::new(base, offsets), enabled) }
-}
-/// # Safety
-/// Every patch must satisfy its native write contract. This convenience call is not retry-safe.
-pub unsafe fn apply_registered_patches<W: PatchWriter>(
-    base: u64, offsets: &HashMap<String, u64>, snapshot: &SelectorSnapshot, writer: &mut W,
-) -> Result<Vec<PatchApplication>, String> {
-    let base = usize::try_from(base).map_err(|_| "Patch module address overflow")?;
-    unsafe { apply_patches_for::<PatternsleuthResolver, _>(&ScanContext::new(base, offsets), snapshot, writer, &mut PatchState::default()) }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

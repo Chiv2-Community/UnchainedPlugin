@@ -125,6 +125,8 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert_eq!(READS.load(Ordering::SeqCst), 0);
     assert!(bindings::function_is_bound_for::<OtherResolver>("Native__add"));
     assert!(!bindings::function_is_bound_for::<KismetReflectionResolver>("Native__add"));
+    bindings::require_function_bindings_for::<OtherResolver>(&["Native__add"]).unwrap();
+    assert!(bindings::require_function_bindings_for::<KismetReflectionResolver>(&["Native__add"]).is_err());
 
     let initialize = || unsafe { bindings::initialize_bindings_for::<KismetReflectionResolver>(&context, &snapshot) };
     assert!(initialize().unwrap_err().contains("not ready"));

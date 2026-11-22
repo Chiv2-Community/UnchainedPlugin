@@ -4,7 +4,7 @@
 
 use std::fmt::Debug;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub(crate) struct TInlineAllocator<const N: usize, V> {

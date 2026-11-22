@@ -4,7 +4,7 @@ use crate::Chivalry2::Engine::*;
 
 // SoftClassPath
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug)]
 pub struct FSoftObjectPath {

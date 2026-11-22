@@ -63,7 +63,7 @@ Use `bind_func_detour` on an unsafe free function.
   aliasing, and write-access contract; `&mut T` requires exclusive access for its
   entire borrow, even for native `&T`. The annotation does not authorize writes
   to shared or read-only memory.
-- Default activation is `ACTIVE`. Add a noncapturing condition only when needed.
+- Hooks default to enabled. Add a noncapturing condition only when needed.
 - Conditions run at attachment and also require global auto-activation.
   Put per-call decisions in the body.
 - Only one detour may own a native address; extend an existing replacement
@@ -76,7 +76,7 @@ Alternative to the existing UDP replacement; do not install both:
 use crate::Chivalry2::Engine::{FString, FUDPPing, FIcmpEchoResultCallback};
 use crate::tools::hook_globals::cli_args;
 
-#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *const FString,
     timeout: f32,

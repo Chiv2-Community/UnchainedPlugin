@@ -1,15 +1,15 @@
 #![cfg(windows)]
 
-unchained_macros::define_pattern_resolver!(ConstRead, ["AA"]);
-unchained_macros::define_pattern_resolver!(MutRead, ["AA"]);
-unchained_macros::define_pattern_resolver!(ConstMatch, ["AA"]);
-unchained_macros::define_pattern_resolver!(MutMatch, ["AA"]);
-unchained_macros::define_pattern_resolver!(Borrowed, ["AA"]);
-unchained_macros::define_pattern_resolver!(SharedRead, ["AA"]);
-unchained_macros::define_pattern_resolver!(ExclusiveRead, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(ConstRead, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(MutRead, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(ConstMatch, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(MutMatch, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(Borrowed, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(SharedRead, ["AA"]);
+unchained_macros_patternsleuth::define_pattern_resolver!(ExclusiveRead, ["AA"]);
 struct Native(i32);
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl Native {
     #[bind_resolved_func(ConstRead)]
     unsafe fn read(value: *const Self) -> i32 {}
@@ -33,35 +33,35 @@ impl Native {
     unsafe fn exclusive_read(value: &mut Self) -> &i32 {}
 }
 
-#[unchained_macros::bind_func_detour(Native::mut_read)]
+#[unchained_macros_core::bind_func_detour(Native::mut_read)]
 unsafe fn reverse(#[mutability_override] value: *const Native, other: *const i32) -> i32 {
     // Reading through a const view does not alter the mutable native contract.
     unsafe { Native::mut_read(value.cast_mut(), other) + 20 }
 }
 
-#[unchained_macros::bind_func_detour(Native::const_match)]
+#[unchained_macros_core::bind_func_detour(Native::const_match)]
 unsafe fn const_match(#[mutability_override] value: *const Native) -> i32 {
     unsafe { Native::const_match(value) + 30 }
 }
 
-#[unchained_macros::bind_func_detour(Native::mut_match)]
+#[unchained_macros_core::bind_func_detour(Native::mut_match)]
 unsafe fn mut_match<'a>(#[mutability_override] value: *mut Native, other: &'a i32) -> &'a i32 {
     unsafe { Native::mut_match(value, other) }
 }
 
-#[unchained_macros::bind_func_detour(Native::borrowed)]
+#[unchained_macros_core::bind_func_detour(Native::borrowed)]
 unsafe fn borrowed<'a>(#[mutability_override] value: *mut &'a i32) -> &'a i32 {
     unsafe { Native::borrowed(value) }
 }
 
-#[unchained_macros::bind_func_detour(Native::shared_read)]
+#[unchained_macros_core::bind_func_detour(Native::shared_read)]
 unsafe fn shared_read<'a>(#[mutability_override] value: &'a mut Native) -> &'a i32 {
     // This fixture's raw native caller provides exclusive, writable storage.
     value.0 += 1;
     unsafe { Native::shared_read(value) }
 }
 
-#[unchained_macros::bind_func_detour(Native::exclusive_read)]
+#[unchained_macros_core::bind_func_detour(Native::exclusive_read)]
 unsafe fn exclusive_read<'a>(#[mutability_override] value: &'a Native) -> &'a i32 {
     &value.0
 }
@@ -89,11 +89,11 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
     assert_ne!(original_shared as *const (), original_exclusive as *const ());
     unsafe {
         Native::__UNCHAINED_BINDING_borrowed.binding()
-            .initialize(1, original_borrowed as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_borrowed as *const () as usize).unwrap()).unwrap();
         Native::__UNCHAINED_BINDING_shared_read.binding()
-            .initialize(1, original_shared as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_shared as *const () as usize).unwrap()).unwrap();
         Native::__UNCHAINED_BINDING_exclusive_read.binding()
-            .initialize(1, original_exclusive as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_exclusive as *const () as usize).unwrap()).unwrap();
         let number = 17;
         let borrowed_number = &number;
         let borrowed_call = std::hint::black_box(original_borrowed as for<'a> unsafe extern "C" fn(*const &'a i32) -> &'a i32);
@@ -144,11 +144,11 @@ unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) 
 fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
     unsafe {
         Native::__UNCHAINED_BINDING_mut_read.binding()
-            .initialize(1, original_mut as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_mut as *const () as usize).unwrap()).unwrap();
         Native::__UNCHAINED_BINDING_const_match.binding()
-            .initialize(1, original_const_match as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_const_match as *const () as usize).unwrap()).unwrap();
         Native::__UNCHAINED_BINDING_mut_match.binding()
-            .initialize(1, original_mut_match as *const () as u64 - 1).unwrap();
+            .initialize_address(std::num::NonZeroUsize::new(original_mut_match as *const () as usize).unwrap()).unwrap();
         let mut value = Native(42);
         let pointer = &raw mut value;
         let other = 7;
@@ -174,7 +174,7 @@ fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
     }
 }
 
-#[unchained_macros::bind_func_detour(Native::read)]
+#[unchained_macros_core::bind_func_detour(Native::read)]
 unsafe fn replacement(#[mutability_override] value: *mut Native) -> i32 {
     // The native caller lends a const object; adaptation does not authorize writes.
     unsafe { Native::read(value) + 10 }
@@ -190,7 +190,7 @@ fn mutability_override_preserves_original_calls_and_const_native_entry() {
     unsafe {
         Native::__UNCHAINED_BINDING_read
             .binding()
-            .initialize(1, original as *const () as u64 - 1)
+            .initialize_address(std::num::NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
         let value = Native(42);
         let pointer = &raw const value;

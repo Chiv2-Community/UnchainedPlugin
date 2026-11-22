@@ -12,15 +12,15 @@ mod selection;
 pub use binding::{ResolvedAddress, FunctionBinding, BindingRegistration, FunctionBindingRegistration,
     NativeFunction, NativeSignature, NativeGlobalPointer, NativeGlobalTarget, ValueBinding,
     ValueBindingRegistration, initialize_value_bindings, initialize_value_bindings_where,
-    is_required_value, function_is_bound, function_is_bound_for, require_function_bindings,
-    binding_inventory_for, initialize_bindings_for, initialize_bindings_for_where};
+    is_required_value, function_is_bound_for, require_function_bindings_for,
+    binding_inventory_for, initialize_bindings_for};
 pub use detour::{detour_is_enabled, detour_is_initialized};
 pub use patch::{Patch, PatchWriter, WriteValue, PatchState, PatchApplication,
     validate_patch_registrations, apply_patches_for};
 pub use registry::{CreateHookFn, HookRegistration, PatchRegistration, hook_inventory_for, patch_inventory_for};
 pub use resolver::{AddressResolver, Resolver, resolver_inventory_for};
 pub use selection::{SelectionKey, ResolverSelector, SelectorSnapshot, SelectorIdentity,
-    ResolverDeclaration, ResolverSelection, ResolverFilter, supports_selection};
+    ResolverDeclaration, ResolverSelection, ResolverFilter};
 
 #[doc(hidden)]
 pub mod __private {

@@ -10,16 +10,16 @@ define_pattern_resolver!(
 );
 
 /// Static native ping helpers; no instance layout is assumed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct FUDPPing {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FUDPPing {
     /// # Safety
     /// Arguments must satisfy the native UDPEcho ABI and callback lifetime.
-    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
+    #[unchained_macros_core::bind_resolved_func(FUDPPing__UDPEcho)]
     pub unsafe fn UDPEcho(
         endpoint: *const FString,
         timeout: f32,
@@ -29,5 +29,5 @@ impl FUDPPing {
 }
 
 /// Opaque `TFunction<void(FIcmpEchoResult)>`; passed only through native pointers.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub type FIcmpEchoResultCallback = c_void;

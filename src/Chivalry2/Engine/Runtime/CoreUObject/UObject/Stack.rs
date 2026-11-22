@@ -10,9 +10,9 @@ use crate::Chivalry2::Engine::*;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 
-unchained_macros::define_custom_resolver!(FFrameStep,
+unchained_macros_patternsleuth::define_custom_resolver!(FFrameStep,
     delegate patternsleuth::resolvers::unreal::kismet::FFrameStep);
-unchained_macros::define_custom_resolver!(FFrameStepExplicitProperty,
+unchained_macros_patternsleuth::define_custom_resolver!(FFrameStepExplicitProperty,
     delegate patternsleuth::resolvers::unreal::kismet::FFrameStepExplicitProperty);
 
 #[cfg(feature = "kismet_log")]
@@ -21,7 +21,7 @@ define_pattern_resolver!(
     ["48 89 5C 24 08 57 48 83 EC 30 0F B6 DA 48 8B F9 80 FA 01 ?? ?? ?? ?? ?? ?? ?? ?? ?? BA",]
 );
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FFrame {
@@ -40,11 +40,11 @@ pub struct FFrame {
     pub b_array_context_failed: bool,
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FFrame {
     /// # Safety
     /// Frame, context, and result storage must satisfy the current bytecode operation.
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         self::FFrameStep
     )]
     pub unsafe fn Step(&mut self, context: *mut UObject, result: *mut c_void) {}
@@ -53,7 +53,7 @@ impl FFrame {
     ///
     /// # Safety
     /// Frame, property, and result storage must describe a valid compiled-in argument.
-    #[unchained_macros::bind_resolved_func(
+    #[unchained_macros_core::bind_resolved_func(
         self::FFrameStepExplicitProperty
     )]
     pub unsafe fn StepExplicitProperty(
@@ -79,7 +79,7 @@ impl FFrame {
 
     // Preserve the legacy return ABI pending native-signature verification.
     #[cfg(feature = "kismet_log")]
-    #[unchained_macros::bind_resolved_func(FFrame__KismetExecutionMessage)]
+    #[unchained_macros_core::bind_resolved_func(FFrame__KismetExecutionMessage)]
     pub(crate) unsafe fn KismetExecutionMessage(
         text: *const TCHAR,
         kind: u8,

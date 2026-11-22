@@ -1,13 +1,12 @@
 use std::cell::Cell;
 use std::collections::HashMap;
-use unchained_macros::{
-    Patch, PatchRegistration, PatchWriter, apply_registered_patches,
-    define_pattern_resolver, register_patch, validate_patch_registrations,
-};
+use unchained_macros_core::{Patch, PatchRegistration, PatchWriter, apply_patches_for, register_patch, validate_patch_registrations, PatchState};
+use unchained_macros_patternsleuth::{PatternsleuthResolver, ScanContext};
+use unchained_macros_patternsleuth::{define_pattern_resolver};
 
-#[unchained_macros::resolver_selection_key(require = [First, Second])]
+#[unchained_macros_core::resolver_selection_key(require = [First, Second])]
 enum Key { First, Second, Optional }
-impl unchained_macros::ResolverSelector for Key {
+impl unchained_macros_core::ResolverSelector for Key {
     fn current() -> Self { Self::First }
 }
 
@@ -71,7 +70,7 @@ impl PatchWriter for Writer {
         self.0.push((address, vec![0x90; count]));
         Ok(())
     }
-    unsafe fn write(&mut self, address: u64, value: &unchained_macros::WriteValue) -> Result<(), String> {
+    unsafe fn write(&mut self, address: u64, value: &unchained_macros_core::WriteValue) -> Result<(), String> {
         // This fixture records initialized scalar values only.
         let bytes = unsafe { std::slice::from_raw_parts(value.as_ptr(), value.size()) };
         self.0.push((address, bytes.to_vec()));
@@ -79,8 +78,8 @@ impl PatchWriter for Writer {
     }
 }
 
-fn registration(name: &str) -> &'static PatchRegistration {
-    unchained_macros::patch_inventory_for::<unchained_macros::PatternsleuthResolver>().find(|patch| patch.name == name).unwrap()
+fn registration(name: &str) -> &'static PatchRegistration<PatternsleuthResolver> {
+    unchained_macros_core::patch_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>().find(|patch| patch.name == name).unwrap()
 }
 
 #[test]
@@ -89,7 +88,7 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
     assert_eq!(registration("SHARED").resolver.name, "Universal");
     assert!(std::ptr::eq(registration("ALIAS").resolver, registration("SHARED").resolver));
     assert!(std::ptr::eq(registration("ALIAS").resolver,
-        <Universal as unchained_macros::ResolverDeclaration>::DESCRIPTOR));
+        <Universal as unchained_macros_core::ResolverDeclaration>::DESCRIPTOR));
     let mut writer = Writer::default();
     unsafe {
         (registration("SHARED").factory)(100).apply(100, &mut writer).unwrap();
@@ -107,12 +106,12 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
 fn selection_filtering_and_roots_do_not_construct_patches(key: Key, root_required: bool) {
     FACTORIES.set(0);
     validate_patch_registrations().unwrap();
-    let roots = unchained_macros::startup_resolvers(&unchained_macros::SelectorSnapshot::from_selection(key).unwrap()).unwrap();
+    let roots = unchained_macros_patternsleuth::startup_resolvers(&unchained_macros_core::SelectorSnapshot::from_selection(key).unwrap()).unwrap();
     assert_eq!(roots.iter().any(|resolver| resolver.name == "RootOnly"), root_required);
     assert_eq!(FACTORIES.get(), 0);
     assert!((registration("SHARED").applies_to)(&key));
     assert_eq!((registration("ONLY_FIRST").applies_to)(&key), key == Key::First);
-    assert!(unchained_macros::supports_selection("Universal", key));
+    assert!(unchained_macros_core::SelectorSnapshot::from_selection(key).unwrap().supports_resolver_for::<PatternsleuthResolver>("Universal"));
 }
 
 #[test_case::test_case(Key::First, 2; "first")]
@@ -125,8 +124,8 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
         ("Conditional".into(), 30), ("Restricted".into(), 40),
     ]);
     let mut writer = Writer::default();
-    let snapshot = unchained_macros::SelectorSnapshot::from_selection(key).unwrap();
-    let results = unsafe { apply_registered_patches(1000, &offsets, &snapshot, &mut writer) }.unwrap();
+    let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(key).unwrap();
+    let results = unsafe { apply_patches_for::<PatternsleuthResolver, _>(&ScanContext::new(1000, &offsets), &snapshot, &mut writer, &mut PatchState::default()) }.unwrap();
     assert!(results.iter().any(|result| result.name == "SHARED" && result.applied));
     assert!(results.iter().any(|result| result.name == "conditional" && !result.applied));
     assert_eq!(results.iter().any(|result| result.name == "ONLY_FIRST"), key == Key::First);
@@ -142,8 +141,8 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
 fn missing_addresses_fail_before_factories_or_writes() {
     FACTORIES.set(0);
     let mut writer = Writer::default();
-    let snapshot = unchained_macros::SelectorSnapshot::from_selection(Key::First).unwrap();
-    let error = unsafe { apply_registered_patches(1000, &HashMap::new(), &snapshot, &mut writer) }.unwrap_err();
+    let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(Key::First).unwrap();
+    let error = unsafe { apply_patches_for::<PatternsleuthResolver, _>(&ScanContext::new(1000, &HashMap::new()), &snapshot, &mut writer, &mut PatchState::default()) }.unwrap_err();
     assert!(error.contains("No address for patch"), "{error}");
     assert_eq!(FACTORIES.get(), 0);
     assert!(writer.0.is_empty());

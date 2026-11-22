@@ -54,7 +54,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "unchained-macros",
  "unchained-macros-core",
  "unchained-macros-kismet",
  "unchained-macros-patternsleuth",
@@ -3161,20 +3160,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
-name = "sleuth_macros"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "object",
- "patternsleuth",
- "proc-macro2",
- "quote",
- "serde",
- "syn 2.0.117",
- "unchained-macros",
-]
-
-[[package]]
 name = "slice-pool2"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3962,21 +3947,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unchained-macros"
-version = "0.1.0"
-dependencies = [
- "binary_bloodhound",
- "inventory",
- "object",
- "patternsleuth",
- "retour",
- "serde",
- "test-case",
- "unchained-macros-core",
- "unchained-macros-patternsleuth",
-]
-
-[[package]]
 name = "unchained-macros-core"
 version = "0.1.0"
 dependencies = [
@@ -4027,7 +3997,9 @@ version = "0.1.0"
 dependencies = [
  "binary_bloodhound",
  "inventory",
+ "object",
  "patternsleuth",
+ "retour",
  "serde",
  "test-case",
  "unchained-macros-core",

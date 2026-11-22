@@ -5,7 +5,7 @@ use ::windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use ::windows::Win32::System::Threading::GetCurrentProcess;
 
 /// Rust adapters for native memory access; no instance layout is assumed.
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 pub struct FMemory {
     _private: (),
 }

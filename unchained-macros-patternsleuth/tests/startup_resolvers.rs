@@ -5,7 +5,8 @@ use patternsleuth::{
     image::{Image, ImageType, pe::PEImage},
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
-use unchained_macros::{bind_resolved_func, bind_resolved_value, define_custom_resolver, define_pattern_resolver};
+use unchained_macros_core::{bind_resolved_func, bind_resolved_value};
+use unchained_macros_patternsleuth::{define_custom_resolver, define_pattern_resolver};
 
 static DEPENDENCIES: AtomicUsize = AtomicUsize::new(0);
 static SIDE_EFFECTS: AtomicUsize = AtomicUsize::new(0);
@@ -27,20 +28,22 @@ define_pattern_resolver!(SideEffectFixture, ["AA BB"], |ctx, _patterns| {
     SIDE_EFFECTS.fetch_add(1, Ordering::SeqCst);
     Ok(ctx.resolve(Dependency::resolver()).await?.0 + 0x1000)
 });
-unchained_macros::require_resolver!(SideEffectFixture);
+unchained_macros_patternsleuth::require_resolver!(SideEffectFixture);
 
 define_pattern_resolver!(ValueFixture, ["AA BB"]);
 define_pattern_resolver!(PatchFixture, ["AA BB"]);
 define_pattern_resolver!(MethodResolver, ["AA BB"]);
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_MethodFixture);
+unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Fixture);
 
 struct MethodFixture;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl MethodFixture {
     #[bind_resolved_func(MethodResolver)]
     pub unsafe fn call() {}
 
-    #[unchained_macros::bind_resolved_request_function(GetPost_MethodFixture)]
+    #[bind_resolved_func(GetPost_MethodFixture)]
     pub unsafe fn request() {}
 
     #[cfg(any())]
@@ -55,11 +58,11 @@ unsafe fn alias() {}
 #[bind_resolved_value(ValueFixture, Address)]
 unsafe fn value() -> *mut u64 {}
 
-#[unchained_macros::bind_resolved_request_function(GetPost_Fixture)]
+#[bind_resolved_func(GetPost_Fixture)]
 unsafe fn request() {}
 
-#[unchained_macros::register_patch(PatchFixture)]
-fn fixture_patch(_address: u64) -> unchained_macros::Patch {
+#[unchained_macros_core::register_patch(PatchFixture)]
+fn fixture_patch(_address: u64) -> unchained_macros_core::Patch {
     panic!("selection must not construct or apply patches")
 }
 
@@ -87,7 +90,7 @@ unsafe fn disabled() {}
 
 #[test]
 fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
-    let roots = unchained_macros::startup_resolvers(&unchained_macros::SelectorSnapshot::default()).unwrap();
+    let roots = unchained_macros_patternsleuth::startup_resolvers(&unchained_macros_core::SelectorSnapshot::default()).unwrap();
     let names: Vec<_> = roots.iter().map(|root| root.name).collect();
     assert_eq!(names, ["BoundFixture", "ExternalFixture", "MethodResolver", "PatchFixture", "SideEffectFixture", "ValueFixture"]);
     let image = Image::from_memory(

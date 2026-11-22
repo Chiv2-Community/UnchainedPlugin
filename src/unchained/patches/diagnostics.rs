@@ -8,7 +8,7 @@ use crate::Chivalry2::Engine::{FName, FString, USaveGame, TCHAR};
 use crate::Chivalry2::TBL::TBLUtilityLibrary::TBLUtility;
 use crate::Chivalry2::TBL::UserFeedbackAndBugReportsLibrary::UUserFeedbackAndBugReportsLibrary;
 
-#[unchained_macros::bind_func_detour(UUserFeedbackAndBugReportsLibrary::GetGameInfo)]
+#[unchained_macros_core::bind_func_detour(UUserFeedbackAndBugReportsLibrary::GetGameInfo)]
 pub(crate) unsafe fn get_game_info_detour(
     storage: *mut crate::Chivalry2::Engine::FString,
     world: *mut crate::Chivalry2::Engine::UWorld,
@@ -18,13 +18,13 @@ pub(crate) unsafe fn get_game_info_detour(
     result
 }
 
-#[unchained_macros::bind_func_detour(TBLUtility::ExecuteConsoleCommand)]
+#[unchained_macros_core::bind_func_detour(TBLUtility::ExecuteConsoleCommand)]
 pub(crate) unsafe fn execute_console_command_detour(command: *const FString) {
     sinfo!("Executing: {}", unsafe { &*command });
     unsafe { TBLUtility::ExecuteConsoleCommand(command) }
 }
 
-#[unchained_macros::bind_func_detour(UGameplayStatics::LoadGameFromSlot)]
+#[unchained_macros_core::bind_func_detour(UGameplayStatics::LoadGameFromSlot)]
 pub(crate) unsafe fn load_game_from_slot_detour<'a>(
     slot: &'a FString,
     index: i32,
@@ -33,7 +33,7 @@ pub(crate) unsafe fn load_game_from_slot_detour<'a>(
     unsafe { UGameplayStatics::LoadGameFromSlot(slot, index) }
 }
 
-#[unchained_macros::bind_func_detour(UGameplayStatics::SaveGameToSlot)]
+#[unchained_macros_core::bind_func_detour(UGameplayStatics::SaveGameToSlot)]
 pub(crate) unsafe fn save_game_to_slot_detour<'a>(
     game: *mut USaveGame,
     slot: &'a FString,
@@ -43,7 +43,7 @@ pub(crate) unsafe fn save_game_to_slot_detour<'a>(
     unsafe { UGameplayStatics::SaveGameToSlot(game, slot, index) }
 }
 
-#[unchained_macros::bind_func_detour(FConsoleOutputDevice::Serialize)]
+#[unchained_macros_core::bind_func_detour(FConsoleOutputDevice::Serialize)]
 pub(crate) unsafe fn serialize_detour(
     this: *mut FConsoleOutputDevice,
     text: *const TCHAR,
@@ -65,7 +65,7 @@ pub(crate) unsafe fn serialize_detour(
 }
 
 #[cfg(feature = "kismet_log")]
-#[unchained_macros::bind_func_detour(FFrame::KismetExecutionMessage)]
+#[unchained_macros_core::bind_func_detour(FFrame::KismetExecutionMessage)]
 pub(crate) unsafe fn kismet_execution_message_detour(
     text: *const TCHAR,
     kind: u8,

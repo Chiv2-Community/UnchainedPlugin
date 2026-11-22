@@ -1,11 +1,11 @@
 #![feature(arbitrary_self_types_pointers)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use unchained_macros::{bind_resolved_value, runtime_bindings, initialize_value_bindings};
+use unchained_macros_core::{bind_resolved_value, runtime_bindings, initialize_value_bindings};
 
 mod resolvers {
     pub struct Allocator;
     pub struct Inline;
-    unchained_macros::define_pattern_resolver!(Probe, ["AA"]);
+    unchained_macros_patternsleuth::define_pattern_resolver!(Probe, ["AA"]);
 }
 
 #[runtime_bindings(global)]
@@ -22,7 +22,7 @@ impl TestAllocator {
 
     pub unsafe fn identity(self: *const Self) -> *const Self { self }
 
-    #[unchained_macros::bind_resolved_func(resolvers::Probe)]
+    #[unchained_macros_core::bind_resolved_func(resolvers::Probe)]
     pub unsafe fn probe(self: *const Self) -> usize {}
 
     #[cfg(any())]
@@ -64,9 +64,9 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
         unsafe { (*allocator).calls.load(Ordering::Relaxed) }
     }
     unsafe {
-        unchained_macros::initialize_function_bindings(1, &std::collections::HashMap::from([
+        unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&unchained_macros_patternsleuth::ScanContext::new(1, &std::collections::HashMap::from([
             ("Probe".into(), (probe as *const () as usize - 1) as u64),
-        ])).unwrap();
+        ])), &unchained_macros_core::SelectorSnapshot::capture_registered().unwrap()).unwrap();
     }
     assert!(std::panic::catch_unwind(|| unsafe { Allocator.allocate(1) }).is_err());
     let mut first = TestAllocator { calls: AtomicUsize::new(0) };

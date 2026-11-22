@@ -34,7 +34,7 @@ unsafe impl UObjectType for APlayerState {
     const CLASS_NAME: &'static str = "PlayerState";
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[rust_ctables::cpp_struct]
 pub struct APlayerState {
     #[inherit]
@@ -62,7 +62,7 @@ pub struct APlayerState {
     pub _padding_last: [u8; 0x10],
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl APlayerState {
     /// # Safety
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.

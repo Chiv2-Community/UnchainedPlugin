@@ -154,8 +154,8 @@ Use BinaryBloodhound to compose searches and recover function entries.
   matcher construction from the frozen selector snapshot.
   This selects the search; it does not register a platform restriction.
 - For inline async scans or mixed-mode resolvers, see the
-  [resolver reference](unchained-macros/resolvers.md#macros).
-- See [custom resolver examples](unchained-macros/README.md#custom-resolvers)
+  [resolver reference](unchained-macros-patternsleuth/resolvers.md#macros).
+- See [custom resolver examples](unchained-macros-patternsleuth/resolvers.md#custom-resolvers)
   for error handling and platform-aware searches.
 
 ```rust
@@ -194,9 +194,9 @@ pub struct FUDPPing {
     _private: (),
 }
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FUDPPing {
-    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
+    #[unchained_macros_core::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
         endpoint: *const FString,
         timeout: f32,
@@ -207,10 +207,11 @@ impl FUDPPing {
 
 Other binding sources:
 
-- **Patternsleuth:** pass a full resolver type path, such as
-  `patternsleuth::resolvers::unreal::game_loop::UGameEngineTick`.
-- **Request registry:** use `bind_resolved_request_function(GetPost_GetMotd)`
-  inside `runtime_bindings`. Populate that exact key in `OffsetRegisty` with
+- **Patternsleuth:** pass a typed resolver declaration. Adapt upstream resolvers
+  with `define_custom_resolver!(Name, delegate upstream::Resolver)` first.
+- **Provider offsets:** declare `define_offset_resolver!(GetPost_GetMotd)`, then
+  use `bind_resolved_func(GetPost_GetMotd)` inside `runtime_bindings`.
+  Populate that exact key in `OffsetRegisty` with
   an RVA, not an absolute address. See the
   [OpenAPI bindings](src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
 - **Native globals:** mirror every C++ static/global used here as a Rust static,
@@ -221,7 +222,7 @@ Other binding sources:
   `unsafe { GMalloc.Malloc(size, alignment) }`. No owning handles, slot borrows,
   cached pointees, or binding locks. Native synchronization still applies.
   These are not detour targets; plugin-owned state is separate. See
-  [native statics](unchained-macros/README.md#required-native-values).
+  [native statics](unchained-macros-core/README.md#native-globals).
 
 ### Declare vtable methods
 
@@ -313,7 +314,7 @@ Target the binding method from a functional module under `src/unchained/patches/
   `runtime_bindings` method. Calling through the vtable may re-enter the hook;
   use the resolver-backed binding for original calls.
 - Only one detour may own a native address.
-- The condition defaults to `ACTIVE`; activation also requires global
+- The condition defaults to `|| true`; activation also requires global
   auto-activation. Conditions run during attachment, not on each call.
 - Preserve native thread, ownership, pointer, and callback-lifetime rules.
 - Do not let Rust panics unwind through native callers.
@@ -343,7 +344,7 @@ Alternative replacement for the existing UDP hook:
 use crate::Chivalry2::Engine::{FString, FUDPPing, FIcmpEchoResultCallback};
 use crate::tools::hook_globals::cli_args;
 
-#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *const FString,
     timeout: f32,

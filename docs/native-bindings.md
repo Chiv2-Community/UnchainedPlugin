@@ -12,6 +12,11 @@
 
 Declare callable native functions separately from plugin behavior.
 
+Import bindings, detours, patches, and selectors from `unchained_macros_core`.
+Import scan and offset-provider declarations from `unchained_macros_patternsleuth`,
+or reflection declarations from `unchained_macros_kismet`. Binding, hook, and patch
+types require an explicit backend; discovery uses `*_inventory_for::<Backend>()`.
+
 - Keep resolvers, native ABI declarations, and bindings under `src/Chivalry2/*`.
 - Follow the [native source layout](engine-sources.md).
 - Use `#[runtime_bindings]` on the native type's inherent impl.
@@ -27,17 +32,17 @@ Declare callable native functions separately from plugin behavior.
 - Use visibility accessible to the replacement.
 - `runtime_bindings` emits invariant signature metadata; it is internal plumbing,
   not an application API.
-- Request bindings use `bind_resolved_request_function(Key)` and expose the same
-  metadata.
+- Provider offsets use `define_offset_resolver!(Key)` and ordinary
+  `bind_resolved_func(Key)` declarations with the same metadata.
 - `TBLUtility` and `UGameplay` adapt native namespaces, not UObject instances.
 - See [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks) for the full workflow.
 
 Existing static UDP-ping binding:
 
 ```rust
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 impl FUDPPing {
-    #[unchained_macros::bind_resolved_func(FUDPPing__UDPEcho)]
+    #[unchained_macros_core::bind_resolved_func(FUDPPing__UDPEcho)]
     pub(crate) unsafe fn UDPEcho(
         endpoint: *const FString,
         timeout: f32,
@@ -63,7 +68,7 @@ Mirror C++ static/global access for every native global used by this project.
 - Native storage/lifetime/method contracts and synchronization remain required.
   One-time address publication does not synchronize ordinary C++ pointer writes.
   Inline registry guards still acquire the engine's critical section.
-- Keep plugin-owned state separate; see [macro usage](../unchained-macros/README.md#required-native-values).
+- Keep plugin-owned state separate; see [macro usage](../unchained-macros-core/README.md#native-globals).
 
 ## Plugin replacement
 
@@ -88,7 +93,7 @@ Target the native binding from a functional module under `src/unchained/patches/
   must satisfy the detour's validity, aliasing, and write-access contract:
   `&mut T` requires exclusive access for its entire borrow, even for native `&T`.
   The annotation does not make shared or read-only memory writable.
-- Activation defaults to `ACTIVE`; custom conditions run at attachment.
+- Hooks default to enabled; custom conditions run at attachment.
 - Activation also requires global auto-activation.
 - State queries and hook diagnostics use the Rust detour function name.
   Each hook references its native binding; that binding keeps the native target
@@ -100,7 +105,7 @@ Target the native binding from a functional module under `src/unchained/patches/
 Alternative to the existing UDP replacement:
 
 ```rust
-#[unchained_macros::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
+#[unchained_macros_core::bind_func_detour(FUDPPing::UDPEcho, || !cli_args().is_server())]
 unsafe fn log_udp_echo(
     endpoint: *const FString,
     timeout: f32,

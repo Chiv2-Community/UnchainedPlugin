@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 use strum::Display;
 
-#[unchained_macros::runtime_bindings]
+#[unchained_macros_core::runtime_bindings]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub enum EKillReason {
