@@ -36,7 +36,8 @@ struct Binding {
     target: String,
     overload: Option<String>,
     rpc_implementation: Option<String>,
-    resolver: String,
+    resolver: Option<String>,
+    key: String,
     notes: String,
     source: Option<Source>,
     link: String,
@@ -409,28 +410,39 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                     let owner = item.self_ty.to_token_stream().to_string().replace(' ', "");
                     let runtime_owner = attr(&item.attrs, "kismet_runtime_bindings")
                         .map(|attribute| attribute.parse_args::<syn::LitStr>()).transpose()?;
+                    let annotated = runtime_owner.is_some() || attr(&item.attrs, "runtime_bindings").is_some();
+                    let method_owner = match item.self_ty.as_ref() {
+                        syn::Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
+                        _ => owner.clone(),
+                    };
                     for method in item.items {
                         let syn::ImplItem::Fn(method) = method else {
                             continue;
                         };
                         let binding = attr(&method.attrs, "bind_resolved_func");
-                        if binding.is_some() || runtime_owner.is_some() {
+                        if binding.is_some() || annotated {
                             let documentation = notes(&method.attrs);
                             let resolver_name = if let Some(binding) = binding {
                                 let resolver: syn::Path = binding.parse_args()?;
-                                resolver.segments.last().unwrap().ident.to_string()
+                                Some(resolver.segments.last().unwrap().ident.to_string())
+                            } else if runtime_owner.is_some() {
+                                Some(format!("{method_owner}__{}", method.sig.ident))
                             } else {
-                                format!("{owner}__{}", method.sig.ident)
+                                None
                             };
-                            if let Some(reflected_path) = &runtime_owner {
+                            if let (Some(reflected_path), Some(resolver_name)) = (&runtime_owner, &resolver_name) {
                                 resolvers.insert(resolver_name.clone(), (
                                     file_link(&path, method.sig.ident.span().start().line)?,
                                     format!("Reflection native body: {}::{}", reflected_path.value(), method.sig.ident),
                                 ));
                             }
-                            let native_owner = resolver_name
-                                .strip_suffix(&format!("__{}", method.sig.ident))
-                                .unwrap_or(&owner);
+                            let native_owner = resolver_name.as_deref()
+                                .and_then(|name| name.strip_suffix(&format!("__{}", method.sig.ident)))
+                                .unwrap_or(&method_owner);
+                            let key = resolver_name.as_ref().map_or_else(
+                                || format!("method-{method_owner}__{}", method.sig.ident),
+                                |name| format!("binding-{name}"),
+                            );
                             let signature_span = if matches!(method.vis, syn::Visibility::Inherited)
                             {
                                 method.sig.span()
@@ -456,6 +468,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     })
                                     .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
+                                key,
                                 notes: documentation
                                     .lines()
                                     .filter(|line| !line.starts_with("Native RPC implementation: "))
@@ -538,20 +551,21 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             .as_ref()
             .map(|source| source.url.as_str())
             .unwrap_or(&binding.link);
-        let resolver = resolvers.get(&binding.resolver);
+        let resolver = binding.resolver.as_ref().and_then(|name| resolvers.get(name));
         let resolution = if let Some((link, declaration)) = resolver {
             format!(
                 "{}\n\n{}",
-                linked(&binding.resolver, link),
+                linked(binding.resolver.as_ref().unwrap(), link),
                 block("rust,ignore", declaration)
             )
         } else {
-            format!("`{}` (upstream resolver)", binding.resolver)
+            binding.resolver.as_ref().map_or_else(String::new, |name| format!("`{name}` (upstream resolver)"))
         };
-        let mut docs = format!(
-            "Native binding to {}.\nResolved by {resolution}",
-            linked(&binding.target, source_link)
-        );
+        let mut docs = if binding.resolver.is_some() {
+            format!("Native binding to {}.\nResolved by {resolution}", linked(&binding.target, source_link))
+        } else {
+            format!("Native method {}.", linked(&binding.target, source_link))
+        };
         let matching = detours
             .get(&binding.target)
             .map(Vec::as_slice)
@@ -611,7 +625,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
         )?;
         write_document(
             &directory,
-            &format!("binding-{}", binding.resolver),
+            &binding.key,
             &docs,
             &mut written,
         )?;
@@ -732,7 +746,7 @@ mod tests {
         )
         .unwrap();
         fs::write(root.join("cpp/Engine/Source/Test/Public/Native.h"),
-            "class Native : public Base { public: const FString& Call() const; static void Typed(const FString& Address, float Timeout, Delegate Result) { Forward(Result); } private: int Value; };").unwrap();
+            "class Native : public Base { public: const FString& Call() const; static void Typed(const FString& Address, float Timeout, Delegate Result) { Forward(Result); } private: int Value; }; class Reflected { public: static void Call(); private: static void Hidden(); };").unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Public/Faction.h"),
             "enum class Faction : unsigned char { First, Second };",
@@ -740,7 +754,7 @@ mod tests {
         .unwrap();
         fs::write(
             root.join("cpp/Engine/Source/Test/Private/Native.cpp"),
-            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }\nvoid Native::Rpc_Implementation() { HandleMessage(); }\nvoid Native::Plain_Implementation() { NotTheBoundFunction(); }\nvoid Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }",
+            "const FString& Native::Call() const { return Value; }\nconst FString& Native::Call(int Index) const { return Other; }\nvoid Native::Rpc_Implementation() { HandleMessage(); }\nvoid Native::Plain_Implementation() { NotTheBoundFunction(); }\nvoid Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }\nvoid Native::Helper() const { NoBinding(); }\nvoid Native::GlobalHelper() const { FromGlobal(); }\nvoid Native::PrivateGlobal() const { PrivateSource(); }\nvoid Reflected::Call() { ReflectedSource(); }\nvoid Reflected::Hidden() { HiddenSource(); }",
         )
         .unwrap();
         fs::write(root.join("src/Chivalry2/Native.rs"), r#"//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Test/Public/Native.h>.
@@ -756,6 +770,7 @@ define_pattern_resolver!(Native__Rpc, ["40 54"]);
 define_pattern_resolver!(Native__Plain, ["40 55"]);
 define_pattern_resolver!(Native__Typed, ["40 56"]);
 define_offset_resolver!(Native__Provided);
+#[runtime_bindings]
 impl Native {
     /// # Safety
     /// Keep the receiver alive.
@@ -774,6 +789,22 @@ impl Native {
     pub unsafe fn Typed(address: *const FString, timeout: f32, #[native_by_value] callback: *mut Callback) {}
     #[bind_resolved_func(Native__Provided)]
     pub unsafe fn Provided(&self) {}
+    /// Helper notes.
+    fn Helper(&self) {}
+}
+#[runtime_bindings(global)]
+impl Native {
+    pub unsafe fn GlobalHelper(&self) {}
+    fn PrivateGlobal(&self) {}
+}
+#[kismet_runtime_bindings("/Script/Fixture.Reflected")]
+impl Reflected {
+    /// Reflected safety notes.
+    pub unsafe fn Call() {}
+    unsafe fn Hidden() {}
+}
+impl Unannotated {
+    fn Ignored(&self) {}
 }
 "#).unwrap();
         fs::write(
@@ -839,6 +870,28 @@ impl Native {
         assert!(typed.contains("void Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }"));
         assert!(!typed.contains("Native overload:"));
         assert!(!typed.contains("Forward(Result)"));
+        for (name, source) in [
+            ("Helper", "NoBinding();"),
+            ("GlobalHelper", "FromGlobal();"),
+            ("PrivateGlobal", "PrivateSource();"),
+        ] {
+            let method = fs::read_to_string(directory.join(format!("method-Native__{name}.md"))).unwrap();
+            assert!(method.starts_with(&format!("Native method [`Native::{name}`]")));
+            assert!(method.contains(source));
+            assert!(!method.contains("Resolved by"));
+            assert!(!method.contains("upstream resolver"));
+        }
+        let helper = fs::read_to_string(directory.join("method-Native__Helper.md")).unwrap();
+        assert!(helper.contains("Helper notes."));
+        assert!(!directory.join("method-Unannotated__Ignored.md").exists());
+        for (name, source) in [("Call", "ReflectedSource();"), ("Hidden", "HiddenSource();")] {
+            let method = fs::read_to_string(directory.join(format!("binding-Reflected__{name}.md"))).unwrap();
+            assert!(method.contains(&format!("Reflection native body: /Script/Fixture.Reflected::{name}")));
+            assert!(method.contains(source));
+            assert!(method.contains("Native.cpp#L"));
+        }
+        let reflected = fs::read_to_string(directory.join("binding-Reflected__Call.md")).unwrap();
+        assert!(reflected.contains("Reflected safety notes."));
         let cpp = root.join("cpp/Engine/Source/Test/Private/Native.cpp");
         fs::write(
             &cpp,

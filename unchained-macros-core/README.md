@@ -3,6 +3,11 @@
 Backend-independent native methods, detours, patches, and selection filters.
 No memory scanner, reflection engine, resolver-kind enum, or startup-phase policy.
 
+`runtime_bindings` attaches native-source documentation to every method in its
+annotated impl, including unbound and private methods. Unbound methods retain
+their Rust bodies and have no resolver metadata. `runtime_bindings(global)` and
+the Kismet backend use the same documentation path.
+
 Implement `AddressResolver` with an associated `Context`. A `Resolver<R>` holds
 the implementation, stable name, and optional selector filter.
 `ResolverDeclaration` associates generated declarations with their backend type.
