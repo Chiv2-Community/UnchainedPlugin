@@ -43,6 +43,19 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 static CONDITION: AtomicBool = AtomicBool::new(false);
 static ADD_CALLS: AtomicUsize = AtomicUsize::new(0);
 static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_OFF_CONDITION_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn borrow_condition() -> bool {
+    assert!(__UNCHAINED_HOOK_plugin_borrow.get().is_some());
+    let binding = Native::__UNCHAINED_BINDING_borrow.binding();
+    assert_ne!(binding.address(), binding.entry_address());
+    false
+}
+
+fn global_off_condition() -> bool {
+    GLOBAL_OFF_CONDITION_CALLS.fetch_add(1, Ordering::SeqCst);
+    true
+}
 
 #[unchained_macros_core::bind_func_detour(model::Native::add, || CONDITION.load(Ordering::SeqCst))]
 unsafe fn plugin_add(value: i32) -> i32 {
@@ -60,7 +73,7 @@ unsafe fn aliased(value: i32) -> i32 {
     unsafe { Native::alias(value) + 300 }
 }
 
-#[unchained_macros_core::bind_func_detour(Native::borrow, || false)]
+#[unchained_macros_core::bind_func_detour(Native::borrow, borrow_condition)]
 unsafe fn plugin_borrow<'a>(this: &'a Native) -> &'a Native {
     BORROW_CALLS.fetch_add(1, Ordering::SeqCst);
     unsafe { this.borrow() }
@@ -73,7 +86,7 @@ unsafe fn plugin_storage<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i
     result
 }
 
-#[unchained_macros_core::bind_func_detour(Native::global_off)]
+#[unchained_macros_core::bind_func_detour(Native::global_off, global_off_condition)]
 unsafe fn plugin_global_off(value: i32) -> i32 {
     unsafe { Native::global_off(value) + 400 }
 }
@@ -175,6 +188,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         __unchained_attach_plugin_borrow(true).unwrap();
         __unchained_attach_plugin_storage(true).unwrap();
         __unchained_attach_plugin_global_off(false).unwrap();
+        assert_eq!(GLOBAL_OFF_CONDITION_CALLS.load(Ordering::SeqCst), 0);
+        assert!(__unchained_attach_plugin_global_off(true).is_err());
+        assert_eq!(GLOBAL_OFF_CONDITION_CALLS.load(Ordering::SeqCst), 0);
         __unchained_attach_plugin_zero(true).unwrap();
         __unchained_attach_plugin_request(true).unwrap();
         assert_eq!(Native::zero(), 17);

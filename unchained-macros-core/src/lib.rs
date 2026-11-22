@@ -25,10 +25,11 @@ pub use selection::{SelectionKey, ResolverSelector, SelectorSnapshot, SelectorId
 #[doc(hidden)]
 pub mod __private {
     pub use inventory;
+    pub use retour;
     pub use log;
     pub use paste;
-    pub use crate::binding::{ErasedFunctionBindingRegistration, publish_function_detours};
-    pub use crate::detour::claim_detour_address;
+    pub use crate::binding::ErasedFunctionBindingRegistration;
+    pub use crate::detour::{attach_function_detour, claim_detour_address};
     pub use crate::registry::{ErasedHookRegistration, ErasedPatchRegistration, PatchInfo};
     pub use crate::resolver::ErasedResolverRegistration;
     pub use crate::selection::{SelectorProvider, selector_type, selection_key,

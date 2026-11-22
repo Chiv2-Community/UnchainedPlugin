@@ -35,7 +35,7 @@ fn binding_storage(
                 #target_name, <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
             );
         #(#cfg)*
-        ::inventory::submit! {
+        ::unchained_macros_core::__private::inventory::submit! {
             ::unchained_macros_core::__private::ErasedFunctionBindingRegistration::new(
                 &::unchained_macros_core::FunctionBindingRegistration { binding: &#name })
         }
@@ -62,7 +62,6 @@ fn call_wrapper(
     let output = &signature.output;
     let native = format_ident!("__unchained_native_call", span = Span::mixed_site());
     expanded.block = Box::new(syn::parse2(quote!({
-        let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
         #setup
         let #native: unsafe extern "C" fn(#(#types),*) #output = unsafe {
             ::core::mem::transmute(#binding.address()
@@ -98,7 +97,7 @@ pub(crate) fn expand_method(
     args: Tokens,
     function: &ItemFn,
     self_ty: &Type,
-) -> syn::Result<(ItemFn, syn::ImplItemConst, Tokens)> {
+) -> syn::Result<(ItemFn, Vec<syn::ImplItemConst>, Tokens)> {
     validate_binding(function)?;
     let resolver = resolver_path(args)?;
     let documentation = binding_documentation(function, self_ty, &resolver);
@@ -108,6 +107,7 @@ pub(crate) fn expand_method(
     let parameters = (0..signature.inputs.len())
         .map(|index| parameter_type(&signature, index))
         .collect::<syn::Result<Vec<_>>>()?;
+    let parameter_values = parameters.iter().map(|_| quote!(::core::marker::PhantomData));
     let name = &function.sig.ident;
     let descriptor = format_ident!("__UNCHAINED_BINDING_{}", name, span = Span::mixed_site());
     let normalized_descriptor = format_ident!("__UNCHAINED_MUTABILITY_{}", name, span = Span::mixed_site());
@@ -119,28 +119,30 @@ pub(crate) fn expand_method(
     let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
     let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation)?;
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
-    let descriptor = syn::parse2(quote! {
-        #(#cfg)*
-        #[doc(hidden)]
-        #[allow(non_upper_case_globals)]
-        #vis const #descriptor: ::unchained_macros_core::NativeFunction<#native, #backend> =
-            unsafe { ::unchained_macros_core::NativeFunction::new(&#storage) };
-    })?;
-    let helper = quote! {
-        #(#cfg)*
-        impl #self_ty {
+    let descriptors = [
+        quote! {
+            #(#cfg)*
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            #vis const #descriptor: ::unchained_macros_core::NativeFunction<#native, #backend> =
+                unsafe { ::unchained_macros_core::NativeFunction::new(&#storage) };
+        },
+        quote! {
+            #(#cfg)*
             #[doc(hidden)]
             #[allow(non_upper_case_globals)]
             #vis const #normalized_descriptor: ::unchained_macros_core::NativeSignature<#normalized> =
                 ::core::marker::PhantomData;
+        },
+        quote! {
+            #(#cfg)*
             #[doc(hidden)]
             #[allow(non_upper_case_globals)]
             #vis const #parameter_descriptor: (#(::unchained_macros_core::NativeSignature<#parameters>,)*) =
-                (#(::core::marker::PhantomData::<fn(#parameters) -> #parameters>,)*);
-        }
-        #registration
-    };
-    Ok((expanded, descriptor, helper))
+                (#(#parameter_values,)*);
+        },
+    ].into_iter().map(syn::parse2).collect::<syn::Result<Vec<_>>>()?;
+    Ok((expanded, descriptors, registration))
 }
 
 
@@ -178,11 +180,11 @@ mod tests {
                 Result: &'a mut FString,
             ) -> &'a mut FString {}
         };
-        let (binding, descriptor, _) = expand_method(
+        let (binding, descriptors, _) = expand_method(
             quote!(self::Native__Call), &function, &syn::parse_quote!(Native),
         ).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(documentation(&descriptor.attrs).is_empty());
+        assert!(descriptors.iter().all(|descriptor| documentation(&descriptor.attrs).is_empty()));
         assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
         assert!(docs.contains("](Self::Call).\nResolved by "));
         assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));

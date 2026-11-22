@@ -236,7 +236,6 @@ pub struct ATBLCharacter {
     pub final_padding: [u8; 0x18],                         // 0x16F8
 } // Size: 0x1710
 
-#[unchained_macros_core::runtime_bindings]
 impl ATBLCharacter {
     /// # Safety
     /// UObjectType::from_ptr's game-thread and lifetime requirements apply.

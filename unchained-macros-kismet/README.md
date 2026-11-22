@@ -24,7 +24,8 @@ impl UGameplayStatics {
   callable wrappers and signature metadata to `unchained-macros-core::runtime_bindings`.
 - Existing `bind_func_detour(Type::Method)` attributes work unchanged. A binding
   without a detour is initialized too; no passive detour is needed for direct calls.
-- The consumer needs `unchained-macros-core`, `inventory`, and `retour` dependencies.
+- The consumer needs `unchained-macros-core`; generated code accesses its
+  implementation dependencies through hidden core re-exports.
   It constructs a `KismetContext` with a game-specific lookup callback that resolves
   `(class_path, method_name)` to the verified native C++ entry.
 - Initialize with `initialize_bindings_for::<KismetReflectionResolver>` on the game

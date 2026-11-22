@@ -2,6 +2,7 @@
 use std::{num::NonZeroUsize, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
 use unchained_macros_core as bindings;
 use bindings::{AddressResolver, Resolver, SelectorSnapshot, Patch, PatchState, PatchWriter};
+use bindings::__private::inventory;
 use unchained_macros_kismet::{KismetContext, KismetReflectionResolver};
 
 static READY: AtomicBool = AtomicBool::new(false);

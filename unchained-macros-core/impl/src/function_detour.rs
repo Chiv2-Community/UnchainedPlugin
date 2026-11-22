@@ -155,7 +155,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         fn #condition_fn() -> bool { (#condition)() }
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::std::sync::OnceLock<::retour::RawDetour> = ::std::sync::OnceLock::new();
+        static #hook: ::std::sync::OnceLock<::unchained_macros_core::__private::retour::RawDetour> =
+            ::std::sync::OnceLock::new();
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
@@ -166,29 +167,15 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         unsafe fn #attach(
             auto_activate: bool,
         ) -> Result<(), Box<dyn ::std::error::Error>> {
-            let binding = #target.binding();
-            let address = binding.entry_address()
-                .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?.get();
-            if #hook.get().is_some() { return Err(::retour::Error::AlreadyInitialized.into()); }
-            let claim = ::unchained_macros_core::__private::claim_detour_address(address)?;
             // Checked outer mutability differences preserve the native ABI.
             // Reference validity and aliasing remain the detour author's obligation.
             let replacement: #native = #replacement;
-            let detour = unsafe { ::retour::RawDetour::new(
-                address as *const (), replacement as *const (),
-            )? };
-            #hook.set(detour).map_err(|_| ::retour::Error::AlreadyInitialized)?;
-            let hook = #hook.get().expect("Hook was just initialized");
-            // The detour and trampoline are process-lifetime storage, even disabled.
-            claim.commit();
-            unsafe { ::unchained_macros_core::__private::publish_function_detours(
-                address, hook,
-            )?; }
-            if auto_activate && #condition_fn() { unsafe { hook.enable()?; } }
-            Ok(())
+            unsafe { ::unchained_macros_core::__private::attach_function_detour(
+                #target.binding(), &#hook, replacement as *const (), auto_activate, #condition_fn,
+            ) }
         }
         #(#cfg)*
-        ::inventory::submit! {
+        ::unchained_macros_core::__private::inventory::submit! {
             ::unchained_macros_core::__private::ErasedHookRegistration::new(&::unchained_macros_core::HookRegistration {
                 name: stringify!(#ident), binding: #target.binding(),
                 hook_fn: #attach, condition: #condition_fn,
@@ -202,6 +189,20 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 mod tests {
     use super::*;
     use crate::docs::documentation;
+
+    #[test]
+    fn attachment_delegates_to_core_without_consumer_dependency_paths() {
+        let expanded = expand(
+            quote!(Native::Call), quote!(unsafe fn replacement(value: i32) -> i32 { value }),
+        ).unwrap().to_string();
+        assert!(expanded.contains(":: unchained_macros_core :: __private :: attach_function_detour"));
+        assert!(expanded.contains(":: unchained_macros_core :: __private :: inventory :: submit"));
+        assert!(expanded.contains(":: unchained_macros_core :: __private :: retour :: RawDetour"));
+        assert!(!expanded.contains("claim_detour_address"));
+        assert!(!expanded.contains("publish_function_detours"));
+        assert!(!expanded.contains("RawDetour :: new"));
+        assert!(expanded.contains("let replacement : unsafe extern \"C\" fn"));
+    }
 
     #[test]
     fn mutability_override_checks_only_the_annotated_raw_pointer() {

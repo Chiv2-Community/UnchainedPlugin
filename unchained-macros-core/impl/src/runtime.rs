@@ -64,23 +64,23 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             sig: method.sig.clone(),
             block: Box::new(method.block.clone()),
         };
-        let (expanded, descriptor, helper) = function::expand_method(
+        let (expanded, metadata, helper) = function::expand_method(
             args, &function, self_ty,
         )?;
-        let normalized_name = format!("__UNCHAINED_MUTABILITY_{}", method.sig.ident);
-        let parameter_name = format!("__UNCHAINED_PARAMETERS_{}", method.sig.ident);
-        if !names.insert(descriptor.ident.to_string())
-            || !names.insert(normalized_name)
-            || !names.insert(parameter_name)
-        {
-            return Err(syn::Error::new_spanned(descriptor, "generated binding metadata conflicts with an associated item"));
+        for descriptor in &metadata {
+            if !names.insert(descriptor.ident.to_string()) {
+                return Err(syn::Error::new_spanned(descriptor, "generated binding metadata conflicts with an associated item"));
+            }
         }
         method.attrs = expanded.attrs;
         method.vis = expanded.vis;
         method.sig = expanded.sig;
         method.block = *expanded.block;
-        descriptors.push(syn::ImplItem::Const(descriptor));
+        descriptors.extend(metadata.into_iter().map(syn::ImplItem::Const));
         helpers.push(helper);
+    }
+    if descriptors.is_empty() {
+        return Ok(quote!(#implementation));
     }
     implementation.items.extend(descriptors);
     let cfg: Vec<_> = cfg_attributes(&implementation.attrs).collect();
@@ -110,9 +110,7 @@ mod tests {
         };
         let expanded = expand_impl(quote!(), quote!(#original)).unwrap();
         let file: syn::File = syn::parse2(expanded).unwrap();
-        let syn::Item::Const(container) = &file.items[0] else { panic!("expected impl container") };
-        let syn::Expr::Block(block) = container.expr.as_ref() else { panic!("expected block") };
-        let syn::Stmt::Item(syn::Item::Impl(implementation)) = &block.block.stmts[0] else { panic!("expected impl") };
+        let syn::Item::Impl(implementation) = &file.items[0] else { panic!("expected unchanged impl") };
         assert_eq!(implementation.to_token_stream().to_string(), original.to_token_stream().to_string());
     }
 
@@ -190,5 +188,28 @@ mod tests {
         assert!(text.contains("for < '__unchained_receiver >"));
         assert!(text.matches("cfg (feature = \"example\")").count() >= 3);
         syn::parse2::<syn::File>(expanded).unwrap();
+    }
+
+    #[test]
+    fn all_signature_metadata_shares_the_original_impl() {
+        let expanded = expand_impl(quote!(), quote! {
+            impl Native {
+                #[bind_resolved_func(First)]
+                unsafe fn first(value: i32) {}
+                #[bind_resolved_func(Second)]
+                unsafe fn second<'a>(value: &'a mut i32) -> &'a mut i32 {}
+            }
+        }).unwrap();
+        let file: syn::File = syn::parse2(expanded).unwrap();
+        let syn::Item::Const(container) = &file.items[0] else { panic!("expected storage scope") };
+        let syn::Expr::Block(block) = container.expr.as_ref() else { panic!("expected block") };
+        let implementations: Vec<_> = block.block.stmts.iter().filter_map(|statement| {
+            if let syn::Stmt::Item(syn::Item::Impl(item)) = statement { Some(item) } else { None }
+        }).collect();
+        assert_eq!(implementations.len(), 1);
+        assert_eq!(implementations[0].items.iter().filter(|item| matches!(item, syn::ImplItem::Const(_))).count(), 6);
+        let text = quote!(#file).to_string();
+        assert!(!text.contains("PhantomData :: <"));
+        assert!(!text.contains("let _ : :: core :: marker :: PhantomData"));
     }
 }

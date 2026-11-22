@@ -13,6 +13,33 @@ pub fn detour_is_enabled(name: &str) -> bool {
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;
+use std::sync::OnceLock;
+
+/// Construct and publish a process-lifetime detour before evaluating activation.
+///
+/// # Safety
+/// The replacement must match the binding's verified native ABI. Attach while
+/// native callers are quiescent; storage and trampolines remain live permanently.
+#[doc(hidden)]
+pub unsafe fn attach_function_detour<R: crate::AddressResolver>(
+    binding: &'static crate::FunctionBinding<R>,
+    storage: &'static OnceLock<retour::RawDetour>,
+    replacement: *const (),
+    auto_activate: bool,
+    condition: fn() -> bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let address = binding.entry_address()
+        .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?.get();
+    if storage.get().is_some() { return Err(retour::Error::AlreadyInitialized.into()); }
+    let claim = claim_detour_address(address)?;
+    let detour = unsafe { retour::RawDetour::new(address as *const (), replacement)? };
+    storage.set(detour).map_err(|_| retour::Error::AlreadyInitialized)?;
+    let hook = storage.get().expect("Hook was just initialized");
+    claim.commit();
+    unsafe { crate::binding::publish_function_detours(address, hook)?; }
+    if auto_activate && condition() { unsafe { hook.enable()?; } }
+    Ok(())
+}
 
 static CLAIMED_ADDRESSES: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
 
