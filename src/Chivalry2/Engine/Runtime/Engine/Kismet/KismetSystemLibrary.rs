@@ -27,21 +27,21 @@ impl UKismetSystemLibrary {
     pub(crate) unsafe fn IsStandalone(context: *mut UObject) -> bool {}
 }
 
-// Verified unique exec wrappers in the documented Steam binary. These markers
+// Verified unique exec wrappers in the supported Steam build. These markers
 // expose VM observations, not native-call ABIs or detourable folded bodies.
 #[cfg(feature = "blueprint_printstring_log")]
 #[unchained_macros_kismet::kismet_exec_bindings("/Script/Engine.KismetSystemLibrary")]
 impl UKismetSystemLibrary {
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub(crate) unsafe fn PrintWarning(message: &FString) {}
 
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub(crate) unsafe fn PrintString(
         context: *mut UObject, message: &FString, print_to_screen: bool,
         print_to_log: bool, color: &FLinearColor, duration: f32,
     ) {}
 
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub(crate) unsafe fn PrintText(
         context: *mut UObject, message: &FText, print_to_screen: bool,
         print_to_log: bool, color: &FLinearColor, duration: f32,

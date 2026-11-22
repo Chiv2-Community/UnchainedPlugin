@@ -57,21 +57,6 @@ impl Inputs<'_> {
 /// One entry callback; fan-out is deliberately not implemented by this backend.
 pub type EntryCallback = for<'a> unsafe fn(Inputs<'a>);
 
-/// Prepare independently owned entry snapshots. Native ownership must never be
-/// bit-copied; pointer snapshots do not extend their pointees' lifetimes.
-pub type SnapshotCallback = for<'a> unsafe fn(Inputs<'a>) -> Option<unchained_macros_core::ExitObservation>;
-pub type FinishCallback = unsafe fn(unchained_macros_core::ExitObservation, *const c_void);
-
-#[derive(Clone, Copy, Default)]
-pub struct Callbacks {
-    pub entry: Option<EntryCallback>,
-    pub snapshot: Option<SnapshotCallback>,
-    /// Backend-specific per-target observer guard for result delivery.
-    pub finish: Option<FinishCallback>,
-    /// Zero for untyped adapters; typed descriptors require their native alignment.
-    pub result_alignment: usize,
-}
-
 fn report(message: &str) {
     // A logger may panic (including a panicking payload destructor) or reenter
     // the same failing VM hook. Neither may escape or recursively log forever.
@@ -84,15 +69,13 @@ fn report(message: &str) {
 
 struct Invocation {
     frame: usize,
-    expected: usize,
     /// Property identities, in step order; zero permits the bytecode Step path.
     properties: &'static [usize],
     depth: usize,
     slots: Vec<NonNull<c_void>>,
     completed: bool,
     failed: bool,
-    callbacks: Callbacks,
-    snapshot: Option<unchained_macros_core::ExitObservation>,
+    entry: Option<EntryCallback>,
 }
 
 thread_local! {
@@ -111,24 +94,17 @@ impl Drop for Scope {
 }
 
 fn ready(call: &Rc<RefCell<Invocation>>) {
-    let (callbacks, slots) = {
+    let (entry, slots) = {
         let mut state = call.borrow_mut();
-        if state.failed || state.completed || state.slots.len() != state.expected { return; }
+        if state.failed || state.completed || state.slots.len() != state.properties.len() { return; }
         state.completed = true;
-        (state.callbacks, state.slots.clone())
+        let Some(entry) = state.entry else { return; };
+        (entry, state.slots.clone())
     };
     // No TLS/state borrow is held while executing arbitrary callback code.
-    let inputs = || Inputs { slots: &slots, _game_thread: PhantomData };
-    if let Some(entry) = callbacks.entry {
-        if unchained_macros_core::isolate_observer(|| unsafe { entry(inputs()) }).is_none() {
-            report("Kismet entry listener panicked");
-        }
-    }
-    if let Some(snapshot) = callbacks.snapshot {
-        match unchained_macros_core::isolate_observer(|| unsafe { snapshot(inputs()) }) {
-            Some(snapshot) => call.borrow_mut().snapshot = snapshot,
-            None => report("Kismet input snapshot panicked; exit listener suppressed"),
-        }
+    let inputs = Inputs { slots: &slots, _game_thread: PhantomData };
+    if unchained_macros_core::isolate_observer(|| unsafe { entry(inputs) }).is_none() {
+        report("Kismet entry listener panicked");
     }
 }
 
@@ -140,19 +116,17 @@ fn ready(call: &Rc<RefCell<Invocation>>) {
 /// the final argument completes. Ref/out layouts are unsupported. All Step and
 /// StepExplicitProperty calls must pass through [`observe_step`]. The original
 /// must receive the real frame/context/result, with its original native ABI.
-/// Callbacks must obey their slot/snapshot contracts and run on the game thread.
-/// Exit callbacks must only interpret validated caller-owned result storage.
+/// The callback must obey its argument-slot contract and run on the game thread.
 pub unsafe fn observe_exec(
     frame: *mut c_void,
-    result: *mut c_void,
     properties: &'static [usize],
-    callbacks: Callbacks,
+    entry: Option<EntryCallback>,
     original: impl FnOnce(),
 ) {
     let call = Rc::new(RefCell::new(Invocation {
-        frame: frame as usize, expected: properties.len(), properties,
+        frame: frame as usize, properties,
         depth: 0, slots: Vec::with_capacity(properties.len()), completed: false,
-        failed: false, callbacks, snapshot: None,
+        failed: false, entry,
     }));
     if CALLS.try_with(|calls| calls.borrow_mut().push(call.clone())).is_err() {
         original();
@@ -161,30 +135,8 @@ pub unsafe fn observe_exec(
     let _scope = Scope(call.clone());
     ready(&call); // No-argument thunks have no Step completion.
     original();
-    let (snapshot, valid) = {
-        let mut state = call.borrow_mut();
-        (state.snapshot.take(), state.completed && !state.failed)
-    };
-    if valid {
-        if let Some(snapshot) = snapshot {
-            if result.is_null() {
-                report("Kismet exit observation has null caller result storage; callback suppressed");
-                return;
-            }
-            let callbacks = call.borrow().callbacks;
-            if callbacks.result_alignment != 0 && result as usize % callbacks.result_alignment != 0 {
-                report("Kismet exit observation has misaligned result storage; callback suppressed");
-                return;
-            }
-            if unchained_macros_core::isolate_observer(|| unsafe {
-                let finish = callbacks.finish;
-                if let Some(finish) = finish { finish(snapshot, result); }
-                else { snapshot.finish(result.cast()); }
-            }).is_none() {
-                report("Kismet exit listener panicked");
-            }
-        }
-    } else {
+    let valid = { let state = call.borrow(); state.completed && !state.failed };
+    if !valid {
         report("Kismet exec observation did not match its verified step contract");
     }
 }
@@ -225,7 +177,7 @@ pub unsafe fn observe_step(
         let mut state = call.borrow_mut();
         let index = state.slots.len();
         let Some(pointer) = NonNull::new(result) else { state.failed = true; return; };
-        if index >= state.expected || (property != 0 && state.properties[index] != property) {
+        if index >= state.properties.len() || (property != 0 && state.properties[index] != property) {
             state.failed = true;
             return;
         }
@@ -249,19 +201,6 @@ mod tests {
         assert_eq!(unsafe { *inputs.get(0).unwrap().borrow::<u32>() }, 42);
         event("entry");
     }
-    unsafe fn snapshot(inputs: Inputs<'_>) -> Option<unchained_macros_core::ExitObservation> {
-        let value = Box::new(unsafe { *inputs.get(0).unwrap().borrow::<u32>() });
-        Some(unsafe { unchained_macros_core::ExitObservation::new(
-            Box::into_raw(value).cast(), exit, release,
-        ) })
-    }
-    unsafe fn release(snapshot: *mut ()) { unsafe { drop(Box::from_raw(snapshot.cast::<u32>())); } }
-    unsafe fn exit(snapshot: *mut (), result: *const ()) {
-        assert_eq!(unsafe { *snapshot.cast::<u32>() }, 42);
-        // Native bool result is one byte; no bool32 overread.
-        assert_eq!(unsafe { result.cast::<u8>().read() }, 1);
-        event("exit");
-    }
     struct Cleanup;
     impl Drop for Cleanup { fn drop(&mut self) { event("cleanup"); } }
 
@@ -271,11 +210,8 @@ mod tests {
         let mut frame = 0u32;
         let pointer = (&mut frame as *mut u32).cast();
         let mut result = 0u8;
-        let result_pointer = (&mut result as *mut u8).cast();
         unsafe {
-            observe_exec(pointer, result_pointer, &[11], Callbacks {
-                entry: Some(entry), snapshot: Some(snapshot), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(entry), || {
                 let _cleanup = Cleanup;
                 let mut argument = 0u32;
                 let slot = (&mut argument as *mut u32).cast();
@@ -291,7 +227,7 @@ mod tests {
         }
         assert_eq!(frame, 1);
         assert_eq!(result, 1);
-        EVENTS.with(|events| assert_eq!(*events.borrow(), ["evaluate", "entry", "body", "cleanup", "exit"]));
+        EVENTS.with(|events| assert_eq!(*events.borrow(), ["evaluate", "entry", "body", "cleanup"]));
     }
 
     #[test]
@@ -300,9 +236,7 @@ mod tests {
         let mut frame = 0u8;
         let pointer = (&mut frame as *mut u8).cast();
         unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(entry), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(entry), || {
                 let mut outer = 0u32;
                 let mut nested = 0u32;
                 observe_step(pointer, (&mut outer as *mut u32).cast(), 0, || {
@@ -323,9 +257,7 @@ mod tests {
                 let mut frame = 0u8;
                 let pointer = (&mut frame as *mut u8).cast();
                 unsafe {
-                    observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                        entry: Some(reenter), ..Callbacks::default()
-                    }, || {
+                    observe_exec(pointer, &[11], Some(reenter), || {
                         let mut slot = 7u32;
                         observe_step(pointer, (&mut slot as *mut u32).cast(), 11, || {});
                     });
@@ -340,9 +272,7 @@ mod tests {
         let mut frame = 0u8;
         let pointer = (&mut frame as *mut u8).cast();
         unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(reenter), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(reenter), || {
                 let mut slot = 9u32;
                 observe_step(pointer, (&mut slot as *mut u32).cast(), 11, || {});
             });
@@ -358,9 +288,7 @@ mod tests {
         let pointer = (&mut frame as *mut u8).cast();
         let mut evaluated = 0;
         unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(entry), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(entry), || {
                 let mut argument = 0u32;
                 observe_step(pointer, (&mut argument as *mut u32).cast(), 12, || {
                     evaluated += 1;
@@ -378,19 +306,17 @@ mod tests {
     fn no_arguments_need_no_step_and_keep_original() {
         EVENTS.with(|events| events.borrow_mut().clear());
         unsafe {
-            observe_exec(std::ptr::dangling_mut(), std::ptr::null_mut(), &[], Callbacks {
-                entry: Some(noargs), ..Callbacks::default()
-            }, || event("body"));
+            observe_exec(std::ptr::dangling_mut(), &[], Some(noargs), || event("body"));
         }
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body"]));
     }
 
     #[test]
-    fn normal_return_only_exit_and_scope_cleanup_on_unwind() {
+    fn scope_cleanup_on_unwind() {
         let mut frame = 0u8;
         let pointer = (&mut frame as *mut u8).cast();
         let result = catch_unwind(AssertUnwindSafe(|| unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[], Callbacks::default(), || panic!("fixture"));
+            observe_exec(pointer, &[], None, || panic!("fixture"));
         }));
         assert!(result.is_err());
         CALLS.with(|calls| assert!(calls.borrow().is_empty()));
@@ -411,9 +337,7 @@ mod tests {
         let mut frame = 0u8;
         let pointer = (&mut frame as *mut u8).cast();
         unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(borrow_owner_then_panic), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(borrow_owner_then_panic), || {
                 // Construct a real owner; no zero-filled FString/FText surrogate.
                 let mut owner = NativeOwner("engine-owned".into());
                 observe_step(pointer, (&mut owner as *mut NativeOwner).cast(), 11, || {});
@@ -431,14 +355,10 @@ mod tests {
         let mut frame = 0u8;
         let pointer = (&mut frame as *mut u8).cast();
         unsafe {
-            observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(entry), ..Callbacks::default()
-            }, || {
+            observe_exec(pointer, &[11], Some(entry), || {
                 let mut outer = 0u32;
                 observe_step(pointer, (&mut outer as *mut u32).cast(), 0, || {
-                    observe_exec(pointer, std::ptr::null_mut(), &[11], Callbacks {
-                        entry: Some(entry), ..Callbacks::default()
-                    }, || {
+                    observe_exec(pointer, &[11], Some(entry), || {
                         let mut inner = 0u32;
                         observe_step(pointer, (&mut inner as *mut u32).cast(), 11, || inner = 42);
                     });
@@ -459,9 +379,7 @@ mod tests {
         let frame = std::ptr::dangling_mut();
         EVENTS.with(|events| events.borrow_mut().clear());
         unsafe {
-            observe_exec(frame, std::ptr::null_mut(), &[11], Callbacks {
-                entry: Some(entry), ..Callbacks::default()
-            }, || {
+            observe_exec(frame, &[11], Some(entry), || {
                 observe_step(frame, slot, 11, || {});
                 event("body");
             });

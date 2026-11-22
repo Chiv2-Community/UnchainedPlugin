@@ -51,7 +51,7 @@ impl KismetExecResolver {
     }
 
     /// Foreign threads must forward the real wrapper without observing native
-    /// text/history or allocating callback snapshots.
+    /// text/history or invoking entry callbacks.
     pub fn is_observation_thread(&self) -> bool {
         self.observation_thread.get().is_some_and(|thread| Some(*thread) == ObservationThread::current())
     }
@@ -82,5 +82,7 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
 
 /// Exec-only methods deliberately provide no native-call/detour descriptor.
 /// This includes shared no-op and cleanup-only bodies; never patch those bodies.
-pub struct VerifiedDummiedExecMethodCannotBeDetoured;
-pub struct ExecOnlyMethodHasNoNativeCallAbi;
+pub struct DummyExecMethodCannotBeDetoured;
+
+/// Dummy exec methods support entry observation only.
+pub enum DummyExecMethodHasNoExitListener {}

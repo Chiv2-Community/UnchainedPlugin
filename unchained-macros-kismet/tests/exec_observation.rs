@@ -9,13 +9,13 @@ struct UObject;
 
 #[kismet_exec_bindings("/Script/Fixture.Library")]
 impl Library {
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub unsafe fn PrintWarning(message: &FString) {}
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub unsafe fn PrintText(message: &FText) {}
-    #[exec_observe(verified)]
+    #[dummy]
     pub unsafe fn Predicate(context: *mut UObject, flag: std::primitive::bool) -> bool {}
-    #[exec_observe(verified)]
+    #[dummy]
     pub unsafe fn NoArgs() {}
 }
 
@@ -24,12 +24,6 @@ unsafe fn warning(_message: &FString) {}
 
 #[unchained_macros_core::bind_func_entry_listener(Library::Predicate)]
 unsafe fn predicate(_context: &*mut UObject, _flag: &bool) {}
-
-#[unchained_macros_core::bind_func_exit_listener(Library::Predicate)]
-unsafe fn predicate_exit(_context: &*mut UObject, _flag: &bool, _result: &bool) {}
-
-#[unchained_macros_core::bind_func_exit_listener(Library::NoArgs)]
-unsafe fn noargs_exit(_result: &()) {}
 
 struct Fixture { shared: bool }
 unsafe impl Reflection for Fixture {
@@ -56,7 +50,7 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
         "/Script/Fixture.Library", "PrintWarning", &[Parameter { kind: "StrProperty", size: std::mem::size_of::<FString>() }], None,
     ) };
     assert_eq!(unsafe { resolver.resolve(&context) }.unwrap().get(), 123);
-    let _: unchained_macros_kismet::VerifiedDummiedExecMethodCannotBeDetoured = Library::__UNCHAINED_BINDING_PrintWarning;
+    let _: unchained_macros_kismet::DummyExecMethodCannotBeDetoured = Library::__UNCHAINED_BINDING_PrintWarning;
 }
 
 #[test]
@@ -84,13 +78,6 @@ unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
     assert_eq!(*context as usize, 0x123);
     assert!(*flag);
     event("entry");
-    unsafe { invoke_reentrant_predicate(); }
-}
-#[unchained_macros_core::bind_func_exit_listener(Library::Predicate)]
-unsafe fn runtime_exit(context: &*mut UObject, flag: &bool, result: &bool) {
-    assert_eq!(*context as usize, 0x123);
-    assert!(*flag && *result);
-    event("exit");
     unsafe { invoke_reentrant_predicate(); }
 }
 unsafe fn invoke_reentrant_predicate() {
@@ -149,7 +136,6 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     let address = unsafe { __UNCHAINED_EXEC_Library_Predicate_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { __UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_Predicate.entry.register(runtime_entry, true, || true) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_Predicate.exit.register(__unchained_prepare_runtime_exit, true, || true) }.unwrap();
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
@@ -158,7 +144,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     }
     assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
     RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(),
-        ["entry", "body", "cleanup", "body", "cleanup", "exit", "body", "cleanup"]));
+        ["entry", "body", "cleanup", "body", "cleanup"]));
     std::thread::spawn(|| {
         let mut frame = Frame::default();
         let mut result = 0u8;
@@ -174,7 +160,6 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
 thread_local! {
     static NOARGS_ORIGINALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NOARGS_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static NOARGS_EXITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 unsafe fn invoke_noargs() {
     unsafe {
@@ -185,11 +170,6 @@ unsafe fn invoke_noargs() {
 unsafe fn noargs_reentrant_entry() {
     NOARGS_ENTRIES.with(|count| count.set(count.get() + 1));
     unsafe { invoke_noargs(); } // Unconditional: the descriptor must stop recursion.
-}
-#[unchained_macros_core::bind_func_exit_listener(Library::NoArgs)]
-unsafe fn noargs_reentrant_exit(_result: &()) {
-    NOARGS_EXITS.with(|count| count.set(count.get() + 1));
-    unsafe { invoke_noargs(); }
 }
 unsafe extern "system" fn noargs_original(_: *mut std::ffi::c_void, _: *mut std::ffi::c_void, result: *mut std::ffi::c_void) {
     assert!(result.is_null(), "Original receives untouched native void result storage");
@@ -207,22 +187,19 @@ unsafe impl Reflection for NoArgsReflection {
 }
 
 #[test]
-fn noargs_entry_and_exit_unconditional_reentry_suppress_only_nested_observers() {
+fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     let context = unsafe { KismetContext::new(NoArgsReflection, ExecEnvironment {
         module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
     }) };
     let address = unsafe { __UNCHAINED_EXEC_Library_NoArgs_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { __UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_NoArgs.entry.register(noargs_reentrant_entry, true, || true) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_NoArgs.exit.register(__unchained_prepare_noargs_reentrant_exit, true, || true) }.unwrap();
     unsafe { invoke_noargs(); }
     NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));
-    NOARGS_EXITS.with(|count| assert_eq!(count.get(), 1));
-    NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 3));
+    NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));
     std::thread::spawn(|| {
         unsafe { invoke_noargs(); }
         NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 1));
         NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 0));
-        NOARGS_EXITS.with(|count| assert_eq!(count.get(), 0));
     }).join().unwrap();
 }

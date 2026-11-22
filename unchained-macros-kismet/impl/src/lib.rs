@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use syn::{ItemImpl, Type};
 mod exec_bindings;
 
-/// Declare observation-only VM wrappers with an explicitly verified Step contract.
+/// Declare entry-only `#[dummy]` methods with a verified exec-wrapper contract.
 #[proc_macro_attribute]
 pub fn kismet_exec_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     exec_bindings::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
@@ -21,11 +21,16 @@ fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::A
     attributes.iter().filter(|attribute| attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr"))
 }
 
-fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+fn class_path(args: Tokens) -> syn::Result<syn::LitStr> {
     let owner: syn::LitStr = syn::parse2(args)?;
     if !owner.value().starts_with("/Script/") || !owner.value().contains('.') || owner.value().contains('\0') {
         return Err(syn::Error::new_spanned(owner, "expected a /Script/Package.Class path without NUL"));
     }
+    Ok(owner)
+}
+
+fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    let owner = class_path(args)?;
     let mut implementation: ItemImpl = syn::parse2(item)?;
     if implementation.trait_.is_some() || !implementation.generics.params.is_empty() || implementation.generics.where_clause.is_some() {
         return Err(syn::Error::new_spanned(&implementation, "kismet_runtime_bindings requires a non-generic inherent impl"));

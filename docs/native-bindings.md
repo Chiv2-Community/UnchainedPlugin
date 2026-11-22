@@ -145,8 +145,9 @@ Initialize bindings and publish trampolines before enabling replacements.
    entry. Original calls read its trampoline; no second trampoline address is stored.
 4. Activate individual callbacks only after publication.
 
-- One physical dispatcher owns a native address. A method supports one
+- One physical dispatcher owns a native address. A native binding supports one
   behavior-changing detour, one entry listener, and one exit listener.
+  Dummy exec markers support one entry listener only.
 - Conditions are attachment-time activation gates. Each callback has independent
   logical activation; disabling a detour does not disable its listeners.
 - Use registration `set_enabled` controls for logical activation. Disabling a raw
@@ -198,4 +199,5 @@ unsafe fn returned(value: &u32, result: &bool) {
   pointee lifetimes. Immutable pointer observations do not authorize pointee writes.
 - Native coverage follows an entry address, including its aliases. Exec-only
   Blueprint observations require a verified unique wrapper and preserve real VM
-  stepping and cleanup; see [Kismet bindings](kismet-runtime-bindings.md).
+  stepping and cleanup. Dummy markers reject exit listeners and detours; see
+  [Kismet bindings](kismet-runtime-bindings.md).

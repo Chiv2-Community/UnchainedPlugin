@@ -68,7 +68,7 @@ Generalized VM argument marshalling and interface/vtable recovery are not includ
 Virtual/interface native calls are unsupported by this decoder; use a separately
 verified rust-ctables declaration, never an inferred C++ ABI.
 
-## Exec-only observations
+## Dummy entry listeners
 
 ```rust
 use unchained_macros_kismet::kismet_exec_bindings;
@@ -77,19 +77,20 @@ struct Library;
 struct FString; // The host supplies the real native layout.
 #[kismet_exec_bindings("/Script/Fixture.Library")]
 impl Library {
-    #[exec_observe(verified, dummied)]
+    #[dummy]
     pub unsafe fn PrintWarning(message: &FString) {}
 }
 #[bind_func_entry_listener(Library::PrintWarning)]
 unsafe fn warning(message: &FString) {}
 ```
 
-- `verified` is an unsafe declaration contract, not automatic disassembly proof.
-  Verify the current binary's argument order, exact top-level Step count, and
-  live independent slots through the final Step. The wrapper must remain unique,
+- `#[dummy]` takes no parameters. Verification is an unsafe declaration contract,
+  not automatic disassembly proof. Verify the current binary's argument order,
+  exact top-level Step count, and live independent slots through the final Step.
+  The wrapper must remain unique,
   including UFunctions loaded later. The adapter rejects currently reflected
   shared wrappers; no `FFrame::node`/callee relationship is assumed.
-- `dummied` explicitly identifies verified shared no-op **or cleanup-only**
+- `#[dummy]` identifies verified no-op **or cleanup-only**
   native bodies. The marker rejects native detours; the exec wrapper, native
   cleanup-only body, frame advancement, and all temporary destruction still run.
   Decoder failure is never dummy evidence.
@@ -98,11 +99,12 @@ unsafe fn warning(message: &FString) {}
   Step adapters through core's global address owner and alias/trampoline sharing.
   The supplied environment retains original Step entry addresses for decoding.
   Each resolver retains the context's constructing/resolving thread identity.
-  Foreign-thread wrapper calls bypass observation and snapshots, forwarding the
-  original exactly once. Windows dispatch checks use allocation-free native thread IDs.
-- One entry and one exit listener per declaration are supported. Core owns
-  conditions, activation and attachment. Callback/condition panics are isolated;
-  native exceptions, aborts and non-returning calls do not promise exit events.
+  Foreign-thread wrapper calls forward the original exactly once without observing.
+  Windows dispatch checks use allocation-free native thread IDs.
+- One entry listener per dummy declaration is supported; exit listeners are
+  rejected at compile time. Core owns conditions, activation and attachment.
+  Callback/condition panics are isolated;
+  original execution and cleanup remain unchanged.
 - Entry runs at the final original Step completion, before original body/cleanup.
   Noargs entry runs immediately before the original wrapper. Nested same-frame
   expression Steps do not count as arguments; nested exec scopes are independent.
@@ -114,40 +116,45 @@ unsafe fn warning(message: &FString) {}
   stealing, or double evaluation. Scalars, VM bool32 inputs, UObject pointers
   and borrowed LinearColor are supported. Native bool result storage is bool8.
   Mutable ref/out and array parameters and unsupported kinds/layouts fail before
-  attachment. FString/FText/LinearColor results are borrowed directly from live
-  caller-owned result storage, never moved or copied. Null result storage suppresses
-  exit observation before any native result reference is formed.
-- Exit appends `&Result` (`&()` for void). Inputs use core's snapshot contract:
-  ordinary Copy values are copied; native owners require an explicit safe owning
-  snapshot implementation supplied by the host. Without that implementation,
-  declarations fail at compile time instead of retaining dead VM slots.
-  Copied raw pointers do not extend pointee lifetimes; dereferencing remains unsafe.
+  attachment. Result metadata is validated, but result storage is forwarded
+  unchanged without forming a typed borrow. No exit snapshots are created.
 - Coverage is calls through the unique exec wrapper, not direct native calls.
-  A separately bound real native body may have its own behavior-changing detour;
-  exit observes its eventual wrapper result. Exec-only markers are not callable
-  native methods and cannot themselves be detoured.
+  Exec-only markers are not callable native methods and cannot themselves be
+  detoured. Ordinary native bindings retain entry/exit listeners and detours.
 
-Native owners without a snapshot implementation cannot be observed at exit:
+Dummy methods cannot have exit listeners, even with Copy inputs and a void result:
 
 ```compile_fail
 struct Library;
-struct FString(String);
 #[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
 impl Library {
-    #[exec_observe(verified, dummied)]
-    pub unsafe fn PrintWarning(message: &FString) {}
+    #[dummy]
+    pub unsafe fn RemovedBody(value: i32) {}
 }
-#[unchained_macros_core::bind_func_exit_listener(Library::PrintWarning)]
-unsafe fn warning(message: &FString, result: &()) {}
+#[unchained_macros_core::bind_func_exit_listener(Library::RemovedBody)]
+unsafe fn returned(value: &i32, result: &()) {}
 ```
 
-Verified dummied methods cannot be detoured:
+Non-void dummy declarations also reject exit listeners:
 
 ```compile_fail
 struct Library;
 #[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
 impl Library {
-    #[exec_observe(verified, dummied)]
+    #[dummy]
+    pub unsafe fn RemovedPredicate() -> bool {}
+}
+#[unchained_macros_core::bind_func_exit_listener(Library::RemovedPredicate)]
+unsafe fn returned(result: &bool) {}
+```
+
+Dummy methods cannot be detoured:
+
+```compile_fail
+struct Library;
+#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+impl Library {
+    #[dummy]
     pub unsafe fn RemovedBody() {}
 }
 #[unchained_macros_core::bind_func_detour(Library::RemovedBody)]
