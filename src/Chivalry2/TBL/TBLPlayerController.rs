@@ -33,24 +33,6 @@ define_pattern_resolver!(ATBLPlayerController__GetOwnershipFromPlayerControllerA
     PlatformType::OTHER: ["40 55 53 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 38 fd"]
 });
 
-define_pattern_resolver!(ATBLPlayerController__CanUseLoadoutItem, {
-    PlatformType::EGS: ["48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00"], // EGS
-    // "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC", // STEAM
-    // from sigga
-    // "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00", // EGS
-    PlatformType::STEAM: [
-        "48 89 5C 24 08 48 89 74 24 18 55 57 41 55 41 56 41 57 48 8B EC 48 83 EC 60 49 8B 31 33 FF C6 02 00",
-        "48 89 5C 24 08 48 89 74 24 10 55 57 41 55 41 56 41 57 48 8B EC 48 81 EC 80 00 00" // EGS 2.11.4
-        ], // STEAM
-});
-
-define_pattern_resolver!(
-    ATBLPlayerController__CanUseCharacter,
-    [
-        "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 49 8B 18", // universal
-    ]
-);
-
 define_pattern_resolver!(ATBLPlayerController__ConditionalInitializeCustomizationOnServer, {
     PlatformType::EGS: [
         "48 89 54 24 10 53 56 57 41 54 48 83 EC 78 48 8B 99 60 02 00 00 48 8B F2 0F B6",
@@ -109,8 +91,10 @@ impl ATBLPlayerController {
         BaseOnly: bool,
     ) -> *mut FOwnershipResponse {
     }
+}
 
-    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__CanUseLoadoutItem)]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/TBL.TBLPlayerController")]
+impl ATBLPlayerController {
     pub(crate) unsafe fn CanUseLoadoutItem(
         self: *mut Self,
         result: *mut FOwnershipResponse,
@@ -119,14 +103,16 @@ impl ATBLPlayerController {
     ) -> *mut FOwnershipResponse {
     }
 
-    #[unchained_macros_core::bind_resolved_func(ATBLPlayerController__CanUseCharacter)]
     pub(crate) unsafe fn CanUseCharacter(
         self: *mut Self,
         result: *mut FOwnershipResponse,
         CharacterSubclass: *mut TSubclassOfATBLCharacter,
     ) -> *mut FOwnershipResponse {
     }
+}
 
+#[unchained_macros_core::runtime_bindings]
+impl ATBLPlayerController {
     // The extra legacy player_state argument is not established by the native signature.
     #[unchained_macros_core::bind_resolved_func(
         ATBLPlayerController__ConditionalInitializeCustomizationOnServer

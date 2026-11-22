@@ -23,9 +23,13 @@ and `src/unchained/reflection.rs`.
 - Direct calls use the resolved entry before attachment and the original trampoline
   afterward, even when the detour is disabled.
 
-The initial migration covers `UGameplayStatics::GetAllActorsOfClass`,
-`LoadGameFromSlot`, and `SaveGameToSlot`. The latter two keep their existing
-diagnostic detours; the first is a direct binding without a detour.
+Reflection covers `UGameplayStatics::{GetAllActorsOfClass, LoadGameFromSlot,
+SaveGameToSlot}`, `ATBLCharacter::{OnDamageTaken, OnKilled}`,
+`ATBLPlayerController::{CanUseCharacter, CanUseLoadoutItem}`,
+`UUserFeedbackAndBugReportsLibrary::GetGameInfo`,
+`UTBLSystemLibrary::GetTBLGameMode`, and `UTBLGameInstance::LoadFrontEndMap`.
+Existing detours, native signatures, resolver keys, and activation conditions
+are unchanged. Chat readiness checks query each binding's backend explicitly.
 These bind native C++ bodies, **not** `UFunction::func` as a typed C++ method.
 
 ## Binary evidence
@@ -45,12 +49,23 @@ Read-only inspection of the installed Steam Windows x64 executable:
 | `/Script/Engine.GameplayStatics::GetAllActorsOfClass` | `0x37b2d20` | `0x32ddef0` | Static; context pointer, class pointer, output-array pointer; void |
 | `/Script/Engine.GameplayStatics::LoadGameFromSlot` | `0x37b4ef0` | `0x32ea100` | Static; FString reference, i32 index; object pointer |
 | `/Script/Engine.GameplayStatics::SaveGameToSlot` | `0x37b6c20` | `0x32f20e0` | Static; object pointer, FString reference, i32 index; bool in AL |
+| `/Script/TBL.TBLCharacter::OnDamageTaken` | `0x1c18ab0` | `0x18bffd0` | Instance; receiver, damage-event pointer; void |
+| `/Script/TBL.TBLCharacter::OnKilled` | `0x1c18c00` | `0x18c0860` | Instance; receiver, death-event pointer; void |
+| `/Script/TBL.TBLPlayerController::CanUseCharacter` | `0x1c671a0` | `0x19c5910` | Instance; receiver, return storage, subclass pointer; storage pointer |
+| `/Script/TBL.TBLPlayerController::CanUseLoadoutItem` | `0x1c67320` | `0x19c5e40` | Instance; receiver, return storage, loadout pointer, item pointer; storage pointer |
+| `/Script/TBL.UserFeedbackAndBugReportsLibrary::GetGameInfo` | `0x1cb5140` | `0x1aead90` | Static; FString return storage, world pointer; storage pointer |
+| `/Script/TBL.TBLSystemLibrary::GetTBLGameMode` | `0x1c923f0` | `0x1a3ecd0` | Static; context pointer; game-mode pointer |
+| `/Script/TBL.TBLGameInstance::LoadFrontEndMap` | `0x1c35c90` | `0x1945580` | Instance; receiver, FString pointer; bool in AL |
 
 Each thunk branches between `FFrame::Step` (`RVA 0x1ff40c0`) and
 `StepExplicitProperty` (`RVA 0x1ff40f0`), advances the real frame past parameters,
 and directly calls the listed body. Save/load then release their temporary string;
 actor enumeration also handles the output-array reference. The recovered body
 RVAs match the previous signature-backed client cache.
+
+`LoadFrontEndMap` is registered in this binary despite being absent from the
+local SDK header. Shared names such as `OnKilled` occur on multiple classes;
+the concrete owner and native callee must both match.
 
 `FEngineLoop::Init` is at RVA `0xa01720`, independently located through the
 `FEngineLoop::Init` string and x64 unwind extent. Its receiver is passed in RCX;
@@ -62,10 +77,14 @@ This ports the address-source mechanism from `feature/exec-thunk-hooks`, not its
 old macros, late-hook inventory, worker-thread fallback, print logging, or identity
 overrides. Virtual/interface receivers and raw exec-thunk bindings remain separate
 work. Do not substitute a shared shipping stub or an exec thunk for a native body.
+Chat's virtual implementations and the no-argument `GetAssetRegistry` helper
+remain scan-backed. Asset-registry interface calls retain rust-ctables dispatch
+and their interface-subobject receiver.
 
 ## Validation
 
-Isolated client/server startup checks used the Steam binary identified above.
+The initial three-method migration's isolated client/server startup checks used
+the Steam binary identified above.
 
 - DLL SHA-256: `671ee698e1bdf65b0406a11a02fea2ad4e63fb1ed58a127cc89d06d85c674f4a`.
 - Fresh scans preserved all 95 remaining baseline offsets and added `FEngineLoopInit`.
@@ -83,3 +102,21 @@ Isolated client/server startup checks used the Steam binary identified above.
 
 These are startup checks, not gameplay coverage or repeated performance measurements.
 EGS live validation remains unavailable.
+
+### Seven additional direct-call bindings
+
+- Isolated Steam client/server runs used DLL SHA-256
+  `a8ec29271ec24679beb20c4d6786878981d851e64e20ecfaaffc6e38f940e906`.
+- Both roles recovered all ten reflected targets at the previous signature RVAs
+  and attached all 42 hooks. The client exercised `LoadFrontEndMap` and its
+  original-call bypass through frontend map loading.
+- Fresh scans preserved 88 remaining baseline offsets plus `FEngineLoopInit`:
+  89 cache entries, 63 roots, pattern batches `[101, 6, 66]`.
+- Host macro/documentation suites: 300 tests passed.
+- Windows plugin tests: 518 passed, 20 ignored with defaults; 509 passed,
+  20 ignored with only `discord_integration,mod_management`.
+- Optional-feature compilation and ordinary plugin documentation passed.
+  Plugin rustdoc retains 14 unrelated warnings.
+- Bare `--no-default-features` is blocked by existing unconditional Discord
+  imports; Discord alone is blocked by unconditional mod-manager consumers.
+  Those feature-gating issues are outside this migration.

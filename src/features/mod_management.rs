@@ -526,9 +526,11 @@ impl ModManager {
             swarn!("globals.world missing; skipping spawn confirmation chat");
             return;
         };
-        if let Err(error) = unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&[
-            "UTBLSystemLibrary__GetTBLGameMode", "ATBLGameMode__BroadcastLocalizedChat",
-        ]) {
+        if let Err(error) = unchained_macros_core::require_function_bindings_for::<unchained_macros_kismet::KismetReflectionResolver>(&[
+            "UTBLSystemLibrary__GetTBLGameMode",
+        ]).and_then(|()| unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&[
+            "ATBLGameMode__BroadcastLocalizedChat",
+        ])) {
             swarn!("Cannot broadcast spawn confirmation: {}", error);
             return;
         }

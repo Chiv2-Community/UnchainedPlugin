@@ -5,16 +5,6 @@ use crate::Chivalry2::Engine::*;
 use crate::Chivalry2::TBL::*;
 use std::os::raw::c_void;
 
-define_pattern_resolver!(
-    ATBLCharacter__OnKilled,
-    ["4C 8B DC 55 41 55 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC 30 03 00 00"]
-);
-
-define_pattern_resolver!(
-    ATBLCharacter__OnDamageTaken,
-    ["4C 8B DC 55 57 41 55 41 56 49 8D AB ?? ?? ?? ?? 48 81 EC 58 02 00 00"]
-);
-
 unsafe impl crate::Chivalry2::Engine::UObjectType for ATBLCharacter {
     const CLASS_NAME: &'static str = "TBLCharacter";
 }
@@ -253,10 +243,11 @@ impl ATBLCharacter {
     pub unsafe fn last_player_state(&self) -> Option<&APlayerState> {
         APlayerState::from_field(self.last_player_state, "TBLCharacter.LastPlayerState")
     }
+}
 
-    #[unchained_macros_core::bind_resolved_func(ATBLCharacter__OnKilled)]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/TBL.TBLCharacter")]
+impl ATBLCharacter {
     pub(crate) unsafe fn OnKilled(self: *mut Self, damage_event: *const FDeathDamageTakenEvent) {}
 
-    #[unchained_macros_core::bind_resolved_func(ATBLCharacter__OnDamageTaken)]
     pub(crate) unsafe fn OnDamageTaken(self: *mut Self, damage_event: *const FDamageTakenEvent) {}
 }

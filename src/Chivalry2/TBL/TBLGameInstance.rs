@@ -13,11 +13,6 @@ define_pattern_resolver!(
 );
 
 define_pattern_resolver!(
-    UTBLGameInstance__LoadFrontEndMap,
-    ["48 8B C4 48 89 50 10 48 89 48 08 55 41 55 48 8D 68 98 48 81 EC 58 01 00 00 83 7A 08 00"]
-);
-
-define_pattern_resolver!(
     UTBLGameInstance__OnPreLoadMap,
     ["48 89 74 24 10 57 48 83 EC 50 83 B9 40 08 00 00 00 48 8D 35"]
 );
@@ -36,14 +31,17 @@ pub struct UTBLGameInstance {
     _opaque: [u8; 0],
 }
 
-#[unchained_macros_core::runtime_bindings]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/TBL.TBLGameInstance")]
 impl UTBLGameInstance {
-    #[unchained_macros_core::bind_resolved_func(UTBLGameInstance__LoadFrontEndMap)]
     pub(crate) unsafe fn LoadFrontEndMap(
         self: *mut Self,
         _url: *mut crate::Chivalry2::Engine::FString,
     ) -> bool {
     }
+}
+
+#[unchained_macros_core::runtime_bindings]
+impl UTBLGameInstance {
     #[unchained_macros_core::bind_resolved_func(UTBLGameInstance__OnPreLoadMap)]
     pub(crate) unsafe fn OnPreLoadMap(
         self: *mut Self,

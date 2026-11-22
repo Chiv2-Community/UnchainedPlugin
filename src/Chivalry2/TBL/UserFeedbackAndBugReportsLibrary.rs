@@ -1,27 +1,15 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/UserFeedbackAndBugReportsLibrary.h>.
 //! Native owner: TBL/Source/TBL/UI/UserFeedbackAndBugReportsLibrary.h/.cpp.
 
-use crate::PlatformType;
-
-define_pattern_resolver!(UUserFeedbackAndBugReportsLibrary__GetGameInfo, {
-    PlatformType::EGS: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00 33 FF"],
-    PlatformType::STEAM: [
-        "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC b0 01 00 00 45 33 FF",
-        "48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00 33 FF",
-    ],
-    PlatformType::OTHER: ["48 8B C4 48 89 58 ?? 48 89 50 ?? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ?? ?? ?? ?? 48 81 EC E0 02 00 00 33 FF"],
-});
-
 /// Static native helpers only; this is not a UObject instance layout.
 #[unchained_macros_core::runtime_bindings]
 pub struct UUserFeedbackAndBugReportsLibrary {
     _private: (),
 }
 
-#[unchained_macros_core::runtime_bindings]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/TBL.UserFeedbackAndBugReportsLibrary")]
 impl UUserFeedbackAndBugReportsLibrary {
     // Static FString return: RCX is caller storage, RDX is world, RAX returns storage.
-    #[unchained_macros_core::bind_resolved_func(UUserFeedbackAndBugReportsLibrary__GetGameInfo)]
     pub(crate) unsafe fn GetGameInfo(
         storage: *mut crate::Chivalry2::Engine::FString,
         world: *mut crate::Chivalry2::Engine::UWorld,
