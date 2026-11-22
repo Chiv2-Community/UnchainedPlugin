@@ -63,7 +63,7 @@ impl UObject {
     /// Engine globals must be initialized. Call on the game thread while object
     /// destruction/GC cannot race this check; this does not pin the object.
     pub unsafe fn is_live(object: *const Self) -> bool {
-        !object.is_null() && GUObjectArray.is_live(object.cast())
+        !object.is_null() && (&*GUObjectArray.read()).is_live(object.cast())
     }
 
     /// Borrow a currently registered native object after a liveness check.

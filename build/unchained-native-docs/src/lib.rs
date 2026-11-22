@@ -792,7 +792,7 @@ impl Native {
     /// Helper notes.
     fn Helper(&self) {}
 }
-#[runtime_bindings(global)]
+#[runtime_bindings]
 impl Native {
     pub unsafe fn GlobalHelper(&self) {}
     fn PrivateGlobal(&self) {}

@@ -110,11 +110,11 @@ Choose the binding mechanism that matches the address source.
   declaring header, preserving native spelling. Use
   `#[bind_resolved_value(Resolver, Value)] pub static GMalloc: *mut FMalloc;`
   for pointer slots; use `Address` for inline storage such as `GUObjectArray`.
-  Opt the target struct into `runtime_bindings(global)` before `cpp_struct` to
-  infer forwards from existing vtable declarations; mark an ordinary public
-  inherent impl similarly. Do not duplicate native signature lists.
-  Call `unsafe { GMalloc.Malloc(size, alignment) }`; each call reloads the
-  current pointer by value. Use unsafe `as_ptr()` only for APIs needing a pointer.
+  Call `unsafe { GMalloc.read().Malloc(size, alignment) }`; `read()` reloads the
+  current pointer by value. rust-ctables supplies vtable dispatch directly.
+  For reference-receiver methods, explicitly borrow the read pointer, e.g.
+  `unsafe { (&*GUObjectArray.read()).objects() }`.
+  Do not generate global forwarders or duplicate native signature lists.
   No owning handle, cached pointee, slot borrow, `DerefMut`, or binding lock.
    Native lifetime, aliasing and synchronization rules remain required; one-time
    address publication does not synchronize ordinary C++ pointer writes.

@@ -8,12 +8,11 @@ mod resolvers {
     unchained_macros_patternsleuth::define_pattern_resolver!(Probe, ["AA"]);
 }
 
-#[runtime_bindings(global)]
 struct TestAllocator {
     calls: AtomicUsize,
 }
 
-#[runtime_bindings(global)]
+#[runtime_bindings]
 impl TestAllocator {
     pub unsafe fn allocate(self: *mut Self, amount: usize) -> *mut Self {
         unsafe { (*self).calls.fetch_add(amount, Ordering::Relaxed); }
@@ -29,10 +28,9 @@ impl TestAllocator {
     pub unsafe fn unavailable(&self, missing: MissingType) {}
 }
 
-#[runtime_bindings(global)]
 struct InlineObject(AtomicUsize);
 
-#[runtime_bindings(global)]
+#[runtime_bindings]
 impl InlineObject {
     pub fn borrow<'a>(&'a self) -> &'a AtomicUsize { &self.0 }
     pub fn address(&self) -> *const Self { self }
@@ -50,8 +48,8 @@ static Disabled: *mut MissingType;
 
 #[test]
 fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
-    assert!(std::panic::catch_unwind(|| unsafe { Allocator.allocate(1) }).is_err());
-    assert!(std::panic::catch_unwind(|| unsafe { Inline.address() }).is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Inline.read() }).is_err());
     let mut slot: *mut TestAllocator = std::ptr::null_mut();
     let object = InlineObject(AtomicUsize::new(0));
     let offsets = std::collections::HashMap::from([
@@ -68,23 +66,23 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
             ("Probe".into(), (probe as *const () as usize - 1) as u64),
         ])), &unchained_macros_core::SelectorSnapshot::capture_registered().unwrap()).unwrap();
     }
-    assert!(std::panic::catch_unwind(|| unsafe { Allocator.allocate(1) }).is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
     let mut first = TestAllocator { calls: AtomicUsize::new(0) };
     let mut second = TestAllocator { calls: AtomicUsize::new(0) };
     // Native-style ordinary writes and reads are sequential here, never racing.
     slot = &raw mut first;
     assert_eq!(slot, &raw mut first);
-    assert_eq!(unsafe { Allocator.allocate(3) }, &raw mut first);
-    assert_eq!(unsafe { Allocator.identity() }, &raw const first);
-    assert_eq!(unsafe { Allocator.probe() }, 3);
+    assert_eq!(unsafe { Allocator.read().allocate(3) }, &raw mut first);
+    assert_eq!(unsafe { Allocator.read().identity() }, &raw const first);
+    assert_eq!(unsafe { Allocator.read().probe() }, 3);
     slot = &raw mut second;
     assert_eq!(slot, &raw mut second);
-    assert_eq!(unsafe { Allocator.allocate(7) }, &raw mut second);
-    assert_eq!(unsafe { Allocator.probe() }, 7);
+    assert_eq!(unsafe { Allocator.read().allocate(7) }, &raw mut second);
+    assert_eq!(unsafe { Allocator.read().probe() }, 7);
     assert_eq!(first.calls.load(Ordering::Relaxed), 3);
     assert_eq!(second.calls.load(Ordering::Relaxed), 7);
-    assert_eq!(unsafe { Inline.address() }, &raw const object);
-    let borrowed = unsafe { Inline.borrow() };
+    assert_eq!(unsafe { (&*Inline.read()).address() }, &raw const object);
+    let borrowed = unsafe { (&*Inline.read()).borrow() };
     borrowed.store(19, Ordering::Relaxed);
     assert!(std::ptr::eq(borrowed, &object.0));
     assert_eq!(object.0.load(Ordering::Relaxed), 19);

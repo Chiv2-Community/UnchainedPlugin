@@ -10,7 +10,7 @@ mod resolver;
 mod selection;
 
 pub use binding::{ResolvedAddress, FunctionBinding, BindingRegistration, FunctionBindingRegistration,
-    NativeFunction, NativeSignature, NativeGlobalPointer, NativeGlobalTarget, ValueBinding,
+    NativeFunction, NativeSignature, NativeGlobal, ValueBinding,
     ValueBindingRegistration, initialize_value_bindings, initialize_value_bindings_where,
     is_required_value, function_is_bound_for, require_function_bindings_for,
     binding_inventory_for, initialize_bindings_for};

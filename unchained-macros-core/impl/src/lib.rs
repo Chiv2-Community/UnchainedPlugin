@@ -4,7 +4,6 @@ use quote::quote;
 use syn::{FnArg, GenericParam, ItemFn, Pat, Path, ReturnType, Type};
 mod bindings;
 mod function_detour;
-mod global;
 mod selection;
 mod patch;
 
@@ -46,8 +45,8 @@ pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Mark a native type for source documentation, or expose bindings in a concrete impl.
 ///
-/// Type annotations add documentation only unless `global` opts into static
-/// forwarding from the existing vtable or public inherent method declarations.
+/// Type annotations add documentation only. Native global reads and vtable
+/// dispatch are explicit operations, not generated method forwarding.
 #[proc_macro_attribute]
 pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_runtime_bindings(args.into(), item.into())
@@ -55,13 +54,6 @@ pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand_runtime_bindings(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    if args.to_string() == "global" {
-        if matches!(syn::parse2::<syn::Item>(item.clone())?, syn::Item::Struct(_)) {
-            let item = expand_runtime_bindings(Tokens::new(), item)?;
-            return global::expand(item);
-        }
-        return global::expand(item);
-    }
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
     }
@@ -235,10 +227,9 @@ fn resolver_path(args: Tokens) -> syn::Result<Path> {
     Ok(resolver)
 }
 
-/// Bind a native global as a static with generated unsafe method forwarding.
-/// `Value` reloads the pointer slot on each call; `Address` uses inline storage.
-/// Targets opt in with `runtime_bindings(global)`. Legacy scalar accessors remain
-/// available; neither form borrows a mutable native pointer slot.
+/// Bind native data to an explicit unsafe read.
+/// Static pointer bindings expose `read()`: `Value` reloads the pointer slot;
+/// `Address` returns inline storage's pointer. Neither form generates native methods.
 #[proc_macro_attribute]
 pub fn bind_resolved_value(args: TokenStream, item: TokenStream) -> TokenStream {
     expand_value(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
@@ -268,7 +259,7 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             return Err(syn::Error::new_spanned(&declaration.ty, "static global bindings require a raw native pointer type"));
         };
         if pointer.mutability.is_none() {
-            return Err(syn::Error::new_spanned(pointer, "static method forwarding requires *mut T; use an unsafe accessor for read-only values"));
+            return Err(syn::Error::new_spanned(pointer, "static native globals require *mut T; use an unsafe accessor for read-only values"));
         }
         let target = &pointer.elem;
         let name = &declaration.ident;
@@ -278,14 +269,14 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         return Ok(quote! {
             #(#attributes)*
             #[allow(non_upper_case_globals)]
-            #vis static #name: <#target as ::unchained_macros_core::NativeGlobalTarget>::Global = {
+            #vis static #name: ::unchained_macros_core::NativeGlobal<#target> = {
                 let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
                 static BINDING: ::unchained_macros_core::ValueBinding =
                     ::unchained_macros_core::ValueBinding::new(#resolver_name);
                 ::inventory::submit! {
                     ::unchained_macros_core::ValueBindingRegistration { binding: &BINDING }
                 }
-                <#target as ::unchained_macros_core::NativeGlobalTarget>::Global::new(&BINDING, #indirect)
+                ::unchained_macros_core::NativeGlobal::new(&BINDING, #indirect)
             };
         });
     }
@@ -387,6 +378,7 @@ mod tests {
     }
 
     #[test_case::test_case(quote!(Other), quote!(struct Native;); "arguments")]
+    #[test_case::test_case(quote!(global), quote!(struct Native;); "removed global forwarding")]
     #[test_case::test_case(quote!(), quote!(fn helper() {}); "function")]
     #[test_case::test_case(quote!(), quote!(trait Native {}); "trait")]
     fn runtime_type_markers_reject_arguments_and_non_type_items(args: Tokens, item: Tokens) {

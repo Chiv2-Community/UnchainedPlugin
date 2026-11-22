@@ -25,7 +25,7 @@ impl FWeakObjectPtr {
             object_index: index,
             // serial allocation performs only atomic operations
             object_serial_number: unsafe {
-                GUObjectArray.allocate_serial_number(index)
+                (&*GUObjectArray.read()).allocate_serial_number(index)
             },
         }
     }

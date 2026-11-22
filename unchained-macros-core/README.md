@@ -5,8 +5,8 @@ No memory scanner, reflection engine, resolver-kind enum, or startup-phase polic
 
 `runtime_bindings` attaches native-source documentation to every method in its
 annotated impl, including unbound and private methods. Unbound methods retain
-their Rust bodies and have no resolver metadata. `runtime_bindings(global)` and
-the Kismet backend use the same documentation path.
+their Rust bodies and have no resolver metadata. The Kismet backend uses the
+same documentation path.
 
 Implement `AddressResolver` with an associated `Context`. A `Resolver<R>` holds
 the implementation, stable name, and optional selector filter.
@@ -60,8 +60,9 @@ original-call bypass does not depend on backend discovery order.
 ## Native globals
 
 Use `bind_resolved_value(Resolver, Address)` for inline storage, or `Value` for a
-pointer slot reloaded on every call. `runtime_bindings(global)` generates unsafe
-forwards from the target's existing method declarations. Initialize registered
-values with `initialize_value_bindings_where`, filtered by the frozen snapshot.
+pointer slot. Static bindings expose `NativeGlobal<T>::read()` returning a raw
+pointer. Read explicitly at each use; dispatch methods through rust-ctables or
+the native type's ordinary methods. No target opt-in or generated forwarding is needed.
+Initialize registered values with `initialize_value_bindings_where`, filtered by the frozen snapshot.
 Keep native spelling, synchronization, and declaring-header placement; never
 cache the pointee of a replaceable slot.

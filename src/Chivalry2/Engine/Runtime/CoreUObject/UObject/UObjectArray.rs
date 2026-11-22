@@ -31,7 +31,7 @@ pub struct FUObjectCreateListener;
 #[repr(C)]
 pub struct FUObjectDeleteListener;
 
-#[unchained_macros_core::runtime_bindings(global)]
+#[unchained_macros_core::runtime_bindings]
 #[derive(Debug)]
 #[repr(C)]
 pub struct FUObjectArray {
@@ -49,7 +49,7 @@ pub struct FUObjectArray {
     master_serial_number: AtomicI32,
 }
 
-#[unchained_macros_core::runtime_bindings(global)]
+#[unchained_macros_core::runtime_bindings]
 impl FUObjectArray {
     pub fn objects(&self) -> CriticalSectionGuard<'_, '_, FChunkedFixedUObjectArray> {
         CriticalSectionGuard::lock(&self.obj_objects_critical, &self.obj_objects)

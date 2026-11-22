@@ -59,10 +59,12 @@ Mirror C++ static/global access for every native global used by this project.
   `HAL/MemoryBase.rs`, `GUObjectArray` in `UObject/UObjectArray.rs`.
 - Declare `#[bind_resolved_value(Resolver, Value)] pub static GMalloc: *mut FMalloc;`.
   Use `Address` instead for inline native storage such as `GUObjectArray`.
-- Opt the target into `runtime_bindings(global)`; forwarding signatures come from
-  existing vtable declarations or a similarly marked public inherent impl.
-- Call `unsafe { GMalloc.Malloc(size, alignment) }`, not an accessor function.
-  Every call loads the current pointer by value, including after UE replaces it.
+- Read the current pointer explicitly: `unsafe { GMalloc.read().Malloc(size, alignment) }`.
+  rust-ctables supplies vtable dispatch; the binding generates no methods.
+  `Value` reads the current slot contents, including after UE replaces the pointer.
+  `Address` returns the inline object's pointer without copying its storage.
+- For ordinary reference-receiver methods, borrow only after reading the pointer:
+  `unsafe { (&*GUObjectArray.read()).objects() }`.
 - Binding stores only the resolved address. It adds no locks, cached allocator,
   ownership, `Deref`, or `DerefMut`. Raw native receivers retain pointer provenance.
 - Native storage/lifetime/method contracts and synchronization remain required.

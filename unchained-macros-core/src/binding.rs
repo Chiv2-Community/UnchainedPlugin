@@ -260,28 +260,27 @@ pub unsafe fn publish_function_detours(entry: usize, detour: &'static retour::Ra
 /// slot contents or return an inline object's address without copying it.
 pub type ValueBinding = ResolvedAddress;
 
-/// Opt-in native types with generated static method forwarding.
-pub trait NativeGlobalTarget {
-    type Global;
-}
-
 /// Address metadata only; never caches a native pointer slot's contents.
-#[doc(hidden)]
-pub struct NativeGlobalPointer {
+pub struct NativeGlobal<T> {
     binding: &'static ValueBinding,
     indirect: bool,
+    marker: std::marker::PhantomData<fn() -> T>,
 }
 
-impl NativeGlobalPointer {
+impl<T> NativeGlobal<T> {
     pub const fn new(binding: &'static ValueBinding, indirect: bool) -> Self {
-        Self { binding, indirect }
+        Self { binding, indirect, marker: std::marker::PhantomData }
     }
 
+    /// Read the current pointer from a `Value` slot, or return an `Address` object's pointer.
+    /// Does not borrow native storage or dispatch methods.
+    ///
     /// # Safety
     /// The native slot/object must be live and correctly typed. Slot reads must
     /// not race with native writes. One-time binding publication does
     /// not make ordinary C++ pointer writes atomic.
-    pub unsafe fn as_ptr<T>(&self) -> *mut T {
+    /// The caller must uphold native lifetime and aliasing rules while using the pointer.
+    pub unsafe fn read(&self) -> *mut T {
         let address = self.binding.address();
         let pointer = if self.indirect {
             unsafe { (address as *const *mut T).read() }

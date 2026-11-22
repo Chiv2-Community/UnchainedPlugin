@@ -217,9 +217,10 @@ Other binding sources:
 - **Native globals:** mirror every C++ static/global used here as a Rust static,
   with native spelling and declaring-header placement. Use
   `bind_resolved_value(Resolver, Address)` for inline storage, or `Value` for a
-  pointer slot reloaded on every call. Opt the native target into
-  `runtime_bindings(global)` to infer unsafe forwards from existing declarations:
-  `unsafe { GMalloc.Malloc(size, alignment) }`. No owning handles, slot borrows,
+  pointer slot. Read explicitly at call sites:
+  `unsafe { GMalloc.read().Malloc(size, alignment) }`.
+  rust-ctables handles vtable dispatch; no global forwarders are generated.
+  No owning handles, slot borrows,
   cached pointees, or binding locks. Native synchronization still applies.
   These are not detour targets; plugin-owned state is separate. See
   [native statics](unchained-macros-core/README.md#native-globals).
