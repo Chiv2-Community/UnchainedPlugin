@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as Tokens;
-use quote::{quote, ToTokens};
-use syn::{ItemFn, Type};
+use quote::quote;
+use syn::ItemFn;
 use crate::{common::{cfg_attributes, is_binding_attribute}, docs::attach_native_documentation, function};
 
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
@@ -52,19 +52,7 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         let attributes: Vec<_> = method.attrs.iter().enumerate()
             .filter(|(_, attribute)| is_binding_attribute(attribute))
             .map(|(index, _)| index).collect();
-        if attributes.is_empty() {
-            let owner = match self_ty.as_ref() {
-                Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
-                _ => self_ty.to_token_stream().to_string().replace(' ', ""),
-            };
-            let name = &method.sig.ident;
-            let documentation = syn::LitStr::new(
-                &format!("Native method `{owner}::{name}`. See the module's native source header."),
-                name.span(),
-            );
-            attach_native_documentation(&mut method.attrs, &format!("method-{owner}__{name}"), &documentation);
-            continue;
-        }
+        if attributes.is_empty() { continue; }
         if attributes.len() != 1 {
             return Err(syn::Error::new_spanned(method, "duplicate or conflicting native binding attributes"));
         }
@@ -110,34 +98,22 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quote::ToTokens;
     #[test]
-    fn unbound_methods_receive_docs_without_changing_their_code_or_visibility() {
-        let expanded = expand_impl(quote!(), quote! {
+    fn unbound_methods_keep_only_authored_docs_and_unchanged_code() {
+        let original: syn::ItemImpl = syn::parse_quote! {
             impl Native {
                 /// Existing safety notes.
                 pub unsafe fn read(&self) -> u32 { self.value }
                 fn helper() -> u32 { 7 }
             }
-        }).unwrap();
+        };
+        let expanded = expand_impl(quote!(), quote!(#original)).unwrap();
         let file: syn::File = syn::parse2(expanded).unwrap();
         let syn::Item::Const(container) = &file.items[0] else { panic!("expected impl container") };
         let syn::Expr::Block(block) = container.expr.as_ref() else { panic!("expected block") };
         let syn::Stmt::Item(syn::Item::Impl(implementation)) = &block.block.stmts[0] else { panic!("expected impl") };
-        assert_eq!(implementation.items.len(), 2);
-        for (index, expected) in ["read", "helper"].into_iter().enumerate() {
-            let syn::ImplItem::Fn(method) = &implementation.items[index] else { panic!("expected method") };
-            let attrs = &method.attrs;
-            let docs = quote!(#(#attrs)*).to_string();
-            assert!(docs.contains(&format!("Native method `Native::{expected}`")));
-        }
-        let syn::ImplItem::Fn(read) = &implementation.items[0] else { unreachable!() };
-        assert!(matches!(read.vis, syn::Visibility::Public(_)));
-        assert!(read.sig.unsafety.is_some());
-        assert!(read.attrs.iter().any(|attr| attr.to_token_stream().to_string().contains("Existing safety notes")));
-        assert_eq!(read.block.to_token_stream().to_string(), quote!({ self.value }).to_string());
-        let syn::ImplItem::Fn(helper) = &implementation.items[1] else { unreachable!() };
-        assert!(matches!(helper.vis, syn::Visibility::Inherited));
-        assert_eq!(helper.block.to_token_stream().to_string(), quote!({ 7 }).to_string());
+        assert_eq!(implementation.to_token_stream().to_string(), original.to_token_stream().to_string());
     }
 
     #[test_case::test_case(quote!(), quote!(impl Native {

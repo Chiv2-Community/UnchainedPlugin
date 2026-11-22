@@ -2,9 +2,9 @@
 
 Kismet native-body bindings layered on `unchained-macros-core`.
 
-Every method in an annotated impl receives native-source documentation through
-core's `runtime_bindings`, including private methods. Reflection lookup details
-supplement the C++ implementation and existing safety notes; they do not replace them.
+Each reflected method becomes a core `bind_resolved_func` binding, which supplies
+its native-source documentation, including for private methods. Reflection lookup
+details supplement the C++ implementation and existing safety notes; they do not replace them.
 The game supplies UObject reflection; this crate owns the attribute and thunk decoder.
 
 ```rust,ignore
