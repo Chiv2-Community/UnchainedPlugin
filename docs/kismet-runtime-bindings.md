@@ -1,9 +1,11 @@
 # Reflection-backed native bindings
 
-`unchained-macros-kismet` supplies the Kismet attribute and exec-thunk decoder.
+`unchained-macros-kismet` supplies the Kismet attribute, metadata validation,
+native-body recovery, and address caching.
 `unchained-macros-core` owns the generic resolver trait, selection filters, bindings,
-patch application, and detour storage. UObject access stays in the game's model
-and `src/unchained/reflection.rs`.
+patch application, and detour storage. UObject access stays in the game's model:
+`src/unchained/blueprints/reflection.rs` implements the
+Kismet `Reflection` trait and returns copied `FunctionMetadata`.
 
 ## Lifecycle
 
@@ -14,6 +16,10 @@ and `src/unchained/reflection.rs`.
 - `Resolver<R>` and the binding/hook/patch registrations retain their backend type.
   The application supplies `ScanContext` or a non-Send `KismetContext`; core has
   no resolver-kind enum, callback-name registry, or initialization-phase policy.
+- The host supplies an `ExecEnvironment` with the module base, original
+  frame-step entries, and frame-code offset. The trait adapter does only
+  class/function lookup and field reads. Kismet validates metadata, chooses
+  parameter handling, decodes the native body, and logs successful resolution.
 - Successful Kismet lookups are cached independently. Function publication is
   idempotent; all selected aliases are bound before runtime detours attach.
 - Runtime patches retain host-owned completion state so successful edits are not
@@ -149,3 +155,19 @@ EGS live validation remains unavailable.
   and Kismet crate documentation with warnings denied passed.
 - These checks do not exercise player-name customization in gameplay or establish
   EGS compatibility.
+
+### Reflection trait boundary
+
+- `Reflection::find_function` returns `FunctionMetadata`, not a resolved native
+  address. The adapter lives in `src/unchained/blueprints/reflection.rs`.
+- The context owns its adapter and receives the executable environment explicitly.
+  Both Send and Sync remain rejected by compile-fail tests.
+- Host suites passed 321 tests. Windows passed 518 plugin tests and 28 Kismet
+  tests, including real synthetic-thunk decoding, retry/cache behavior, and
+  cross-backend trampoline sharing. Reduced-feature plugin tests passed 509 tests;
+  both plugin configurations retain 20 ignored tests.
+- Optional-feature compilation, plugin docs, and strict macro-crate docs passed.
+- Isolated Steam client/server checks used DLL SHA-256
+  `c6e3b05c8eef5dba8cf44b99d79a19fdbd6b61fd0faab22ef708152ee23e0bd6`.
+  All twelve reflected addresses, 42 hooks, 61 scan roots, and 87 cache entries
+  matched the previous checks. EGS remains unverified.

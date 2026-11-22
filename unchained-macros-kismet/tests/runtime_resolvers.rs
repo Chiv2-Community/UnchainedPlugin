@@ -1,9 +1,11 @@
 //! Backend isolation, retries, and cross-backend original-call publication.
+#![cfg(windows)]
+
 use std::{num::NonZeroUsize, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
 use unchained_macros_core as bindings;
 use bindings::{AddressResolver, Resolver, SelectorSnapshot, Patch, PatchState, PatchWriter};
 use bindings::__private::inventory;
-use unchained_macros_kismet::{KismetContext, KismetReflectionResolver};
+use unchained_macros_kismet::{ExecEnvironment, FunctionMetadata, KismetContext, KismetReflectionResolver, Reflection};
 
 static READY: AtomicBool = AtomicBool::new(false);
 static READS: AtomicUsize = AtomicUsize::new(0);
@@ -16,16 +18,58 @@ unsafe extern "C" fn add(value: i32) -> i32 {
 unsafe extern "C" fn plain(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(2)
 }
-unsafe fn lookup(owner: &str, member: &str) -> Result<NonZeroUsize, String> {
-    assert_eq!(owner, "/Script/Fixture.Native");
-    READS.fetch_add(1, Ordering::SeqCst);
-    if !READY.load(Ordering::SeqCst) { return Err("not ready".into()); }
-    let address = match member {
-        "add" | "alias" => add as *const () as usize,
-        "plain" => plain as *const () as usize,
-        _ => panic!("excluded callback must not run"),
-    };
-    Ok(NonZeroUsize::new(address).unwrap())
+// Synthetic thunks are decoded, never executed. Their first call models parameter
+// stepping; the second calls the same native body used by the direct bindings.
+struct Frame { value: i32 }
+#[inline(never)]
+unsafe extern "C" fn step(frame: *const Frame) -> i32 {
+    unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }
+}
+#[inline(never)]
+unsafe extern "C" fn explicit_step(frame: *const Frame) -> i32 {
+    unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }.wrapping_add(1)
+}
+#[inline(never)]
+unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
+    let value = unsafe { step(frame) };
+    let value = unsafe { add(value) };
+    unsafe { result.write(value); }
+}
+#[inline(never)]
+unsafe extern "C" fn plain_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
+    let value = unsafe { step(frame) };
+    let value = unsafe { plain(value) };
+    unsafe { result.write(value); }
+}
+
+struct FixtureReflection;
+// SAFETY: Metadata identifies the synthetic functions and their in-module callees.
+unsafe impl Reflection for FixtureReflection {
+    unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String> {
+        assert_eq!(owner, "/Script/Fixture.Native");
+        READS.fetch_add(1, Ordering::SeqCst);
+        if !READY.load(Ordering::SeqCst) { return Err("not ready".into()); }
+        let exec_thunk = match member {
+            "add" | "alias" => add_thunk as *const () as usize,
+            "plain" => plain_thunk as *const () as usize,
+            _ => panic!("excluded lookup must not run"),
+        };
+        Ok(FunctionMetadata { is_native: true, exec_thunk, num_parms: 2, return_value_offset: 0 })
+    }
+}
+
+fn environment() -> ExecEnvironment {
+    let mut image = 0;
+    let entry = unsafe { windows::Win32::System::Diagnostics::Debug::RtlLookupFunctionEntry(
+        add_thunk as *const () as u64, &mut image, None,
+    ) };
+    assert!(!entry.is_null(), "synthetic thunk must have unwind metadata");
+    ExecEnvironment {
+        module_base: image as usize,
+        frame_step: step as *const () as usize,
+        frame_step_explicit: explicit_step as *const () as usize,
+        frame_code_offset: 0, // Unused by these parameterized thunks.
+    }
 }
 
 struct Native;
@@ -113,7 +157,7 @@ impl PatchWriter for Writer {
 #[test]
 fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_ownership() {
     let snapshot = SelectorSnapshot::from_selection(Mode::Disabled).unwrap();
-    let context = unsafe { KismetContext::new(lookup) };
+    let context = unsafe { KismetContext::new(FixtureReflection, environment()) };
     assert_eq!(bindings::hook_inventory_for::<OtherResolver>().count(), 0);
     assert_eq!(bindings::patch_inventory_for::<OtherResolver>().count(), 0);
     assert_eq!(bindings::binding_inventory_for::<OtherResolver>().count(), 1);

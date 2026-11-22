@@ -2,7 +2,9 @@
 
 use std::sync::{Mutex, OnceLock};
 use unchained_macros_core::PatchState;
-use unchained_macros_kismet::{KismetContext, KismetReflectionResolver};
+use unchained_macros_kismet::{ExecEnvironment, KismetContext, KismetReflectionResolver};
+use crate::Chivalry2::Engine::FFrame;
+use crate::unchained::blueprints::reflection::EngineReflection;
 use crate::Chivalry2::Engine::Runtime::Launch::LaunchEngineLoop::FEngineLoop;
 
 #[unchained_macros_core::bind_func_detour(FEngineLoop::Init)]
@@ -28,8 +30,16 @@ pub(super) unsafe fn initialize() {
     let Ok(mut state) = STATE.get_or_init(Default::default).try_lock() else { return };
     if state.complete { return; }
     let snapshot = crate::selectors();
-    let context = unsafe { KismetContext::new(crate::unchained::reflection::resolve_native) };
     let result = (|| -> Result<(), String> {
+        let environment = ExecEnvironment {
+            module_base: *crate::unchained::startup::BASE_ADDR,
+            frame_step: FFrame::__UNCHAINED_BINDING_Step.binding().entry_address()
+                .ok_or("FFrame::Step is unbound")?.get(),
+            frame_step_explicit: FFrame::__UNCHAINED_BINDING_StepExplicitProperty.binding().entry_address()
+                .ok_or("FFrame::StepExplicitProperty is unbound")?.get(),
+            frame_code_offset: std::mem::offset_of!(FFrame, code),
+        };
+        let context = unsafe { KismetContext::new(EngineReflection, environment) };
         unsafe {
             unchained_macros_core::initialize_bindings_for::<KismetReflectionResolver>(&context, snapshot)?;
             crate::apply_patches::<KismetReflectionResolver>(&context, snapshot, &mut state.patches)?;

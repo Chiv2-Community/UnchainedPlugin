@@ -3974,6 +3974,7 @@ name = "unchained-macros-kismet"
 version = "0.1.0"
 dependencies = [
  "iced-x86",
+ "log",
  "test-case",
  "unchained-macros-core",
  "unchained-macros-kismet-impl",
