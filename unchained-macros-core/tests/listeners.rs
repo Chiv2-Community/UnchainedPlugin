@@ -640,11 +640,14 @@ mod ownership {
             Native::__UNCHAINED_BINDING_make.binding().initialize_address(
                 NonZeroUsize::new(original_make as *const () as usize).unwrap()).unwrap();
             for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
-            let result = original_echo(Owned { value: 17, padding: [1, 2, 3] });
+            // Keep calls opaque: optimized direct calls can bypass the patched entry.
+            let echo = std::hint::black_box(original_echo as unsafe extern "C" fn(Owned) -> Owned);
+            let make = std::hint::black_box(original_make as unsafe extern "C" fn(usize) -> Owned);
+            let result = echo(Owned { value: 17, padding: [1, 2, 3] });
             assert_eq!(SEEN.load(Ordering::SeqCst), 17);
             assert_eq!(DROPS.load(Ordering::SeqCst), 0);
             drop(result);
-            let result = original_make(23);
+            let result = make(23);
             assert_eq!(result.padding, [1, 2, 3]);
             assert_eq!(SEEN.load(Ordering::SeqCst), 23);
             assert_eq!(DROPS.load(Ordering::SeqCst), 1);
@@ -712,13 +715,14 @@ mod custom_snapshots {
             Native::__UNCHAINED_BINDING_two.binding().initialize_address(
                 NonZeroUsize::new(original_two as *const () as usize).unwrap()).unwrap();
             for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
-            let result = original(Owned { value: 5 });
+            let call = std::hint::black_box(original as unsafe extern "C" fn(Owned) -> Owned);
+            let result = call(Owned { value: 5 });
             assert_eq!(result.value, 6);
             assert_eq!(SNAPSHOTS.load(Ordering::SeqCst), 1);
             assert_eq!(DROPS.load(Ordering::SeqCst), 1); // Snapshot, not result.
             drop(result);
             PANIC_EXIT.store(true, Ordering::SeqCst);
-            let result = original(Owned { value: 7 });
+            let result = call(Owned { value: 7 });
             assert_eq!(result.value, 8);
             assert_eq!(DROPS.load(Ordering::SeqCst), 3);
             drop(result);
@@ -742,7 +746,8 @@ mod custom_snapshots {
         assert_eq!(EXITS.load(Ordering::SeqCst), 2);
         drop(value);
         assert_eq!(DROPS.load(Ordering::SeqCst), 7);
-        unsafe { original_two(Owned { value: 1 }, Owned { value: 99 }); }
+        let two = std::hint::black_box(original_two as unsafe extern "C" fn(Owned, Owned));
+        unsafe { two(Owned { value: 1 }, Owned { value: 99 }); }
         assert_eq!(TWO_ORIGINAL.load(Ordering::SeqCst), 1);
         assert_eq!(TWO_EXITS.load(Ordering::SeqCst), 0);
         assert_eq!(DROPS.load(Ordering::SeqCst), 10); // Partial snapshot + both real inputs.
