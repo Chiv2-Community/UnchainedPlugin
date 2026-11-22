@@ -27,7 +27,8 @@ pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStre
     selection::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
-/// Bind an unsafe Rust method/function to a separately declared named resolver.
+/// Bind an unsafe Rust method/function to a named resolver, or to
+/// `Backend, descriptor` with a `&'static Resolver<Backend>` expression.
 ///
 /// The empty body calls the native entry or its original trampoline. Receiver
 /// types and declared per-call lifetime relationships are preserved.

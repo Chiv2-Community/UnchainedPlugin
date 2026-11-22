@@ -144,7 +144,16 @@ static SUPPRESSED: Resolver<SuppressedResolver> = Resolver {
 };
 inventory::submit! { &SUPPRESSED as &dyn bindings::__private::ResolverInfo }
 
-#[bindings::register_patch(Native__plain)]
+// Patch keys remain explicit declarations; native bindings need no marker type.
+struct PlainPatch;
+impl bindings::ResolverDeclaration for PlainPatch {
+    type Backend = KismetReflectionResolver;
+    const NAME: &'static str = "Native__plain";
+    const UNRESTRICTED: bool = true;
+    const DESCRIPTOR: &'static Resolver<Self::Backend> =
+        Native::__UNCHAINED_BINDING_plain.binding().resolver;
+}
+#[bindings::register_patch(PlainPatch)]
 static EDIT: Patch = Patch::nop(0, 1);
 #[derive(Default)]
 struct Writer(Vec<u64>);

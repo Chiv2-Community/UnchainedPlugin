@@ -10,6 +10,50 @@ pub fn kismet_exec_bindings(args: TokenStream, item: TokenStream) -> TokenStream
     exec_bindings::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_bindings_emit_typed_descriptors_not_resolver_declarations() {
+        let expanded = expand(quote!("/Script/Engine.KismetSystemLibrary"), quote! {
+            #[cfg(feature = "fixture")]
+            impl UKismetSystemLibrary {
+                #[cfg(any())]
+                pub(crate) unsafe fn IsDedicatedServer(value: *const ()) -> bool {}
+                pub unsafe fn IsServer(value: *const ()) -> bool {}
+                unsafe fn IsStandalone(value: *const ()) -> bool {}
+            }
+        }).unwrap();
+        syn::parse2::<syn::File>(expanded.clone()).unwrap();
+        let text = expanded.to_string();
+        for method in ["IsDedicatedServer", "IsServer", "IsStandalone"] {
+            assert!(text.contains(&format!("\"UKismetSystemLibrary__{method}\"")));
+            assert!(text.contains(&format!("static __UNCHAINED_KISMET_RESOLVER_{method}")));
+        }
+        assert_eq!(text.matches("static __UNCHAINED_KISMET_RESOLVER_").count(), 3);
+        assert_eq!(text.matches("bind_resolved_func").count(), 3);
+        assert_eq!(text.matches("as & dyn :: unchained_macros_core :: __private :: ResolverInfo").count(), 3);
+        assert!(!text.contains("struct "));
+        assert!(!text.contains("ResolverDeclaration"));
+        assert!(!text.contains("ResolverSelection"));
+        assert!(!text.contains("doc (hidden)"));
+        assert!(text.matches("cfg (any ())").count() >= 3);
+        assert!(text.contains("pub (crate) unsafe fn IsDedicatedServer"));
+        assert!(text.contains("cfg (feature = \"fixture\")"));
+    }
+
+    #[test]
+    fn runtime_bindings_reject_a_second_address_source() {
+        assert!(expand(quote!("/Script/Fixture.Native"), quote! {
+            impl Native {
+                #[bind_resolved_func(Backend, &DESCRIPTOR)]
+                unsafe fn call() {}
+            }
+        }).is_err());
+    }
+}
+
 /// Bind native C++ methods by reflected class path through the host's Kismet backend.
 /// This resolves native bodies, not Blueprint VM exec-thunk signatures.
 #[proc_macro_attribute]
@@ -49,42 +93,33 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             return Err(syn::Error::new_spanned(method, "Kismet methods cannot also declare an address binding"));
         }
         let method_name = method.sig.ident.to_string();
-        let resolver = format_ident!("{}__{}", class, method.sig.ident);
-        let visibility = &method.vis;
+        let resolver_name = format!("{}__{}", class, method.sig.ident);
+        let resolver = format_ident!("__UNCHAINED_KISMET_RESOLVER_{}", method.sig.ident);
         let cfg: Vec<_> = cfg_attributes(&method.attrs).cloned().collect();
         declarations.push(quote! {
-            #(#implementation_cfg)* #(#cfg)*
-            #[allow(non_camel_case_types)]
-            #visibility struct #resolver;
-            #(#implementation_cfg)* #(#cfg)*
-            impl ::unchained_macros_core::ResolverDeclaration for #resolver {
-                type Backend = ::unchained_macros_kismet::KismetReflectionResolver;
-                const NAME: &'static str = stringify!(#resolver);
-                const UNRESTRICTED: bool = true;
-                const DESCRIPTOR: &'static ::unchained_macros_core::Resolver<Self::Backend> = {
-                    static DESCRIPTOR: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetReflectionResolver> = ::unchained_macros_core::Resolver {
-                        name: stringify!(#resolver),
-                        implementation: ::unchained_macros_kismet::KismetReflectionResolver::new(#owner, #method_name),
-                        filter: ::core::option::Option::None,
-                    };
-                    &DESCRIPTOR
+            #(#cfg)*
+            #[allow(non_upper_case_globals)]
+            static #resolver: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetReflectionResolver> =
+                ::unchained_macros_core::Resolver {
+                    name: #resolver_name,
+                    implementation: ::unchained_macros_kismet::KismetReflectionResolver::new(#owner, #method_name),
+                    filter: ::core::option::Option::None,
                 };
-            }
-            #(#implementation_cfg)* #(#cfg)*
-            impl<E: ::unchained_macros_core::SelectionKey> ::unchained_macros_core::ResolverSelection<E> for #resolver {
-                const SELECTIONS: &'static [(E, bool)] = &[];
-            }
-            #(#implementation_cfg)* #(#cfg)*
+            #(#cfg)*
             ::unchained_macros_core::__private::inventory::submit! {
-                <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR
-                    as &dyn ::unchained_macros_core::__private::ResolverInfo
+                &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
             }
         });
-        method.attrs.push(syn::parse_quote!(#[bind_resolved_func(#resolver)]));
+        method.attrs.push(syn::parse_quote!(#[bind_resolved_func(
+            ::unchained_macros_kismet::KismetReflectionResolver, &#resolver
+        )]));
     }
     Ok(quote! {
-        #(#declarations)*
-        #[::unchained_macros_core::runtime_bindings]
-        #implementation
+        #(#implementation_cfg)*
+        const _: () = {
+            #(#declarations)*
+            #[::unchained_macros_core::runtime_bindings]
+            #implementation
+        };
     })
 }

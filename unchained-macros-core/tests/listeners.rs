@@ -20,6 +20,8 @@ struct Native;
 impl Native {
     #[bind_resolved_func(Target)]
     unsafe fn call(value: i32, output: *mut i32) -> i32 {}
+    #[bind_resolved_func(Backend, &RESOLVER)]
+    unsafe fn descriptor_alias(value: i32, output: *mut i32) -> i32 {}
 }
 
 static EVENTS: Mutex<Vec<(char, i32)>> = Mutex::new(Vec::new());
@@ -118,6 +120,13 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     // Project-native calls bypass every observer and the behavior-changing detour.
     output = 0;
     assert_eq!(unsafe { Native::call(5, &mut output) }, 6);
+    assert_eq!(*EVENTS.lock().unwrap(), [('o',5)]);
+    EVENTS.lock().unwrap().clear();
+    // Descriptor bindings inherit the same trampoline, including late aliases.
+    let alias = Native::__UNCHAINED_BINDING_descriptor_alias.binding();
+    unsafe { alias.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap(); }
+    assert_eq!(alias.address(), binding.address());
+    assert_eq!(unsafe { Native::descriptor_alias(5, &mut output) }, 6);
     assert_eq!(*EVENTS.lock().unwrap(), [('o',5)]);
     EVENTS.lock().unwrap().clear();
 
@@ -414,7 +423,7 @@ mod activation {
     struct Native;
     #[runtime_bindings]
     impl Native {
-        #[bind_resolved_func(Target)]
+        #[bind_resolved_func(Backend, &RESOLVER)]
         unsafe fn off() -> usize {}
         #[bind_resolved_func(Target)]
         unsafe fn gated() -> usize {}
@@ -451,6 +460,9 @@ mod activation {
             (off.set_enabled)(true);
             assert!((off.enabled)());
             assert_eq!(original_off(), 99);
+            assert_eq!(ENTRIES.load(Ordering::SeqCst), 2);
+            assert_eq!(Native::off(), 11);
+            assert_eq!(Native::gated(), 12);
             assert_eq!(ENTRIES.load(Ordering::SeqCst), 2);
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 1);
         }

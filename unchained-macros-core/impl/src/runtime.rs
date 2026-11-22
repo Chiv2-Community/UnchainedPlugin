@@ -130,6 +130,11 @@ mod tests {
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
             }); "parameters collision")]
+    #[test_case::test_case(quote!(), quote!(impl Native {
+                const __UNCHAINED_BINDING_call: () = ();
+                #[bind_resolved_func(Backend, &DESCRIPTOR)]
+                unsafe fn call(&self) {}
+            }); "descriptor binding collision")]
     #[test_case::test_case(quote!(), quote!(impl<T> Native<T> {}); "generic impl")]
     #[test_case::test_case(quote!(), quote!(impl Trait for Native {}); "trait impl")]
     #[test_case::test_case(quote!(unexpected), quote!(impl Native {}); "arguments")]
@@ -166,14 +171,15 @@ mod tests {
         assert!(expand(args, item).is_err());
     }
 
-    #[test]
-    fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions() {
+    #[test_case::test_case(quote!(Resolver); "named declaration")]
+    #[test_case::test_case(quote!(Backend, &DESCRIPTOR); "typed descriptor")]
+    fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions(args: Tokens) {
         let expanded = expand(
             quote!(),
             quote! {
                 impl Native {
                     #[cfg(feature = "example")]
-                    #[bind_resolved_func(Resolver)]
+                    #[bind_resolved_func(#args)]
                     pub(crate) unsafe fn call(&self) -> &Self {}
                 }
             },

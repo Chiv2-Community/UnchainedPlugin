@@ -1,5 +1,4 @@
 //! Compile the actual host adapter against raw-receiver native declarations.
-#![cfg(windows)]
 #![feature(arbitrary_self_types_pointers)]
 #![allow(non_snake_case, dead_code)]
 

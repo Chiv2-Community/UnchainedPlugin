@@ -8,8 +8,32 @@ use crate::{
         native_type, normalized_mutability, parameter_type},
 };
 
+struct BindingResolver {
+    backend: Tokens,
+    descriptor: Tokens,
+    declaration: Option<Path>,
+}
+
+impl syn::parse::Parse for BindingResolver {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let path: Path = input.parse()?;
+        if input.is_empty() {
+            let path = resolver_path(quote!(#path))?;
+            Ok(Self {
+                backend: quote!(<#path as ::unchained_macros_core::ResolverDeclaration>::Backend),
+                descriptor: quote!(<#path as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR),
+                declaration: Some(path),
+            })
+        } else {
+            input.parse::<syn::Token![,]>()?;
+            let descriptor: syn::Expr = input.parse()?;
+            Ok(Self { backend: quote!(#path), descriptor: quote!(#descriptor), declaration: None })
+        }
+    }
+}
+
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    let resolver = resolver_path(args)?;
+    let resolver: BindingResolver = syn::parse2(args)?;
     let function: ItemFn = syn::parse2(item)?;
     validate_binding(&function)?;
     let binding = format_ident!("__UNCHAINED_BINDING", span = Span::mixed_site());
@@ -23,16 +47,17 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 fn binding_storage(
-    name: &syn::Ident, resolver: &Path, target_name: &str, attributes: &[syn::Attribute],
+    name: &syn::Ident, resolver: &BindingResolver, target_name: &str, attributes: &[syn::Attribute],
 ) -> Tokens {
-    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let backend = &resolver.backend;
+    let descriptor = &resolver.descriptor;
     let cfg: Vec<_> = cfg_attributes(attributes).collect();
     quote! {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #name: ::unchained_macros_core::FunctionBinding<#backend> =
             ::unchained_macros_core::FunctionBinding::new(
-                #target_name, <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
+                #target_name, #descriptor,
             );
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
@@ -43,9 +68,10 @@ fn binding_storage(
 }
 
 fn call_wrapper(
-    function: &ItemFn, resolver: &Path, binding: &syn::Ident, setup: Tokens, documentation: &syn::LitStr,
+    function: &ItemFn, resolver: &BindingResolver, binding: &syn::Ident, setup: Tokens, documentation: &syn::LitStr,
 ) -> syn::Result<ItemFn> {
-    let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+    let resolver_name = resolver.declaration.as_ref().map(|path| path.segments.last().unwrap().ident.to_string())
+        .unwrap_or_else(|| function.sig.ident.to_string());
     let mut expanded = function.clone();
     consume_native_parameter_metadata(&mut expanded.sig)?;
     let signature = &expanded.sig;
@@ -79,17 +105,16 @@ fn call_wrapper(
 fn binding_documentation(
     function: &ItemFn,
     self_ty: &Type,
-    resolver: &Path,
+    resolver: &BindingResolver,
 ) -> syn::LitStr {
     let name = &function.sig.ident;
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
-    let key = &resolver.segments.last().unwrap().ident;
-    let path = resolver.to_token_stream().to_string().replace(' ', "");
-    let resolution = format!("[`{key}`]({path})");
-    let documentation = format!(
-        "Native binding to [`{native_name}`](Self::{name}).\n\
-         Resolved by {resolution}."
-    );
+    let mut documentation = format!("Native binding to [`{native_name}`](Self::{name}).");
+    if let Some(path) = &resolver.declaration {
+        let key = &path.segments.last().unwrap().ident;
+        let path = path.to_token_stream().to_string().replace(' ', "");
+        documentation.push_str(&format!("\nResolved by [`{key}`]({path})."));
+    }
     syn::LitStr::new(&documentation, name.span())
 }
 
@@ -99,7 +124,7 @@ pub(crate) fn expand_method(
     self_ty: &Type,
 ) -> syn::Result<(ItemFn, Vec<syn::ImplItemConst>, Tokens)> {
     validate_binding(function)?;
-    let resolver = resolver_path(args)?;
+    let resolver: BindingResolver = syn::parse2(args)?;
     let documentation = binding_documentation(function, self_ty, &resolver);
     let signature = concrete_signature(function, self_ty);
     let native = native_type(&signature)?;
@@ -118,7 +143,7 @@ pub(crate) fn expand_method(
     let vis = &function.vis;
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
-    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let backend = &resolver.backend;
     let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation)?;
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
     let (listener_type, listener_storage, hook_storage, listener_setup) =
@@ -163,14 +188,15 @@ pub(crate) fn expand_method(
 }
 
 fn listener_dispatch(
-    signature: &syn::Signature, binding: &syn::Ident, resolver: &Path, attrs: &[syn::Attribute],
+    signature: &syn::Signature, binding: &syn::Ident, resolver: &BindingResolver, attrs: &[syn::Attribute],
 ) -> syn::Result<(Tokens, syn::Ident, syn::Ident, Tokens)> {
     let name = &signature.ident;
     let listener = format_ident!("__UNCHAINED_NATIVE_LISTENERS_{}", name);
     let hook = format_ident!("__UNCHAINED_NATIVE_HOOK_{}", name);
     let attach = format_ident!("__unchained_attach_native_{}", name);
     let dispatch = format_ident!("__unchained_dispatch_{}", name);
-    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let backend = &resolver.backend;
+    let descriptor = &resolver.descriptor;
     let cfg: Vec<_> = cfg_attributes(attrs).collect();
     let (names, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|input| {
         let FnArg::Typed(arg) = input else { unreachable!() };
@@ -207,7 +233,7 @@ fn listener_dispatch(
         #[allow(non_upper_case_globals)]
         static #listener: #descriptor_type = unsafe {
             ::unchained_macros_core::ListenerDescriptor::new(
-                <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR, #attach,
+                #descriptor, #attach,
             )
         };
         #(#cfg)*
@@ -292,5 +318,29 @@ mod tests {
         ).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(docs.contains("Resolved by [`OtherBackend__Call`](OtherBackend__Call)."));
+    }
+
+    #[test]
+    fn descriptor_binding_shares_typed_generation_without_resolver_hover_links() {
+        let function = syn::parse_quote! {
+            /// Keep the native safety contract.
+            pub unsafe fn Call<'a>(value: &'a mut i32) -> &'a mut i32 {}
+        };
+        let (binding, metadata, storage) = expand_method(
+            quote!(backend::Native, &DESCRIPTOR), &function, &syn::parse_quote!(Client),
+        ).unwrap();
+        let docs = documentation(&binding.attrs);
+        assert!(docs.starts_with("Native binding to [`Client::Call`](Self::Call)."));
+        assert!(docs.contains("Keep the native safety contract."));
+        assert!(!docs.contains("Resolved by"));
+        assert!(!docs.contains("DESCRIPTOR"));
+        assert_eq!(metadata.len(), 5);
+        let expanded = quote!(#binding #(#metadata)* #storage).to_string();
+        assert!(expanded.contains("for < 'a > unsafe extern \"C\" fn"));
+        assert!(expanded.contains("backend :: Native"));
+        assert!(expanded.contains("& DESCRIPTOR"));
+        assert!(!expanded.contains("ResolverDeclaration"));
+        assert!(!expanded.contains("ResolverSelection"));
+        assert!(expand(quote!(backend::Native, &DESCRIPTOR), quote!(unsafe fn call() {})).is_ok());
     }
 }

@@ -14,6 +14,10 @@ core's hidden dependency re-exports, not consumer `inventory` or `retour` paths.
 Implement `AddressResolver` with an associated `Context`. A `Resolver<R>` holds
 the implementation, stable name, and optional selector filter.
 `ResolverDeclaration` associates generated declarations with their backend type.
+`bind_resolved_func(Key)` uses that declaration, preserving provider keys and
+selection. `bind_resolved_func(Backend, &DESCRIPTOR)` instead accepts a typed
+`Resolver<Backend>` static without a marker type. The backend registers that
+resolver for discovery; both forms share native calls, signature metadata, and hooks.
 
 - `FunctionBinding<R>` references `Resolver<R>` and stores the native target name.
 - `NativeFunction<F, R>` preserves the native signature independently of the backend.

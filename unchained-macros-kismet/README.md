@@ -21,8 +21,9 @@ impl UGameplayStatics {
 
 - Every method must be an empty unsafe native declaration. Static/instance ABIs,
   lifetimes, hidden return storage, and ownership remain the author's responsibility.
-- The attribute generates `Owner__Method` runtime resolver descriptors and delegates
-  callable wrappers and signature metadata to `unchained-macros-core::runtime_bindings`.
+- The attribute generates typed resolver values named `Owner__Method` for discovery,
+  not per-method resolver types. Callable wrappers and signature metadata use
+  `unchained-macros-core::runtime_bindings`.
 - Existing `bind_func_detour(Type::Method)` attributes work unchanged. A binding
   without a detour is initialized too; no passive detour is needed for direct calls.
 - The consumer needs `unchained-macros-core`; generated code accesses its

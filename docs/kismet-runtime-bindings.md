@@ -36,8 +36,9 @@ impl UKismetSystemLibrary {
   storage. Static methods have no receiver; instance methods retain theirs.
 - Use the exact reflected member name.
 - Keep native source links and safety requirements with the declaration.
-- The macro generates an `Owner__Method` resolver and delegates typed wrappers
-  to `runtime_bindings`. Do not add `bind_resolved_func` to the same method.
+- The macro creates a typed resolver value with discovery name `Owner__Method`,
+  without generating a resolver marker type. It delegates typed wrappers to
+  `runtime_bindings`. Do not add `bind_resolved_func` to the same method.
 
 Once initialized, call the binding directly:
 
