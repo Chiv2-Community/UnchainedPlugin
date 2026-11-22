@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-pub use unchained_macros_kismet_impl::{kismet_runtime_bindings, kismet_exec_bindings};
+pub use unchained_macros_kismet_impl::kismet_runtime_bindings;
 pub mod observation;
 pub mod schema;
 mod exec_binding;

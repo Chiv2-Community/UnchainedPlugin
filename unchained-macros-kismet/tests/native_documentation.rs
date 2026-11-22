@@ -52,9 +52,10 @@ unchained-native-docs = {{ path = "{}/build/unchained-native-docs" }}
         root.join("build.rs"),
         r#"
 fn main() {
+    let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     unchained_native_docs::generate(
-        std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()),
-        std::path::Path::new(&std::env::var("OUT_DIR").unwrap()),
+        &manifest,
+        &manifest.join("generated"),
     ).unwrap();
 }
 "#,
@@ -79,7 +80,7 @@ fn main() {
     )
     .unwrap();
     fs::write(root.join("cpp/Engine/Source/Test/Public/Fixture.h"),
-        "class Reflected { public: static int Call(); static int Call(int Value); static int Typed(int Value); }; class Named { public: static void Scan(); static void Provided(); };").unwrap();
+        "class Reflected { public: static int Call(); static int Call(int Value); static int Typed(int Value); static void Observed(); }; class Named { public: static void Scan(); static void Provided(); }; class Explicit { public: static int Direct(int Value); };").unwrap();
     fs::write(
         root.join("cpp/Engine/Source/Test/Private/Fixture.cpp"),
         r#"
@@ -87,8 +88,11 @@ int Reflected::Call() { return SelectedOverload(); }
 int Reflected::Call(int Value) { return WrongOverload(); }
 int Reflected::Typed(int Value) { return SelectedSignature(); }
 int Reflected::Typed() { return WrongSignature(); }
+void Reflected::Observed() { DummyMustNotBeDiscovered(); }
 void Named::Scan() { ScanImplementation(); }
 void Named::Provided() { ProviderImplementation(); }
+int Explicit::Direct(int Value) { return DescriptorImplementation(); }
+int Explicit::Direct() { return WrongDescriptorSignature(); }
 "#,
     )
     .unwrap();
@@ -119,6 +123,8 @@ void Named::Provided() { ProviderImplementation(); }
         "Fixture.cpp#L",
         "Keep the native receiver alive.",
         "Authored method comment.",
+        "Dummy entry safety note.",
+        "Entry-only dummy observation marker.",
     ] {
         assert!(reflected.contains(expected), "missing {expected}");
     }
@@ -132,9 +138,14 @@ void Named::Provided() { ProviderImplementation(); }
         "WrongSignature",
         "struct.Reflected__Call.html",
         "binding-Call.md",
+        "DummyMustNotBeDiscovered",
+        "Reflected::Observed",
     ] {
         assert!(!reflected.contains(unexpected), "unexpected {unexpected}");
     }
+    let generated = root.join("generated/native-docs");
+    assert!(generated.join("binding-Reflected__Call.md").exists());
+    assert!(!generated.join("binding-Reflected__Observed.md").exists());
     let named =
         fs::read_to_string(root.join("target/doc/native_hover_fixture/struct.Named.html")).unwrap();
     for expected in [
@@ -150,5 +161,33 @@ void Named::Provided() { ProviderImplementation(); }
             .unwrap();
     assert!(free.contains("Direct calls invoke the original implementation"));
     assert!(free.contains("Free-function safety note."));
+    let explicit = fs::read_to_string(
+        root.join("target/doc/native_hover_fixture/qualified/struct.Explicit.html"),
+    )
+    .unwrap();
+    for expected in [
+        "Explicit::Direct",
+        "DescriptorImplementation",
+        "Native implementation:",
+        "Fixture.cpp#L",
+        "Explicit descriptor safety note.",
+        "KismetReflectionResolver",
+        "FREE_DESCRIPTOR",
+        "explicit descriptor",
+        "Fixture.rs#L",
+    ] {
+        assert!(explicit.contains(expected), "missing {expected}");
+    }
+    for unexpected in [
+        "WrongDescriptorSignature",
+        "upstream resolver",
+        "Reflection native body:",
+    ] {
+        assert!(!explicit.contains(unexpected), "unexpected {unexpected}");
+    }
+    assert_eq!(
+        explicit.matches("Explicit descriptor safety note.").count(),
+        1
+    );
     fs::remove_dir_all(root).unwrap();
 }

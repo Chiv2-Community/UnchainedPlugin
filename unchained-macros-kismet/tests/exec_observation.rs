@@ -1,4 +1,4 @@
-use unchained_macros_kismet::{kismet_exec_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
+use unchained_macros_kismet::{kismet_runtime_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
 use unchained_macros_kismet::schema::*;
 use unchained_macros_core::AddressResolver;
 
@@ -7,7 +7,8 @@ struct FString;
 struct FText;
 struct UObject;
 
-#[kismet_exec_bindings("/Script/Fixture.Library")]
+include!("fixtures/exec_access.rs");
+#[kismet_runtime_bindings("/Script/Fixture.Library")]
 impl Library {
     #[dummy]
     pub unsafe fn PrintWarning(message: &FString) {}
@@ -17,6 +18,8 @@ impl Library {
     pub unsafe fn Predicate(context: *mut UObject, flag: std::primitive::bool) -> bool {}
     #[dummy]
     pub unsafe fn NoArgs() {}
+    exec_access!(__UNCHAINED_EXEC_Library_Predicate_RESOLVER, __UNCHAINED_EXEC_Library_Predicate_BINDING, __UNCHAINED_EXEC_Library_Predicate_dispatch);
+    exec_access!(__UNCHAINED_EXEC_Library_NoArgs_RESOLVER, __UNCHAINED_EXEC_Library_NoArgs_BINDING, __UNCHAINED_EXEC_Library_NoArgs_dispatch);
 }
 
 #[unchained_macros_core::bind_func_entry_listener(Library::PrintWarning)]
@@ -84,7 +87,7 @@ unsafe fn invoke_reentrant_predicate() {
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
-        __UNCHAINED_EXEC_Library_Predicate_dispatch(std::ptr::null_mut(),
+        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
             (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
     }
     assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
@@ -133,13 +136,13 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     let context = unsafe { KismetContext::new(RuntimeReflection, ExecEnvironment {
         module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
     }) };
-    let address = unsafe { __UNCHAINED_EXEC_Library_Predicate_RESOLVER.implementation.resolve(&context) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
+    let address = unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER.implementation.resolve(&context) }.unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_Predicate.entry.register(runtime_entry, true, || true) }.unwrap();
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
-        __UNCHAINED_EXEC_Library_Predicate_dispatch(std::ptr::null_mut(),
+        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
             (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
     }
     assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
@@ -149,7 +152,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
         let mut frame = Frame::default();
         let mut result = 0u8;
         unsafe {
-            __UNCHAINED_EXEC_Library_Predicate_dispatch(std::ptr::null_mut(),
+            (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
                 (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
         }
         assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
@@ -163,7 +166,7 @@ thread_local! {
 }
 unsafe fn invoke_noargs() {
     unsafe {
-        __UNCHAINED_EXEC_Library_NoArgs_dispatch(
+        (Library::__UNCHAINED_EXEC_Library_NoArgs_dispatch)(
             std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut());
     }
 }
@@ -191,8 +194,8 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     let context = unsafe { KismetContext::new(NoArgsReflection, ExecEnvironment {
         module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
     }) };
-    let address = unsafe { __UNCHAINED_EXEC_Library_NoArgs_RESOLVER.implementation.resolve(&context) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
+    let address = unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER.implementation.resolve(&context) }.unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_NoArgs.entry.register(noargs_reentrant_entry, true, || true) }.unwrap();
     unsafe { invoke_noargs(); }
     NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));

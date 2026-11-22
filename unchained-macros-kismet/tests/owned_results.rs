@@ -1,7 +1,7 @@
 //! Entry-only observation leaves original result storage and ownership untouched.
 use std::{ffi::c_void, mem::{size_of, MaybeUninit}, sync::{Arc, atomic::{AtomicUsize, Ordering}}};
 use unchained_macros_core::AddressResolver;
-use unchained_macros_kismet::{kismet_exec_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
+use unchained_macros_kismet::{kismet_runtime_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
 use unchained_macros_kismet::schema::*;
 
 static STRING_DROPS: AtomicUsize = AtomicUsize::new(0);
@@ -18,8 +18,14 @@ impl Drop for FText { fn drop(&mut self) { TEXT_DROPS.fetch_add(1, Ordering::Seq
 #[repr(C)]
 struct FLinearColor { red: f32, green: f32, blue: f32, alpha: f32 }
 struct Library;
-#[kismet_exec_bindings("/Script/Fixture.Results")]
+include!("fixtures/exec_access.rs");
+#[kismet_runtime_bindings("/Script/Fixture.Results")]
 impl Library {
+    exec_access!(__UNCHAINED_EXEC_Library_StringResult_RESOLVER, __UNCHAINED_EXEC_Library_StringResult_BINDING, __UNCHAINED_EXEC_Library_StringResult_dispatch);
+    exec_access!(__UNCHAINED_EXEC_Library_TextResult_RESOLVER, __UNCHAINED_EXEC_Library_TextResult_BINDING, __UNCHAINED_EXEC_Library_TextResult_dispatch);
+    exec_access!(__UNCHAINED_EXEC_Library_ColorResult_RESOLVER, __UNCHAINED_EXEC_Library_ColorResult_BINDING, __UNCHAINED_EXEC_Library_ColorResult_dispatch);
+    exec_access!(__UNCHAINED_EXEC_Library_NullStringResult_RESOLVER, __UNCHAINED_EXEC_Library_NullStringResult_BINDING, __UNCHAINED_EXEC_Library_NullStringResult_dispatch);
+    exec_access!(__UNCHAINED_EXEC_Library_MisalignedColorResult_RESOLVER, __UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING, __UNCHAINED_EXEC_Library_MisalignedColorResult_dispatch);
     #[dummy]
     unsafe fn StringResult() -> FString {}
     #[dummy]
@@ -101,8 +107,8 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
     let context = context();
     macro_rules! initialize {
         ($resolver:ident, $binding:ident, $descriptor:ident, $callback:ident) => {
-            let address = unsafe { $resolver.implementation.resolve(&context) }.unwrap();
-            unsafe { $binding.initialize_address(address) }.unwrap();
+            let address = unsafe { Library::$resolver.implementation.resolve(&context) }.unwrap();
+            unsafe { Library::$binding.initialize_address(address) }.unwrap();
             unsafe { Library::$descriptor.entry.register($callback, true, || true) }.unwrap();
         };
     }
@@ -116,9 +122,9 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
     let mut text = MaybeUninit::<FText>::uninit();
     let mut color = MaybeUninit::<FLinearColor>::uninit();
     unsafe {
-        __UNCHAINED_EXEC_Library_StringResult_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), string.as_mut_ptr().cast());
-        __UNCHAINED_EXEC_Library_TextResult_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), text.as_mut_ptr().cast());
-        __UNCHAINED_EXEC_Library_ColorResult_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), color.as_mut_ptr().cast());
+        (Library::__UNCHAINED_EXEC_Library_StringResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), string.as_mut_ptr().cast());
+        (Library::__UNCHAINED_EXEC_Library_TextResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), text.as_mut_ptr().cast());
+        (Library::__UNCHAINED_EXEC_Library_ColorResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), color.as_mut_ptr().cast());
         let string = string.assume_init();
         let text = text.assume_init();
         let color = color.assume_init();
@@ -139,10 +145,10 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
 #[test]
 fn null_result_is_forwarded_without_forming_native_owner_reference() {
     let context = context();
-    let address = unsafe { __UNCHAINED_EXEC_Library_NullStringResult_RESOLVER.implementation.resolve(&context) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_NullStringResult_BINDING.initialize_address(address) }.unwrap();
+    let address = unsafe { Library::__UNCHAINED_EXEC_Library_NullStringResult_RESOLVER.implementation.resolve(&context) }.unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_NullStringResult_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_NullStringResult.entry.register(null_result, true, || true) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_NullStringResult_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
+    unsafe { (Library::__UNCHAINED_EXEC_Library_NullStringResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
     assert_eq!(NULL_ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(NULL_OBSERVED.load(Ordering::SeqCst), 1);
 }
@@ -152,12 +158,12 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
     #[repr(align(16))]
     struct Buffer([u8; 32]);
     let context = context();
-    let address = unsafe { __UNCHAINED_EXEC_Library_MisalignedColorResult_RESOLVER.implementation.resolve(&context) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING.initialize_address(address) }.unwrap();
+    let address = unsafe { Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_RESOLVER.implementation.resolve(&context) }.unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_MisalignedColorResult.entry.register(misaligned_result, true, || true) }.unwrap();
     let mut buffer = Buffer([0; 32]);
     let result = unsafe { buffer.0.as_mut_ptr().add(1).cast::<c_void>() };
-    unsafe { __UNCHAINED_EXEC_Library_MisalignedColorResult_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), result); }
+    unsafe { (Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), result); }
     assert_eq!(MISALIGNED_ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(MISALIGNED_OBSERVED.load(Ordering::SeqCst), 1);
     let result = unsafe { result.cast::<FLinearColor>().read_unaligned() };

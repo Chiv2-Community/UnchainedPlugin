@@ -37,6 +37,7 @@ struct Binding {
     overload: Option<String>,
     rpc_implementation: Option<String>,
     resolver: String,
+    descriptor: Option<String>,
     notes: String,
     source: Option<Source>,
     link: String,
@@ -240,6 +241,19 @@ fn native_target(path: &syn::Path) -> String {
         .join("::")
 }
 
+fn binding_resolver(attribute: &Attribute) -> syn::Result<(syn::Path, Option<syn::Expr>)> {
+    attribute.parse_args_with(|input: syn::parse::ParseStream| {
+        let path = input.parse()?;
+        let descriptor = if input.is_empty() {
+            None
+        } else {
+            input.parse::<syn::Token![,]>()?;
+            Some(input.parse()?)
+        };
+        Ok((path, descriptor))
+    })
+}
+
 fn native_implementation(
     source: Option<&Source>,
     target: &str,
@@ -417,16 +431,32 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                         let syn::ImplItem::Fn(method) = method else {
                             continue;
                         };
+                        if runtime_owner.is_some() && attr(&method.attrs, "dummy").is_some() {
+                            continue;
+                        }
                         let binding = attr(&method.attrs, "bind_resolved_func");
                         if binding.is_some() || runtime_owner.is_some() {
                             let documentation = notes(&method.attrs);
-                            let resolver_name = if let Some(binding) = binding {
-                                let resolver: syn::Path = binding.parse_args()?;
-                                resolver.segments.last().unwrap().ident.to_string()
+                            let (resolver_name, descriptor) = if let Some(binding) = binding {
+                                let (resolver, descriptor) = binding_resolver(binding)?;
+                                if let Some(descriptor) = descriptor {
+                                    (
+                                        format!("{method_owner}__{}", method.sig.ident),
+                                        Some(format!(
+                                            "{}, {}",
+                                            resolver.to_token_stream(),
+                                            descriptor.to_token_stream(),
+                                        )),
+                                    )
+                                } else {
+                                    (resolver.segments.last().unwrap().ident.to_string(), None)
+                                }
                             } else {
-                                format!("{method_owner}__{}", method.sig.ident)
+                                (format!("{method_owner}__{}", method.sig.ident), None)
                             };
-                            if let Some(reflected_path) = &runtime_owner {
+                            if let Some(reflected_path) =
+                                runtime_owner.as_ref().filter(|_| descriptor.is_none())
+                            {
                                 resolvers.insert(resolver_name.clone(), (
                                     file_link(&path, method.sig.ident.span().start().line)?,
                                     format!("Reflection native body: {}::{}", reflected_path.value(), method.sig.ident),
@@ -460,6 +490,7 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     })
                                     .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
+                                descriptor,
                                 notes: documentation
                                     .lines()
                                     .filter(|line| !line.starts_with("Native RPC implementation: "))
@@ -543,7 +574,9 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
             .map(|source| source.url.as_str())
             .unwrap_or(&binding.link);
         let resolver = resolvers.get(&binding.resolver);
-        let resolution = if let Some((link, declaration)) = resolver {
+        let resolution = if let Some(descriptor) = &binding.descriptor {
+            format!("{} (explicit descriptor)", linked(descriptor, &binding.link))
+        } else if let Some((link, declaration)) = resolver {
             format!(
                 "{}\n\n{}",
                 linked(&binding.resolver, link),
@@ -653,6 +686,25 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binding_resolver_accepts_named_keys_and_backend_expressions() {
+        for attribute in [
+            syn::parse_quote!(#[bind_resolved_func(crate::NamedKey)]),
+            syn::parse_quote!(#[bind_resolved_func(crate::Backend, &DESCRIPTOR)]),
+            syn::parse_quote!(#[bind_resolved_func(crate::Backend<T>, select_descriptor(1, 2))]),
+        ] {
+            assert!(binding_resolver(&attribute).is_ok());
+        }
+        for attribute in [
+            syn::parse_quote!(#[bind_resolved_func()]),
+            syn::parse_quote!(#[bind_resolved_func(Backend,)]),
+            syn::parse_quote!(#[bind_resolved_func(Backend, &DESCRIPTOR, &OTHER)]),
+            syn::parse_quote!(#[bind_resolved_func(Backend, &DESCRIPTOR,)]),
+        ] {
+            assert!(binding_resolver(&attribute).is_err());
+        }
+    }
 
     #[test]
     fn resolver_previews_are_at_most_eighty_characters() {
@@ -789,6 +841,8 @@ impl Reflected {
     /// Reflected safety notes.
     pub unsafe fn Call() {}
     unsafe fn Hidden() {}
+    #[dummy]
+    pub unsafe fn Observed() {}
 }
 impl Unannotated {
     fn Ignored(&self) {}
@@ -870,6 +924,7 @@ impl Unannotated {
         }
         let reflected = fs::read_to_string(directory.join("binding-Reflected__Call.md")).unwrap();
         assert!(reflected.contains("Reflected safety notes."));
+        assert!(!directory.join("binding-Reflected__Observed.md").exists());
         let cpp = root.join("cpp/Engine/Source/Test/Private/Native.cpp");
         fs::write(
             &cpp,

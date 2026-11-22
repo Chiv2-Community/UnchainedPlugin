@@ -72,12 +72,14 @@ verified rust-ctables declaration, never an inferred C++ ABI.
 ## Dummy entry listeners
 
 ```rust
-use unchained_macros_kismet::kismet_exec_bindings;
+use unchained_macros_kismet::kismet_runtime_bindings;
 use unchained_macros_core::bind_func_entry_listener;
 struct Library;
 struct FString; // The host supplies the real native layout.
-#[kismet_exec_bindings("/Script/Fixture.Library")]
+#[kismet_runtime_bindings("/Script/Fixture.Library")]
 impl Library {
+    pub unsafe fn NativePredicate(value: i32) -> bool {}
+
     #[dummy]
     pub unsafe fn PrintWarning(message: &FString) {}
 }
@@ -91,6 +93,7 @@ unsafe fn warning(message: &FString) {}
   The wrapper must remain unique,
   including UFunctions loaded later. The adapter rejects currently reflected
   shared wrappers; no `FFrame::node`/callee relationship is assumed.
+- Native and dummy methods can share one `#[kismet_runtime_bindings]` impl.
 - `#[dummy]` identifies verified no-op **or cleanup-only**
   native bodies. The marker rejects native detours; the exec wrapper, native
   cleanup-only body, frame advancement, and all temporary destruction still run.
@@ -127,7 +130,7 @@ Dummy methods cannot have exit listeners, even with Copy inputs and a void resul
 
 ```compile_fail
 struct Library;
-#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Fixture.Library")]
 impl Library {
     #[dummy]
     pub unsafe fn RemovedBody(value: i32) {}
@@ -140,7 +143,7 @@ Non-void dummy declarations also reject exit listeners:
 
 ```compile_fail
 struct Library;
-#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Fixture.Library")]
 impl Library {
     #[dummy]
     pub unsafe fn RemovedPredicate() -> bool {}
@@ -153,13 +156,25 @@ Dummy methods cannot be detoured:
 
 ```compile_fail
 struct Library;
-#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Fixture.Library")]
 impl Library {
     #[dummy]
     pub unsafe fn RemovedBody() {}
 }
 #[unchained_macros_core::bind_func_detour(Library::RemovedBody)]
 unsafe fn replacement() {}
+```
+
+Dummy markers cannot be called directly:
+
+```compile_fail
+struct Library;
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Fixture.Library")]
+impl Library {
+    #[dummy]
+    pub unsafe fn RemovedBody() {}
+}
+unsafe { Library::RemovedBody(); }
 ```
 
 The context owns its adapter, which need not implement Send or Sync. The context

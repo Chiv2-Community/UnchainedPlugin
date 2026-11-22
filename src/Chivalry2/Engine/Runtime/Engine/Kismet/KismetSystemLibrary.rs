@@ -30,7 +30,7 @@ impl UKismetSystemLibrary {
 // Verified unique exec wrappers in the supported Steam build. These markers
 // expose VM observations, not native-call ABIs or detourable folded bodies.
 #[cfg(feature = "blueprint_printstring_log")]
-#[unchained_macros_kismet::kismet_exec_bindings("/Script/Engine.KismetSystemLibrary")]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Engine.KismetSystemLibrary")]
 impl UKismetSystemLibrary {
     #[dummy]
     pub(crate) unsafe fn PrintWarning(message: &FString) {}

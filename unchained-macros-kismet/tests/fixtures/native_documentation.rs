@@ -6,6 +6,15 @@ use unchained_macros_kismet::{kismet_runtime_bindings, KismetReflectionResolver}
 
 pub mod qualified {
     pub struct Reflected;
+    pub struct Explicit;
+}
+
+#[runtime_bindings]
+impl crate::qualified::Explicit {
+    /// # Safety
+    /// Explicit descriptor safety note.
+    #[bind_resolved_func(KismetReflectionResolver, &FREE_DESCRIPTOR)]
+    pub unsafe fn Direct(value: i32) -> i32 {}
 }
 
 #[kismet_runtime_bindings("/Script/Fixture.Reflected")]
@@ -16,6 +25,9 @@ impl crate::qualified::Reflected {
     /// Native overload: `()`
     pub unsafe fn Call() -> i32 {}
     pub unsafe fn Typed(value: i32) -> i32 {}
+    /// Dummy entry safety note.
+    #[dummy]
+    pub unsafe fn Observed() {}
 }
 
 macro_rules! named_resolver {

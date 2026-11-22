@@ -1,7 +1,7 @@
 //! Entry listeners borrow VM owners without taking or duplicating ownership.
 use std::{ffi::c_void, mem::size_of, sync::{Arc, atomic::{AtomicUsize, Ordering}}};
 use unchained_macros_core::AddressResolver;
-use unchained_macros_kismet::{kismet_exec_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
+use unchained_macros_kismet::{kismet_runtime_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
 use unchained_macros_kismet::schema::*;
 
 static STRING_DROPS: AtomicUsize = AtomicUsize::new(0);
@@ -13,8 +13,10 @@ impl Drop for FString { fn drop(&mut self) { STRING_DROPS.fetch_add(1, Ordering:
 struct FText(Arc<String>);
 impl Drop for FText { fn drop(&mut self) { TEXT_DROPS.fetch_add(1, Ordering::SeqCst); } }
 struct Library;
-#[kismet_exec_bindings("/Script/Fixture.Inputs")]
+include!("fixtures/exec_access.rs");
+#[kismet_runtime_bindings("/Script/Fixture.Inputs")]
 impl Library {
+    exec_access!(__UNCHAINED_EXEC_Library_Owners_RESOLVER, __UNCHAINED_EXEC_Library_Owners_BINDING, __UNCHAINED_EXEC_Library_Owners_dispatch);
     #[dummy]
     unsafe fn Owners(string: &FString, text: &FText) {}
 }
@@ -58,10 +60,10 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
     let context = unsafe { KismetContext::new(Fixture, ExecEnvironment {
         module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
     }) };
-    let address = unsafe { __UNCHAINED_EXEC_Library_Owners_RESOLVER.implementation.resolve(&context) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address) }.unwrap();
+    let address = unsafe { Library::__UNCHAINED_EXEC_Library_Owners_RESOLVER.implementation.resolve(&context) }.unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address) }.unwrap();
     unsafe { Library::__UNCHAINED_LISTENERS_Owners.entry.register(owners_entry, true, || true) }.unwrap();
-    unsafe { __UNCHAINED_EXEC_Library_Owners_dispatch(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
+    unsafe { (Library::__UNCHAINED_EXEC_Library_Owners_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
     assert_eq!(ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);
     assert_eq!(STRING_DROPS.load(Ordering::SeqCst), 1);

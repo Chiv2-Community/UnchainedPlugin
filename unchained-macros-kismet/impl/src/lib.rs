@@ -4,12 +4,6 @@ use quote::{format_ident, quote};
 use syn::{ItemImpl, Type};
 mod exec_bindings;
 
-/// Declare entry-only `#[dummy]` methods with a verified exec-wrapper contract.
-#[proc_macro_attribute]
-pub fn kismet_exec_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
-    exec_bindings::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,11 +45,52 @@ mod tests {
                 unsafe fn call() {}
             }
         }).is_err());
+        assert!(expand(quote!("/Script/Fixture.Native"), quote! {
+            impl Native {
+                #[dummy]
+                #[bind_resolved_func(Backend, &DESCRIPTOR)]
+                unsafe fn call() {}
+            }
+        }).is_err());
+    }
+
+    #[test]
+    fn dummy_metadata_cannot_collide_with_authored_items() {
+        for name in ["__UNCHAINED_BINDING_Call", "__UNCHAINED_LISTENERS_Call"] {
+            let name = format_ident!("{name}");
+            assert!(expand(quote!("/Script/Fixture.Native"), quote! {
+                impl Native {
+                    const #name: () = ();
+                    #[dummy]
+                    unsafe fn Call() {}
+                }
+            }).unwrap_err().to_string().contains("conflicts"));
+        }
+    }
+
+    #[test]
+    fn mixed_impl_preserves_constants_visibility_and_native_lifetimes() {
+        let output = expand(quote!("/Script/Fixture.Native"), quote! {
+            impl Native {
+                pub(crate) const AUTHORED: u32 = 42;
+                pub unsafe fn Call<'a>(&'a self) -> &'a Self {}
+                #[dummy]
+                pub(crate) unsafe fn Observe(value: bool) {}
+            }
+        }).unwrap();
+        syn::parse2::<syn::File>(output.clone()).unwrap();
+        let text = output.to_string();
+        assert_eq!(text.matches("runtime_bindings").count(), 1);
+        assert_eq!(text.matches("KismetReflectionResolver :: new").count(), 1);
+        assert_eq!(text.matches("KismetExecResolver :: new").count(), 1);
+        assert!(text.contains("pub (crate) const AUTHORED"));
+        assert!(text.contains("pub (crate) const Observe"));
+        assert!(text.contains("pub unsafe fn Call < 'a > (& 'a self) -> & 'a Self"));
     }
 }
 
 /// Bind native C++ methods by reflected class path through the host's Kismet backend.
-/// This resolves native bodies, not Blueprint VM exec-thunk signatures.
+/// Native methods resolve C++ bodies; `#[dummy]` methods observe exec entry only.
 #[proc_macro_attribute]
 pub fn kismet_runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
@@ -85,12 +120,29 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let class = &ty.path.segments.last().unwrap().ident;
     let implementation_cfg: Vec<_> = cfg_attributes(&implementation.attrs).cloned().collect();
     let mut declarations = Vec::new();
-    for item in &mut implementation.items {
-        let syn::ImplItem::Fn(method) = item else { continue };
+    let mut names: std::collections::HashSet<_> = implementation.items.iter().filter_map(|item| match item {
+        syn::ImplItem::Fn(method) => Some(method.sig.ident.to_string()),
+        syn::ImplItem::Const(item) => Some(item.ident.to_string()),
+        _ => None,
+    }).collect();
+    let mut items = Vec::new();
+    for mut item in std::mem::take(&mut implementation.items) {
+        let syn::ImplItem::Fn(method) = &mut item else { items.push(item); continue };
         if method.attrs.iter().any(|attribute| attribute.path().segments.last().is_some_and(|segment|
             segment.ident == "bind_resolved_func"))
         {
             return Err(syn::Error::new_spanned(method, "Kismet methods cannot also declare an address binding"));
+        }
+        if method.attrs.iter().any(|attribute| attribute.path().is_ident("dummy")) {
+            for prefix in ["__UNCHAINED_LISTENERS_", "__UNCHAINED_BINDING_"] {
+                if !names.insert(format!("{prefix}{}", method.sig.ident)) {
+                    return Err(syn::Error::new_spanned(method, "generated binding metadata conflicts with an associated item"));
+                }
+            }
+            let (metadata, helpers) = exec_bindings::expand_method(&owner, class, method)?;
+            items.extend(metadata);
+            declarations.push(helpers);
+            continue;
         }
         let method_name = method.sig.ident.to_string();
         let resolver_name = format!("{}__{}", class, method.sig.ident);
@@ -113,7 +165,9 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         method.attrs.push(syn::parse_quote!(#[bind_resolved_func(
             ::unchained_macros_kismet::KismetReflectionResolver, &#resolver
         )]));
+        items.push(item);
     }
+    implementation.items = items;
     Ok(quote! {
         #(#implementation_cfg)*
         const _: () = {

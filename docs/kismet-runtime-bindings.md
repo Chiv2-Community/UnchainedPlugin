@@ -8,7 +8,7 @@ instead of maintaining a byte signature.
 | Target | Declaration | What you can do |
 |---|---|---|
 | Native C++ implementation | `#[kismet_runtime_bindings("…")]` | Call the original, attach a detour, add entry/exit listeners |
-| Dummied native implementation | `#[kismet_exec_bindings("…")]` with `#[dummy]` | Add an entry listener to its unique exec wrapper |
+| Dummied native implementation | `#[kismet_runtime_bindings("…")]` with `#[dummy]` | Add an entry listener to its unique exec wrapper |
 | Virtual/interface method | Explicit `rust-ctables` declaration | Dispatch through the object's vtable; resolve a concrete implementation separately to intercept it |
 | Function implemented only in Blueprint | Not supported | Requires a separate script invocation/observation mechanism |
 
@@ -89,7 +89,7 @@ Their bodies may share an address with unrelated methods. Observe the unique
 exec wrapper instead:
 
 ```rust,ignore
-#[unchained_macros_kismet::kismet_exec_bindings("/Script/Engine.KismetSystemLibrary")]
+#[unchained_macros_kismet::kismet_runtime_bindings("/Script/Engine.KismetSystemLibrary")]
 impl UKismetSystemLibrary {
     #[dummy]
     pub(crate) unsafe fn PrintWarning(message: &FString) {}
@@ -106,6 +106,7 @@ unsafe fn print_warning(message: &FString) {
 `#[dummy]` takes no parameters. It declares an entry-only observation target,
 not a callable native method. Exit listeners and detours fail compilation.
 One entry listener per method is supported.
+Native and dummy declarations can share the same annotated impl.
 
 Before declaring a dummy, verify:
 
