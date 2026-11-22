@@ -2,6 +2,13 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as Tokens;
 use quote::{format_ident, quote};
 use syn::{ItemImpl, Type};
+mod exec_bindings;
+
+/// Declare observation-only VM wrappers with an explicitly verified Step contract.
+#[proc_macro_attribute]
+pub fn kismet_exec_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
+    exec_bindings::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+}
 
 /// Bind native C++ methods by reflected class path through the host's Kismet backend.
 /// This resolves native bodies, not Blueprint VM exec-thunk signatures.

@@ -83,6 +83,7 @@ pub use self::Runtime::Engine::GameFramework::PlayerState::*;
 pub use self::Runtime::Engine::GameFramework::SaveGame::*;
 pub use self::Runtime::Engine::Kismet::AssemblyBlueprint::*;
 pub use self::Runtime::Engine::Kismet::GameplayStatics::*;
+pub use self::Runtime::Engine::Kismet::KismetSystemLibrary::*;
 pub use self::Runtime::Online::ICMP::Icmp::*;
 pub use self::Runtime::PakFile::IPlatformFilePak::*;
 pub use self::Runtime::Sockets::IPAddress::*;

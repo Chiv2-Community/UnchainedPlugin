@@ -72,7 +72,25 @@ appenders:
       inline-removals: *inline_removals
       pattern: "[{d(%Y-%m-%dT%H:%M:%S%:z)} {P} {l:<5}| {fn:<16}] {m}{n}"
 
+  blueprint_console:
+    kind: console
+    encoder:
+      kind: palette
+      pattern: "{palette(timestamp)}{d(%H:%M:%S)}{palette(debug)} | {palette(client_message)}BP {K(kind):<12.12}{palette(debug)} - {palette()}{m}{n}"
+      palette: *console_palette
+  blueprint_file:
+    kind: file
+    path: "__BLUEPRINT_LOG_PATH__"
+    encoder:
+      pattern: "{d(%Y-%m-%dT%H:%M:%S%:z)} | BP {K(kind):<12} - {m}{n}"
+
 loggers:
+  blueprint_log:
+    level: info
+    appenders:
+      - blueprint_console
+      - blueprint_file
+    additive: false
   chat_log:
     level: info
     appenders:

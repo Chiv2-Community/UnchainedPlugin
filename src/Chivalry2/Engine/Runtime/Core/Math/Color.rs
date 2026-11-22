@@ -1,7 +1,7 @@
 //! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Core/Public/Math/Color.h>.
 
 #[unchained_macros_core::runtime_bindings]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct FLinearColor {
     pub r: f32,

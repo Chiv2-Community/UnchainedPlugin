@@ -23,7 +23,7 @@ Both formats have second precision.
 
 ### Log location
 
-Default files are `unchained.log`, `chat.log`, and `kismet.log` in the launched
+Default files are `unchained.log`, `chat.log`, `kismet.log`, and `blueprint.log` in the launched
 profile's saved directory. Most users use:
 
 ```text
@@ -48,6 +48,9 @@ Custom configurations can use these path placeholders:
 | `__UNCHAINED_LOG_PATH__` | `unchained.log` |
 | `__CHAT_LOG_PATH__` | `chat.log` |
 | `__KISMET_LOG_PATH__` | `kismet.log` |
+| `__BLUEPRINT_LOG_PATH__` | `blueprint.log` |
+
+Use placeholders inside double-quoted YAML paths, as in the embedded configuration.
 
 ### Stdio
 
@@ -135,6 +138,35 @@ in JSON records:
 | `chat_kind` | `player`, `system`, or `external`. |
 | `label` | Uppercase display label, such as `ALL`, `MASON`, `SPECTATOR`, `SYSTEM`, or `DISCORD`. |
 | `faction` | Native faction (`Agatha`, `Mason`, `Tenosia`, `FFA`, `None`, `All`, `MAX`, `Unknown`), `System`, or `Discord`. |
+
+## Blueprint Logging
+
+Build with `blueprint_printstring_log` for PrintString, PrintWarning, and PrintText
+observations. `kismet_diagnostics` enables it together with existing `kismet_log`
+diagnostics. Both are optional; default/dev features remain unchanged.
+
+The [embedded configuration](../src/logging/log4rs/log4rs.default.yaml) routes
+`INFO` records on `blueprint_log` to the console and `blueprint.log` in the
+[plugin log directory](#log-location), without duplicating them into root output.
+The `kind` attribute identifies the print function; patterns can use `{K(kind)}`.
+
+Put `blueprint_filter.txt` in that same plugin log directory:
+
+- One exact full-message string per line; filter entries are trimmed.
+- Blank lines and lines whose first non-whitespace character is `#` are ignored.
+- Matching is case-sensitive; no substring/regex matching or trimming of messages.
+  Multiline messages and messages with leading/trailing whitespace cannot be listed.
+- Loaded once on first use. Restart after edits, including creating a missing file
+  or fixing a read error. Missing/unreadable files suppress nothing and are reported once.
+
+Custom YAML replaces the embedded configuration; Blueprint routes are not injected.
+Copy its `blueprint_console`/`blueprint_file` appenders and `blueprint_log` logger
+to opt into that routing, retaining `additive: false` for isolation.
+Use `path: "__BLUEPRINT_LOG_PATH__"` for the default file location.
+Without an explicit Blueprint logger, records follow your configured root rules.
+Root JSON appenders are not automatically shared with isolated Blueprint records;
+list any desired JSON appenders on `blueprint_log` explicitly.
+Custom file destinations do not relocate `blueprint_filter.txt`.
 
 ## Structured logging
 
@@ -314,6 +346,7 @@ Features emit records when enabled and exercised.
 | `UnchainedPlugin::seh` | Windows exceptions and stack traces. |
 | `UnchainedPlugin::tools::hook_globals` | Integration initialization and TRACE state dumps. |
 | `UnchainedPlugin::tools::pdb_scan` | Symbol lookups in `with_pdb` builds. |
+| `blueprint_log` | Optional Blueprint print records; see [Blueprint Logging](#blueprint-logging). |
 
 Chat metadata and routing are listed under [Chat Logging](#chat-logging).
 

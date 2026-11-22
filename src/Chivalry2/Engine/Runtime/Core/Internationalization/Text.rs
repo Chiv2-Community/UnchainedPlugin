@@ -43,6 +43,50 @@ pub struct FText {
     flags: u32,
 }
 
+/// One retained native text reference used by a call-scoped exit observation.
+/// Unlike InvariantText, this does not promise culture-invariant display data.
+/// It retains shared history, not a frozen display string.
+#[doc(hidden)]
+pub struct FTextObservation {
+    text: FText,
+}
+
+// SAFETY: The verified UE copy operation copies storage and increments the
+// shared reference controller at +8. Drop releases exactly that owned reference.
+// Native history access retains FText's existing engine-thread requirements.
+unsafe impl unchained_macros_core::ObserverSnapshot for FText {
+    type Snapshot = FTextObservation;
+
+    fn snapshot(&self) -> FTextObservation {
+        FText::__UNCHAINED_BINDING_Destructor.binding().address()
+            .expect("FText snapshot requires its native destructor binding");
+        if !self.shared_reference.is_null() {
+            // Same controller layout and atomic retain as the PrintText thunk.
+            let count = unsafe {
+                &*self.shared_reference.cast::<u8>().add(8)
+                    .cast::<std::sync::atomic::AtomicI32>()
+            };
+            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        FTextObservation {
+            text: FText {
+                text_data: self.text_data,
+                shared_reference: self.shared_reference,
+                flags: self.flags,
+            },
+        }
+    }
+
+    fn borrow(snapshot: &FTextObservation) -> &FText { &snapshot.text }
+}
+
+impl Drop for FTextObservation {
+    fn drop(&mut self) {
+        // This guard alone owns the retained reference, never the VM temporary.
+        unsafe { (&raw mut self.text).Destructor(); }
+    }
+}
+
 #[unchained_macros_core::runtime_bindings]
 impl FText {
     /// Borrow native text without acquiring a shared reference.

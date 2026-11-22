@@ -203,7 +203,7 @@ mod tests {
             if let syn::Stmt::Item(syn::Item::Impl(item)) = statement { Some(item) } else { None }
         }).collect();
         assert_eq!(implementations.len(), 1);
-        assert_eq!(implementations[0].items.iter().filter(|item| matches!(item, syn::ImplItem::Const(_))).count(), 6);
+        assert_eq!(implementations[0].items.iter().filter(|item| matches!(item, syn::ImplItem::Const(_))).count(), 10);
         let text = quote!(#file).to_string();
         assert!(!text.contains("PhantomData :: <"));
         assert!(!text.contains("let _ : :: core :: marker :: PhantomData"));

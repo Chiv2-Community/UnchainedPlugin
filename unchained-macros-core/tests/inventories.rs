@@ -25,6 +25,7 @@ macro_rules! backend {
                 hook_fn: |_| panic!("discovery must not attach"),
                 condition: || panic!("discovery must not evaluate conditions"),
                 detour: || None,
+                enabled: || false, set_enabled: |_| {},
             };
             pub static PATCH: bindings::PatchRegistration<Backend> = bindings::PatchRegistration {
                 name: stringify!($module), resolver: &RESOLVER,

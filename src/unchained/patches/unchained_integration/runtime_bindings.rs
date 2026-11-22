@@ -3,6 +3,8 @@
 use std::sync::{Mutex, OnceLock};
 use unchained_macros_core::PatchState;
 use unchained_macros_kismet::{ExecEnvironment, KismetContext, KismetReflectionResolver};
+#[cfg(feature = "blueprint_printstring_log")]
+use unchained_macros_kismet::KismetExecResolver;
 use crate::Chivalry2::Engine::FFrame;
 use crate::unchained::blueprints::reflection::EngineReflection;
 use crate::Chivalry2::Engine::Runtime::Launch::LaunchEngineLoop::FEngineLoop;
@@ -45,6 +47,19 @@ pub(super) unsafe fn initialize() {
             crate::apply_patches::<KismetReflectionResolver>(&context, snapshot, &mut state.patches)?;
         }
         crate::attach_hooks_for::<KismetReflectionResolver>(snapshot).map_err(|error| error.to_string())?;
+        #[cfg(feature = "blueprint_printstring_log")]
+        if snapshot.get::<crate::PlatformType>()? == crate::PlatformType::STEAM {
+            // Step adapters were attached by the early Patternsleuth pass.
+            if !unchained_macros_core::detour_is_enabled("observe_frame_step")
+                || !unchained_macros_core::detour_is_enabled("observe_frame_step_explicit")
+            {
+                return Err("Exec listeners require both active frame-step adapters".into());
+            }
+            unsafe { unchained_macros_core::initialize_bindings_for::<KismetExecResolver>(&context, snapshot)?; }
+            crate::attach_hooks_for::<KismetExecResolver>(snapshot).map_err(|error| error.to_string())?;
+        } else {
+            swarn!("Blueprint print listeners are disabled: exec wrappers are verified only for Steam");
+        }
         Ok(())
     })();
     match result {

@@ -1,6 +1,6 @@
 # unchained-macros-core
 
-Backend-independent native methods, detours, patches, and selection filters.
+Backend-independent native methods, detours, listeners, patches, and selection filters.
 No memory scanner, reflection engine, resolver-kind enum, or startup-phase policy.
 
 `runtime_bindings` documents outer native declarations and expands annotated
@@ -26,6 +26,7 @@ Discover typed registrations:
 resolver_inventory_for::<Backend>()
 binding_inventory_for::<Backend>()
 hook_inventory_for::<Backend>()
+listener_inventory_for::<Backend>()
 patch_inventory_for::<Backend>()
 ```
 
@@ -58,12 +59,108 @@ Address claims and trampoline publication are **global across backends**.
 Already-bound aliases receive a newly attached trampoline; aliases bound later
 inherit it during initialization. With the required quiescent callers,
 original-call bypass does not depend on backend discovery order.
-All generated detours use one core attachment procedure: reserve the address,
-retain the hook, publish trampolines to aliases, then evaluate activation.
-Global auto-activation off skips the condition but still publishes the trampoline.
+Each native method has one dispatcher: reserve the address, retain the physical
+hook, publish trampolines to aliases, then register independent callbacks.
+The physical hook stays enabled even when every callback is passive.
+Auto-activation off skips callback conditions, not trampoline publication.
 
 `function_is_bound_for::<Backend>(name)` and
 `selectors.supports_resolver_for::<Backend>(name)` scope name queries to a backend.
+
+## Function listeners
+
+```rust,ignore
+#[bind_func_entry_listener(Native::Call, || diagnostics_enabled())]
+unsafe fn entered(value: &u32, output: &*mut u32) {}
+
+#[bind_func_exit_listener(Native::Call)]
+unsafe fn returned(value: &u32, output: &*mut u32, result: &bool) {}
+```
+
+- One entry listener, one exit listener, and one behavior-changing detour per
+  method. Extra registrations fail explicitly; bounded slots avoid erased
+  callback chains and ambiguous ownership/ordering.
+  Call `validate_listener_registrations_for::<Backend>(&selectors)` before any
+  attachment. It checks every selected listener's slot storage identity,
+  including passive registrations, without evaluating conditions.
+- Callbacks are unsafe free functions returning `()`. Every native input,
+  including an explicit receiver, receives one immutable outer borrow.
+  A native `&T` parameter is observed as `&&T`; pointers are borrowed addresses,
+  not automatically dereferenced. Exit appends `&Result`, including `&()` for void.
+- Native order: entry, input snapshot, detour or original, exit, return.
+  Exit sees the caller-visible result, including detour overrides/skips.
+  Results are borrowed without copying/dropping their owned storage.
+- Exit inputs require `ObserverSnapshot`. `Copy + 'static` values have a blanket
+  implementation; hosts may supply verified deep-owned/retained snapshots for
+  non-`Copy` native strings/text. Unknown owners and native reference inputs are
+  rejected rather than shallow-copied or lifetime-erased. Raw-pointer
+  snapshots preserve addresses, **not** entry-time pointee/out values. Pointee
+  validity after execution remains the callback author's obligation. `Copy`
+  snapshots do not extend the lifetime of native allocations referenced by
+  fields; adapters must reject transient native storage they cannot keep valid.
+- Direct project calls through the native binding bypass **all** callbacks.
+  Natural native recursion is observed normally. Callback/condition-induced
+  reentry into the same method suppresses observers only; detour/original still
+  execute. The per-thread guard holds no borrow/lock across user/native code.
+  Its allocation-free stack suppresses observation beyond 64 simultaneously
+  nested distinct observed methods, without suppressing execution.
+- Observer/condition panics are caught; original execution continues. Failed
+  snapshot preparation skips exit only. No exit is promised for exceptions,
+  aborts, panicking detours, or other paths that do not return normally.
+- Conditions, feature gates, and activation are independent per callback.
+  Conditions are attachment-time gates, evaluated once when auto-activation is
+  enabled and never by dispatch/status queries. Auto-activation off skips them.
+  Conditions use the target's observer guard, including failure-policy queries;
+  condition-induced native calls execute without recursive observation.
+  Slot/registration `set_enabled` changes logical activation without reevaluation.
+  `HookRegistration::enabled` / `set_enabled` refer to the detour callback only.
+  `HookRegistration::detour` exposes the **shared physical** hook for inspection:
+  directly disabling it disables every callback at that address.
+- Addresses remain globally owned across backends. A second independently
+  described alias cannot attach another dispatcher; late aliases still share
+  the trampoline for original-call bypass.
+
+Unsafe callbacks must not mutate observations, retain temporary borrows, release
+engine-owned storage, or invalidate borrowed arguments/results. Raw pointers,
+interior mutability, and arbitrary unsafe Rust cannot be sandboxed.
+
+`unsafe ObserverSnapshot` implementations provide `type Snapshot: 'static`,
+`snapshot(&self) -> Snapshot`, and `borrow(&Snapshot) -> &Self`. Snapshots own or
+retain independent storage; `borrow` must reference that live storage. Snapshot
+owners are released after normal exit, a caught callback panic, skipped/reentrant
+delivery, or an explicit drop without delivery. Preparing multiple inputs uses
+ordinary Rust partial-initialization cleanup if a later snapshot fails.
+
+### Backend-specific listener targets
+
+Backends may publish only `__UNCHAINED_LISTENERS_Method`, a reference to
+`ListenerDescriptor<E, X, P, R>`. No callable method or `NativeFunction` is needed;
+without native binding metadata `bind_func_detour` is unavailable. This lets a
+surviving per-method wrapper observe a folded native body without patching its
+shared stub.
+
+- `E`: `unsafe fn(&Input, ...)`.
+- `X`: `unsafe fn(&Input, ..., &Result)`.
+- `P`: `unsafe fn(&Input, ...) -> ExitObservation`.
+- Constructor: `unsafe ListenerDescriptor::new(&resolver, attach_fn)`.
+  Attachment must preserve backend ownership, readiness, and original execution.
+  Native attachment retries resume a retained but physically disabled hook before
+  publishing callbacks or reporting success.
+- Dispatch with `observe_entry`, `prepare_exit`, and `finish_exit`; these include
+  panic isolation and the per-method reentry guard. Supply the actual live
+  caller-visible result storage to `finish_exit`.
+- `ListenerRegistration<R>` discovery references the resolver, not a native
+  binding. Each registration tracks its own successful publication; an occupied
+  target slot never makes a competing registration appear initialized/enabled.
+  The host selects and retries these registrations independently.
+
+Low-level slot `register` is unsafe: it bypasses descriptor result-signature and
+attachment checks. Prefer descriptor registration. Slot reads/status/activation
+remain safe; backend fixtures using direct publication must uphold its full ABI,
+ownership, and guarded-condition contract.
+
+Backend argument marshalling, result semantics, coverage, and unsupported shapes
+remain backend responsibilities. Core never treats a wrapper address as a native ABI.
 
 ## Native globals
 

@@ -21,6 +21,14 @@ inventory::submit! {
         hook_fn: |_| unreachable!(),
         condition: || true,
         detour: || HOOK.get(),
+        enabled: || HOOK.get().is_some_and(retour::RawDetour::is_enabled),
+        set_enabled: |enabled| {
+            if let Some(hook) = HOOK.get() {
+                unsafe {
+                    if enabled { hook.enable().unwrap(); } else { hook.disable().unwrap(); }
+                }
+            }
+        },
     } as &dyn unchained_macros_core::__private::HookInfo
 }
 

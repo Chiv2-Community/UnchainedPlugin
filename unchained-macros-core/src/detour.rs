@@ -9,11 +9,60 @@ pub fn detour_is_initialized(name: &str) -> bool {
 pub fn detour_is_enabled(name: &str) -> bool {
     inventory::iter::<&'static dyn HookInfo>
         .into_iter()
-        .any(|binding| binding.name() == name && binding.detour().is_some_and(retour::RawDetour::is_enabled))
+        .any(|binding| binding.name() == name && binding.enabled())
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 use std::sync::OnceLock;
+
+/// Shared physical attachment and optional behavior-changing callback.
+pub struct NativeHook {
+    hook: OnceLock<retour::RawDetour>,
+    replacement: crate::CallbackSlot<usize>,
+}
+impl NativeHook {
+    pub const fn new() -> Self {
+        Self { hook: OnceLock::new(), replacement: crate::CallbackSlot::new() }
+    }
+    pub fn detour(&self) -> Option<&retour::RawDetour> { self.hook.get() }
+    pub fn replacement_address(&self) -> Option<usize> { self.replacement.get() }
+    pub fn has_replacement(&self) -> bool { self.replacement.is_registered() }
+    pub fn set_enabled(&self, enabled: bool) { self.replacement.set_enabled(enabled); }
+    /// # Safety
+    /// `replacement` must have the binding dispatcher's complete native ABI and
+    /// lifetime contract and remain live for the process.
+    pub unsafe fn register_replacement(
+        &self, replacement: usize, activate: bool,
+    ) -> Result<(), String> {
+        unsafe { self.replacement.register(replacement, activate, || true) }
+    }
+    /// # Safety
+    /// Dispatcher ABI must match binding; all native callers must be quiescent.
+    pub unsafe fn attach<R: crate::AddressResolver>(
+        &'static self, binding: &'static crate::FunctionBinding<R>, dispatcher: *const (),
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.attach_with(binding, dispatcher, |hook| {
+            hook.enable()?;
+            Ok(())
+        }) }
+    }
+
+    unsafe fn attach_with<R: crate::AddressResolver>(
+        &'static self, binding: &'static crate::FunctionBinding<R>, dispatcher: *const (),
+        activate: impl FnOnce(&retour::RawDetour) -> Result<(), Box<dyn std::error::Error>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.hook.get().is_none() {
+            unsafe { attach_function_detour(binding, &self.hook, dispatcher, false, || true)?; }
+        }
+        let hook = self.hook.get().expect("Native detour was just constructed");
+        if !hook.is_enabled() { activate(hook)?; }
+        Ok(())
+    }
+}
+
+impl Default for NativeHook {
+    fn default() -> Self { Self::new() }
+}
 
 /// Construct and publish a process-lifetime detour before evaluating activation.
 ///
@@ -70,4 +119,49 @@ pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String
         return Err(format!("A detour already owns native address {address:#x}"));
     }
     Ok(DetourAddressClaim { address, committed: false })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AddressResolver, FunctionBinding, FunctionBindingRegistration, Resolver};
+    use std::num::NonZeroUsize;
+
+    struct Backend;
+    impl AddressResolver for Backend {
+        type Context = ();
+        unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> { unreachable!() }
+    }
+    static RESOLVER: Resolver<Backend> = Resolver { name: "activation retry", implementation: Backend, filter: None };
+    static BINDING: FunctionBinding<Backend> = FunctionBinding::new("activation retry", &RESOLVER);
+    static HOOK: NativeHook = NativeHook::new();
+    inventory::submit! {
+        &FunctionBindingRegistration { binding: &BINDING } as &dyn crate::binding::FunctionInfo
+    }
+    #[inline(never)]
+    unsafe extern "C" fn original(value: usize) -> usize {
+        std::hint::black_box(value).wrapping_add(1)
+    }
+    unsafe extern "C" fn replacement(value: usize) -> usize { value + 10 }
+
+    #[test]
+    fn stored_detour_retries_failed_physical_activation_before_reporting_success() {
+        unsafe {
+            BINDING.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
+            let error = HOOK.attach_with(&BINDING, replacement as *const (),
+                |_| Err("injected activation failure".into())).unwrap_err();
+            assert!(error.to_string().contains("injected activation failure"));
+            let physical = HOOK.detour().unwrap();
+            assert!(!physical.is_enabled());
+            assert_ne!(BINDING.address(), BINDING.entry_address());
+            assert_eq!(original(1), 2);
+            HOOK.attach(&BINDING, replacement as *const ()).unwrap();
+            assert!(physical.is_enabled());
+            assert!(std::ptr::eq(physical, HOOK.detour().unwrap()));
+            assert_eq!(original(1), 11);
+            let bypass: unsafe extern "C" fn(usize) -> usize =
+                std::mem::transmute(BINDING.address().unwrap().get());
+            assert_eq!(bypass(1), 2);
+        }
+    }
 }

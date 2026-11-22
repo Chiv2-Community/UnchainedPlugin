@@ -8,10 +8,9 @@ mod console;
 pub(crate) mod palette;
 pub mod pattern;
 mod removals;
-use std::backtrace::Backtrace;
-use std::panic;
+mod panic_report;
 use crate::tools::hook_globals::cli_args;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::BTreeSet;
 
 const EMBEDDED_LOG4RS_YAML: &str = include_str!("log4rs.default.yaml");
@@ -19,26 +18,12 @@ const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
 const UNCHAINED_LOG_PATH_PLACEHOLDER: &str = "__UNCHAINED_LOG_PATH__";
 const KISMET_LOG_PATH_PLACEHOLDER: &str = "__KISMET_LOG_PATH__";
 const CHAT_LOG_PATH_PLACEHOLDER: &str = "__CHAT_LOG_PATH__";
+const BLUEPRINT_LOG_PATH_PLACEHOLDER: &str = "__BLUEPRINT_LOG_PATH__";
 
+/// Write panic diagnostics to stderr and forward them asynchronously to the logger.
+/// Forwarding is best-effort; a full queue or failed logger leaves stderr only.
 pub fn setup_panic_logger() {
-    panic::set_hook(Box::new(|info| {
-        let backtrace = Backtrace::force_capture();
-        let msg = match info.payload().downcast_ref::<&'static str>() {
-            Some(s) => *s,
-            None => match info.payload().downcast_ref::<String>() {
-                Some(s) => &s[..],
-                None => "Box<dyn Any>",
-            },
-        };
-
-        let location = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
-            .unwrap_or_else(|| "unknown location".to_string());
-
-        serror!(
-            "PANIC at {}: {}\nStack Backtrace:\n{}",
-            location, msg, backtrace
-        );
-    }));
+    panic_report::setup(module_path!());
 }
 
 pub fn init() -> anyhow::Result<()> {
@@ -160,15 +145,30 @@ fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
     }).collect()
 }
 
-fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+fn log_dir_for_base(local_app_data: Option<&Path>, saved_dir_suffix: Option<&str>) -> PathBuf {
     let suffix = saved_dir_suffix
         .map(|value| format!("_{}", value))
         .unwrap_or_default();
 
-    let log_dir = std::env::var("LOCALAPPDATA").ok()
-        .map(|base| PathBuf::from(base).join(format!(r"Chivalry 2\Saved{suffix}")))
+    local_app_data
+        .map(|base| base.join(format!(r"Chivalry 2\Saved{suffix}")))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Logs");
+        .join("Logs")
+}
+
+fn log_dir_for(saved_dir_suffix: Option<&str>) -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").ok();
+    log_dir_for_base(base.as_deref().map(Path::new), saved_dir_suffix)
+}
+
+/// Plugin logs and sidecars use `%LOCALAPPDATA%\Chivalry 2\Saved{suffix}\Logs`
+/// (`./Logs` without LOCALAPPDATA), independently of custom appender paths.
+pub fn plugin_log_dir() -> PathBuf {
+    log_dir_for(cli_args().saved_dir_suffix.as_deref())
+}
+
+fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+    let log_dir = log_dir_for(saved_dir_suffix);
 
     if let Err(error) = std::fs::create_dir_all(&log_dir) {
         eprintln!(
@@ -179,16 +179,25 @@ fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> Stri
         );
     }
 
+    render_logger_placeholders(yaml, &log_dir)
+}
+
+// Keep rendering independent of the environment, CLI, and filesystem.
+fn render_logger_placeholders(yaml: &str, log_dir: &Path) -> String {
     let log_path = |name: &str| yaml_escape_double_quoted(&log_dir.join(name).to_string_lossy());
     yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &log_path("unchained.log"))
         .replace(KISMET_LOG_PATH_PLACEHOLDER, &log_path("kismet.log"))
         .replace(CHAT_LOG_PATH_PLACEHOLDER, &log_path("chat.log"))
+        .replace(BLUEPRINT_LOG_PATH_PLACEHOLDER, &log_path("blueprint.log"))
 }
 
 fn yaml_escape_double_quoted(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
 
 #[cfg(test)]
@@ -197,6 +206,78 @@ mod tests {
     use crate::logging::test_resources as fixtures;
     use log::{Level, Log, Metadata, Record};
     use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    #[test]
+    fn plugin_log_paths_preserve_saved_suffix_and_fallback() {
+        let base = Path::new(r#"C:\Users\name "quoted""#);
+        assert_eq!(log_dir_for_base(Some(base), None),
+            base.join(r"Chivalry 2\Saved").join("Logs"));
+        assert_eq!(log_dir_for_base(Some(base), Some("server-2")),
+            base.join(r"Chivalry 2\Saved_server-2").join("Logs"));
+        assert_eq!(log_dir_for_base(None, Some("server-2")), PathBuf::from("./Logs"));
+    }
+
+    #[test]
+    fn logger_placeholders_render_all_paths_without_environment_or_io() {
+        let dir = Path::new("not-created/quote\"backslash\\tab\tline\nreturn\r界");
+        let rendered = render_logger_placeholders(EMBEDDED_LOG4RS_YAML, dir);
+        assert!(!rendered.contains("_LOG_PATH__"));
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+        for (appender, file) in [
+            ("file", "unchained.log"), ("kismet", "kismet.log"),
+            ("chat_file", "chat.log"), ("chat_system_file", "chat.log"),
+            ("blueprint_file", "blueprint.log"),
+        ] {
+            assert_eq!(yaml["appenders"][appender]["path"].as_str().unwrap(),
+                dir.join(file).to_str().unwrap());
+        }
+        let custom = "root: {level: off}\n# no placeholders";
+        assert_eq!(render_logger_placeholders(custom, dir), custom);
+    }
+
+    #[test]
+    fn embedded_blueprint_routes_are_isolated_and_render_kind_and_message() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-blueprint-route-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        let rendered = render_logger_placeholders(EMBEDDED_LOG4RS_YAML, &dir.0);
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+        assert_eq!(yaml["loggers"]["blueprint_log"]["appenders"],
+            serde_yaml::to_value(["blueprint_console", "blueprint_file"]).unwrap());
+        assert_eq!(yaml["loggers"]["blueprint_log"]["additive"], false);
+        assert_eq!(yaml["appenders"]["blueprint_console"]["kind"], "console");
+        let mut registry = Deserializers::default();
+        register(&mut registry);
+        let fields = [("kind", "PrintWarning")];
+        let console = render_encoder(&registry, yaml["appenders"]["blueprint_console"]["encoder"].clone(),
+            &Record::builder().level(Level::Info).key_values(&fields)
+                .args(format_args!("exact 界 message")).build());
+        assert!(String::from_utf8(console).unwrap().contains(" | BP PrintWarning - exact 界 message"));
+        let logger = log4rs::Logger::new(config_from_value(yaml, "blueprint-routing").unwrap());
+        logger.log(&Record::builder().target("ordinary").level(Level::Info)
+            .args(format_args!("ordinary marker")).build());
+        for kind in ["PrintString", "PrintWarning", "PrintText"] {
+            let fields = [("kind", kind)];
+            logger.log(&Record::builder().target("blueprint_log").level(Level::Info)
+                .key_values(&fields).args(format_args!("exact 界 message")).build());
+        }
+        logger.flush();
+        let blueprint = std::fs::read_to_string(dir.0.join("blueprint.log")).unwrap();
+        let ordinary = std::fs::read_to_string(dir.0.join("unchained.log")).unwrap();
+        assert_eq!(blueprint.lines().count(), 3);
+        for kind in ["PrintString", "PrintWarning", "PrintText"] {
+            assert!(blueprint.contains(&format!("BP {kind:<12} - exact 界 message")), "{blueprint}");
+        }
+        assert!(!blueprint.contains("ordinary marker"));
+        assert!(ordinary.contains("ordinary marker"));
+        assert!(!ordinary.contains("exact 界 message"));
+        drop(logger);
+    }
 
     #[test]
     fn logger_yaml_precedence_and_read_errors() {
@@ -369,7 +450,8 @@ mod tests {
             .retain(|name, _| name.as_str() == Some("console"));
         yaml["root"]["appenders"] = vec!["console"].into();
         yaml["loggers"].as_mapping_mut().unwrap()
-            .retain(|name, _| !name.as_str().is_some_and(|name| name.starts_with("chat_log")));
+            .retain(|name, _| !name.as_str().is_some_and(|name|
+                name.starts_with("chat_log") || name.starts_with("blueprint_log")));
         let config = config_from_value(yaml, "embedded").unwrap();
         let logger = log4rs::Logger::new(config);
         assert!(logger.enabled(&Metadata::builder()

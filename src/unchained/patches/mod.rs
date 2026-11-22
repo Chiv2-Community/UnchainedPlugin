@@ -1,6 +1,10 @@
 //! Detours and instruction patches grouped by plugin purpose.
 
 pub mod backend_hooks;
+#[cfg(feature = "kismet_server_identity_hooks")]
+pub mod blueprint_identity;
+#[cfg(feature = "blueprint_printstring_log")]
+pub mod blueprint_prints;
 pub mod config_overrides;
 pub mod custom_loading_screens;
 pub mod damage_events;

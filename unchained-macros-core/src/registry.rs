@@ -11,6 +11,9 @@ pub struct HookRegistration<R: AddressResolver> {
     pub hook_fn: CreateHookFn,
     pub condition: fn() -> bool,
     pub detour: fn() -> Option<&'static retour::RawDetour>,
+    /// Logical callback state; the physical hook may remain enabled for listeners.
+    pub enabled: fn() -> bool,
+    pub set_enabled: fn(bool),
 }
 
 pub struct PatchRegistration<R: AddressResolver> {
@@ -45,10 +48,12 @@ impl<R: AddressResolver> PatchRegistration<R> {
 pub trait HookInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn detour(&self) -> Option<&'static retour::RawDetour>;
+    fn enabled(&self) -> bool;
 }
 impl<R: AddressResolver> HookInfo for HookRegistration<R> {
     fn name(&self) -> &'static str { self.name }
     fn detour(&self) -> Option<&'static retour::RawDetour> { (self.detour)() }
+    fn enabled(&self) -> bool { (self.enabled)() }
 }
 
 inventory::collect!(&'static dyn HookInfo);

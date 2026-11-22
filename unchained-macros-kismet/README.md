@@ -65,6 +65,94 @@ branches before the native call, and contradictory frame-step calls.
 Inlined bodies and shipping-folded leaf stubs are unsupported.
 There is **no fallback to the exec thunk**, whose ABI is different.
 Generalized VM argument marshalling and interface/vtable recovery are not included.
+Virtual/interface native calls are unsupported by this decoder; use a separately
+verified rust-ctables declaration, never an inferred C++ ABI.
+
+## Exec-only observations
+
+```rust
+use unchained_macros_kismet::kismet_exec_bindings;
+use unchained_macros_core::bind_func_entry_listener;
+struct Library;
+struct FString; // The host supplies the real native layout.
+#[kismet_exec_bindings("/Script/Fixture.Library")]
+impl Library {
+    #[exec_observe(verified, dummied)]
+    pub unsafe fn PrintWarning(message: &FString) {}
+}
+#[bind_func_entry_listener(Library::PrintWarning)]
+unsafe fn warning(message: &FString) {}
+```
+
+- `verified` is an unsafe declaration contract, not automatic disassembly proof.
+  Verify the current binary's argument order, exact top-level Step count, and
+  live independent slots through the final Step. The wrapper must remain unique,
+  including UFunctions loaded later. The adapter rejects currently reflected
+  shared wrappers; no `FFrame::node`/callee relationship is assumed.
+- `dummied` explicitly identifies verified shared no-op **or cleanup-only**
+  native bodies. The marker rejects native detours; the exec wrapper, native
+  cleanup-only body, frame advancement, and all temporary destruction still run.
+  Decoder failure is never dummy evidence.
+- Initialize `KismetExecResolver` bindings, then attach its listener inventory
+  on the game thread with callers quiescent. The host must first attach both
+  Step adapters through core's global address owner and alias/trampoline sharing.
+  The supplied environment retains original Step entry addresses for decoding.
+  Each resolver retains the context's constructing/resolving thread identity.
+  Foreign-thread wrapper calls bypass observation and snapshots, forwarding the
+  original exactly once. Windows dispatch checks use allocation-free native thread IDs.
+- One entry and one exit listener per declaration are supported. Core owns
+  conditions, activation and attachment. Callback/condition panics are isolated;
+  native exceptions, aborts and non-returning calls do not promise exit events.
+- Entry runs at the final original Step completion, before original body/cleanup.
+  Noargs entry runs immediately before the original wrapper. Nested same-frame
+  expression Steps do not count as arguments; nested exec scopes are independent.
+  Core suppresses same-target observers while a callback/condition runs, but
+  nested original calls still execute. No VM state borrow spans native execution
+  or callbacks; the per-target observer guard never spans the original call.
+- Callback inputs are immutable `&T` observations. FString/FText are borrowed:
+  no ownership transfer, shallow-frame replay, zero-initialized text, reference
+  stealing, or double evaluation. Scalars, VM bool32 inputs, UObject pointers
+  and borrowed LinearColor are supported. Native bool result storage is bool8.
+  Mutable ref/out and array parameters and unsupported kinds/layouts fail before
+  attachment. FString/FText/LinearColor results are borrowed directly from live
+  caller-owned result storage, never moved or copied. Null result storage suppresses
+  exit observation before any native result reference is formed.
+- Exit appends `&Result` (`&()` for void). Inputs use core's snapshot contract:
+  ordinary Copy values are copied; native owners require an explicit safe owning
+  snapshot implementation supplied by the host. Without that implementation,
+  declarations fail at compile time instead of retaining dead VM slots.
+  Copied raw pointers do not extend pointee lifetimes; dereferencing remains unsafe.
+- Coverage is calls through the unique exec wrapper, not direct native calls.
+  A separately bound real native body may have its own behavior-changing detour;
+  exit observes its eventual wrapper result. Exec-only markers are not callable
+  native methods and cannot themselves be detoured.
+
+Native owners without a snapshot implementation cannot be observed at exit:
+
+```compile_fail
+struct Library;
+struct FString(String);
+#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+impl Library {
+    #[exec_observe(verified, dummied)]
+    pub unsafe fn PrintWarning(message: &FString) {}
+}
+#[unchained_macros_core::bind_func_exit_listener(Library::PrintWarning)]
+unsafe fn warning(message: &FString, result: &()) {}
+```
+
+Verified dummied methods cannot be detoured:
+
+```compile_fail
+struct Library;
+#[unchained_macros_kismet::kismet_exec_bindings("/Script/Fixture.Library")]
+impl Library {
+    #[exec_observe(verified, dummied)]
+    pub unsafe fn RemovedBody() {}
+}
+#[unchained_macros_core::bind_func_detour(Library::RemovedBody)]
+unsafe fn replacement() {}
+```
 
 The context owns its adapter, which need not implement Send or Sync. The context
 itself remains game-thread-only:

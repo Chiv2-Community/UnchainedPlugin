@@ -75,6 +75,13 @@ image-elf = []
 dev = []
 syslog-client = [  ]
 kismet_log = [] # Dump kismetexecutionmessage logs
+# Opt-in diagnostics; keep dev/default builds unchanged.
+blueprint_printstring_log = [] # Log Blueprint PrintString/PrintWarning/PrintText
+kismet_diagnostics = ["kismet_log", "blueprint_printstring_log"]
+kismet_server_identity_hooks = [] # Observe identity predicates without forcing results
+force_kismet_is_dedicated_server = ["kismet_server_identity_hooks"]
+force_kismet_is_server = ["kismet_server_identity_hooks"]
+force_kismet_is_standalone = ["kismet_server_identity_hooks"]
 with_pdb = ["pdb"]
 loose_assets = [] # Load assets in addition to paks
 verbose_hooks = [] # print (some) hook triggers to console

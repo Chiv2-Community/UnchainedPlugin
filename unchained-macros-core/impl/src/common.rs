@@ -1,5 +1,32 @@
-use proc_macro2::TokenStream as Tokens;
+use proc_macro2::{Span, TokenStream as Tokens};
 use syn::Path;
+use syn::parse::{Parse, ParseStream};
+
+pub(crate) struct CallbackArguments {
+    pub target: Path,
+    pub condition: syn::Expr,
+}
+
+pub(crate) fn fresh_local(signature: &syn::Signature, role: &str) -> syn::Ident {
+    let mut name = format!("__unchained_{role}");
+    while signature.ident == name || signature.inputs.iter().any(|input| matches!(input,
+        syn::FnArg::Typed(arg) if matches!(&*arg.pat, syn::Pat::Ident(pat) if pat.ident == name)))
+    {
+        name.push('_');
+    }
+    syn::Ident::new(&name, Span::mixed_site())
+}
+impl Parse for CallbackArguments {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let target = input.parse()?;
+        let condition = if input.is_empty() { syn::parse_quote!(|| true) } else {
+            input.parse::<syn::Token![,]>()?;
+            if input.is_empty() { syn::parse_quote!(|| true) } else { input.parse()? }
+        };
+        if !input.is_empty() { input.parse::<syn::Token![,]>()?; }
+        Ok(Self { target, condition })
+    }
+}
 
 pub(crate) fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::Attribute> {
     attributes.iter().filter(|attribute|

@@ -1,6 +1,10 @@
 #![doc = include_str!("../README.md")]
 
-pub use unchained_macros_kismet_impl::kismet_runtime_bindings;
+pub use unchained_macros_kismet_impl::{kismet_runtime_bindings, kismet_exec_bindings};
+pub mod observation;
+pub mod schema;
+mod exec_binding;
+pub use exec_binding::{KismetExecResolver, VerifiedDummiedExecMethodCannotBeDetoured, ExecOnlyMethodHasNoNativeCallAbi};
 use std::{num::NonZeroUsize, sync::{Mutex, OnceLock}};
 
 /// Copied UFunction metadata; the exec address is raw storage, not a Rust fn value.
@@ -25,6 +29,14 @@ pub unsafe trait Reflection {
     /// # Safety
     /// Call on the game thread after the host's reflection prerequisites are ready.
     unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String>;
+
+    /// Copy parameter identity, flags, kind and layout from the same UFunction.
+    ///
+    /// # Safety
+    /// The same game-thread/readiness contract as `find_function` applies.
+    unsafe fn find_exec_schema(&self, _owner: &str, _member: &str) -> Result<schema::FunctionSchema, String> {
+        Err("Reflection adapter does not provide exec observation schemas".into())
+    }
 }
 
 /// Verified executable addresses and the host's FFrame layout.
@@ -41,6 +53,7 @@ pub struct ExecEnvironment {
 pub struct KismetContext {
     reflection: Box<dyn Reflection>,
     environment: ExecEnvironment,
+    observation_thread: Option<exec_binding::ObservationThread>,
     _game_thread: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl KismetContext {
@@ -49,7 +62,9 @@ impl KismetContext {
     /// Native callers must remain quiescent until bindings and hooks are published.
     /// The environment must describe the adapter's module and verified frame-step entries.
     pub unsafe fn new(reflection: impl Reflection + 'static, environment: ExecEnvironment) -> Self {
-        Self { reflection: Box::new(reflection), environment, _game_thread: std::marker::PhantomData }
+        Self { reflection: Box::new(reflection), environment,
+            observation_thread: exec_binding::ObservationThread::current(),
+            _game_thread: std::marker::PhantomData }
     }
 
     unsafe fn resolve_native(&self, owner: &str, member: &str) -> Result<NonZeroUsize, String> {
@@ -170,6 +185,7 @@ mod tests {
         let context = KismetContext {
             reflection: Box::new(MetadataReflection { reads: reads.clone(), ready: ready.clone() }),
             environment: ExecEnvironment { module_base: 0, frame_step: 0, frame_step_explicit: 0, frame_code_offset: 0 },
+            observation_thread: exec_binding::ObservationThread::current(),
             _game_thread: std::marker::PhantomData,
         };
         let resolver = KismetReflectionResolver::new("/Script/Fixture.Native", "Call");

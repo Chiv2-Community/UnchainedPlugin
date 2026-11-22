@@ -590,19 +590,30 @@ pub fn attach_hooks(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::erro
 
 fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
+    unchained_macros_core::validate_listener_registrations_for::<R>(snapshot)?;
 
     for hook in unchained_macros_core::hook_inventory_for::<R>() {
         if !hook.binding.supports(snapshot) || (hook.detour)().is_some() {
             continue;
         }
-        let cond = (hook.condition)();
-        match unsafe { (hook.hook_fn)(cond) } {
-            Ok(_) => sinfo!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
+        match unsafe { (hook.hook_fn)(true) } {
+            Ok(_) => sinfo!("☑ {} {}", hook.name, if (hook.enabled)() { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);
-                if cond {
+                if unchained_macros_core::isolate_observer(hook.condition).unwrap_or(false) {
                     return Err(e);
                 }
+            },
+        }
+    }
+
+    for listener in unchained_macros_core::listener_inventory_for::<R>() {
+        if !listener.resolver.supports(snapshot) || (listener.initialized)() { continue; }
+        match unsafe { (listener.hook_fn)(true) } {
+            Ok(()) => sinfo!("☑ {} listener {}", listener.name, if (listener.enabled)() { "attached" } else { "attached (passive)" }),
+            Err(error) => {
+                serror!("☐ {} listener: {}", listener.name, error);
+                if unchained_macros_core::isolate_observer(listener.condition).unwrap_or(false) { return Err(error); }
             },
         }
     }

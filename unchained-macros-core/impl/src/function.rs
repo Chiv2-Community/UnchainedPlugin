@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Path, Type};
 use crate::{
-    common::{cfg_attributes, resolver_path},
+    common::{cfg_attributes, resolver_path, fresh_local},
     docs::attach_native_documentation,
     signature::{validate_binding, consume_native_parameter_metadata, concrete_signature,
         native_type, normalized_mutability, parameter_type},
@@ -60,7 +60,7 @@ fn call_wrapper(
         }
     }).unzip();
     let output = &signature.output;
-    let native = format_ident!("__unchained_native_call", span = Span::mixed_site());
+    let native = fresh_local(signature, "native_call");
     expanded.block = Box::new(syn::parse2(quote!({
         #setup
         let #native: unsafe extern "C" fn(#(#types),*) #output = unsafe {
@@ -113,12 +113,17 @@ pub(crate) fn expand_method(
     let normalized_descriptor = format_ident!("__UNCHAINED_MUTABILITY_{}", name, span = Span::mixed_site());
     let parameter_descriptor = format_ident!("__UNCHAINED_PARAMETERS_{}", name, span = Span::mixed_site());
     let storage = format_ident!("__UNCHAINED_NATIVE_BINDING_{}", name, span = Span::mixed_site());
+    let listeners_descriptor = format_ident!("__UNCHAINED_LISTENERS_{}", name, span = Span::mixed_site());
+    let hook_descriptor = format_ident!("__UNCHAINED_HOOK_{}", name, span = Span::mixed_site());
     let vis = &function.vis;
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
     let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
     let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation)?;
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
+    let (listener_type, listener_storage, hook_storage, listener_setup) =
+        listener_dispatch(&signature, &storage, &resolver, &function.attrs)?;
+    let registration = quote!(#registration #listener_setup);
     let descriptors = [
         quote! {
             #(#cfg)*
@@ -141,8 +146,91 @@ pub(crate) fn expand_method(
             #vis const #parameter_descriptor: (#(::unchained_macros_core::NativeSignature<#parameters>,)*) =
                 (#(#parameter_values,)*);
         },
+        quote! {
+            #(#cfg)*
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            #vis const #listeners_descriptor: &'static #listener_type = &#listener_storage;
+        },
+        quote! {
+            #(#cfg)*
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            #vis const #hook_descriptor: &'static ::unchained_macros_core::__private::NativeHook = &#hook_storage;
+        },
     ].into_iter().map(syn::parse2).collect::<syn::Result<Vec<_>>>()?;
     Ok((expanded, descriptors, registration))
+}
+
+fn listener_dispatch(
+    signature: &syn::Signature, binding: &syn::Ident, resolver: &Path, attrs: &[syn::Attribute],
+) -> syn::Result<(Tokens, syn::Ident, syn::Ident, Tokens)> {
+    let name = &signature.ident;
+    let listener = format_ident!("__UNCHAINED_NATIVE_LISTENERS_{}", name);
+    let hook = format_ident!("__UNCHAINED_NATIVE_HOOK_{}", name);
+    let attach = format_ident!("__unchained_attach_native_{}", name);
+    let dispatch = format_ident!("__unchained_dispatch_{}", name);
+    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let cfg: Vec<_> = cfg_attributes(attrs).collect();
+    let (names, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|input| {
+        let FnArg::Typed(arg) = input else { unreachable!() };
+        let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
+        (&pat.ident, &arg.ty)
+    }).unzip();
+    let lifetimes: Vec<_> = signature.generics.lifetimes().map(|p| &p.lifetime).collect();
+    let binder = (!lifetimes.is_empty()).then(|| quote!(for<#(#lifetimes),*>));
+    let result: Type = match &signature.output {
+        syn::ReturnType::Default => syn::parse_quote!(()),
+        syn::ReturnType::Type(_, ty) => *ty.clone(),
+    };
+    let entry_type = quote!(#binder unsafe fn(#(&#types),*));
+    let exit_type = quote!(#binder unsafe fn(#(&#types,)* &#result));
+    let prepare_type = quote!(#binder unsafe fn(#(&#types),*) -> ::unchained_macros_core::ExitObservation);
+    let descriptor_type = quote!(::unchained_macros_core::ListenerDescriptor<
+        #entry_type, #exit_type, #prepare_type, #backend
+    >);
+    let output = &signature.output;
+    let native = quote!(unsafe extern "C" fn(#(#types),*) #output);
+    let generics = &signature.generics;
+    let callback = fresh_local(signature, "callback");
+    let prepare = fresh_local(signature, "prepare");
+    let observation = fresh_local(signature, "observation");
+    let address = fresh_local(signature, "address");
+    let call = fresh_local(signature, "call");
+    let returned = fresh_local(signature, "result");
+    let setup = quote! {
+        #(#cfg)*
+        #[allow(non_upper_case_globals)]
+        static #hook: ::unchained_macros_core::__private::NativeHook =
+            ::unchained_macros_core::__private::NativeHook::new();
+        #(#cfg)*
+        #[allow(non_upper_case_globals)]
+        static #listener: #descriptor_type = unsafe {
+            ::unchained_macros_core::ListenerDescriptor::new(
+                <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR, #attach,
+            )
+        };
+        #(#cfg)*
+        #[allow(non_snake_case)]
+        unsafe fn #attach() -> Result<(), Box<dyn ::std::error::Error>> {
+            unsafe { #hook.attach(&#binding, #dispatch as *const ()) }
+        }
+        #(#cfg)*
+        #[allow(non_snake_case)]
+        unsafe extern "C" fn #dispatch #generics (#(#names: #types),*) #output {
+            #listener.observe_entry(|#callback| unsafe { #callback(#(&#names),*) });
+            let #observation = #listener.prepare_exit(|#prepare| unsafe { #prepare(#(&#names),*) });
+            let #address = #hook.replacement_address().unwrap_or_else(||
+                #binding.address().expect("Attached native binding has no trampoline").get());
+            let #call: #native = unsafe { ::core::mem::transmute(#address) };
+            let #returned = unsafe { #call(#(#names),*) };
+            if let Some(#observation) = #observation {
+                unsafe { #listener.finish_exit(#observation, (&#returned as *const #result).cast()); }
+            }
+            #returned
+        }
+    };
+    Ok((descriptor_type, listener, hook, setup))
 }
 
 

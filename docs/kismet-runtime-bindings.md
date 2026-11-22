@@ -5,7 +5,7 @@ native-body recovery, and address caching.
 `unchained-macros-core` owns the generic resolver trait, selection filters, bindings,
 patch application, and detour storage. UObject access stays in the game's model:
 `src/unchained/blueprints/reflection.rs` implements the
-Kismet `Reflection` trait and returns copied `FunctionMetadata`.
+Kismet `Reflection` trait and returns copied function/property metadata.
 
 ## Lifecycle
 
@@ -27,7 +27,10 @@ Kismet `Reflection` trait and returns copied `FunctionMetadata`.
 - The same frozen selector snapshot filters both backends. Factories and activation
   conditions do not affect root selection.
 - Direct calls use the resolved entry before attachment and the original trampoline
-  afterward, even when the detour is disabled.
+  afterward, bypassing that method's detour and listeners.
+- With `blueprint_printstring_log`, early Step adapters observe original stepping.
+  Runtime initialization then validates and attaches unique exec-wrapper listeners.
+  This verified-wrapper integration is Steam-only; other storefronts are skipped.
 
 Reflection covers `UGameplayStatics::{GetAllActorsOfClass, LoadGameFromSlot,
 SaveGameToSlot}`, `ATBLCharacter::{OnDamageTaken, OnKilled}`,
@@ -38,6 +41,9 @@ SaveGameToSlot}`, `ATBLCharacter::{OnDamageTaken, OnKilled}`,
 Existing detours, native signatures, resolver keys, and activation conditions
 are unchanged. Chat readiness checks query each binding's backend explicitly.
 These bind native C++ bodies, **not** `UFunction::func` as a typed C++ method.
+`kismet_server_identity_hooks` additionally binds the three KismetSystemLibrary
+identity predicates. Its `force_kismet_is_*` features retain original calls and
+deliberately override their results through detours, not listeners.
 
 ## Binary evidence
 
@@ -65,6 +71,9 @@ Read-only inspection of the installed Steam Windows x64 executable:
 | `/Script/TBL.TBLGameInstance::LoadFrontEndMap` | `0x1c35c90` | `0x1945580` | Instance; receiver, FString pointer; bool in AL |
 | `/Script/Engine.PlayerState::GetPlayerName` | `0x38728b0` | `0x356bb90` | Instance; receiver, FString return storage; storage pointer |
 | `/Script/AssetRegistry.AssetRegistryHelpers::GetAssetRegistry` | `0x2f70b10` | `0x2f569b0` | Static; TScriptInterface return storage; storage pointer |
+| `/Script/Engine.KismetSystemLibrary::IsDedicatedServer` | `0x381a370` | `0x338b420` | Static; UObject context pointer; bool in AL |
+| `/Script/Engine.KismetSystemLibrary::IsServer` | `0x381a630` | `0x338b9c0` | Static; UObject context pointer; bool in AL |
+| `/Script/Engine.KismetSystemLibrary::IsStandalone` | `0x381a730` | `0x338ba40` | Static; UObject context pointer; bool in AL |
 
 The ten parameterized thunks branch between `FFrame::Step` (`RVA 0x1ff40c0`) and
 `StepExplicitProperty` (`RVA 0x1ff40f0`), advance the real frame past parameters,
@@ -89,15 +98,88 @@ the concrete owner and native callee must both match.
 `FEngineLoop::Init` string and x64 unwind extent. Its receiver is passed in RCX;
 the binding retains the upstream resolver's `int32 Init(FEngineLoop*)` ABI.
 
+### Shipping print methods
+
+The native-registration function at RVA `0x3810590` registers 242 methods from
+table RVA `0x4fa2b60`. Its class constructor names
+`/Script/Engine.KismetSystemLibrary`.
+
+| Method | Exec thunk RVA | Body RVA | Verified behavior |
+|---|---:|---:|---|
+| PrintString | `0x381ee00` | `0xa016c0` | Six argument steps, shared return stub, temporary FString cleanup |
+| PrintWarning | `0x381f210` | `0xa016c0` | One FString step, shared return stub, temporary FString cleanup |
+| PrintText | `0x381efe0` | `0xabdd00` | Six argument steps, by-value FText retain/release, temporary FText cleanup |
+
+The exported Wwise name on the shared return stub is an identical-code-folding
+artifact, not ownership evidence. PrintText's body is cleanup-only, not the same
+return stub: it releases the copied argument's shared reference. Its wrapper
+separately releases the stepped temporary. Skipping either changes ownership.
+The old branch's blanket description of all three bodies as a shared no-op is
+not accurate for this binary.
+
+The native PrintWarning declaration takes `const FString&`; a by-value Rust
+observation must use an independent copy, never a shallow copy of engine storage.
+
 ## Scope
 
-This ports the address-source mechanism from `feature/exec-thunk-hooks`, not its
-old macros, late-hook inventory, worker-thread fallback, print logging, or identity
-overrides. Virtual/interface receivers and raw exec-thunk bindings remain separate
-work. Do not substitute a shared shipping stub or an exec thunk for a native body.
+This ports the used address-source, print-diagnostic, and identity behavior from
+`feature/exec-thunk-hooks`, not its old macros, late-hook inventory, worker-thread
+fallback, or frame-consuming “observe” implementation.
+Do not substitute a shared shipping stub or an exec thunk for a native body.
 Chat's virtual implementations remain scan-backed.
 Asset-registry interface calls retain rust-ctables dispatch
 and their interface-subobject receiver.
+
+## Entry and exit observation
+
+```rust,ignore
+#[unchained_macros_core::bind_func_entry_listener(UKismetSystemLibrary::PrintWarning)]
+unsafe fn print_warning(message: &FString) {
+    if let Ok(message) = message.copy_to_string() {
+        log_blueprint_print("PrintWarning", &message);
+    }
+}
+```
+
+The borrow is intentional: a by-value FString would steal the engine's allocation.
+An exit listener adds a borrowed result (`&()` for void) after the same inputs;
+its independently owned input snapshots survive original thunk cleanup.
+FString snapshots copy native storage; FText snapshots retain/release a native
+shared reference. Neither wrapper-owned argument is dropped by the listener.
+
+- One entry and one exit listener per method are supported alongside one native
+  detour. Excess phase registrations fail preflight, not silent last-wins selection.
+- Original exec thunks run exactly once. Top-level original Step completions
+  expose initialized arguments before body execution; nested expression Steps
+  are not counted as additional parameters. Frame/code state is never replayed.
+- `#[kismet_exec_bindings]` requires explicit `#[exec_observe(verified)]`
+  declarations. `dummied` marks verified no-op or cleanup-only bodies and rejects
+  native detours. These markers are not callable native methods.
+- Schema checks reject shared wrappers, mutable ref/out parameters, arrays and
+  unsupported property kinds/layouts. Exact Step order and temporary lifetimes
+  remain unsafe, binary-specific declaration obligations.
+- Shared wrappers cannot use `FFrame::node` as an assumed callee identity.
+  UE's `EX_CallMath` does not establish `CurrentNativeFunction` either. Such
+  methods need an independently verified identity adapter and are rejected here.
+- Core [listener contracts](native-bindings.md#observation-listeners) cover
+  activation, callbacks, snapshots, reentry, original bypass and failure behavior.
+
+### Parity coverage
+
+| Reference behavior | Current implementation |
+|---|---|
+| PrintString, PrintWarning, PrintText | Unique exec-wrapper entry listeners; original execution and cleanup retained |
+| Console, `blueprint.log`, exact-message filter | `blueprint_log` routing and restart-loaded `blueprint_filter.txt`; [configuration](logging.md) |
+| Print feature gates | Opt-in `blueprint_printstring_log`; `kismet_diagnostics` also enables existing `kismet_log`; defaults unchanged |
+| Identity observation | `kismet_server_identity_hooks`, independent of forced results |
+| Forced identity predicates | Three separate `force_kismet_is_*` detour features |
+| Native and virtual targets | Verified native bindings; virtual calls remain rust-ctables, with separately resolved concrete entries required for interception |
+| Startup | Quiescent game-thread Init entry, unresolved retry at return; no worker reflection fallback |
+
+Automatic reflected-vtable recovery is not implemented. The old branch's generic
+virtual helper is not ABI evidence; unsupported indirect dispatch still fails
+closed rather than guessing a receiver/slot. EGS exec-wrapper behavior remains
+unvalidated and is not enabled by this integration.
 
 ## Validation
 
@@ -190,3 +272,39 @@ EGS live validation remains unavailable.
   and 87 cache entries. The server's cold scan exited with the expected restart
   code `-67` (`189`); its warm run completed runtime initialization.
   EGS remains unverified.
+
+### Coordinated entry/exit listeners
+
+- Final suites passed 382 host tests and 219 Windows backend tests. Plugin suites
+  passed 522 default tests, 513 reduced-feature tests, and 524 tests with print,
+  identity, and all forced-result features. Plugin suites retain 21 ignored tests.
+  Optional-feature compilation, plugin docs, strict macro docs, and release builds
+  passed.
+- Independent review/fix passes addressed callback-publication safety, physical
+  activation retry, attachment-condition reentry, panic-hook/logger containment,
+  generated-local hygiene, duplicate registration/status ownership, and VM bool
+  decoding. The final source review found no remaining actionable cleanup.
+- Production feature DLL SHA-256:
+  `0869364b8558b8f1671de61845268f649af374ba1e9f43baf05cae09d516cb43`.
+- Isolated Steam client/server probes used an instrumented DLL:
+  `cc9a3a9782c6ddb9928bc0bbc4744f87472816761fada213bdcee3b57d84f3c5`.
+  Fresh scans used the preceding probe artifact
+  `48a6215104aef01c0363147ce5479b3f6d1309d24718c51451642f6a7ecab5bd`;
+  both preserved the previous cached addresses. Diagnostics add one scan root
+  and cache entry for existing Kismet execution-message logging.
+- Each role observed five visible print messages exactly once and suppressed one
+  exact filter match. Exit listeners read four warning inputs, one string input,
+  and one text input after original thunk cleanup; retained FText references
+  balanced `2 → 2`.
+- Real `ProcessEvent` frames exercised compiled-in stepping, then test-only code
+  injection exercised Unicode bytecode and nested `MakeLiteralString` evaluation
+  on the same frame. Original stepping counted exactly one and two calls
+  respectively; code advancement and the compiled-in property chain were checked.
+  No frame was copied or replayed. Probe code is not included in production.
+- Identity checks compared original-call bypass with forced results and observed
+  each final native result once. The probe disabled overrides during engine
+  initialization and enabled them for these checks; this is not gameplay/role
+  compatibility validation for arbitrary combinations of forced predicates.
+- Shared exec wrappers, mutable ref/out schemas, automatic reflected-vtable
+  recovery, and generic native-reference exit snapshots remain explicitly
+  unsupported. EGS print observation remains disabled pending binary validation.

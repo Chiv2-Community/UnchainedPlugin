@@ -125,7 +125,7 @@ Call the native binding to invoke the original implementation.
 - **Uninitialized:** panic before making a native call.
 - **Bound, no attached detour:** call the resolved entry.
 - **Attached, enabled or disabled:** call the original-function trampoline.
-- Calling the binding from its replacement does not recurse into that replacement.
+- Calling the binding bypasses that method's detour and entry/exit listeners.
 - Bypass applies to our hook on that target, not nested callees or third-party patches.
 - To invoke plugin policy deliberately, call the plugin helper explicitly.
 - Assume startup initialized required bindings.
@@ -140,12 +140,17 @@ Call the native binding to invoke the original implementation.
 Initialize bindings and publish trampolines before enabling replacements.
 
 1. Resolve and initialize **all** function bindings, including aliases.
-2. Attach detours while plugin binding callers are quiescent.
+2. Attach the shared dispatcher while plugin binding callers are quiescent.
 3. Publish a reference to the Retour detour to every binding sharing its native
    entry. Original calls read its trampoline; no second trampoline address is stored.
-4. Enable replacements only after publication.
+4. Activate individual callbacks only after publication.
 
-- Only one detour may own a native address.
+- One physical dispatcher owns a native address. A method supports one
+  behavior-changing detour, one entry listener, and one exit listener.
+- Conditions are attachment-time activation gates. Each callback has independent
+  logical activation; disabling a detour does not disable its listeners.
+- Use registration `set_enabled` controls for logical activation. Disabling a raw
+  physical Retour hook disables every callback sharing it.
 - Aliases share address reservations; duplicate attachment fails rather than
   silently chaining hooks.
 - Failed construction releases its reservation.
@@ -157,3 +162,40 @@ Initialize bindings and publish trampolines before enabling replacements.
 Resolved addresses use `OnceLock`, not manually managed atomic address slots.
 Startup writes once; cross-thread readers still require safe publication.
 Code and data share `ResolvedAddress`; data bindings carry no detour state.
+
+## Observation listeners
+
+For an illustrative native binding `unsafe fn Method(value: u32) -> bool`:
+
+```rust,ignore
+#[unchained_macros_core::bind_func_entry_listener(NativeType::Method)]
+unsafe fn entered(value: &u32) {
+    // Read the input; do not change native execution.
+}
+
+#[unchained_macros_core::bind_func_exit_listener(NativeType::Method)]
+unsafe fn returned(value: &u32, result: &bool) {
+    // Entry-time input snapshot and actual caller-visible result.
+}
+```
+
+- Callbacks return `()` and take immutable, call-scoped borrows. Exit appends a
+  borrowed result, including `&()` for void. Native pointer inputs are observed
+  as pointer values, not implicitly dereferenced objects.
+- Exit input types require `ObserverSnapshot`. Copy values have a default
+  implementation; native FString copies its array, and FText retains a shared
+  native reference. Raw pointer snapshots do not extend pointee lifetimes.
+  Retained FText history is not a frozen display string.
+- Native reference inputs cannot currently be snapshotted by the generic exit
+  attribute. Unsupported ownership/lifetime contracts fail compilation.
+- Entry precedes detour/original execution. Exit observes the final result even
+  when a detour replaces it or skips the original. Neither observer can replace
+  arguments, results, or dispatch through its API.
+- Callback-induced reentry suppresses observers, not execution. Ordinary recursive
+  calls remain observable. Rust observer/condition panics are isolated; native
+  exceptions, aborts, and non-returning calls do not promise exit events.
+- Unsafe callbacks must preserve native ownership, aliasing, thread affinity, and
+  pointee lifetimes. Immutable pointer observations do not authorize pointee writes.
+- Native coverage follows an entry address, including its aliases. Exec-only
+  Blueprint observations require a verified unique wrapper and preserve real VM
+  stepping and cleanup; see [Kismet bindings](kismet-runtime-bindings.md).

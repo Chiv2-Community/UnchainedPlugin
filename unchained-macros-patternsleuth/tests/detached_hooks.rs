@@ -46,7 +46,7 @@ static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_OFF_CONDITION_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 fn borrow_condition() -> bool {
-    assert!(__UNCHAINED_HOOK_plugin_borrow.get().is_some());
+    assert!(Native::__UNCHAINED_HOOK_borrow.detour().is_some());
     let binding = Native::__UNCHAINED_BINDING_borrow.binding();
     assert_ne!(binding.address(), binding.entry_address());
     false
@@ -222,11 +222,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             std::hint::black_box(borrow_target as unsafe extern "C" fn(&Native) -> &Native);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 0);
-        __UNCHAINED_HOOK_plugin_borrow
-            .get()
-            .unwrap()
-            .enable()
-            .unwrap();
+        let borrow_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+            .find(|hook| hook.name == "plugin_borrow").unwrap();
+        (borrow_hook.set_enabled)(true);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert!(std::ptr::eq(native.borrow(), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 1);

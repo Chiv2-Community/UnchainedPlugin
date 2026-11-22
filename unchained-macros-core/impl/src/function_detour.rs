@@ -1,38 +1,16 @@
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
-use syn::{FnArg, ItemFn, Pat, Path, Type};
-use syn::parse::{Parse, ParseStream};
+use syn::{FnArg, ItemFn, Pat, Type};
 use crate::{
-    common::cfg_attributes,
+    common::{cfg_attributes, CallbackArguments},
     docs::attach_native_documentation,
     signature::{validate_native_signature, native_type,
         normalized_mutability, parameter_type},
 };
 
-struct Arguments {
-    target: Path,
-    condition: syn::Expr,
-}
-
-impl Parse for Arguments {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let target = input.parse()?;
-        let condition = if input.is_empty() {
-            syn::parse_quote!(|| true)
-        } else {
-            input.parse::<syn::Token![,]>()?;
-            if input.is_empty() { syn::parse_quote!(|| true) } else { input.parse()? }
-        };
-        if !input.is_empty() {
-            input.parse::<syn::Token![,]>()?;
-        }
-        Ok(Self { target, condition })
-    }
-}
-
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut function: ItemFn = syn::parse2(item)?;
-    let Arguments { mut target, condition } = syn::parse2(args)?;
+    let CallbackArguments { mut target, condition } = syn::parse2(args)?;
     if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
         return Err(syn::Error::new_spanned(
             target,
@@ -40,6 +18,12 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ));
     }
     let native_target = target.clone();
+    let mut listener_target = target.clone();
+    let listener_method = listener_target.segments.last_mut().unwrap();
+    listener_method.ident = format_ident!("__UNCHAINED_LISTENERS_{}", listener_method.ident, span = Span::mixed_site());
+    let mut hook_target = target.clone();
+    let hook_method = hook_target.segments.last_mut().unwrap();
+    hook_method.ident = format_ident!("__UNCHAINED_HOOK_{}", hook_method.ident, span = Span::mixed_site());
     let mut normalized_target = target.clone();
     let normalized_method = normalized_target.segments.last_mut().unwrap();
     normalized_method.ident = format_ident!("__UNCHAINED_MUTABILITY_{}", normalized_method.ident, span = Span::mixed_site());
@@ -147,7 +131,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         fn #condition_fn() -> bool { (#condition)() }
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::std::sync::OnceLock<::unchained_macros_core::__private::retour::RawDetour> =
+        static #hook: ::std::sync::OnceLock<&'static ::unchained_macros_core::__private::retour::RawDetour> =
             ::std::sync::OnceLock::new();
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -162,16 +146,31 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             // Checked outer mutability differences preserve the native ABI.
             // Reference validity and aliasing remain the detour author's obligation.
             let replacement: #native = #replacement;
-            unsafe { ::unchained_macros_core::__private::attach_function_detour(
-                #target.binding(), &#hook, replacement as *const (), auto_activate, #condition_fn,
-            ) }
+            if #hook.get().is_some() {
+                return Err("Detour callback is already initialized".into());
+            }
+            if #hook_target.has_replacement() {
+                return Err("Only one behavior-changing detour is supported per method".into());
+            }
+            unsafe { #listener_target.ensure_attached()?; }
+            let activate = #listener_target.activation(auto_activate, #condition_fn);
+            unsafe { #hook_target.register_replacement(replacement as usize, activate)?; }
+            #hook.set(#hook_target.detour().expect("Native dispatcher just attached"))
+                .map_err(|_| "Detour callback is already initialized")?;
+            Ok(())
         }
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
             &::unchained_macros_core::HookRegistration {
                 name: stringify!(#ident), binding: #target.binding(),
-                hook_fn: #attach, condition: #condition_fn,
-                detour: || #hook.get(),
+                hook_fn: #attach,
+                condition: || #listener_target.activation(true, #condition_fn),
+                detour: || #hook.get().copied(),
+                enabled: || #hook_target.replacement_address().is_some()
+                    && #hook.get().is_some_and(|hook| hook.is_enabled()),
+                set_enabled: |enabled| {
+                    if #hook.get().is_some() { #hook_target.set_enabled(enabled); }
+                },
             } as &dyn ::unchained_macros_core::__private::HookInfo
         }
     })
@@ -187,7 +186,7 @@ mod tests {
         let expanded = expand(
             quote!(Native::Call), quote!(unsafe fn replacement(value: i32) -> i32 { value }),
         ).unwrap().to_string();
-        assert!(expanded.contains(":: unchained_macros_core :: __private :: attach_function_detour"));
+        assert!(expanded.contains("ensure_attached"));
         assert!(expanded.contains(":: unchained_macros_core :: __private :: inventory :: submit"));
         assert!(expanded.contains(":: unchained_macros_core :: __private :: retour :: RawDetour"));
         assert!(!expanded.contains("claim_detour_address"));

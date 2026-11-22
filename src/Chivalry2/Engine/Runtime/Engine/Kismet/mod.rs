@@ -2,6 +2,8 @@
 
 pub mod AssemblyBlueprint;
 pub mod GameplayStatics;
+pub mod KismetSystemLibrary;
 
 pub use self::AssemblyBlueprint::*;
 pub use self::GameplayStatics::*;
+pub use self::KismetSystemLibrary::*;

@@ -31,3 +31,4 @@ pub use self::GameFramework::PlayerController::*;
 pub use self::GameFramework::PlayerState::*;
 pub use self::GameFramework::SaveGame::*;
 pub use self::Kismet::GameplayStatics::*;
+pub use self::Kismet::KismetSystemLibrary::*;

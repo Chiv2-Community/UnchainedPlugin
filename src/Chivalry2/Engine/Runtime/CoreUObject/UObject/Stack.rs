@@ -44,20 +44,22 @@ pub struct FFrame {
 impl FFrame {
     /// # Safety
     /// Frame, context, and result storage must satisfy the current bytecode operation.
+    /// Recursive VM evaluation may reuse the frame; do not retain exclusive Rust borrows.
     #[unchained_macros_core::bind_resolved_func(
         self::FFrameStep
     )]
-    pub unsafe fn Step(&mut self, context: *mut UObject, result: *mut c_void) {}
+    pub unsafe fn Step(self: *mut Self, context: *mut UObject, result: *mut c_void) {}
 
     /// Preserves the existing property-pointer ABI.
     ///
     /// # Safety
     /// Frame, property, and result storage must describe a valid compiled-in argument.
+    /// Recursive VM evaluation may reuse the frame; do not retain exclusive Rust borrows.
     #[unchained_macros_core::bind_resolved_func(
         self::FFrameStepExplicitProperty
     )]
     pub unsafe fn StepExplicitProperty(
-        &mut self,
+        self: *mut Self,
         result: *mut c_void,
         property: *const FProperty,
     ) {}
@@ -69,9 +71,9 @@ impl FFrame {
         if self.code.is_null() {
             let cur = self.property_chain_for_compiled_in;
             self.property_chain_for_compiled_in = (*cur).next;
-            self.StepExplicitProperty(ptr, cur as *const FProperty);
+            Self::StepExplicitProperty(self as *mut Self, ptr, cur as *const FProperty);
         } else {
-            self.Step(self.object, ptr);
+            Self::Step(self as *mut Self, self.object, ptr);
         }
 
         value.assume_init()

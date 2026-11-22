@@ -4,6 +4,7 @@ mod common;
 mod docs;
 mod function;
 mod function_detour;
+mod function_listener;
 mod patch;
 mod runtime;
 mod selection;
@@ -43,6 +44,18 @@ pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     function_detour::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+#[proc_macro_attribute]
+pub fn bind_func_entry_listener(args: TokenStream, item: TokenStream) -> TokenStream {
+    function_listener::expand(args.into(), item.into(), false)
+        .unwrap_or_else(|error| error.to_compile_error()).into()
+}
+
+#[proc_macro_attribute]
+pub fn bind_func_exit_listener(args: TokenStream, item: TokenStream) -> TokenStream {
+    function_listener::expand(args.into(), item.into(), true)
         .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
