@@ -1,0 +1,15 @@
+[package]
+name = "unchained-macros-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+unchained-macros-core-impl = { path = "impl" }
+inventory = "0.3.14"
+serde = { workspace = true }
+log = "0.4"
+paste = "1.0"
+retour = { version = "=0.4.0-alpha.4" }
+
+[dev-dependencies]
+test-case = { workspace = true }

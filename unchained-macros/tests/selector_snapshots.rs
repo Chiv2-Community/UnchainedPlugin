@@ -1,5 +1,6 @@
 #[path = "support/image.rs"]
 mod fixture;
+use unchained_macros::SelectorSnapshotExt;
 
 use std::sync::{Mutex, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use binary_bloodhound::BinaryMatcher;
@@ -114,9 +115,9 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert!(!next.supports_resolver("AlphaResolver"));
     assert!(next.supports_resolver("BetaResolver"));
     assert!(next.get::<Beta>().unwrap() == Beta::Leaf);
-    let alpha_hook = inventory::iter::<unchained_macros::HookRegistration>.into_iter()
+    let alpha_hook = unchained_macros::hook_inventory_for::<unchained_macros::PatternsleuthResolver>()
         .find(|hook| hook.name == "alpha_detour").unwrap();
-    let beta_hook = inventory::iter::<unchained_macros::HookRegistration>.into_iter()
+    let beta_hook = unchained_macros::hook_inventory_for::<unchained_macros::PatternsleuthResolver>()
         .find(|hook| hook.name == "beta_detour").unwrap();
     assert!(std::ptr::eq(alpha_hook.binding, Native::__UNCHAINED_BINDING_alpha.binding()));
     assert!(alpha_hook.binding.supports(&snapshot));
@@ -124,11 +125,8 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert!(beta_hook.binding.supports(&snapshot));
     assert!(beta_hook.binding.supports(&next));
     assert_eq!(alpha_hook.binding.name(), "Native::alpha");
-    match alpha_hook.binding.source() {
-        unchained_macros::FunctionSource::Resolver(resolver) => assert!(std::ptr::eq(
-            *resolver, <AlphaResolver as unchained_macros::ResolverDeclaration>::DESCRIPTOR)),
-        _ => panic!("expected a resolver-backed binding"),
-    }
+    assert!(std::ptr::eq(alpha_hook.binding.resolver,
+        <AlphaResolver as unchained_macros::ResolverDeclaration>::DESCRIPTOR));
     assert!(next.chain::<Alpha>().unwrap() == [Alpha::Second, Alpha::Default]);
     assert!(next.chain::<Beta>().unwrap() == [Beta::Leaf]);
     assert_eq!(ALPHA_READS.load(Ordering::SeqCst), 2);

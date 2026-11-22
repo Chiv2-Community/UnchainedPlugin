@@ -41,10 +41,10 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 
 #[test]
 fn request_keys_bind_without_corresponding_resolver_types() {
-    for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
+    for registration in unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>() {
         let binding = registration.binding;
-        assert!(matches!(binding.source(), unchained_macros::FunctionSource::ProviderOffset(key)
-            if *key == binding.offset_key()));
+        assert!(binding.resolver.implementation.named.is_none());
+        assert_eq!(binding.resolver.implementation.key, binding.offset_key());
         let address = match binding.offset_key() {
             "GetPost_GetMotd" => get_motd as *const () as usize,
             "GetPost_Borrow" => borrow as *const () as usize,

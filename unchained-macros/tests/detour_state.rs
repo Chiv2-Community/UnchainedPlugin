@@ -3,7 +3,9 @@ use unchained_macros::{detour_is_enabled, detour_is_initialized, HookRegistratio
 
 static HOOK: OnceLock<retour::RawDetour> = OnceLock::new();
 static BINDING: unchained_macros::FunctionBinding =
-    unchained_macros::FunctionBinding::from_offset_key("Fixture::target", "FixtureTarget");
+    unchained_macros::FunctionBinding::new("Fixture::target", &unchained_macros::ResolverDescriptor {
+        name: "FixtureTarget", implementation: unchained_macros::PatternsleuthResolver::offset("FixtureTarget"), filter: None,
+    });
 
 #[inline(never)]
 unsafe extern "C" fn target(value: i32) -> i32 {
@@ -13,13 +15,13 @@ unsafe extern "C" fn target(value: i32) -> i32 {
 unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
 
 inventory::submit! {
-    HookRegistration {
+    unchained_macros::__private::ErasedHookRegistration::new(&HookRegistration {
         name: "FixtureDetour",
         binding: &BINDING,
-        hook_fn: |_, _| unreachable!(),
+        hook_fn: |_| unreachable!(),
         condition: || true,
         detour: || HOOK.get(),
-    }
+    })
 }
 
 #[test]

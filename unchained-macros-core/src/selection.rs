@@ -1,11 +1,8 @@
 //! Consumer-defined selection keys and resolver restrictions.
 
 use std::any::{Any, TypeId};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use patternsleuth::{image::Image, resolvers::{AsyncContext, ResolverFactory, DynResolverFactory, Resolution}};
-use patternsleuth::resolvers::futures::future::{BoxFuture, join_all};
 
 /// A fieldless enum used to select resolver behavior.
 ///
@@ -16,35 +13,32 @@ use patternsleuth::resolvers::futures::future::{BoxFuture, join_all};
 /// `fallback = Variant` supplies a terminal default fallback for its provider.
 ///
 /// ```
-/// #[unchained_macros::resolver_selection_key]
+/// #[unchained_macros_core::resolver_selection_key]
 /// enum Mode { Read, Write }
-/// # impl unchained_macros::ResolverSelector for Mode {
+/// # impl unchained_macros_core::ResolverSelector for Mode {
 /// #     fn current() -> Self { Self::Read }
 /// # }
-/// assert!(unchained_macros::supports_selection("unrestricted", Mode::Read));
+/// assert!(unchained_macros_core::supports_selection("unrestricted", Mode::Read));
 /// ```
 ///
 /// ```
-/// #[unchained_macros::resolver_selection_key(require = [Read, Write])]
+/// #[unchained_macros_core::resolver_selection_key(require = [Read, Write])]
 /// enum Mode { Read, Write, Shared }
-/// impl unchained_macros::ResolverSelector for Mode {
+/// impl unchained_macros_core::ResolverSelector for Mode {
 ///     fn current() -> Self { Self::Read }
 /// }
-/// unchained_macros::define_pattern_resolver!(ReadOnly, {
-///     Mode::Read: ["AA BB"], Mode::Write: None,
-/// });
 /// fn main() {
-///     assert!(<Mode as unchained_macros::SelectionKey>::REQUIRED == [Mode::Read, Mode::Write]);
+///     assert!(<Mode as unchained_macros_core::SelectionKey>::REQUIRED == [Mode::Read, Mode::Write]);
 /// }
 /// ```
 ///
 /// Payloads and generics are rejected:
 /// ```compile_fail
-/// #[unchained_macros::resolver_selection_key]
+/// #[unchained_macros_core::resolver_selection_key]
 /// enum Mode { Value(u8) }
 /// ```
 /// ```compile_fail
-/// #[unchained_macros::resolver_selection_key]
+/// #[unchained_macros_core::resolver_selection_key]
 /// enum Mode<const N: usize> { Value }
 /// ```
 pub trait SelectionKey: Copy + Eq + Send + Sync + 'static {
@@ -188,18 +182,24 @@ impl SelectorSnapshot {
                 return Err("Snapshot is missing a registered selector provider".into());
             }
         }
-        for patch in inventory::iter::<crate::PatchRegistration> {
-            if self.supports_patch(patch) && !patch.resolver.supports(self) {
-                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver.named.name));
+        for registration in inventory::iter::<crate::registry::ErasedPatchRegistration> {
+            let patch = registration.info;
+            if self.supports_patch(patch) && !patch.resolver().supports(self) {
+                return Err(format!("Patch {} targets unavailable resolver {}", patch.name(), patch.resolver().name()));
             }
         }
         Ok(())
     }
 
     pub fn supports_resolver(&self, name: &str) -> bool {
-        inventory::iter::<crate::DeclaredResolver>.into_iter()
-            .filter(|declaration| declaration.resolver.named.name == name)
-            .all(|declaration| declaration.resolver.supports(self))
+        inventory::iter::<crate::resolver::ErasedResolverRegistration>.into_iter()
+            .filter(|declaration| declaration.info.name() == name)
+            .all(|declaration| declaration.info.supports(self))
+    }
+
+    pub fn supports_resolver_for<R: crate::AddressResolver>(&self, name: &str) -> bool {
+        crate::resolver_inventory_for::<R>().filter(|resolver| resolver.name == name)
+            .all(|resolver| resolver.supports(self))
     }
 
     pub fn supports_filter(&self, filter: &ResolverFilter) -> bool {
@@ -208,64 +208,18 @@ impl SelectorSnapshot {
                 .find_map(|key| (filter.lookup)(key.as_ref())).unwrap_or(false))
     }
 
-    pub fn supports_patch(&self, patch: &crate::PatchRegistration) -> bool {
-        patch.selector.is_none_or(|selector| self.values.get(&selector())
-            .is_some_and(|value| (patch.applies_to)(value.value.as_ref())))
+    pub fn supports_patch(&self, patch: &dyn crate::registry::PatchInfo) -> bool {
+        patch.selector().is_none_or(|selector| self.values.get(&selector())
+            .is_some_and(|value| patch.applies_to(value.value.as_ref())))
     }
-
-    /// Seed a fresh Patternsleuth context before any consumer runs. Context clones
-    /// share its cached snapshot, including when polled from another thread.
-    /// Like Patternsleuth's blocking eval, do not call this inside another executor;
-    /// resolve transitive dependencies through the existing `ctx` instead.
-    pub fn eval<'env, F, T: Send + Sync>(&self, image: &'env Image<'_>, f: F) -> T
-    where
-        F: for<'ctx> FnOnce(&'ctx AsyncContext<'env>) -> BoxFuture<'ctx, T> + Send + Sync + 'env,
-    {
-        let _scope = SnapshotScope(ACTIVE_SNAPSHOT.with(|active| active.replace(Some(self.clone()))));
-        patternsleuth::resolvers::eval(image, |ctx| Box::pin(async move {
-            context_snapshot(ctx).await.expect("explicit snapshot seed must be available");
-            f(ctx).await
-        }))
-    }
-
-    pub fn resolve_many(&self, image: &Image<'_>, resolvers: &[fn() -> &'static DynResolverFactory])
-        -> Vec<patternsleuth::resolvers::Result<Arc<dyn Resolution>>>
-    {
-        let factories: Vec<_> = resolvers.iter().map(|resolver| resolver().factory).collect();
-        self.eval(image, |ctx| Box::pin(async move {
-            join_all(factories.into_iter().map(|factory| factory(ctx))).await
-        }))
-    }
-}
-
-// Patternsleuth has no user-data setter. This scope only seeds a new context;
-// resolver execution reads the snapshot cached in that context, not this TLS.
-thread_local! {
-    static ACTIVE_SNAPSHOT: RefCell<Option<SelectorSnapshot>> = const { RefCell::new(None) };
-}
-struct SnapshotScope(Option<SelectorSnapshot>);
-impl Drop for SnapshotScope {
-    fn drop(&mut self) { ACTIVE_SNAPSHOT.with(|active| active.replace(self.0.take())); }
-}
-static SNAPSHOT: ResolverFactory<SelectorSnapshot> = ResolverFactory {
-    name: "SelectorSnapshot",
-    factory: |_| Box::pin(async {
-        ACTIVE_SNAPSHOT.with(|active| active.borrow().clone())
-            .map_or_else(SelectorSnapshot::capture_registered, Ok)
-            .map_err(patternsleuth::resolvers::ResolveError::new_msg)
-    }),
-};
-
-#[doc(hidden)]
-pub async fn context_snapshot(ctx: &AsyncContext<'_>) -> patternsleuth::resolvers::Result<Arc<SelectorSnapshot>> {
-    ctx.resolve(&SNAPSHOT).await
 }
 
 /// Compile-time resolver identity and applicability.
 pub trait ResolverDeclaration {
+    type Backend: crate::AddressResolver;
     const NAME: &'static str;
     const UNRESTRICTED: bool;
-    const DESCRIPTOR: &'static crate::ResolverDescriptor;
+    const DESCRIPTOR: &'static crate::Resolver<Self::Backend>;
 }
 
 /// Typed applicability metadata. Empty policies mean unrestricted coverage.

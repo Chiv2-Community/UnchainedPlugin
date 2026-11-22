@@ -7,13 +7,6 @@ mod function_detour;
 mod global;
 mod selection;
 mod patch;
-mod resolver;
-
-/// Declare a resolver. Qualified dictionary keys identify their selector provider.
-#[proc_macro]
-pub fn define_pattern_resolver(input: TokenStream) -> TokenStream {
-    resolver::expand(input.into()).unwrap_or_else(|error| error.to_compile_error()).into()
-}
 
 /// Register a `fn(u64) -> Patch` factory or immutable `Patch` static.
 /// An optional enum variant restricts applicability. Required coverage is grouped
@@ -38,14 +31,6 @@ pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStre
 #[proc_macro_attribute]
 pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
     expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
-}
-
-/// Bind an unsafe method/function to a `GetPost_*` offset-registry key.
-/// Unlike a resolver binding, the key does not name a Rust type.
-#[proc_macro_attribute]
-pub fn bind_resolved_request_function(args: TokenStream, item: TokenStream) -> TokenStream {
-    expand_request(args.into(), item.into())
-        .unwrap_or_else(|error| error.to_compile_error()).into()
 }
 
 /// Register a replacement for a typed method binding, not a resolver.
@@ -115,21 +100,7 @@ fn attach_native_documentation(attributes: &mut Vec<syn::Attribute>, key: &str, 
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    expand_binding(args, item, true)
-}
-
-fn request_key(path: &Path) -> syn::Result<()> {
-    let valid = path.get_ident().is_some_and(|name| {
-        name.to_string().strip_prefix("GetPost_").is_some_and(|suffix| !suffix.is_empty())
-    });
-    if !valid {
-        return Err(syn::Error::new_spanned(path, "request function keys must be unqualified GetPost_* identifiers"));
-    }
-    Ok(())
-}
-
-fn expand_request(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-    expand_binding(args, item, false)
+    expand_binding(args, item)
 }
 
 fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::Attribute> {
@@ -139,7 +110,7 @@ fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::A
 
 fn is_binding_attribute(attribute: &syn::Attribute) -> bool {
     attribute.path().segments.last().is_some_and(|segment|
-        segment.ident == "bind_resolved_func" || segment.ident == "bind_resolved_request_function")
+        segment.ident == "bind_resolved_func")
 }
 
 fn validate_native_signature(signature: &syn::Signature) -> syn::Result<()> {
@@ -203,11 +174,8 @@ fn consume_native_parameter_metadata(signature: &mut syn::Signature) -> syn::Res
     Ok(())
 }
 
-fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> syn::Result<Tokens> {
+fn expand_binding(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let resolver = resolver_path(args)?;
-    if !require_resolver_type {
-        request_key(&resolver)?;
-    }
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let mut function: ItemFn = syn::parse2(item)?;
     validate_binding(&function)?;
@@ -226,23 +194,21 @@ fn expand_binding(args: Tokens, item: Tokens, require_resolver_type: bool) -> sy
     let output = &signature.output;
     let binding = syn::Ident::new("__UNCHAINED_BINDING", Span::mixed_site());
     let native = syn::Ident::new("__unchained_native", Span::mixed_site());
-    let resolver_type_check = require_resolver_type.then(|| quote! {
+    let resolver_type_check = quote! {
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-    });
-    let target_name = signature.ident.to_string();
-    let initializer = if require_resolver_type {
-        quote!(::unchained_macros::FunctionBinding::new(
-            #target_name, <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
-        ))
-    } else {
-        quote!(::unchained_macros::FunctionBinding::from_offset_key(#target_name, #resolver_name))
     };
+    let target_name = signature.ident.to_string();
+    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let initializer = quote!(::unchained_macros_core::FunctionBinding::new(
+        #target_name, <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
+    ));
     function.block = Box::new(syn::parse2(quote!({
         #resolver_type_check
-        static #binding: ::unchained_macros::FunctionBinding =
+        static #binding: ::unchained_macros_core::FunctionBinding<#backend> =
             #initializer;
         ::inventory::submit! {
-            ::unchained_macros::FunctionBindingRegistration { binding: &#binding }
+            ::unchained_macros_core::__private::ErasedFunctionBindingRegistration::new(
+                &::unchained_macros_core::FunctionBindingRegistration { binding: &#binding })
         }
         let #native: unsafe extern "C" fn(#(#types),*) #output = unsafe {
             ::core::mem::transmute(#binding.address()
@@ -312,14 +278,14 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         return Ok(quote! {
             #(#attributes)*
             #[allow(non_upper_case_globals)]
-            #vis static #name: <#target as ::unchained_macros::NativeGlobalTarget>::Global = {
+            #vis static #name: <#target as ::unchained_macros_core::NativeGlobalTarget>::Global = {
                 let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-                static BINDING: ::unchained_macros::ValueBinding =
-                    ::unchained_macros::ValueBinding::new(#resolver_name);
+                static BINDING: ::unchained_macros_core::ValueBinding =
+                    ::unchained_macros_core::ValueBinding::new(#resolver_name);
                 ::inventory::submit! {
-                    ::unchained_macros::ValueBindingRegistration { binding: &BINDING }
+                    ::unchained_macros_core::ValueBindingRegistration { binding: &BINDING }
                 }
-                <#target as ::unchained_macros::NativeGlobalTarget>::Global::new(&BINDING, #indirect)
+                <#target as ::unchained_macros_core::NativeGlobalTarget>::Global::new(&BINDING, #indirect)
             };
         });
     }
@@ -360,10 +326,10 @@ fn expand_value(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
     function.block = Box::new(syn::parse2(quote!({
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-        static #binding: ::unchained_macros::ValueBinding =
-            ::unchained_macros::ValueBinding::new(#resolver_name);
+        static #binding: ::unchained_macros_core::ValueBinding =
+            ::unchained_macros_core::ValueBinding::new(#resolver_name);
         ::inventory::submit! {
-            ::unchained_macros::ValueBindingRegistration { binding: &#binding }
+            ::unchained_macros_core::ValueBindingRegistration { binding: &#binding }
         }
         fn __require_copy<T: ::core::marker::Copy>() {}
         __require_copy::<#ty>();
@@ -427,15 +393,6 @@ mod tests {
         assert!(super::expand_runtime_bindings(args, item).is_err());
     }
 
-    #[test_case::test_case(quote!(GetPost_); "empty suffix")]
-    #[test_case::test_case(quote!(CreateHttpRequest); "wrong prefix")]
-    #[test_case::test_case(quote!(module::GetPost_GetMotd); "qualified")]
-    #[test_case::test_case(quote!("GetPost_GetMotd"); "literal")]
-    #[test_case::test_case(quote!(GetPost_GetMotd<u8>); "generic")]
-    fn request_bindings_reject_non_request_keys(key: Tokens) {
-        assert!(expand_request(key, quote!(pub unsafe fn request() {})).is_err());
-    }
-
     #[test_case::test_matrix(
         [
             (quote!(fn release(&mut self) {}), "require unsafe"),
@@ -444,15 +401,10 @@ mod tests {
             (quote!(unsafe fn release<T>(&mut self, value: T) {}), "non-generic"),
             (quote!(async unsafe fn release(&mut self) {}), "non-async"),
             (quote!(unsafe fn release((a, b): (u8, u8)) {}), "plain identifiers"),
-        ],
-        [true, false]
+        ]
     )]
-    fn rejects_unsupported_native_declarations((item, message): (Tokens, &str), request: bool) {
-        let error = if request {
-            expand_request(quote!(GetPost_Fixture), item)
-        } else {
-            expand(quote!(Release), item)
-        }.unwrap_err();
+    fn rejects_unsupported_native_declarations((item, message): (Tokens, &str)) {
+        let error = expand(quote!(Release), item).unwrap_err();
         assert!(error.to_string().contains(message), "{error}");
     }
 

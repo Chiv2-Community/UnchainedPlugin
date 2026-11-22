@@ -37,7 +37,6 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             return Err(syn::Error::new_spanned(method, "duplicate or conflicting native binding attributes"));
         }
         let attribute = method.attrs.remove(attributes[0]);
-        let require_resolver = attribute.path().segments.last().unwrap().ident == "bind_resolved_func";
         let args = attribute.meta.require_list()?.tokens.clone();
         let function = ItemFn {
             attrs: method.attrs.clone(),
@@ -46,7 +45,7 @@ pub(super) fn expand_impl(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             block: Box::new(method.block.clone()),
         };
         let (expanded, descriptor, helper) = super::function_detour::expand_binding(
-            args, &function, self_ty, require_resolver,
+            args, &function, self_ty,
         )?;
         let normalized_name = format!("__UNCHAINED_MUTABILITY_{}", method.sig.ident);
         let parameter_name = format!("__UNCHAINED_PARAMETERS_{}", method.sig.ident);
@@ -180,7 +179,7 @@ mod tests {
 
     #[test_case::test_case(quote!(), quote!(impl Native {
                 #[bind_resolved_func(Resolver)]
-                #[bind_resolved_request_function(GetPost_Example)]
+                #[bind_resolved_func(OtherResolver)]
                 unsafe fn call(&self) {}
             }); "duplicate bindings")]
     #[test_case::test_case(quote!(), quote!(impl Native {

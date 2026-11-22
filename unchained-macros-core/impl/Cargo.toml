@@ -1,5 +1,5 @@
 [package]
-name = "unchained-macros-impl"
+name = "unchained-macros-core-impl"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,7 +1,8 @@
 # unchained-macros
 
 Runtime bindings, detours, patches, resolver declarations, and startup registration.
-Procedural attributes live in `impl/`; runtime support lives in `src/`.
+This is a compatibility facade over `unchained-macros-core` and
+`unchained-macros-patternsleuth`. Kismet support is a separate crate.
 Native declarations and feature gates stay in the consuming plugin.
 
 Start with [Creating game hooks](../CONTRIBUTING.md#creating-game-hooks).
@@ -32,23 +33,30 @@ there is no project-global enum in the toolkit.
 
 `ResolvedAddress` publishes addresses once; `FunctionBinding` refers to Retour's
 detour rather than copying its trampoline address. Both binding inventories use
-`BindingRegistration<T>`. Hooks receive the executable base; patch factories
+`BindingRegistration<T>`. Hook attachment receives activation policy; patch factories
 receive the resolved native address. Hosts implement `PatchWriter`; generated code also
 requires the consumer's `retour` and `inventory` dependencies.
 
-Generated resolvers expose `ResolverDeclaration::DESCRIPTOR`: a stable
-`ResolverDescriptor` containing Patternsleuth's `NamedResolver` and an optional
-selection filter. Scans and consumers use the same frozen policy.
-`FunctionBinding` records the native target name separately from its resolver
-cache key. `FunctionSource` distinguishes a resolver descriptor from a provider
-offset key. `HookRegistration` references that binding and names the Rust detour.
-`PatchRegistration` names the patch item and references its resolver descriptor.
+Generated declarations expose `ResolverDeclaration::Backend` and `DESCRIPTOR`.
+`Resolver<R>` holds the implementation, stable name, and selection filter.
+`FunctionBinding<R>`, `HookRegistration<R>`, and `PatchRegistration<R>` retain
+that backend type. The facade's type aliases default to `PatternsleuthResolver`;
+new integrations should use core's explicit types and `*_inventory_for::<R>()`.
 
 Adapt a dependency's single-address tuple resolver without changing its scan:
 
 ```rust,ignore
 define_custom_resolver!(ExternalName, delegate dependency::ExternalName);
 ```
+
+Initialize each backend with `initialize_bindings_for::<R>(&context, &selectors)`.
+Apply its patches with `apply_patches_for::<R, _>` and a retained `PatchState`;
+enumerate its hooks with `hook_inventory_for::<R>()`. The application chooses
+readiness and timing. Core has no resolver-kind enum or initialization phases.
+Address claims and original-call trampoline publication remain shared across backends,
+including aliases initialized after a detour has attached.
+Kismet-specific attributes and decoding live in
+[`unchained-macros-kismet`](../unchained-macros-kismet/README.md), not this crate.
 
 ## Direct method bindings
 
@@ -64,8 +72,8 @@ impl NativeObject {
   Supports borrowed/raw receivers, static/free functions, and lifetime parameters.
 - Type/const generics, async/const functions, explicit ABIs, and nonempty bodies
   are rejected. Hidden native parameters must be declared explicitly.
-- Resolver arguments are type paths; the final identifier is the cache key.
-  Do not use an import alias with a different name.
+- Resolver arguments are type paths; their descriptor supplies the stable key.
+  Prefer declared paths so source documentation identifies the native owner.
 - `bind_resolved_request_function(GetPost_Name)` uses an offset-provider key,
   not a Rust resolver type.
 - Calls use the resolved entry before attachment, then the original trampoline,
@@ -231,7 +239,7 @@ See the [patch reference](patches.md) for factories, statics, conditions, and ex
 ## Validation
 
 ```sh
-cargo test --locked -p unchained-macros -p unchained-macros-impl
+cargo test --locked -p unchained-macros -p unchained-macros-core -p unchained-macros-core-impl -p unchained-macros-patternsleuth -p unchained-macros-patternsleuth-impl
 ```
 
 Tests cover generic declaration rejection, local native-call fixtures, resolver

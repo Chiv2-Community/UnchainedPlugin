@@ -63,7 +63,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
             quote!(const _: () = assert!(
-                <#resolver as ::unchained_macros::ResolverDeclaration>::UNRESTRICTED,
+                <#resolver as ::unchained_macros_core::ResolverDeclaration>::UNRESTRICTED,
                 "universal patch targets a restricted resolver; declare its selection explicitly"
             );),
             quote!(),
@@ -74,18 +74,18 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         Some(key) => (
             quote! {
                 const _: () = (#key).__unchained_validate_patch(
-                    ::unchained_macros::__private::resolver_selections::<#resolver, _>(#key),
+                    ::unchained_macros_core::__private::resolver_selections::<#resolver, _>(#key),
                     &[(#key, true)],
                 );
             },
             quote! {
-                ::unchained_macros::__private::inventory::submit! {
-                    ::unchained_macros::__private::SelectorProvider::for_key(#key)
+                ::unchained_macros_core::__private::inventory::submit! {
+                    ::unchained_macros_core::__private::SelectorProvider::for_key(#key)
                 }
             },
-            quote!(::core::option::Option::Some(::unchained_macros::__private::selector_type(#key))),
-            quote!(|selection| ::unchained_macros::__private::selection_matches(selection, #key)),
-            quote!(|patches| ::unchained_macros::__private::validate_patch_coverage::<#resolver, _>(#key, patches)),
+            quote!(::core::option::Option::Some(::unchained_macros_core::__private::selector_type(#key))),
+            quote!(|selection| ::unchained_macros_core::__private::selection_matches(selection, #key)),
+            quote!(|patches| ::unchained_macros_core::__private::validate_patch_coverage::<#resolver, _>(#key, patches)),
         ),
     };
     Ok(quote! {
@@ -93,15 +93,15 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         #(#cfg)* #validation
         #(#cfg)* #provider
         #(#cfg)*
-        ::unchained_macros::__private::inventory::submit! {
-            ::unchained_macros::PatchRegistration {
+        ::unchained_macros_core::__private::inventory::submit! {
+            ::unchained_macros_core::__private::ErasedPatchRegistration::new(&::unchained_macros_core::PatchRegistration {
                 name: stringify!(#name),
-                resolver: <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
+                resolver: <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
                 factory: #factory,
                 selector: #selector,
                 applies_to: #applicability,
                 validate_group: #coverage,
-            }
+            })
         }
     })
 }

@@ -100,7 +100,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     let name = &declaration.ident;
     Ok(quote! {
         #declaration
-        impl ::unchained_macros::SelectionKey for #name {
+        impl ::unchained_macros_core::SelectionKey for #name {
             const REQUIRED: &'static [Self] = &[#(Self::#required),*];
             fn name(self) -> &'static str { match self { #(#name_arms)* } }
             fn default_fallback(self) -> ::core::option::Option<Self> { #fallback_body }

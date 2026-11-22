@@ -53,6 +53,28 @@ pub struct UClass {
 
 #[unchained_macros::runtime_bindings]
 impl UClass {
+    /// Find a reflected function on this class or its superclasses.
+    ///
+    /// # Safety
+    /// Call on the game thread with live class metadata and initialized FName bindings.
+    pub unsafe fn find_function(class: *const UClass, name: &str) -> Option<*const UFunction> {
+        let mut current = class.cast::<UStruct>();
+        let mut visited = std::collections::HashSet::new();
+        for _ in 0..256 {
+            let strukt = current.as_ref()?;
+            let mut field = strukt.children;
+            while let Some(value) = field.as_ref() {
+                if visited.len() >= 8192 || !visited.insert(field as usize) { return None; }
+                if value.uobject.name() == name {
+                    return value.uobject.inherits_from("Function").then_some(field.cast());
+                }
+                field = value.next;
+            }
+            current = strukt.super_struct;
+        }
+        None
+    }
+
     #[unchained_macros::bind_resolved_func(UClass__GetConfigName)]
     pub(crate) unsafe fn GetConfigName(
         self: *mut Self,

@@ -1,0 +1,15 @@
+[package]
+name = "unchained-macros-patternsleuth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+unchained-macros-core = { path = "../unchained-macros-core" }
+unchained-macros-patternsleuth-impl = { path = "impl" }
+patternsleuth = { workspace = true }
+binary_bloodhound = { workspace = true }
+inventory = "0.3.14"
+serde = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }

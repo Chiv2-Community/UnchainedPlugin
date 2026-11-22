@@ -1,18 +1,12 @@
 //! Native binding, detour, patch, and resolver support.
-mod detour;
-pub use detour::{detour_is_initialized, detour_is_enabled};
-
-pub use unchained_macros_impl::{
-    bind_resolved_func, bind_resolved_value, runtime_bindings,
-    bind_resolved_request_function, resolver_selection_key,
-};
+pub use unchained_macros_core::{bind_resolved_func, bind_resolved_value, resolver_selection_key};
+pub use unchained_macros_patternsleuth::{runtime_bindings, bind_resolved_request_function};
 
 #[doc = include_str!("../resolver-declarations.md")]
-pub use unchained_macros_impl::define_pattern_resolver;
+pub use unchained_macros_patternsleuth::define_pattern_resolver;
 
 #[doc = include_str!("../patches.md")]
-pub use unchained_macros_impl::register_patch;
-pub use patch::{Patch, PatchWriter, WriteValue, PatchApplication, apply_registered_patches, validate_patch_registrations};
+pub use unchained_macros_core::register_patch;
 
 /// Attach a replacement with the native binding's exact signature.
 ///
@@ -205,39 +199,20 @@ pub use patch::{Patch, PatchWriter, WriteValue, PatchApplication, apply_register
 /// #[bind_func_detour(Native::read)]
 /// unsafe fn replacement(#[mutability_override] value: &mut u32, other: &mut u32) {}
 /// ```
-pub use unchained_macros_impl::bind_func_detour;
-pub use binding::{ResolvedAddress, FunctionBinding, FunctionSource, BindingRegistration, FunctionBindingRegistration, ValueBinding, ValueBindingRegistration};
-#[doc(hidden)]
-pub use binding::{NativeFunction, NativeSignature};
-pub use binding::{NativeGlobalPointer, NativeGlobalTarget};
-pub use binding::{initialize_value_bindings, is_required_value};
-pub use binding::{initialize_function_bindings, function_is_bound, require_function_bindings};
-pub use binding::{initialize_function_bindings_where, initialize_value_bindings_where};
-pub use registry::{
-    CreateHookFn, HookRegistration,
-    PatchRegistration, OffsetRegisty,
-};
-pub use selection::{SelectionKey, ResolverSelector, SelectorSnapshot, SelectorIdentity,
-    ResolverDeclaration, ResolverSelection, ResolverFilter, supports_selection};
-pub use resolvers::{ResolverDescriptor, DeclaredResolver, RequiredResolver, startup_resolvers};
-
-mod binding;
-mod registry;
-mod selection;
-mod patch;
-mod signatures;
-mod custom_resolver;
-mod resolvers;
+pub use unchained_macros_core::*;
+pub use unchained_macros_patternsleuth::{define_custom_resolver, require_resolver,
+    PatternsleuthResolver, ScanContext, SelectorSnapshotExt, RequiredResolver, OffsetRegisty,
+    startup_resolvers, initialize_function_bindings, initialize_function_bindings_where,
+    apply_registered_patches, __pattern_resolver};
+pub type ResolverDescriptor<R = PatternsleuthResolver> = unchained_macros_core::Resolver<R>;
+pub type FunctionBinding<R = PatternsleuthResolver> = unchained_macros_core::FunctionBinding<R>;
+pub type FunctionBindingRegistration<R = PatternsleuthResolver> = unchained_macros_core::FunctionBindingRegistration<R>;
+pub type HookRegistration<R = PatternsleuthResolver> = unchained_macros_core::HookRegistration<R>;
+pub type PatchRegistration<R = PatternsleuthResolver> = unchained_macros_core::PatchRegistration<R>;
+pub type NativeFunction<F, R = PatternsleuthResolver> = unchained_macros_core::NativeFunction<F, R>;
 
 #[doc(hidden)]
 pub mod __private {
-    pub use inventory;
-    pub use crate::detour::claim_detour_address;
-    pub use crate::binding::publish_function_detours;
-    pub use crate::custom_resolver::single_address;
-    pub use crate::selection::{selection_key, selection_matches, dictionary_allows, dictionary_lookup, resolver_selections};
-    pub use crate::selection::{SelectorProvider, selector_type, context_snapshot};
-    pub use crate::patch::validate_patch_coverage;
-    pub use log;
-    pub use paste;
+    pub use unchained_macros_core::__private::*;
+    pub use unchained_macros_patternsleuth::__private::{context_snapshot, single_address};
 }

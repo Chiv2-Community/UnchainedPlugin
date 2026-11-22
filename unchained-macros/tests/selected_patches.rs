@@ -80,13 +80,13 @@ impl PatchWriter for Writer {
 }
 
 fn registration(name: &str) -> &'static PatchRegistration {
-    inventory::iter::<PatchRegistration>.into_iter().find(|patch| patch.name == name).unwrap()
+    unchained_macros::patch_inventory_for::<unchained_macros::PatternsleuthResolver>().find(|patch| patch.name == name).unwrap()
 }
 
 #[test]
 fn statics_and_factories_use_patch_names_not_resolver_names() {
-    assert_eq!(registration("ALIAS").resolver.named.name, "Universal");
-    assert_eq!(registration("SHARED").resolver.named.name, "Universal");
+    assert_eq!(registration("ALIAS").resolver.name, "Universal");
+    assert_eq!(registration("SHARED").resolver.name, "Universal");
     assert!(std::ptr::eq(registration("ALIAS").resolver, registration("SHARED").resolver));
     assert!(std::ptr::eq(registration("ALIAS").resolver,
         <Universal as unchained_macros::ResolverDeclaration>::DESCRIPTOR));

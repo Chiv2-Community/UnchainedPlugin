@@ -4,7 +4,7 @@ use patternsleuth::resolvers::NamedResolver;
 
 use std::process;
 use anyhow::{Context, Result};
-use unchained_macros::SelectorSnapshot;
+use unchained_macros::{SelectorSnapshot, SelectorSnapshotExt};
 
 pub fn scan(snapshot: &SelectorSnapshot, resolvers_to_scan: Vec<&'static NamedResolver>) -> Result<HashMap<String, u64>> {
     let pid = process::id() as i32;

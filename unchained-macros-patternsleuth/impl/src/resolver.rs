@@ -86,15 +86,15 @@ impl Parse for Declaration {
 pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
     let Declaration { name, mode, patterns, body } = syn::parse2(input)?;
     Ok(match (patterns, body) {
-        (Patterns::List(values), None) => quote!(::unchained_macros::__pattern_resolver!(#name, #mode, [#values]);),
+        (Patterns::List(values), None) => quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, [#values]);),
         (Patterns::List(values), Some((ctx, patterns, body))) =>
-            quote!(::unchained_macros::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);),
+            quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);),
         (Patterns::Dictionary(selector, entries), body) => {
             let (keys, values): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
             match body {
-                None => quote!(::unchained_macros::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });),
+                None => quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });),
                 Some((ctx, patterns, body)) => quote!(
-                    ::unchained_macros::__pattern_resolver!(#name, #selector, { #(#keys: #values),* }, |#ctx, #patterns| #body);
+                    ::unchained_macros_patternsleuth::__pattern_resolver!(#name, #selector, { #(#keys: #values),* }, |#ctx, #patterns| #body);
                 ),
             }
         }

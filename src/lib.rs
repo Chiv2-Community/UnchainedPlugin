@@ -170,7 +170,7 @@ impl BuildInfo {
     pub fn get_unresolved(&self, snapshot: &SelectorSnapshot, resolvers_in: Vec<&'static NamedResolver>) -> Vec<&'static NamedResolver> {
         resolvers_in
             .into_iter()
-            .filter(|resolver| snapshot.supports_resolver(resolver.name))
+            .filter(|resolver| snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(resolver.name))
             .filter(|resolver| self.selectors != snapshot.cache_key() || !self.offsets.contains_key(resolver.name))
             .map(|resolver| resolver)
             .collect()
@@ -372,13 +372,14 @@ fn initialize_native_runtime() {
         return;
     }
 
-    let enabled = |name: &str| snapshot.supports_resolver(name);
+    let enabled = |name: &str| snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(name);
+    let context = unchained_macros_patternsleuth::ScanContext::new(*unchained::startup::BASE_ADDR, &bi.offsets);
     unsafe { unchained_macros::initialize_value_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, enabled); }
-    if let Err(error) = unsafe { unchained_macros::initialize_function_bindings_where(*unchained::startup::BASE_ADDR, &bi.offsets, |binding| binding.supports(snapshot)) } {
+    if let Err(error) = unsafe { unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&context, snapshot) } {
         serror!("Failed to bind native functions: {}", error);
         std::process::exit(-67);
     }
-    if let Err(error) = apply_patches(&bi.offsets, snapshot) {
+    if let Err(error) = unsafe { apply_patches::<unchained_macros_patternsleuth::PatternsleuthResolver>(&context, snapshot, &mut unchained_macros_core::PatchState::default()) } {
         serror!("Failed to apply patches: {}", error);
         std::process::exit(-67);
     }
@@ -584,14 +585,18 @@ pub fn world_init() {
 
 /// The base program address of the running application will be used.
 pub fn attach_hooks(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::error::Error>> {
+    attach_hooks_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(snapshot)
+}
+
+fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
 
-    for hook in inventory::iter::<unchained_macros::HookRegistration> {
-        if !hook.binding.supports(snapshot) {
+    for hook in unchained_macros_core::hook_inventory_for::<R>() {
+        if !hook.binding.supports(snapshot) || (hook.detour)().is_some() {
             continue;
         }
         let cond = (hook.condition)();
-        match unsafe { (hook.hook_fn)(*unchained::startup::BASE_ADDR, cond) } {
+        match unsafe { (hook.hook_fn)(cond) } {
             Ok(_) => sinfo!("☑ {} {}", hook.name, if cond { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);
@@ -623,9 +628,9 @@ impl unchained_macros::PatchWriter for NativePatchWriter {
 }
 
 /// Apply named patches through the existing native memory-protection backend.
-pub fn apply_patches(offsets: &HashMap<String, u64>, snapshot: &SelectorSnapshot) -> Result<(), String> {
-    let results = unsafe { unchained_macros::apply_registered_patches(
-        *unchained::startup::BASE_ADDR as u64, offsets, snapshot, &mut NativePatchWriter,
+unsafe fn apply_patches<R: unchained_macros_core::AddressResolver>(context: &R::Context, snapshot: &SelectorSnapshot, state: &mut unchained_macros_core::PatchState) -> Result<(), String> {
+    let results = unsafe { unchained_macros_core::apply_patches_for::<R, _>(
+        context, snapshot, &mut NativePatchWriter, state,
     ) }?;
     for result in results {
         if result.applied {

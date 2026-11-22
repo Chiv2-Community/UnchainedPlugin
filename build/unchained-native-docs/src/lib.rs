@@ -407,16 +407,28 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                 }
                 Item::Impl(item) => {
                     let owner = item.self_ty.to_token_stream().to_string().replace(' ', "");
+                    let runtime_owner = attr(&item.attrs, "kismet_runtime_bindings")
+                        .map(|attribute| attribute.parse_args::<syn::LitStr>()).transpose()?;
                     for method in item.items {
                         let syn::ImplItem::Fn(method) = method else {
                             continue;
                         };
                         let binding = attr(&method.attrs, "bind_resolved_func")
                             .or_else(|| attr(&method.attrs, "bind_resolved_request_function"));
-                        if let Some(binding) = binding {
+                        if binding.is_some() || runtime_owner.is_some() {
                             let documentation = notes(&method.attrs);
-                            let resolver: syn::Path = binding.parse_args()?;
-                            let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+                            let resolver_name = if let Some(binding) = binding {
+                                let resolver: syn::Path = binding.parse_args()?;
+                                resolver.segments.last().unwrap().ident.to_string()
+                            } else {
+                                format!("{owner}__{}", method.sig.ident)
+                            };
+                            if let Some(reflected_path) = &runtime_owner {
+                                resolvers.insert(resolver_name.clone(), (
+                                    file_link(&path, method.sig.ident.span().start().line)?,
+                                    format!("Reflection native body: {}::{}", reflected_path.value(), method.sig.ident),
+                                ));
+                            }
                             let native_owner = resolver_name
                                 .strip_suffix(&format!("__{}", method.sig.ident))
                                 .unwrap_or(&owner);
@@ -445,8 +457,8 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
                                     })
                                     .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
-                                request: binding.path().segments.last().unwrap().ident
-                                    == "bind_resolved_request_function",
+                                request: binding.is_some_and(|binding| binding.path().segments.last().unwrap().ident
+                                    == "bind_resolved_request_function"),
                                 notes: documentation
                                     .lines()
                                     .filter(|line| !line.starts_with("Native RPC implementation: "))

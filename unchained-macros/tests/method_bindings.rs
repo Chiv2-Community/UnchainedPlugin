@@ -54,14 +54,12 @@ fn metadata_preserves_signatures_and_binding_identity() {
     let _: NativeFunction<for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32> =
         Native::__UNCHAINED_BINDING_storage;
     let binding = Native::__UNCHAINED_BINDING_add.binding();
-    let registration = inventory::iter::<unchained_macros::FunctionBindingRegistration>
-        .into_iter()
+    let registration = unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>()
         .find(|r| r.binding.name() == "Native::add")
         .unwrap();
     assert!(std::ptr::eq(binding, registration.binding));
     assert!(
-        !inventory::iter::<unchained_macros::FunctionBindingRegistration>
-            .into_iter()
+        !unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>()
             .any(|r| r.binding.offset_key() == "DoesNotExist")
     );
 }

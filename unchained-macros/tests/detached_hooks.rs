@@ -123,7 +123,7 @@ unsafe extern "C" fn request_target(value: i32) -> i32 {
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
     let base = BASE;
     assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
-    assert!(unsafe { __unchained_attach_plugin_add(base, true) }.is_err());
+    assert!(unsafe { __unchained_attach_plugin_add(true) }.is_err());
     assert!(!unchained_macros::detour_is_initialized("plugin_add"));
     assert!(!unchained_macros::detour_is_enabled("MissingDetour"));
     assert!(!unchained_macros::detour_is_initialized("MissingDetour"));
@@ -161,8 +161,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             binding.initialize(base, (address - base) as u64).unwrap();
         }
     }
-    let registration = inventory::iter::<unchained_macros::HookRegistration>
-        .into_iter()
+    let registration = unchained_macros::hook_inventory_for::<unchained_macros::PatternsleuthResolver>()
         .find(|r| r.hook_fn as usize == __unchained_attach_plugin_add as *const () as usize)
         .unwrap();
     assert_eq!(registration.name, "plugin_add");
@@ -174,13 +173,12 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
     assert!((registration.condition)());
     unsafe {
         assert_eq!(Native::add(7), 10);
-        assert!((registration.hook_fn)(usize::MAX, true).is_err());
-        (registration.hook_fn)(base, true).unwrap();
-        __unchained_attach_plugin_borrow(base, true).unwrap();
-        __unchained_attach_plugin_storage(base, true).unwrap();
-        __unchained_attach_plugin_global_off(base, false).unwrap();
-        __unchained_attach_plugin_zero(base, true).unwrap();
-        __unchained_attach_plugin_request(base, true).unwrap();
+        (registration.hook_fn)(true).unwrap();
+        __unchained_attach_plugin_borrow(true).unwrap();
+        __unchained_attach_plugin_storage(true).unwrap();
+        __unchained_attach_plugin_global_off(false).unwrap();
+        __unchained_attach_plugin_zero(true).unwrap();
+        __unchained_attach_plugin_request(true).unwrap();
         assert_eq!(Native::zero(), 17);
         assert_eq!(
             std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(),
@@ -201,9 +199,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert_eq!(Native::add(7), 10);
         assert_eq!(Native::alias(7), 10);
         assert_eq!(ADD_CALLS.load(Ordering::SeqCst), 1);
-        assert!(__unchained_attach_duplicate(base, true).is_err());
-        assert!(__unchained_attach_aliased(base, true).is_err());
-        assert!(__unchained_attach_plugin_add(base, true).is_err());
+        assert!(__unchained_attach_duplicate(true).is_err());
+        assert!(__unchained_attach_aliased(true).is_err());
+        assert!(__unchained_attach_plugin_add(true).is_err());
 
         let native = Native { value: 42 };
         let borrow_call =

@@ -60,7 +60,7 @@ unsafe extern "C" fn return_storage<'a>(value: *const Native, output: &'a mut i3
 }
 
 fn initialize() {
-    for registration in inventory::iter::<unchained_macros::FunctionBindingRegistration> {
+    for registration in unchained_macros::binding_inventory_for::<unchained_macros::PatternsleuthResolver>() {
         let address = match registration.binding.offset_key() {
             "Read" | "RawRead" => read as *const () as usize,
             "Write" | "RawWrite" => write as *const () as usize,

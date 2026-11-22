@@ -27,17 +27,12 @@ fn binding_documentation(
     function: &ItemFn,
     self_ty: &Type,
     resolver: &Path,
-    require_resolver: bool,
 ) -> syn::LitStr {
     let name = &function.sig.ident;
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let key = &resolver.segments.last().unwrap().ident;
     let path = resolver.to_token_stream().to_string().replace(' ', "");
-    let resolution = if require_resolver {
-        format!("[`{key}`]({path})")
-    } else {
-        format!("`{key}` (offset-registry key; not a Rust resolver type)")
-    };
+    let resolution = format!("[`{key}`]({path})");
     let documentation = format!(
         "Native binding to [`{native_name}`](Self::{name}).\n\
          Resolved by {resolution}."
@@ -93,14 +88,10 @@ pub(super) fn expand_binding(
     args: Tokens,
     function: &ItemFn,
     self_ty: &Type,
-    require_resolver: bool,
 ) -> syn::Result<(ItemFn, syn::ImplItemConst, Tokens)> {
     super::validate_binding(function)?;
     let resolver = resolver_path(args)?;
-    let documentation = binding_documentation(function, self_ty, &resolver, require_resolver);
-    if !require_resolver {
-        request_key(&resolver)?;
-    }
+    let documentation = binding_documentation(function, self_ty, &resolver);
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     let signature = super::bindings::concrete_signature(function, Some(self_ty))?;
     let native = native_type(&signature)?;
@@ -130,19 +121,14 @@ pub(super) fn expand_binding(
         FnArg::Typed(argument) => &argument.ty,
     });
     let call_output = &function.sig.output;
-    let resolver_check = require_resolver.then(|| {
-        quote! {
+    let resolver_check = quote! {
             let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
-        }
-    });
-    let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
-    let initializer = if require_resolver {
-        quote!(::unchained_macros::FunctionBinding::new(
-            #target_name, <#resolver as ::unchained_macros::ResolverDeclaration>::DESCRIPTOR,
-        ))
-    } else {
-        quote!(::unchained_macros::FunctionBinding::from_offset_key(#target_name, #resolver_name))
     };
+    let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
+    let backend = quote!(<#resolver as ::unchained_macros_core::ResolverDeclaration>::Backend);
+    let initializer = quote!(::unchained_macros_core::FunctionBinding::new(
+        #target_name, <#resolver as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR,
+    ));
     let mut expanded = function.clone();
     let native_call = format_ident!("__unchained_native_call", span = Span::mixed_site());
     super::consume_native_parameter_metadata(&mut expanded.sig)?;
@@ -162,28 +148,29 @@ pub(super) fn expand_binding(
         #(#cfg)*
         #[doc(hidden)]
         #[allow(non_upper_case_globals)]
-        #vis const #descriptor: ::unchained_macros::NativeFunction<#native> =
-            unsafe { ::unchained_macros::NativeFunction::new(&#storage) };
+        #vis const #descriptor: ::unchained_macros_core::NativeFunction<#native, #backend> =
+            unsafe { ::unchained_macros_core::NativeFunction::new(&#storage) };
     })?;
     let helper = quote! {
         #(#cfg)*
         impl #self_ty {
             #[doc(hidden)]
             #[allow(non_upper_case_globals)]
-            #vis const #normalized_descriptor: ::unchained_macros::NativeSignature<#normalized> =
+            #vis const #normalized_descriptor: ::unchained_macros_core::NativeSignature<#normalized> =
                 ::core::marker::PhantomData;
             #[doc(hidden)]
             #[allow(non_upper_case_globals)]
-            #vis const #parameter_descriptor: (#(::unchained_macros::NativeSignature<#parameters>,)*) =
+            #vis const #parameter_descriptor: (#(::unchained_macros_core::NativeSignature<#parameters>,)*) =
                 (#(::core::marker::PhantomData::<fn(#parameters) -> #parameters>,)*);
         }
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #storage: ::unchained_macros::FunctionBinding =
+        static #storage: ::unchained_macros_core::FunctionBinding<#backend> =
             #initializer;
         #(#cfg)*
         ::inventory::submit! {
-            ::unchained_macros::FunctionBindingRegistration { binding: &#storage }
+            ::unchained_macros_core::__private::ErasedFunctionBindingRegistration::new(
+                &::unchained_macros_core::FunctionBindingRegistration { binding: &#storage })
         }
     };
     Ok((expanded, descriptor, helper))
@@ -254,7 +241,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             let parameter = &parameter_types[index];
             let index = syn::Index::from(index);
             parameter_checks.push(quote! {
-                let _: ::unchained_macros::NativeSignature<#parameter> = #parameter_target.#index;
+                let _: ::unchained_macros_core::NativeSignature<#parameter> = #parameter_target.#index;
             });
             continue;
         }
@@ -295,11 +282,11 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         quote! {
             // Only outer pointer/reference mutability is erased. The complete
             // invariant signature still checks every lifetime relationship.
-            let _: ::unchained_macros::NativeSignature<#normalized> = #normalized_target;
+            let _: ::unchained_macros_core::NativeSignature<#normalized> = #normalized_target;
             #(#parameter_checks)*
         }
     } else {
-        quote! { let _: ::unchained_macros::NativeFunction<#native> = #target; }
+        quote! { let _: ::unchained_macros_core::NativeFunction<#native, _> = #target; }
     };
     let condition = match &condition {
         syn::Expr::Path(path) if path.path.is_ident("ACTIVE") => quote!(|| true),
@@ -334,16 +321,13 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe fn #attach(
-            base_address: usize,
             auto_activate: bool,
-        ) -> Result<Option<usize>, Box<dyn ::std::error::Error>> {
+        ) -> Result<(), Box<dyn ::std::error::Error>> {
             let binding = #target.binding();
             let address = binding.entry_address()
                 .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?.get();
-            let offset = address.checked_sub(base_address)
-                .ok_or("Native detour address precedes the module")?;
             if #hook.get().is_some() { return Err(::retour::Error::AlreadyInitialized.into()); }
-            let claim = ::unchained_macros::__private::claim_detour_address(address)?;
+            let claim = ::unchained_macros_core::__private::claim_detour_address(address)?;
             // Checked outer mutability differences preserve the native ABI.
             // Reference validity and aliasing remain the detour author's obligation.
             let replacement: #native = #replacement;
@@ -354,19 +338,19 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             let hook = #hook.get().expect("Hook was just initialized");
             // The detour and trampoline are process-lifetime storage, even disabled.
             claim.commit();
-            unsafe { ::unchained_macros::__private::publish_function_detours(
+            unsafe { ::unchained_macros_core::__private::publish_function_detours(
                 address, hook,
             )?; }
             if auto_activate && #condition_fn() { unsafe { hook.enable()?; } }
-            Ok(Some(offset))
+            Ok(())
         }
         #(#cfg)*
         ::inventory::submit! {
-            ::unchained_macros::HookRegistration {
+            ::unchained_macros_core::__private::ErasedHookRegistration::new(&::unchained_macros_core::HookRegistration {
                 name: stringify!(#ident), binding: #target.binding(),
                 hook_fn: #attach, condition: #condition_fn,
                 detour: || #hook.get(),
-            }
+            })
         }
     })
 }
@@ -486,7 +470,7 @@ mod tests {
             ) -> &'a mut FString {}
         };
         let (binding, descriptor, _) = expand_binding(
-            quote!(self::Native__Call), &function, &syn::parse_quote!(Native), true,
+            quote!(self::Native__Call), &function, &syn::parse_quote!(Native),
         ).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(documentation(&descriptor.attrs).is_empty());
@@ -500,16 +484,15 @@ mod tests {
     }
 
     #[test]
-    fn request_hover_identifies_registry_keys_without_fabricating_resolver_links() {
+    fn binding_hover_links_an_arbitrary_resolver_declaration() {
         let function = syn::parse_quote! {
-            pub unsafe fn GetPost_Example(value: i32) -> i32 {}
+            pub unsafe fn Call(value: i32) -> i32 {}
         };
         let (binding, _, _) = expand_binding(
-            quote!(GetPost_Example), &function, &syn::parse_quote!(Client), false,
+            quote!(OtherBackend__Call), &function, &syn::parse_quote!(Client),
         ).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(docs.contains("Resolved by `GetPost_Example` (offset-registry key;"));
-        assert!(!docs.contains("](GetPost_Example)"));
+        assert!(docs.contains("Resolved by [`OtherBackend__Call`](OtherBackend__Call)."));
     }
 
     #[test]

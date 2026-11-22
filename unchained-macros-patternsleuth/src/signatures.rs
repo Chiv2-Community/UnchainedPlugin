@@ -64,22 +64,22 @@ macro_rules! __pattern_resolver {
         #[allow(non_camel_case_types)]
         pub struct $name(pub u64);
         impl $crate::ResolverDeclaration for $name {
+            type Backend = $crate::PatternsleuthResolver;
             const NAME: &'static str = stringify!($name);
             const UNRESTRICTED: bool = $unrestricted;
             const DESCRIPTOR: &'static $crate::ResolverDescriptor = {
                 static DESCRIPTOR: $crate::ResolverDescriptor = $crate::ResolverDescriptor {
-                    named: ::patternsleuth::resolvers::NamedResolver {
+                    name: stringify!($name),
+                    implementation: $crate::PatternsleuthResolver::named(::patternsleuth::resolvers::NamedResolver {
                         name: stringify!($name), getter: $name::dyn_resolver,
-                    },
+                    }),
                     filter: $filter,
                 };
                 &DESCRIPTOR
             };
         }
         $crate::__private::inventory::submit! {
-            $crate::DeclaredResolver {
-                resolver: <$name as $crate::ResolverDeclaration>::DESCRIPTOR,
-            }
+            $crate::__private::ErasedResolverRegistration::new(<$name as $crate::ResolverDeclaration>::DESCRIPTOR)
         }
     };
     (@emit_header $name:ident) => {

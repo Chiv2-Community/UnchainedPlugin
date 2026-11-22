@@ -4,7 +4,7 @@ version = "1.0.1"
 edition = "2021"
 
 [workspace]
-members = [".", "sleuth_macros", "unchained-macros", "unchained-macros/impl", "build/unchained-native-docs", "xtask", "tests/backend-integration"]
+members = [".", "sleuth_macros", "unchained-macros", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "build/unchained-native-docs", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
@@ -91,6 +91,9 @@ loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/f
 
 [dependencies]
 unchained-macros = { path = "unchained-macros" }
+unchained-macros-core = { path = "unchained-macros-core" }
+unchained-macros-patternsleuth = { path = "unchained-macros-patternsleuth" }
+unchained-macros-kismet = { path = "unchained-macros-kismet" }
 rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "45459669b4e6807ed6fba96bb225a097a65a34a8" }
 backon = { workspace = true, optional = true }
 server-browser-client = { workspace = true }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use unchained_macros::{
     bind_resolved_func, function_is_bound, initialize_function_bindings,
-    require_function_bindings, HookRegistration, OffsetRegisty,
+    require_function_bindings, OffsetRegisty,
 };
 
 unchained_macros::define_pattern_resolver!(FixtureRead, ["AA"]);
@@ -31,7 +31,7 @@ fn functions_initialize_with_the_host_supplied_base() {
     assert!(require_function_bindings(&["FixtureRead"]).is_ok());
     assert!(require_function_bindings(&["Unregistered"]).is_err());
     assert_eq!(unsafe { read() }, 42);
-    assert_eq!(inventory::iter::<HookRegistration>.into_iter().count(), 0);
+    assert_eq!(unchained_macros::hook_inventory_for::<unchained_macros::PatternsleuthResolver>().count(), 0);
 }
 
 #[test]

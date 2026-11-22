@@ -67,6 +67,12 @@ Mirror C++ static/global access for every native global used by this project.
 
 ## Plugin replacement
 
+Reflection-backed native C++ methods can use
+`unchained_macros_kismet::kismet_runtime_bindings("/Script/Package.Class")`.
+They retain the same unsafe declarations and detour API, but initialize on the
+game thread once reflection is available. See
+[runtime reflection bindings](kismet-runtime-bindings.md) for lifecycle and limits.
+
 Target the native binding from a functional module under `src/unchained/patches/`.
 
 - Use `#[bind_func_detour(Type::Method)]` on an unsafe free function.

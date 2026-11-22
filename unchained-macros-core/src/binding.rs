@@ -1,4 +1,8 @@
 use std::{num::NonZeroUsize, sync::OnceLock};
+use std::{collections::BTreeMap, sync::Mutex};
+
+// Shared across resolver implementations and initialization stages.
+static ATTACHED_DETOURS: Mutex<BTreeMap<usize, &'static retour::RawDetour>> = Mutex::new(BTreeMap::new());
 
 /// One-time publication of a resolved module address, shared by code and data.
 pub struct ResolvedAddress {
@@ -23,6 +27,10 @@ impl ResolvedAddress {
             .and_then(NonZeroUsize::new)
             .filter(|_| base != 0)
             .ok_or_else(|| format!("Invalid address for native binding {}", self.name))?;
+        self.publish(address)
+    }
+
+    fn publish(&self, address: NonZeroUsize) -> Result<(), String> {
         match self.address.set(address) {
             Ok(()) => Ok(()),
             Err(address) if self.get() == Some(address) => Ok(()),
@@ -48,44 +56,26 @@ impl ResolvedAddress {
     }
 }
 
-/// Address source for a native function.
-pub enum FunctionSource {
-    /// A scan root with its own selection policy.
-    Resolver(&'static crate::ResolverDescriptor),
-    /// A cache key populated by a separately required offset provider.
-    ProviderOffset(&'static str),
-}
-
 /// Native target name, address source, and optional original-call trampoline.
-pub struct FunctionBinding {
+pub struct FunctionBinding<R: crate::AddressResolver> {
     name: &'static str,
     target: ResolvedAddress,
     detour: OnceLock<&'static retour::RawDetour>,
-    source: FunctionSource,
+    pub resolver: &'static crate::Resolver<R>,
 }
 
-impl FunctionBinding {
-    pub const fn new(name: &'static str, resolver: &'static crate::ResolverDescriptor) -> Self {
-        Self { name, target: ResolvedAddress::new(resolver.named.name), detour: OnceLock::new(), source: FunctionSource::Resolver(resolver) }
-    }
-
-    /// An address supplied by an offset provider, not a named resolver type.
-    pub const fn from_offset_key(name: &'static str, key: &'static str) -> Self {
-        Self { name, target: ResolvedAddress::new(key), detour: OnceLock::new(), source: FunctionSource::ProviderOffset(key) }
+impl<R: crate::AddressResolver> FunctionBinding<R> {
+    pub const fn new(name: &'static str, resolver: &'static crate::Resolver<R>) -> Self {
+        Self { name, target: ResolvedAddress::new(resolver.name), detour: OnceLock::new(), resolver }
     }
 
     /// Native target name, independent of the resolver's cache key.
     pub const fn name(&self) -> &'static str { self.name }
 
-    pub const fn source(&self) -> &FunctionSource { &self.source }
-
     pub const fn offset_key(&self) -> &'static str { self.target.name() }
 
     pub fn supports(&self, snapshot: &crate::SelectorSnapshot) -> bool {
-        match self.source {
-            FunctionSource::Resolver(resolver) => resolver.supports(snapshot),
-            FunctionSource::ProviderOffset(_) => true,
-        }
+        self.resolver.supports(snapshot)
     }
 
     /// Original-call address, bypassing this target's registered replacement.
@@ -122,7 +112,22 @@ impl FunctionBinding {
     /// process-lifetime code with their exact ABI and behavioral contract.
     /// Initialize every alias before attaching a detour to that native address.
     pub unsafe fn initialize(&self, base: usize, offset: u64) -> Result<(), String> {
-        unsafe { self.target.try_initialize(base, offset) }
+        let address = usize::try_from(offset).ok().and_then(|offset| base.checked_add(offset))
+            .filter(|_| base != 0).and_then(NonZeroUsize::new).ok_or("Invalid native function address")?;
+        self.initialize_address(address)
+    }
+
+    fn initialize_address(&self, address: NonZeroUsize) -> Result<(), String> {
+        let attached = ATTACHED_DETOURS.lock().map_err(|_| "Detour publication lock poisoned")?;
+        self.target.publish(address)?;
+        if let Some(detour) = attached.get(&address.get()) {
+            if let Some(current) = self.detour.get() {
+                if !std::ptr::eq(*current, *detour) { return Err("Binding has a different published trampoline".into()); }
+            } else {
+                unsafe { self.publish_detour(detour)?; }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -131,21 +136,21 @@ impl FunctionBinding {
 /// narrower lifetime contract.
 ///
 /// ```compile_fail
-/// use unchained_macros::NativeFunction;
-/// fn wrong_arguments(binding: NativeFunction<unsafe extern "C" fn(u32)>) {
-///     let _: NativeFunction<unsafe extern "C" fn(u64)> = binding;
+/// use unchained_macros_core::NativeFunction;
+/// fn wrong_arguments<R: unchained_macros_core::AddressResolver>(binding: NativeFunction<unsafe extern "C" fn(u32), R>) {
+///     let _: NativeFunction<unsafe extern "C" fn(u64), R> = binding;
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// use unchained_macros::NativeFunction;
-/// fn narrowed_lifetime(binding: NativeFunction<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32>) {
-///     let _: NativeFunction<unsafe extern "C" fn(&'static i32) -> &'static i32> = binding;
+/// use unchained_macros_core::NativeFunction;
+/// fn narrowed_lifetime<R: unchained_macros_core::AddressResolver>(binding: NativeFunction<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, R>) {
+///     let _: NativeFunction<unsafe extern "C" fn(&'static i32) -> &'static i32, R> = binding;
 /// }
 /// ```
 #[doc(hidden)]
-pub struct NativeFunction<F> {
-    binding: &'static FunctionBinding,
+pub struct NativeFunction<F, R: crate::AddressResolver> {
+    binding: &'static FunctionBinding<R>,
     signature: std::marker::PhantomData<fn(F) -> F>,
 }
 
@@ -153,14 +158,14 @@ pub struct NativeFunction<F> {
 #[doc(hidden)]
 pub type NativeSignature<F> = std::marker::PhantomData<fn(F) -> F>;
 
-impl<F> NativeFunction<F> {
+impl<F, R: crate::AddressResolver> NativeFunction<F, R> {
     /// # Safety
     /// Every address published by `binding` must have the native signature `F`.
-    pub const unsafe fn new(binding: &'static FunctionBinding) -> Self {
+    pub const unsafe fn new(binding: &'static FunctionBinding<R>) -> Self {
         Self { binding, signature: std::marker::PhantomData }
     }
 
-    pub const fn binding(&self) -> &'static FunctionBinding { self.binding }
+    pub const fn binding(&self) -> &'static FunctionBinding<R> { self.binding }
     pub const fn name(&self) -> &'static str { self.binding.name() }
 }
 
@@ -169,46 +174,83 @@ pub struct BindingRegistration<T: 'static> {
     pub binding: &'static T,
 }
 
-pub type FunctionBindingRegistration = BindingRegistration<FunctionBinding>;
-inventory::collect!(FunctionBindingRegistration);
+pub type FunctionBindingRegistration<R> = BindingRegistration<FunctionBinding<R>>;
 
-/// Initialize registered functions from image-relative offsets.
+#[doc(hidden)]
+pub trait FunctionInfo: Send + Sync {
+    fn key(&self) -> &'static str;
+    fn address(&self) -> Option<NonZeroUsize>;
+    fn entry_address(&self) -> Option<NonZeroUsize>;
+    unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
+}
+impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
+    fn key(&self) -> &'static str { self.offset_key() }
+    fn address(&self) -> Option<NonZeroUsize> { self.address() }
+    fn entry_address(&self) -> Option<NonZeroUsize> { self.entry_address() }
+    unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
+        unsafe { self.publish_detour(detour) }
+    }
+}
+#[doc(hidden)]
+pub struct ErasedFunctionBindingRegistration {
+    pub info: &'static dyn FunctionInfo,
+    value: &'static (dyn std::any::Any + Send + Sync),
+}
+impl ErasedFunctionBindingRegistration {
+    pub const fn new<R: crate::AddressResolver>(registration: &'static FunctionBindingRegistration<R>) -> Self {
+        Self { info: registration.binding, value: registration }
+    }
+}
+inventory::collect!(ErasedFunctionBindingRegistration);
+pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item = &'static FunctionBindingRegistration<R>> {
+    inventory::iter::<ErasedFunctionBindingRegistration>.into_iter().filter_map(|entry| entry.value.downcast_ref())
+}
+
+/// Resolve and publish selected function bindings for one backend.
 ///
 /// # Safety
-/// Each RVA must identify process-lifetime native code with its binding's ABI
-/// and behavioral contract. Initialize before native calls or detour attachment.
-pub unsafe fn initialize_function_bindings(
-    base: usize,
-    offsets: &std::collections::HashMap<String, u64>,
+/// Each address must identify process-lifetime native code with its binding's ABI
+/// and behavioral contract. Meet the backend context's threading/readiness contract.
+/// Initialize before native calls or detour attachment.
+pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
+    context: &R::Context, snapshot: &crate::SelectorSnapshot,
 ) -> Result<(), String> {
-    unsafe { initialize_function_bindings_where(base, offsets, |_| true) }
+    snapshot.validate_registered()?;
+    unsafe { initialize_bindings_for_where::<R>(context, |binding| binding.supports(snapshot)) }
 }
 
 /// Initialize only bindings accepted by the host's applicability predicate.
 /// Rejected bindings remain unbound, even if cached offsets exist.
 ///
 /// # Safety
-/// The contracts of [`initialize_function_bindings`] apply to accepted bindings.
-pub unsafe fn initialize_function_bindings_where(
-    base: usize,
-    offsets: &std::collections::HashMap<String, u64>,
-    enabled: impl Fn(&FunctionBinding) -> bool,
+/// The contracts of [`initialize_bindings_for`] apply to accepted bindings.
+pub unsafe fn initialize_bindings_for_where<R: crate::AddressResolver>(
+    context: &R::Context,
+    enabled: impl Fn(&FunctionBinding<R>) -> bool,
 ) -> Result<(), String> {
-    for registration in inventory::iter::<FunctionBindingRegistration>.into_iter()
+    let mut resolved = Vec::new();
+    for registration in binding_inventory_for::<R>()
         .filter(|registration| enabled(registration.binding))
     {
         let binding = registration.binding;
-        let offset = offsets.get(binding.offset_key())
-            .ok_or_else(|| format!("No address found for native binding {} (key {})", binding.name(), binding.offset_key()))?;
-        unsafe { binding.initialize(base, *offset)?; }
+        let address = unsafe { binding.resolver.implementation.resolve(context) }
+            .map_err(|error| format!("Binding {} ({}): {error}", binding.name(), binding.offset_key()))?;
+        resolved.push((binding, address));
+    }
+    for (binding, address) in resolved {
+        binding.initialize_address(address)?;
     }
     Ok(())
 }
 
 /// Query publication by resolver/provider offset key, not detour name.
 pub fn function_is_bound(name: &str) -> bool {
-    inventory::iter::<FunctionBindingRegistration>.into_iter()
-        .any(|registration| registration.binding.offset_key() == name && registration.binding.address().is_some())
+    inventory::iter::<ErasedFunctionBindingRegistration>.into_iter()
+        .any(|registration| registration.info.key() == name && registration.info.address().is_some())
+}
+
+pub fn function_is_bound_for<R: crate::AddressResolver>(name: &str) -> bool {
+    binding_inventory_for::<R>().any(|entry| entry.binding.offset_key() == name && entry.binding.address().is_some())
 }
 
 /// Preserve fallible helper behavior before native binding initialization.
@@ -228,8 +270,13 @@ pub fn require_function_bindings(names: &[&str]) -> Result<(), String> {
 /// satisfy every binding's native contract and remain live for the process.
 #[doc(hidden)]
 pub unsafe fn publish_function_detours(entry: usize, detour: &'static retour::RawDetour) -> Result<(), String> {
-    for registration in inventory::iter::<FunctionBindingRegistration> {
-        let binding = registration.binding;
+    let mut attached = ATTACHED_DETOURS.lock().map_err(|_| "Detour publication lock poisoned")?;
+    if attached.get(&entry).is_some_and(|existing| !std::ptr::eq(*existing, detour)) {
+        return Err(format!("A different trampoline is already published for {entry:#x}"));
+    }
+    attached.insert(entry, detour);
+    for registration in inventory::iter::<ErasedFunctionBindingRegistration> {
+        let binding = registration.info;
         if binding.entry_address().is_some_and(|address| address.get() == entry) {
             unsafe { binding.publish_detour(detour)?; }
         }

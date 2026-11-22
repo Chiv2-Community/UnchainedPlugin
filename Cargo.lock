@@ -55,6 +55,9 @@ dependencies = [
  "tokio-util",
  "tracing",
  "unchained-macros",
+ "unchained-macros-core",
+ "unchained-macros-kismet",
+ "unchained-macros-patternsleuth",
  "unchained-native-docs",
  "unicode-segmentation",
  "widestring",
@@ -3964,18 +3967,75 @@ version = "0.1.0"
 dependencies = [
  "binary_bloodhound",
  "inventory",
- "log",
  "object",
- "paste",
  "patternsleuth",
  "retour",
  "serde",
  "test-case",
- "unchained-macros-impl",
+ "unchained-macros-core",
+ "unchained-macros-patternsleuth",
 ]
 
 [[package]]
-name = "unchained-macros-impl"
+name = "unchained-macros-core"
+version = "0.1.0"
+dependencies = [
+ "inventory",
+ "log",
+ "paste",
+ "retour",
+ "serde",
+ "test-case",
+ "unchained-macros-core-impl",
+]
+
+[[package]]
+name = "unchained-macros-core-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "test-case",
+]
+
+[[package]]
+name = "unchained-macros-kismet"
+version = "0.1.0"
+dependencies = [
+ "iced-x86",
+ "inventory",
+ "retour",
+ "test-case",
+ "unchained-macros-core",
+ "unchained-macros-kismet-impl",
+ "windows 0.52.0",
+]
+
+[[package]]
+name = "unchained-macros-kismet-impl"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "unchained-macros-patternsleuth"
+version = "0.1.0"
+dependencies = [
+ "binary_bloodhound",
+ "inventory",
+ "patternsleuth",
+ "serde",
+ "test-case",
+ "unchained-macros-core",
+ "unchained-macros-patternsleuth-impl",
+]
+
+[[package]]
+name = "unchained-macros-patternsleuth-impl"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",

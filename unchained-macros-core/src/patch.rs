@@ -1,9 +1,10 @@
 //! Patch descriptions, host memory backends, and registration validation.
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{MaybeUninit, align_of, size_of};
-use crate::{PatchRegistration, ResolverSelection, SelectionKey, SelectorSnapshot};
+use crate::{ResolverSelection, SelectionKey, SelectorSnapshot};
+use crate::registry::{PatchInfo, ErasedPatchRegistration};
 
 trait StaticWriteSource: Sync {
     fn source(&self) -> *const u8;
@@ -149,11 +150,11 @@ pub struct PatchApplication {
 
 #[doc(hidden)]
 pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
-    _: E, patches: &[&PatchRegistration],
+    _: E, patches: &[&dyn PatchInfo],
 ) -> Result<(), String> {
     for key in E::REQUIRED {
         if crate::__private::dictionary_allows(key, R::SELECTIONS)
-            && !patches.iter().any(|patch| (patch.applies_to)(key))
+            && !patches.iter().any(|patch| patch.applies_to(key))
         {
             return Err(format!("Patches for resolver {} do not cover required selection {}", R::NAME, key.name()));
         }
@@ -161,21 +162,21 @@ pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
     Ok(())
 }
 
-fn validate(patches: &[&PatchRegistration]) -> Result<(), String> {
+fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
     let mut names = BTreeSet::new();
     let mut groups = BTreeMap::<_, Vec<_>>::new();
     for patch in patches {
-        if !names.insert(patch.name) {
-            return Err(format!("Duplicate patch name {}", patch.name));
+        if !names.insert(patch.name()) {
+            return Err(format!("Duplicate patch name {}", patch.name()));
         }
-        groups.entry(patch.resolver.named.name).or_default().push(*patch);
+        groups.entry((patch.resolver().backend(), patch.resolver().name())).or_default().push(*patch);
     }
     for group in groups.values() {
-        if group.iter().any(|patch| !std::ptr::eq(patch.resolver, group[0].resolver)) {
-            return Err(format!("Patches reference different descriptors for resolver {}", group[0].resolver.named.name));
+        if group.iter().any(|patch| patch.resolver().identity() != group[0].resolver().identity()) {
+            return Err(format!("Patches reference different descriptors for resolver {}", group[0].resolver().name()));
         }
         for patch in group {
-            (patch.validate_group)(group)?;
+            patch.validate_group(group)?;
         }
     }
     Ok(())
@@ -184,7 +185,7 @@ fn validate(patches: &[&PatchRegistration]) -> Result<(), String> {
 /// Validate unique patch names and required coverage across each resolver's group.
 /// This does not run factories, conditions, or memory writes.
 pub fn validate_patch_registrations() -> Result<(), String> {
-    validate(&inventory::iter::<PatchRegistration>.into_iter().collect::<Vec<_>>())
+    validate(&inventory::iter::<ErasedPatchRegistration>.into_iter().map(|entry| entry.info).collect::<Vec<_>>())
 }
 
 /// Validate and resolve every applicable patch before invoking factories/writers.
@@ -193,26 +194,34 @@ pub fn validate_patch_registrations() -> Result<(), String> {
 /// # Safety
 /// Each resolved address and resulting edit must satisfy its native contract.
 /// Earlier writes are not rolled back if a later writer call fails.
-pub unsafe fn apply_registered_patches<W: PatchWriter>(
-    base: u64, offsets: &HashMap<String, u64>, snapshot: &SelectorSnapshot, writer: &mut W,
+/// Host-owned state prevents successful edits from running again during retries.
+#[derive(Default)]
+pub struct PatchState { completed: BTreeSet<&'static str> }
+
+/// # Safety
+/// Each resolved address and edit must satisfy its native contract.
+/// Keep one state for the initialization session; serialize calls with that state.
+pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
+    context: &R::Context, snapshot: &SelectorSnapshot, writer: &mut W,
+    state: &mut PatchState,
 ) -> Result<Vec<PatchApplication>, String> {
     snapshot.validate_registered()?;
-    let patches: Vec<_> = inventory::iter::<PatchRegistration>.into_iter().collect();
-    validate(&patches)?;
-    let selected = patches.into_iter().filter(|patch| snapshot.supports_patch(patch))
+    validate_patch_registrations()?;
+    let selected = crate::patch_inventory_for::<R>().filter(|patch| snapshot.supports_patch(*patch)
+        && !state.completed.contains(patch.name))
         .map(|patch| {
             if !patch.resolver.supports(snapshot) {
-                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver.named.name));
+                return Err(format!("Patch {} targets unavailable resolver {}", patch.name, patch.resolver.name));
             }
-            let offset = offsets.get(patch.resolver.named.name)
-                .ok_or_else(|| format!("No address for patch {} resolver {}", patch.name, patch.resolver.named.name))?;
-            let address = base.checked_add(*offset).ok_or_else(|| format!("Address overflow for patch {}", patch.name))?;
+            let address = unsafe { patch.resolver.implementation.resolve(context) }
+                .map_err(|error| format!("No address for patch {} resolver {}: {error}", patch.name, patch.resolver.name))?.get() as u64;
             Ok((patch, address))
         }).collect::<Result<Vec<_>, String>>()?;
     selected.into_iter().map(|(patch, address)| {
         let applied = unsafe { (patch.factory)(address).apply(address, writer) }
             .map_err(|error| format!("Patch {}: {error}", patch.name))?;
-        Ok(PatchApplication { name: patch.name, resolver: patch.resolver.named.name, applied })
+        state.completed.insert(patch.name);
+        Ok(PatchApplication { name: patch.name, resolver: patch.resolver.name, applied })
     }).collect()
 }
 
@@ -220,6 +229,13 @@ pub unsafe fn apply_registered_patches<W: PatchWriter>(
 mod tests {
     use super::*;
     use crate::ResolverDeclaration;
+    struct Mock;
+    impl crate::AddressResolver for Mock {
+        type Context = ();
+        unsafe fn resolve(&self, _: &()) -> Result<std::num::NonZeroUsize, String> { panic!("validation must not resolve") }
+    }
+    type PatchRegistration = crate::PatchRegistration<Mock>;
+    type ResolverDescriptor = crate::Resolver<Mock>;
 
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Key { First, Second }
@@ -230,36 +246,33 @@ mod tests {
 
     struct Both;
     impl ResolverDeclaration for Both {
+        type Backend = Mock;
         const NAME: &'static str = "Both";
         const UNRESTRICTED: bool = true;
-        const DESCRIPTOR: &'static crate::ResolverDescriptor = &BOTH;
+        const DESCRIPTOR: &'static ResolverDescriptor = &BOTH;
     }
     impl ResolverSelection<Key> for Both {
         const SELECTIONS: &'static [(Key, bool)] = &[];
     }
     struct FirstOnly;
     impl ResolverDeclaration for FirstOnly {
+        type Backend = Mock;
         const NAME: &'static str = "FirstOnly";
         const UNRESTRICTED: bool = false;
-        const DESCRIPTOR: &'static crate::ResolverDescriptor = &FIRST_DESCRIPTOR;
+        const DESCRIPTOR: &'static ResolverDescriptor = &FIRST_DESCRIPTOR;
     }
     impl ResolverSelection<Key> for FirstOnly {
         const SELECTIONS: &'static [(Key, bool)] = &[(Key::First, true), (Key::Second, false)];
     }
 
-    fn unused_getter() -> &'static patternsleuth::resolvers::DynResolverFactory { panic!("validation must not scan") }
-    static BOTH: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
-        patternsleuth::resolvers::NamedResolver { name: "Both", getter: unused_getter });
-    static FIRST_DESCRIPTOR: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
-        patternsleuth::resolvers::NamedResolver { name: "FirstOnly", getter: unused_getter });
-    static OTHER: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
-        patternsleuth::resolvers::NamedResolver { name: "Other", getter: unused_getter });
-    static NAMESAKE: crate::ResolverDescriptor = crate::ResolverDescriptor::unrestricted(
-        patternsleuth::resolvers::NamedResolver { name: "Both", getter: unused_getter });
+    static BOTH: ResolverDescriptor = ResolverDescriptor { name: "Both", implementation: Mock, filter: None };
+    static FIRST_DESCRIPTOR: ResolverDescriptor = ResolverDescriptor { name: "FirstOnly", implementation: Mock, filter: None };
+    static OTHER: ResolverDescriptor = ResolverDescriptor { name: "Other", implementation: Mock, filter: None };
+    static NAMESAKE: ResolverDescriptor = ResolverDescriptor { name: "Both", implementation: Mock, filter: None };
     fn never_construct(_: u64) -> Patch { panic!("validation must not construct patches") }
     fn first(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::First) }
     fn second(key: &dyn std::any::Any) -> bool { crate::__private::selection_matches(key, Key::Second) }
-    fn both(group: &[&PatchRegistration]) -> Result<(), String> {
+    fn both(group: &[&dyn PatchInfo]) -> Result<(), String> {
         validate_patch_coverage::<Both, _>(Key::First, group)
     }
     static FIRST: PatchRegistration = PatchRegistration {
@@ -295,9 +308,10 @@ mod tests {
     #[test_case::test_case(&[&FIRST, &OTHER_RESOLVER], Some("required selection Second"); "other resolver does not supply coverage")]
     #[test_case::test_case(&[&FIRST, &CONFLICTING_DESCRIPTOR], Some("different descriptors"); "namesake descriptor does not supply coverage")]
     fn coverage_is_grouped_by_resolver(patches: &[&PatchRegistration], expected: Option<&str>) {
+        let patches: Vec<&dyn PatchInfo> = patches.iter().map(|patch| *patch as &dyn PatchInfo).collect();
         match expected {
-            Some(message) => assert!(validate(patches).unwrap_err().contains(message)),
-            None => validate(patches).unwrap(),
+            Some(message) => assert!(validate(&patches).unwrap_err().contains(message)),
+            None => validate(&patches).unwrap(),
         }
     }
 }

@@ -97,7 +97,7 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
         let number = 17;
         let borrowed_number = &number;
         let borrowed_call = std::hint::black_box(original_borrowed as for<'a> unsafe extern "C" fn(*const &'a i32) -> &'a i32);
-        __unchained_attach_borrowed(1, true).unwrap();
+        __unchained_attach_borrowed(true).unwrap();
         assert!(std::ptr::eq(borrowed_call(&borrowed_number), &number));
         assert!(std::ptr::eq(Native::borrowed(&borrowed_number), &number));
 
@@ -109,8 +109,8 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
             std::mem::transmute(std::hint::black_box(original_exclusive as *const ()));
         let mut value = Native(42);
         let pointer = &raw mut value;
-        __unchained_attach_shared_read(1, true).unwrap();
-        __unchained_attach_exclusive_read(1, true).unwrap();
+        __unchained_attach_shared_read(true).unwrap();
+        __unchained_attach_exclusive_read(true).unwrap();
         assert_eq!(*shared_call(pointer), 43);
         assert_eq!(*exclusive_call(pointer), 43);
         assert_eq!(*Native::shared_read(&value), 43);
@@ -155,9 +155,9 @@ fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
         let reverse_call = std::hint::black_box(original_mut as unsafe extern "C" fn(*mut Native, *const i32) -> i32);
         let const_call = std::hint::black_box(original_const_match as unsafe extern "C" fn(*const Native) -> i32);
         let mut_call = std::hint::black_box(original_mut_match as for<'a> unsafe extern "C" fn(*mut Native, &'a i32) -> &'a i32);
-        __unchained_attach_reverse(1, true).unwrap();
-        __unchained_attach_const_match(1, true).unwrap();
-        __unchained_attach_mut_match(1, true).unwrap();
+        __unchained_attach_reverse(true).unwrap();
+        __unchained_attach_const_match(true).unwrap();
+        __unchained_attach_mut_match(true).unwrap();
         assert_eq!(reverse_call(pointer, &other), 69);
         assert_eq!(Native::mut_read(pointer, &other), 49);
         assert_eq!(const_call(pointer), 74);
@@ -196,7 +196,7 @@ fn mutability_override_preserves_original_calls_and_const_native_entry() {
         let pointer = &raw const value;
         let call = std::hint::black_box(original as unsafe extern "C" fn(*const Native) -> i32);
         assert_eq!(call(pointer), 43);
-        __unchained_attach_replacement(1, true).unwrap();
+        __unchained_attach_replacement(true).unwrap();
         assert_eq!(call(pointer), 53);
         assert_eq!(Native::read(pointer), 43);
         assert_eq!(value.0, 42);

@@ -56,14 +56,14 @@ pub fn expand(item: TokenStream) -> syn::Result<TokenStream> {
                 #item
                 #(#cfg)*
                 /// Generated native-global forwarding. Does not own native storage.
-                #vis struct #proxy { pointer: ::unchained_macros::NativeGlobalPointer }
+                #vis struct #proxy { pointer: ::unchained_macros_core::NativeGlobalPointer }
                 #(#cfg)*
-                impl ::unchained_macros::NativeGlobalTarget for #name { type Global = #proxy; }
+                impl ::unchained_macros_core::NativeGlobalTarget for #name { type Global = #proxy; }
                 #(#cfg)*
                 impl #proxy {
                     #[doc(hidden)]
-                    pub const fn new(binding: &'static ::unchained_macros::ValueBinding, indirect: bool) -> Self {
-                        Self { pointer: ::unchained_macros::NativeGlobalPointer::new(binding, indirect) }
+                    pub const fn new(binding: &'static ::unchained_macros_core::ValueBinding, indirect: bool) -> Self {
+                        Self { pointer: ::unchained_macros_core::NativeGlobalPointer::new(binding, indirect) }
                     }
                     /// Load the current native pointer without borrowing its slot.
                     ///
@@ -161,7 +161,7 @@ fn forward(method: &syn::ImplItemFn, target: &syn::Ident) -> syn::Result<TokenSt
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+use super::*;
 
     #[test]
     fn vtable_forwarding_uses_existing_signatures_and_raw_receiver() {
