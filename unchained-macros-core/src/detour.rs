@@ -1,15 +1,15 @@
-use crate::registry::HookInfo;
+use crate::HookRegistration;
 
 pub fn detour_is_initialized(name: &str) -> bool {
-    inventory::iter::<&'static dyn HookInfo>
+    inventory::iter::<&'static HookRegistration>
         .into_iter()
-        .any(|binding| binding.name() == name && binding.detour().is_some())
+        .any(|binding| binding.name == name && binding.initialized())
 }
 
 pub fn detour_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static dyn HookInfo>
+    inventory::iter::<&'static HookRegistration>
         .into_iter()
-        .any(|binding| binding.name() == name && binding.enabled())
+        .any(|binding| binding.name == name && binding.enabled())
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -124,7 +124,7 @@ pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AddressResolver, FunctionBinding, FunctionBindingRegistration, Resolver};
+    use crate::{AddressResolver, FunctionBinding, Resolver};
     use std::num::NonZeroUsize;
 
     struct Backend;
@@ -136,7 +136,7 @@ mod tests {
     static BINDING: FunctionBinding<Backend> = FunctionBinding::new("activation retry", &RESOLVER);
     static HOOK: NativeHook = NativeHook::new();
     inventory::submit! {
-        &FunctionBindingRegistration { binding: &BINDING } as &dyn crate::binding::FunctionInfo
+        &BINDING as &dyn crate::binding::FunctionInfo
     }
     #[inline(never)]
     unsafe extern "C" fn original(value: usize) -> usize {

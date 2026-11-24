@@ -45,7 +45,7 @@ unsafe extern "C" fn borrow<'a>(this: &OpenAPIClientAPI, result: &'a mut i32) ->
 #[test]
 fn provider_offsets_use_ordinary_typed_resolver_bindings() {
     for registration in unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>() {
-        let binding = registration.binding;
+        let binding = registration;
         assert!(binding.resolver.implementation.named.is_none());
         assert_eq!(binding.resolver.implementation.key, binding.resolver_name());
         let address = match binding.resolver_name() {

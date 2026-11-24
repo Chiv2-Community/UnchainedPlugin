@@ -76,12 +76,12 @@ pub fn startup_resolvers(snapshot: &SelectorSnapshot) -> Result<Vec<&'static Nam
         .filter_map(|resolver| resolver.implementation.named.as_ref()).collect();
     let available: Vec<_> = patternsleuth::resolvers::resolvers().collect();
     let names = inventory::iter::<RequiredResolver>.into_iter().map(|root| root.name)
-        .chain(inventory::iter::<ValueBindingRegistration>.into_iter().map(|entry| entry.binding.name()));
+        .chain(inventory::iter::<&'static ValueBinding>.into_iter().map(|entry| entry.name()));
     let mut roots = select(names, &declared, &available)?;
     roots.retain(|resolver| snapshot.supports_resolver_for::<PatternsleuthResolver>(resolver.name));
     roots.extend(binding_inventory_for::<PatternsleuthResolver>()
-        .filter(|entry| entry.binding.supports(snapshot))
-        .filter_map(|entry| entry.binding.resolver.implementation.named.as_ref()));
+        .filter(|entry| entry.supports(snapshot))
+        .filter_map(|entry| entry.resolver.implementation.named.as_ref()));
     roots.extend(patch_inventory_for::<PatternsleuthResolver>()
         .filter(|entry| snapshot.supports_patch(*entry))
         .filter_map(|entry| entry.resolver.implementation.named.as_ref()));

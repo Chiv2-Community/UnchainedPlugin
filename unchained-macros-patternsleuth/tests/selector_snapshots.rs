@@ -117,13 +117,14 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
         .find(|hook| hook.name == "alpha_detour").unwrap();
     let beta_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
         .find(|hook| hook.name == "beta_detour").unwrap();
-    assert!(std::ptr::eq(alpha_hook.binding, Native::__UNCHAINED_BINDING_alpha.binding()));
-    assert!(alpha_hook.binding.supports(&snapshot));
-    assert!(!alpha_hook.binding.supports(&next));
-    assert!(beta_hook.binding.supports(&snapshot));
-    assert!(beta_hook.binding.supports(&next));
-    assert_eq!(alpha_hook.binding.name(), "Native::alpha");
-    assert!(std::ptr::eq(alpha_hook.binding.resolver,
+    let alpha_binding = alpha_hook.binding::<unchained_macros_patternsleuth::PatternsleuthResolver>().unwrap();
+    assert!(std::ptr::eq(alpha_binding, Native::__UNCHAINED_BINDING_alpha.binding()));
+    assert!(alpha_hook.resolver().supports(&snapshot));
+    assert!(!alpha_hook.resolver().supports(&next));
+    assert!(beta_hook.resolver().supports(&snapshot));
+    assert!(beta_hook.resolver().supports(&next));
+    assert_eq!(alpha_binding.name(), "Native::alpha");
+    assert!(std::ptr::eq(alpha_binding.resolver,
         <AlphaResolver as unchained_macros_core::ResolverDeclaration>::DESCRIPTOR));
     assert!(next.chain::<Alpha>().unwrap() == [Alpha::Second, Alpha::Default]);
     assert!(next.chain::<Beta>().unwrap() == [Beta::Leaf]);

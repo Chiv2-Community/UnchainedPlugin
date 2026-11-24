@@ -61,7 +61,7 @@ unsafe extern "C" fn return_storage<'a>(value: *const Native, output: &'a mut i3
 
 fn initialize() {
     for registration in unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>() {
-        let address = match registration.binding.resolver_name() {
+        let address = match registration.resolver_name() {
             "Read" | "RawRead" => read as *const () as usize,
             "Write" | "RawWrite" => write as *const () as usize,
             "Add" => add as *const () as usize,
@@ -70,7 +70,7 @@ fn initialize() {
             "ReturnStorage" => return_storage as *const () as usize,
             name => panic!("Unexpected binding {name}"),
         };
-        unsafe { registration.binding.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap(); }
+        unsafe { registration.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap(); }
     }
 }
 

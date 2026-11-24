@@ -99,16 +99,16 @@ fn native_coexistence_bypass_conditions_and_aliases() {
         .filter(|listener| !listener.name.starts_with("duplicate_")).collect::<Vec<_>>();
     // Failed unresolved attachment does not publish slots; retry after resolution works.
     for registration in &listeners {
-        assert!(unsafe { (registration.hook_fn)(true) }.unwrap_err().to_string().contains("not initialized"));
-        assert!(!(registration.initialized)());
+        assert!(unsafe { registration.attach(true) }.unwrap_err().to_string().contains("not initialized"));
+        assert!(!registration.initialized());
     }
     unsafe { binding.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap(); }
     // Register in reverse dispatch order; registration order is immaterial.
-    for registration in &listeners { unsafe { (registration.hook_fn)(true).unwrap(); } }
+    for registration in &listeners { unsafe { registration.attach(true).unwrap(); } }
     assert!(listener_is_initialized("native_entry"));
     assert!(listener_is_enabled("native_entry"));
     let hook = hook_inventory_for::<Backend>().find(|hook| hook.name == "coexistence_detour").unwrap();
-    unsafe { (hook.hook_fn)(true).unwrap(); }
+    unsafe { hook.attach(true).unwrap(); }
     assert!(detour_is_enabled("coexistence_detour"));
     let mut output = 0;
     assert_eq!(unsafe { original(4, &mut output) }, 15);
@@ -138,7 +138,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     assert_eq!(unsafe { original(6, &mut output) }, 17);
     assert_eq!(*EVENTS.lock().unwrap(), [('e',6),('d',6),('o',6),('x',6),('r',17)]);
     EVENTS.lock().unwrap().clear();
-    (hook.set_enabled)(false);
+    hook.set_enabled(false);
     Native::__UNCHAINED_LISTENERS_call.entry.set_enabled(false);
     assert!(!listener_is_enabled("native_entry"));
     assert!(listener_is_enabled("native_exit"));
@@ -150,13 +150,13 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     DETOUR_CONDITION.store(true, Ordering::SeqCst);
     ENTRY_CONDITION.store(true, Ordering::SeqCst);
     Native::__UNCHAINED_LISTENERS_call.entry.set_enabled(true);
-    (hook.set_enabled)(false);
+    hook.set_enabled(false);
     assert!(!detour_is_enabled("coexistence_detour"));
     output = 0;
     assert_eq!(unsafe { original(7, &mut output) }, 8);
     assert_eq!(*EVENTS.lock().unwrap(), [('e',7),('o',7),('x',7),('r',8)]);
     EVENTS.lock().unwrap().clear();
-    (hook.set_enabled)(true);
+    hook.set_enabled(true);
 
     SKIP_ORIGINAL.store(true, Ordering::SeqCst);
     output = 0;
@@ -209,22 +209,22 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     assert_eq!(ENTRY_CONDITION_CALLS.load(Ordering::SeqCst), 1);
 
     for registration in listeners {
-        assert!(unsafe { (registration.hook_fn)(true) }.unwrap_err().to_string().contains("Only one"));
+        assert!(unsafe { registration.attach(true) }.is_err());
     }
-    assert!(unsafe { (hook.hook_fn)(true) }.is_err());
+    assert!(unsafe { hook.attach(true) }.is_err());
     for registration in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("duplicate_")) {
-        assert!(unsafe { (registration.hook_fn)(true) }.unwrap_err().to_string().contains("Only one"));
+        assert!(unsafe { registration.attach(true) }.unwrap_err().to_string().contains("Only one"));
     }
     let duplicate = hook_inventory_for::<Backend>().find(|hook| hook.name == "duplicate_detour").unwrap();
-    assert!(unsafe { (duplicate.hook_fn)(true) }.unwrap_err().to_string().contains("Only one behavior-changing"));
-    assert!((duplicate.detour)().is_none());
-    (duplicate.set_enabled)(false);
-    assert!((hook.enabled)());
-    (hook.set_enabled)(false);
-    (duplicate.set_enabled)(true);
-    assert!(!(hook.enabled)());
-    assert!(!(duplicate.enabled)());
-    (hook.set_enabled)(true);
+    assert!(unsafe { duplicate.attach(true) }.unwrap_err().to_string().contains("Only one behavior-changing"));
+    assert!(duplicate.detour().is_none());
+    duplicate.set_enabled(false);
+    assert!(hook.enabled());
+    hook.set_enabled(false);
+    duplicate.set_enabled(true);
+    assert!(!hook.enabled());
+    assert!(!duplicate.enabled());
+    hook.set_enabled(true);
 
     struct OtherBackend;
     impl AddressResolver for OtherBackend {
@@ -237,7 +237,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     let other = Box::leak(Box::new(FunctionBinding::new("other backend", &OTHER_RESOLVER)));
     unsafe { other.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap(); }
     assert_eq!(other.address(), binding.address());
-    let physical = Box::leak(Box::new(__private::NativeHook::new()));
+    let physical = Box::leak(Box::new(NativeHook::new()));
     assert!(unsafe { physical.attach(other, original as *const ()) }
         .unwrap_err().to_string().contains("already owns native address"));
     assert!(physical.detour().is_none());
@@ -251,11 +251,11 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
     assert!(slot.get().is_none());
     static DROPS: AtomicUsize = AtomicUsize::new(0);
     unsafe fn finish(_: *mut (), _: *const ()) { panic!("exit failure"); }
-    unsafe fn release(state: *mut ()) {
-        unsafe { drop(Box::from_raw(state.cast::<u32>())); }
-        DROPS.fetch_add(1, Ordering::SeqCst);
+    struct Snapshot;
+    impl Drop for Snapshot {
+        fn drop(&mut self) { DROPS.fetch_add(1, Ordering::SeqCst); }
     }
-    let make = || unsafe { ExitObservation::new(Box::into_raw(Box::new(1_u32)).cast(), finish, release) };
+    let make = || unsafe { ExitObservation::from_snapshot(Snapshot, finish) };
     drop(make());
     unsafe { make().finish(std::ptr::null()); }
     assert_eq!(DROPS.load(Ordering::SeqCst), 2);
@@ -330,7 +330,7 @@ mod backend_specific {
     fn observation_only_target_does_not_need_native_function_or_callable_method() {
         validate_listener_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
         for listener in listener_inventory_for::<Backend>() {
-            unsafe { (listener.hook_fn)(true).unwrap(); }
+            unsafe { listener.attach(true).unwrap(); }
         }
         assert!(ATTACHED.load(Ordering::SeqCst));
         assert_eq!(binding_inventory_for::<Backend>().count(), 0);
@@ -376,8 +376,8 @@ mod duplicate_discovery {
     unsafe fn host_loop(snapshot: &SelectorSnapshot, preflight: bool) -> Result<(), Box<dyn std::error::Error>> {
         if preflight { validate_listener_registrations_for::<Backend>(snapshot)?; }
         for listener in listener_inventory_for::<Backend>() {
-            if !listener.resolver.supports(snapshot) || (listener.initialized)() { continue; }
-            unsafe { (listener.hook_fn)(true)?; }
+            if !listener.resolver.supports(snapshot) || listener.initialized() { continue; }
+            unsafe { listener.attach(true)?; }
         }
         Ok(())
     }
@@ -388,27 +388,27 @@ mod duplicate_discovery {
         assert!(error.contains("Only one listener per method phase"), "{error}");
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 0);
         for listener in listener_inventory_for::<Backend>() {
-            assert!(!(listener.initialized)());
-            assert!(!(listener.enabled)());
+            assert!(!listener.initialized());
+            assert!(!listener.enabled());
         }
 
         // Even a host without preflight must not skip a loser as "initialized".
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("first_")) {
-            unsafe { (listener.hook_fn)(true).unwrap(); }
+            unsafe { listener.attach(true).unwrap(); }
         }
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 1);
         let error = unsafe { host_loop(&snapshot, false) }.unwrap_err().to_string();
         assert!(error.contains("Only one"), "{error}");
         for listener in listener_inventory_for::<Backend>() {
             if listener.name.starts_with("second_") {
-                assert!(!(listener.initialized)());
-                assert!(!(listener.enabled)());
-                (listener.set_enabled)(false);
+                assert!(!listener.initialized());
+                assert!(!listener.enabled());
+                listener.set_enabled(false);
             }
         }
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("first_")) {
-            assert!((listener.initialized)());
-            assert!((listener.enabled)());
+            assert!(listener.initialized());
+            assert!(listener.enabled());
         }
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 1);
     }
@@ -447,18 +447,18 @@ mod activation {
                 NonZeroUsize::new(original_gated as *const () as usize).unwrap()).unwrap();
             let off = hook_inventory_for::<Backend>().find(|hook| hook.name == "off").unwrap();
             let gated = hook_inventory_for::<Backend>().find(|hook| hook.name == "gated").unwrap();
-            (off.hook_fn)(false).unwrap();
+            off.attach(false).unwrap();
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
-            (gated.hook_fn)(true).unwrap();
+            gated.attach(true).unwrap();
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 1);
-            for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
-            assert!(!(off.enabled)());
-            assert!(!(gated.enabled)());
+            for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
+            assert!(!off.enabled());
+            assert!(!gated.enabled());
             assert_eq!(original_off(), 11);
             assert_eq!(original_gated(), 12);
             assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);
-            (off.set_enabled)(true);
-            assert!((off.enabled)());
+            off.set_enabled(true);
+            assert!(off.enabled());
             assert_eq!(original_off(), 99);
             assert_eq!(ENTRIES.load(Ordering::SeqCst), 2);
             assert_eq!(Native::off(), 11);
@@ -505,10 +505,10 @@ mod condition_reentry {
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
             let entry = listener_inventory_for::<Backend>().find(|listener| listener.name == "entry").unwrap();
             let exit = listener_inventory_for::<Backend>().find(|listener| listener.name == "exit").unwrap();
-            (entry.hook_fn)(true).unwrap();
-            (exit.hook_fn)(true).unwrap();
+            entry.attach(true).unwrap();
+            exit.attach(true).unwrap();
             let detour = hook_inventory_for::<Backend>().next().unwrap();
-            (detour.hook_fn)(true).unwrap();
+            detour.attach(true).unwrap();
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
             assert_eq!(ORIGINAL.load(Ordering::SeqCst), 2);
             assert_eq!(ENTRIES.load(Ordering::SeqCst), 0);
@@ -600,7 +600,7 @@ mod local_hygiene {
             Native::__UNCHAINED_BINDING_call.binding().initialize_address(
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
             validate_listener_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
-            for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
+            for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             let mut callback_value = 0_usize;
             let address_value = 0_usize;
             let callback = &mut callback_value as *mut usize;
@@ -651,7 +651,7 @@ mod ownership {
                 NonZeroUsize::new(original_echo as *const () as usize).unwrap()).unwrap();
             Native::__UNCHAINED_BINDING_make.binding().initialize_address(
                 NonZeroUsize::new(original_make as *const () as usize).unwrap()).unwrap();
-            for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
+            for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             // Keep calls opaque: optimized direct calls can bypass the patched entry.
             let echo = std::hint::black_box(original_echo as unsafe extern "C" fn(Owned) -> Owned);
             let make = std::hint::black_box(original_make as unsafe extern "C" fn(usize) -> Owned);
@@ -726,7 +726,7 @@ mod custom_snapshots {
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
             Native::__UNCHAINED_BINDING_two.binding().initialize_address(
                 NonZeroUsize::new(original_two as *const () as usize).unwrap()).unwrap();
-            for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
+            for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             let call = std::hint::black_box(original as unsafe extern "C" fn(Owned) -> Owned);
             let result = call(Owned { value: 5 });
             assert_eq!(result.value, 6);
@@ -808,7 +808,7 @@ mod references {
                 (Native::__UNCHAINED_BINDING_pointer.binding(), original_pointer as *const () as usize),
                 (Native::__UNCHAINED_BINDING_nothing.binding(), original_nothing as *const () as usize),
             ] { binding.initialize_address(NonZeroUsize::new(address).unwrap()).unwrap(); }
-            for listener in listener_inventory_for::<Backend>() { (listener.hook_fn)(true).unwrap(); }
+            for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             let mut value = 7;
             assert_eq!(*original_read(&mut value), 8);
             assert_eq!(SEEN.load(Ordering::SeqCst), 7);

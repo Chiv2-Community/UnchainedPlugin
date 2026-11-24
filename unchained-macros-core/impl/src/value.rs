@@ -42,7 +42,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 static BINDING: ::unchained_macros_core::ValueBinding =
                     ::unchained_macros_core::ValueBinding::new(#resolver_name);
                 ::unchained_macros_core::__private::inventory::submit! {
-                    ::unchained_macros_core::ValueBindingRegistration { binding: &BINDING }
+                    &BINDING as &'static ::unchained_macros_core::ValueBinding
                 }
                 ::unchained_macros_core::NativeGlobal::#constructor(&BINDING)
             };
@@ -88,7 +88,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         static #binding: ::unchained_macros_core::ValueBinding =
             ::unchained_macros_core::ValueBinding::new(#resolver_name);
         ::unchained_macros_core::__private::inventory::submit! {
-            ::unchained_macros_core::ValueBindingRegistration { binding: &#binding }
+            &#binding as &'static ::unchained_macros_core::ValueBinding
         }
         fn __require_copy<T: ::core::marker::Copy>() {}
         __require_copy::<#ty>();

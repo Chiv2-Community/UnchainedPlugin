@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Type};
 use crate::{
-    common::{cfg_attributes, CallbackArguments},
+    common::{cfg_attributes, CallbackArguments, fresh_local},
     docs::attach_native_documentation,
     signature::{validate_native_signature, native_type,
         normalized_mutability, parameter_type},
@@ -80,9 +80,10 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let signature = &function.sig;
     let native = native_type(signature)?;
     let ident = &function.sig.ident;
-    let hook = format_ident!("__UNCHAINED_HOOK_{}", ident, span = Span::mixed_site());
+    let registration = format_ident!("__UNCHAINED_REGISTRATION_{}", ident, span = Span::mixed_site());
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
-    let attach = format_ident!("__unchained_attach_{}", ident, span = Span::mixed_site());
+    let activate = fresh_local(signature, "activate");
+    let native_replacement = fresh_local(signature, "replacement");
     let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let (names, types): (Vec<_>, Vec<_>) = signature
@@ -130,48 +131,32 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #[allow(non_snake_case)]
         fn #condition_fn() -> bool { (#condition)() }
         #(#cfg)*
-        #[allow(non_upper_case_globals)]
-        static #hook: ::std::sync::OnceLock<&'static ::unchained_macros_core::__private::retour::RawDetour> =
-            ::std::sync::OnceLock::new();
-        #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
             unsafe { #ident(#(#names),*) }
         }
         #(#cfg)*
-        #[allow(non_snake_case)]
-        unsafe fn #attach(
-            auto_activate: bool,
-        ) -> Result<(), Box<dyn ::std::error::Error>> {
+        #[allow(non_upper_case_globals)]
+        static #registration: ::unchained_macros_core::HookRegistration =
+            ::unchained_macros_core::HookRegistration::new(
+            stringify!(#ident), #target.binding(), #hook_target,
+            |#activate| {
             // Checked outer mutability differences preserve the native ABI.
             // Reference validity and aliasing remain the detour author's obligation.
-            let replacement: #native = #replacement;
-            if #hook.get().is_some() {
-                return Err("Detour callback is already initialized".into());
-            }
+            let #native_replacement: #native = #replacement;
             if #hook_target.has_replacement() {
                 return Err("Only one behavior-changing detour is supported per method".into());
             }
             unsafe { #listener_target.ensure_attached()?; }
-            let activate = #listener_target.activation(auto_activate, #condition_fn);
-            unsafe { #hook_target.register_replacement(replacement as usize, activate)?; }
-            #hook.set(#hook_target.detour().expect("Native dispatcher just attached"))
-                .map_err(|_| "Detour callback is already initialized")?;
+            let #activate = #listener_target.activation(#activate, #condition_fn);
+            unsafe { #hook_target.register_replacement(#native_replacement as usize, #activate)?; }
             Ok(())
-        }
+            },
+            || #listener_target.activation(true, #condition_fn),
+        );
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            &::unchained_macros_core::HookRegistration {
-                name: stringify!(#ident), binding: #target.binding(),
-                hook_fn: #attach,
-                condition: || #listener_target.activation(true, #condition_fn),
-                detour: || #hook.get().copied(),
-                enabled: || #hook_target.replacement_address().is_some()
-                    && #hook.get().is_some_and(|hook| hook.is_enabled()),
-                set_enabled: |enabled| {
-                    if #hook.get().is_some() { #hook_target.set_enabled(enabled); }
-                },
-            } as &dyn ::unchained_macros_core::__private::HookInfo
+            &#registration
         }
     })
 }
@@ -188,11 +173,14 @@ mod tests {
         ).unwrap().to_string();
         assert!(expanded.contains("ensure_attached"));
         assert!(expanded.contains(":: unchained_macros_core :: __private :: inventory :: submit"));
-        assert!(expanded.contains(":: unchained_macros_core :: __private :: retour :: RawDetour"));
+        assert!(expanded.contains("HookRegistration :: new"));
+        assert!(expanded.contains("__UNCHAINED_REGISTRATION_replacement"));
+        assert!(!expanded.contains("OnceLock"));
+        assert!(!expanded.contains("__unchained_attach_replacement"));
         assert!(!expanded.contains("claim_detour_address"));
         assert!(!expanded.contains("publish_function_detours"));
         assert!(!expanded.contains("RawDetour :: new"));
-        assert!(expanded.contains("let replacement : unsafe extern \"C\" fn"));
+        assert!(expanded.contains("unsafe extern \"C\" fn (i32) -> i32"));
     }
 
     #[test]

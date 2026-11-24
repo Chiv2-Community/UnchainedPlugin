@@ -102,7 +102,7 @@ static FILTERED: Resolver<KismetReflectionResolver> = Resolver {
 static FILTERED_BINDING: bindings::FunctionBinding<KismetReflectionResolver> =
     bindings::FunctionBinding::new("Filtered::call", &FILTERED);
 inventory::submit! {
-    &bindings::FunctionBindingRegistration { binding: &FILTERED_BINDING }
+    &FILTERED_BINDING
         as &dyn bindings::__private::FunctionInfo
 }
 
@@ -123,13 +123,13 @@ impl AddressResolver for LateResolver {
 static LATE: Resolver<LateResolver> = Resolver { name: "Late", implementation: LateResolver, filter: None };
 static LATE_BINDING: bindings::FunctionBinding<LateResolver> = bindings::FunctionBinding::new("Late::alias", &LATE);
 inventory::submit! {
-    &bindings::FunctionBindingRegistration { binding: &LATE_BINDING }
+    &LATE_BINDING
         as &dyn bindings::__private::FunctionInfo
 }
 static OTHER: Resolver<OtherResolver> = Resolver { name: "Native__add", implementation: OtherResolver, filter: None };
 static OTHER_BINDING: bindings::FunctionBinding<OtherResolver> = bindings::FunctionBinding::new("Other::alias", &OTHER);
 inventory::submit! {
-    &bindings::FunctionBindingRegistration { binding: &OTHER_BINDING }
+    &OTHER_BINDING
         as &dyn bindings::__private::FunctionInfo
 }
 inventory::submit! { &OTHER as &dyn bindings::__private::ResolverInfo }
@@ -211,7 +211,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert_eq!(READS.load(Ordering::SeqCst), reads);
 
     unsafe {
-        __unchained_attach_replacement(true).unwrap();
+        __UNCHAINED_REGISTRATION_replacement.attach(true).unwrap();
         assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(5), 16);
         assert_eq!(Native::add(5), 6);
         assert_eq!(Native::alias(5), 6);
@@ -226,7 +226,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
         assert_ne!(OTHER_BINDING.address(), OTHER_BINDING.entry_address());
         assert!(bindings::__private::claim_detour_address(OTHER_BINDING.entry_address().unwrap().get()).is_err());
         let hook = bindings::hook_inventory_for::<KismetReflectionResolver>().next().unwrap();
-        (hook.detour)().unwrap().disable().unwrap();
+        hook.detour().unwrap().disable().unwrap();
         assert_eq!(Native::add(5), 6);
     }
 }

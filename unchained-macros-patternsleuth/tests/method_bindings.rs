@@ -55,12 +55,12 @@ fn metadata_preserves_signatures_and_binding_identity() {
         Native::__UNCHAINED_BINDING_storage;
     let binding = Native::__UNCHAINED_BINDING_add.binding();
     let registration = unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|r| r.binding.name() == "Native::add")
+        .find(|r| r.name() == "Native::add")
         .unwrap();
-    assert!(std::ptr::eq(binding, registration.binding));
+    assert!(std::ptr::eq(binding, registration));
     assert!(
         !unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-            .any(|r| r.binding.resolver_name() == "DoesNotExist")
+            .any(|r| r.resolver_name() == "DoesNotExist")
     );
 }
 

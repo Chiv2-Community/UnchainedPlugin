@@ -134,7 +134,7 @@ unsafe extern "C" fn request_target(value: i32) -> i32 {
 #[test]
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
     assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
-    assert!(unsafe { __unchained_attach_plugin_add(true) }.is_err());
+    assert!(unsafe { __UNCHAINED_REGISTRATION_plugin_add.attach(true) }.is_err());
     assert!(!unchained_macros_core::detour_is_initialized("plugin_add"));
     assert!(!unchained_macros_core::detour_is_enabled("MissingDetour"));
     assert!(!unchained_macros_core::detour_is_initialized("MissingDetour"));
@@ -173,26 +173,27 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         }
     }
     let registration = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|r| r.hook_fn as usize == __unchained_attach_plugin_add as *const () as usize)
+        .find(|r| r.name == "plugin_add")
         .unwrap();
     assert_eq!(registration.name, "plugin_add");
-    assert!(std::ptr::eq(registration.binding, Native::__UNCHAINED_BINDING_add.binding()));
-    assert_eq!(registration.binding.name(), "Native::add");
-    assert_eq!(registration.binding.resolver_name(), "DetachedAdd");
+    let binding = registration.binding::<unchained_macros_patternsleuth::PatternsleuthResolver>().unwrap();
+    assert!(std::ptr::eq(binding, Native::__UNCHAINED_BINDING_add.binding()));
+    assert_eq!(binding.name(), "Native::add");
+    assert_eq!(binding.resolver_name(), "DetachedAdd");
     assert!(!(registration.condition)());
     CONDITION.store(true, Ordering::SeqCst);
     assert!((registration.condition)());
     unsafe {
         assert_eq!(Native::add(7), 10);
-        (registration.hook_fn)(true).unwrap();
-        __unchained_attach_plugin_borrow(true).unwrap();
-        __unchained_attach_plugin_storage(true).unwrap();
-        __unchained_attach_plugin_global_off(false).unwrap();
+        registration.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_plugin_borrow.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_plugin_storage.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_plugin_global_off.attach(false).unwrap();
         assert_eq!(GLOBAL_OFF_CONDITION_CALLS.load(Ordering::SeqCst), 0);
-        assert!(__unchained_attach_plugin_global_off(true).is_err());
+        assert!(__UNCHAINED_REGISTRATION_plugin_global_off.attach(true).is_err());
         assert_eq!(GLOBAL_OFF_CONDITION_CALLS.load(Ordering::SeqCst), 0);
-        __unchained_attach_plugin_zero(true).unwrap();
-        __unchained_attach_plugin_request(true).unwrap();
+        __UNCHAINED_REGISTRATION_plugin_zero.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_plugin_request.attach(true).unwrap();
         assert_eq!(Native::zero(), 17);
         assert_eq!(
             std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(),
@@ -213,9 +214,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert_eq!(Native::add(7), 10);
         assert_eq!(Native::alias(7), 10);
         assert_eq!(ADD_CALLS.load(Ordering::SeqCst), 1);
-        assert!(__unchained_attach_duplicate(true).is_err());
-        assert!(__unchained_attach_aliased(true).is_err());
-        assert!(__unchained_attach_plugin_add(true).is_err());
+        assert!(__UNCHAINED_REGISTRATION_duplicate.attach(true).is_err());
+        assert!(__UNCHAINED_REGISTRATION_aliased.attach(true).is_err());
+        assert!(__UNCHAINED_REGISTRATION_plugin_add.attach(true).is_err());
 
         let native = Native { value: 42 };
         let borrow_call =
@@ -224,7 +225,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 0);
         let borrow_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
             .find(|hook| hook.name == "plugin_borrow").unwrap();
-        (borrow_hook.set_enabled)(true);
+        borrow_hook.set_enabled(true);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert!(std::ptr::eq(native.borrow(), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 1);
@@ -245,9 +246,8 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         );
 
         let original_address = Native::__UNCHAINED_BINDING_add.binding().address();
-        __UNCHAINED_HOOK_plugin_add
-            .get()
-            .unwrap()
+        __UNCHAINED_REGISTRATION_plugin_add
+            .detour().unwrap()
             .disable()
             .unwrap();
         assert_eq!(call(7), 10);
@@ -258,24 +258,20 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             Native::__UNCHAINED_BINDING_add.binding().address(),
             original_address
         );
-        __UNCHAINED_HOOK_plugin_borrow
-            .get()
-            .unwrap()
+        __UNCHAINED_REGISTRATION_plugin_borrow
+            .detour().unwrap()
             .disable()
             .unwrap();
-        __UNCHAINED_HOOK_plugin_storage
-            .get()
-            .unwrap()
+        __UNCHAINED_REGISTRATION_plugin_storage
+            .detour().unwrap()
             .disable()
             .unwrap();
-        __UNCHAINED_HOOK_plugin_zero
-            .get()
-            .unwrap()
+        __UNCHAINED_REGISTRATION_plugin_zero
+            .detour().unwrap()
             .disable()
             .unwrap();
-        __UNCHAINED_HOOK_plugin_request
-            .get()
-            .unwrap()
+        __UNCHAINED_REGISTRATION_plugin_request
+            .detour().unwrap()
             .disable()
             .unwrap();
     }

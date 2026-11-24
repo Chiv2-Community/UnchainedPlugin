@@ -2,18 +2,54 @@
 use std::any::{Any, TypeId};
 use crate::{AddressResolver, FunctionBinding, Resolver, SelectorSnapshot};
 use crate::resolver::ResolverInfo;
+use std::sync::atomic::{AtomicBool, Ordering};
+use crate::detour::NativeHook;
+use crate::binding::FunctionInfo;
 
 pub type CreateHookFn = unsafe fn(bool) -> Result<(), Box<dyn std::error::Error>>;
 
-pub struct HookRegistration<R: AddressResolver> {
+/// Process-lifetime replacement ownership. Attach only during quiescent startup.
+pub struct HookRegistration {
     pub name: &'static str,
-    pub binding: &'static FunctionBinding<R>,
-    pub hook_fn: CreateHookFn,
+    binding: &'static dyn FunctionInfo,
+    hook: &'static NativeHook,
+    install: CreateHookFn,
+    initialized: AtomicBool,
     pub condition: fn() -> bool,
-    pub detour: fn() -> Option<&'static retour::RawDetour>,
-    /// Logical callback state; the physical hook may remain enabled for listeners.
-    pub enabled: fn() -> bool,
-    pub set_enabled: fn(bool),
+}
+impl HookRegistration {
+    pub const fn new<R: AddressResolver>(
+        name: &'static str, binding: &'static FunctionBinding<R>, hook: &'static NativeHook,
+        install: CreateHookFn, condition: fn() -> bool,
+    ) -> Self {
+        Self { name, binding, hook, install, condition, initialized: AtomicBool::new(false) }
+    }
+    pub fn binding<R: AddressResolver>(&self) -> Option<&'static FunctionBinding<R>> {
+        (self.binding as &dyn Any).downcast_ref()
+    }
+    pub fn resolver(&self) -> &'static dyn ResolverInfo { self.binding.resolver() }
+    /// # Safety
+    /// Attach during quiescent startup. The installer must publish this hook's
+    /// ABI-correct process-lifetime replacement, rejecting duplicates before
+    /// publication. It must not publish the callback on failure.
+    /// Do not attach concurrently.
+    pub unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
+        if self.initialized() { return Err("Detour callback is already initialized".into()); }
+        unsafe { (self.install)(activate)?; }
+        self.initialized.store(true, Ordering::Release);
+        Ok(())
+    }
+    pub fn initialized(&self) -> bool { self.initialized.load(Ordering::Acquire) }
+    pub fn detour(&self) -> Option<&'static retour::RawDetour> {
+        self.initialized().then(|| self.hook.detour()).flatten()
+    }
+    pub fn enabled(&self) -> bool {
+        self.detour().is_some_and(|hook| hook.is_enabled())
+            && self.hook.replacement_address().is_some()
+    }
+    pub fn set_enabled(&self, enabled: bool) {
+        if self.initialized() { self.hook.set_enabled(enabled); }
+    }
 }
 
 pub struct PatchRegistration<R: AddressResolver> {
@@ -44,23 +80,12 @@ impl<R: AddressResolver> PatchRegistration<R> {
     pub fn supports(&self, snapshot: &SelectorSnapshot) -> bool { snapshot.supports_patch(self) }
 }
 
-#[doc(hidden)]
-pub trait HookInfo: Any + Send + Sync {
-    fn name(&self) -> &'static str;
-    fn detour(&self) -> Option<&'static retour::RawDetour>;
-    fn enabled(&self) -> bool;
-}
-impl<R: AddressResolver> HookInfo for HookRegistration<R> {
-    fn name(&self) -> &'static str { self.name }
-    fn detour(&self) -> Option<&'static retour::RawDetour> { (self.detour)() }
-    fn enabled(&self) -> bool { (self.enabled)() }
-}
-
-inventory::collect!(&'static dyn HookInfo);
+inventory::collect!(&'static HookRegistration);
 inventory::collect!(&'static dyn PatchInfo);
 
-pub fn hook_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static HookRegistration<R>> {
-    inventory::iter::<&'static dyn HookInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())
+pub fn hook_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static HookRegistration> {
+    inventory::iter::<&'static HookRegistration>.into_iter().copied()
+        .filter(|entry| entry.binding::<R>().is_some())
 }
 pub fn patch_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static PatchRegistration<R>> {
     inventory::iter::<&'static dyn PatchInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())

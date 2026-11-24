@@ -163,26 +163,21 @@ impl<F, R: crate::AddressResolver> NativeFunction<F, R> {
     pub const fn name(&self) -> &'static str { self.binding.name() }
 }
 
-/// References stable binding storage without duplicating its address or name.
-pub struct BindingRegistration<T: 'static> {
-    pub binding: &'static T,
-}
-
-pub type FunctionBindingRegistration<R> = BindingRegistration<FunctionBinding<R>>;
-
 #[doc(hidden)]
 pub trait FunctionInfo: std::any::Any + Send + Sync {
+    fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
     fn entry_address(&self) -> Option<NonZeroUsize>;
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
 }
-impl<R: crate::AddressResolver> FunctionInfo for FunctionBindingRegistration<R> {
-    fn entry_address(&self) -> Option<NonZeroUsize> { self.binding.entry_address() }
+impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
+    fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo { self.resolver }
+    fn entry_address(&self) -> Option<NonZeroUsize> { self.entry_address() }
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
-        unsafe { self.binding.publish_detour(detour) }
+        unsafe { self.publish_detour(detour) }
     }
 }
 inventory::collect!(&'static dyn FunctionInfo);
-pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item = &'static FunctionBindingRegistration<R>> {
+pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item = &'static FunctionBinding<R>> {
     inventory::iter::<&'static dyn FunctionInfo>.into_iter().filter_map(|entry| (*entry as &dyn std::any::Any).downcast_ref())
 }
 
@@ -197,10 +192,9 @@ pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
 ) -> Result<(), String> {
     snapshot.validate_registered()?;
     let mut resolved = Vec::new();
-    for registration in binding_inventory_for::<R>()
-        .filter(|registration| registration.binding.supports(snapshot))
+    for binding in binding_inventory_for::<R>()
+        .filter(|binding| binding.supports(snapshot))
     {
-        let binding = registration.binding;
         let address = unsafe { binding.resolver.implementation.resolve(context) }
             .map_err(|error| format!("Binding {} ({}): {error}", binding.name(), binding.resolver_name()))?;
         resolved.push((binding, address));
@@ -212,7 +206,7 @@ pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
 }
 
 pub fn function_is_bound_for<R: crate::AddressResolver>(name: &str) -> bool {
-    binding_inventory_for::<R>().any(|entry| entry.binding.resolver_name() == name && entry.binding.address().is_some())
+    binding_inventory_for::<R>().any(|entry| entry.resolver_name() == name && entry.address().is_some())
 }
 
 /// Preserve fallible helper behavior before native binding initialization.
@@ -287,9 +281,7 @@ impl<T> NativeGlobal<T> {
     }
 }
 
-pub type ValueBindingRegistration = BindingRegistration<ValueBinding>;
-
-inventory::collect!(ValueBindingRegistration);
+inventory::collect!(&'static ValueBinding);
 
 /// Bind every required native value from cached or scanned module-relative offsets.
 ///
@@ -310,10 +302,9 @@ pub unsafe fn initialize_value_bindings_where(
     offsets: &std::collections::HashMap<String, u64>,
     enabled: impl Fn(&str) -> bool,
 ) {
-    for registration in inventory::iter::<ValueBindingRegistration>.into_iter()
-        .filter(|registration| enabled(registration.binding.name()))
+    for binding in inventory::iter::<&'static ValueBinding>.into_iter()
+        .filter(|binding| enabled(binding.name()))
     {
-        let binding = registration.binding;
         let offset = offsets.get(binding.name()).unwrap_or_else(|| {
             panic!("Required native value {} could not be resolved; no offset is available", binding.name())
         });
@@ -322,6 +313,6 @@ pub unsafe fn initialize_value_bindings_where(
 }
 
 pub fn is_required_value(name: &str) -> bool {
-    inventory::iter::<ValueBindingRegistration>.into_iter()
-        .any(|registration| registration.binding.name() == name)
+    inventory::iter::<&'static ValueBinding>.into_iter()
+        .any(|binding| binding.name() == name)
 }

@@ -45,12 +45,10 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let method = target.segments.last_mut().unwrap();
     method.ident = format_ident!("__UNCHAINED_LISTENERS_{}", method.ident, span = Span::mixed_site());
     let ident = &function.sig.ident;
-    let attach = format_ident!("__unchained_attach_{}", ident);
+    let registration = format_ident!("__UNCHAINED_REGISTRATION_{}", ident);
     let condition_fn = format_ident!("__unchained_condition_{}", ident);
     let prepare = format_ident!("__unchained_prepare_{}", ident);
     let finish = format_ident!("__unchained_finish_{}", ident);
-    let release = format_ident!("__unchained_release_{}", ident);
-    let initialized = format_ident!("__UNCHAINED_LISTENER_INITIALIZED_{}", ident);
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let indices: Vec<_> = (0..types.len()).map(syn::Index::from).collect();
     let snapshot_types: Vec<_> = types.iter().map(|ty|
@@ -69,9 +67,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         unsafe fn #prepare(#(#names: &#types),*) -> ::unchained_macros_core::ExitObservation {
             let #snapshot: (#(#snapshot_types,)*) =
                 (#(<#types as ::unchained_macros_core::ObserverSnapshot>::snapshot(#names),)*);
-            unsafe { ::unchained_macros_core::ExitObservation::new(
-                Box::into_raw(Box::new(#snapshot)).cast(), #finish, #release,
-            ) }
+            unsafe { ::unchained_macros_core::ExitObservation::from_snapshot(#snapshot, #finish) }
         }
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -83,11 +79,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
                 #returned,
             ); }
         }
-        #(#cfg)*
-        #[allow(non_snake_case)]
-        unsafe fn #release(#state: *mut ()) {
-            unsafe { drop(Box::from_raw(#state.cast::<(#(#snapshot_types,)*)>())); }
-        }
     });
     Ok(quote! {
         #function
@@ -97,30 +88,15 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         fn #condition_fn() -> bool { (#condition)() }
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #initialized: ::std::sync::atomic::AtomicBool = ::std::sync::atomic::AtomicBool::new(false);
-        #(#cfg)*
-        #[allow(non_snake_case)]
-        unsafe fn #attach(#activate: bool) -> Result<(), Box<dyn ::std::error::Error>> {
-            unsafe { #register?; }
-            #initialized.store(true, ::std::sync::atomic::Ordering::Release);
-            Ok(())
-        }
+        static #registration: ::unchained_macros_core::ListenerRegistration =
+            ::unchained_macros_core::ListenerRegistration::new(
+            stringify!(#ident), #target.resolver, &#target.#slot,
+            |#activate| unsafe { #register },
+            || #target.activation(true, #condition_fn),
+        );
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            &::unchained_macros_core::ListenerRegistration {
-                name: stringify!(#ident), resolver: #target.resolver,
-                hook_fn: #attach,
-                condition: || #target.activation(true, #condition_fn),
-                slot: || (&#target.#slot as *const _ as *const ()),
-                initialized: || #initialized.load(::std::sync::atomic::Ordering::Acquire),
-                enabled: || #initialized.load(::std::sync::atomic::Ordering::Acquire)
-                    && #target.#slot.get().is_some(),
-                set_enabled: |enabled| {
-                    if #initialized.load(::std::sync::atomic::Ordering::Acquire) {
-                        #target.#slot.set_enabled(enabled);
-                    }
-                },
-            } as &dyn ::unchained_macros_core::__private::ListenerInfo
+            &#registration
         }
     })
 }
@@ -147,6 +123,12 @@ mod tests {
         let text = expanded.to_string();
         assert!(text.contains("Owned as :: unchained_macros_core :: ObserverSnapshot"));
         assert!(text.contains("register_exit"));
+        assert!(text.contains("ExitObservation :: from_snapshot"));
+        assert!(text.contains("ListenerRegistration :: new"));
+        assert!(!text.contains("__unchained_release_"));
+        assert!(!text.contains("Box ::"));
+        assert!(!text.contains("AtomicBool"));
+        assert!(!text.contains("__unchained_attach_"));
         assert!(text.contains("__UNCHAINED_LISTENERS_Call"));
         assert!(!text.contains("__UNCHAINED_BINDING"));
         syn::parse2::<syn::File>(expanded).unwrap();

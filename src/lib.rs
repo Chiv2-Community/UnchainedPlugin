@@ -593,11 +593,11 @@ fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &Select
     unchained_macros_core::validate_listener_registrations_for::<R>(snapshot)?;
 
     for hook in unchained_macros_core::hook_inventory_for::<R>() {
-        if !hook.binding.supports(snapshot) || (hook.detour)().is_some() {
+        if !hook.resolver().supports(snapshot) || hook.initialized() {
             continue;
         }
-        match unsafe { (hook.hook_fn)(true) } {
-            Ok(_) => sinfo!("☑ {} {}", hook.name, if (hook.enabled)() { "attached" } else { "attached (passive)" }),
+        match unsafe { hook.attach(true) } {
+            Ok(_) => sinfo!("☑ {} {}", hook.name, if hook.enabled() { "attached" } else { "attached (passive)" }),
             Err(e) => {
                 serror!("☐ {}: {}", hook.name.to_uppercase(), e);
                 if unchained_macros_core::isolate_observer(hook.condition).unwrap_or(false) {
@@ -608,9 +608,9 @@ fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &Select
     }
 
     for listener in unchained_macros_core::listener_inventory_for::<R>() {
-        if !listener.resolver.supports(snapshot) || (listener.initialized)() { continue; }
-        match unsafe { (listener.hook_fn)(true) } {
-            Ok(()) => sinfo!("☑ {} listener {}", listener.name, if (listener.enabled)() { "attached" } else { "attached (passive)" }),
+        if !listener.resolver.supports(snapshot) || listener.initialized() { continue; }
+        match unsafe { listener.attach(true) } {
+            Ok(()) => sinfo!("☑ {} listener {}", listener.name, if listener.enabled() { "attached" } else { "attached (passive)" }),
             Err(error) => {
                 serror!("☐ {} listener: {}", listener.name, error);
                 if unchained_macros_core::isolate_observer(listener.condition).unwrap_or(false) { return Err(error); }

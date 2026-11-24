@@ -142,7 +142,7 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
             ::unchained_macros_core::FunctionBinding::new(concat!(stringify!(#class), "::", #member, " [exec]"), &#resolver);
         #(#attributes_cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::unchained_macros_core::__private::NativeHook = ::unchained_macros_core::__private::NativeHook::new();
+        static #hook: ::unchained_macros_core::NativeHook = ::unchained_macros_core::NativeHook::new();
         #(#attributes_cfg)*
         #[allow(non_upper_case_globals)]
         static #descriptor: #listener_type =
@@ -183,7 +183,7 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
         }
         #(#attributes_cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            &::unchained_macros_core::BindingRegistration { binding: &#binding }
+            &#binding
                 as &dyn ::unchained_macros_core::__private::FunctionInfo
         }
     }))

@@ -71,7 +71,7 @@ fn binding_storage(
             );
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            &::unchained_macros_core::FunctionBindingRegistration { binding: &#name }
+            &#name
                 as &dyn ::unchained_macros_core::__private::FunctionInfo
         }
     }
@@ -198,7 +198,7 @@ pub(crate) fn expand_method(
             #(#cfg)*
             #[doc(hidden)]
             #[allow(non_upper_case_globals)]
-            #vis const #hook_descriptor: &'static ::unchained_macros_core::__private::NativeHook = &#hook_storage;
+            #vis const #hook_descriptor: &'static ::unchained_macros_core::NativeHook = &#hook_storage;
         },
     ].into_iter().map(syn::parse2).collect::<syn::Result<Vec<_>>>()?;
     Ok((expanded, descriptors, registration))
@@ -244,8 +244,8 @@ fn listener_dispatch(
     let setup = quote! {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::unchained_macros_core::__private::NativeHook =
-            ::unchained_macros_core::__private::NativeHook::new();
+        static #hook: ::unchained_macros_core::NativeHook =
+            ::unchained_macros_core::NativeHook::new();
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #listener: #descriptor_type = unsafe {

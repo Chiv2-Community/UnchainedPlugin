@@ -1,36 +1,34 @@
-use std::sync::OnceLock;
-use unchained_macros_core::{detour_is_enabled, detour_is_initialized, HookRegistration};
+use unchained_macros_core::{detour_is_enabled, detour_is_initialized, HookRegistration, NativeHook};
 
-static HOOK: OnceLock<retour::RawDetour> = OnceLock::new();
+static HOOK: NativeHook = NativeHook::new();
 static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patternsleuth::PatternsleuthResolver> =
     unchained_macros_core::FunctionBinding::new("Fixture::target", &unchained_macros_core::Resolver {
         name: "FixtureTarget", implementation: unchained_macros_patternsleuth::PatternsleuthResolver::offset("FixtureTarget"), filter: None,
     });
+inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::FunctionInfo }
 
 #[inline(never)]
 unsafe extern "C" fn target(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
-
 unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
-
-inventory::submit! {
-    &HookRegistration {
-        name: "FixtureDetour",
-        binding: &BINDING,
-        hook_fn: |_| unreachable!(),
-        condition: || true,
-        detour: || HOOK.get(),
-        enabled: || HOOK.get().is_some_and(retour::RawDetour::is_enabled),
-        set_enabled: |enabled| {
-            if let Some(hook) = HOOK.get() {
-                unsafe {
-                    if enabled { hook.enable().unwrap(); } else { hook.disable().unwrap(); }
-                }
-            }
-        },
-    } as &dyn unchained_macros_core::__private::HookInfo
+unsafe extern "C" fn dispatch(value: i32) -> i32 {
+    let address = HOOK.replacement_address().unwrap_or_else(|| BINDING.address().unwrap().get());
+    let call: unsafe extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(address) };
+    unsafe { call(value) }
 }
+
+static REGISTRATION: HookRegistration = HookRegistration::new(
+    "FixtureDetour", &BINDING, &HOOK,
+    |activate| unsafe {
+        if HOOK.has_replacement() { return Err("duplicate replacement".into()); }
+        HOOK.attach(&BINDING, dispatch as *const ())?;
+        HOOK.register_replacement(replacement as *const () as usize, activate)?;
+        Ok(())
+    },
+    || true,
+);
+inventory::submit! { &REGISTRATION }
 
 #[test]
 fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
@@ -38,12 +36,19 @@ fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
     assert!(!detour_is_enabled("Unknown"));
     assert!(!detour_is_initialized("FixtureDetour"));
     assert!(!detour_is_enabled("FixtureDetour"));
-    HOOK.set(unsafe { retour::RawDetour::new(target as *const (), replacement as *const ()).unwrap() }).unwrap();
+    unsafe {
+        BINDING.initialize_address(std::num::NonZeroUsize::new(target as *const () as usize).unwrap()).unwrap();
+        REGISTRATION.attach(false).unwrap();
+    }
     assert!(detour_is_initialized("FixtureDetour"));
     assert!(!detour_is_enabled("FixtureDetour"));
-    unsafe { HOOK.get().unwrap().enable().unwrap(); }
+    let call = std::hint::black_box(target as unsafe extern "C" fn(i32) -> i32);
+    assert_eq!(unsafe { call(3) }, 4);
+    REGISTRATION.set_enabled(true);
     assert!(detour_is_enabled("FixtureDetour"));
-    unsafe { HOOK.get().unwrap().disable().unwrap(); }
+    assert_eq!(unsafe { call(3) }, 5);
+    unsafe { REGISTRATION.detour().unwrap().disable().unwrap(); }
     assert!(detour_is_initialized("FixtureDetour"));
     assert!(!detour_is_enabled("FixtureDetour"));
+    assert_eq!(unsafe { call(3) }, 4);
 }

@@ -21,7 +21,8 @@ resolver for discovery; both forms share native calls, signature metadata, and h
 
 - `FunctionBinding<R>` references `Resolver<R>` and stores the native target name.
 - `NativeFunction<F, R>` preserves the native signature independently of the backend.
-- `HookRegistration<R>` references its binding and names the Rust detour function.
+- `HookRegistration` references its binding/shared hook and owns callback initialization.
+- `ListenerRegistration` references the actual callback slot and owns initialization.
 - `PatchRegistration<R>` references its resolver and names the patch factory/static.
 
 Discover typed registrations:
@@ -34,9 +35,12 @@ listener_inventory_for::<Backend>()
 patch_inventory_for::<Backend>()
 ```
 
-Inventory stores trait-object references internally. Traits extend `Any`, so
-typed discovery safely downcasts the same registration without a second erased
-pointer or wrapper struct.
+Function inventory stores direct `&FunctionBinding<R>` trait-object references.
+Typed discovery downcasts the accessor's exact storage, without registration
+wrappers. Required-value inventory stores direct `&ValueBinding` references.
+Hook/listener inventories reference named registration statics and filter by
+their concrete binding/resolver backend. `hook.binding::<Backend>()` retrieves
+the typed binding.
 Selection and required patch coverage do not combine unrelated backend types.
 Patch IDs remain globally unique.
 
@@ -50,7 +54,9 @@ unsafe {
     apply_patches_for::<Backend, _>(&context, &selectors, &mut writer, &mut patch_state)?;
 }
 for hook in hook_inventory_for::<Backend>() {
-    // Check selection and attachment state, then attach using the host's policy.
+    if hook.resolver().supports(&selectors) && !hook.initialized() {
+        unsafe { hook.attach(true)?; }
+    }
 }
 ```
 
@@ -153,10 +159,45 @@ shared stub.
 - Dispatch with `observe_entry`, `prepare_exit`, and `finish_exit`; these include
   panic isolation and the per-method reentry guard. Supply the actual live
   caller-visible result storage to `finish_exit`.
-- `ListenerRegistration<R>` discovery references the resolver, not a native
+- `ListenerRegistration` discovery references the resolver, not a native
   binding. Each registration tracks its own successful publication; an occupied
   target slot never makes a competing registration appear initialized/enabled.
   The host selects and retries these registrations independently.
+
+### Handwritten registrations
+
+The low-level API needs no proc macros:
+
+```rust,ignore
+static BINDING: FunctionBinding<Backend> = FunctionBinding::new("Call", &RESOLVER);
+inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::FunctionInfo }
+static ENTRY: ListenerRegistration = ListenerRegistration::new(
+    "entered", &RESOLVER, &LISTENERS.entry,
+    |activate| unsafe { LISTENERS.register_entry(entered, activate, condition) },
+    || LISTENERS.activation(true, condition),
+);
+inventory::submit! { &ENTRY }
+unsafe { ENTRY.attach(true)?; }
+ENTRY.set_enabled(false);
+assert!(ENTRY.initialized());
+assert!(!ENTRY.enabled());
+```
+
+`HookRegistration::new(name, &binding, &native_hook, install, condition)` uses
+the same attach/control lifecycle. Installers remain signature-specific: reject
+duplicate replacements, ensure attachment, evaluate guarded activation, then
+publish the typed callback. Attach is unsafe, startup-only, and not concurrently
+safe. Failed/duplicate registrations remain uninitialized and cannot toggle an
+owner's slot or shared replacement.
+Callback macros emit `__UNCHAINED_REGISTRATION_callback_name` handles with these
+same methods; startup hosts normally discover them through the inventories.
+
+`ExitObservation::from_snapshot(snapshot, finish)` owns and releases a boxed
+snapshot. The unsafe finish adapter borrows that exact snapshot type and the
+descriptor's result; it must not free/move the snapshot or retain references.
+See [`tests/manual_api.rs`](tests/manual_api.rs) for complete handwritten
+binding submission, dispatch, entry/exit/detour coexistence, toggles, late aliases,
+and original-call bypass.
 
 Low-level slot `register` is unsafe: it bypasses descriptor result-signature and
 attachment checks. Prefer descriptor registration. Slot reads/status/activation

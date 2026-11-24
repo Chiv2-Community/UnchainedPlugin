@@ -141,11 +141,16 @@ pub struct ExitObservation {
 
 impl ExitObservation {
     /// # Safety
-    /// `state` is uniquely owned; finish borrows it and release destroys it once.
-    /// `finish` must accept the descriptor's declared result storage.
-    pub unsafe fn new(
-        state: *mut (), finish: unsafe fn(*mut (), *const ()), release: unsafe fn(*mut ()),
-    ) -> Self { Self { state, finish, release } }
+    /// `finish` must borrow state as `S`, without freeing, moving it out, or
+    /// retaining references. Result storage must match the descriptor's result.
+    pub unsafe fn from_snapshot<S: 'static>(
+        snapshot: S, finish: unsafe fn(*mut (), *const ()),
+    ) -> Self {
+        unsafe fn release<S>(state: *mut ()) {
+            unsafe { drop(Box::from_raw(state.cast::<S>())); }
+        }
+        Self { state: Box::into_raw(Box::new(snapshot)).cast(), finish, release: release::<S> }
+    }
 
     /// # Safety
     /// Result storage must match the typed descriptor and remain live during this call.
@@ -279,42 +284,66 @@ impl<E: Copy, X, P: Copy, R: AddressResolver> ListenerDescriptor<E, X, P, R> {
     }
 }
 
-pub struct ListenerRegistration<R: AddressResolver> {
-    pub name: &'static str,
-    pub resolver: &'static Resolver<R>,
-    pub hook_fn: crate::CreateHookFn,
-    pub condition: fn() -> bool,
-    /// Identity of the occupied entry/exit storage, not its attachment function.
-    pub slot: fn() -> *const (),
-    pub initialized: fn() -> bool,
-    pub enabled: fn() -> bool,
-    pub set_enabled: fn(bool),
+trait CallbackControl: Send + Sync {
+    fn enabled(&self) -> bool;
+    fn set_enabled(&self, enabled: bool);
+    fn storage_identity(&self) -> *const ();
+}
+impl<T: Copy + Send + Sync + 'static> CallbackControl for CallbackSlot<T> {
+    fn enabled(&self) -> bool { self.get().is_some() }
+    fn set_enabled(&self, enabled: bool) { self.set_enabled(enabled); }
+    fn storage_identity(&self) -> *const () { self as *const Self as *const () }
 }
 
-pub trait ListenerInfo: std::any::Any + Send + Sync {
-    fn name(&self) -> &'static str;
-    fn initialized(&self) -> bool;
-    fn enabled(&self) -> bool;
+/// Process-lifetime listener ownership. Attach only during quiescent startup.
+pub struct ListenerRegistration {
+    pub name: &'static str,
+    pub resolver: &'static dyn crate::resolver::ResolverInfo,
+    install: crate::CreateHookFn,
+    pub condition: fn() -> bool,
+    slot: &'static dyn CallbackControl,
+    initialized: AtomicBool,
 }
-impl<R: AddressResolver> ListenerInfo for ListenerRegistration<R> {
-    fn name(&self) -> &'static str { self.name }
-    fn initialized(&self) -> bool { (self.initialized)() }
-    fn enabled(&self) -> bool { (self.enabled)() }
+impl ListenerRegistration {
+    pub const fn new<R: AddressResolver, T: Copy + Send + Sync + 'static>(
+        name: &'static str, resolver: &'static Resolver<R>, slot: &'static CallbackSlot<T>,
+        install: crate::CreateHookFn, condition: fn() -> bool,
+    ) -> Self {
+        Self { name, resolver, slot, install, condition, initialized: AtomicBool::new(false) }
+    }
+    /// # Safety
+    /// Callers must be quiescent. The installer must publish this slot's typed
+    /// process-lifetime callback and reject duplicate ownership before publication.
+    /// It must not publish the callback on failure.
+    /// Do not attach concurrently.
+    pub unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
+        if self.initialized() { return Err("Listener callback is already initialized".into()); }
+        unsafe { (self.install)(activate)?; }
+        self.initialized.store(true, Ordering::Release);
+        Ok(())
+    }
+    pub fn initialized(&self) -> bool { self.initialized.load(Ordering::Acquire) }
+    pub fn enabled(&self) -> bool { self.initialized() && self.slot.enabled() }
+    pub fn set_enabled(&self, enabled: bool) {
+        if self.initialized() { self.slot.set_enabled(enabled); }
+    }
+    pub fn slot_identity(&self) -> *const () { self.slot.storage_identity() }
 }
-inventory::collect!(&'static dyn ListenerInfo);
+
+inventory::collect!(&'static ListenerRegistration);
 
 pub fn listener_is_initialized(name: &str) -> bool {
-    inventory::iter::<&'static dyn ListenerInfo>.into_iter()
-        .any(|listener| listener.name() == name && listener.initialized())
+    inventory::iter::<&'static ListenerRegistration>.into_iter()
+        .any(|listener| listener.name == name && listener.initialized())
 }
 pub fn listener_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static dyn ListenerInfo>.into_iter()
-        .any(|listener| listener.name() == name && listener.enabled())
+    inventory::iter::<&'static ListenerRegistration>.into_iter()
+        .any(|listener| listener.name == name && listener.enabled())
 }
 
-pub fn listener_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static ListenerRegistration<R>> {
-    inventory::iter::<&'static dyn ListenerInfo>.into_iter()
-        .filter_map(|entry| (*entry as &dyn std::any::Any).downcast_ref())
+pub fn listener_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static ListenerRegistration> {
+    inventory::iter::<&'static ListenerRegistration>.into_iter().copied()
+        .filter(|entry| (entry.resolver as &dyn std::any::Any).is::<Resolver<R>>())
 }
 
 /// Reject excess registrations before any physical attachment or slot publication.
@@ -324,10 +353,10 @@ pub fn validate_listener_registrations_for<R: AddressResolver>(
 ) -> Result<(), String> {
     let mut slots = std::collections::BTreeMap::new();
     for listener in listener_inventory_for::<R>().filter(|listener| listener.resolver.supports(snapshot)) {
-        if let Some(previous) = slots.insert((listener.slot)() as usize, listener.name) {
+        if let Some(previous) = slots.insert(listener.slot_identity() as usize, listener.name) {
             return Err(format!(
                 "Only one listener per method phase is supported: {previous} and {} both register for {}",
-                listener.name, listener.resolver.name,
+                listener.name, listener.resolver.name(),
             ));
         }
     }
