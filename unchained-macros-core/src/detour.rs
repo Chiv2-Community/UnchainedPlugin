@@ -15,6 +15,7 @@ pub fn detour_is_enabled(name: &str) -> bool {
 }
 
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
@@ -22,17 +23,24 @@ use std::sync::OnceLock;
 
 pub struct NativeHook {
     hook: OnceLock<retour::RawDetour>,
+    published: AtomicBool,
 }
 
 impl NativeHook {
     pub const fn new() -> Self {
 
-        Self { hook: OnceLock::new() }
+        Self {
+            hook: OnceLock::new(),
+            published: AtomicBool::new(false),
+        }
     }
 
     pub fn detour(&self) -> Option<&retour::RawDetour> {
 
-        self.hook.get()
+        self.published
+            .load(Ordering::Acquire)
+            .then(|| self.hook.get())
+            .flatten()
     }
 
     /// # Safety
@@ -64,13 +72,33 @@ impl NativeHook {
 
         if self.hook.get().is_none() {
 
+            let address = binding
+                .entry_address()
+                .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?
+                .get();
+
+            let claim = claim_detour_address(address)?;
+
+            let hook = unsafe {
+
+                retour::RawDetour::new(address as *const (), dispatcher)?
+            };
+
+            self.hook.set(hook).map_err(|_| retour::Error::AlreadyInitialized)?;
+
+            claim.commit();
+
+            // Publication can fail after some aliases have received the trampoline.
+            // Retain storage and the address claim, but never enable a partially published hook.
             unsafe {
 
-                attach_function_detour(binding, &self.hook, dispatcher, false, || true)?;
+                crate::binding::publish_function_detours(binding, self.hook.get().unwrap())?;
             }
+
+            self.published.store(true, Ordering::Release);
         }
 
-        let hook = self.hook.get().expect("Native detour was just constructed");
+        let hook = self.detour().ok_or("Native trampoline publication previously failed")?;
 
         if !hook.is_enabled() {
 
@@ -86,60 +114,6 @@ impl Default for NativeHook {
 
         Self::new()
     }
-}
-
-/// Construct and publish a process-lifetime detour before evaluating activation.
-///
-/// # Safety
-/// The replacement must match the binding's verified native ABI. Attach while
-/// native callers are quiescent; storage and trampolines remain live permanently.
-#[doc(hidden)]
-
-pub unsafe fn attach_function_detour<R: crate::AddressResolver>(
-    binding: &'static crate::FunctionBinding<R>,
-    storage: &'static OnceLock<retour::RawDetour>,
-    replacement: *const (),
-    auto_activate: bool,
-    condition: fn() -> bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-
-    let address = binding
-        .entry_address()
-        .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?
-        .get();
-
-    if storage.get().is_some() {
-
-        return Err(retour::Error::AlreadyInitialized.into());
-    }
-
-    let claim = claim_detour_address(address)?;
-
-    let detour = unsafe {
-
-        retour::RawDetour::new(address as *const (), replacement)?
-    };
-
-    storage.set(detour).map_err(|_| retour::Error::AlreadyInitialized)?;
-
-    let hook = storage.get().expect("Hook was just initialized");
-
-    claim.commit();
-
-    unsafe {
-
-        crate::binding::publish_function_detours(binding, hook)?;
-    }
-
-    if auto_activate && condition() {
-
-        unsafe {
-
-            hook.enable()?;
-        }
-    }
-
-    Ok(())
 }
 
 static CLAIMED_ADDRESSES: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
@@ -240,6 +214,74 @@ mod tests {
     unsafe extern "C" fn replacement(value: usize) -> usize {
 
         value + 10
+    }
+
+    #[inline(never)]
+
+    unsafe extern "C" fn unpublished_entry(value: usize) -> usize {
+
+        std::hint::black_box(value).wrapping_add(23)
+    }
+
+    struct RejectingAlias;
+
+    impl crate::binding::FunctionInfo for RejectingAlias {
+        fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
+
+            &RESOLVER
+        }
+
+        fn entry_address(&self) -> Option<NonZeroUsize> {
+
+            NonZeroUsize::new(unpublished_entry as *const () as usize)
+        }
+
+        unsafe fn publish_detour(&self, _: &'static retour::RawDetour) -> Result<(), String> {
+
+            Err("injected alias publication failure".into())
+        }
+    }
+
+    inventory::submit! { &RejectingAlias as &dyn crate::binding::FunctionInfo }
+
+    #[test]
+
+    fn partial_publication_never_enables_the_hook_on_retry() {
+
+        static OWNER: FunctionBinding<Backend> = FunctionBinding::new("publication failure", &RESOLVER);
+
+        static FAILED: NativeHook = NativeHook::new();
+
+        unsafe {
+
+            OWNER
+                .initialize_address(NonZeroUsize::new(unpublished_entry as *const () as usize).unwrap())
+                .unwrap();
+
+            let attach = || {
+
+                FAILED.attach_with(&OWNER, replacement as *const (), |_| {
+
+                    panic!("activated unpublished hook")
+                })
+            };
+
+            assert!(attach()
+                .unwrap_err()
+                .to_string()
+                .contains("injected alias publication failure"));
+
+            assert_ne!(OWNER.address(), OWNER.entry_address());
+
+            assert!(attach()
+                .unwrap_err()
+                .to_string()
+                .contains("publication previously failed"));
+
+            assert!(FAILED.detour().is_none());
+
+            assert!(!FAILED.hook.get().unwrap().is_enabled());
+        }
     }
 
     #[test]

@@ -130,8 +130,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
 
-    let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
-
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
 
     let (names, types): (Vec<_>, Vec<_>) = signature
@@ -207,9 +205,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
         #(#cfg)*
         #[allow(non_snake_case)]
-        fn #condition_fn() -> bool { (#condition)() }
-        #(#cfg)*
-        #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
             unsafe { #ident(#(#names),*) }
         }
@@ -217,11 +212,13 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: &dyn ::unchained_macros_core::DetourInfo = {
-            static INITIALIZED: ::core::sync::atomic::AtomicBool = ::core::sync::atomic::AtomicBool::new(false);
             let registration = ::unchained_macros_core::DetourRegistration::new(
-                stringify!(#ident), #capability, #callback, #condition_fn,
+                stringify!(#ident), #capability, #callback, || (#condition)(),
             );
-            &unsafe { registration.with_inventory_state(&INITIALIZED) }
+            &unsafe {
+                static INITIALIZED: ::core::sync::atomic::AtomicBool = ::core::sync::atomic::AtomicBool::new(false);
+                registration.with_inventory_state(&INITIALIZED)
+            }
         };
 
         #(#cfg)*
@@ -396,23 +393,13 @@ mod tests {
         )
         .unwrap();
 
-        let file = syn::parse2::<syn::File>(expanded).unwrap();
+        let expected: syn::Expr = syn::parse2(expected).unwrap();
 
-        let condition = file
-            .items
-            .iter()
-            .find_map(|item| match item {
-                syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" => {
-                    Some(&function.block)
-                }
+        let expected = quote!(|| (#expected)()).to_string();
 
-                _ => None,
-            })
-            .unwrap();
+        assert!(expanded.to_string().contains(&expected));
 
-        let expected: syn::Block = syn::parse2(quote!({ (#expected)() })).unwrap();
-
-        assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
+        assert!(!expanded.to_string().contains("__unchained_condition_"));
     }
 
     #[test]

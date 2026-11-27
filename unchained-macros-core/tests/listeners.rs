@@ -729,7 +729,7 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
 
     unsafe {
 
-        slot.register(12_u32, true, || panic!("condition failure")).unwrap();
+        slot.register(12_u32, false).unwrap();
     }
 
     assert!(slot.get().is_none());
@@ -1836,7 +1836,7 @@ mod custom_snapshots {
 
         unsafe {
 
-            descriptor.entry_slot().register(entry, true, || true).unwrap();
+            descriptor.entry_slot().register(entry, true).unwrap();
         }
 
         descriptor.observe_entry(|_| unsafe {

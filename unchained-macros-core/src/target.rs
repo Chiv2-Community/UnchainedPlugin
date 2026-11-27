@@ -32,7 +32,7 @@ pub trait SupportsDetour: CallbackTarget {
         unsafe {
 
             self.replacement_slot()
-                .register(callback, self.activation(activate, condition), || true)?;
+                .register(callback, self.activation(activate, condition))?;
         }
 
         Ok(())

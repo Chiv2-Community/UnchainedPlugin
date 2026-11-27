@@ -139,17 +139,15 @@ impl<T: Copy> CallbackSlot<T> {
     /// ```compile_fail
     /// use unchained_macros_core::CallbackSlot;
     /// let slot = CallbackSlot::new();
-    /// slot.register(123_usize, true, || true).unwrap();
+    /// slot.register(123_usize, true).unwrap();
     /// ```
 
-    pub unsafe fn register(&self, value: T, activate: bool, condition: fn() -> bool) -> Result<(), String> {
+    pub unsafe fn register(&self, value: T, enabled: bool) -> Result<(), String> {
 
         if self.is_registered() {
 
             return Err("Only one callback of each kind is supported per method".into());
         }
-
-        let enabled = activate && isolate_observer(condition).unwrap_or(false);
 
         self.value
             .set(value)
@@ -358,7 +356,7 @@ pub trait SupportsEntry: CallbackTarget {
         unsafe {
 
             self.entry_slot()
-                .register(callback, self.activation(activate, condition), || true)?;
+                .register(callback, self.activation(activate, condition))?;
         }
 
         Ok(())
@@ -417,7 +415,7 @@ pub trait SupportsExit: CallbackTarget {
         unsafe {
 
             self.exit_slot()
-                .register(prepare, self.activation(activate, condition), || true)?;
+                .register(prepare, self.activation(activate, condition))?;
         }
 
         Ok(())

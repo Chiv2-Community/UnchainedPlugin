@@ -168,9 +168,7 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
 
     unsafe {
 
-        Library::__UNCHAINED_TARGET_Owners
-            .entry
-            .register(owners_entry, true, || true)
+        Library::__UNCHAINED_TARGET_Owners.entry.register(owners_entry, true)
     }
     .unwrap();
 

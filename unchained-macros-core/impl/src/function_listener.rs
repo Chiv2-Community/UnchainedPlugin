@@ -108,8 +108,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
 
     let registration = format_ident!("__UNCHAINED_REGISTRATION_{}", ident);
 
-    let condition_fn = format_ident!("__unchained_condition_{}", ident);
-
     let prepare = format_ident!("__unchained_prepare_{}", ident);
 
     let finish = format_ident!("__unchained_finish_{}", ident);
@@ -167,12 +165,9 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         #function
         #helpers
         #(#cfg)*
-        #[allow(non_snake_case)]
-        fn #condition_fn() -> bool { (#condition)() }
-        #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: ::unchained_macros_core::ListenerRegistration =
-            ::unchained_macros_core::ListenerRegistration::#phase(stringify!(#ident), &#action, #condition_fn);
+            ::unchained_macros_core::ListenerRegistration::#phase(stringify!(#ident), &#action, || (#condition)());
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
             &#registration

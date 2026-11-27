@@ -343,7 +343,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
 
         Library::__UNCHAINED_TARGET_Predicate
             .entry
-            .register(runtime_entry, true, || true)
+            .register(runtime_entry, true)
     }
     .unwrap();
 
@@ -492,7 +492,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
 
         Library::__UNCHAINED_TARGET_NoArgs
             .entry
-            .register(noargs_reentrant_entry, true, || true)
+            .register(noargs_reentrant_entry, true)
     }
     .unwrap();
 
