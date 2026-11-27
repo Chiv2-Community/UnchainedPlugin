@@ -26,7 +26,6 @@ static HOOK: NativeHook = NativeHook::new();
 type Call = unsafe extern "C" fn(usize) -> usize;
 
 #[inline(never)]
-
 unsafe extern "C" fn original(n: usize) -> usize {
     black_box(n).wrapping_add(1)
 }

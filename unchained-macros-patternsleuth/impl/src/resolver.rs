@@ -178,7 +178,6 @@ pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

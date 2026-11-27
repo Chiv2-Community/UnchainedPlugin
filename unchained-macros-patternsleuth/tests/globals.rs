@@ -45,7 +45,7 @@ struct InlineObject(AtomicUsize);
 #[runtime_bindings]
 
 impl InlineObject {
-    pub fn borrow<'a>(&'a self) -> &'a AtomicUsize {
+    pub fn borrow(&self) -> &AtomicUsize {
         &self.0
     }
 

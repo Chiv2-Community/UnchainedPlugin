@@ -112,7 +112,6 @@ impl SourceIndex {
     }
 
     /// Register all planned method lookups before generation to batch file reads.
-
     pub fn plan_implementation(&mut self, root: &Path, header: &Path, target: &str) -> Result<()> {
         let (root, header) = native_header(root, header)?;
 
@@ -420,11 +419,9 @@ fn scoped_name(node: Node<'_>, name: String, source: &str) -> Option<String> {
             node.kind(),
             "class_specifier" | "struct_specifier" | "namespace_definition"
         ) {
-            if let Some(name) = node.child_by_field_name("name") {
+            {
+                let name = node.child_by_field_name("name")?;
                 scopes.push(source[name.byte_range()].to_owned());
-            } else {
-                // Anonymous scopes cannot be identified by a Rust class name.
-                return None;
             }
         }
 
@@ -721,7 +718,6 @@ impl SourceIndex {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

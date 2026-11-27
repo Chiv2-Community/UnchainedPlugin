@@ -24,7 +24,6 @@ impl Argument<'_> {
     /// # Safety
     /// `T` must match the validated VM slot layout. Do not move from the slot,
     /// retain the borrow, mutate native storage, or release native ownership.
-
     pub unsafe fn borrow<T>(&self) -> &T {
         assert!(
             self.pointer.as_ptr().cast::<T>().is_aligned(),
@@ -38,7 +37,6 @@ impl Argument<'_> {
     ///
     /// # Safety
     /// The validated parameter must be a VM boolean.
-
     pub unsafe fn boolean(&self) -> bool {
         assert!(
             self.pointer.as_ptr().cast::<u32>().is_aligned(),
@@ -50,7 +48,6 @@ impl Argument<'_> {
 }
 
 /// Callback-scoped read-only access to argument slots.
-
 pub struct Inputs<'a> {
     slots: &'a [NonNull<c_void>],
     _game_thread: PhantomData<Rc<()>>,
@@ -75,7 +72,6 @@ impl Inputs<'_> {
 }
 
 /// One entry callback; fan-out is deliberately not implemented by this backend.
-
 pub type EntryCallback = for<'a> unsafe fn(Inputs<'a>);
 
 fn report(message: &str) {
@@ -157,7 +153,6 @@ fn ready(call: &Rc<RefCell<Invocation>>) {
 /// StepExplicitProperty calls must pass through [`observe_step`]. The original
 /// must receive the real frame/context/result, with its original native ABI.
 /// The callback must obey its argument-slot contract and run on the game thread.
-
 pub unsafe fn observe_exec(
     frame: *mut c_void,
     properties: &'static [usize],
@@ -213,7 +208,6 @@ impl Drop for StepScope {
 /// `property` is zero for Step, and the actual FProperty identity for
 /// StepExplicitProperty. `result` is the original, initialized result slot after
 /// the original returns. This function must cover recursive Step calls as well.
-
 pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: usize, original: impl FnOnce()) {
     let call = CALLS
         .try_with(|calls| {
@@ -275,7 +269,6 @@ pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: us
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;
@@ -562,7 +555,6 @@ mod tests {
 
     fn misaligned_argument_suppresses_callback_before_typed_borrow() {
         #[repr(align(4))]
-
         struct Buffer([u8; 8]);
 
         let mut buffer = Buffer([0; 8]);

@@ -28,7 +28,6 @@
 ///     binary_bloodhound::BinaryMatcher::address(1).map(|_| "text").ensure_one());
 /// ```
 #[macro_export]
-
 macro_rules! define_custom_resolver {
     // Adapt a dependency's address resolver without string-based inventory lookup.
     ($name:ident, delegate $resolver:path $(,)?) => {
@@ -64,7 +63,6 @@ macro_rules! define_custom_resolver {
 }
 
 #[doc(hidden)]
-
 pub fn single_address<P>(node: binary_bloodhound::Trace<u64, P>) -> u64 {
     *node.value
 }

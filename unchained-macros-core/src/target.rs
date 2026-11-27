@@ -11,7 +11,6 @@ pub trait SupportsDetour: CallbackTarget {
 
     /// # Safety
     /// Callers must be quiescent and the replacement must uphold the target's native contract.
-
     unsafe fn register_detour(
         &'static self,
         callback: Self::Callback,
@@ -41,7 +40,6 @@ pub const fn detour_signature<T: SupportsDetour>(_: &T) -> crate::NativeSignatur
 
 /// One dispatcher's exact replacement, entry, exit and exit-preparation signatures.
 /// Function pointers stay typed all the way to dispatch, including higher-ranked lifetimes.
-
 pub struct NativeTarget<F, E, X, P, R: AddressResolver> {
     binding: &'static FunctionBinding<R>,
     hook: NativeHook,
@@ -57,7 +55,6 @@ impl<F: Copy, E: Copy, X, P: Copy, R: AddressResolver> NativeTarget<F, E, X, P, 
     /// # Safety
     /// `binding` and `dispatcher` must honor F/E/X/P and original-call bypass.
     /// `code_pointer` must convert its argument to the unchanged code pointer.
-
     pub const unsafe fn new(
         binding: &'static FunctionBinding<R>,
         dispatcher: F,

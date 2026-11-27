@@ -82,7 +82,6 @@ impl Patch {
     }
 
     /// Write a Copy value without interpreting its representation as initialized bytes.
-
     pub fn write<T: Copy + 'static>(offset: u64, value: T) -> Self {
         Self::new(
             offset,
@@ -94,7 +93,6 @@ impl Patch {
     }
 
     /// Const form for statics. Copies the referenced value, not its address.
-
     pub const fn write_ref<T: Copy + Sync + 'static>(offset: u64, value: &'static T) -> Self {
         Self::new(
             offset,
@@ -115,7 +113,6 @@ impl Patch {
     ///
     /// # Safety
     /// The enabled patch's target range must be valid for its native contract.
-
     pub unsafe fn apply<W: PatchWriter>(&self, resolved_address: u64, writer: &mut W) -> Result<bool, String> {
         if !self.enabled {
             return Ok(false);
@@ -150,22 +147,18 @@ impl Patch {
 }
 
 /// Host-owned memory protection and write operations.
-
 pub trait PatchWriter {
     /// # Safety
     /// The caller must supply a valid native target range.
-
     unsafe fn bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), String>;
 
     /// # Safety
     /// The caller must supply a valid native instruction range.
-
     unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String>;
 
     /// # Safety
     /// The destination must be valid, nonoverlapping, and aligned for this value.
     /// Copy raw storage; its padding need not be initialized.
-
     unsafe fn write(&mut self, address: u64, value: &WriteValue) -> Result<(), String>;
 }
 
@@ -178,7 +171,6 @@ pub struct PatchApplication {
 }
 
 #[doc(hidden)]
-
 pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
     _: E,
     patches: &[&dyn PatchInfo],
@@ -234,7 +226,6 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
 
 /// Validate unique patch names and required coverage across each resolver's group.
 /// This does not run factories, conditions, or memory writes.
-
 pub fn validate_patch_registrations() -> Result<(), String> {
     validate(
         &inventory::iter::<&'static dyn PatchInfo>
@@ -260,7 +251,6 @@ pub struct PatchState {
 /// # Safety
 /// Each resolved address and edit must satisfy its native contract.
 /// Keep one state for the initialization session; serialize calls with that state.
-
 pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
     context: &R::Context,
     snapshot: &SelectorSnapshot,
@@ -312,7 +302,6 @@ pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

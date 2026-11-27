@@ -21,7 +21,6 @@ pub(crate) fn attach_native_documentation(attributes: &mut Vec<syn::Attribute>, 
 }
 
 #[cfg(test)]
-
 pub(crate) fn documentation(attributes: &[syn::Attribute]) -> String {
     attributes
         .iter()

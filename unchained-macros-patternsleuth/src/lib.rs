@@ -13,7 +13,6 @@ mod custom_resolver;
 mod signatures;
 
 #[doc(hidden)]
-
 pub mod __private {
 
     pub use crate::context::context_snapshot;

@@ -5,148 +5,9 @@ use syn::{ItemImpl, Type};
 
 mod exec_bindings;
 
-#[cfg(test)]
-
-mod tests {
-
-    use super::*;
-
-    #[test]
-
-    fn runtime_bindings_emit_typed_descriptors_not_resolver_declarations() {
-        let expanded = expand(
-            quote!("/Script/Engine.KismetSystemLibrary"),
-            quote! {
-                #[cfg(feature = "fixture")]
-                impl UKismetSystemLibrary {
-                    #[cfg(any())]
-                    pub(crate) unsafe fn IsDedicatedServer(value: *const ()) -> bool {}
-                    pub unsafe fn IsServer(value: *const ()) -> bool {}
-                    unsafe fn IsStandalone(value: *const ()) -> bool {}
-                }
-            },
-        )
-        .unwrap();
-
-        syn::parse2::<syn::File>(expanded.clone()).unwrap();
-
-        let text = expanded.to_string();
-
-        for method in ["IsDedicatedServer", "IsServer", "IsStandalone"] {
-            assert!(text.contains(&format!("\"UKismetSystemLibrary__{method}\"")));
-
-            assert!(text.contains(&format!("static __UNCHAINED_KISMET_RESOLVER_{method}")));
-        }
-
-        assert_eq!(text.matches("static __UNCHAINED_KISMET_RESOLVER_").count(), 3);
-
-        assert_eq!(text.matches("bind_resolved_func").count(), 3);
-
-        assert_eq!(
-            text.matches("as & dyn :: unchained_macros_core :: __private :: ResolverInfo")
-                .count(),
-            3
-        );
-
-        assert!(!text.contains("struct "));
-
-        assert!(!text.contains("ResolverDeclaration"));
-
-        assert!(!text.contains("ResolverSelection"));
-
-        assert!(!text.contains("doc (hidden)"));
-
-        // The method and its resolver carry the guard; the inventory entry lives inside the resolver.
-        assert_eq!(text.matches("cfg (any ())").count(), 2);
-
-        assert!(text.contains("pub (crate) unsafe fn IsDedicatedServer"));
-
-        assert!(text.contains("cfg (feature = \"fixture\")"));
-    }
-
-    #[test]
-
-    fn runtime_bindings_reject_a_second_address_source() {
-        assert!(expand(
-            quote!("/Script/Fixture.Native"),
-            quote! {
-                impl Native {
-                    #[bind_resolved_func(Backend, &DESCRIPTOR)]
-                    unsafe fn call() {}
-                }
-            }
-        )
-        .is_err());
-
-        assert!(expand(
-            quote!("/Script/Fixture.Native"),
-            quote! {
-                impl Native {
-                    #[dummy]
-                    #[bind_resolved_func(Backend, &DESCRIPTOR)]
-                    unsafe fn call() {}
-                }
-            }
-        )
-        .is_err());
-    }
-
-    #[test]
-
-    fn dummy_metadata_cannot_collide_with_authored_items() {
-        assert!(expand(
-            quote!("/Script/Fixture.Native"),
-            quote! {
-                impl Native {
-                    const __UNCHAINED_TARGET_Call: () = ();
-                    #[dummy]
-                    unsafe fn Call() {}
-                }
-            }
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("conflicts"));
-    }
-
-    #[test]
-
-    fn mixed_impl_preserves_constants_visibility_and_native_lifetimes() {
-        let output = expand(
-            quote!("/Script/Fixture.Native"),
-            quote! {
-                impl Native {
-                    pub(crate) const AUTHORED: u32 = 42;
-                    pub unsafe fn Call<'a>(&'a self) -> &'a Self {}
-                    #[dummy]
-                    pub(crate) unsafe fn Observe(value: bool) {}
-                }
-            },
-        )
-        .unwrap();
-
-        syn::parse2::<syn::File>(output.clone()).unwrap();
-
-        let text = output.to_string();
-
-        assert_eq!(text.matches("runtime_bindings").count(), 1);
-
-        assert_eq!(text.matches("KismetReflectionResolver :: new").count(), 1);
-
-        assert_eq!(text.matches("KismetExecResolver :: new").count(), 1);
-
-        assert!(text.contains("pub (crate) const AUTHORED"));
-
-        assert!(text.contains("pub (crate) const Observe"));
-
-        assert!(text.contains("pub unsafe fn Call < 'a > (& 'a self) -> & 'a Self"));
-    }
-}
-
 /// Bind native C++ methods by reflected class path through the host's Kismet backend.
 /// Native methods resolve C++ bodies; `#[dummy]` methods observe exec entry only.
 #[proc_macro_attribute]
-
 pub fn kismet_runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -289,4 +150,141 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             #implementation
         };
     })
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+
+    fn runtime_bindings_emit_typed_descriptors_not_resolver_declarations() {
+        let expanded = expand(
+            quote!("/Script/Engine.KismetSystemLibrary"),
+            quote! {
+                #[cfg(feature = "fixture")]
+                impl UKismetSystemLibrary {
+                    #[cfg(any())]
+                    pub(crate) unsafe fn IsDedicatedServer(value: *const ()) -> bool {}
+                    pub unsafe fn IsServer(value: *const ()) -> bool {}
+                    unsafe fn IsStandalone(value: *const ()) -> bool {}
+                }
+            },
+        )
+        .unwrap();
+
+        syn::parse2::<syn::File>(expanded.clone()).unwrap();
+
+        let text = expanded.to_string();
+
+        for method in ["IsDedicatedServer", "IsServer", "IsStandalone"] {
+            assert!(text.contains(&format!("\"UKismetSystemLibrary__{method}\"")));
+
+            assert!(text.contains(&format!("static __UNCHAINED_KISMET_RESOLVER_{method}")));
+        }
+
+        assert_eq!(text.matches("static __UNCHAINED_KISMET_RESOLVER_").count(), 3);
+
+        assert_eq!(text.matches("bind_resolved_func").count(), 3);
+
+        assert_eq!(
+            text.matches("as & dyn :: unchained_macros_core :: __private :: ResolverInfo")
+                .count(),
+            3
+        );
+
+        assert!(!text.contains("struct "));
+
+        assert!(!text.contains("ResolverDeclaration"));
+
+        assert!(!text.contains("ResolverSelection"));
+
+        assert!(!text.contains("doc (hidden)"));
+
+        // The method and its resolver carry the guard; the inventory entry lives inside the resolver.
+        assert_eq!(text.matches("cfg (any ())").count(), 2);
+
+        assert!(text.contains("pub (crate) unsafe fn IsDedicatedServer"));
+
+        assert!(text.contains("cfg (feature = \"fixture\")"));
+    }
+
+    #[test]
+
+    fn runtime_bindings_reject_a_second_address_source() {
+        assert!(expand(
+            quote!("/Script/Fixture.Native"),
+            quote! {
+                impl Native {
+                    #[bind_resolved_func(Backend, &DESCRIPTOR)]
+                    unsafe fn call() {}
+                }
+            }
+        )
+        .is_err());
+
+        assert!(expand(
+            quote!("/Script/Fixture.Native"),
+            quote! {
+                impl Native {
+                    #[dummy]
+                    #[bind_resolved_func(Backend, &DESCRIPTOR)]
+                    unsafe fn call() {}
+                }
+            }
+        )
+        .is_err());
+    }
+
+    #[test]
+
+    fn dummy_metadata_cannot_collide_with_authored_items() {
+        assert!(expand(
+            quote!("/Script/Fixture.Native"),
+            quote! {
+                impl Native {
+                    const __UNCHAINED_TARGET_Call: () = ();
+                    #[dummy]
+                    unsafe fn Call() {}
+                }
+            }
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("conflicts"));
+    }
+
+    #[test]
+
+    fn mixed_impl_preserves_constants_visibility_and_native_lifetimes() {
+        let output = expand(
+            quote!("/Script/Fixture.Native"),
+            quote! {
+                impl Native {
+                    pub(crate) const AUTHORED: u32 = 42;
+                    pub unsafe fn Call<'a>(&'a self) -> &'a Self {}
+                    #[dummy]
+                    pub(crate) unsafe fn Observe(value: bool) {}
+                }
+            },
+        )
+        .unwrap();
+
+        syn::parse2::<syn::File>(output.clone()).unwrap();
+
+        let text = output.to_string();
+
+        assert_eq!(text.matches("runtime_bindings").count(), 1);
+
+        assert_eq!(text.matches("KismetReflectionResolver :: new").count(), 1);
+
+        assert_eq!(text.matches("KismetExecResolver :: new").count(), 1);
+
+        assert!(text.contains("pub (crate) const AUTHORED"));
+
+        assert!(text.contains("pub (crate) const Observe"));
+
+        assert!(text.contains("pub unsafe fn Call < 'a > (& 'a self) -> & 'a Self"));
+    }
 }

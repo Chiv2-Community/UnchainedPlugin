@@ -29,20 +29,17 @@ pub struct FunctionMetadata {
 /// # Safety
 /// Implementations must return accurate metadata for the requested owner/member.
 /// Non-null exec addresses must remain valid in the module supplied to KismetContext.
-
 pub unsafe trait Reflection {
     /// Find a UFunction on the class or its superclasses and copy its metadata.
     ///
     /// # Safety
     /// Call on the game thread after the host's reflection prerequisites are ready.
-
     unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String>;
 
     /// Copy parameter identity, flags, kind and layout from the same UFunction.
     ///
     /// # Safety
     /// The same game-thread/readiness contract as `find_function` applies.
-
     unsafe fn find_exec_schema(&self, _owner: &str, _member: &str) -> Result<schema::FunctionSchema, String> {
         Err("Reflection adapter does not provide exec observation schemas".into())
     }
@@ -60,7 +57,6 @@ pub struct ExecEnvironment {
 }
 
 /// Game-thread reflection adapter and executable environment.
-
 pub struct KismetContext {
     reflection: Box<dyn Reflection>,
     environment: ExecEnvironment,
@@ -73,7 +69,6 @@ impl KismetContext {
     /// Construct and use on the game thread once reflection is ready.
     /// Native callers must remain quiescent until bindings and hooks are published.
     /// The environment must describe the adapter's module and verified frame-step entries.
-
     pub unsafe fn new(reflection: impl Reflection + 'static, environment: ExecEnvironment) -> Self {
         Self {
             reflection: Box::new(reflection),
@@ -187,7 +182,6 @@ mod exec_thunk;
 pub use exec_thunk::{native_body, ExecThunkParameters};
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

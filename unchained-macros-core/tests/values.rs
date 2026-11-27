@@ -115,7 +115,6 @@ fn invalid_required_binding_panics(base: usize, offset: u64) {
 
 #[test]
 #[should_panic(expected = "already initialized at another address")]
-
 fn required_binding_rejects_rebinding() {
     let binding = ValueBinding::new("Fixed");
 

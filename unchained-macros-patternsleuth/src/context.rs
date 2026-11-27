@@ -77,7 +77,6 @@ static SNAPSHOT: ResolverFactory<SelectorSnapshot> = ResolverFactory {
 };
 
 #[doc(hidden)]
-
 pub async fn context_snapshot(ctx: &AsyncContext<'_>) -> patternsleuth::resolvers::Result<Arc<SelectorSnapshot>> {
     ctx.resolve(&SNAPSHOT).await
 }

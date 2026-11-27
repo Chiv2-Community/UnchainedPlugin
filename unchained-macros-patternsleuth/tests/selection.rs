@@ -31,7 +31,6 @@ impl unchained_macros_core::ResolverSelector for Other {
 #[unchained_macros_core::resolver_selection_key(require = [First])]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-
 enum ExistingDerives {
     First = 7,
 }

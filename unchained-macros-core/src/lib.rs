@@ -41,7 +41,6 @@ pub use selection::{
 };
 
 #[doc(hidden)]
-
 pub mod __private {
 
     pub use crate::target::detour_signature;

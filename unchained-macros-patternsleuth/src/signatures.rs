@@ -2,7 +2,6 @@
 
 #[doc(hidden)]
 #[macro_export]
-
 macro_rules! __pattern_resolver {
     (@emit_body $name:ident, Simple, $ctx:ident, $patterns:ident) => {{
         $crate::__pattern_resolver!(@emit_process_inline $name, {

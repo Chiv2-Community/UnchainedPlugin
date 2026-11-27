@@ -5,7 +5,6 @@ use std::{num::NonZeroUsize, sync::OnceLock};
 static ATTACHED_DETOURS: Mutex<BTreeMap<usize, &'static retour::RawDetour>> = Mutex::new(BTreeMap::new());
 
 /// One-time publication of a resolved module address, shared by code and data.
-
 pub struct ResolvedAddress {
     name: &'static str,
     address: OnceLock<NonZeroUsize>,
@@ -30,7 +29,6 @@ impl ResolvedAddress {
     /// # Safety
     /// The address must identify process-lifetime storage/code with the caller's
     /// native contract. Publish before use; a different address is rejected.
-
     pub unsafe fn try_initialize(&self, base: usize, offset: u64) -> Result<(), String> {
         let address = usize::try_from(offset)
             .ok()
@@ -69,7 +67,6 @@ impl ResolvedAddress {
     /// # Safety
     /// The resolved slot must remain readable with the declared layout.
     /// Native writes must be synchronized with reads.
-
     pub unsafe fn initialize(&self, base: usize, offset: u64) {
         unsafe { self.try_initialize(base, offset) }
             .unwrap_or_else(|error| panic!("Failed to bind required native value {}: {error}", self.name));
@@ -77,7 +74,6 @@ impl ResolvedAddress {
 }
 
 /// Native target name, address source, and optional original-call trampoline.
-
 pub struct FunctionBinding<R: crate::AddressResolver> {
     name: &'static str,
     target: ResolvedAddress,
@@ -96,7 +92,6 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     }
 
     /// Native target name, independent of the resolver's cache key.
-
     pub const fn name(&self) -> &'static str {
         self.name
     }
@@ -110,7 +105,6 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     }
 
     /// Original-call address, bypassing this target's registered replacement.
-
     pub fn address(&self) -> Option<NonZeroUsize> {
         self.detour
             .get()
@@ -119,7 +113,6 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     }
 
     /// Resolved entry to patch, never the Rust binding wrapper or trampoline.
-
     pub fn entry_address(&self) -> Option<NonZeroUsize> {
         self.target.get()
     }
@@ -130,7 +123,6 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     /// The detour must target this entry with this binding's exact native
     /// contract. Attachment requires quiescent callers: publishing does not stop
     /// another thread that already loaded the old entry address.
-
     pub unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
         if self.entry_address().is_none() {
             return Err(format!("Native binding {} is not initialized", self.name()));
@@ -148,7 +140,6 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     /// process-lifetime code with their exact ABI and behavioral contract.
     /// Keep native callers quiescent until initialization and attachment complete.
     /// Late aliases inherit any trampoline already published for this address.
-
     pub unsafe fn initialize_address(&self, address: NonZeroUsize) -> Result<(), String> {
         let attached = ATTACHED_DETOURS
             .lock()
@@ -174,11 +165,9 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
 
 /// Invariant signature equality witness; carries no callable address or contract.
 #[doc(hidden)]
-
 pub type NativeSignature<F> = std::marker::PhantomData<fn(F) -> F>;
 
 #[doc(hidden)]
-
 pub trait FunctionInfo: std::any::Any + Send + Sync {
     fn entry_address(&self) -> Option<NonZeroUsize>;
 
@@ -209,7 +198,6 @@ pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item 
 /// Each address must identify process-lifetime native code with its binding's ABI
 /// and behavioral contract. Meet the backend context's threading/readiness contract.
 /// Initialize before native calls or detour attachment.
-
 pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
     context: &R::Context,
     snapshot: &crate::SelectorSnapshot,
@@ -239,7 +227,6 @@ pub fn function_is_bound_for<R: crate::AddressResolver>(name: &str) -> bool {
 }
 
 /// Preserve fallible helper behavior before native binding initialization.
-
 pub fn require_function_bindings_for<R: crate::AddressResolver>(names: &[&str]) -> Result<(), String> {
     for name in names {
         if !function_is_bound_for::<R>(name) {
@@ -256,7 +243,6 @@ pub fn require_function_bindings_for<R: crate::AddressResolver>(names: &[&str]) 
 /// Call during quiescent startup before enabling the patch. The trampoline must
 /// satisfy every binding's native contract and remain live for the process.
 #[doc(hidden)]
-
 pub(crate) unsafe fn publish_function_detours<R: crate::AddressResolver>(
     owner: &FunctionBinding<R>,
     detour: &'static retour::RawDetour,
@@ -296,11 +282,9 @@ pub(crate) unsafe fn publish_function_detours<R: crate::AddressResolver>(
 
 /// Required native data address. Binding failures are fatal; generated access reads
 /// slot contents or return an inline object's address without copying it.
-
 pub type ValueBinding = ResolvedAddress;
 
 /// Address metadata only; never caches a native pointer slot's contents.
-
 pub struct NativeGlobal<T> {
     binding: &'static ValueBinding,
     indirect: bool,
@@ -309,7 +293,6 @@ pub struct NativeGlobal<T> {
 
 impl<T> NativeGlobal<T> {
     /// Construct metadata for a slot holding a replaceable native pointer.
-
     pub const fn pointer_slot(binding: &'static ValueBinding) -> Self {
         Self {
             binding,
@@ -319,7 +302,6 @@ impl<T> NativeGlobal<T> {
     }
 
     /// Construct metadata for inline native storage without copying it.
-
     pub const fn inline(binding: &'static ValueBinding) -> Self {
         Self {
             binding,
@@ -336,7 +318,6 @@ impl<T> NativeGlobal<T> {
     /// not race with native writes. One-time binding publication does
     /// not make ordinary C++ pointer writes atomic.
     /// The caller must uphold native lifetime and aliasing rules while using the pointer.
-
     pub unsafe fn read(&self) -> *mut T {
         let address = self.binding.address();
 
@@ -363,7 +344,6 @@ inventory::collect!(&'static ValueBinding);
 /// # Safety
 /// Each resolved slot must satisfy its generated accessor's type/lifetime and
 /// synchronization contract. This binds addresses, not their current contents.
-
 pub unsafe fn initialize_value_bindings(base: usize, offsets: &std::collections::HashMap<String, u64>) {
     unsafe {
         initialize_value_bindings_where(base, offsets, |_| true);
@@ -375,7 +355,6 @@ pub unsafe fn initialize_value_bindings(base: usize, offsets: &std::collections:
 ///
 /// # Safety
 /// The contracts of [`initialize_value_bindings`] apply to accepted bindings.
-
 pub unsafe fn initialize_value_bindings_where(
     base: usize,
     offsets: &std::collections::HashMap<String, u64>,

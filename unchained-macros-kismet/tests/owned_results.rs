@@ -44,7 +44,6 @@ impl Drop for FText {
 }
 
 #[repr(C)]
-
 struct FLinearColor {
     red: f32,
     green: f32,
@@ -391,7 +390,6 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
 
 fn misaligned_result_is_forwarded_without_typed_borrow() {
     #[repr(align(16))]
-
     struct Buffer([u8; 32]);
 
     let context = context();

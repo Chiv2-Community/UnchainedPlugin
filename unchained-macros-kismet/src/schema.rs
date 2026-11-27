@@ -69,7 +69,6 @@ fn matches(kind: &PropertyKind, expected: &str) -> bool {
 }
 
 /// Validate before attaching; never infer a dummy from schema/decoder failure.
-
 pub fn validate(
     function: &crate::FunctionMetadata,
     schema: &FunctionSchema,
@@ -147,7 +146,6 @@ pub fn validate(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

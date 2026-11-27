@@ -202,7 +202,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

@@ -45,9 +45,7 @@ impl BindingSignature {
                             return None;
                         };
 
-                        if pointer.mutability.is_none() {
-                            return None;
-                        }
+                        pointer.mutability?;
 
                         parameters.push(Parameter::IndirectValue(type_name(&pointer.elem, owner)?));
                     } else {
@@ -249,7 +247,6 @@ fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

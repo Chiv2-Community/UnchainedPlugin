@@ -13,7 +13,6 @@ static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patterns
 inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::FunctionInfo }
 
 #[inline(never)]
-
 unsafe extern "C" fn target(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }

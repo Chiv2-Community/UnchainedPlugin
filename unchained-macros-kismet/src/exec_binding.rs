@@ -9,7 +9,6 @@ pub(crate) fn current_thread_id() -> u32 {
 }
 
 /// Resolver for a surviving, explicitly verified VM wrapper, never a C++ body.
-
 pub struct KismetExecResolver {
     pub owner: &'static str,
     pub member: &'static str,
@@ -30,7 +29,6 @@ impl KismetExecResolver {
     /// arguments is supported. Reverify this contract when the binary changes.
     /// The wrapper must remain unique to this UFunction, including native
     /// functions not yet loaded at initialization; reflected aliases are rejected.
-
     pub const unsafe fn new(
         owner: &'static str,
         member: &'static str,
@@ -57,7 +55,6 @@ impl KismetExecResolver {
 
     /// Foreign threads must forward the real wrapper without observing native
     /// text/history or invoking entry callbacks.
-
     pub fn is_observation_thread(&self) -> bool {
         self.observation_thread
             .get()
@@ -117,7 +114,6 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
 }
 
 /// Observation target for a verified dummy exec wrapper. Only entry is supported.
-
 pub struct DummyExecTarget<E> {
     binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
     hook: unchained_macros_core::NativeHook,
@@ -130,7 +126,6 @@ type ExecDispatcher = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std:
 impl<E: Copy> DummyExecTarget<E> {
     /// # Safety
     /// The VM dispatcher must forward the real wrapper and invoke E only with verified live step locals.
-
     pub const unsafe fn new(
         binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
         dispatcher: ExecDispatcher,

@@ -1,4 +1,8 @@
 #![cfg(windows)]
+#![allow(
+    clippy::useless_transmute,
+    reason = "The exact-match fixture deliberately tests an override whose type needs no conversion."
+)]
 
 unchained_macros_patternsleuth::define_pattern_resolver!(ConstRead, ["AA"]);
 
@@ -63,19 +67,19 @@ unsafe fn const_match(#[mutability_override] value: *const Native) -> i32 {
 
 #[unchained_macros_core::bind_func_detour(Native::mut_match)]
 
-unsafe fn mut_match<'a>(#[mutability_override] value: *mut Native, other: &'a i32) -> &'a i32 {
+unsafe fn mut_match(#[mutability_override] value: *mut Native, other: &i32) -> &i32 {
     unsafe { Native::mut_match(value, other) }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::borrowed)]
 
-unsafe fn borrowed<'a>(#[mutability_override] value: *mut &'a i32) -> &'a i32 {
+unsafe fn borrowed(#[mutability_override] value: *mut &i32) -> &i32 {
     unsafe { Native::borrowed(value) }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::shared_read)]
 
-unsafe fn shared_read<'a>(#[mutability_override] value: &'a mut Native) -> &'a i32 {
+unsafe fn shared_read(#[mutability_override] value: &mut Native) -> &i32 {
     // This fixture's raw native caller provides exclusive, writable storage.
     value.0 += 1;
 
@@ -84,24 +88,21 @@ unsafe fn shared_read<'a>(#[mutability_override] value: &'a mut Native) -> &'a i
 
 #[unchained_macros_core::bind_func_detour(Native::exclusive_read)]
 
-unsafe fn exclusive_read<'a>(#[mutability_override] value: &'a Native) -> &'a i32 {
+unsafe fn exclusive_read(#[mutability_override] value: &Native) -> &i32 {
     &value.0
 }
 
 #[inline(never)]
-
-unsafe extern "C" fn original_borrowed<'a>(value: *const &'a i32) -> &'a i32 {
+unsafe extern "C" fn original_borrowed(value: *const &i32) -> &i32 {
     unsafe { *std::hint::black_box(value) }
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn original_shared(value: &Native) -> &i32 {
     &std::hint::black_box(value).0
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
     // Keep this target semantically distinct from original_shared under ICF.
     let value = std::hint::black_box(value);
@@ -192,20 +193,17 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn original_mut(value: *mut Native, other: *const i32) -> i32 {
     unsafe { (*std::hint::black_box(value)).0 + *other }
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn original_const_match(value: *const Native) -> i32 {
     unsafe { (*std::hint::black_box(value)).0 + 2 }
 }
 
 #[inline(never)]
-
-unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) -> &'a i32 {
+unsafe extern "C" fn original_mut_match(value: *mut Native, other: &i32) -> &i32 {
     std::hint::black_box(value);
 
     std::hint::black_box(other)
@@ -289,7 +287,6 @@ unsafe fn replacement(#[mutability_override] value: *mut Native) -> i32 {
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn original(value: *const Native) -> i32 {
     unsafe { (*std::hint::black_box(value)).0 + 1 }
 }

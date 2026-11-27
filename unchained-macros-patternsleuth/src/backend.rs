@@ -68,7 +68,6 @@ inventory::collect!(OffsetProvider);
 
 /// Declare a typed resolver for an RVA supplied by an offset-map provider.
 #[macro_export]
-
 macro_rules! define_offset_resolver {
     ($name:ident) => {
         #[allow(non_camel_case_types)]
@@ -106,7 +105,6 @@ macro_rules! define_offset_resolver {
 }
 
 #[macro_export]
-
 macro_rules! require_resolver {
     ($name:ident) => {
         $crate::__private::inventory::submit! { $crate::RequiredResolver { name: stringify!($name) } }
@@ -190,7 +188,6 @@ fn select<'a>(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

@@ -11,7 +11,6 @@ unchained_macros_patternsleuth::define_pattern_resolver!(Storage, ["AA"]);
 unchained_macros_patternsleuth::define_pattern_resolver!(Missing, ["AA"]);
 
 #[repr(C)]
-
 struct Native {
     value: i32,
 }
@@ -42,7 +41,6 @@ impl Native {
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn add(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
@@ -141,7 +139,6 @@ fn uninitialized_binding_rejects_detour_publication() {
     let binding = Native::__UNCHAINED_TARGET_missing.binding();
 
     #[inline(never)]
-
     unsafe extern "C" fn unbound_target(value: i32) -> i32 {
         unsafe { std::ptr::read_volatile(&value) }.wrapping_add(3)
     }

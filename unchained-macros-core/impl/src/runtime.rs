@@ -144,7 +144,6 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

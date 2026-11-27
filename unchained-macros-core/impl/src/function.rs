@@ -371,7 +371,6 @@ fn native_dispatch(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

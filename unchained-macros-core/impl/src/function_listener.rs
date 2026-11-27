@@ -159,7 +159,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

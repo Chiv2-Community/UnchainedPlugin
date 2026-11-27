@@ -26,7 +26,6 @@ use std::{
 ///     let _ = DetourRegistration::new("rust ABI", target, rust_abi, || true);
 /// }
 /// ```
-
 pub struct DetourRegistration<T: crate::SupportsDetour + 'static, State = AtomicBool> {
     pub name: &'static str,
     target: &'static T,
@@ -55,7 +54,6 @@ impl<T: crate::SupportsDetour> DetourRegistration<T> {
     /// # Safety
     /// `initialized` must be fresh, false, and reserved solely for this registration.
     #[doc(hidden)]
-
     pub const unsafe fn with_inventory_state(
         self,
         initialized: &'static AtomicBool,
@@ -71,7 +69,6 @@ impl<T: crate::SupportsDetour> DetourRegistration<T> {
 }
 
 /// Object-safe discovery/control surface. Callback types stay on the registration.
-
 pub trait DetourInfo: Sync {
     fn name(&self) -> &'static str;
 
@@ -82,7 +79,6 @@ pub trait DetourInfo: Sync {
     /// # Safety
     /// Attach during quiescent startup, satisfying target readiness and the callback's
     /// ABI, aliasing and lifetime contracts. Do not attach concurrently.
-
     unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>>;
 
     fn initialized(&self) -> bool;
@@ -150,7 +146,6 @@ pub struct PatchRegistration<R: AddressResolver> {
 }
 
 #[doc(hidden)]
-
 pub trait PatchInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
 

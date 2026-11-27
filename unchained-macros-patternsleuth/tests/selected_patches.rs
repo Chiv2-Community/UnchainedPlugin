@@ -277,7 +277,7 @@ fn relative_address_overflow_never_writes(enabled: bool) {
     if enabled {
         assert!(result.is_err());
     } else {
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     assert!(writer.0.is_empty());

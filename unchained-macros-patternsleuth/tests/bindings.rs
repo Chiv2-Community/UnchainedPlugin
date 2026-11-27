@@ -22,7 +22,6 @@ mod resolvers {
 }
 
 #[repr(C)]
-
 struct Native {
     value: i32,
 }
@@ -34,7 +33,7 @@ impl Native {
 
     #[bind_resolved_func(resolvers::Write)]
 
-    unsafe fn write(self: &mut Self, value: i32) {}
+    unsafe fn write(&mut self, value: i32) {}
 
     #[bind_resolved_func(resolvers::RawRead)]
 
@@ -79,7 +78,7 @@ unsafe extern "C" fn borrow(value: &Native) -> &i32 {
     &value.value
 }
 
-unsafe extern "C" fn return_storage<'a>(value: *const Native, output: &'a mut i32) -> &'a mut i32 {
+unsafe extern "C" fn return_storage(value: *const Native, output: &mut i32) -> &mut i32 {
     *output = unsafe { (*value).value };
 
     output
@@ -134,7 +133,6 @@ fn generated_bindings_forward_receivers_arguments_and_returns() {
 
 #[test]
 #[should_panic(expected = "Native binding Missing is not initialized")]
-
 fn uninitialized_binding_fails_before_native_call() {
     unsafe {
         Native { value: 0 }.missing();

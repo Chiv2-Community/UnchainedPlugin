@@ -280,7 +280,6 @@ pub(crate) fn parameter_type(signature: &syn::Signature, index: usize) -> syn::R
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

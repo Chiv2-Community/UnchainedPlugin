@@ -6,7 +6,6 @@ use std::sync::{
 use unchained_macros_core::ExitObservation;
 
 #[repr(align(128))]
-
 struct Snapshot {
     drops: Arc<AtomicUsize>,
     panic_on_drop: bool,

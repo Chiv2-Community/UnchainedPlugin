@@ -18,7 +18,6 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 /// Shared physical attachment. Logical callbacks belong to the typed target.
-
 pub struct NativeHook {
     hook: OnceLock<retour::RawDetour>,
     published: AtomicBool,
@@ -41,7 +40,6 @@ impl NativeHook {
 
     /// # Safety
     /// Dispatcher ABI must match binding; all native callers must be quiescent.
-
     pub unsafe fn attach<R: crate::AddressResolver>(
         &'static self,
         binding: &'static crate::FunctionBinding<R>,
@@ -105,7 +103,6 @@ static CLAIMED_ADDRESSES: Mutex<BTreeSet<usize>> = Mutex::new(BTreeSet::new());
 
 /// Reservation retained by an attached detour.
 #[doc(hidden)]
-
 pub struct DetourAddressClaim {
     address: usize,
     committed: bool,
@@ -130,7 +127,6 @@ impl Drop for DetourAddressClaim {
 
 /// Reserve by address, so differently named aliases cannot patch one target twice.
 #[doc(hidden)]
-
 pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String> {
     if address == 0 {
         return Err("Native detour address is null".into());
@@ -151,7 +147,6 @@ pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;
@@ -183,7 +178,6 @@ mod tests {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original(value: usize) -> usize {
         std::hint::black_box(value).wrapping_add(1)
     }
@@ -193,7 +187,6 @@ mod tests {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn unpublished_entry(value: usize) -> usize {
         std::hint::black_box(value).wrapping_add(23)
     }

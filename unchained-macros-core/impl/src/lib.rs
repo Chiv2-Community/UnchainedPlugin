@@ -15,7 +15,6 @@ mod value;
 /// An optional enum variant restricts applicability. Required coverage is grouped
 /// by resolver and excludes selections explicitly disabled by that resolver.
 #[proc_macro_attribute]
-
 pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
     patch::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -26,7 +25,6 @@ pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
 /// and `fallback = Variant`. The fallback variant itself terminates the chain.
 /// Supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`, and `Eq`.
 #[proc_macro_attribute]
-
 pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStream {
     selection::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -39,7 +37,6 @@ pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStre
 /// The empty body calls the native entry or its original trampoline. Receiver
 /// types and declared per-call lifetime relationships are preserved.
 #[proc_macro_attribute]
-
 pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
     function::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -52,7 +49,6 @@ pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
 /// resolver link, and original-call behavior. The replacement's hover links
 /// back to that binding and explains game-side interception.
 #[proc_macro_attribute]
-
 pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     function_detour::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -60,7 +56,6 @@ pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-
 pub fn bind_func_entry_listener(args: TokenStream, item: TokenStream) -> TokenStream {
     function_listener::expand(args.into(), item.into(), false)
         .unwrap_or_else(|error| error.to_compile_error())
@@ -68,7 +63,6 @@ pub fn bind_func_entry_listener(args: TokenStream, item: TokenStream) -> TokenSt
 }
 
 #[proc_macro_attribute]
-
 pub fn bind_func_exit_listener(args: TokenStream, item: TokenStream) -> TokenStream {
     function_listener::expand(args.into(), item.into(), true)
         .unwrap_or_else(|error| error.to_compile_error())
@@ -80,7 +74,6 @@ pub fn bind_func_exit_listener(args: TokenStream, item: TokenStream) -> TokenStr
 /// Type annotations add documentation only. Native global reads and vtable
 /// dispatch are explicit operations, not generated method forwarding.
 #[proc_macro_attribute]
-
 pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     runtime::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
@@ -91,7 +84,6 @@ pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Static pointer bindings expose `read()`: `Value` reloads the pointer slot;
 /// `Address` returns inline storage's pointer. Neither form generates native methods.
 #[proc_macro_attribute]
-
 pub fn bind_resolved_value(args: TokenStream, item: TokenStream) -> TokenStream {
     value::expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())

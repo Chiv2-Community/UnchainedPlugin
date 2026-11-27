@@ -154,7 +154,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         quote!(unsafe { (#binding.address() as *const #ty).read() })
     };
 
-    function.block = Box::new(syn::parse2(quote!({
+    *function.block = syn::parse2(quote!({
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
         static #binding: ::unchained_macros_core::ValueBinding =
             ::unchained_macros_core::ValueBinding::new(#resolver_name);
@@ -167,7 +167,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         let #value: #ty = #read;
         #check_pointer
         #value
-    }))?);
+    }))?;
 
     if !function
         .attrs
@@ -181,7 +181,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

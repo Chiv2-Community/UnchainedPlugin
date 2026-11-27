@@ -32,10 +32,10 @@ fn parameter(ty: &Type) -> syn::Result<Tokens> {
             "FString" => "StrProperty",
             "FText" => "TextProperty",
             "FLinearColor" => "StructProperty:LinearColor",
-            _ => return Err(syn::Error::new_spanned(&ty, "unsupported exec observation type")),
+            _ => return Err(syn::Error::new_spanned(ty, "unsupported exec observation type")),
         },
 
-        _ => return Err(syn::Error::new_spanned(&ty, "unsupported exec observation type")),
+        _ => return Err(syn::Error::new_spanned(ty, "unsupported exec observation type")),
     };
 
     Ok(quote!(::unchained_macros_kismet::schema::Parameter {
@@ -241,7 +241,6 @@ pub fn expand_method(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

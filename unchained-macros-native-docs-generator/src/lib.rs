@@ -353,7 +353,6 @@ fn write_document(directory: &Path, key: &str, docs: &str, written: &mut BTreeSe
 }
 
 /// Generate standard Rustdoc includes before the consumer's macros expand.
-
 pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> {
     let local_path = workspace.join(".cargo/config.local.toml");
 
@@ -762,7 +761,6 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::*;

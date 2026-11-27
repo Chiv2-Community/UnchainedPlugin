@@ -220,7 +220,6 @@ unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
 /// verified frame-step entry addresses, not Rust wrappers or trampolines.
 /// Only use with independently verified direct-call native declarations.
 /// `parameters` must match reflection metadata; a return value is not an argument.
-
 pub unsafe fn native_body(
     thunk: usize,
     base: usize,
@@ -260,7 +259,6 @@ pub unsafe fn native_body(
 }
 
 #[cfg(test)]
-
 mod tests {
 
     use super::{candidate, ExecThunkParameters};

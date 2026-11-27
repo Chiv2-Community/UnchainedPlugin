@@ -48,7 +48,6 @@ inventory::submit! { &BINDING as &dyn __private::FunctionInfo }
 inventory::submit! { &ALIAS as &dyn __private::FunctionInfo }
 
 #[inline(never)]
-
 unsafe extern "C" fn original(value: usize) -> usize {
     std::hint::black_box(value).wrapping_add(1)
 }

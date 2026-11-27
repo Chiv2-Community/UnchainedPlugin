@@ -11,7 +11,6 @@ pub trait AddressResolver: Send + Sync + 'static {
 
     /// # Safety
     /// The host must satisfy the backend's readiness, threading, and ABI contracts.
-
     unsafe fn resolve(&self, context: &Self::Context) -> Result<NonZeroUsize, String>;
 }
 
@@ -30,7 +29,6 @@ impl<R: AddressResolver> Resolver<R> {
 }
 
 #[doc(hidden)]
-
 pub trait ResolverInfo: Any + Send + Sync {
     fn name(&self) -> &'static str;
 

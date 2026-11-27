@@ -16,13 +16,11 @@ static READY: AtomicBool = AtomicBool::new(false);
 static READS: AtomicUsize = AtomicUsize::new(0);
 
 #[inline(never)]
-
 unsafe extern "C" fn add(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn plain(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(2)
 }
@@ -34,19 +32,16 @@ struct Frame {
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn step(frame: *const Frame) -> i32 {
     unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn explicit_step(frame: *const Frame) -> i32 {
     unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }.wrapping_add(1)
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
     let value = unsafe { step(frame) };
 
@@ -58,7 +53,6 @@ unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn plain_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
     let value = unsafe { step(frame) };
 

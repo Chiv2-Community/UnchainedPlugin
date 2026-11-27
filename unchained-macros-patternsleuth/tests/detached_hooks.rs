@@ -19,7 +19,6 @@ mod model {
     unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Detached);
 
     #[repr(C)]
-
     pub struct Native {
         pub value: i32,
     }
@@ -111,7 +110,7 @@ unsafe fn aliased(value: i32) -> i32 {
 
 #[unchained_macros_core::bind_func_detour(Native::borrow, borrow_condition)]
 
-unsafe fn plugin_borrow<'a>(this: &'a Native) -> &'a Native {
+unsafe fn plugin_borrow(this: &Native) -> &Native {
     BORROW_CALLS.fetch_add(1, Ordering::SeqCst);
 
     unsafe { this.borrow() }
@@ -119,7 +118,7 @@ unsafe fn plugin_borrow<'a>(this: &'a Native) -> &'a Native {
 
 #[unchained_macros_core::bind_func_detour(Native::storage)]
 
-unsafe fn plugin_storage<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
+unsafe fn plugin_storage(this: *const Native, out: &mut i32) -> &mut i32 {
     let result = unsafe { this.storage(out) };
 
     *result += 10;
@@ -151,39 +150,33 @@ unsafe fn plugin_request(value: i32) -> i32 {
 unsafe fn excluded() {}
 
 #[inline(never)]
-
 unsafe extern "C" fn add_target(value: i32) -> i32 {
     std::hint::black_box(value) + 3
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn borrow_target(this: &Native) -> &Native {
     std::hint::black_box(this)
 }
 
 #[inline(never)]
-
-unsafe extern "C" fn storage_target<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
+unsafe extern "C" fn storage_target(this: *const Native, out: &mut i32) -> &mut i32 {
     *out = unsafe { (*std::hint::black_box(this)).value };
 
     std::hint::black_box(out)
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn global_off_target(value: i32) -> i32 {
     std::hint::black_box(value) + 4
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn zero_target() -> i32 {
     std::hint::black_box(17)
 }
 
 #[inline(never)]
-
 unsafe extern "C" fn request_target(value: i32) -> i32 {
     std::hint::black_box(value) + 6
 }

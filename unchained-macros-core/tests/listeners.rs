@@ -20,7 +20,6 @@ impl<E: Copy, X, P: Copy, R: AddressResolver> ObservationTarget<E, X, P, R> {
     /// # Safety
     /// Attachment and dispatch must honor E/X/P, preserve original execution,
     /// and finish snapshots only with the declared caller-visible result.
-
     pub const unsafe fn new(
         resolver: &'static Resolver<R>,
         attach: unsafe fn() -> Result<(), Box<dyn std::error::Error>>,
@@ -140,7 +139,6 @@ static REENTER_EXIT: AtomicBool = AtomicBool::new(false);
 static ADJUST_INPUT: AtomicBool = AtomicBool::new(false);
 
 #[inline(never)]
-
 unsafe extern "C" fn original(value: i32, output: *mut i32) -> i32 {
     ORIGINAL_CALLS.fetch_add(1, Ordering::SeqCst);
 
@@ -711,7 +709,6 @@ mod backend_specific {
 
     impl VmOnly {
         #[allow(non_upper_case_globals)]
-
         const __UNCHAINED_TARGET_call: &'static Descriptor = &DESCRIPTOR;
     }
 
@@ -788,7 +785,6 @@ mod duplicate_discovery {
 
     impl VmOnly {
         #[allow(non_upper_case_globals)]
-
         const __UNCHAINED_TARGET_call: &'static Descriptor = &DESCRIPTOR;
     }
 
@@ -908,13 +904,11 @@ mod activation {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_off() -> usize {
         std::hint::black_box(11)
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_gated() -> usize {
         std::hint::black_box(12)
     }
@@ -1025,7 +1019,6 @@ mod condition_reentry {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original(value: usize) -> usize {
         ORIGINAL.fetch_add(1, Ordering::SeqCst);
 
@@ -1104,6 +1097,10 @@ mod condition_reentry {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Each argument deliberately collides with a distinct generated local name."
+)]
 mod local_hygiene {
 
     use super::*;
@@ -1147,7 +1144,6 @@ mod local_hygiene {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original(
         callback: *mut usize,
         address: *const usize,
@@ -1308,7 +1304,6 @@ mod ownership {
     static SEEN: AtomicUsize = AtomicUsize::new(0);
 
     #[repr(C)]
-
     struct Owned {
         value: usize,
         padding: [usize; 3],
@@ -1335,13 +1330,11 @@ mod ownership {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_echo(value: Owned) -> Owned {
         value
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_make(value: usize) -> Owned {
         Owned {
             value,
@@ -1433,7 +1426,6 @@ mod custom_snapshots {
     static PANIC_EXIT: AtomicBool = AtomicBool::new(false);
 
     #[repr(C)]
-
     struct Owned {
         value: usize,
     }
@@ -1478,7 +1470,6 @@ mod custom_snapshots {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original(mut value: Owned) -> Owned {
         value.value += 1;
 
@@ -1486,7 +1477,6 @@ mod custom_snapshots {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_two(first: Owned, second: Owned) {
         TWO_ORIGINAL.fetch_add(1, Ordering::SeqCst);
 
@@ -1633,7 +1623,6 @@ mod references {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_read(value: &mut i32) -> &mut i32 {
         *value += 1;
 
@@ -1641,19 +1630,16 @@ mod references {
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_reference() -> &'static i32 {
         &RESULT
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_pointer(value: *mut i32) -> *mut i32 {
         value
     }
 
     #[inline(never)]
-
     unsafe extern "C" fn original_nothing(value: usize) {
         SEEN.fetch_add(value, Ordering::SeqCst);
     }
