@@ -182,19 +182,27 @@ pub fn expand_method(
             static #arguments: &[::unchained_macros_kismet::schema::Parameter] = &[#(#parameters),*];
             #(#attributes_cfg)*
             #[allow(non_upper_case_globals)]
-            static #resolver: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetExecResolver> =
+            static #resolver: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetExecResolver> = {
+                ::unchained_macros_core::__private::inventory::submit! {
+                    &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
+                }
                 ::unchained_macros_core::Resolver {
                     name: concat!(stringify!(#class), "__", #member, "__exec"),
                     implementation: unsafe { ::unchained_macros_kismet::KismetExecResolver::new(
                         #owner, #member, #arguments, #result_parameter,
                     ) },
                     filter: None,
-                };
+                }
+            };
 
             #(#attributes_cfg)*
             #[allow(non_upper_case_globals)]
-            static #binding: ::unchained_macros_core::FunctionBinding<::unchained_macros_kismet::KismetExecResolver> =
-                ::unchained_macros_core::FunctionBinding::new(concat!(stringify!(#class), "::", #member, " [exec]"), &#resolver);
+            static #binding: ::unchained_macros_core::FunctionBinding<::unchained_macros_kismet::KismetExecResolver> = {
+                ::unchained_macros_core::__private::inventory::submit! {
+                    &#binding as &dyn ::unchained_macros_core::__private::FunctionInfo
+                }
+                ::unchained_macros_core::FunctionBinding::new(concat!(stringify!(#class), "::", #member, " [exec]"), &#resolver)
+            };
             #(#attributes_cfg)*
             #[allow(non_upper_case_globals)]
             static #descriptor: #listener_type =
@@ -228,16 +236,6 @@ pub fn expand_method(
                 }
             }
 
-            #(#attributes_cfg)*
-            ::unchained_macros_core::__private::inventory::submit! {
-                &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
-            }
-
-            #(#attributes_cfg)*
-            ::unchained_macros_core::__private::inventory::submit! {
-                &#binding
-                    as &dyn ::unchained_macros_core::__private::FunctionInfo
-            }
         },
     ))
 }

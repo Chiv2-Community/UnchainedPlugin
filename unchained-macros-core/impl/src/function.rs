@@ -96,15 +96,14 @@ fn binding_storage(
     quote! {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #name: ::unchained_macros_core::FunctionBinding<#backend> =
+        static #name: ::unchained_macros_core::FunctionBinding<#backend> = {
+            ::unchained_macros_core::__private::inventory::submit! {
+                &#name as &dyn ::unchained_macros_core::__private::FunctionInfo
+            }
             ::unchained_macros_core::FunctionBinding::new(
                 #target_name, #descriptor,
-            );
-        #(#cfg)*
-        ::unchained_macros_core::__private::inventory::submit! {
-            &#name
-                as &dyn ::unchained_macros_core::__private::FunctionInfo
-        }
+            )
+        };
     }
 }
 

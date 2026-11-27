@@ -56,7 +56,8 @@ mod tests {
 
         assert!(!text.contains("doc (hidden)"));
 
-        assert!(text.matches("cfg (any ())").count() >= 3);
+        // The method and its resolver carry the guard; the inventory entry lives inside the resolver.
+        assert_eq!(text.matches("cfg (any ())").count(), 2);
 
         assert!(text.contains("pub (crate) unsafe fn IsDedicatedServer"));
 
@@ -259,17 +260,16 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         declarations.push(quote! {
             #(#cfg)*
             #[allow(non_upper_case_globals)]
-            static #resolver: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetReflectionResolver> =
+            static #resolver: ::unchained_macros_core::Resolver<::unchained_macros_kismet::KismetReflectionResolver> = {
+                ::unchained_macros_core::__private::inventory::submit! {
+                    &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
+                }
                 ::unchained_macros_core::Resolver {
                     name: #resolver_name,
                     implementation: ::unchained_macros_kismet::KismetReflectionResolver::new(#owner, #method_name),
                     filter: ::core::option::Option::None,
-                };
-
-            #(#cfg)*
-            ::unchained_macros_core::__private::inventory::submit! {
-                &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
-            }
+                }
+            };
         });
 
         method.attrs.push(syn::parse_quote!(#[bind_resolved_func(
