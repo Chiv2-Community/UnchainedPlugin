@@ -17,15 +17,7 @@ struct Package {
 #[serde(rename_all = "kebab-case")]
 struct Metadata {
     #[serde(default)]
-    pre_build_steps: Vec<PreBuildStep>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum PreBuildStep {
-    GenerateNativeBindingDocs,
-    EmbedBuildMetadata,
-    Format,
+    pre_build_steps: Vec<String>,
 }
 
 #[proc_macro]
@@ -36,13 +28,13 @@ pub fn build_script(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut modules = String::new();
     let mut calls = String::new();
     for step in manifest.package.metadata.pre_build_steps {
-        let (name, path) = match step {
-            PreBuildStep::GenerateNativeBindingDocs => ("generate_native_binding_docs", "generate_native_binding_docs.rs"),
-            PreBuildStep::EmbedBuildMetadata => ("embed_build_metadata", "embed_build_metadata.rs"),
-            PreBuildStep::Format => ("format", "format.rs"),
-        };
-        modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));
-        calls.push_str(&format!("{name}::run();"));
+        assert!(
+            step != "build" && step.split('-').all(|word| !word.is_empty() && word.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())),
+            "{}: expected a kebab-case pre-build step name (`build` is reserved), got {step:?}", path.display()
+        );
+        let name = step.replace('-', "_");
+        modules.push_str(&format!("#[path = \"{name}.rs\"] mod step_{name};"));
+        calls.push_str(&format!("step_{name}::run();"));
     }
     // Recompile the build script when the task list changes, even if Cargo
     // considers the metadata-only manifest edit irrelevant to compilation.
