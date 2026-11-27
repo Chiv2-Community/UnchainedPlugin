@@ -9,5 +9,5 @@ fn main() -> Result<()> {
         .ancestors()
         .nth(2)
         .unwrap();
-    unchained_native_docs::generate(manifest, Path::new(&output))
+    unchained_native_docs::generate(manifest, manifest.parent().unwrap(), Path::new(&output))
 }

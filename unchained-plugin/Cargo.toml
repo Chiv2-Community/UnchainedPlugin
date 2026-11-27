@@ -1,0 +1,149 @@
+[package]
+name = "UnchainedPlugin"
+version = "1.0.1"
+edition = "2021"
+build = "../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["generate-native-binding-docs", "embed-build-metadata"]
+
+[[bin]]
+name = "mock_server"
+path = "src/bin/mock_server.rs"
+
+[lib]
+name = "UnchainedPlugin"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+unchained-native-docs = { path = "build/unchained-native-docs" }
+embed-resource = "3.0"
+git2 = { version = "0.21", default-features = false }
+
+[lints.rust]
+non_snake_case = "allow"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
+
+[features]
+default = [
+        "serde-resolvers",
+        "dev",
+        # "loose_assets",
+        "verbose_hooks",
+        "cli_commands",
+        "rcon_commands",
+        "server_registration",
+        "mod_management",
+        "discord_integration",
+        "syslog-client",
+        # "config_overrides_verbose_hooks",
+        # "map_profiles",
+        ]
+serde-resolvers = []
+image-elf = []
+dev = []
+syslog-client = [  ]
+kismet_log = [] # Dump kismetexecutionmessage logs
+# Opt-in diagnostics; keep dev/default builds unchanged.
+blueprint_printstring_log = [] # Log Blueprint PrintString/PrintWarning/PrintText
+kismet_diagnostics = ["kismet_log", "blueprint_printstring_log"]
+kismet_server_identity_hooks = [] # Observe identity predicates without forcing results
+force_kismet_is_dedicated_server = ["kismet_server_identity_hooks"]
+force_kismet_is_server = ["kismet_server_identity_hooks"]
+force_kismet_is_standalone = ["kismet_server_identity_hooks"]
+with_pdb = ["pdb"]
+loose_assets = [] # Load assets in addition to paks
+verbose_hooks = [] # print (some) hook triggers to console
+config_overrides_verbose_hooks = [] # print (config_override) hook triggers to console
+map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
+cli_commands = [] # process commands from plugin windows
+rcon_commands = [] # process commands from rcon
+server_registration = ["a2s", "backon", "tokio"] # register server with backend
+mod_management = [] # info about mod markers and actors
+discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
+move-autonomous-desync = []
+loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/found, patch only the texture FName
+
+[dependencies]
+unchained-macros-core = { path = "../unchained-macros-core" }
+unchained-macros-patternsleuth = { path = "../unchained-macros-patternsleuth" }
+unchained-macros-kismet = { path = "../unchained-macros-kismet" }
+rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "45459669b4e6807ed6fba96bb225a097a65a34a8" }
+backon = { workspace = true, optional = true }
+server-browser-client = { workspace = true }
+server-browser-client-sdk = { workspace = true }
+binary_bloodhound = { workspace = true }
+patternsleuth = { workspace = true }
+anyhow = "1.0.79"
+# Pak index reads for off-thread mod-map discovery. The crates.io `repak`
+# crate is an unrelated name-squatter; use trumank/repak.
+repak = { git = "https://github.com/trumank/repak" }
+# AES-256 key pass-through for paks with encrypted indexes (must unify with
+# repak's own aes version).
+aes = "0.8"
+base64 = "0.22"
+hex = "0.4"
+serde = { workspace = true }
+serde_json = "1.0.111"
+serde_yaml = "0.9"
+serde_urlencoded = "0.7"
+tracing = "0.1.40"
+futures = "0.3.31"
+paste = "1.0"
+memmap2 = "0.9.4"
+widestring = "1.0.2"
+bitflags = "2.4.1"
+log = { version = "0.4", features = ["kv"] }
+log4rs = { version = "1.4.0", features = ["log_kv", "json_encoder", "gzip"] }
+parking_lot = "0.12.1"
+inventory = "0.3.14"
+regex = "1.11"
+itertools = "0.14.0"
+# server registration
+a2s = { workspace = true, optional = true }
+reqwest = { workspace = true }
+get_if_addrs = "0.5"
+# discord<
+async-trait = "0.1"
+# Symbol-file loading (local tests)
+pdb = { version = "0.8.0", optional = true }
+retour = { version = "=0.4.0-alpha.4" }
+clap = { workspace = true } # cli arg parsing
+winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser", "excpt"] }
+windows = { version = "0.52.0", features = ["Win32_Foundation",
+            "Win32_System_Console",
+            "Win32_System_Registry",
+            "Win32_System_LibraryLoader",
+            "Win32_System_SystemServices",
+            "Win32_Graphics_Gdi",
+            "Win32_Graphics_Direct3D",
+            "Win32_Graphics_Direct3D11",
+            "Win32_Graphics_Dxgi",
+            "Win32_Graphics_Dxgi_Common",
+            "Win32_UI_WindowsAndMessaging",
+            "Win32_System_Threading",
+            "Win32_System_Diagnostics_Debug",
+
+            "Win32_Security",
+            "Win32_System_Kernel",
+            "Win32_System_Memory",
+            "Win32_System_ProcessStatus",
+            ]}
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true }
+serenity = { version = "0.12", optional = true, default-features = false, features = ["client", "gateway", "model", "native_tls_backend"] }
+discord-http = { package = "reqwest", version = "0.13", optional = true, default-features = false, features = ["native-tls"] }
+shlex = "1.3.0"
+crossbeam-channel = { version = "0.5", optional = true}
+rand = "0.9.2"
+censor = { workspace = true }
+crc32c = "0.6.8"
+strum = { version = "0.26", features = ["derive"] }
+emojis = "0.6"
+unicode-segmentation = "1.12"
+
+[dev-dependencies]
+object = "0.32.2"
+test-case = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

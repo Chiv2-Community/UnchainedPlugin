@@ -1,6 +1,6 @@
 ---
 name: create-detour
-description: Create a plugin detour targeting an existing native runtime binding. Use when intercepting a Chivalry 2 function to add logging, publish events, or change behavior under src/unchained/patches.
+description: Create a plugin detour targeting an existing native runtime binding. Use when intercepting a Chivalry 2 function to add logging, publish events, or change behavior under unchained-plugin/src/unchained/patches.
 ---
 
 # Creating a detour
@@ -31,7 +31,7 @@ Reuse an existing binding unless it is missing or there is evidence it may be wr
 
 ## Choose the functional module
 
-Place replacements under `src/unchained/patches/*` by plugin purpose.
+Place replacements under `unchained-plugin/src/unchained/patches/*` by plugin purpose.
 
 - Reuse the relevant hosting, backend, networking, message, or other feature module.
 - Put hooks that only log in `diagnostics.rs`.
@@ -40,7 +40,7 @@ Place replacements under `src/unchained/patches/*` by plugin purpose.
 - Put imports first, then all detour entry points, then instruction patches,
   helpers, state, types, and tests.
 - Gate a whole module when all its contents require the same feature.
-- Keep native resolvers and ABI declarations under `src/Chivalry2/*`.
+- Keep native resolvers and ABI declarations under `unchained-plugin/src/Chivalry2/*`.
 
 ## Implement the replacement
 

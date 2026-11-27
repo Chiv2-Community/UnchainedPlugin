@@ -111,12 +111,13 @@ pub(super) fn generate() -> (String, String) {
         "src",
         "build",
         "resources",
-        "unchained-macros-core",
-        "unchained-macros-patternsleuth",
-        "unchained-macros-kismet",
-        "build.rs",
+        "../unchained-macros-core",
+        "../unchained-macros-patternsleuth",
+        "../unchained-macros-kismet",
+        "../build",
+        "../Cargo.toml",
         "Cargo.toml",
-        "Cargo.lock",
+        "../Cargo.lock",
     ] {
         println!("cargo:rerun-if-changed={path}");
     }

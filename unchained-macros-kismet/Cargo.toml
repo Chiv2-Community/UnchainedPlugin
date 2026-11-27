@@ -2,7 +2,7 @@
 name = "unchained-macros-kismet"
 version = "0.1.0"
 edition = "2021"
-build = "../build.rs"
+build = "../build/build.rs"
 
 [package.metadata]
 pre-build-steps = ["format"]
@@ -23,4 +23,4 @@ windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_Di
 test-case = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
-unchained-native-docs = { path = "../build/unchained-native-docs" }
+unchained-native-docs = { path = "../unchained-plugin/build/unchained-native-docs" }

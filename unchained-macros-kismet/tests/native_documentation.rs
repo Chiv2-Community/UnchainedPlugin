@@ -38,7 +38,7 @@ edition = "2021"
 unchained-macros-core = {{ path = "{}/unchained-macros-core" }}
 unchained-macros-kismet = {{ path = "{}/unchained-macros-kismet" }}
 [build-dependencies]
-unchained-native-docs = {{ path = "{}/build/unchained-native-docs" }}
+unchained-native-docs = {{ path = "{}/unchained-plugin/build/unchained-native-docs" }}
 [patch.crates-io]
 {patches}
 "#,
@@ -55,6 +55,7 @@ unchained-native-docs = {{ path = "{}/build/unchained-native-docs" }}
 fn main() {
     let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     unchained_native_docs::generate(
+        &manifest,
         &manifest,
         &manifest.join("generated"),
     ).unwrap();

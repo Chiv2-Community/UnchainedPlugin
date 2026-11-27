@@ -17,7 +17,7 @@ Import scan and offset-provider declarations from `unchained_macros_patternsleut
 or reflection declarations from `unchained_macros_kismet`. Binding, hook, and patch
 types require an explicit backend; discovery uses `*_inventory_for::<Backend>()`.
 
-- Keep resolvers, native ABI declarations, and bindings under `src/Chivalry2/*`.
+- Keep resolvers, native ABI declarations, and bindings under `unchained-plugin/src/Chivalry2/*`.
 - Follow the [native source layout](engine-sources.md).
 - Use `#[runtime_bindings]` on the native type's inherent impl.
 - Declare an empty unsafe method with `#[bind_resolved_func(Resolver)]`.
@@ -80,7 +80,7 @@ They retain the same unsafe declarations and detour API, but initialize on the
 game thread once reflection is available. See
 [runtime reflection bindings](kismet-runtime-bindings.md) for lifecycle and limits.
 
-Target the native binding from a functional module under `src/unchained/patches/`.
+Target the native binding from a functional module under `unchained-plugin/src/unchained/patches/`.
 
 - Use `#[bind_func_detour(Type::Method)]` on an unsafe free function.
 - Do not target the resolver or Rust wrapper address.

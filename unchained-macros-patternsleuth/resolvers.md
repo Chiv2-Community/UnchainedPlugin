@@ -1,6 +1,6 @@
 # Native resolvers
 
-Resolve a verified target beside its native declaration under `src/Chivalry2/*`.
+Resolve a verified target beside its native declaration under `unchained-plugin/src/Chivalry2/*`.
 See [native ownership and paths](../docs/engine-sources.md),
 [binding contracts](../docs/native-bindings.md), and the
 [hook workflow](../CONTRIBUTING.md#creating-game-hooks).
@@ -118,7 +118,7 @@ requires an independent scan.
 - [`core binding`](../unchained-macros-core/src/binding.rs): address publication and native calls.
 - [`core registry`](../unchained-macros-core/src/registry.rs): typed hook and patch inventories.
 - [`core selection`](../unchained-macros-core/src/selection.rs): consumer-defined restrictions.
-- [`startup.rs`](../src/unchained/startup.rs): host executable-base discovery.
+- [`startup.rs`](../unchained-plugin/src/unchained/startup.rs): host executable-base discovery.
 
 Validate game targets with fresh binary scans, not snapshots asserting production
 patterns, addresses, keys, registrations, or signatures. Generic algorithm and

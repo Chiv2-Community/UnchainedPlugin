@@ -20,7 +20,7 @@ mod Chivalry2 {
     }
 }
 
-#[path = "../../src/unchained/blueprints/exec_listeners.rs"]
+#[path = "../../unchained-plugin/src/unchained/blueprints/exec_listeners.rs"]
 mod actual_host_adapter;
 
 #[test]

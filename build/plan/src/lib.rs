@@ -37,9 +37,9 @@ pub fn build_script(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut calls = String::new();
     for step in manifest.package.metadata.pre_build_steps {
         let (name, path) = match step {
-            PreBuildStep::GenerateNativeBindingDocs => ("generate_native_binding_docs", "build/generate_native_binding_docs.rs"),
-            PreBuildStep::EmbedBuildMetadata => ("embed_build_metadata", "build/embed_build_metadata.rs"),
-            PreBuildStep::Format => ("format", "build/format.rs"),
+            PreBuildStep::GenerateNativeBindingDocs => ("generate_native_binding_docs", "../unchained-plugin/build/generate_native_binding_docs.rs"),
+            PreBuildStep::EmbedBuildMetadata => ("embed_build_metadata", "../unchained-plugin/build/embed_build_metadata.rs"),
+            PreBuildStep::Format => ("format", "format.rs"),
         };
         modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));
         calls.push_str(&format!("{name}::run();"));

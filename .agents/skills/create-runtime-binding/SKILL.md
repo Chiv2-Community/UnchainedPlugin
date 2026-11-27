@@ -1,6 +1,6 @@
 ---
 name: create-runtime-binding
-description: Declare a verified Chivalry 2 native runtime binding under src/Chivalry2, including instance/static ABIs, request-registry bindings, native globals, and vtable methods. Use when exposing a native function for direct calls or a plugin detour.
+description: Declare a verified Chivalry 2 native runtime binding under unchained-plugin/src/Chivalry2, including instance/static ABIs, request-registry bindings, native globals, and vtable methods. Use when exposing a native function for direct calls or a plugin detour.
 ---
 
 # Creating a runtime binding
@@ -29,7 +29,7 @@ Load the `create-resolver` skill before creating or changing an address resolver
 
 Keep native contracts with their source owners.
 
-- Use the appropriate `src/Chivalry2/{Engine,TBL,TBLLoadingScreen,Plugins}/*`
+- Use the appropriate `unchained-plugin/src/Chivalry2/{Engine,TBL,TBLLoadingScreen,Plugins}/*`
   module, not a plugin-policy directory.
 - Preserve native module/header casing, including `Runtime`, `ThirdParty`, and
   `CoreUObject`; omit visibility directories. Add new modules to `mod.rs`.

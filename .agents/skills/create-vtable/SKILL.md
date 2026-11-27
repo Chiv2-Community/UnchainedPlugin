@@ -1,6 +1,6 @@
 ---
 name: create-vtable
-description: Create or extend a native vtable declaration under src/Chivalry2 using rust_ctables. Use when modeling virtual methods, verifying slot offsets and receivers, or extending inherited primary vtables.
+description: Create or extend a native vtable declaration under unchained-plugin/src/Chivalry2 using rust_ctables. Use when modeling virtual methods, verifying slot offsets and receivers, or extending inherited primary vtables.
 ---
 
 # Creating a vtable
@@ -36,7 +36,7 @@ Establish the object layout, table, slots, and ABI in the latest target binary.
 
 Keep native types and virtual methods under their verified source owner.
 
-- Place declarations under `src/Chivalry2/*`; add new modules to `mod.rs`.
+- Place declarations under `unchained-plugin/src/Chivalry2/*`; add new modules to `mod.rs`.
 - Reuse existing native types rather than introducing duplicate layouts.
 - Apply `#[rust_ctables::cpp_struct]` to the containing struct.
 - Put `#[vtable(...)]` on the vptr field or inherited base field.
@@ -75,9 +75,9 @@ pub struct FUniqueNetId {
 
 - `IsValid` uses slot 5 (`0x28`); `ToString` uses slot 6 (`0x30`).
 - The string method explicitly receives caller-provided storage.
-- See [FOutputDevice](../../../src/Chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs)
+- See [FOutputDevice](../../../unchained-plugin/src/Chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs)
   for raw receivers and
-  [FInternetAddr](../../../src/Chivalry2/Engine/Runtime/Sockets/IPAddress.rs)
+  [FInternetAddr](../../../unchained-plugin/src/Chivalry2/Engine/Runtime/Sockets/IPAddress.rs)
   for a sparse table declaration.
 
 ## Extend an inherited table

@@ -1,9 +1,9 @@
 use std::net::TcpListener;
 
-#[path = "../../src/features/server_browser/http.rs"]
+#[path = "../../unchained-plugin/src/features/server_browser/http.rs"]
 mod http;
 
-#[path = "../../src/features/server_browser/urls.rs"]
+#[path = "../../unchained-plugin/src/features/server_browser/urls.rs"]
 mod urls;
 
 #[tokio::test(flavor = "current_thread")]

@@ -13,10 +13,10 @@
 
 Organize native declarations by verified source/header paths.
 
-- `src/Chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
-- `src/Chivalry2/TBL/`: native TBL owners.
-- `src/Chivalry2/TBLLoadingScreen/`: the separate loading-screen module.
-- `src/Chivalry2/Plugins/`: native game-plugin headers, including private headers.
+- `unchained-plugin/src/Chivalry2/Engine/`: UE **4.25-plus** headers and engine plugins.
+- `unchained-plugin/src/Chivalry2/TBL/`: native TBL owners.
+- `unchained-plugin/src/Chivalry2/TBLLoadingScreen/`: the separate loading-screen module.
+- `unchained-plugin/src/Chivalry2/Plugins/`: native game-plugin headers, including private headers.
 - Identify the owner in the file's opening source comment.
 - Use native source and shipping PDB evidence where available.
 - Link the header that defines a declaration, not one that only references it.
@@ -91,8 +91,8 @@ content is available through LSP and `cargo doc`. To test generation and parsing
 cargo test --locked -p unchained-native-docs
 ```
 
-Generation lives in `build/unchained-native-docs`; root `build.rs` delegates to
-`build/generate_native_binding_docs.rs`. A build-local module/file index shares extracted declarations,
+Generation lives in `unchained-plugin/build/unchained-native-docs`; shared `build/build.rs` delegates to
+`unchained-plugin/build/generate_native_binding_docs.rs`. A build-local module/file index shares extracted declarations,
 not syntax trees. Rebuilding reads changed native sources; no persistent index
 is trusted.
 
@@ -147,14 +147,14 @@ Engine header:
 
 ```text
 Engine/Source/Runtime/Engine/Classes/Engine/World.h
-→ src/Chivalry2/Engine/Runtime/Engine/Engine/World.rs
+→ unchained-plugin/src/Chivalry2/Engine/Runtime/Engine/Engine/World.rs
 ```
 
 Game-plugin header:
 
 ```text
 TBL/Plugins/OnlineSubsystemPlayFab/Source/OpenAPIMerged/Public/OpenAPIClientApi.h
-→ src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs
+→ unchained-plugin/src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs
 ```
 
 ## Declaration order
@@ -182,8 +182,8 @@ Keep callable native contracts easy to find.
 
 Organize plugin policy by functionality, not native source paths.
 
-- Detours and instruction patches: `src/unchained/patches/`.
-- Custom blueprint layouts and adapters: `src/unchained/blueprints/`.
+- Detours and instruction patches: `unchained-plugin/src/unchained/patches/`.
+- Custom blueprint layouts and adapters: `unchained-plugin/src/unchained/blueprints/`.
 - Keep queues, chat helpers, mounted-pak tracking, and override state out of native types.
 - Put detours after imports, before instruction patches, helpers, state, and tests.
 - See [native bindings and plugin detours](native-bindings.md) for call contracts.

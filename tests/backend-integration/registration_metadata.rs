@@ -1,7 +1,7 @@
-#[path = "../../src/features/mod_metadata.rs"]
+#[path = "../../unchained-plugin/src/features/mod_metadata.rs"]
 pub mod features;
 
-#[path = "../../src/features/server_browser/server_metadata.rs"]
+#[path = "../../unchained-plugin/src/features/server_browser/server_metadata.rs"]
 pub mod server_metadata;
 
 use test_case::test_case;

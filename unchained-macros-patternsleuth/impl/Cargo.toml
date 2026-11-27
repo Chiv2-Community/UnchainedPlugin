@@ -2,7 +2,7 @@
 name = "unchained-macros-patternsleuth-impl"
 version = "0.1.0"
 edition = "2021"
-build = "../../build.rs"
+build = "../../build/build.rs"
 
 [package.metadata]
 pre-build-steps = ["format"]

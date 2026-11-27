@@ -317,8 +317,8 @@ fn write_document(
 }
 
 /// Generate standard Rustdoc includes before the consumer's macros expand.
-pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
-    let local_path = manifest.join(".cargo/config.local.toml");
+pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> {
+    let local_path = workspace.join(".cargo/config.local.toml");
     let local: toml::Value = if local_path.exists() {
         fs::read_to_string(&local_path)?
             .parse()
@@ -329,15 +329,15 @@ pub fn generate(manifest: &Path, output: &Path) -> Result<()> {
     let roots = BTreeMap::from([
         (
             "ARGON_SDK_SOURCE_LOCATION",
-            configured_root(manifest, "ARGON_SDK_SOURCE_LOCATION", ARGON, &local)?,
+            configured_root(workspace, "ARGON_SDK_SOURCE_LOCATION", ARGON, &local)?,
         ),
         (
             "UE_SOURCE_LOCATION",
-            configured_root(manifest, "UE_SOURCE_LOCATION", UE, &local)?,
+            configured_root(workspace, "UE_SOURCE_LOCATION", UE, &local)?,
         ),
     ]);
     let mut watches = BTreeSet::from([
-        manifest.join(".cargo"),
+        workspace.join(".cargo"),
         manifest.join("src/Chivalry2"),
         manifest.join("src/unchained/patches"),
     ]);
@@ -743,7 +743,7 @@ mod tests {
                 "#[bind_func_detour(Native::Call)] unsafe fn unicode_detour() {{ /* λ */ trace!(\"{payload}\"); }}"
             );
             fs::write(root.join("src/unchained/patches/Test.rs"), &declaration).unwrap();
-            generate(&root, &root.join("out")).unwrap();
+            generate(&root, &root, &root.join("out")).unwrap();
             let docs = fs::read_to_string(root.join("out/native-docs/binding-Native__Call.md")).unwrap();
             assert!(docs.contains(&declaration), "{docs}");
         }
@@ -853,7 +853,7 @@ impl Unannotated {
             "#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }\n#[bind_func_detour(Native::Rpc)]\nunsafe fn rpc_detour() {}",
         )
         .unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let directory = root.join("out/native-docs");
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
         assert!(class.starts_with("Native class definition:"));
@@ -934,7 +934,7 @@ impl Unannotated {
             ),
         )
         .unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let rpc = fs::read_to_string(directory.join("binding-Native__Rpc.md")).unwrap();
         assert!(rpc.contains("Native implementation: [`Native::Rpc`]"));
         assert!(rpc.contains("void Native::Rpc() { ProcessEvent(); }"));
@@ -948,7 +948,7 @@ impl Unannotated {
             .replace("pub struct Native;", "pub type Native = TArray<TCHAR>;")
             .replace("impl Native {", "impl TArray<TCHAR> {");
         fs::write(&rust, aliased).unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.contains("Native binding to [`Native::Call`]"));
         assert!(binding.contains("Overwritten by [`call_detour`]"));
@@ -958,7 +958,7 @@ impl Unannotated {
             "// No function body.",
         )
         .unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(binding.ends_with(NO_CPP_SOURCES));
         let rpc = fs::read_to_string(directory.join("binding-Native__Rpc.md")).unwrap();
@@ -970,11 +970,11 @@ impl Unannotated {
             format!("[env]\nUE_SOURCE_LOCATION = {{ value = \"{UE}\", force = true }}\n"),
         )
         .unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let class = fs::read_to_string(directory.join("type-Native.md")).unwrap();
         assert_eq!(class, CONFIGURATION_NOTE);
         fs::write(root.join("src/unchained/patches/Test.rs"), "").unwrap();
-        generate(&root, &root.join("out")).unwrap();
+        generate(&root, &root, &root.join("out")).unwrap();
         let binding = fs::read_to_string(directory.join("binding-Native__Call.md")).unwrap();
         assert!(!binding.contains("Overwritten by"));
         assert!(!binding.contains("Detours apply only when"));

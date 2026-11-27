@@ -39,9 +39,9 @@ Extend the plugin through native hooks, commands, votes, and event subscribers.
 
 Resolve a native address, declare its binding, then attach a plugin replacement.
 
-- **Resolver and binding:** `src/Chivalry2/*`, beside the native owner.
-- **Detour and instruction patches:** `src/unchained/patches/*`, grouped by purpose.
-- **Logging-only hooks:** `src/unchained/patches/diagnostics.rs`.
+- **Resolver and binding:** `unchained-plugin/src/Chivalry2/*`, beside the native owner.
+- **Detour and instruction patches:** `unchained-plugin/src/unchained/patches/*`, grouped by purpose.
+- **Logging-only hooks:** `unchained-plugin/src/unchained/patches/diagnostics.rs`.
 - Use `runtime_bindings` and `bind_func_detour`; call the native binding for
   original-call bypass.
 
@@ -54,7 +54,7 @@ Establish the native contract before writing Rust declarations.
   - Preserve native casing and header paths, including `Runtime`, `ThirdParty`,
     `CoreUObject`, and `TBL`.
   - Omit `Public`, `Private`, and `Classes`.
-  - Put native game-plugin types under `src/Chivalry2/Plugins/`.
+  - Put native game-plugin types under `unchained-plugin/src/Chivalry2/Plugins/`.
 - Add new files to their parent `mod.rs`.
 - Put resolvers before native types and bindings.
 - Keep static methods static; declare instance receivers explicitly.
@@ -127,7 +127,7 @@ define_pattern_resolver!(ExampleStringOwner, XrefFirst, [
 Select patterns for each storefront build.
 
 - Names: `STEAM`, `EGS`, `XBOX`, `OTHER`.
-- [`src/platform.rs`](src/platform.rs) supplies selector state through
+- [`unchained-plugin/src/platform.rs`](unchained-plugin/src/platform.rs) supplies selector state through
   `ResolverSelector::current()`. There are no project wrapper macros.
 - `fallback = OTHER` advances only when a dictionary key is absent, not when a
   declared signature fails to match. The first declared entry wins.
@@ -223,7 +223,7 @@ Other binding sources:
   use `bind_resolved_func(GetPost_GetMotd)` inside `runtime_bindings`.
   Populate that exact key in `OffsetProvider` with
   an RVA, not an absolute address. See the
-  [OpenAPI bindings](src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
+  [OpenAPI bindings](unchained-plugin/src/Chivalry2/Plugins/OnlineSubsystemPlayFab/OpenAPIMerged/OpenAPIClientApi.rs).
 - **Native globals:** mirror every C++ static/global used here as a Rust static,
   with native spelling and declaring-header placement. Use
   `bind_resolved_value(Resolver, Address)` for inline storage, or `Value` for a
@@ -239,7 +239,7 @@ Other binding sources:
 
 Use `rust_ctables::cpp_struct` for calls dispatched through a native object's vtable.
 
-- Keep vtable declarations with their native owner under `src/Chivalry2/*`.
+- Keep vtable declarations with their native owner under `unchained-plugin/src/Chivalry2/*`.
 - Verify the vptr location, slot offsets, receiver, and ABI for supported builds.
 - `offset(...)` is a **byte offset within the vtable**, not a slot index or RVA.
   Slots are eight bytes on Windows x64; declarations advance one slot each.
@@ -277,10 +277,10 @@ unsafe fn read_id(id: &FUniqueNetId) -> Option<String> {
 - `ToString` explicitly models caller-provided return storage.
 - `&self` supplies the native `this` pointer.
 - Use `self: *mut Self` for raw mutable receivers when a Rust borrow is
-  inappropriate; see [FOutputDevice](src/Chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs).
-- See [FUniqueNetId](src/Chivalry2/Engine/Runtime/CoreUObject/UObject/CoreOnline.rs)
+  inappropriate; see [FOutputDevice](unchained-plugin/src/Chivalry2/Engine/Runtime/Core/Misc/OutputDevice.rs).
+- See [FUniqueNetId](unchained-plugin/src/Chivalry2/Engine/Runtime/CoreUObject/UObject/CoreOnline.rs)
   for a native-table fixture test and
-  [FInternetAddr](src/Chivalry2/Engine/Runtime/Sockets/IPAddress.rs) for a slot-15 call.
+  [FInternetAddr](unchained-plugin/src/Chivalry2/Engine/Runtime/Sockets/IPAddress.rs) for a slot-15 call.
 
 #### Inherited vtables
 
@@ -310,7 +310,7 @@ pub struct UObject {
 
 ### Create the detour
 
-Target the binding method from a functional module under `src/unchained/patches/`.
+Target the binding method from a functional module under `unchained-plugin/src/unchained/patches/`.
 
 - Put detours after imports, before patches, helpers, state, and tests.
 - Use an unsafe free function; declare instance receivers as the first argument.
@@ -384,14 +384,14 @@ Test replacement behavior, not native signatures, layouts, or registrations.
 
 Implement `Command<Args>` and register it with the command subscriber.
 
-- Add the implementation under `src/modules/`; declare it in `src/modules/mod.rs`.
+- Add the implementation under `unchained-plugin/src/modules/`; declare it in `unchained-plugin/src/modules/mod.rs`.
 - Derive `clap::Parser` for arguments; it also supplies `CommandFactory`.
 - Choose the minimum `PermissionFlags` required.
 - Override `required_source` when a command must be source-restricted.
-- Register server commands in `src/features/events.rs::initialize_subscribers`.
+- Register server commands in `unchained-plugin/src/features/events.rs::initialize_subscribers`.
 - Add client-safe commands separately in `initialize_client_commands`.
 - Register Discord-dependent commands during Discord initialization in
-  `src/features/discord.rs`.
+  `unchained-plugin/src/features/discord.rs`.
 
 ```rust
 use async_trait::async_trait;
@@ -429,14 +429,14 @@ command_subscriber.register(ExampleLogCommand);
 
 Implement `VoteType<Args>` and register it with `VotingState`.
 
-- Add the implementation under `src/modules/votes/`; update its `mod.rs`.
+- Add the implementation under `unchained-plugin/src/modules/votes/`; update its `mod.rs`.
 - Derive `Parser` and `Clone` for arguments; derive `Clone` for vote logic.
 - Implement the title, description, thresholds, success action, and `clone_box`.
 - Use `check_prerequisites` to reject invalid requests before starting a vote.
 - Register with `state.register(MyVote)` in
-  `src/features/events.rs::initialize_vote_commands`.
-- See [speed votes](src/modules/votes/votespeed.rs) for argument handling and
-  the [vote API](src/modules/vote.rs) for prerequisite checks and thresholds.
+  `unchained-plugin/src/features/events.rs::initialize_vote_commands`.
+- See [speed votes](unchained-plugin/src/modules/votes/votespeed.rs) for argument handling and
+  the [vote API](unchained-plugin/src/modules/vote.rs) for prerequisite checks and thresholds.
 
 Existing end-map vote pattern:
 
@@ -479,12 +479,12 @@ state.register(ExampleNextMapVote);
 
 Implement `Subscriber<T>` to consume events or periodic ticks.
 
-- Add a module under `src/modules/` and declare it in `mod.rs`.
+- Add a module under `unchained-plugin/src/modules/` and declare it in `mod.rs`.
 - Use `GameEvent` for gameplay events or
   `crate::events::broadcast::BroadcastMessage` for outgoing messages.
 - Give each subscriber a unique `identifier`.
 - Implement `on_event`; override `on_tick` only when periodic work is needed.
-- Subscribe to the matching bus in `src/features/events.rs::initialize_subscribers`.
+- Subscribe to the matching bus in `unchained-plugin/src/features/events.rs::initialize_subscribers`.
 - Check subscription errors; duplicate identifiers are rejected.
 - Keep handlers brief; slow work delays other subscribers.
 
@@ -521,7 +521,7 @@ game_event_bus.subscribe(Box::new(MapLogSubscriber)).await
 Keep native access on the correct thread and shared state explicit.
 
 - Inject publishers and shared state through constructors; see
-  [stats commands and subscribers](src/modules/stats.rs).
+  [stats commands and subscribers](unchained-plugin/src/modules/stats.rs).
 - Reuse existing hook state; add globals only when callback access requires them.
 - Queue native work with
   `unchained::patches::unchained_integration::game_thread::run_on_game_thread`.

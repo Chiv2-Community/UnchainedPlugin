@@ -18,7 +18,7 @@ function address.
 
 ## Declare a native binding
 
-Keep native declarations under `src/Chivalry2`, following the
+Keep native declarations under `unchained-plugin/src/Chivalry2`, following the
 [native source layout](engine-sources.md). Use the reflected owner path, not a
 short class name.
 
@@ -52,7 +52,7 @@ initialization panics.
 
 ## Add plugin behavior
 
-Put callbacks under `src/unchained/patches`, separate from native declarations.
+Put callbacks under `unchained-plugin/src/unchained/patches`, separate from native declarations.
 Target the binding, not its resolver or Rust wrapper address.
 
 ```rust,ignore
@@ -137,7 +137,7 @@ contributors adding declarations do not need another startup hook.
 
 For backend work:
 
-- Keep `EngineReflection` under `src/unchained/blueprints/reflection.rs`. It copies
+- Keep `EngineReflection` under `unchained-plugin/src/unchained/blueprints/reflection.rs`. It copies
   function/property metadata; decoding belongs to `unchained-macros-kismet`.
 - Supply a `KismetContext` with that adapter and an `ExecEnvironment` containing
   the module base, original Step entries, and `FFrame::Code` offset.
