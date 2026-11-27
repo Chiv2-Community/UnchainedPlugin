@@ -22,6 +22,9 @@
 Extend the plugin through native hooks, commands, votes, and event subscribers.
 
 - Follow existing modules and feature gates.
+- Declare dependency versions, Git sources, and local crate paths in the root
+  `[workspace.dependencies]`. Members use `{ workspace = true }`, adding their
+  own `features` or `optional = true` as needed.
 - Cargo builds automatically format each `unchained-macros-*` crate in this checkout
   before compiling it. To format them all at once, run `cargo fmt-macros`. CI runs the same
   command with `--check`. These crates use standard rustfmt with a 120-column target.

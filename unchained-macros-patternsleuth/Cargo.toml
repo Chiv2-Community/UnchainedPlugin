@@ -11,14 +11,14 @@ pre-build-steps = ["format"]
 unchained-build-plan.workspace = true
 
 [dependencies]
-unchained-macros-core = { path = "../unchained-macros-core" }
-unchained-macros-patternsleuth-impl = { path = "impl" }
+unchained-macros-core = { workspace = true }
+unchained-macros-patternsleuth-impl = { workspace = true }
 patternsleuth = { workspace = true }
 binary_bloodhound = { workspace = true }
-inventory = "0.3.14"
+inventory = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
 test-case = { workspace = true }
-retour = { version = "=0.4.0-alpha.4" }
-object = "0.32.2"
+retour = { workspace = true }
+object = { workspace = true }

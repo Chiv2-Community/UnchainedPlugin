@@ -39,7 +39,7 @@ container-tests = ["dep:testcontainers"]
 move-autonomous-desync = []
 
 [dependencies]
-testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
+testcontainers = { workspace = true, optional = true }
 
 [dev-dependencies]
 clap = { workspace = true }

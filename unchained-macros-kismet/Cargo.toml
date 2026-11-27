@@ -11,15 +11,15 @@ pre-build-steps = ["format"]
 unchained-build-plan.workspace = true
 
 [dependencies]
-unchained-macros-core = { path = "../unchained-macros-core" }
-unchained-macros-kismet-impl = { path = "impl" }
-iced-x86 = { version = "1.21.0", default-features = false, features = ["std", "decoder", "instr_info"] }
-log = "0.4"
+unchained-macros-core = { workspace = true }
+unchained-macros-kismet-impl = { workspace = true }
+iced-x86 = { workspace = true }
+log = { workspace = true }
 
-windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
 [dev-dependencies]
 test-case = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
-unchained-macros-native-docs-generator = { path = "../unchained-macros-native-docs-generator" }
+unchained-macros-native-docs-generator = { workspace = true }

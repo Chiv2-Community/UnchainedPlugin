@@ -9,4 +9,4 @@ proc-macro = true
 
 [dependencies]
 serde.workspace = true
-toml = "0.8"
+toml = { workspace = true }

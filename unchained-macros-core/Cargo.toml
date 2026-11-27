@@ -11,12 +11,12 @@ pre-build-steps = ["format"]
 unchained-build-plan.workspace = true
 
 [dependencies]
-unchained-macros-core-impl = { path = "impl" }
-inventory = "0.3.14"
+unchained-macros-core-impl = { workspace = true }
+inventory = { workspace = true }
 serde = { workspace = true }
-log = "0.4"
-paste = "1.0"
-retour = { version = "=0.4.0-alpha.4" }
+log = { workspace = true }
+paste = { workspace = true }
+retour = { workspace = true }
 
 [dev-dependencies]
 test-case = { workspace = true }
