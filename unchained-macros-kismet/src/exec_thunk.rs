@@ -3,7 +3,6 @@
 
 use iced_x86::{Decoder, DecoderOptions, FlowControl, Instruction, Mnemonic, OpKind, Register};
 use std::ops::Range;
-#[cfg(windows)]
 use windows::Win32::{
     Foundation::HMODULE,
     System::{
@@ -115,7 +114,6 @@ fn candidate(bytes: &[u8], thunk: usize, step: usize, explicit: usize, module: R
     target.ok_or_else(|| "No direct native body after parameter handling; inlined thunks are unsupported".into())
 }
 
-#[cfg(windows)]
 unsafe fn executable_range(address: usize, end: usize) -> bool {
     let mut info = MEMORY_BASIC_INFORMATION::default();
     let read = unsafe { VirtualQuery(Some(address as *const _), &mut info, size_of::<MEMORY_BASIC_INFORMATION>()) };
@@ -124,7 +122,6 @@ unsafe fn executable_range(address: usize, end: usize) -> bool {
         && (info.BaseAddress as usize).checked_add(info.RegionSize).is_some_and(|limit| end <= limit)
 }
 
-#[cfg(windows)]
 unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
     let mut image = 0;
     let entry = unsafe { RtlLookupFunctionEntry(address as u64, &mut image, None).as_ref() }
@@ -142,7 +139,6 @@ unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
 /// verified frame-step entry addresses, not Rust wrappers or trampolines.
 /// Only use with independently verified direct-call native declarations.
 /// `parameters` must match reflection metadata; a return value is not an argument.
-#[cfg(windows)]
 pub unsafe fn native_body(thunk: usize, base: usize, step: usize, explicit: usize, parameters: ExecThunkParameters) -> Result<usize, String> {
     let mut module = MODULEINFO::default();
     unsafe { GetModuleInformation(GetCurrentProcess(), HMODULE(base as isize), &mut module, size_of::<MODULEINFO>() as u32) }

@@ -7,12 +7,10 @@ pub(crate) use banner::print_banner;
 static NO_SPAWN_CONSOLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static ATTACH_STDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_STD_OUTPUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-#[cfg(windows)]
 static OWN_CONSOLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub(crate) fn attach_stdio() {
     ATTACH_STDIO.store(true, std::sync::atomic::Ordering::Relaxed);
-    #[cfg(windows)]
     NO_STD_OUTPUT.store(!windows_backend::attach_parent_output(), std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -34,17 +32,11 @@ pub(crate) fn report_attachment_failure() {
     }
 }
 
-#[cfg(windows)]
 #[path = "windows.rs"]
 mod windows_backend;
 
-#[cfg(windows)]
-pub(crate) use windows_backend::{enable_selection, is_console, preserve_console_handles, should_strip_console_emojis, spawn_console};
+pub(crate) use windows_backend::{background_slots, enable_selection, is_console, preserve_console_handles, should_strip_console_emojis, spawn_console};
 
-#[cfg(not(windows))]
-pub(crate) fn should_strip_console_emojis(_: Target) -> bool { false }
-
-#[cfg(windows)]
 pub(crate) fn owns_console() -> bool {
     OWN_CONSOLE.load(std::sync::atomic::Ordering::Relaxed) && !stdio_attached()
 }
@@ -66,18 +58,6 @@ fn nearest_slots<const N: usize>(colors: [u32; N], palette: &[[u8; 3]]) -> Vec<u
     }).collect()
 }
 
-// log4rs exposes eight native background colors; RGB terminals use exact ANSI colors.
-pub(crate) fn background_slots(target: Target, colors: &[[u8; 3]]) -> Vec<u8> {
-    #[cfg(windows)]
-    { windows_backend::background_slots(target, colors) }
-    #[cfg(not(windows))]
-    {
-        let _ = target;
-        nearest_slots::<8>(BASIC_COLORS[..8].try_into().unwrap(), colors)
-    }
-}
-
-#[cfg(any(windows, test))]
 fn fallback_palette(mut colors: [u32; 16], attributes: u16, palette: &[[u8; 3]]) -> ([u32; 16], u16) {
     let background = ((attributes >> 4) & 15) as u8;
     let normal = if background == 15 { 0 } else { 15 };
@@ -90,7 +70,6 @@ fn fallback_palette(mut colors: [u32; 16], attributes: u16, palette: &[[u8; 3]])
     (colors, (attributes & !0x0f) | u16::from(normal))
 }
 
-#[cfg(any(windows, test))]
 fn use_truecolor(vt_enabled: bool, wine: bool, windows_terminal: bool) -> bool {
     vt_enabled && (!wine || windows_terminal)
 }
@@ -101,10 +80,7 @@ pub(crate) fn configure_palette(target: Target, colors: &[[u8; 3]]) -> Option<(b
         Target::Stderr => ConsoleWriter::stderr(),
     };
     writer?;
-    #[cfg(windows)]
-    { Some(windows_backend::configure(target, colors)) }
-    #[cfg(not(windows))]
-    { Some((true, nearest_slots(BASIC_COLORS, colors))) }
+    Some(windows_backend::configure(target, colors))
 }
 
 #[cfg(test)]

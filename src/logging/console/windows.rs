@@ -126,7 +126,7 @@ pub(crate) fn enable_selection() {
     }
 }
 
-pub(super) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
+pub(crate) fn background_slots(target: log4rs::append::console::Target, palette: &[[u8; 3]]) -> Vec<u8> {
     unsafe {
         let info = GetStdHandle(output_handle_kind(target)).ok().and_then(|handle| screen_info(handle));
         let bank = info.as_ref().map_or(0, |info| usize::from(info.wAttributes.0 & 0x80 != 0) * 8);

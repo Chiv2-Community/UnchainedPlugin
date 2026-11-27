@@ -1,20 +1,8 @@
 use std::{num::NonZeroUsize, sync::{Mutex, OnceLock}};
 use crate::{KismetContext, schema::Parameter};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ObservationThread {
-    #[cfg(windows)]
-    id: u32,
-    #[cfg(not(windows))]
-    id: std::thread::ThreadId,
-}
-impl ObservationThread {
-    pub(crate) fn current() -> Option<Self> {
-        #[cfg(windows)]
-        { Some(Self { id: unsafe { windows::Win32::System::Threading::GetCurrentThreadId() } }) }
-        #[cfg(not(windows))]
-        { unchained_macros_core::isolate_observer(|| Self { id: std::thread::current().id() }) }
-    }
+pub(crate) fn current_thread_id() -> u32 {
+    unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
 }
 
 /// Resolver for a surviving, explicitly verified VM wrapper, never a C++ body.
@@ -25,7 +13,7 @@ pub struct KismetExecResolver {
     result: Option<Parameter>,
     address: OnceLock<NonZeroUsize>,
     properties: OnceLock<Box<[usize]>>,
-    observation_thread: OnceLock<ObservationThread>,
+    observation_thread: OnceLock<u32>,
     lock: Mutex<()>,
 }
 
@@ -53,7 +41,7 @@ impl KismetExecResolver {
     /// Foreign threads must forward the real wrapper without observing native
     /// text/history or invoking entry callbacks.
     pub fn is_observation_thread(&self) -> bool {
-        self.observation_thread.get().is_some_and(|thread| Some(*thread) == ObservationThread::current())
+        self.observation_thread.get().is_some_and(|thread| *thread == current_thread_id())
     }
 }
 
@@ -62,9 +50,10 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
     unsafe fn resolve(&self, context: &KismetContext) -> Result<NonZeroUsize, String> {
         let _guard = self.lock.lock().map_err(|_| "Exec resolver lock poisoned")?;
         if let Some(address) = self.address.get() { return Ok(*address); }
-        let thread = context.observation_thread
-            .filter(|thread| Some(*thread) == ObservationThread::current())
-            .ok_or("Exec observation must resolve on the context's game thread")?;
+        let thread = context.observation_thread;
+        if thread != current_thread_id() {
+            return Err("Exec observation must resolve on the context's game thread".into());
+        }
         let function = unsafe { context.reflection.find_function(self.owner, self.member) }?;
         let schema = unsafe { context.reflection.find_exec_schema(self.owner, self.member) }?;
         let properties = crate::schema::validate(&function, &schema, self.arguments, self.result)

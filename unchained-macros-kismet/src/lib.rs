@@ -53,7 +53,7 @@ pub struct ExecEnvironment {
 pub struct KismetContext {
     reflection: Box<dyn Reflection>,
     environment: ExecEnvironment,
-    observation_thread: Option<exec_binding::ObservationThread>,
+    observation_thread: u32,
     _game_thread: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl KismetContext {
@@ -63,7 +63,7 @@ impl KismetContext {
     /// The environment must describe the adapter's module and verified frame-step entries.
     pub unsafe fn new(reflection: impl Reflection + 'static, environment: ExecEnvironment) -> Self {
         Self { reflection: Box::new(reflection), environment,
-            observation_thread: exec_binding::ObservationThread::current(),
+            observation_thread: exec_binding::current_thread_id(),
             _game_thread: std::marker::PhantomData }
     }
 
@@ -89,20 +89,12 @@ unsafe fn decode_native(thunk: usize, arguments: u8, environment: ExecEnvironmen
     if environment.module_base == 0 || environment.frame_step == 0 || environment.frame_step_explicit == 0 {
         return Err("Kismet executable environment contains a null address".into());
     }
-    #[cfg(windows)]
-    {
-        let parameters = if arguments == 0 {
-            ExecThunkParameters::NoArguments { frame_code_offset: environment.frame_code_offset }
-        } else {
-            ExecThunkParameters::Stepped
-        };
-        unsafe { native_body(thunk, environment.module_base, environment.frame_step, environment.frame_step_explicit, parameters) }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (thunk, arguments);
-        Err("Kismet native-body resolution requires Windows x64".into())
-    }
+    let parameters = if arguments == 0 {
+        ExecThunkParameters::NoArguments { frame_code_offset: environment.frame_code_offset }
+    } else {
+        ExecThunkParameters::Stepped
+    };
+    unsafe { native_body(thunk, environment.module_base, environment.frame_step, environment.frame_step_explicit, parameters) }
 }
 
 pub struct KismetReflectionResolver {
@@ -127,9 +119,7 @@ impl unchained_macros_core::AddressResolver for KismetReflectionResolver {
     }
 }
 
-#[cfg(any(windows, test))]
 mod exec_thunk;
-#[cfg(windows)]
 pub use exec_thunk::{native_body, ExecThunkParameters};
 
 #[cfg(test)]
@@ -185,7 +175,7 @@ mod tests {
         let context = KismetContext {
             reflection: Box::new(MetadataReflection { reads: reads.clone(), ready: ready.clone() }),
             environment: ExecEnvironment { module_base: 0, frame_step: 0, frame_step_explicit: 0, frame_code_offset: 0 },
-            observation_thread: exec_binding::ObservationThread::current(),
+            observation_thread: exec_binding::current_thread_id(),
             _game_thread: std::marker::PhantomData,
         };
         let resolver = KismetReflectionResolver::new("/Script/Fixture.Native", "Call");
