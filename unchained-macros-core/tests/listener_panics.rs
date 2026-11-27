@@ -5,12 +5,10 @@ struct PanickingLogger;
 
 impl log::Log for PanickingLogger {
     fn enabled(&self, _: &log::Metadata<'_>) -> bool {
-
         true
     }
 
     fn log(&self, _: &log::Record<'_>) {
-
         panic!("logger failure");
     }
 
@@ -25,11 +23,9 @@ struct Payload(bool);
 
 impl Drop for Payload {
     fn drop(&mut self) {
-
         DROPS.fetch_add(1, Ordering::SeqCst);
 
         if self.0 {
-
             panic!("panic payload destructor failed");
         }
     }
@@ -38,7 +34,6 @@ impl Drop for Payload {
 #[test]
 
 fn panic_isolation_does_not_call_a_throwing_logger_or_escape_payload_destructors() {
-
     log::set_logger(&LOGGER).unwrap();
 
     log::set_max_level(log::LevelFilter::Trace);

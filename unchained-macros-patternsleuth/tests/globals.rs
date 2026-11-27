@@ -20,9 +20,7 @@ struct TestAllocator {
 
 impl TestAllocator {
     pub unsafe fn allocate(self: *mut Self, amount: usize) -> *mut Self {
-
         unsafe {
-
             (*self).calls.fetch_add(amount, Ordering::Relaxed);
         }
 
@@ -30,7 +28,6 @@ impl TestAllocator {
     }
 
     pub unsafe fn identity(self: *const Self) -> *const Self {
-
         self
     }
 
@@ -49,12 +46,10 @@ struct InlineObject(AtomicUsize);
 
 impl InlineObject {
     pub fn borrow<'a>(&'a self) -> &'a AtomicUsize {
-
         &self.0
     }
 
     pub fn address(&self) -> *const Self {
-
         self
     }
 }
@@ -76,18 +71,9 @@ static Disabled: *mut MissingType;
 #[test]
 
 fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
+    assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
 
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        Allocator.read()
-    })
-    .is_err());
-
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        Inline.read()
-    })
-    .is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Inline.read() }).is_err());
 
     let mut slot: *mut TestAllocator = std::ptr::null_mut();
 
@@ -100,20 +86,14 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
 
     // The registry does not dereference the slot during binding.
     unsafe {
-
         initialize_value_bindings(1, &offsets);
     }
 
     unsafe extern "C" fn probe(allocator: *const TestAllocator) -> usize {
-
-        unsafe {
-
-            (*allocator).calls.load(Ordering::Relaxed)
-        }
+        unsafe { (*allocator).calls.load(Ordering::Relaxed) }
     }
 
     unsafe {
-
         unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(
             &unchained_macros_patternsleuth::ScanContext::new(
                 1,
@@ -124,11 +104,7 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
         .unwrap();
     }
 
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        Allocator.read()
-    })
-    .is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
 
     let mut first = TestAllocator {
         calls: AtomicUsize::new(0),
@@ -143,66 +119,27 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
 
     assert_eq!(slot, &raw mut first);
 
-    assert_eq!(
-        unsafe {
+    assert_eq!(unsafe { Allocator.read().allocate(3) }, &raw mut first);
 
-            Allocator.read().allocate(3)
-        },
-        &raw mut first
-    );
+    assert_eq!(unsafe { Allocator.read().identity() }, &raw const first);
 
-    assert_eq!(
-        unsafe {
-
-            Allocator.read().identity()
-        },
-        &raw const first
-    );
-
-    assert_eq!(
-        unsafe {
-
-            Allocator.read().probe()
-        },
-        3
-    );
+    assert_eq!(unsafe { Allocator.read().probe() }, 3);
 
     slot = &raw mut second;
 
     assert_eq!(slot, &raw mut second);
 
-    assert_eq!(
-        unsafe {
+    assert_eq!(unsafe { Allocator.read().allocate(7) }, &raw mut second);
 
-            Allocator.read().allocate(7)
-        },
-        &raw mut second
-    );
-
-    assert_eq!(
-        unsafe {
-
-            Allocator.read().probe()
-        },
-        7
-    );
+    assert_eq!(unsafe { Allocator.read().probe() }, 7);
 
     assert_eq!(first.calls.load(Ordering::Relaxed), 3);
 
     assert_eq!(second.calls.load(Ordering::Relaxed), 7);
 
-    assert_eq!(
-        unsafe {
+    assert_eq!(unsafe { (&*Inline.read()).address() }, &raw const object);
 
-            (&*Inline.read()).address()
-        },
-        &raw const object
-    );
-
-    let borrowed = unsafe {
-
-        (&*Inline.read()).borrow()
-    };
+    let borrowed = unsafe { (&*Inline.read()).borrow() };
 
     borrowed.store(19, Ordering::Relaxed);
 

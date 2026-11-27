@@ -21,18 +21,14 @@ pub struct BindingSignature {
 
 impl BindingSignature {
     pub fn from_rust(signature: &Signature, owner: &str) -> Option<Self> {
-
         let mut parameters = Vec::new();
 
         let mut receiver_const = None;
 
         for argument in &signature.inputs {
-
             match argument {
                 FnArg::Receiver(receiver) => {
-
                     let Parameter::Indirect { mutable, .. } = parameter(&receiver.ty, owner)? else {
-
                         return None;
                     };
 
@@ -40,26 +36,21 @@ impl BindingSignature {
                 }
 
                 FnArg::Typed(argument) => {
-
                     if argument
                         .attrs
                         .iter()
                         .any(|attribute| attribute.path().is_ident("native_by_value"))
                     {
-
                         let Type::Ptr(pointer) = argument.ty.as_ref() else {
-
                             return None;
                         };
 
                         if pointer.mutability.is_none() {
-
                             return None;
                         }
 
                         parameters.push(Parameter::IndirectValue(type_name(&pointer.elem, owner)?));
                     } else {
-
                         parameters.push(parameter(&argument.ty, owner)?);
                     }
                 }
@@ -73,29 +64,23 @@ impl BindingSignature {
     }
 
     pub(crate) fn matches(&self, cpp: &[Vec<String>]) -> bool {
-
         let Some((qualifiers, parameters)) = cpp.split_last() else {
-
             return false;
         };
 
         let parameters = if parameters.len() == 1 && parameters[0] == ["void"] {
-
             &[][..]
         } else {
-
             parameters
         };
 
         if self.parameters.len() != parameters.len() {
-
             return false;
         }
 
         let is_const = qualifiers.iter().any(|token| token == "const");
 
         if self.receiver_const.unwrap_or(false) != is_const {
-
             return false;
         }
 
@@ -107,7 +92,6 @@ impl BindingSignature {
 }
 
 fn parameter(ty: &Type, owner: &str) -> Option<Parameter> {
-
     Some(match ty {
         Type::Ptr(pointer) => Parameter::Indirect {
             name: type_name(&pointer.elem, owner)?,
@@ -124,21 +108,17 @@ fn parameter(ty: &Type, owner: &str) -> Option<Parameter> {
 }
 
 fn type_name(ty: &Type, owner: &str) -> Option<String> {
-
     match ty {
         Type::Path(path) if path.qself.is_none() => {
-
             let segment = path.path.segments.last()?;
 
             let mut name = segment.ident.to_string();
 
             if name == "Self" {
-
                 name = owner.to_owned();
             }
 
             if let PathArguments::AngleBracketed(arguments) = &segment.arguments {
-
                 let arguments = arguments
                     .args
                     .iter()
@@ -151,7 +131,6 @@ fn type_name(ty: &Type, owner: &str) -> Option<String> {
 
                 name = format!("{name}<{}>", arguments.join(","));
             } else if !matches!(segment.arguments, PathArguments::None) {
-
                 return None;
             }
 
@@ -159,17 +138,13 @@ fn type_name(ty: &Type, owner: &str) -> Option<String> {
         }
 
         Type::Ptr(pointer) => {
-
             let pointee = type_name(&pointer.elem, owner)?;
 
             Some(if pointer.mutability.is_some() {
-
                 format!("{pointee}*")
             } else if pointee.ends_with('*') {
-
                 format!("{pointee}const*")
             } else {
-
                 format!("const{pointee}*")
             })
         }
@@ -181,7 +156,6 @@ fn type_name(ty: &Type, owner: &str) -> Option<String> {
 }
 
 fn canonical(name: &str) -> &str {
-
     match name {
         "float" => "f32",
         "double" => "f64",
@@ -200,14 +174,12 @@ fn canonical(name: &str) -> &str {
 }
 
 fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
-
     let mut cpp = cpp;
 
     // A by-value pointer's own const qualifier is not pointee constness.
     if cpp.last().is_some_and(|token| token == "const")
         && cpp.get(cpp.len().saturating_sub(2)).is_some_and(|token| token == "*")
     {
-
         cpp = &cpp[..cpp.len() - 1];
     }
 
@@ -216,7 +188,6 @@ fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
         .is_some_and(|token| matches!(token.as_str(), "*" | "&" | "&&"));
 
     if indirect {
-
         cpp = &cpp[..cpp.len() - 1];
     }
 
@@ -226,21 +197,18 @@ fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
 
     let nested_pointer = cpp.iter().any(|token| match token.as_str() {
         "<" => {
-
             depth += 1;
 
             false
         }
 
         ">" => {
-
             depth = depth.saturating_sub(1);
 
             false
         }
 
         ">>" => {
-
             depth = depth.saturating_sub(2);
 
             false
@@ -251,14 +219,12 @@ fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
     });
 
     if !nested_pointer && cpp.first().is_some_and(|token| token == "const") {
-
         is_const = true;
 
         cpp = &cpp[1..];
     }
 
     if cpp.last().is_some_and(|token| token == "const") {
-
         is_const = true;
 
         cpp = &cpp[..cpp.len() - 1];
@@ -271,9 +237,7 @@ fn parameter_matches(rust: &Parameter, cpp: &[String]) -> bool {
     match rust {
         Parameter::Value(rust) => !indirect && rust == name,
         Parameter::Indirect { name: rust, mutable } => {
-
             if rust != name {
-
                 return false;
             }
 
@@ -291,7 +255,6 @@ mod tests {
     use super::*;
 
     fn key(parameters: &[&str], qualifiers: &str) -> Vec<Vec<String>> {
-
         parameters
             .iter()
             .chain([&qualifiers])
@@ -302,7 +265,6 @@ mod tests {
     #[test]
 
     fn callback_and_constness_select_the_native_overload() {
-
         let signature = BindingSignature::from_rust(&syn::parse_quote! {
             unsafe fn UDPEcho(endpoint: *const FString, timeout: f32, #[native_by_value] callback: *mut FIcmpEchoResultCallback)
         }, "FUDPPing").unwrap();
@@ -319,7 +281,6 @@ mod tests {
     #[test]
 
     fn hidden_storage_is_not_silently_removed() {
-
         let signature = BindingSignature::from_rust(
             &syn::parse_quote! {
                 unsafe fn Construct(output: *mut Self, string: &FString) -> *mut Self
@@ -334,7 +295,6 @@ mod tests {
     #[test]
 
     fn ordinary_pointers_are_not_guessed_to_be_indirect_values() {
-
         let signature = BindingSignature::from_rust(
             &syn::parse_quote! {
                 unsafe fn Call(callback: *mut Callback)
@@ -351,7 +311,6 @@ mod tests {
     #[test]
 
     fn nested_pointers_keep_constness_at_the_correct_level() {
-
         let signature = BindingSignature::from_rust(
             &syn::parse_quote! {
                 unsafe fn Call(value: *mut *const FString)
@@ -380,7 +339,6 @@ mod tests {
     #[test]
 
     fn receiver_constness_and_generic_parameter_types_are_preserved() {
-
         let signature = BindingSignature::from_rust(
             &syn::parse_quote! {
                 unsafe fn Call(self: *const Self, output: *mut TArray<FString>)

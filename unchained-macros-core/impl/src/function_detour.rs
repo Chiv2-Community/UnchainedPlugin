@@ -9,13 +9,11 @@ use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Type};
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-
     let mut function: ItemFn = syn::parse2(item)?;
 
     let CallbackArguments { target, condition } = syn::parse2(args)?;
 
     if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
-
         return Err(syn::Error::new_spanned(
             target,
             "detour target must be a non-generic Type::method binding path",
@@ -53,7 +51,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     validate_native_signature(&function.sig)?;
 
     if function.sig.inputs.iter().any(|a| matches!(a, FnArg::Receiver(_))) {
-
         return Err(syn::Error::new_spanned(
             &function.sig,
             "detours must be free functions with explicit native receiver arguments",
@@ -80,11 +77,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut checked_parameters = Vec::new();
 
     for (index, input) in function.sig.inputs.iter_mut().enumerate() {
-
-        let FnArg::Typed(local) = input else {
-
-            unreachable!()
-        };
+        let FnArg::Typed(local) = input else { unreachable!() };
 
         let annotations: Vec<_> = local
             .attrs
@@ -93,14 +86,12 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             .collect();
 
         if annotations.is_empty() {
-
             checked_parameters.push(index);
 
             continue;
         }
 
         if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
-
             return Err(syn::Error::new_spanned(
                 annotations[0],
                 "use one bare #[mutability_override] annotation",
@@ -108,7 +99,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
 
         if !matches!(&*local.ty, Type::Ptr(_) | Type::Reference(_)) {
-
             return Err(syn::Error::new_spanned(
                 &local.ty,
                 "#[mutability_override] requires a raw pointer or reference detour parameter",
@@ -136,16 +126,9 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         .inputs
         .iter()
         .map(|input| {
+            let FnArg::Typed(arg) = input else { unreachable!() };
 
-            let FnArg::Typed(arg) = input else {
-
-                unreachable!()
-            };
-
-            let Pat::Ident(pat) = &*arg.pat else {
-
-                unreachable!()
-            };
+            let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
 
             (&pat.ident, &arg.ty)
         })
@@ -156,13 +139,11 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let generics = &signature.generics;
 
     let signature_check = if has_override {
-
         let normalized = native_type(&normalized_mutability(signature))?;
 
         let parameter_checks = checked_parameters
             .into_iter()
             .map(|index| {
-
                 let parameter = parameter_type(signature, index)?;
 
                 let index = syn::Index::from(index);
@@ -180,7 +161,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             #(#parameter_checks)*
         }
     } else {
-
         quote! {
             let _: ::unchained_macros_core::NativeSignature<#native> =
                 ::unchained_macros_core::__private::detour_signature(#capability);
@@ -188,10 +168,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
 
     let callback = if has_override {
-
         quote!(unsafe { ::core::mem::transmute(#replacement as #native) })
     } else {
-
         quote!(#replacement)
     };
 
@@ -233,12 +211,10 @@ mod tests {
     #[test]
 
     fn attachment_delegates_to_core_without_consumer_dependency_paths() {
-
         let expanded = expand(
             quote!(Native::Call),
             quote!(
                 unsafe fn replacement(value: i32) -> i32 {
-
                     value
                 }
             ),
@@ -270,7 +246,6 @@ mod tests {
     #[test]
 
     fn mutability_override_checks_only_the_annotated_raw_pointer() {
-
         let expanded = expand(
             quote!(Native::Call),
             quote!(
@@ -286,10 +261,8 @@ mod tests {
             .iter()
             .filter_map(|item| {
                 if let syn::Item::Fn(function) = item {
-
                     Some(function)
                 } else {
-
                     None
                 }
             })
@@ -303,12 +276,10 @@ mod tests {
             .unwrap();
 
         let FnArg::Typed(local_arg) = &local.sig.inputs[0] else {
-
             unreachable!()
         };
 
         let FnArg::Typed(native_arg) = &native.sig.inputs[0] else {
-
             unreachable!()
         };
 
@@ -341,7 +312,6 @@ mod tests {
     #[test_case::test_case(quote!(&mut u32); "mutable reference")]
 
     fn multiple_overrides_accept_both_pointer_and_reference_spellings(ty: Tokens) {
-
         let expanded = expand(
             quote!(Native::Call),
             quote!(unsafe fn replacement(
@@ -367,7 +337,6 @@ mod tests {
     #[test_case::test_case(quote!(unsafe fn replacement(#[mutability_override] #[mutability_override] value: *mut u32) {}); "duplicate")]
 
     fn mutability_override_rejects_values_and_invalid_annotations(function: Tokens) {
-
         assert!(expand(quote!(Native::Call), function).is_err());
     }
 
@@ -379,7 +348,6 @@ mod tests {
     #[test_case::test_case(quote!(Native::call, enabled), quote!(|| (enabled)()); "function")]
 
     fn conditions_default_to_enabled_and_preserve_explicit_predicates(args: Tokens, expected: Tokens) {
-
         let expanded = expand(
             args,
             quote!(
@@ -400,7 +368,6 @@ mod tests {
     #[test]
 
     fn detour_hover_keeps_existing_docs_and_links_to_the_native_binding() {
-
         let expanded = expand(
             quote!(model::Native::Call),
             quote! {
@@ -443,7 +410,6 @@ mod tests {
     #[test_case::test_case(quote!(Type::call::<u8>); "generic method")]
 
     fn rejects_non_method_targets(target: Tokens) {
-
         assert!(expand(
             target,
             quote!(
@@ -461,7 +427,6 @@ mod tests {
     #[test_case::test_case(quote!(unsafe fn replacement<'a: 'static>(value: &'a i32) {}); "lifetime bound")]
 
     fn rejects_invalid_replacement_declarations(declaration: Tokens) {
-
         assert!(expand(quote!(Type::call), declaration).is_err());
     }
 }

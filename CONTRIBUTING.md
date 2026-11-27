@@ -25,7 +25,6 @@ Extend the plugin through native hooks, commands, votes, and event subscribers.
 - Cargo builds automatically format each `unchained-macros-*` crate in this checkout
   before compiling it. To format them all at once, run `cargo fmt-macros`. CI runs the same
   command with `--check`. These crates use standard rustfmt with a 120-column target.
-  Rustfmt handles item spacing with `blank_lines_lower_bound = 1`.
   The [shared build script](build/README.md) reads `pre-build-steps` from each crate's `[package.metadata]`
   table. The macro crates select `format`. The plugin selects `generate-native-binding-docs`
   for native documentation and `embed-build-metadata` for Git provenance and Windows version resources.

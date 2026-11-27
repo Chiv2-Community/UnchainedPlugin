@@ -15,7 +15,6 @@ enum Mode {
 
 impl unchained_macros_core::ResolverSelector for Mode {
     fn current() -> Self {
-
         Self::Allow
     }
 }
@@ -53,7 +52,6 @@ unsafe fn enabled_value() -> u32 {}
 unsafe fn disabled_value() -> u32 {}
 
 unsafe extern "C" fn fixture() -> u32 {
-
     42
 }
 
@@ -63,7 +61,6 @@ static VALUE: u32 = 7;
 #[test_case::test_case(true; "stale disabled offsets")]
 
 fn disabled_bindings_are_not_initialized(cached: bool) {
-
     // Tests share one-time bindings, but always publish identical native addresses.
     let mut offsets = HashMap::from([
         ("Enabled".into(), fixture as *const () as u64 - 1),
@@ -71,7 +68,6 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
     ]);
 
     if cached {
-
         offsets.insert("Disabled".into(), fixture as *const () as u64 - 1);
 
         offsets.insert("DisabledValue".into(), (&raw const VALUE) as u64 - 1);
@@ -82,7 +78,6 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
     let applicable = |name: &str| snapshot.supports_resolver_for::<PatternsleuthResolver>(name);
 
     unsafe {
-
         initialize_bindings_for::<PatternsleuthResolver>(&ScanContext::new(1, &offsets), &snapshot).unwrap();
 
         initialize_value_bindings_where(1, &offsets, applicable);
@@ -96,15 +91,7 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
 
     assert!(!function_is_bound_for::<PatternsleuthResolver>("Disabled"));
 
-    assert!(std::panic::catch_unwind(|| unsafe {
+    assert!(std::panic::catch_unwind(|| unsafe { disabled() }).is_err());
 
-        disabled()
-    })
-    .is_err());
-
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        disabled_value()
-    })
-    .is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { disabled_value() }).is_err());
 }

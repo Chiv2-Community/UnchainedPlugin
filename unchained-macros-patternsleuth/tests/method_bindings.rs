@@ -44,30 +44,19 @@ impl Native {
 #[inline(never)]
 
 unsafe extern "C" fn add(value: i32) -> i32 {
-
-    unsafe {
-
-        std::ptr::read_volatile(&value)
-    }
-    .wrapping_add(1)
+    unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
 
 unsafe extern "C" fn original_trampoline(value: i32) -> i32 {
-
     value + 2
 }
 
 unsafe extern "C" fn borrow(value: &Native) -> &i32 {
-
     &value.value
 }
 
 unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &'a mut i32 {
-
-    *output = unsafe {
-
-        (*value).value
-    };
+    *output = unsafe { (*value).value };
 
     output
 }
@@ -75,7 +64,6 @@ unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &
 #[test]
 
 fn metadata_preserves_signatures_and_binding_identity() {
-
     let _: &NativeTarget<
         unsafe extern "C" fn(i32) -> i32,
         _,
@@ -118,13 +106,11 @@ fn metadata_preserves_signatures_and_binding_identity() {
 #[test]
 
 fn wrappers_use_the_entry_then_the_published_trampoline() {
-
     let binding = Native::__UNCHAINED_TARGET_add.binding();
 
     let entry = add as *const () as usize;
 
     unsafe {
-
         binding
             .initialize_address(std::num::NonZeroUsize::new(entry).unwrap())
             .unwrap();
@@ -162,9 +148,7 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
 #[test]
 
 fn borrowed_receiver_and_return_storage_preserve_ownership() {
-
     unsafe {
-
         Native::__UNCHAINED_TARGET_borrow
             .binding()
             .initialize_address(std::num::NonZeroUsize::new(borrow as *const () as usize).unwrap())
@@ -194,42 +178,26 @@ fn borrowed_receiver_and_return_storage_preserve_ownership() {
 #[test]
 
 fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
-
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        Native::missing()
-    })
-    .is_err());
+    assert!(std::panic::catch_unwind(|| unsafe { Native::missing() }).is_err());
 
     let binding = Native::__UNCHAINED_TARGET_missing.binding();
 
     #[inline(never)]
 
     unsafe extern "C" fn unbound_target(value: i32) -> i32 {
-
-        unsafe {
-
-            std::ptr::read_volatile(&value)
-        }
-        .wrapping_add(3)
+        unsafe { std::ptr::read_volatile(&value) }.wrapping_add(3)
     }
 
     let detour = Box::leak(Box::new(unsafe {
-
         retour::RawDetour::new(unbound_target as *const (), original_trampoline as *const ()).unwrap()
     }));
 
-    assert!(unsafe {
-
-        binding.publish_detour(detour)
-    }
-    .is_err());
+    assert!(unsafe { binding.publish_detour(detour) }.is_err());
 }
 
 #[test]
 
 fn duplicate_native_addresses_are_rejected_and_failed_claims_roll_back() {
-
     let claim = unchained_macros_core::__private::claim_detour_address(0x12345).unwrap();
 
     assert!(unchained_macros_core::__private::claim_detour_address(0x12345).is_err());

@@ -26,16 +26,12 @@ impl Argument<'_> {
     /// retain the borrow, mutate native storage, or release native ownership.
 
     pub unsafe fn borrow<T>(&self) -> &T {
-
         assert!(
             self.pointer.as_ptr().cast::<T>().is_aligned(),
             "Misaligned VM argument slot"
         );
 
-        unsafe {
-
-            &*self.pointer.as_ptr().cast::<T>()
-        }
+        unsafe { &*self.pointer.as_ptr().cast::<T>() }
     }
 
     /// VM bool arguments occupy a 32-bit slot, unlike native bool returns.
@@ -44,16 +40,12 @@ impl Argument<'_> {
     /// The validated parameter must be a VM boolean.
 
     pub unsafe fn boolean(&self) -> bool {
-
         assert!(
             self.pointer.as_ptr().cast::<u32>().is_aligned(),
             "Misaligned VM bool32 slot"
         );
 
-        unsafe {
-
-            self.pointer.as_ptr().cast::<u32>().read() != 0
-        }
+        unsafe { self.pointer.as_ptr().cast::<u32>().read() != 0 }
     }
 }
 
@@ -66,17 +58,14 @@ pub struct Inputs<'a> {
 
 impl Inputs<'_> {
     pub fn len(&self) -> usize {
-
         self.slots.len()
     }
 
     pub fn is_empty(&self) -> bool {
-
         self.slots.is_empty()
     }
 
     pub fn get(&self, index: usize) -> Option<Argument<'_>> {
-
         self.slots.get(index).copied().map(|pointer| Argument {
             pointer,
             _borrow: PhantomData,
@@ -90,13 +79,10 @@ impl Inputs<'_> {
 pub type EntryCallback = for<'a> unsafe fn(Inputs<'a>);
 
 fn report(message: &str) {
-
     // A logger may panic (including a panicking payload destructor) or reenter
     // the same failing VM hook. Neither may escape or recursively log forever.
     REPORTING.with(|active| {
-
         if active.replace(true) {
-
             return;
         }
 
@@ -126,9 +112,7 @@ struct Scope(Rc<RefCell<Invocation>>);
 
 impl Drop for Scope {
     fn drop(&mut self) {
-
         let _ = CALLS.try_with(|calls| {
-
             let removed = calls.borrow_mut().pop();
 
             debug_assert!(removed.as_ref().is_some_and(|call| Rc::ptr_eq(call, &self.0)));
@@ -137,20 +121,16 @@ impl Drop for Scope {
 }
 
 fn ready(call: &Rc<RefCell<Invocation>>) {
-
     let (entry, slots) = {
-
         let mut state = call.borrow_mut();
 
         if state.failed || state.completed || state.slots.len() != state.properties.len() {
-
             return;
         }
 
         state.completed = true;
 
         let Some(entry) = state.entry else {
-
             return;
         };
 
@@ -163,13 +143,7 @@ fn ready(call: &Rc<RefCell<Invocation>>) {
         _game_thread: PhantomData,
     };
 
-    if unchained_macros_core::isolate_observer(|| unsafe {
-
-        entry(inputs)
-    })
-    .is_none()
-    {
-
+    if unchained_macros_core::isolate_observer(|| unsafe { entry(inputs) }).is_none() {
         report("Kismet entry listener panicked");
     }
 }
@@ -190,7 +164,6 @@ pub unsafe fn observe_exec(
     entry: Option<EntryCallback>,
     original: impl FnOnce(),
 ) {
-
     let call = Rc::new(RefCell::new(Invocation {
         frame: frame as usize,
         properties,
@@ -202,7 +175,6 @@ pub unsafe fn observe_exec(
     }));
 
     if CALLS.try_with(|calls| calls.borrow_mut().push(call.clone())).is_err() {
-
         original();
 
         return;
@@ -214,14 +186,12 @@ pub unsafe fn observe_exec(
     original();
 
     let valid = {
-
         let state = call.borrow();
 
         state.completed && !state.failed
     };
 
     if !valid {
-
         report("Kismet exec observation did not match its verified step contract");
     }
 }
@@ -232,7 +202,6 @@ struct StepScope {
 
 impl Drop for StepScope {
     fn drop(&mut self) {
-
         self.call.borrow_mut().depth -= 1;
     }
 }
@@ -246,10 +215,8 @@ impl Drop for StepScope {
 /// the original returns. This function must cover recursive Step calls as well.
 
 pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: usize, original: impl FnOnce()) {
-
     let call = CALLS
         .try_with(|calls| {
-
             calls
                 .borrow()
                 .iter()
@@ -261,14 +228,12 @@ pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: us
         .flatten();
 
     let Some(call) = call else {
-
         original();
 
         return;
     };
 
     let top_level = {
-
         let mut state = call.borrow_mut();
 
         state.depth += 1;
@@ -283,25 +248,21 @@ pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: us
     drop(scope);
 
     if !top_level {
-
         return;
     }
 
     {
-
         let mut state = call.borrow_mut();
 
         let index = state.slots.len();
 
         let Some(pointer) = NonNull::new(result) else {
-
             state.failed = true;
 
             return;
         };
 
         if index >= state.properties.len() || (property != 0 && state.properties[index] != property) {
-
             state.failed = true;
 
             return;
@@ -327,19 +288,11 @@ mod tests {
     }
 
     fn event(name: &'static str) {
-
         EVENTS.with(|events| events.borrow_mut().push(name));
     }
 
     unsafe fn entry(inputs: Inputs<'_>) {
-
-        assert_eq!(
-            unsafe {
-
-                *inputs.get(0).unwrap().borrow::<u32>()
-            },
-            42
-        );
+        assert_eq!(unsafe { *inputs.get(0).unwrap().borrow::<u32>() }, 42);
 
         event("entry");
     }
@@ -348,7 +301,6 @@ mod tests {
 
     impl Drop for Cleanup {
         fn drop(&mut self) {
-
             event("cleanup");
         }
     }
@@ -356,7 +308,6 @@ mod tests {
     #[test]
 
     fn original_real_frame_evaluation_body_and_cleanup_run_once() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         let mut frame = 0u32;
@@ -366,9 +317,7 @@ mod tests {
         let mut result = 0u8;
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(entry), || {
-
                 let _cleanup = Cleanup;
 
                 let mut argument = 0u32;
@@ -376,7 +325,6 @@ mod tests {
                 let slot = (&mut argument as *mut u32).cast();
 
                 observe_step(pointer, slot, 11, || {
-
                     event("evaluate");
 
                     frame += 1;
@@ -402,7 +350,6 @@ mod tests {
     #[test]
 
     fn recursive_same_frame_step_does_not_capture_nested_result() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         let mut frame = 0u8;
@@ -410,15 +357,12 @@ mod tests {
         let pointer = (&mut frame as *mut u8).cast();
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(entry), || {
-
                 let mut outer = 0u32;
 
                 let mut nested = 0u32;
 
                 observe_step(pointer, (&mut outer as *mut u32).cast(), 0, || {
-
                     observe_step(pointer, (&mut nested as *mut u32).cast(), 0, || nested = 99);
 
                     outer = 42;
@@ -430,25 +374,20 @@ mod tests {
     }
 
     unsafe fn reenter(inputs: Inputs<'_>) {
-
         assert_eq!(inputs.len(), 1);
 
         ENTRIES.with(|entries| {
-
             let count = entries.get();
 
             entries.set(count + 1);
 
             if count == 0 {
-
                 let mut frame = 0u8;
 
                 let pointer = (&mut frame as *mut u8).cast();
 
                 unsafe {
-
                     observe_exec(pointer, &[11], Some(reenter), || {
-
                         let mut slot = 7u32;
 
                         observe_step(pointer, (&mut slot as *mut u32).cast(), 11, || {});
@@ -461,7 +400,6 @@ mod tests {
     #[test]
 
     fn listener_reentry_uses_independent_scope() {
-
         ENTRIES.with(|entries| entries.set(0));
 
         let mut frame = 0u8;
@@ -469,9 +407,7 @@ mod tests {
         let pointer = (&mut frame as *mut u8).cast();
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(reenter), || {
-
                 let mut slot = 9u32;
 
                 observe_step(pointer, (&mut slot as *mut u32).cast(), 11, || {});
@@ -486,7 +422,6 @@ mod tests {
     #[test]
 
     fn wrong_compiled_in_property_suppresses_callbacks_not_original() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         let mut frame = 0u8;
@@ -496,13 +431,10 @@ mod tests {
         let mut evaluated = 0;
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(entry), || {
-
                 let mut argument = 0u32;
 
                 observe_step(pointer, (&mut argument as *mut u32).cast(), 12, || {
-
                     evaluated += 1;
 
                     argument = 42;
@@ -518,7 +450,6 @@ mod tests {
     }
 
     unsafe fn noargs(inputs: Inputs<'_>) {
-
         assert!(inputs.is_empty());
 
         event("entry");
@@ -527,11 +458,9 @@ mod tests {
     #[test]
 
     fn no_arguments_need_no_step_and_keep_original() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         unsafe {
-
             observe_exec(std::ptr::dangling_mut(), &[], Some(noargs), || event("body"));
         }
 
@@ -541,13 +470,11 @@ mod tests {
     #[test]
 
     fn scope_cleanup_on_unwind() {
-
         let mut frame = 0u8;
 
         let pointer = (&mut frame as *mut u8).cast();
 
         let result = catch_unwind(AssertUnwindSafe(|| unsafe {
-
             observe_exec(pointer, &[], None, || panic!("fixture"));
         }));
 
@@ -560,19 +487,14 @@ mod tests {
 
     impl Drop for NativeOwner {
         fn drop(&mut self) {
-
             event("owner-drop");
         }
     }
 
     unsafe fn borrow_owner_then_panic(inputs: Inputs<'_>) {
-
         let argument = inputs.get(0).unwrap();
 
-        let owner = unsafe {
-
-            argument.borrow::<NativeOwner>()
-        };
+        let owner = unsafe { argument.borrow::<NativeOwner>() };
 
         assert_eq!(owner.0, "engine-owned");
 
@@ -584,7 +506,6 @@ mod tests {
     #[test]
 
     fn borrowed_owner_is_destroyed_only_by_original_after_panicking_listener() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         let mut frame = 0u8;
@@ -592,9 +513,7 @@ mod tests {
         let pointer = (&mut frame as *mut u8).cast();
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(borrow_owner_then_panic), || {
-
                 // Construct a real owner; no zero-filled FString/FText surrogate.
                 let mut owner = NativeOwner("engine-owned".into());
 
@@ -614,7 +533,6 @@ mod tests {
     #[test]
 
     fn nested_exec_with_same_frame_has_its_own_argument_depth() {
-
         EVENTS.with(|events| events.borrow_mut().clear());
 
         let mut frame = 0u8;
@@ -622,15 +540,11 @@ mod tests {
         let pointer = (&mut frame as *mut u8).cast();
 
         unsafe {
-
             observe_exec(pointer, &[11], Some(entry), || {
-
                 let mut outer = 0u32;
 
                 observe_step(pointer, (&mut outer as *mut u32).cast(), 0, || {
-
                     observe_exec(pointer, &[11], Some(entry), || {
-
                         let mut inner = 0u32;
 
                         observe_step(pointer, (&mut inner as *mut u32).cast(), 11, || inner = 42);
@@ -647,7 +561,6 @@ mod tests {
     #[test]
 
     fn misaligned_argument_suppresses_callback_before_typed_borrow() {
-
         #[repr(align(4))]
 
         struct Buffer([u8; 8]);
@@ -656,19 +569,14 @@ mod tests {
 
         buffer.0[1..5].copy_from_slice(&42u32.to_ne_bytes());
 
-        let slot = unsafe {
-
-            buffer.0.as_mut_ptr().add(1).cast()
-        };
+        let slot = unsafe { buffer.0.as_mut_ptr().add(1).cast() };
 
         let frame = std::ptr::dangling_mut();
 
         EVENTS.with(|events| events.borrow_mut().clear());
 
         unsafe {
-
             observe_exec(frame, &[11], Some(entry), || {
-
                 observe_step(frame, slot, 11, || {});
 
                 event("body");

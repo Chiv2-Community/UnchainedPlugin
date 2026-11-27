@@ -18,23 +18,13 @@ static READS: AtomicUsize = AtomicUsize::new(0);
 #[inline(never)]
 
 unsafe extern "C" fn add(value: i32) -> i32 {
-
-    unsafe {
-
-        std::ptr::read_volatile(&value)
-    }
-    .wrapping_add(1)
+    unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn plain(value: i32) -> i32 {
-
-    unsafe {
-
-        std::ptr::read_volatile(&value)
-    }
-    .wrapping_add(2)
+    unsafe { std::ptr::read_volatile(&value) }.wrapping_add(2)
 }
 
 // Synthetic thunks are decoded, never executed. Their first call models parameter
@@ -46,40 +36,23 @@ struct Frame {
 #[inline(never)]
 
 unsafe extern "C" fn step(frame: *const Frame) -> i32 {
-
-    unsafe {
-
-        std::ptr::read_volatile(std::ptr::addr_of!((*frame).value))
-    }
+    unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn explicit_step(frame: *const Frame) -> i32 {
-
-    unsafe {
-
-        std::ptr::read_volatile(std::ptr::addr_of!((*frame).value))
-    }
-    .wrapping_add(1)
+    unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }.wrapping_add(1)
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
+    let value = unsafe { step(frame) };
 
-    let value = unsafe {
-
-        step(frame)
-    };
-
-    let value = unsafe {
-
-        add(value)
-    };
+    let value = unsafe { add(value) };
 
     unsafe {
-
         result.write(value);
     }
 }
@@ -87,19 +60,11 @@ unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32
 #[inline(never)]
 
 unsafe extern "C" fn plain_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
+    let value = unsafe { step(frame) };
 
-    let value = unsafe {
-
-        step(frame)
-    };
-
-    let value = unsafe {
-
-        plain(value)
-    };
+    let value = unsafe { plain(value) };
 
     unsafe {
-
         result.write(value);
     }
 }
@@ -109,13 +74,11 @@ struct FixtureReflection;
 // SAFETY: Metadata identifies the synthetic functions and their in-module callees.
 unsafe impl Reflection for FixtureReflection {
     unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String> {
-
         assert_eq!(owner, "/Script/Fixture.Native");
 
         READS.fetch_add(1, Ordering::SeqCst);
 
         if !READY.load(Ordering::SeqCst) {
-
             return Err("not ready".into());
         }
 
@@ -135,11 +98,9 @@ unsafe impl Reflection for FixtureReflection {
 }
 
 fn environment() -> ExecEnvironment {
-
     let mut image = 0;
 
     let entry = unsafe {
-
         windows::Win32::System::Diagnostics::Debug::RtlLookupFunctionEntry(
             add_thunk as *const () as u64,
             &mut image,
@@ -182,11 +143,7 @@ impl Native {
 #[bindings::bind_func_detour(Native::add)]
 
 unsafe fn replacement(value: i32) -> i32 {
-
-    unsafe {
-
-        Native::add(value) + 10
-    }
+    unsafe { Native::add(value) + 10 }
 }
 
 #[bindings::resolver_selection_key]
@@ -197,7 +154,6 @@ enum Mode {
 
 impl bindings::ResolverSelector for Mode {
     fn current() -> Self {
-
         Self::Disabled
     }
 }
@@ -225,7 +181,6 @@ impl AddressResolver for OtherResolver {
     type Context = ();
 
     unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
         Ok(NonZeroUsize::new(add as *const () as usize).unwrap())
     }
 }
@@ -236,7 +191,6 @@ impl AddressResolver for LateResolver {
     type Context = ();
 
     unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
         Ok(NonZeroUsize::new(add as *const () as usize).unwrap())
     }
 }
@@ -275,7 +229,6 @@ impl AddressResolver for SuppressedResolver {
     type Context = ();
 
     unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
         panic!("excluded backend must not run")
     }
 }
@@ -322,21 +275,18 @@ struct Writer(Vec<u64>);
 
 impl PatchWriter for Writer {
     unsafe fn bytes(&mut self, address: u64, _: &[u8]) -> Result<(), String> {
-
         self.0.push(address);
 
         Ok(())
     }
 
     unsafe fn nop(&mut self, address: u64, _: usize) -> Result<(), String> {
-
         self.0.push(address);
 
         Ok(())
     }
 
     unsafe fn write(&mut self, address: u64, _: &bindings::WriteValue) -> Result<(), String> {
-
         self.0.push(address);
 
         Ok(())
@@ -346,13 +296,9 @@ impl PatchWriter for Writer {
 #[test]
 
 fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_ownership() {
-
     let snapshot = SelectorSnapshot::from_selection(Mode::Disabled).unwrap();
 
-    let context = unsafe {
-
-        KismetContext::new(FixtureReflection, environment())
-    };
+    let context = unsafe { KismetContext::new(FixtureReflection, environment()) };
 
     assert_eq!(bindings::detour_inventory_for::<OtherResolver>().count(), 0);
 
@@ -374,7 +320,6 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert!(!snapshot.supports_resolver_for::<SuppressedResolver>("Native__add"));
 
     unsafe {
-
         bindings::initialize_bindings_for::<OtherResolver>(&(), &snapshot).unwrap();
     }
 
@@ -390,10 +335,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
 
     assert!(bindings::require_function_bindings_for::<KismetReflectionResolver>(&["Native__add"]).is_err());
 
-    let initialize = || unsafe {
-
-        bindings::initialize_bindings_for::<KismetReflectionResolver>(&context, &snapshot)
-    };
+    let initialize = || unsafe { bindings::initialize_bindings_for::<KismetReflectionResolver>(&context, &snapshot) };
 
     assert!(initialize().unwrap_err().contains("not ready"));
 
@@ -411,22 +353,14 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
 
     assert!(FILTERED_BINDING.entry_address().is_none());
 
-    assert_eq!(
-        unsafe {
-
-            Native::plain(5)
-        },
-        7
-    );
+    assert_eq!(unsafe { Native::plain(5) }, 7);
 
     let mut writer = Writer::default();
 
     let mut state = PatchState::default();
 
     for _ in 0..2 {
-
         unsafe {
-
             bindings::apply_patches_for::<KismetReflectionResolver, _>(&context, &snapshot, &mut writer, &mut state)
                 .unwrap();
         }
@@ -437,7 +371,6 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert_eq!(READS.load(Ordering::SeqCst), reads);
 
     unsafe {
-
         __UNCHAINED_REGISTRATION_replacement.attach(true).unwrap();
 
         assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(5), 16);

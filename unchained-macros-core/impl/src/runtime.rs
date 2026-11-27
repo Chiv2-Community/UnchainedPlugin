@@ -9,9 +9,7 @@ use quote::quote;
 use syn::ItemFn;
 
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-
     if !args.is_empty() {
-
         return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
     }
 
@@ -42,12 +40,10 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
-
     if implementation.trait_.is_some()
         || !implementation.generics.params.is_empty()
         || implementation.generics.where_clause.is_some()
     {
-
         return Err(syn::Error::new_spanned(
             &implementation,
             "runtime_bindings requires a non-generic inherent impl",
@@ -71,9 +67,7 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
     let mut helpers = Vec::new();
 
     for item in &mut implementation.items {
-
         let syn::ImplItem::Fn(method) = item else {
-
             continue;
         };
 
@@ -86,12 +80,10 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
             .collect();
 
         if attributes.is_empty() {
-
             continue;
         }
 
         if attributes.len() != 1 {
-
             return Err(syn::Error::new_spanned(
                 method,
                 "duplicate or conflicting native binding attributes",
@@ -112,9 +104,7 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
         let (expanded, metadata, helper) = function::expand_method(args, &function, self_ty)?;
 
         for descriptor in &metadata {
-
             if !names.insert(descriptor.ident.to_string()) {
-
                 return Err(syn::Error::new_spanned(
                     descriptor,
                     "generated binding metadata conflicts with an associated item",
@@ -136,7 +126,6 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
     }
 
     if descriptors.is_empty() {
-
         return Ok(quote!(#implementation));
     }
 
@@ -164,7 +153,6 @@ mod tests {
     #[test]
 
     fn unbound_methods_keep_only_authored_docs_and_unchanged_code() {
-
         let original: syn::ItemImpl = syn::parse_quote! {
             impl Native {
                 /// Existing safety notes.
@@ -178,7 +166,6 @@ mod tests {
         let file: syn::File = syn::parse2(expanded).unwrap();
 
         let syn::Item::Impl(implementation) = &file.items[0] else {
-
             panic!("expected unchanged impl")
         };
 
@@ -218,7 +205,6 @@ mod tests {
     #[test_case::test_case(quote!(unexpected), quote!(impl Native {}); "arguments")]
 
     fn rejects_invalid_binding_impls(args: Tokens, implementation: Tokens) {
-
         assert!(expand(args, implementation).is_err());
     }
 
@@ -228,7 +214,6 @@ mod tests {
     #[test_case::test_case(quote!(pub type Native<T> = *mut T;); "alias")]
 
     fn runtime_type_markers_preserve_declarations_and_generate_no_registration(tokens: Tokens) {
-
         use quote::ToTokens;
 
         let original: syn::Item = syn::parse2(tokens.clone()).unwrap();
@@ -265,7 +250,6 @@ mod tests {
     #[test_case::test_case(quote!(), quote!(trait Native {}); "trait")]
 
     fn runtime_type_markers_reject_arguments_and_non_type_items(args: Tokens, item: Tokens) {
-
         assert!(expand(args, item).is_err());
     }
 
@@ -273,7 +257,6 @@ mod tests {
     #[test_case::test_case(quote!(Backend, &DESCRIPTOR); "typed descriptor")]
 
     fn runtime_binding_descriptors_carry_visibility_and_cfg_restrictions(args: Tokens) {
-
         let expanded = expand(
             quote!(),
             quote! {
@@ -300,7 +283,6 @@ mod tests {
     #[test]
 
     fn all_signature_metadata_shares_the_original_impl() {
-
         let expanded = expand(
             quote!(),
             quote! {
@@ -317,12 +299,10 @@ mod tests {
         let file: syn::File = syn::parse2(expanded).unwrap();
 
         let syn::Item::Const(container) = &file.items[0] else {
-
             panic!("expected storage scope")
         };
 
         let syn::Expr::Block(block) = container.expr.as_ref() else {
-
             panic!("expected block")
         };
 
@@ -332,10 +312,8 @@ mod tests {
             .iter()
             .filter_map(|statement| {
                 if let syn::Stmt::Item(syn::Item::Impl(item)) = statement {
-
                     Some(item)
                 } else {
-
                     None
                 }
             })

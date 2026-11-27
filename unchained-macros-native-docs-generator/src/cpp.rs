@@ -31,7 +31,6 @@ struct Definition {
 
 impl Definition {
     fn matches(&self, target: &str) -> bool {
-
         self.name == target
             || self
                 .name
@@ -40,7 +39,6 @@ impl Definition {
     }
 
     fn implementation(&self, path: &Path, source: &str) -> Implementation {
-
         Implementation {
             path: path.to_owned(),
             line: self.line,
@@ -58,12 +56,10 @@ struct Declarations {
 
 impl SourceFile {
     fn parse<'a>(&'a mut self, path: &Path) -> Result<(&'a str, &'a Declarations)> {
-
         let source = std::str::from_utf8(&self.bytes)
             .with_context(|| format!("Native source is not UTF-8: {}", path.display()))?;
 
         if self.declarations.is_none() {
-
             let tree = parse_source(source)?;
 
             let mut declarations = Declarations::default();
@@ -101,14 +97,11 @@ struct IndexedFunction {
 
 impl SourceIndex {
     pub fn new() -> Self {
-
         Self::default()
     }
 
     fn load(&mut self, path: &Path) -> Result<()> {
-
         if let std::collections::btree_map::Entry::Vacant(entry) = self.files.entry(path.to_owned()) {
-
             entry.insert(SourceFile {
                 bytes: fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?,
                 declarations: None,
@@ -121,7 +114,6 @@ impl SourceIndex {
     /// Register all planned method lookups before generation to batch file reads.
 
     pub fn plan_implementation(&mut self, root: &Path, header: &Path, target: &str) -> Result<()> {
-
         let (root, header) = native_header(root, header)?;
 
         self.requests
@@ -133,14 +125,12 @@ impl SourceIndex {
     }
 
     fn index_module(&mut self, module: &Path, target: &str) -> Result<()> {
-
         self.requests
             .entry(module.to_owned())
             .or_default()
             .insert(target.to_owned());
 
         if let std::collections::btree_map::Entry::Vacant(entry) = self.modules.entry(module.to_owned()) {
-
             let mut files = BTreeSet::new();
 
             cpp_files(module, &mut files)?;
@@ -160,7 +150,6 @@ impl SourceIndex {
             .collect();
 
         if pending.is_empty() {
-
             return Ok(());
         }
 
@@ -170,16 +159,13 @@ impl SourceIndex {
             .collect();
 
         for path in &indexed.files {
-
             let bytes = fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
 
             if !pending.keys().any(|target| may_contain_implementation(&bytes, target)) {
-
                 continue;
             }
 
             let parsed = (|| -> Result<Vec<Definition>> {
-
                 let source = std::str::from_utf8(&bytes)
                     .with_context(|| format!("Native source is not UTF-8: {}", path.display()))?;
 
@@ -194,17 +180,12 @@ impl SourceIndex {
 
             match parsed {
                 Ok(found) => {
-
                     let source = std::str::from_utf8(&bytes).unwrap();
 
                     for definition in found {
-
                         for (target, functions) in &mut pending {
-
                             if definition.matches(target) {
-
                                 if let Ok(functions) = functions {
-
                                     functions.push(IndexedFunction {
                                         implementation: definition.implementation(path, source),
                                         definition: definition.clone(),
@@ -217,9 +198,7 @@ impl SourceIndex {
 
                 Err(error) => {
                     for (target, functions) in &mut pending {
-
                         if may_contain_implementation(&bytes, target) {
-
                             *functions = Err(error.to_string());
                         }
                     }
@@ -234,24 +213,19 @@ impl SourceIndex {
 }
 
 fn implementation_target(target: &str) -> String {
-
     let target = target.split('(').next().unwrap().trim();
 
     if let Some(owner) = target.strip_suffix("::Destructor") {
-
         format!("{owner}::~{}", owner.rsplit("::").next().unwrap())
     } else {
-
         target.to_owned()
     }
 }
 
 fn may_contain_implementation(bytes: &[u8], target: &str) -> bool {
-
     let (owner, method) = target.rsplit_once("::").unwrap_or(("", target));
 
     if memchr::memmem::find(bytes, method.as_bytes()).is_none() {
-
         return false;
     }
 
@@ -269,16 +243,13 @@ fn may_contain_implementation(bytes: &[u8], target: &str) -> bool {
 }
 
 fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
-
     for entry in fs::read_dir(directory)? {
-
         let entry = entry?;
 
         let kind = entry.file_type()?;
 
         // Do not follow directory symlinks outside the selected checkout.
         if kind.is_dir() {
-
             cpp_files(&entry.path(), files)?;
         } else if kind.is_file()
             && matches!(
@@ -286,7 +257,6 @@ fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
                 Some("cpp" | "cc" | "cxx")
             )
         {
-
             files.insert(entry.path());
         }
     }
@@ -295,14 +265,11 @@ fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
 }
 
 pub(crate) fn module_directory(header: &Path, root: &Path) -> PathBuf {
-
     for directory in header.ancestors().skip(1) {
-
         if matches!(
             directory.file_name().and_then(|s| s.to_str()),
             Some("Public" | "Private" | "Classes")
         ) {
-
             return directory
                 .parent()
                 .filter(|parent| parent.starts_with(root))
@@ -311,7 +278,6 @@ pub(crate) fn module_directory(header: &Path, root: &Path) -> PathBuf {
         }
 
         if directory == root {
-
             break;
         }
     }
@@ -320,13 +286,10 @@ pub(crate) fn module_directory(header: &Path, root: &Path) -> PathBuf {
 }
 
 fn function_declarator(node: Node<'_>) -> Option<Node<'_>> {
-
     let mut declarator = node.child_by_field_name("declarator")?;
 
     while declarator.kind() != "function_declarator" {
-
         declarator = declarator.child_by_field_name("declarator").or_else(|| {
-
             let mut cursor = declarator.walk();
 
             let found = declarator
@@ -341,7 +304,6 @@ fn function_declarator(node: Node<'_>) -> Option<Node<'_>> {
 }
 
 fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
-
     let name = function_declarator(node)?.child_by_field_name("declarator")?;
 
     Some(
@@ -354,23 +316,17 @@ fn declarator_name(node: Node<'_>, source: &str) -> Option<String> {
 
 // Compare source-level types, not Rust ABI arguments (which may include sret).
 fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
-
     fn tokens(node: Node<'_>, source: &str, skip: Option<usize>, out: &mut Vec<String>) {
-
         if Some(node.start_byte()) == skip || node.kind() == "comment" {
-
             return;
         }
 
         if node.child_count() == 0 {
-
             out.push(source[node.byte_range()].to_owned());
         } else {
-
             let mut cursor = node.walk();
 
             for child in node.children(&mut cursor) {
-
                 tokens(child, source, skip, out);
             }
         }
@@ -385,14 +341,11 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
     let mut cursor = parameters.walk();
 
     for parameter in parameters.children(&mut cursor) {
-
         if matches!(parameter.kind(), "(" | ")" | "," | "comment") {
-
             continue;
         }
 
         if parameter.kind() == "..." {
-
             key.push(vec!["...".to_owned()]);
 
             continue;
@@ -401,20 +354,16 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
         let mut name = parameter.child_by_field_name("declarator");
 
         while let Some(node) = name {
-
             // Complex callable declarators need a richer type model.
             if node.kind() == "function_declarator" {
-
                 return None;
             }
 
             if node.kind() == "identifier" {
-
                 break;
             }
 
             name = node.child_by_field_name("declarator").or_else(|| {
-
                 let mut cursor = node.walk();
 
                 let found = node
@@ -430,9 +379,7 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
         let mut cursor = parameter.walk();
 
         for child in parameter.children(&mut cursor) {
-
             if child.kind() == "=" {
-
                 break;
             }
 
@@ -447,9 +394,7 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
     let mut cursor = declarator.walk();
 
     for child in declarator.named_children(&mut cursor) {
-
         if matches!(child.kind(), "type_qualifier" | "ref_qualifier") {
-
             tokens(child, source, None, &mut qualifiers);
         }
     }
@@ -460,30 +405,24 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
 }
 
 fn qualified_name(node: Node<'_>, source: &str) -> Option<String> {
-
     let name = declarator_name(node, source)?;
 
     scoped_name(node, name, source)
 }
 
 fn scoped_name(node: Node<'_>, name: String, source: &str) -> Option<String> {
-
     let mut scopes = Vec::new();
 
     let mut parent = node.parent();
 
     while let Some(node) = parent {
-
         if matches!(
             node.kind(),
             "class_specifier" | "struct_specifier" | "namespace_definition"
         ) {
-
             if let Some(name) = node.child_by_field_name("name") {
-
                 scopes.push(source[name.byte_range()].to_owned());
             } else {
-
                 // Anonymous scopes cannot be identified by a Rust class name.
                 return None;
             }
@@ -500,18 +439,15 @@ fn scoped_name(node: Node<'_>, name: String, source: &str) -> Option<String> {
 }
 
 fn parser_input(source: &str) -> Vec<u8> {
-
     let mut input = source.as_bytes().to_vec();
 
     // Unreal's export annotations are not C++ keywords. Keep original byte offsets.
     for (offset, _) in source.match_indices("_API") {
-
         let end = offset + 4;
 
         let identifier = |c: char| c.is_ascii_alphanumeric() || c == '_';
 
         if source[end..].starts_with(identifier) {
-
             continue;
         }
 
@@ -524,7 +460,6 @@ fn parser_input(source: &str) -> Vec<u8> {
         let keyword = prefix.rsplit(|c: char| !identifier(c)).next().unwrap_or("");
 
         if matches!(keyword, "class" | "struct") {
-
             input[start..end].fill(b' ');
         }
     }
@@ -533,7 +468,6 @@ fn parser_input(source: &str) -> Vec<u8> {
 }
 
 fn parse_source(source: &str) -> Result<Tree> {
-
     let mut parser = CppParser::new();
 
     parser.set_language(&tree_sitter_cpp::LANGUAGE.into())?;
@@ -544,15 +478,12 @@ fn parse_source(source: &str) -> Result<Tree> {
 }
 
 fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) {
-
     if matches!(node.kind(), "type_definition" | "alias_declaration") && !node.has_error() {
-
         if let Some(name) = node
             .child_by_field_name("name")
             .or_else(|| node.child_by_field_name("declarator"))
             .filter(|name| matches!(name.kind(), "identifier" | "type_identifier"))
         {
-
             let repeats_tag = node
                 .child_by_field_name("type")
                 .and_then(|ty| ty.child_by_field_name("name"))
@@ -560,7 +491,6 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
 
             if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source).filter(|_| !repeats_tag)
             {
-
                 found.push(Definition {
                     name,
                     line: node.start_position().row + 1,
@@ -575,17 +505,13 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
         node.kind(),
         "class_specifier" | "struct_specifier" | "union_specifier" | "enum_specifier"
     ) {
-
         if let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body")) {
-
             let closed = body
                 .child(body.child_count().saturating_sub(1))
                 .is_some_and(|end| end.kind() == "}" && !end.is_missing());
 
             if closed {
-
                 if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source) {
-
                     let declaration = node
                         .parent()
                         .filter(|parent| parent.kind() == "template_declaration")
@@ -598,7 +524,6 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
                     let whitespace = suffix.len() - suffix.trim_start().len();
 
                     if suffix[whitespace..].starts_with(';') {
-
                         end += whitespace + 1;
                     }
 
@@ -616,13 +541,11 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
     let mut cursor = node.walk();
 
     for child in node.named_children(&mut cursor) {
-
         class_definitions(child, source, found);
     }
 }
 
 fn native_header(root: &Path, header: &Path) -> Result<(PathBuf, PathBuf)> {
-
     let root = root.canonicalize().context("Cannot open source root")?;
 
     let header = root.join(header).canonicalize().context("Cannot open native header")?;
@@ -633,13 +556,11 @@ fn native_header(root: &Path, header: &Path) -> Result<(PathBuf, PathBuf)> {
 }
 
 pub fn find_class(root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
-
     SourceIndex::new().find_class(root, header, target)
 }
 
 impl SourceIndex {
     pub fn find_class(&mut self, root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
-
         let (_, header) = native_header(root, header)?;
 
         self.load(&header)?;
@@ -654,25 +575,18 @@ impl SourceIndex {
         let first = found.next();
 
         Ok(if found.next().is_none() {
-
             first.map(|definition| definition.implementation(&header, source))
         } else {
-
             None
         })
     }
 }
 
 fn definitions(node: Node<'_>, source: &str, wanted: Option<&BTreeSet<String>>, found: &mut Vec<Definition>) {
-
     if node.kind() == "function_definition" {
-
         if !node.has_error() && node.child_by_field_name("body").is_some() {
-
             if let Some(name) = qualified_name(node, source) {
-
                 if wanted.is_some_and(|methods| !methods.contains(name.rsplit("::").next().unwrap())) {
-
                     return;
                 }
 
@@ -696,19 +610,16 @@ fn definitions(node: Node<'_>, source: &str, wanted: Option<&BTreeSet<String>>, 
     let mut cursor = node.walk();
 
     for child in node.named_children(&mut cursor) {
-
         definitions(child, source, wanted, found);
     }
 }
 
 pub fn find_implementation(root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
-
     SourceIndex::new().find_implementation(root, header, target)
 }
 
 impl SourceIndex {
     pub fn find_implementation(&mut self, root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
-
         self.find_implementation_for_binding(root, header, target, None)
     }
 
@@ -719,7 +630,6 @@ impl SourceIndex {
         target: &str,
         binding: Option<&crate::signature::BindingSignature>,
     ) -> Result<Option<Implementation>> {
-
         let (target, selector) = target
             .split_once('(')
             .map_or((target, None), |(name, parameters)| (name.trim(), Some(parameters)));
@@ -736,7 +646,6 @@ impl SourceIndex {
         let module = module_directory(&header, &root);
 
         let overload = if let Some(selector) = selector {
-
             let source = format!("void selected({selector} {{}}");
 
             let tree = parse_source(&source)?;
@@ -747,7 +656,6 @@ impl SourceIndex {
 
             Some(overload_key(function, &source).context("Unsupported C++ overload selector")?)
         } else {
-
             None
         };
 
@@ -762,7 +670,6 @@ impl SourceIndex {
         let file = self.files.get_mut(&header).unwrap();
 
         if memchr::memmem::find(&file.bytes, method.as_bytes()).is_some() {
-
             let (source, declarations) = file.parse(&header)?;
 
             implementations.extend(
@@ -770,7 +677,6 @@ impl SourceIndex {
                     .functions
                     .iter()
                     .filter(|definition| {
-
                         definition.matches(&target)
                             && overload
                                 .as_ref()
@@ -790,7 +696,6 @@ impl SourceIndex {
             functions
                 .iter()
                 .filter(|function| {
-
                     function.implementation.path != header
                         && function.definition.matches(&target)
                         && overload
@@ -801,19 +706,15 @@ impl SourceIndex {
         );
 
         if overload.is_none() && implementations.len() > 1 {
-
             if let Some(binding) = binding {
-
                 implementations.retain(|(key, _)| key.as_ref().is_some_and(|key| binding.matches(key)));
             }
         }
 
         // Never choose an overload or preprocessor branch by directory order.
         Ok(if implementations.len() == 1 {
-
             implementations.pop().map(|(_, implementation)| implementation)
         } else {
-
             None
         })
     }
@@ -828,7 +729,6 @@ mod tests {
     #[test]
 
     fn nested_pointer_qualifiers_select_the_correct_implementation() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -863,7 +763,6 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
-
             let root = std::env::temp_dir().join(format!(
                 "native-cpp-test-{}-{}",
                 std::process::id(),
@@ -878,19 +777,16 @@ mod tests {
         }
 
         fn write(&self, path: &str, code: &str) {
-
             fs::write(self.0.join(path), code).unwrap();
         }
 
         fn find(&self, target: &str) -> Option<Implementation> {
-
             find_implementation(&self.0, Path::new("Source/Test/Public/Native.h"), target).unwrap()
         }
     }
 
     impl Drop for Fixture {
         fn drop(&mut self) {
-
             // Only this test's uniquely created fixture directory.
             let _ = fs::remove_dir_all(&self.0);
         }
@@ -899,7 +795,6 @@ mod tests {
     #[test]
 
     fn source_index_reuses_files_and_trees_within_one_generation() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -984,7 +879,6 @@ mod tests {
     #[test]
 
     fn shared_method_names_keep_planned_and_late_owners_independent() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1004,11 +898,9 @@ mod tests {
         fixture.write("Source/Test/Private/Third.cpp", "int Game::Third::Call() { return 3; }");
 
         for planned in [false, true] {
-
             let mut index = SourceIndex::new();
 
             if planned {
-
                 index
                     .plan_implementation(&fixture.0, header, "Game::First::Call()")
                     .unwrap();
@@ -1021,7 +913,6 @@ mod tests {
                 ("Second::Call", "return 2;"),
                 ("Game::Third::Call", "return 3;"),
             ] {
-
                 assert!(index
                     .find_implementation(&fixture.0, header, target)
                     .unwrap()
@@ -1043,7 +934,6 @@ mod tests {
     #[test]
 
     fn shared_method_errors_only_affect_candidate_owners() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1057,7 +947,6 @@ mod tests {
         let mut index = SourceIndex::new();
 
         for target in ["Native::Call", "Other::Call"] {
-
             index.plan_implementation(&fixture.0, header, target).unwrap();
         }
 
@@ -1072,7 +961,6 @@ mod tests {
     #[test]
 
     fn planned_destructors_and_template_owners_keep_native_matches() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1088,7 +976,6 @@ mod tests {
         let mut index = SourceIndex::new();
 
         for target in ["Game::Native::Destructor()", "Box<int>::Call()"] {
-
             index.plan_implementation(&fixture.0, header, target).unwrap();
         }
 
@@ -1114,7 +1001,6 @@ mod tests {
     #[test]
 
     fn owner_prefilter_falls_back_for_non_identifier_spellings() {
-
         assert!(may_contain_implementation(b"Call", "Box< int >::Call"));
 
         assert!(may_contain_implementation(b"Call", "Nativé::Call"));
@@ -1135,7 +1021,6 @@ mod tests {
     #[test]
 
     fn unplanned_methods_extend_the_index_without_losing_matches() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1164,7 +1049,6 @@ mod tests {
     #[test]
 
     fn planned_method_errors_do_not_hide_other_methods() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1192,7 +1076,6 @@ mod tests {
     #[test]
 
     fn unrelated_non_utf8_sources_are_not_parsed() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
@@ -1207,7 +1090,6 @@ mod tests {
     #[test]
 
     fn extracts_complete_body_without_matching_calls_comments_or_strings() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { int Call(); };");
@@ -1240,7 +1122,6 @@ int Native::Call() {
     #[test]
 
     fn handles_inline_namespaces_and_pointer_returns() {
-
         let fixture = Fixture::new();
 
         fixture.write(
@@ -1260,7 +1141,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn handles_const_reference_return_declarators() {
-
         let fixture = Fixture::new();
 
         fixture.write(
@@ -1283,7 +1163,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn binding_parameters_select_callback_overload_without_manual_selector() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1332,7 +1211,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn pointer_and_reference_lowering_does_not_choose_an_ambiguous_overload() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1361,7 +1239,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn extracts_native_typedefs_and_using_aliases() {
-
         let fixture = Fixture::new();
 
         let header = Path::new("Source/Test/Public/Native.h");
@@ -1375,7 +1252,6 @@ struct Native { int* Call() const { return nullptr; } };
             ("Callback", "typedef Function<void(Result)> Callback;"),
             ("Alias", "using Alias = Array<Element>;"),
         ] {
-
             assert_eq!(find_class(&fixture.0, header, name).unwrap().unwrap().code, definition);
         }
 
@@ -1390,7 +1266,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn selects_callback_overload_in_cpp_instead_of_inline_delegate_wrapper() {
-
         let fixture = Fixture::new();
 
         fixture.write(
@@ -1421,7 +1296,6 @@ struct Native { int* Call() const { return nullptr; } };
     #[test]
 
     fn selects_overloads_by_cpp_parameter_types() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
@@ -1444,7 +1318,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
             ("const String *, int", "pointer(Value)"),
             ("int, ...", "variadic(Count)"),
         ] {
-
             let found = fixture
                 .find(&format!("Native::Call({selector})"))
                 .unwrap_or_else(|| panic!("No match for {selector}"));
@@ -1464,7 +1337,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn selects_cv_ref_overloads_but_rejects_duplicate_definitions() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
@@ -1498,7 +1370,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn refuses_overloads_and_duplicate_implementations() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
@@ -1514,7 +1385,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn does_not_treat_declarations_as_implementations() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
@@ -1525,7 +1395,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn preserves_template_declarations() {
-
         let fixture = Fixture::new();
 
         fixture.write(
@@ -1548,7 +1417,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn refuses_alternative_preprocessor_definitions_and_malformed_bodies() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
@@ -1568,7 +1436,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn supports_destructor_binding_names() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { ~Native() {} };");
@@ -1579,7 +1446,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn refuses_headers_outside_the_root() {
-
         let fixture = Fixture::new();
 
         assert!(find_implementation(&fixture.0, Path::new("../../../Cargo.toml"), "Native::Call").is_err());
@@ -1588,7 +1454,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn does_not_search_outside_a_public_directory_root() {
-
         let fixture = Fixture::new();
 
         fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
@@ -1607,7 +1472,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
 
     fn extracts_complete_exported_class_with_bases_and_members() {
-
         let fixture = Fixture::new();
 
         let class = r#"class TEST_API Native final : public Base, public Interface {
@@ -1638,7 +1502,6 @@ private:
     #[test]
 
     fn class_lookup_supports_qualified_names_and_templates() {
-
         let fixture = Fixture::new();
 
         fixture.write(
@@ -1656,14 +1519,12 @@ private:
     #[test]
 
     fn type_lookup_supports_complete_enums_and_unions() {
-
         let fixture = Fixture::new();
 
         for source in [
             "enum class Native : unsigned char { First, Second };",
             "union Native { int Value; void* Pointer; };",
         ] {
-
             fixture.write("Source/Test/Public/Native.h", source);
 
             let found = find_class(&fixture.0, Path::new("Source/Test/Public/Native.h"), "Native")
@@ -1677,7 +1538,6 @@ private:
     #[test]
 
     fn class_lookup_refuses_forward_incomplete_and_ambiguous_definitions() {
-
         let fixture = Fixture::new();
 
         for source in [
@@ -1685,7 +1545,6 @@ private:
             "class Native { int Value;",
             "namespace A { class Native {}; } namespace B { class Native {}; }",
         ] {
-
             fixture.write("Source/Test/Public/Native.h", source);
 
             assert!(

@@ -38,26 +38,16 @@ unsafe fn pointer() -> *const i32 {}
 #[test]
 
 fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
-
     // No invocation may silently succeed before startup binds its slot.
-    let failure = std::panic::catch_unwind(|| unsafe {
-
-        count()
-    })
-    .unwrap_err();
+    let failure = std::panic::catch_unwind(|| unsafe { count() }).unwrap_err();
 
     assert!(panic_message(failure).contains("Required native value Count is not bound"));
 
-    let failure = std::panic::catch_unwind(|| unsafe {
-
-        objects()
-    })
-    .unwrap_err();
+    let failure = std::panic::catch_unwind(|| unsafe { objects() }).unwrap_err();
 
     assert!(panic_message(failure).contains("Required native value Objects is not bound"));
 
     let failure = std::panic::catch_unwind(|| unsafe {
-
         initialize_value_bindings(1, &std::collections::HashMap::new());
     })
     .unwrap_err();
@@ -71,7 +61,6 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
     ]);
 
     unsafe {
-
         // Binding a slot before the engine populates it is permitted.
         initialize_value_bindings(1, &offsets);
 
@@ -93,39 +82,21 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
         assert_eq!((*objects()).0.load(Ordering::Relaxed), 77);
     }
 
-    let failure = std::panic::catch_unwind(|| unsafe {
-
-        pointer()
-    })
-    .unwrap_err();
+    let failure = std::panic::catch_unwind(|| unsafe { pointer() }).unwrap_err();
 
     assert!(panic_message(failure).contains("Required native value Allocator is null"));
 
     POINTER.store((&raw const FIRST).cast_mut(), Ordering::Relaxed);
 
-    assert_eq!(
-        unsafe {
-
-            pointer()
-        },
-        &raw const FIRST
-    );
+    assert_eq!(unsafe { pointer() }, &raw const FIRST);
 
     POINTER.store((&raw const SECOND).cast_mut(), Ordering::Relaxed);
 
-    assert_eq!(
-        unsafe {
-
-            pointer()
-        },
-        &raw const SECOND
-    );
+    assert_eq!(unsafe { pointer() }, &raw const SECOND);
 }
 
 fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
-
     if let Some(message) = error.downcast_ref::<String>() {
-
         return message.clone();
     }
 
@@ -137,9 +108,7 @@ fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
 #[should_panic(expected = "Failed to bind required native value Invalid")]
 
 fn invalid_required_binding_panics(base: usize, offset: u64) {
-
     unsafe {
-
         ValueBinding::new("Invalid").initialize(base, offset);
     }
 }
@@ -148,11 +117,9 @@ fn invalid_required_binding_panics(base: usize, offset: u64) {
 #[should_panic(expected = "already initialized at another address")]
 
 fn required_binding_rejects_rebinding() {
-
     let binding = ValueBinding::new("Fixed");
 
     unsafe {
-
         binding.initialize((&raw const FIRST) as usize, 0);
 
         binding.initialize((&raw const FIRST) as usize, 0);

@@ -6,7 +6,6 @@ use std::{fs, path::Path, process::Command};
 #[test]
 
 fn generated_native_documents_reach_method_hovers() {
-
     let root = std::env::temp_dir().join(format!("kismet-native-docs-{}", std::process::id()));
 
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -18,7 +17,6 @@ fn generated_native_documents_reach_method_hovers() {
         "cpp/Engine/Source/Test/Public",
         "cpp/Engine/Source/Test/Private",
     ] {
-
         fs::create_dir_all(root.join(directory)).unwrap();
     }
 
@@ -143,7 +141,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "Dummy entry safety note.",
         "Entry-only dummy observation marker.",
     ] {
-
         assert!(reflected.contains(expected), "missing {expected}");
     }
 
@@ -159,7 +156,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "DummyMustNotBeDiscovered",
         "Reflected::Observed",
     ] {
-
         assert!(!reflected.contains(unexpected), "unexpected {unexpected}");
     }
 
@@ -172,7 +168,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
     let named = fs::read_to_string(root.join("target/doc/native_hover_fixture/struct.Named.html")).unwrap();
 
     for expected in ["ScanImplementation", "ProviderImplementation", "ScanKey", "ProviderKey"] {
-
         assert!(named.contains(expected), "missing {expected}");
     }
 
@@ -196,7 +191,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "explicit descriptor",
         "Fixture.rs#L",
     ] {
-
         assert!(explicit.contains(expected), "missing {expected}");
     }
 
@@ -205,7 +199,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "upstream resolver",
         "Reflection native body:",
     ] {
-
         assert!(!explicit.contains(unexpected), "unexpected {unexpected}");
     }
 

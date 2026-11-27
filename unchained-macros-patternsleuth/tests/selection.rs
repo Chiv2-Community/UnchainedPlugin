@@ -12,7 +12,6 @@ enum Mode {
 
 impl unchained_macros_core::ResolverSelector for Mode {
     fn current() -> Self {
-
         Self::Read
     }
 }
@@ -25,7 +24,6 @@ enum Other {
 
 impl unchained_macros_core::ResolverSelector for Other {
     fn current() -> Self {
-
         Self::Read
     }
 }
@@ -48,7 +46,6 @@ enum PartialDerives {
 #[test]
 
 fn selection_attribute_preserves_existing_derives_and_discriminants() {
-
     assert_eq!(ExistingDerives::First as u8, 7);
 
     assert_eq!(ExistingDerives::First, ExistingDerives::First);
@@ -98,7 +95,6 @@ define_pattern_resolver!(AliasedKey, {
 )]
 
 fn restrictions_apply_across_macro_forms((name, restriction): (&str, Option<Mode>), selection: Mode) {
-
     assert_eq!(
         SelectorSnapshot::from_selection(selection)
             .unwrap()
@@ -110,7 +106,6 @@ fn restrictions_apply_across_macro_forms((name, restriction): (&str, Option<Mode
 #[test]
 
 fn required_variants_accept_aliases_and_optional_keys_remain_optional() {
-
     assert!(<Mode as unchained_macros_core::SelectionKey>::REQUIRED == [Mode::Read, Mode::Write]);
 
     assert!(SelectorSnapshot::from_selection(Mode::Read)
@@ -129,7 +124,6 @@ fn required_variants_accept_aliases_and_optional_keys_remain_optional() {
 #[test]
 
 fn different_enum_types_do_not_match_equal_discriminants() {
-
     let snapshot = SelectorSnapshot::from_selection(Other::Read).unwrap();
 
     assert!(!snapshot.supports_resolver_for::<PatternsleuthResolver>("ReadOnly"));
@@ -164,7 +158,6 @@ inventory::submit! {
 #[test_case::test_case(Mode::Shared; "shared")]
 
 fn conflicting_restrictions_fail_closed(selection: Mode) {
-
     assert!(!SelectorSnapshot::from_selection(selection)
         .unwrap()
         .supports_resolver_for::<PatternsleuthResolver>("Conflicting"));

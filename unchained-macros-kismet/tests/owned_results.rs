@@ -31,7 +31,6 @@ struct FString(String);
 
 impl Drop for FString {
     fn drop(&mut self) {
-
         STRING_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -40,7 +39,6 @@ struct FText(Arc<()>);
 
 impl Drop for FText {
     fn drop(&mut self) {
-
         TEXT_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -115,7 +113,6 @@ impl Library {
 #[unchained_macros_core::bind_func_entry_listener(Library::StringResult)]
 
 unsafe fn string_result() {
-
     assert_eq!(STRING_DROPS.load(Ordering::SeqCst), 0);
 
     OBSERVED.fetch_add(1, Ordering::SeqCst);
@@ -124,7 +121,6 @@ unsafe fn string_result() {
 #[unchained_macros_core::bind_func_entry_listener(Library::TextResult)]
 
 unsafe fn text_result() {
-
     assert_eq!(TEXT_DROPS.load(Ordering::SeqCst), 0);
 
     OBSERVED.fetch_add(1, Ordering::SeqCst);
@@ -133,44 +129,35 @@ unsafe fn text_result() {
 #[unchained_macros_core::bind_func_entry_listener(Library::ColorResult)]
 
 unsafe fn color_result() {
-
     OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
 
 #[unchained_macros_core::bind_func_entry_listener(Library::NullStringResult)]
 
 unsafe fn null_result() {
-
     NULL_OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
 
 #[unchained_macros_core::bind_func_entry_listener(Library::MisalignedColorResult)]
 
 unsafe fn misaligned_result() {
-
     MISALIGNED_OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
 
 unsafe extern "system" fn string_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
-
     unsafe {
-
         result.cast::<FString>().write(FString("caller-owned".into()));
     }
 }
 
 unsafe extern "system" fn text_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
-
     unsafe {
-
         result.cast::<FText>().write(FText(Arc::new(())));
     }
 }
 
 unsafe extern "system" fn color_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
-
     unsafe {
-
         result.cast::<FLinearColor>().write(FLinearColor {
             red: 1.0,
             green: 0.5,
@@ -181,7 +168,6 @@ unsafe extern "system" fn color_original(_: *mut c_void, _: *mut c_void, result:
 }
 
 unsafe extern "system" fn null_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
-
     // Invalid caller storage is tolerated only by this failure-path fixture.
     assert!(result.is_null());
 
@@ -189,9 +175,7 @@ unsafe extern "system" fn null_original(_: *mut c_void, _: *mut c_void, result: 
 }
 
 unsafe extern "system" fn unaligned_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
-
     unsafe {
-
         result.cast::<FLinearColor>().write_unaligned(FLinearColor {
             red: 1.0,
             green: 0.5,
@@ -206,7 +190,6 @@ unsafe extern "system" fn unaligned_original(_: *mut c_void, _: *mut c_void, res
 struct Fixture;
 
 fn native(member: &str) -> (usize, PropertyKind, usize) {
-
     match member {
         "StringResult" => (
             string_original as *const () as usize,
@@ -239,7 +222,6 @@ fn native(member: &str) -> (usize, PropertyKind, usize) {
 
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, member: &str) -> Result<FunctionMetadata, String> {
-
         Ok(FunctionMetadata {
             is_native: true,
             exec_thunk: native(member).0,
@@ -249,7 +231,6 @@ unsafe impl Reflection for Fixture {
     }
 
     unsafe fn find_exec_schema(&self, _: &str, member: &str) -> Result<FunctionSchema, String> {
-
         let (identity, kind, size) = native(member);
 
         Ok(FunctionSchema {
@@ -268,9 +249,7 @@ unsafe impl Reflection for Fixture {
 }
 
 fn context() -> KismetContext {
-
     unsafe {
-
         KismetContext::new(
             Fixture,
             ExecEnvironment {
@@ -286,29 +265,15 @@ fn context() -> KismetContext {
 #[test]
 
 fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
-
     let context = context();
 
     macro_rules! initialize {
         ($resolver:ident, $binding:ident, $descriptor:ident, $callback:ident) => {
+            let address = unsafe { Library::$resolver.implementation.resolve(&context) }.unwrap();
 
-            let address = unsafe {
+            unsafe { Library::$binding.initialize_address(address) }.unwrap();
 
-                Library::$resolver.implementation.resolve(&context)
-            }
-            .unwrap();
-
-            unsafe {
-
-                Library::$binding.initialize_address(address)
-            }
-            .unwrap();
-
-            unsafe {
-
-                Library::$descriptor.entry.register($callback, true)
-            }
-            .unwrap();
+            unsafe { Library::$descriptor.entry.register($callback, true) }.unwrap();
         };
     }
 
@@ -340,7 +305,6 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
     let mut color = MaybeUninit::<FLinearColor>::uninit();
 
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_StringResult_dispatch)(
             std::ptr::null_mut(),
             std::ptr::dangling_mut(),
@@ -392,25 +356,18 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
 #[test]
 
 fn null_result_is_forwarded_without_forming_native_owner_reference() {
-
     let context = context();
 
     let address = unsafe {
-
         Library::__UNCHAINED_EXEC_Library_NullStringResult_RESOLVER
             .implementation
             .resolve(&context)
     }
     .unwrap();
 
-    unsafe {
-
-        Library::__UNCHAINED_EXEC_Library_NullStringResult_BINDING.initialize_address(address)
-    }
-    .unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_NullStringResult_BINDING.initialize_address(address) }.unwrap();
 
     unsafe {
-
         Library::__UNCHAINED_TARGET_NullStringResult
             .entry
             .register(null_result, true)
@@ -418,7 +375,6 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
     .unwrap();
 
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_NullStringResult_dispatch)(
             std::ptr::null_mut(),
             std::ptr::dangling_mut(),
@@ -434,7 +390,6 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
 #[test]
 
 fn misaligned_result_is_forwarded_without_typed_borrow() {
-
     #[repr(align(16))]
 
     struct Buffer([u8; 32]);
@@ -442,21 +397,15 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
     let context = context();
 
     let address = unsafe {
-
         Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_RESOLVER
             .implementation
             .resolve(&context)
     }
     .unwrap();
 
-    unsafe {
-
-        Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING.initialize_address(address)
-    }
-    .unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING.initialize_address(address) }.unwrap();
 
     unsafe {
-
         Library::__UNCHAINED_TARGET_MisalignedColorResult
             .entry
             .register(misaligned_result, true)
@@ -465,13 +414,9 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
 
     let mut buffer = Buffer([0; 32]);
 
-    let result = unsafe {
-
-        buffer.0.as_mut_ptr().add(1).cast::<c_void>()
-    };
+    let result = unsafe { buffer.0.as_mut_ptr().add(1).cast::<c_void>() };
 
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_dispatch)(
             std::ptr::null_mut(),
             std::ptr::dangling_mut(),
@@ -483,10 +428,7 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
 
     assert_eq!(MISALIGNED_OBSERVED.load(Ordering::SeqCst), 1);
 
-    let result = unsafe {
-
-        result.cast::<FLinearColor>().read_unaligned()
-    };
+    let result = unsafe { result.cast::<FLinearColor>().read_unaligned() };
 
     assert_eq!(result.green, 0.5);
 }

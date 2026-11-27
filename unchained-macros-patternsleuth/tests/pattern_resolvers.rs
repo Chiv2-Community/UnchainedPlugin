@@ -11,7 +11,6 @@ static PATTERN_EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 static BODY_EVALUATIONS: AtomicUsize = AtomicUsize::new(0);
 
 fn shared_pattern() -> &'static str {
-
     PATTERN_EVALUATIONS.fetch_add(1, Ordering::SeqCst);
 
     "11 22"
@@ -55,7 +54,6 @@ mod nested {
 
     impl unchained_macros_core::ResolverSelector for Fallback {
         fn current() -> Self {
-
             Self::Missing
         }
     }
@@ -107,9 +105,7 @@ mod nested {
 #[test]
 
 fn all_none_dictionaries_compile_and_cannot_resolve() {
-
     if !initialize_selection(Flavor::First) {
-
         return;
     }
 
@@ -138,9 +134,7 @@ fn all_none_dictionaries_compile_and_cannot_resolve() {
 #[test_case::test_case(Flavor::Second, true; "explicit list stays enabled")]
 
 fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, enabled: bool) {
-
     if !initialize_selection(flavor) {
-
         return;
     }
 
@@ -163,12 +157,10 @@ fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, ena
     let inline = image.resolve(nested::DisabledInline::resolver());
 
     if enabled {
-
         assert_eq!(standard.unwrap().0, TEXT);
 
         assert_eq!(inline.unwrap().0, 1);
     } else {
-
         assert!(standard.unwrap_err().to_string().contains("disabled"));
 
         assert!(inline.unwrap_err().to_string().contains("disabled"));
@@ -182,7 +174,6 @@ fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, ena
 #[test]
 
 fn simple_requires_uniqueness_while_first_preserves_pattern_order() {
-
     let image = image(&[0x10]);
 
     assert!(image.resolve(Unique::resolver()).is_err());
@@ -193,7 +184,6 @@ fn simple_requires_uniqueness_while_first_preserves_pattern_order() {
 #[test]
 
 fn call_follows_the_marked_displacement() {
-
     let mut text = vec![0x90; 0x80];
 
     text[8] = 0xE8;
@@ -206,13 +196,10 @@ fn call_follows_the_marked_displacement() {
 }
 
 fn references_image(references: bool) -> Image<'static> {
-
     let mut text = vec![0x90; 0x80];
 
     if references {
-
         for (offset, target) in [(0x10, BASE + 0x4000), (0x50, BASE + 0x4000), (0x30, BASE + 0x4010)] {
-
             text[offset..offset + 3].copy_from_slice(&[0x48, 0x8D, 0x0D]);
 
             let displacement = (target as i64 - (TEXT + offset as u64 + 7) as i64) as i32;
@@ -241,7 +228,6 @@ fn references_image(references: bool) -> Image<'static> {
 #[test]
 
 fn xref_modes_select_root_functions_from_only_the_first_pattern() {
-
     let image = references_image(true);
 
     assert_eq!(image.resolve(FirstReference::resolver()).unwrap().0, TEXT);
@@ -260,9 +246,7 @@ fn xref_modes_select_root_functions_from_only_the_first_pattern() {
 #[test_case::test_case(Flavor::Shared, Some(TEXT); "explicit fallback key")]
 
 fn selection_dictionary_uses_first_declared_key(flavor: Flavor, expected: Option<u64>) {
-
     if !initialize_selection(flavor) {
-
         return;
     }
 

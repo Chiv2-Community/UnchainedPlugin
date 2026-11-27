@@ -25,7 +25,6 @@ struct FString(String);
 
 impl Drop for FString {
     fn drop(&mut self) {
-
         STRING_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -34,7 +33,6 @@ struct FText(Arc<String>);
 
 impl Drop for FText {
     fn drop(&mut self) {
-
         TEXT_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -60,7 +58,6 @@ impl Library {
 #[unchained_macros_core::bind_func_entry_listener(Library::Owners)]
 
 unsafe fn owners_entry(string: &FString, text: &FText) {
-
     assert_eq!(string.0, "entry-string");
 
     assert_eq!(*text.0, "entry-text");
@@ -75,7 +72,6 @@ unsafe fn owners_entry(string: &FString, text: &FText) {
 }
 
 unsafe extern "system" fn original(_: *mut c_void, frame: *mut c_void, result: *mut c_void) {
-
     assert!(result.is_null(), "Void original receives unchanged result pointer");
 
     let mut string = FString("entry-string".into());
@@ -83,7 +79,6 @@ unsafe extern "system" fn original(_: *mut c_void, frame: *mut c_void, result: *
     let mut text = FText(Arc::new("entry-text".into()));
 
     unsafe {
-
         unchained_macros_kismet::observation::observe_step(frame, (&mut string as *mut FString).cast(), 11, || {});
 
         unchained_macros_kismet::observation::observe_step(frame, (&mut text as *mut FText).cast(), 12, || {});
@@ -99,7 +94,6 @@ struct Fixture;
 
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-
         Ok(FunctionMetadata {
             is_native: true,
             exec_thunk: original as *const () as usize,
@@ -109,7 +103,6 @@ unsafe impl Reflection for Fixture {
     }
 
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-
         Ok(FunctionSchema {
             function_identity: 42,
             unique_exec_thunk: true,
@@ -138,9 +131,7 @@ unsafe impl Reflection for Fixture {
 #[test]
 
 fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
-
     let context = unsafe {
-
         KismetContext::new(
             Fixture,
             ExecEnvironment {
@@ -153,27 +144,17 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
     };
 
     let address = unsafe {
-
         Library::__UNCHAINED_EXEC_Library_Owners_RESOLVER
             .implementation
             .resolve(&context)
     }
     .unwrap();
 
-    unsafe {
+    unsafe { Library::__UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address) }.unwrap();
 
-        Library::__UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address)
-    }
-    .unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_Owners.entry.register(owners_entry, true) }.unwrap();
 
     unsafe {
-
-        Library::__UNCHAINED_TARGET_Owners.entry.register(owners_entry, true)
-    }
-    .unwrap();
-
-    unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_Owners_dispatch)(
             std::ptr::null_mut(),
             std::ptr::dangling_mut(),

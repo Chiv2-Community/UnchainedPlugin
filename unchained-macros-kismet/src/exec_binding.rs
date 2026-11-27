@@ -5,11 +5,7 @@ use std::{
 };
 
 pub(crate) fn current_thread_id() -> u32 {
-
-    unsafe {
-
-        windows::Win32::System::Threading::GetCurrentThreadId()
-    }
+    unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
 }
 
 /// Resolver for a surviving, explicitly verified VM wrapper, never a C++ body.
@@ -41,7 +37,6 @@ impl KismetExecResolver {
         arguments: &'static [Parameter],
         result: Option<Parameter>,
     ) -> Self {
-
         Self {
             owner,
             member,
@@ -55,7 +50,6 @@ impl KismetExecResolver {
     }
 
     pub fn properties(&'static self) -> &'static [usize] {
-
         self.properties
             .get()
             .expect("Exec schema must be published before attachment")
@@ -65,7 +59,6 @@ impl KismetExecResolver {
     /// text/history or invoking entry callbacks.
 
     pub fn is_observation_thread(&self) -> bool {
-
         self.observation_thread
             .get()
             .is_some_and(|thread| *thread == current_thread_id())
@@ -76,30 +69,21 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
     type Context = KismetContext;
 
     unsafe fn resolve(&self, context: &KismetContext) -> Result<NonZeroUsize, String> {
-
         let _guard = self.lock.lock().map_err(|_| "Exec resolver lock poisoned")?;
 
         if let Some(address) = self.address.get() {
-
             return Ok(*address);
         }
 
         let thread = context.observation_thread;
 
         if thread != current_thread_id() {
-
             return Err("Exec observation must resolve on the context's game thread".into());
         }
 
-        let function = unsafe {
+        let function = unsafe { context.reflection.find_function(self.owner, self.member) }?;
 
-            context.reflection.find_function(self.owner, self.member)
-        }?;
-
-        let schema = unsafe {
-
-            context.reflection.find_exec_schema(self.owner, self.member)
-        }?;
+        let schema = unsafe { context.reflection.find_exec_schema(self.owner, self.member) }?;
 
         let properties = crate::schema::validate(&function, &schema, self.arguments, self.result)
             .map_err(|error| format!("{}::{}: {error}", self.owner, self.member))?;
@@ -151,7 +135,6 @@ impl<E: Copy> DummyExecTarget<E> {
         binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
         dispatcher: ExecDispatcher,
     ) -> Self {
-
         Self {
             binding,
             hook: unchained_macros_core::NativeHook::new(),
@@ -163,16 +146,11 @@ impl<E: Copy> DummyExecTarget<E> {
 
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for DummyExecTarget<E> {
     fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo {
-
         self.binding.resolver
     }
 
     unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
-
-        unsafe {
-
-            self.hook.attach(self.binding, self.dispatcher as *const ())
-        }
+        unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) }
     }
 }
 
@@ -180,7 +158,6 @@ impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for D
     type Entry = E;
 
     fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> {
-
         &self.entry
     }
 }

@@ -17,7 +17,6 @@ enum Key {
 
 impl unchained_macros_core::ResolverSelector for Key {
     fn current() -> Self {
-
         Self::First
     }
 }
@@ -45,7 +44,6 @@ static FIRST: Patch = Patch::bytes(2, &[0xAA]);
 #[register_patch(Universal, Key::Second)]
 
 fn second(resolved_address: u64) -> Patch {
-
     FACTORIES.set(FACTORIES.get() + 1);
 
     Patch::owned_bytes(2, resolved_address.to_le_bytes().to_vec())
@@ -66,7 +64,6 @@ static ROOT_SECOND: Patch = Patch::bytes(0, &[2]).when(false);
 #[register_patch(Conditional)]
 
 fn conditional(_resolved_address: u64) -> Patch {
-
     FACTORIES.set(FACTORIES.get() + 1);
 
     Patch::bytes(0, &[0xEE]).when(false)
@@ -85,7 +82,6 @@ static FLOAT_WRITE: Patch = Patch::write_ref(2, &1.5f32);
 #[register_patch(Universal)]
 
 fn word_write(_resolved_address: u64) -> Patch {
-
     FACTORIES.set(FACTORIES.get() + 1);
 
     Patch::write(2, 0x12345678u32)
@@ -97,26 +93,20 @@ struct Writer(Vec<(u64, Vec<u8>)>);
 
 impl PatchWriter for Writer {
     unsafe fn bytes(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
-
         self.0.push((address, bytes.to_vec()));
 
         Ok(())
     }
 
     unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String> {
-
         self.0.push((address, vec![0x90; count]));
 
         Ok(())
     }
 
     unsafe fn write(&mut self, address: u64, value: &unchained_macros_core::WriteValue) -> Result<(), String> {
-
         // This fixture records initialized scalar values only.
-        let bytes = unsafe {
-
-            std::slice::from_raw_parts(value.as_ptr(), value.size())
-        };
+        let bytes = unsafe { std::slice::from_raw_parts(value.as_ptr(), value.size()) };
 
         self.0.push((address, bytes.to_vec()));
 
@@ -125,7 +115,6 @@ impl PatchWriter for Writer {
 }
 
 fn registration(name: &str) -> &'static PatchRegistration<PatternsleuthResolver> {
-
     unchained_macros_core::patch_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
         .find(|patch| patch.name == name)
         .unwrap()
@@ -134,7 +123,6 @@ fn registration(name: &str) -> &'static PatchRegistration<PatternsleuthResolver>
 #[test]
 
 fn statics_and_factories_use_patch_names_not_resolver_names() {
-
     assert_eq!(registration("ALIAS").resolver.name, "Universal");
 
     assert_eq!(registration("SHARED").resolver.name, "Universal");
@@ -152,7 +140,6 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
     let mut writer = Writer::default();
 
     unsafe {
-
         (registration("SHARED").factory)(100).apply(100, &mut writer).unwrap();
 
         (registration("second").factory)(200).apply(200, &mut writer).unwrap();
@@ -177,7 +164,6 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
 #[test_case::test_case(Key::Optional, false; "optional has no patch consumer")]
 
 fn selection_filtering_and_roots_do_not_construct_patches(key: Key, root_required: bool) {
-
     FACTORIES.set(0);
 
     validate_patch_registrations().unwrap();
@@ -205,7 +191,6 @@ fn selection_filtering_and_roots_do_not_construct_patches(key: Key, root_require
 #[test_case::test_case(Key::Optional, 2; "optional")]
 
 fn registered_application_selects_named_patches_and_preserves_conditions(key: Key, expected_factories: usize) {
-
     FACTORIES.set(0);
 
     let offsets = HashMap::from([
@@ -220,7 +205,6 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
     let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(key).unwrap();
 
     let results = unsafe {
-
         apply_patches_for::<PatternsleuthResolver, _>(
             &ScanContext::new(1000, &offsets),
             &snapshot,
@@ -257,7 +241,6 @@ fn registered_application_selects_named_patches_and_preserves_conditions(key: Ke
 #[test]
 
 fn missing_addresses_fail_before_factories_or_writes() {
-
     FACTORIES.set(0);
 
     let mut writer = Writer::default();
@@ -265,7 +248,6 @@ fn missing_addresses_fail_before_factories_or_writes() {
     let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(Key::First).unwrap();
 
     let error = unsafe {
-
         apply_patches_for::<PatternsleuthResolver, _>(
             &ScanContext::new(1000, &HashMap::new()),
             &snapshot,
@@ -286,21 +268,15 @@ fn missing_addresses_fail_before_factories_or_writes() {
 #[test_case::test_case(true; "enabled rejects overflow")]
 
 fn relative_address_overflow_never_writes(enabled: bool) {
-
     let mut writer = Writer::default();
 
     let patch = Patch::bytes(1, &[1]).when(enabled);
 
-    let result = unsafe {
-
-        patch.apply(u64::MAX, &mut writer)
-    };
+    let result = unsafe { patch.apply(u64::MAX, &mut writer) };
 
     if enabled {
-
         assert!(result.is_err());
     } else {
-
         assert_eq!(result.unwrap(), false);
     }
 

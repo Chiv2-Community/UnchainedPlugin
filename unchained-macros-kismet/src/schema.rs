@@ -55,7 +55,6 @@ pub const REFERENCE_PARM: u64 = 0x0800_0000;
 pub const CONST_PARM: u64 = 0x2;
 
 fn matches(kind: &PropertyKind, expected: &str) -> bool {
-
     match kind {
         PropertyKind::Bool => expected == "BoolProperty",
         PropertyKind::Byte => expected == "ByteProperty",
@@ -77,11 +76,9 @@ pub fn validate(
     arguments: &[Parameter],
     result: Option<Parameter>,
 ) -> Result<Vec<usize>, String> {
-
     let count = function.arguments()? as usize;
 
     if !schema.unique_exec_thunk {
-
         return Err("Shared exec wrappers are unsupported without verified frame-to-function identity".into());
     }
 
@@ -89,7 +86,6 @@ pub fn validate(
         || count != arguments.len()
         || schema.parameters.len() != function.num_parms as usize
     {
-
         return Err("Exec observation function identity/parameter count mismatch".into());
     }
 
@@ -98,18 +94,14 @@ pub fn validate(
     let mut returned = false;
 
     for property in &schema.parameters {
-
         if property.identity == 0 || property.flags & PARM == 0 || property.array_dim != 1 {
-
             return Err("Exec observation requires scalar reflected parameter properties".into());
         }
 
         let is_result = property.flags & RETURN_PARM != 0;
 
         let expected = if is_result {
-
             if returned || property.offset != function.return_value_offset as usize {
-
                 return Err("Exec observation return metadata mismatch".into());
             }
 
@@ -117,11 +109,9 @@ pub fn validate(
 
             result.ok_or("Exec observation declaration omits reflected result")?
         } else {
-
             if property.flags & OUT_PARM != 0
                 || (property.flags & REFERENCE_PARM != 0 && property.flags & CONST_PARM == 0)
             {
-
                 return Err("Exec observation does not support mutable reference/out parameters".into());
             }
 
@@ -132,15 +122,12 @@ pub fn validate(
 
         // A VM bool input uses bool32, but reflected property/result size is bool8.
         let size = if !is_result && matches!(property.kind, PropertyKind::Bool) {
-
             1
         } else {
-
             expected.size
         };
 
         if !matches(&property.kind, expected.kind) || property.size != size {
-
             return Err(format!(
                 "Exec observation parameter type/layout mismatch: expected {}, reflected {:?}",
                 expected.kind, property.kind
@@ -148,13 +135,11 @@ pub fn validate(
         }
 
         if !is_result {
-
             properties.push(property.identity);
         }
     }
 
     if properties.len() != arguments.len() || returned != result.is_some() {
-
         return Err("Exec observation argument/result schema mismatch".into());
     }
 
@@ -168,7 +153,6 @@ mod tests {
     use super::*;
 
     fn fixture() -> (crate::FunctionMetadata, FunctionSchema) {
-
         (
             crate::FunctionMetadata {
                 is_native: true,
@@ -209,7 +193,6 @@ mod tests {
     #[test]
 
     fn return_is_not_stepped_and_bool_input_uses_separate_vm_layout() {
-
         let (function, schema) = fixture();
 
         assert_eq!(validate(&function, &schema, &[BOOL], Some(BOOL)).unwrap(), [3]);
@@ -218,7 +201,6 @@ mod tests {
     #[test]
 
     fn mismatched_counts_results_types_and_layouts_fail_closed() {
-
         let (function, schema) = fixture();
 
         assert!(validate(&function, &schema, &[], Some(BOOL)).is_err());
@@ -247,11 +229,9 @@ mod tests {
     #[test]
 
     fn mutable_references_out_parameters_and_arrays_are_rejected() {
-
         let (function, schema) = fixture();
 
         for flags in [PARM | OUT_PARM, PARM | REFERENCE_PARM, PARM | OUT_PARM | CONST_PARM] {
-
             let mut wrong = schema.clone();
 
             wrong.parameters[0].flags = flags;
@@ -275,7 +255,6 @@ mod tests {
     #[test]
 
     fn owned_results_require_exact_native_storage_size_and_kind() {
-
         for (kind, name, size) in [
             (PropertyKind::String, "StrProperty", 16),
             (PropertyKind::Text, "TextProperty", 24),
@@ -285,7 +264,6 @@ mod tests {
                 16,
             ),
         ] {
-
             let function = crate::FunctionMetadata {
                 is_native: true,
                 exec_thunk: 1,

@@ -4,13 +4,11 @@ use quote::{format_ident, quote};
 use syn::{FnArg, ItemFn, Pat, Type};
 
 pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Tokens> {
-
     let function: ItemFn = syn::parse2(item)?;
 
     let CallbackArguments { mut target, condition } = syn::parse2(args)?;
 
     if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
-
         return Err(syn::Error::new_spanned(
             target,
             "listener target must be a non-generic Type::method descriptor path",
@@ -20,7 +18,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     crate::signature::validate_native_signature(&function.sig)?;
 
     if !function.sig.generics.params.is_empty() {
-
         return Err(syn::Error::new_spanned(
             &function.sig.generics,
             "listeners use call-scoped elided borrows, not explicit lifetime parameters",
@@ -30,7 +27,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     if !matches!(function.sig.output, syn::ReturnType::Default)
         && !matches!(&function.sig.output, syn::ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(t) if t.elems.is_empty()))
     {
-
         return Err(syn::Error::new_spanned(
             &function.sig.output,
             "listeners must return ()",
@@ -42,9 +38,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let mut types = Vec::new();
 
     for input in &function.sig.inputs {
-
         let FnArg::Typed(arg) = input else {
-
             return Err(syn::Error::new_spanned(
                 input,
                 "listeners are free functions with explicit borrowed receiver arguments",
@@ -52,7 +46,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         };
 
         let Type::Reference(reference) = &*arg.ty else {
-
             return Err(syn::Error::new_spanned(
                 &arg.ty,
                 "listener parameters must be immutable borrowed observations (&T)",
@@ -60,17 +53,13 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         };
 
         if reference.mutability.is_some() || reference.lifetime.is_some() {
-
             return Err(syn::Error::new_spanned(
                 &arg.ty,
                 "listener observations require call-scoped immutable &T borrows",
             ));
         }
 
-        let Pat::Ident(name) = &*arg.pat else {
-
-            unreachable!()
-        };
+        let Pat::Ident(name) = &*arg.pat else { unreachable!() };
 
         names.push(name.ident.clone());
 
@@ -78,7 +67,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     }
 
     if exit && types.is_empty() {
-
         return Err(syn::Error::new_spanned(
             &function.sig,
             "exit listeners require a final borrowed result parameter (including &() for void)",
@@ -88,12 +76,10 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let result = exit.then(|| types.pop().unwrap());
 
     if exit {
-
         names.pop();
     }
 
     if exit && types.iter().any(|ty| matches!(ty, Type::Reference(_))) {
-
         return Err(syn::Error::new_spanned(
             &function.sig,
             "exit input snapshots require ObserverSnapshot, not native reference inputs",
@@ -124,10 +110,8 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let phase = if exit { quote!(exit) } else { quote!(entry) };
 
     let action = if exit {
-
         quote!((#target, #ident, #prepare))
     } else {
-
         quote!((#target, #ident))
     };
 
@@ -138,7 +122,6 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let returned = fresh_local(&function.sig, "result");
 
     let helpers = result.map(|result| {
-
         quote! {
             #(#cfg)*
             #[allow(non_snake_case)]
@@ -191,7 +174,6 @@ mod tests {
     #[test_case::test_case(quote!(fn observe(value: &u32) {}), false, "unsafe fn"; "safe observer")]
 
     fn rejects_invalid_observers(item: Tokens, exit: bool, message: &str) {
-
         let error = expand(quote!(Native::Call), item, exit).unwrap_err();
 
         assert!(error.to_string().contains(message), "{error}");
@@ -200,7 +182,6 @@ mod tests {
     #[test]
 
     fn exit_snapshots_require_owned_snapshot_contract_and_include_void_result() {
-
         let expanded = expand(
             quote!(Native::Call, || enabled()),
             quote!(
@@ -236,7 +217,6 @@ mod tests {
     #[test]
 
     fn entry_does_not_require_a_callable_native_binding_or_owned_copy() {
-
         let expanded = expand(
             quote!(VmOnly::Call),
             quote!(

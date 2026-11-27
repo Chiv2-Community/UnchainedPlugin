@@ -44,7 +44,6 @@ pub unsafe trait Reflection {
     /// The same game-thread/readiness contract as `find_function` applies.
 
     unsafe fn find_exec_schema(&self, _owner: &str, _member: &str) -> Result<schema::FunctionSchema, String> {
-
         Err("Reflection adapter does not provide exec observation schemas".into())
     }
 }
@@ -76,7 +75,6 @@ impl KismetContext {
     /// The environment must describe the adapter's module and verified frame-step entries.
 
     pub unsafe fn new(reflection: impl Reflection + 'static, environment: ExecEnvironment) -> Self {
-
         Self {
             reflection: Box::new(reflection),
             environment,
@@ -86,20 +84,13 @@ impl KismetContext {
     }
 
     unsafe fn resolve_native(&self, owner: &str, member: &str) -> Result<NonZeroUsize, String> {
-
-        let function = unsafe {
-
-            self.reflection.find_function(owner, member)
-        }?;
+        let function = unsafe { self.reflection.find_function(owner, member) }?;
 
         let arguments = function
             .arguments()
             .map_err(|error| format!("{owner}::{member}: {error}"))?;
 
-        let target = unsafe {
-
-            decode_native(function.exec_thunk, arguments, self.environment)
-        }?;
+        let target = unsafe { decode_native(function.exec_thunk, arguments, self.environment) }?;
 
         log::info!(
             "Reflected {}::{}: thunk {:#x}, native {:#x}",
@@ -115,14 +106,11 @@ impl KismetContext {
 
 impl FunctionMetadata {
     fn arguments(&self) -> Result<u8, String> {
-
         if !self.is_native {
-
             return Err("Reflected function is not native".into());
         }
 
         if self.exec_thunk == 0 {
-
             return Err("Reflected exec thunk is null".into());
         }
 
@@ -133,24 +121,19 @@ impl FunctionMetadata {
 }
 
 unsafe fn decode_native(thunk: usize, arguments: u8, environment: ExecEnvironment) -> Result<usize, String> {
-
     if environment.module_base == 0 || environment.frame_step == 0 || environment.frame_step_explicit == 0 {
-
         return Err("Kismet executable environment contains a null address".into());
     }
 
     let parameters = if arguments == 0 {
-
         ExecThunkParameters::NoArguments {
             frame_code_offset: environment.frame_code_offset,
         }
     } else {
-
         ExecThunkParameters::Stepped
     };
 
     unsafe {
-
         native_body(
             thunk,
             environment.module_base,
@@ -170,7 +153,6 @@ pub struct KismetReflectionResolver {
 
 impl KismetReflectionResolver {
     pub const fn new(owner: &'static str, member: &'static str) -> Self {
-
         Self {
             owner,
             member,
@@ -184,18 +166,13 @@ impl unchained_macros_core::AddressResolver for KismetReflectionResolver {
     type Context = KismetContext;
 
     unsafe fn resolve(&self, context: &KismetContext) -> Result<NonZeroUsize, String> {
-
         let _guard = self.lock.lock().map_err(|_| "Kismet resolver lock poisoned")?;
 
         if let Some(address) = self.address.get() {
-
             return Ok(*address);
         }
 
-        let address = unsafe {
-
-            context.resolve_native(self.owner, self.member)?
-        };
+        let address = unsafe { context.resolve_native(self.owner, self.member)? };
 
         self.address
             .set(address)
@@ -218,7 +195,6 @@ mod tests {
     use unchained_macros_core::AddressResolver;
 
     fn function(num_parms: u8, return_value_offset: u16) -> FunctionMetadata {
-
         FunctionMetadata {
             is_native: true,
             exec_thunk: 1,
@@ -233,14 +209,12 @@ mod tests {
     #[test_case::test_case(2, u16::MAX, 2; "two arguments without return")]
 
     fn return_storage_is_not_an_argument(num_parms: u8, return_offset: u16, arguments: u8) {
-
         assert_eq!(function(num_parms, return_offset).arguments().unwrap(), arguments);
     }
 
     #[test]
 
     fn invalid_function_metadata_is_rejected() {
-
         let mut info = function(1, 0);
 
         info.is_native = false;
@@ -268,13 +242,11 @@ mod tests {
     // SAFETY: Only copied invalid metadata is returned; tests reject it before decoding.
     unsafe impl Reflection for MetadataReflection {
         unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String> {
-
             assert_eq!((owner, member), ("/Script/Fixture.Native", "Call"));
 
             self.reads.set(self.reads.get() + 1);
 
             if !self.ready.get() {
-
                 return Err("class not loaded".into());
             }
 
@@ -288,7 +260,6 @@ mod tests {
     #[test]
 
     fn failed_lookup_and_metadata_validation_remain_retryable() {
-
         let reads = Rc::new(Cell::new(0));
 
         let ready = Rc::new(Cell::new(false));
@@ -314,18 +285,11 @@ mod tests {
         let resolver = KismetReflectionResolver::new("/Script/Fixture.Native", "Call");
 
         for expected in ["class not loaded", "class not loaded", "null", "null"] {
-
             if reads.get() == 2 {
-
                 ready.set(true);
             }
 
-            assert!(unsafe {
-
-                resolver.resolve(&context)
-            }
-            .unwrap_err()
-            .contains(expected));
+            assert!(unsafe { resolver.resolve(&context) }.unwrap_err().contains(expected));
 
             assert!(resolver.address.get().is_none());
         }
@@ -336,7 +300,6 @@ mod tests {
     #[test]
 
     fn null_environment_addresses_fail_before_native_access() {
-
         let environment = ExecEnvironment {
             module_base: 1,
             frame_step: 2,
@@ -358,13 +321,9 @@ mod tests {
                 ..environment
             },
         ] {
-
-            assert!(unsafe {
-
-                decode_native(1, 0, environment)
-            }
-            .unwrap_err()
-            .contains("null address"));
+            assert!(unsafe { decode_native(1, 0, environment) }
+                .unwrap_err()
+                .contains("null address"));
         }
     }
 }

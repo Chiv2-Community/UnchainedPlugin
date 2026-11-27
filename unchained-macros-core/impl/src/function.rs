@@ -19,7 +19,6 @@ struct BindingResolver {
 
 impl BindingResolver {
     fn documentation_key(&self, fallback: &str) -> String {
-
         let name = self
             .declaration
             .as_ref()
@@ -32,11 +31,9 @@ impl BindingResolver {
 
 impl syn::parse::Parse for BindingResolver {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-
         let path: Path = input.parse()?;
 
         if input.is_empty() {
-
             let path = resolver_path(quote!(#path))?;
 
             Ok(Self {
@@ -45,7 +42,6 @@ impl syn::parse::Parse for BindingResolver {
                 declaration: Some(path),
             })
         } else {
-
             input.parse::<syn::Token![,]>()?;
 
             let descriptor: syn::Expr = input.parse()?;
@@ -60,7 +56,6 @@ impl syn::parse::Parse for BindingResolver {
 }
 
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-
     let resolver: BindingResolver = syn::parse2(args)?;
 
     let function: ItemFn = syn::parse2(item)?;
@@ -92,7 +87,6 @@ fn binding_storage(
     target_name: &str,
     attributes: &[syn::Attribute],
 ) -> Tokens {
-
     let backend = &resolver.backend;
 
     let descriptor = &resolver.descriptor;
@@ -122,7 +116,6 @@ fn call_wrapper(
     documentation: &syn::LitStr,
     documentation_key: &str,
 ) -> syn::Result<ItemFn> {
-
     let resolver_name = resolver
         .declaration
         .as_ref()
@@ -141,9 +134,7 @@ fn call_wrapper(
         .map(|argument| match argument {
             FnArg::Receiver(receiver) => (quote!(self), &receiver.ty),
             FnArg::Typed(argument) => {
-
                 let Pat::Ident(name) = argument.pat.as_ref() else {
-
                     unreachable!()
                 };
 
@@ -173,7 +164,6 @@ fn call_wrapper(
         .iter()
         .any(|attribute| attribute.path().is_ident("inline"))
     {
-
         expanded.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
 
@@ -183,7 +173,6 @@ fn call_wrapper(
 }
 
 fn binding_documentation(function: &ItemFn, self_ty: &Type, resolver: &BindingResolver) -> syn::LitStr {
-
     let name = &function.sig.ident;
 
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
@@ -191,7 +180,6 @@ fn binding_documentation(function: &ItemFn, self_ty: &Type, resolver: &BindingRe
     let mut documentation = format!("Native binding to [`{native_name}`](Self::{name}).");
 
     if let Some(path) = &resolver.declaration {
-
         let key = &path.segments.last().unwrap().ident;
 
         let path = path.to_token_stream().to_string().replace(' ', "");
@@ -207,7 +195,6 @@ pub(crate) fn expand_method(
     function: &ItemFn,
     self_ty: &Type,
 ) -> syn::Result<(ItemFn, Vec<syn::ImplItemConst>, Tokens)> {
-
     validate_binding(function)?;
 
     let resolver: BindingResolver = syn::parse2(args)?;
@@ -297,7 +284,6 @@ fn native_dispatch(
     resolver: &BindingResolver,
     attrs: &[syn::Attribute],
 ) -> syn::Result<(Tokens, syn::Ident, Tokens)> {
-
     let name = &signature.ident;
 
     let target = format_ident!("__UNCHAINED_NATIVE_TARGET_{}", name);
@@ -312,16 +298,9 @@ fn native_dispatch(
         .inputs
         .iter()
         .map(|input| {
+            let FnArg::Typed(arg) = input else { unreachable!() };
 
-            let FnArg::Typed(arg) = input else {
-
-                unreachable!()
-            };
-
-            let Pat::Ident(pat) = &*arg.pat else {
-
-                unreachable!()
-            };
+            let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
 
             (&pat.ident, &arg.ty)
         })
@@ -411,7 +390,6 @@ mod tests {
     )]
 
     fn rejects_unsupported_native_declarations((item, message): (Tokens, &str)) {
-
         let error = expand(quote!(Release), item).unwrap_err();
 
         assert!(error.to_string().contains(message), "{error}");
@@ -420,7 +398,6 @@ mod tests {
     #[test]
 
     fn rejects_generic_resolver_paths() {
-
         assert!(expand(
             quote!(Release<u8>),
             quote!(
@@ -441,7 +418,6 @@ mod tests {
     #[test]
 
     fn binding_hover_identifies_native_method_and_resolver_without_assuming_a_detour() {
-
         let function = syn::parse_quote! {
             /// Existing native safety note.
             pub(crate) unsafe fn Call<'a>(
@@ -477,7 +453,6 @@ mod tests {
     #[test]
 
     fn binding_hover_links_an_arbitrary_resolver_declaration() {
-
         let function = syn::parse_quote! {
             pub unsafe fn Call(value: i32) -> i32 {}
         };
@@ -492,7 +467,6 @@ mod tests {
     #[test]
 
     fn descriptor_binding_shares_typed_generation_without_resolver_hover_links() {
-
         let function = syn::parse_quote! {
             /// Keep the native safety contract.
             pub unsafe fn Call<'a>(value: &'a mut i32) -> &'a mut i32 {}

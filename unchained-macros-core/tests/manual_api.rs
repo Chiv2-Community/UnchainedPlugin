@@ -13,7 +13,6 @@ impl AddressResolver for Backend {
     type Context = ();
 
     unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
         Ok(NonZeroUsize::new(original as *const () as usize).unwrap())
     }
 }
@@ -36,10 +35,7 @@ type Descriptor = NativeTarget<
     Backend,
 >;
 
-static TARGET: Descriptor = unsafe {
-
-    Descriptor::new(&BINDING, dispatch, |f| f as *const ())
-};
+static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, dispatch, |f| f as *const ()) };
 
 static ENTRIES: AtomicUsize = AtomicUsize::new(0);
 
@@ -54,49 +50,30 @@ inventory::submit! { &ALIAS as &dyn __private::FunctionInfo }
 #[inline(never)]
 
 unsafe extern "C" fn original(value: usize) -> usize {
-
     std::hint::black_box(value).wrapping_add(1)
 }
 
 unsafe fn call_original(value: usize) -> usize {
+    let call: unsafe extern "C" fn(usize) -> usize =
+        unsafe { std::mem::transmute(TARGET.binding().address().unwrap().get()) };
 
-    let call: unsafe extern "C" fn(usize) -> usize = unsafe {
-
-        std::mem::transmute(TARGET.binding().address().unwrap().get())
-    };
-
-    unsafe {
-
-        call(value)
-    }
+    unsafe { call(value) }
 }
 
 unsafe extern "C" fn dispatch(value: usize) -> usize {
+    TARGET.observe_entry(|callback| unsafe { callback(&value) });
 
-    TARGET.observe_entry(|callback| unsafe {
+    let snapshot = TARGET.prepare_exit(|prepare| unsafe { prepare(&value) });
 
-        callback(&value)
-    });
+    let call: unsafe extern "C" fn(usize) -> usize = TARGET
+        .replacement_slot()
+        .get()
+        .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
 
-    let snapshot = TARGET.prepare_exit(|prepare| unsafe {
-
-        prepare(&value)
-    });
-
-    let call: unsafe extern "C" fn(usize) -> usize = TARGET.replacement_slot().get().unwrap_or_else(|| unsafe {
-
-        std::mem::transmute(BINDING.address().unwrap().get())
-    });
-
-    let result = unsafe {
-
-        call(value)
-    };
+    let result = unsafe { call(value) };
 
     if let Some(snapshot) = snapshot {
-
         unsafe {
-
             TARGET.finish_exit(snapshot, (&result as *const usize).cast());
         }
     }
@@ -105,43 +82,30 @@ unsafe extern "C" fn dispatch(value: usize) -> usize {
 }
 
 unsafe fn entered(_: &usize) {
-
     ENTRIES.fetch_add(1, Ordering::SeqCst);
 }
 
 unsafe fn returned(value: &usize, result: &usize) {
-
     assert!(*result == value + 1 || *result == value + 11);
 
     EXITS.fetch_add(1, Ordering::SeqCst);
 }
 
 unsafe fn finish(state: *mut (), result: *const ()) {
-
     unsafe {
-
         returned(&*state.cast::<usize>(), &*result.cast::<usize>());
     }
 }
 
 unsafe fn prepare(value: &usize) -> ExitObservation {
-
-    unsafe {
-
-        ExitObservation::from_snapshot(*value, finish)
-    }
+    unsafe { ExitObservation::from_snapshot(*value, finish) }
 }
 
 unsafe extern "C" fn replacement(value: usize) -> usize {
-
-    unsafe {
-
-        call_original(value) + 10
-    }
+    unsafe { call_original(value) + 10 }
 }
 
 fn gate() -> bool {
-
     CONDITIONS.fetch_add(1, Ordering::SeqCst);
 
     true
@@ -166,7 +130,6 @@ inventory::submit! { &DUPLICATE }
 #[test]
 
 fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
-
     assert!(binding_inventory_for::<Backend>().any(|binding| std::ptr::eq(binding, &BINDING)));
 
     assert!(std::ptr::eq(DETOUR.target().binding(), &BINDING));
@@ -176,7 +139,6 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
     assert_ne!(ENTRY.slot_identity(), EXIT.slot_identity());
 
     unsafe {
-
         assert!(ENTRY.attach(true).is_err());
 
         assert!(!ENTRY.initialized());
@@ -272,7 +234,6 @@ inventory::submit! { &SKIPPED }
 #[test]
 
 fn required_inventory_references_accessor_storage_and_reads_current_slot() {
-
     assert!(inventory::iter::<&ValueBinding>
         .into_iter()
         .any(|value| std::ptr::eq(*value, &VALUE)));
@@ -288,9 +249,7 @@ fn required_inventory_references_accessor_storage_and_reads_current_slot() {
     let offsets = [(VALUE.name().to_string(), 0)].into_iter().collect();
 
     unsafe {
-
         initialize_value_bindings_where((slot as *mut *mut usize) as usize, &offsets, |name| {
-
             name == VALUE.name()
         });
 

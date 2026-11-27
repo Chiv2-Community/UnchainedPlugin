@@ -32,7 +32,6 @@ mod actual_host_adapter;
 #[test]
 
 fn raw_receiver_signatures_match_without_mutability_overrides() {
-
     let _: &unchained_macros_core::NativeTarget<
         unsafe extern "C" fn(*mut FFrame, *mut UObject, *mut c_void),
         _,

@@ -12,7 +12,6 @@ struct Arguments {
 
 impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-
         let resolver: Path = input.parse()?;
 
         if resolver
@@ -20,7 +19,6 @@ impl Parse for Arguments {
             .iter()
             .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
         {
-
             return Err(syn::Error::new_spanned(
                 resolver,
                 "patch targets must be non-generic resolver types",
@@ -28,21 +26,16 @@ impl Parse for Arguments {
         }
 
         let selection = if input.is_empty() {
-
             None
         } else {
-
             input.parse::<Token![,]>()?;
 
             if input.is_empty() {
-
                 None
             } else {
-
                 let selection = input.parse()?;
 
                 if input.peek(Token![,]) {
-
                     input.parse::<Token![,]>()?;
                 }
 
@@ -55,14 +48,12 @@ impl Parse for Arguments {
 }
 
 pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
-
     let Arguments { resolver, selection } = syn::parse2(args)?;
 
     let declaration: syn::Item = syn::parse2(item)?;
 
     let (name, attributes, factory) = match &declaration {
         syn::Item::Fn(function) => {
-
             let signature = &function.sig;
 
             if signature.asyncness.is_some()
@@ -75,7 +66,6 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                 || signature.inputs.len() != 1
                 || matches!(signature.inputs.first(), Some(syn::FnArg::Receiver(_)))
             {
-
                 return Err(syn::Error::new_spanned(signature,
                     "patch factories must be safe, non-generic Rust functions taking one u64 address and returning Patch"));
             }
@@ -86,9 +76,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         }
 
         syn::Item::Static(value) => {
-
             if matches!(value.mutability, syn::StaticMutability::Mut(_)) {
-
                 return Err(syn::Error::new_spanned(
                     value,
                     "registered patches must be immutable statics",
@@ -109,14 +97,12 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     };
 
     if attributes.iter().any(|attribute| {
-
         attribute
             .path()
             .segments
             .last()
             .is_some_and(|segment| segment.ident == "register_patch")
     }) {
-
         return Err(syn::Error::new_spanned(
             &declaration,
             "register each patch item only once",
@@ -184,7 +170,6 @@ mod tests {
     #[test_case::test_case(quote!(Target, Key::First), quote!(static PATCH: Patch = Patch::nop(0, 1);); "selected static")]
 
     fn accepts_patch_items(args: TokenStream, item: TokenStream) {
-
         syn::parse2::<syn::File>(expand(args, item).unwrap()).unwrap();
     }
 
@@ -198,7 +183,6 @@ mod tests {
     #[test_case::test_case(quote!(Target), quote!(#[register_patch(Other)] fn patch(address: u64) -> Patch {}); "duplicate attribute")]
 
     fn rejects_invalid_patches(args: TokenStream, item: TokenStream) {
-
         assert!(expand(args, item).is_err());
     }
 }

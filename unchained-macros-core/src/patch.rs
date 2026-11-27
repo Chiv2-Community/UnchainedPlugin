@@ -7,12 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, size_of, MaybeUninit};
 
 const fn value_bytes<T: Copy>(value: &T) -> &[MaybeUninit<u8>] {
-
     // Borrow the representation, including padding, without requiring initialized bytes.
-    unsafe {
-
-        std::slice::from_raw_parts(std::ptr::from_ref(value).cast(), size_of::<T>())
-    }
+    unsafe { std::slice::from_raw_parts(std::ptr::from_ref(value).cast(), size_of::<T>()) }
 }
 
 /// An erased Copy value. Raw copying preserves pointer provenance and padding;
@@ -26,7 +22,6 @@ pub struct WriteValue {
 
 impl std::fmt::Debug for WriteValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-
         f.debug_struct("WriteValue")
             .field("size", &self.size())
             .field("alignment", &self.alignment)
@@ -36,17 +31,14 @@ impl std::fmt::Debug for WriteValue {
 
 impl WriteValue {
     pub fn as_ptr(&self) -> *const u8 {
-
         self.bytes.as_ptr().cast()
     }
 
     pub fn size(&self) -> usize {
-
         self.bytes.len()
     }
 
     pub fn alignment(&self) -> usize {
-
         self.alignment
     }
 }
@@ -70,7 +62,6 @@ pub struct Patch {
 
 impl Patch {
     const fn new(offset: u64, operation: Operation) -> Self {
-
         Self {
             offset,
             operation,
@@ -79,24 +70,20 @@ impl Patch {
     }
 
     pub const fn bytes(offset: u64, bytes: &'static [u8]) -> Self {
-
         Self::new(offset, Operation::Bytes(Cow::Borrowed(bytes)))
     }
 
     pub fn owned_bytes(offset: u64, bytes: Vec<u8>) -> Self {
-
         Self::new(offset, Operation::Bytes(Cow::Owned(bytes)))
     }
 
     pub const fn nop(offset: u64, count: usize) -> Self {
-
         Self::new(offset, Operation::Nop(count))
     }
 
     /// Write a Copy value without interpreting its representation as initialized bytes.
 
     pub fn write<T: Copy + 'static>(offset: u64, value: T) -> Self {
-
         Self::new(
             offset,
             Operation::Write(WriteValue {
@@ -109,7 +96,6 @@ impl Patch {
     /// Const form for statics. Copies the referenced value, not its address.
 
     pub const fn write_ref<T: Copy + Sync + 'static>(offset: u64, value: &'static T) -> Self {
-
         Self::new(
             offset,
             Operation::Write(WriteValue {
@@ -120,7 +106,6 @@ impl Patch {
     }
 
     pub const fn when(mut self, enabled: bool) -> Self {
-
         self.enabled = enabled;
 
         self
@@ -132,9 +117,7 @@ impl Patch {
     /// The enabled patch's target range must be valid for its native contract.
 
     pub unsafe fn apply<W: PatchWriter>(&self, resolved_address: u64, writer: &mut W) -> Result<bool, String> {
-
         if !self.enabled {
-
             return Ok(false);
         }
 
@@ -144,24 +127,19 @@ impl Patch {
 
         match &self.operation {
             Operation::Bytes(bytes) => unsafe {
-
                 writer.bytes(address, bytes)?;
             },
 
             Operation::Nop(count) => unsafe {
-
                 writer.nop(address, *count)?;
             },
 
             Operation::Write(value) => {
-
                 if address % value.alignment() as u64 != 0 {
-
                     return Err("Unaligned typed patch address".into());
                 }
 
                 unsafe {
-
                     writer.write(address, value)?;
                 }
             }
@@ -205,12 +183,9 @@ pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
     _: E,
     patches: &[&dyn PatchInfo],
 ) -> Result<(), String> {
-
     for key in E::REQUIRED {
-
         if crate::__private::dictionary_allows(key, R::SELECTIONS) && !patches.iter().any(|patch| patch.applies_to(key))
         {
-
             return Err(format!(
                 "Patches for resolver {} do not cover required selection {}",
                 R::NAME,
@@ -223,15 +198,12 @@ pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
 }
 
 fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
-
     let mut names = BTreeSet::new();
 
     let mut groups = BTreeMap::<_, Vec<_>>::new();
 
     for patch in patches {
-
         if !names.insert(patch.name()) {
-
             return Err(format!("Duplicate patch name {}", patch.name()));
         }
 
@@ -242,12 +214,10 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
     }
 
     for group in groups.values() {
-
         if group
             .iter()
             .any(|patch| patch.resolver().identity() != group[0].resolver().identity())
         {
-
             return Err(format!(
                 "Patches reference different descriptors for resolver {}",
                 group[0].resolver().name()
@@ -255,7 +225,6 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
         }
 
         for patch in group {
-
             patch.validate_group(group)?;
         }
     }
@@ -267,7 +236,6 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
 /// This does not run factories, conditions, or memory writes.
 
 pub fn validate_patch_registrations() -> Result<(), String> {
-
     validate(
         &inventory::iter::<&'static dyn PatchInfo>
             .into_iter()
@@ -299,7 +267,6 @@ pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
     writer: &mut W,
     state: &mut PatchState,
 ) -> Result<Vec<PatchApplication>, String> {
-
     snapshot.validate_registered()?;
 
     validate_patch_registrations()?;
@@ -307,27 +274,21 @@ pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
     let selected = crate::patch_inventory_for::<R>()
         .filter(|patch| snapshot.supports_patch(*patch) && !state.completed.contains(patch.name))
         .map(|patch| {
-
             if !patch.resolver.supports(snapshot) {
-
                 return Err(format!(
                     "Patch {} targets unavailable resolver {}",
                     patch.name, patch.resolver.name
                 ));
             }
 
-            let address = unsafe {
-
-                patch.resolver.implementation.resolve(context)
-            }
-            .map_err(|error| {
-
-                format!(
-                    "No address for patch {} resolver {}: {error}",
-                    patch.name, patch.resolver.name
-                )
-            })?
-            .get() as u64;
+            let address = unsafe { patch.resolver.implementation.resolve(context) }
+                .map_err(|error| {
+                    format!(
+                        "No address for patch {} resolver {}: {error}",
+                        patch.name, patch.resolver.name
+                    )
+                })?
+                .get() as u64;
 
             Ok((patch, address))
         })
@@ -336,12 +297,8 @@ pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
     selected
         .into_iter()
         .map(|(patch, address)| {
-
-            let applied = unsafe {
-
-                (patch.factory)(address).apply(address, writer)
-            }
-            .map_err(|error| format!("Patch {}: {error}", patch.name))?;
+            let applied = unsafe { (patch.factory)(address).apply(address, writer) }
+                .map_err(|error| format!("Patch {}: {error}", patch.name))?;
 
             state.completed.insert(patch.name);
 
@@ -367,7 +324,6 @@ mod tests {
         type Context = ();
 
         unsafe fn resolve(&self, _: &()) -> Result<std::num::NonZeroUsize, String> {
-
             panic!("validation must not resolve")
         }
     }
@@ -385,7 +341,6 @@ mod tests {
         const REQUIRED: &'static [Self] = &[Self::First, Self::Second];
 
         fn name(self) -> &'static str {
-
             match self {
                 Self::First => "First",
                 Self::Second => "Second",
@@ -450,22 +405,18 @@ mod tests {
     };
 
     fn never_construct(_: u64) -> Patch {
-
         panic!("validation must not construct patches")
     }
 
     fn first(key: &dyn std::any::Any) -> bool {
-
         crate::__private::selection_matches(key, Key::First)
     }
 
     fn second(key: &dyn std::any::Any) -> bool {
-
         crate::__private::selection_matches(key, Key::Second)
     }
 
     fn both(group: &[&dyn PatchInfo]) -> Result<(), String> {
-
         validate_patch_coverage::<Both, _>(Key::First, group)
     }
 
@@ -531,7 +482,6 @@ mod tests {
     #[test_case::test_case(&[&FIRST, &CONFLICTING_DESCRIPTOR], Some("different descriptors"); "namesake descriptor does not supply coverage")]
 
     fn coverage_is_grouped_by_resolver(patches: &[&PatchRegistration], expected: Option<&str>) {
-
         let patches: Vec<&dyn PatchInfo> = patches.iter().map(|patch| *patch as &dyn PatchInfo).collect();
 
         match expected {

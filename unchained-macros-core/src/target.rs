@@ -18,19 +18,15 @@ pub trait SupportsDetour: CallbackTarget {
         activate: bool,
         condition: fn() -> bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-
         if self.replacement_slot().is_registered() {
-
             return Err("Only one behavior-changing detour is supported per method".into());
         }
 
         unsafe {
-
             self.ensure_attached()?;
         }
 
         unsafe {
-
             self.replacement_slot()
                 .register(callback, self.activation(activate, condition))?;
         }
@@ -40,7 +36,6 @@ pub trait SupportsDetour: CallbackTarget {
 }
 
 pub const fn detour_signature<T: SupportsDetour>(_: &T) -> crate::NativeSignature<T::Callback> {
-
     std::marker::PhantomData
 }
 
@@ -68,7 +63,6 @@ impl<F: Copy, E: Copy, X, P: Copy, R: AddressResolver> NativeTarget<F, E, X, P, 
         dispatcher: F,
         code_pointer: fn(F) -> *const (),
     ) -> Self {
-
         Self {
             binding,
             hook: NativeHook::new(),
@@ -82,7 +76,6 @@ impl<F: Copy, E: Copy, X, P: Copy, R: AddressResolver> NativeTarget<F, E, X, P, 
     }
 
     pub const fn binding(&self) -> &'static FunctionBinding<R> {
-
         self.binding
     }
 }
@@ -94,16 +87,11 @@ where
     P: Copy + Send + Sync + 'static,
 {
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
-
         self.binding.resolver
     }
 
     unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
-
-        unsafe {
-
-            self.hook.attach(self.binding, (self.code_pointer)(self.dispatcher))
-        }
+        unsafe { self.hook.attach(self.binding, (self.code_pointer)(self.dispatcher)) }
     }
 }
 
@@ -116,7 +104,6 @@ where
     type Entry = E;
 
     fn entry_slot(&self) -> &CallbackSlot<E> {
-
         &self.entry
     }
 }
@@ -132,7 +119,6 @@ where
     type Prepare = P;
 
     fn exit_slot(&self) -> &CallbackSlot<P> {
-
         &self.exit
     }
 }
@@ -146,12 +132,10 @@ where
     type Callback = F;
 
     fn replacement_slot(&self) -> &CallbackSlot<F> {
-
         &self.replacement
     }
 
     fn physical_detour(&self) -> Option<&retour::RawDetour> {
-
         self.hook.detour()
     }
 }

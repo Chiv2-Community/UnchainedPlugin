@@ -37,14 +37,11 @@ enum Alpha {
 
 impl ResolverSelector for Alpha {
     fn current() -> Self {
-
         ALPHA_READS.fetch_add(1, Ordering::SeqCst);
 
         if ALPHA.load(Ordering::SeqCst) {
-
             Self::First
         } else {
-
             Self::Second
         }
     }
@@ -60,20 +57,16 @@ enum Beta {
 
 impl ResolverSelector for Beta {
     fn current() -> Self {
-
         BETA_READS.fetch_add(1, Ordering::SeqCst);
 
         if BETA.load(Ordering::SeqCst) {
-
             Self::Missing
         } else {
-
             Self::Leaf
         }
     }
 
     fn fallback(self) -> Option<Self> {
-
         match self {
             Self::Missing => Some(Self::Middle),
             Self::Middle if CHAIN.load(Ordering::SeqCst) => Some(Self::Leaf),
@@ -113,9 +106,7 @@ impl Native {
 #[unchained_macros_core::bind_func_detour(Native::alpha)]
 
 unsafe fn alpha_detour() {
-
     unsafe {
-
         Native::alpha();
     }
 }
@@ -123,9 +114,7 @@ unsafe fn alpha_detour() {
 #[unchained_macros_core::bind_func_detour(Native::beta)]
 
 unsafe fn beta_detour() {
-
     unsafe {
-
         Native::beta();
     }
 }
@@ -143,7 +132,6 @@ static BETA_PATCH: Patch = Patch::nop(0, 1);
 static BETA_UNIVERSAL: Patch = Patch::nop(0, 1);
 
 fn reset() {
-
     ALPHA.store(true, Ordering::SeqCst);
 
     BETA.store(true, Ordering::SeqCst);
@@ -158,7 +146,6 @@ fn reset() {
 #[test]
 
 fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
-
     let _guard = LOCK.lock().unwrap();
 
     reset();
@@ -204,7 +191,6 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert!(results.iter().all(Result::is_ok));
 
     let value = snapshot.eval(&image, |ctx| {
-
         Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
     });
 
@@ -260,19 +246,14 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert_eq!(BETA_READS.load(Ordering::SeqCst), 2);
 
     std::thread::scope(|scope| {
-
         let old = scope.spawn(|| {
-
             snapshot.eval(&image, |ctx| {
-
                 Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
             })
         });
 
         let new = scope.spawn(|| {
-
             next.eval(&image, |ctx| {
-
                 Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
             })
         });
@@ -285,11 +266,8 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert_eq!(BETA_READS.load(Ordering::SeqCst), 2);
 
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-
         let _: () = snapshot.eval(&image, |_| {
-
             Box::pin(async {
-
                 panic!("fixture panic");
             })
         });
@@ -308,7 +286,6 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
 #[test]
 
 fn fallback_policy_changes_partition_caches_without_changing_current_values() {
-
     let _guard = LOCK.lock().unwrap();
 
     reset();
@@ -332,7 +309,6 @@ fn fallback_policy_changes_partition_caches_without_changing_current_values() {
     let mut writer = Writer::default();
 
     assert!(unsafe {
-
         unchained_macros_core::apply_patches_for::<unchained_macros_patternsleuth::PatternsleuthResolver, _>(
             &unchained_macros_patternsleuth::ScanContext::new(1, &Default::default()),
             &after,
@@ -357,21 +333,18 @@ struct Writer(usize);
 
 impl PatchWriter for Writer {
     unsafe fn bytes(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
-
         self.0 += 1;
 
         Ok(())
     }
 
     unsafe fn nop(&mut self, _: u64, _: usize) -> Result<(), String> {
-
         self.0 += 1;
 
         Ok(())
     }
 
     unsafe fn write(&mut self, _: u64, _: &unchained_macros_core::WriteValue) -> Result<(), String> {
-
         self.0 += 1;
 
         Ok(())
@@ -381,7 +354,6 @@ impl PatchWriter for Writer {
 #[test]
 
 fn missing_provider_is_an_error_not_a_silently_filtered_consumer() {
-
     let snapshot = SelectorSnapshot::from_selection(Alpha::First).unwrap();
 
     assert!(startup_resolvers(&snapshot).err().unwrap().contains("missing"));
@@ -389,7 +361,6 @@ fn missing_provider_is_an_error_not_a_silently_filtered_consumer() {
     let mut writer = Writer::default();
 
     let error = unsafe {
-
         unchained_macros_core::apply_patches_for::<unchained_macros_patternsleuth::PatternsleuthResolver, _>(
             &unchained_macros_patternsleuth::ScanContext::new(1, &Default::default()),
             &snapshot,
@@ -413,12 +384,10 @@ enum Cycle {
 
 impl ResolverSelector for Cycle {
     fn current() -> Self {
-
         Self::First
     }
 
     fn fallback(self) -> Option<Self> {
-
         Some(match self {
             Self::First => Self::Second,
             Self::Second => Self::First,
@@ -429,7 +398,6 @@ impl ResolverSelector for Cycle {
 #[test]
 
 fn fallback_cycles_are_rejected_before_resolution() {
-
     assert!(SelectorSnapshot::from_selection(Cycle::First)
         .unwrap_err()
         .contains("cycle"));

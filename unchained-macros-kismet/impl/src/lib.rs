@@ -14,7 +14,6 @@ mod tests {
     #[test]
 
     fn runtime_bindings_emit_typed_descriptors_not_resolver_declarations() {
-
         let expanded = expand(
             quote!("/Script/Engine.KismetSystemLibrary"),
             quote! {
@@ -34,7 +33,6 @@ mod tests {
         let text = expanded.to_string();
 
         for method in ["IsDedicatedServer", "IsServer", "IsStandalone"] {
-
             assert!(text.contains(&format!("\"UKismetSystemLibrary__{method}\"")));
 
             assert!(text.contains(&format!("static __UNCHAINED_KISMET_RESOLVER_{method}")));
@@ -68,7 +66,6 @@ mod tests {
     #[test]
 
     fn runtime_bindings_reject_a_second_address_source() {
-
         assert!(expand(
             quote!("/Script/Fixture.Native"),
             quote! {
@@ -96,7 +93,6 @@ mod tests {
     #[test]
 
     fn dummy_metadata_cannot_collide_with_authored_items() {
-
         assert!(expand(
             quote!("/Script/Fixture.Native"),
             quote! {
@@ -115,7 +111,6 @@ mod tests {
     #[test]
 
     fn mixed_impl_preserves_constants_visibility_and_native_lifetimes() {
-
         let output = expand(
             quote!("/Script/Fixture.Native"),
             quote! {
@@ -152,25 +147,21 @@ mod tests {
 #[proc_macro_attribute]
 
 pub fn kismet_runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
-
     expand(args.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
 }
 
 fn cfg_attributes(attributes: &[syn::Attribute]) -> impl Iterator<Item = &syn::Attribute> {
-
     attributes
         .iter()
         .filter(|attribute| attribute.path().is_ident("cfg") || attribute.path().is_ident("cfg_attr"))
 }
 
 fn class_path(args: Tokens) -> syn::Result<syn::LitStr> {
-
     let owner: syn::LitStr = syn::parse2(args)?;
 
     if !owner.value().starts_with("/Script/") || !owner.value().contains('.') || owner.value().contains('\0') {
-
         return Err(syn::Error::new_spanned(
             owner,
             "expected a /Script/Package.Class path without NUL",
@@ -181,7 +172,6 @@ fn class_path(args: Tokens) -> syn::Result<syn::LitStr> {
 }
 
 fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
-
     let owner = class_path(args)?;
 
     let mut implementation: ItemImpl = syn::parse2(item)?;
@@ -190,7 +180,6 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         || !implementation.generics.params.is_empty()
         || implementation.generics.where_clause.is_some()
     {
-
         return Err(syn::Error::new_spanned(
             &implementation,
             "kismet_runtime_bindings requires a non-generic inherent impl",
@@ -198,7 +187,6 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     let Type::Path(ty) = implementation.self_ty.as_ref() else {
-
         return Err(syn::Error::new_spanned(
             &implementation.self_ty,
             "expected a named native type",
@@ -224,23 +212,19 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut items = Vec::new();
 
     for mut item in std::mem::take(&mut implementation.items) {
-
         let syn::ImplItem::Fn(method) = &mut item else {
-
             items.push(item);
 
             continue;
         };
 
         if method.attrs.iter().any(|attribute| {
-
             attribute
                 .path()
                 .segments
                 .last()
                 .is_some_and(|segment| segment.ident == "bind_resolved_func")
         }) {
-
             return Err(syn::Error::new_spanned(
                 method,
                 "Kismet methods cannot also declare an address binding",
@@ -248,9 +232,7 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
 
         if method.attrs.iter().any(|attribute| attribute.path().is_ident("dummy")) {
-
             if !names.insert(format!("__UNCHAINED_TARGET_{}", method.sig.ident)) {
-
                 return Err(syn::Error::new_spanned(
                     method,
                     "generated binding metadata conflicts with an associated item",

@@ -7,7 +7,6 @@ impl AddressResolver for ExplicitAddress {
     type Context = NonZeroUsize;
 
     unsafe fn resolve(&self, address: &Self::Context) -> Result<NonZeroUsize, String> {
-
         Ok(*address)
     }
 }
@@ -29,25 +28,21 @@ type Call = unsafe extern "C" fn(usize) -> usize;
 #[inline(never)]
 
 unsafe extern "C" fn original(n: usize) -> usize {
-
     black_box(n).wrapping_add(1)
 }
 
 unsafe extern "C" fn replacement(n: usize) -> usize {
-
     n.wrapping_add(10)
 }
 
 #[test]
 
 fn unlisted_owner_and_late_alias_receive_original_trampoline() {
-
     let entry = black_box(original as Call);
 
     let address = NonZeroUsize::new(entry as usize).unwrap();
 
     unsafe {
-
         OWNER.initialize_address(address).unwrap();
 
         HOOK.attach(&OWNER, replacement as *const ()).unwrap();

@@ -51,85 +51,58 @@ impl Native {
 #[unchained_macros_core::bind_func_detour(Native::mut_read)]
 
 unsafe fn reverse(#[mutability_override] value: *const Native, other: *const i32) -> i32 {
-
     // Reading through a const view does not alter the mutable native contract.
-    unsafe {
-
-        Native::mut_read(value.cast_mut(), other) + 20
-    }
+    unsafe { Native::mut_read(value.cast_mut(), other) + 20 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::const_match)]
 
 unsafe fn const_match(#[mutability_override] value: *const Native) -> i32 {
-
-    unsafe {
-
-        Native::const_match(value) + 30
-    }
+    unsafe { Native::const_match(value) + 30 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::mut_match)]
 
 unsafe fn mut_match<'a>(#[mutability_override] value: *mut Native, other: &'a i32) -> &'a i32 {
-
-    unsafe {
-
-        Native::mut_match(value, other)
-    }
+    unsafe { Native::mut_match(value, other) }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::borrowed)]
 
 unsafe fn borrowed<'a>(#[mutability_override] value: *mut &'a i32) -> &'a i32 {
-
-    unsafe {
-
-        Native::borrowed(value)
-    }
+    unsafe { Native::borrowed(value) }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::shared_read)]
 
 unsafe fn shared_read<'a>(#[mutability_override] value: &'a mut Native) -> &'a i32 {
-
     // This fixture's raw native caller provides exclusive, writable storage.
     value.0 += 1;
 
-    unsafe {
-
-        Native::shared_read(value)
-    }
+    unsafe { Native::shared_read(value) }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::exclusive_read)]
 
 unsafe fn exclusive_read<'a>(#[mutability_override] value: &'a Native) -> &'a i32 {
-
     &value.0
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original_borrowed<'a>(value: *const &'a i32) -> &'a i32 {
-
-    unsafe {
-
-        *std::hint::black_box(value)
-    }
+    unsafe { *std::hint::black_box(value) }
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original_shared(value: &Native) -> &i32 {
-
     &std::hint::black_box(value).0
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
-
     // Keep this target semantically distinct from original_shared under ICF.
     let value = std::hint::black_box(value);
 
@@ -141,11 +114,9 @@ unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
 #[test]
 
 fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
-
     assert_ne!(original_shared as *const (), original_exclusive as *const ());
 
     unsafe {
-
         Native::__UNCHAINED_TARGET_borrowed
             .binding()
             .initialize_address(std::num::NonZeroUsize::new(original_borrowed as *const () as usize).unwrap())
@@ -223,27 +194,18 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
 #[inline(never)]
 
 unsafe extern "C" fn original_mut(value: *mut Native, other: *const i32) -> i32 {
-
-    unsafe {
-
-        (*std::hint::black_box(value)).0 + *other
-    }
+    unsafe { (*std::hint::black_box(value)).0 + *other }
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original_const_match(value: *const Native) -> i32 {
-
-    unsafe {
-
-        (*std::hint::black_box(value)).0 + 2
-    }
+    unsafe { (*std::hint::black_box(value)).0 + 2 }
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) -> &'a i32 {
-
     std::hint::black_box(value);
 
     std::hint::black_box(other)
@@ -252,9 +214,7 @@ unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) 
 #[test]
 
 fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
-
     unsafe {
-
         Native::__UNCHAINED_TARGET_mut_read
             .binding()
             .initialize_address(std::num::NonZeroUsize::new(original_mut as *const () as usize).unwrap())
@@ -324,30 +284,20 @@ fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
 #[unchained_macros_core::bind_func_detour(Native::read)]
 
 unsafe fn replacement(#[mutability_override] value: *mut Native) -> i32 {
-
     // The native caller lends a const object; adaptation does not authorize writes.
-    unsafe {
-
-        Native::read(value) + 10
-    }
+    unsafe { Native::read(value) + 10 }
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn original(value: *const Native) -> i32 {
-
-    unsafe {
-
-        (*std::hint::black_box(value)).0 + 1
-    }
+    unsafe { (*std::hint::black_box(value)).0 + 1 }
 }
 
 #[test]
 
 fn mutability_override_preserves_original_calls_and_const_native_entry() {
-
     unsafe {
-
         Native::__UNCHAINED_TARGET_read
             .binding()
             .initialize_address(std::num::NonZeroUsize::new(original as *const () as usize).unwrap())

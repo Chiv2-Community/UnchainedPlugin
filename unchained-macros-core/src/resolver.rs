@@ -23,7 +23,6 @@ pub struct Resolver<R: AddressResolver> {
 
 impl<R: AddressResolver> Resolver<R> {
     pub fn supports(&self, snapshot: &SelectorSnapshot) -> bool {
-
         self.filter
             .as_ref()
             .is_none_or(|filter| snapshot.supports_filter(filter))
@@ -44,22 +43,18 @@ pub trait ResolverInfo: Any + Send + Sync {
 
 impl<R: AddressResolver> ResolverInfo for Resolver<R> {
     fn name(&self) -> &'static str {
-
         self.name
     }
 
     fn backend(&self) -> TypeId {
-
         TypeId::of::<R>()
     }
 
     fn identity(&self) -> *const () {
-
         (self as *const Self).cast()
     }
 
     fn supports(&self, snapshot: &SelectorSnapshot) -> bool {
-
         self.supports(snapshot)
     }
 }
@@ -67,7 +62,6 @@ impl<R: AddressResolver> ResolverInfo for Resolver<R> {
 inventory::collect!(&'static dyn ResolverInfo);
 
 pub fn resolver_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static Resolver<R>> {
-
     inventory::iter::<&'static dyn ResolverInfo>
         .into_iter()
         .filter_map(|entry| (*entry as &dyn Any).downcast_ref())

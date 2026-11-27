@@ -79,14 +79,12 @@ impl MissingType {
 }
 
 unsafe extern "C" fn identity(value: &i32) -> &i32 {
-
     value
 }
 
 #[test]
 
 fn reflection_descriptors_preserve_names_backend_signatures_and_lifetimes() {
-
     let mut names: Vec<_> = core::resolver_inventory_for::<KismetReflectionResolver>()
         .map(|resolver| resolver.name)
         .collect();
@@ -137,7 +135,6 @@ fn reflection_descriptors_preserve_names_backend_signatures_and_lifetimes() {
     let binding = Borrowed::__UNCHAINED_TARGET_identity.binding();
 
     unsafe {
-
         binding
             .initialize_address(std::num::NonZeroUsize::new(identity as *const () as usize).unwrap())
             .unwrap();

@@ -19,7 +19,6 @@ struct Declaration {
 
 impl Parse for Declaration {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-
         let name = input.parse()?;
 
         input.parse::<Token![,]>()?;
@@ -27,26 +26,22 @@ impl Parse for Declaration {
         let explicit_mode = input.peek(Ident);
 
         let mode = if explicit_mode {
-
             let mode: Ident = input.parse()?;
 
             input.parse::<Token![,]>()?;
 
             mode
         } else {
-
             syn::parse_quote!(Simple)
         };
 
         let patterns = if input.peek(syn::token::Bracket) {
-
             let content;
 
             syn::bracketed!(content in input);
 
             Patterns::List(content.parse()?)
         } else {
-
             let content;
 
             syn::braced!(content in input);
@@ -54,13 +49,11 @@ impl Parse for Declaration {
             let mut entries = Vec::new();
 
             while !content.is_empty() {
-
                 let key: Path = content.parse()?;
 
                 content.parse::<Token![:]>()?;
 
                 let value = if content.peek(syn::token::Bracket) {
-
                     let values;
 
                     syn::bracketed!(values in content);
@@ -68,17 +61,14 @@ impl Parse for Declaration {
                     let values: TokenStream = values.parse()?;
 
                     if values.is_empty() {
-
                         return Err(content.error("pattern entries must not be empty; omit an optional key for fallback or use None to disable it"));
                     }
 
                     quote!([#values])
                 } else {
-
                     let value: Ident = content.parse()?;
 
                     if value != "None" {
-
                         return Err(syn::Error::new_spanned(value, "expected a pattern list or None"));
                     }
 
@@ -88,7 +78,6 @@ impl Parse for Declaration {
                 entries.push((key, value));
 
                 if !content.is_empty() {
-
                     content.parse::<Token![,]>()?;
                 }
             }
@@ -108,7 +97,6 @@ impl Parse for Declaration {
                 .iter()
                 .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
             {
-
                 return Err(syn::Error::new_spanned(selector, "selector enums must be non-generic"));
             }
 
@@ -116,19 +104,14 @@ impl Parse for Declaration {
         };
 
         let body = if input.is_empty() {
-
             None
         } else {
-
             input.parse::<Token![,]>()?;
 
             if input.is_empty() {
-
                 None
             } else {
-
                 if explicit_mode {
-
                     return Err(input.error("inline resolver bodies do not take a scan mode"));
                 }
 
@@ -145,7 +128,6 @@ impl Parse for Declaration {
                 let body = input.parse()?;
 
                 if input.peek(Token![,]) {
-
                     input.parse::<Token![,]>()?;
                 }
 
@@ -163,7 +145,6 @@ impl Parse for Declaration {
 }
 
 pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
-
     let Declaration {
         name,
         mode,
@@ -173,22 +154,18 @@ pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
 
     Ok(match (patterns, body) {
         (Patterns::List(values), None) => {
-
             quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, [#values]);)
         }
 
         (Patterns::List(values), Some((ctx, patterns, body))) => {
-
             quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);)
         }
 
         (Patterns::Dictionary(selector, entries), body) => {
-
             let (keys, values): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
 
             match body {
                 None => {
-
                     quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });)
                 }
 
@@ -211,7 +188,6 @@ mod tests {
     #[test_case::test_case(quote!(Target, { module::Key::First: ["AA"] }, |ctx, patterns| { Ok(1) }); "inline dictionary")]
 
     fn accepts_resolvers(input: TokenStream) {
-
         syn::parse2::<syn::File>(expand(input).unwrap()).unwrap();
     }
 
@@ -221,7 +197,6 @@ mod tests {
     #[test_case::test_case(quote!(Target, { Key::First: [] }); "empty entry")]
 
     fn rejects_invalid_resolvers(input: TokenStream) {
-
         assert!(expand(input).is_err());
     }
 }

@@ -16,7 +16,6 @@ static SIDE_EFFECTS: AtomicUsize = AtomicUsize::new(0);
 define_custom_resolver!(
     Dependency,
     BinaryMatcher::from_sync(|()| {
-
         DEPENDENCIES.fetch_add(1, Ordering::SeqCst);
 
         Ok(vec![0x1000])
@@ -25,21 +24,15 @@ define_custom_resolver!(
 );
 
 define_pattern_resolver!(BoundFixture, ["AA BB"], |ctx, _patterns| {
-
     Ok(ctx.resolve(Dependency::resolver()).await?.0)
 });
 
 define_custom_resolver!(
     UnusedFixture,
-    BinaryMatcher::from_sync(|()| {
-
-        panic!("unconsumed declarations must not run")
-    })
-    .ensure_one()
+    BinaryMatcher::from_sync(|()| { panic!("unconsumed declarations must not run") }).ensure_one()
 );
 
 define_pattern_resolver!(SideEffectFixture, ["AA BB"], |ctx, _patterns| {
-
     SIDE_EFFECTS.fetch_add(1, Ordering::SeqCst);
 
     Ok(ctx.resolve(Dependency::resolver()).await?.0 + 0x1000)
@@ -95,7 +88,6 @@ unsafe fn request() {}
 #[unchained_macros_core::register_patch(PatchFixture)]
 
 fn fixture_patch(_address: u64) -> unchained_macros_core::Patch {
-
     panic!("selection must not construct or apply patches")
 }
 
@@ -107,7 +99,6 @@ mod upstream {
     pub struct BoundFixture(pub u64);
 
     patternsleuth::resolvers::impl_resolver_singleton!(all, BoundFixture, |_ctx| async {
-
         panic!("the upstream namesake must not run")
     });
 
@@ -132,7 +123,6 @@ unsafe fn disabled() {}
 #[test]
 
 fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
-
     let roots =
         unchained_macros_patternsleuth::startup_resolvers(&unchained_macros_core::SelectorSnapshot::default()).unwrap();
 

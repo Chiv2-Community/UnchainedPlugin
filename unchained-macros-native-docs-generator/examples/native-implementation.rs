@@ -24,7 +24,6 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-
     let args = Args::parse();
 
     let result = match args.kind {
@@ -33,7 +32,6 @@ fn main() -> Result<()> {
     };
 
     let output = result.map(|implementation| {
-
         serde_json::json!({
             "path": implementation.path, "line": implementation.line, "code": implementation.code,
         })

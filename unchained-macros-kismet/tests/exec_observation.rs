@@ -58,7 +58,6 @@ struct Fixture {
 
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-
         Ok(FunctionMetadata {
             is_native: true,
             exec_thunk: 123,
@@ -68,7 +67,6 @@ unsafe impl Reflection for Fixture {
     }
 
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-
         Ok(FunctionSchema {
             function_identity: 42,
             unique_exec_thunk: !self.shared,
@@ -87,9 +85,7 @@ unsafe impl Reflection for Fixture {
 #[test]
 
 fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
-
     let context = unsafe {
-
         KismetContext::new(
             Fixture { shared: false },
             ExecEnvironment {
@@ -102,7 +98,6 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
     };
 
     let resolver = unsafe {
-
         unchained_macros_kismet::KismetExecResolver::new(
             "/Script/Fixture.Library",
             "PrintWarning",
@@ -114,23 +109,13 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
         )
     };
 
-    assert_eq!(
-        unsafe {
-
-            resolver.resolve(&context)
-        }
-        .unwrap()
-        .get(),
-        123
-    );
+    assert_eq!(unsafe { resolver.resolve(&context) }.unwrap().get(), 123);
 }
 
 #[test]
 
 fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
-
     let context = unsafe {
-
         KismetContext::new(
             Fixture { shared: true },
             ExecEnvironment {
@@ -143,7 +128,6 @@ fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
     };
 
     let resolver = unsafe {
-
         unchained_macros_kismet::KismetExecResolver::new(
             "/Script/Fixture.Library",
             "PrintWarning",
@@ -155,12 +139,9 @@ fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
         )
     };
 
-    assert!(unsafe {
-
-        resolver.resolve(&context)
-    }
-    .unwrap_err()
-    .contains("Shared exec wrappers"));
+    assert!(unsafe { resolver.resolve(&context) }
+        .unwrap_err()
+        .contains("Shared exec wrappers"));
 }
 
 #[derive(Default)]
@@ -176,12 +157,10 @@ thread_local! {
 }
 
 fn event(value: &'static str) {
-
     RUNTIME_EVENTS.with(|events| events.borrow_mut().push(value));
 }
 
 unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
-
     assert_eq!(*context as usize, 0x123);
 
     assert!(*flag);
@@ -189,19 +168,16 @@ unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
     event("entry");
 
     unsafe {
-
         invoke_reentrant_predicate();
     }
 }
 
 unsafe fn invoke_reentrant_predicate() {
-
     let mut frame = Frame::default();
 
     let mut result = 0u8;
 
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
             std::ptr::null_mut(),
             (&mut frame as *mut Frame).cast(),
@@ -220,13 +196,9 @@ unsafe extern "system" fn original_exec(
     frame: *mut std::ffi::c_void,
     result: *mut std::ffi::c_void,
 ) {
-
     use unchained_macros_kismet::observation::observe_step;
 
-    let state = unsafe {
-
-        &mut *frame.cast::<Frame>()
-    };
+    let state = unsafe { &mut *frame.cast::<Frame>() };
 
     state.original_calls += 1;
 
@@ -235,16 +207,13 @@ unsafe extern "system" fn original_exec(
     let mut boolean = 0u32;
 
     unsafe {
-
         observe_step(frame, (&mut context as *mut *mut UObject).cast(), 11, || {
-
             state.evaluations += 1;
 
             context = 0x123usize as *mut UObject;
         });
 
         observe_step(frame, (&mut boolean as *mut u32).cast(), 12, || {
-
             state.evaluations += 1;
 
             boolean = 0x100; // Must read bool32, not its low byte.
@@ -264,7 +233,6 @@ struct RuntimeReflection;
 
 unsafe impl Reflection for RuntimeReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-
         Ok(FunctionMetadata {
             is_native: true,
             exec_thunk: original_exec as *const () as usize,
@@ -274,7 +242,6 @@ unsafe impl Reflection for RuntimeReflection {
     }
 
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-
         Ok(FunctionSchema {
             function_identity: 42,
             unique_exec_thunk: true,
@@ -311,9 +278,7 @@ unsafe impl Reflection for RuntimeReflection {
 #[test]
 
 fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
-
     let context = unsafe {
-
         KismetContext::new(
             RuntimeReflection,
             ExecEnvironment {
@@ -326,21 +291,15 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     };
 
     let address = unsafe {
-
         Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER
             .implementation
             .resolve(&context)
     }
     .unwrap();
 
-    unsafe {
-
-        Library::__UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address)
-    }
-    .unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
 
     unsafe {
-
         Library::__UNCHAINED_TARGET_Predicate
             .entry
             .register(runtime_entry, true)
@@ -352,7 +311,6 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     let mut result = 0u8;
 
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
             std::ptr::null_mut(),
             (&mut frame as *mut Frame).cast(),
@@ -368,13 +326,11 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body", "cleanup", "body", "cleanup"]));
 
     std::thread::spawn(|| {
-
         let mut frame = Frame::default();
 
         let mut result = 0u8;
 
         unsafe {
-
             (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
                 std::ptr::null_mut(),
                 (&mut frame as *mut Frame).cast(),
@@ -399,9 +355,7 @@ thread_local! {
 }
 
 unsafe fn invoke_noargs() {
-
     unsafe {
-
         (Library::__UNCHAINED_EXEC_Library_NoArgs_dispatch)(
             std::ptr::null_mut(),
             std::ptr::dangling_mut(),
@@ -411,11 +365,9 @@ unsafe fn invoke_noargs() {
 }
 
 unsafe fn noargs_reentrant_entry() {
-
     NOARGS_ENTRIES.with(|count| count.set(count.get() + 1));
 
     unsafe {
-
         invoke_noargs();
     } // Unconditional: the descriptor must stop recursion.
 }
@@ -425,7 +377,6 @@ unsafe extern "system" fn noargs_original(
     _: *mut std::ffi::c_void,
     result: *mut std::ffi::c_void,
 ) {
-
     assert!(
         result.is_null(),
         "Original receives untouched native void result storage"
@@ -438,7 +389,6 @@ struct NoArgsReflection;
 
 unsafe impl Reflection for NoArgsReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-
         Ok(FunctionMetadata {
             is_native: true,
             exec_thunk: noargs_original as *const () as usize,
@@ -448,7 +398,6 @@ unsafe impl Reflection for NoArgsReflection {
     }
 
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-
         Ok(FunctionSchema {
             function_identity: 43,
             unique_exec_thunk: true,
@@ -460,9 +409,7 @@ unsafe impl Reflection for NoArgsReflection {
 #[test]
 
 fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
-
     let context = unsafe {
-
         KismetContext::new(
             NoArgsReflection,
             ExecEnvironment {
@@ -475,21 +422,15 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     };
 
     let address = unsafe {
-
         Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER
             .implementation
             .resolve(&context)
     }
     .unwrap();
 
-    unsafe {
-
-        Library::__UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address)
-    }
-    .unwrap();
+    unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
 
     unsafe {
-
         Library::__UNCHAINED_TARGET_NoArgs
             .entry
             .register(noargs_reentrant_entry, true)
@@ -497,7 +438,6 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     .unwrap();
 
     unsafe {
-
         invoke_noargs();
     }
 
@@ -506,9 +446,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));
 
     std::thread::spawn(|| {
-
         unsafe {
-
             invoke_noargs();
         }
 

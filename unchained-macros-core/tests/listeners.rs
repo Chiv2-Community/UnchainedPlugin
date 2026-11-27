@@ -25,7 +25,6 @@ impl<E: Copy, X, P: Copy, R: AddressResolver> ObservationTarget<E, X, P, R> {
         resolver: &'static Resolver<R>,
         attach: unsafe fn() -> Result<(), Box<dyn std::error::Error>>,
     ) -> Self {
-
         Self {
             resolver,
             entry: CallbackSlot::new(),
@@ -40,16 +39,11 @@ impl<E: Copy + Send + Sync + 'static, X: 'static, P: Copy + Send + Sync + 'stati
     for ObservationTarget<E, X, P, R>
 {
     fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo {
-
         self.resolver
     }
 
     unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
-
-        unsafe {
-
-            (self.attach)()
-        }
+        unsafe { (self.attach)() }
     }
 }
 
@@ -59,7 +53,6 @@ impl<E: Copy + Send + Sync + 'static, X: 'static, P: Copy + Send + Sync + 'stati
     type Entry = E;
 
     fn entry_slot(&self) -> &CallbackSlot<E> {
-
         &self.entry
     }
 }
@@ -76,7 +69,6 @@ impl<
     type Prepare = P;
 
     fn exit_slot(&self) -> &CallbackSlot<P> {
-
         &self.exit
     }
 }
@@ -87,7 +79,6 @@ impl AddressResolver for Backend {
     type Context = ();
 
     unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
         unreachable!()
     }
 }
@@ -151,13 +142,11 @@ static ADJUST_INPUT: AtomicBool = AtomicBool::new(false);
 #[inline(never)]
 
 unsafe extern "C" fn original(value: i32, output: *mut i32) -> i32 {
-
     ORIGINAL_CALLS.fetch_add(1, Ordering::SeqCst);
 
     EVENTS.lock().unwrap().push(('o', value));
 
     unsafe {
-
         *output += value;
     }
 
@@ -170,20 +159,16 @@ unsafe extern "C" fn original(value: i32, output: *mut i32) -> i32 {
 })]
 
 unsafe fn native_entry(value: &i32, _output: &*mut i32) {
-
     EVENTS.lock().unwrap().push(('e', *value));
 
     if PANIC_ENTRY.load(Ordering::SeqCst) {
-
         panic!("entry failed");
     }
 
     if REENTER_ENTRY.load(Ordering::SeqCst) {
-
         let mut output = 0;
 
         unsafe {
-
             original(*value + 100, &mut output);
         }
     }
@@ -192,32 +177,24 @@ unsafe fn native_entry(value: &i32, _output: &*mut i32) {
 #[bind_func_exit_listener(Native::call)]
 
 unsafe fn native_exit(value: &i32, output: &*mut i32, result: &i32) {
-
     EVENTS.lock().unwrap().push(('x', *value));
 
     EVENTS.lock().unwrap().push(('r', *result));
 
     // Raw pointers snapshot addresses, not pointee values.
     assert_eq!(
-        unsafe {
-
-            **output
-        },
+        unsafe { **output },
         if SKIP_ORIGINAL.load(Ordering::SeqCst) {
-
             0
         } else {
-
             *value + if ADJUST_INPUT.load(Ordering::SeqCst) { 10 } else { 0 }
         }
     );
 
     if REENTER_EXIT.load(Ordering::SeqCst) {
-
         let mut output = 0;
 
         unsafe {
-
             original(*value + 200, &mut output);
         }
     }
@@ -229,30 +206,22 @@ unsafe fn native_exit(value: &i32, output: &*mut i32, result: &i32) {
 })]
 
 unsafe fn coexistence_detour(value: i32, output: *mut i32) -> i32 {
-
     EVENTS.lock().unwrap().push(('d', value));
 
     if NEST.load(Ordering::SeqCst) && value > 1 {
-
         let mut nested_output = 0;
 
         unsafe {
-
             original(value - 1, &mut nested_output);
         }
     }
 
     if SKIP_ORIGINAL.load(Ordering::SeqCst) {
-
         99
     } else {
-
         let input = value + if ADJUST_INPUT.load(Ordering::SeqCst) { 10 } else { 0 };
 
-        unsafe {
-
-            Native::call(input, output) + 10
-        }
+        unsafe { Native::call(input, output) + 10 }
     }
 }
 
@@ -267,17 +236,12 @@ unsafe fn duplicate_exit(_value: &i32, _output: &*mut i32, _result: &i32) {}
 #[bind_func_detour(Native::call)]
 
 unsafe fn duplicate_detour(value: i32, output: *mut i32) -> i32 {
-
-    unsafe {
-
-        Native::call(value, output)
-    }
+    unsafe { Native::call(value, output) }
 }
 
 #[test]
 
 fn native_coexistence_bypass_conditions_and_aliases() {
-
     let binding = Native::__UNCHAINED_TARGET_call.binding();
 
     let listeners = listener_inventory_for::<Backend>()
@@ -286,20 +250,15 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     // Failed unresolved attachment does not publish slots; retry after resolution works.
     for registration in &listeners {
-
-        assert!(unsafe {
-
-            registration.attach(true)
-        }
-        .unwrap_err()
-        .to_string()
-        .contains("not initialized"));
+        assert!(unsafe { registration.attach(true) }
+            .unwrap_err()
+            .to_string()
+            .contains("not initialized"));
 
         assert!(!registration.initialized());
     }
 
     unsafe {
-
         binding
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
@@ -307,9 +266,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     // Register in reverse dispatch order; registration order is immaterial.
     for registration in &listeners {
-
         unsafe {
-
             registration.attach(true).unwrap();
         }
     }
@@ -323,7 +280,6 @@ fn native_coexistence_bypass_conditions_and_aliases() {
         .unwrap();
 
     unsafe {
-
         hook.attach(true).unwrap();
     }
 
@@ -331,13 +287,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     let mut output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(4, &mut output)
-        },
-        15
-    );
+    assert_eq!(unsafe { original(4, &mut output) }, 15);
 
     assert_eq!(output, 4);
 
@@ -353,13 +303,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     // Project-native calls bypass every observer and the behavior-changing detour.
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            Native::call(5, &mut output)
-        },
-        6
-    );
+    assert_eq!(unsafe { Native::call(5, &mut output) }, 6);
 
     assert_eq!(*EVENTS.lock().unwrap(), [('o', 5)]);
 
@@ -369,7 +313,6 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     let alias = Native::__UNCHAINED_TARGET_descriptor_alias.binding();
 
     unsafe {
-
         alias
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
@@ -377,13 +320,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     assert_eq!(alias.address(), binding.address());
 
-    assert_eq!(
-        unsafe {
-
-            Native::descriptor_alias(5, &mut output)
-        },
-        6
-    );
+    assert_eq!(unsafe { Native::descriptor_alias(5, &mut output) }, 6);
 
     assert_eq!(*EVENTS.lock().unwrap(), [('o', 5)]);
 
@@ -398,13 +335,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(6, &mut output)
-        },
-        17
-    );
+    assert_eq!(unsafe { original(6, &mut output) }, 17);
 
     assert_eq!(
         *EVENTS.lock().unwrap(),
@@ -425,13 +356,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(6, &mut output)
-        },
-        7
-    );
+    assert_eq!(unsafe { original(6, &mut output) }, 7);
 
     assert_eq!(*EVENTS.lock().unwrap(), [('o', 6), ('x', 6), ('r', 7)]);
 
@@ -449,13 +374,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(7, &mut output)
-        },
-        8
-    );
+    assert_eq!(unsafe { original(7, &mut output) }, 8);
 
     assert_eq!(*EVENTS.lock().unwrap(), [('e', 7), ('o', 7), ('x', 7), ('r', 8)]);
 
@@ -467,13 +386,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(8, &mut output)
-        },
-        99
-    );
+    assert_eq!(unsafe { original(8, &mut output) }, 99);
 
     assert_eq!(output, 0);
 
@@ -486,7 +399,6 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     let alias: &'static FunctionBinding<Backend> = Box::leak(Box::new(FunctionBinding::new("late alias", &RESOLVER)));
 
     unsafe {
-
         alias
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
@@ -494,18 +406,10 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     assert_eq!(alias.address(), binding.address());
 
-    let bypass: unsafe extern "C" fn(i32, *mut i32) -> i32 = unsafe {
+    let bypass: unsafe extern "C" fn(i32, *mut i32) -> i32 =
+        unsafe { std::mem::transmute(alias.address().unwrap().get()) };
 
-        std::mem::transmute(alias.address().unwrap().get())
-    };
-
-    assert_eq!(
-        unsafe {
-
-            bypass(9, &mut output)
-        },
-        10
-    );
+    assert_eq!(unsafe { bypass(9, &mut output) }, 10);
 
     assert_eq!(ORIGINAL_CALLS.load(Ordering::SeqCst), before + 1);
 
@@ -517,13 +421,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(2, &mut output)
-        },
-        13
-    );
+    assert_eq!(unsafe { original(2, &mut output) }, 13);
 
     assert_eq!(
         *EVENTS.lock().unwrap(),
@@ -549,13 +447,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(3, &mut output)
-        },
-        14
-    );
+    assert_eq!(unsafe { original(3, &mut output) }, 14);
 
     assert_eq!(
         *EVENTS.lock().unwrap(),
@@ -572,13 +464,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(3, &mut output)
-        },
-        14
-    );
+    assert_eq!(unsafe { original(3, &mut output) }, 14);
 
     assert_eq!(
         *EVENTS.lock().unwrap(),
@@ -605,13 +491,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     output = 0;
 
-    assert_eq!(
-        unsafe {
-
-            original(3, &mut output)
-        },
-        24
-    );
+    assert_eq!(unsafe { original(3, &mut output) }, 24);
 
     assert_eq!(output, 13);
 
@@ -625,42 +505,26 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     assert_eq!(ENTRY_CONDITION_CALLS.load(Ordering::SeqCst), 1);
 
     for registration in listeners {
-
-        assert!(unsafe {
-
-            registration.attach(true)
-        }
-        .is_err());
+        assert!(unsafe { registration.attach(true) }.is_err());
     }
 
-    assert!(unsafe {
-
-        hook.attach(true)
-    }
-    .is_err());
+    assert!(unsafe { hook.attach(true) }.is_err());
 
     for registration in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("duplicate_")) {
-
-        assert!(unsafe {
-
-            registration.attach(true)
-        }
-        .unwrap_err()
-        .to_string()
-        .contains("Only one"));
+        assert!(unsafe { registration.attach(true) }
+            .unwrap_err()
+            .to_string()
+            .contains("Only one"));
     }
 
     let duplicate = detour_inventory_for::<Backend>()
         .find(|hook| hook.name() == "duplicate_detour")
         .unwrap();
 
-    assert!(unsafe {
-
-        duplicate.attach(true)
-    }
-    .unwrap_err()
-    .to_string()
-    .contains("Only one behavior-changing"));
+    assert!(unsafe { duplicate.attach(true) }
+        .unwrap_err()
+        .to_string()
+        .contains("Only one behavior-changing"));
 
     assert!(duplicate.detour().is_none());
 
@@ -684,7 +548,6 @@ fn native_coexistence_bypass_conditions_and_aliases() {
         type Context = ();
 
         unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
             unreachable!()
         }
     }
@@ -698,7 +561,6 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     let other = Box::leak(Box::new(FunctionBinding::new("other backend", &OTHER_RESOLVER)));
 
     unsafe {
-
         other
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
@@ -708,13 +570,10 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 
     let physical = Box::leak(Box::new(NativeHook::new()));
 
-    assert!(unsafe {
-
-        physical.attach(other, original as *const ())
-    }
-    .unwrap_err()
-    .to_string()
-    .contains("already owns native address"));
+    assert!(unsafe { physical.attach(other, original as *const ()) }
+        .unwrap_err()
+        .to_string()
+        .contains("already owns native address"));
 
     assert!(physical.detour().is_none());
 }
@@ -722,13 +581,11 @@ fn native_coexistence_bypass_conditions_and_aliases() {
 #[test]
 
 fn callback_panics_and_dropped_snapshots_are_isolated() {
-
     assert!(isolate_observer(|| panic!("observer failure")).is_none());
 
     let slot = CallbackSlot::new();
 
     unsafe {
-
         slot.register(12_u32, false).unwrap();
     }
 
@@ -737,7 +594,6 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
     static DROPS: AtomicUsize = AtomicUsize::new(0);
 
     unsafe fn finish(_: *mut (), _: *const ()) {
-
         panic!("exit failure");
     }
 
@@ -745,20 +601,15 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
 
     impl Drop for Snapshot {
         fn drop(&mut self) {
-
             DROPS.fetch_add(1, Ordering::SeqCst);
         }
     }
 
-    let make = || unsafe {
-
-        ExitObservation::from_snapshot(Snapshot, finish)
-    };
+    let make = || unsafe { ExitObservation::from_snapshot(Snapshot, finish) };
 
     drop(make());
 
     unsafe {
-
         make().finish(std::ptr::null());
     }
 
@@ -768,35 +619,25 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
 #[test]
 
 fn descriptor_guard_is_thread_local_and_restored_after_panics() {
-
     type Descriptor = ObservationTarget<unsafe fn(&u32), (), (), Backend>;
 
     unsafe fn attach() -> Result<(), Box<dyn std::error::Error>> {
-
         Ok(())
     }
 
     unsafe fn callback(_: &u32) {}
 
-    static FIRST: Descriptor = unsafe {
+    static FIRST: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 
-        Descriptor::new(&RESOLVER, attach)
-    };
-
-    static SECOND: Descriptor = unsafe {
-
-        Descriptor::new(&RESOLVER, attach)
-    };
+    static SECOND: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 
     unsafe {
-
         FIRST.register_entry(callback, true, || true).unwrap();
 
         SECOND.register_entry(callback, true, || true).unwrap();
     }
 
     FIRST.observe_entry(|_| {
-
         assert!(FIRST.observe_entry(|_| ()).is_none());
 
         assert!(SECOND.observe_entry(|_| ()).is_some());
@@ -819,7 +660,6 @@ macro_rules! fixture_resolver {
             type Context = ();
 
             unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
-
                 unreachable!()
             }
         }
@@ -860,16 +700,12 @@ mod backend_specific {
         ObservationTarget<unsafe fn(&u32), unsafe fn(&u32, &bool), unsafe fn(&u32) -> ExitObservation, Backend>;
 
     unsafe fn attach() -> Result<(), Box<dyn std::error::Error>> {
-
         ATTACHED.store(true, Ordering::SeqCst);
 
         Ok(())
     }
 
-    static DESCRIPTOR: Descriptor = unsafe {
-
-        Descriptor::new(&RESOLVER, attach)
-    };
+    static DESCRIPTOR: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 
     struct VmOnly;
 
@@ -882,14 +718,12 @@ mod backend_specific {
     #[bind_func_entry_listener(VmOnly::call)]
 
     unsafe fn entry(value: &u32) {
-
         CALLS.fetch_add(*value as usize, Ordering::SeqCst);
     }
 
     #[bind_func_exit_listener(VmOnly::call)]
 
     unsafe fn exit(value: &u32, result: &bool) {
-
         assert!(*result);
 
         CALLS.fetch_add(*value as usize, Ordering::SeqCst);
@@ -898,13 +732,10 @@ mod backend_specific {
     #[test]
 
     fn observation_only_target_does_not_need_native_function_or_callable_method() {
-
         validate_listener_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
 
         for listener in listener_inventory_for::<Backend>() {
-
             unsafe {
-
                 listener.attach(true).unwrap();
             }
         }
@@ -915,23 +746,14 @@ mod backend_specific {
 
         assert_eq!(detour_inventory_for::<Backend>().count(), 0);
 
-        DESCRIPTOR.observe_entry(|callback| unsafe {
+        DESCRIPTOR.observe_entry(|callback| unsafe { callback(&3) });
 
-            callback(&3)
-        });
-
-        let observation = DESCRIPTOR
-            .prepare_exit(|prepare| unsafe {
-
-                prepare(&3)
-            })
-            .unwrap();
+        let observation = DESCRIPTOR.prepare_exit(|prepare| unsafe { prepare(&3) }).unwrap();
 
         // Backend execution remains independent of core's native ABI machinery.
         let result = true;
 
         unsafe {
-
             DESCRIPTOR.finish_exit(observation, (&result as *const bool).cast());
         }
 
@@ -953,19 +775,14 @@ mod duplicate_discovery {
         ObservationTarget<unsafe fn(&u32), unsafe fn(&u32, &u32), unsafe fn(&u32) -> ExitObservation, Backend>;
 
     unsafe fn attach() -> Result<(), Box<dyn std::error::Error>> {
-
         if !ATTACHED.swap(true, Ordering::SeqCst) {
-
             ATTACHMENTS.fetch_add(1, Ordering::SeqCst);
         }
 
         Ok(())
     }
 
-    static DESCRIPTOR: Descriptor = unsafe {
-
-        Descriptor::new(&RESOLVER, attach)
-    };
+    static DESCRIPTOR: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 
     struct VmOnly;
 
@@ -993,21 +810,16 @@ mod duplicate_discovery {
     unsafe fn second_exit(_value: &u32, _result: &u32) {}
 
     unsafe fn host_loop(snapshot: &SelectorSnapshot, preflight: bool) -> Result<(), Box<dyn std::error::Error>> {
-
         if preflight {
-
             validate_listener_registrations_for::<Backend>(snapshot)?;
         }
 
         for listener in listener_inventory_for::<Backend>() {
-
             if !listener.resolver().supports(snapshot) || listener.initialized() {
-
                 continue;
             }
 
             unsafe {
-
                 listener.attach(true)?;
             }
         }
@@ -1018,22 +830,15 @@ mod duplicate_discovery {
     #[test]
 
     fn host_discovery_rejects_duplicates_before_attachment_and_never_steals_status() {
-
         let snapshot = SelectorSnapshot::default();
 
-        let error = unsafe {
-
-            host_loop(&snapshot, true)
-        }
-        .unwrap_err()
-        .to_string();
+        let error = unsafe { host_loop(&snapshot, true) }.unwrap_err().to_string();
 
         assert!(error.contains("Only one listener per method phase"), "{error}");
 
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 0);
 
         for listener in listener_inventory_for::<Backend>() {
-
             assert!(!listener.initialized());
 
             assert!(!listener.enabled());
@@ -1041,28 +846,19 @@ mod duplicate_discovery {
 
         // Even a host without preflight must not skip a loser as "initialized".
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("first_")) {
-
             unsafe {
-
                 listener.attach(true).unwrap();
             }
         }
 
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 1);
 
-        let error = unsafe {
-
-            host_loop(&snapshot, false)
-        }
-        .unwrap_err()
-        .to_string();
+        let error = unsafe { host_loop(&snapshot, false) }.unwrap_err().to_string();
 
         assert!(error.contains("Only one"), "{error}");
 
         for listener in listener_inventory_for::<Backend>() {
-
             if listener.name.starts_with("second_") {
-
                 assert!(!listener.initialized());
 
                 assert!(!listener.enabled());
@@ -1072,7 +868,6 @@ mod duplicate_discovery {
         }
 
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("first_")) {
-
             assert!(listener.initialized());
 
             assert!(listener.enabled());
@@ -1093,7 +888,6 @@ mod activation {
     static ENTRIES: AtomicUsize = AtomicUsize::new(0);
 
     fn disabled() -> bool {
-
         CONDITIONS.fetch_add(1, Ordering::SeqCst);
 
         false
@@ -1116,44 +910,37 @@ mod activation {
     #[inline(never)]
 
     unsafe extern "C" fn original_off() -> usize {
-
         std::hint::black_box(11)
     }
 
     #[inline(never)]
 
     unsafe extern "C" fn original_gated() -> usize {
-
         std::hint::black_box(12)
     }
 
     #[bind_func_detour(Native::off, disabled)]
 
     unsafe fn off() -> usize {
-
         99
     }
 
     #[bind_func_detour(Native::gated, disabled)]
 
     unsafe fn gated() -> usize {
-
         98
     }
 
     #[bind_func_entry_listener(Native::off)]
 
     unsafe fn entry() {
-
         ENTRIES.fetch_add(1, Ordering::SeqCst);
     }
 
     #[test]
 
     fn global_autoactivation_off_skips_condition_and_conditions_are_not_dispatch_predicates() {
-
         unsafe {
-
             Native::__UNCHAINED_TARGET_off
                 .binding()
                 .initialize_address(NonZeroUsize::new(original_off as *const () as usize).unwrap())
@@ -1181,7 +968,6 @@ mod activation {
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 1);
 
             for listener in listener_inventory_for::<Backend>() {
-
                 listener.attach(true).unwrap();
             }
 
@@ -1241,23 +1027,15 @@ mod condition_reentry {
     #[inline(never)]
 
     unsafe extern "C" fn original(value: usize) -> usize {
-
         ORIGINAL.fetch_add(1, Ordering::SeqCst);
 
         value + 1
     }
 
     fn condition() -> bool {
-
         CONDITIONS.fetch_add(1, Ordering::SeqCst);
 
-        assert_eq!(
-            unsafe {
-
-                original(5)
-            },
-            6
-        );
+        assert_eq!(unsafe { original(5) }, 6);
 
         true
     }
@@ -1265,33 +1043,25 @@ mod condition_reentry {
     #[bind_func_entry_listener(Native::call)]
 
     unsafe fn entry(_value: &usize) {
-
         ENTRIES.fetch_add(1, Ordering::SeqCst);
     }
 
     #[bind_func_exit_listener(Native::call, condition)]
 
     unsafe fn exit(_value: &usize, _result: &usize) {
-
         EXITS.fetch_add(1, Ordering::SeqCst);
     }
 
     #[bind_func_detour(Native::call, condition)]
 
     unsafe fn detour(value: usize) -> usize {
-
-        unsafe {
-
-            Native::call(value) + 10
-        }
+        unsafe { Native::call(value) + 10 }
     }
 
     #[test]
 
     fn exit_and_detour_attachment_conditions_suppress_existing_observers_not_execution() {
-
         unsafe {
-
             Native::__UNCHAINED_TARGET_call
                 .binding()
                 .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
@@ -1347,9 +1117,7 @@ mod local_hygiene {
     static OBSERVATIONS: AtomicUsize = AtomicUsize::new(0);
 
     fn checksum(values: [usize; 12]) -> usize {
-
         values.into_iter().enumerate().fold(0_usize, |sum, (index, value)| {
-
             sum.wrapping_add(value.wrapping_mul(index + 1))
         })
     }
@@ -1394,7 +1162,6 @@ mod local_hygiene {
         __unchained_call: usize,
         __unchained_native_call: usize,
     ) -> usize {
-
         checksum([
             callback as usize,
             address as usize,
@@ -1427,7 +1194,6 @@ mod local_hygiene {
         __unchained_call: &usize,
         __unchained_native_call: &usize,
     ) {
-
         ENTRY.store(
             checksum([
                 *callback as usize,
@@ -1466,7 +1232,6 @@ mod local_hygiene {
         __unchained_native_call: &usize,
         return_value: &usize,
     ) {
-
         let inputs = checksum([
             *callback as usize,
             *address as usize,
@@ -1492,9 +1257,7 @@ mod local_hygiene {
     #[test]
 
     fn user_parameter_names_do_not_alias_dispatcher_snapshot_or_original_wrapper_locals() {
-
         unsafe {
-
             Native::__UNCHAINED_TARGET_call
                 .binding()
                 .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
@@ -1503,7 +1266,6 @@ mod local_hygiene {
             validate_listener_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
 
             for listener in listener_inventory_for::<Backend>() {
-
                 listener.attach(true).unwrap();
             }
 
@@ -1554,7 +1316,6 @@ mod ownership {
 
     impl Drop for Owned {
         fn drop(&mut self) {
-
             DROPS.fetch_add(1, Ordering::SeqCst);
         }
     }
@@ -1576,14 +1337,12 @@ mod ownership {
     #[inline(never)]
 
     unsafe extern "C" fn original_echo(value: Owned) -> Owned {
-
         value
     }
 
     #[inline(never)]
 
     unsafe extern "C" fn original_make(value: usize) -> Owned {
-
         Owned {
             value,
             padding: [1, 2, 3],
@@ -1593,14 +1352,12 @@ mod ownership {
     #[bind_func_entry_listener(Native::echo)]
 
     unsafe fn entry(value: &Owned) {
-
         SEEN.store(value.value, Ordering::SeqCst);
     }
 
     #[bind_func_exit_listener(Native::make)]
 
     unsafe fn exit(value: &usize, result: &Owned) {
-
         assert_eq!(*value, result.value);
 
         assert_eq!(DROPS.load(Ordering::SeqCst), 1);
@@ -1611,9 +1368,7 @@ mod ownership {
     #[test]
 
     fn owned_input_and_aggregate_return_are_borrowed_without_extra_drops() {
-
         unsafe {
-
             Native::__UNCHAINED_TARGET_echo
                 .binding()
                 .initialize_address(NonZeroUsize::new(original_echo as *const () as usize).unwrap())
@@ -1625,7 +1380,6 @@ mod ownership {
                 .unwrap();
 
             for listener in listener_inventory_for::<Backend>() {
-
                 listener.attach(true).unwrap();
             }
 
@@ -1686,7 +1440,6 @@ mod custom_snapshots {
 
     impl Drop for Owned {
         fn drop(&mut self) {
-
             DROPS.fetch_add(1, Ordering::SeqCst);
         }
     }
@@ -1696,11 +1449,9 @@ mod custom_snapshots {
         type Snapshot = Owned;
 
         fn snapshot(&self) -> Owned {
-
             SNAPSHOTS.fetch_add(1, Ordering::SeqCst);
 
             if self.value == 99 {
-
                 panic!("snapshot preparation failed");
             }
 
@@ -1708,7 +1459,6 @@ mod custom_snapshots {
         }
 
         fn borrow(snapshot: &Owned) -> &Owned {
-
             snapshot
         }
     }
@@ -1730,7 +1480,6 @@ mod custom_snapshots {
     #[inline(never)]
 
     unsafe extern "C" fn original(mut value: Owned) -> Owned {
-
         value.value += 1;
 
         value
@@ -1739,7 +1488,6 @@ mod custom_snapshots {
     #[inline(never)]
 
     unsafe extern "C" fn original_two(first: Owned, second: Owned) {
-
         TWO_ORIGINAL.fetch_add(1, Ordering::SeqCst);
 
         drop((first, second));
@@ -1748,13 +1496,11 @@ mod custom_snapshots {
     #[bind_func_exit_listener(Native::call)]
 
     unsafe fn exit(value: &Owned, result: &Owned) {
-
         assert_eq!(value.value + 1, result.value);
 
         EXITS.fetch_add(1, Ordering::SeqCst);
 
         if PANIC_EXIT.load(Ordering::SeqCst) {
-
             panic!("snapshot observer failed");
         }
     }
@@ -1762,16 +1508,13 @@ mod custom_snapshots {
     #[bind_func_exit_listener(Native::two)]
 
     unsafe fn exit_two(_first: &Owned, _second: &Owned, _result: &()) {
-
         TWO_EXITS.fetch_add(1, Ordering::SeqCst);
     }
 
     #[test]
 
     fn custom_owned_snapshots_preserve_inputs_and_release_once_on_every_delivery_path() {
-
         unsafe {
-
             Native::__UNCHAINED_TARGET_call
                 .binding()
                 .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
@@ -1783,7 +1526,6 @@ mod custom_snapshots {
                 .unwrap();
 
             for listener in listener_inventory_for::<Backend>() {
-
                 listener.attach(true).unwrap();
             }
 
@@ -1817,30 +1559,22 @@ mod custom_snapshots {
 
         let prepare = descriptor.exit_slot().get().unwrap();
 
-        let observation = unsafe {
-
-            prepare(&value)
-        };
+        let observation = unsafe { prepare(&value) };
 
         drop(observation); // Skipped delivery still owns/releases exactly one snapshot.
         assert_eq!(DROPS.load(Ordering::SeqCst), 5);
 
-        let observation = unsafe {
-
-            prepare(&value)
-        };
+        let observation = unsafe { prepare(&value) };
 
         descriptor.observe_entry(|_| unreachable!()); // Entry slot is absent.
                                                       // Install an entry slot only to exercise suppressed reentrant delivery.
         unsafe fn entry(_value: &Owned) {}
 
         unsafe {
-
             descriptor.entry_slot().register(entry, true).unwrap();
         }
 
         descriptor.observe_entry(|_| unsafe {
-
             descriptor.finish_exit(observation, (&value as *const Owned).cast());
         });
 
@@ -1855,7 +1589,6 @@ mod custom_snapshots {
         let two = std::hint::black_box(original_two as unsafe extern "C" fn(Owned, Owned));
 
         unsafe {
-
             two(Owned { value: 1 }, Owned { value: 99 });
         }
 
@@ -1902,7 +1635,6 @@ mod references {
     #[inline(never)]
 
     unsafe extern "C" fn original_read(value: &mut i32) -> &mut i32 {
-
         *value += 1;
 
         value
@@ -1911,49 +1643,42 @@ mod references {
     #[inline(never)]
 
     unsafe extern "C" fn original_reference() -> &'static i32 {
-
         &RESULT
     }
 
     #[inline(never)]
 
     unsafe extern "C" fn original_pointer(value: *mut i32) -> *mut i32 {
-
         value
     }
 
     #[inline(never)]
 
     unsafe extern "C" fn original_nothing(value: usize) {
-
         SEEN.fetch_add(value, Ordering::SeqCst);
     }
 
     #[bind_func_entry_listener(Native::read)]
 
     unsafe fn read_entry(value: &&mut i32) {
-
         SEEN.store(**value as usize, Ordering::SeqCst);
     }
 
     #[bind_func_exit_listener(Native::reference)]
 
     unsafe fn reference_exit(result: &&i32) {
-
         assert_eq!(**result, 42);
     }
 
     #[bind_func_exit_listener(Native::pointer)]
 
     unsafe fn pointer_exit(value: &*mut i32, result: &*mut i32) {
-
         assert_eq!(value, result);
     }
 
     #[bind_func_exit_listener(Native::nothing)]
 
     unsafe fn void_exit(value: &usize, result: &()) {
-
         assert_eq!(*value, 3);
 
         assert_eq!(*result, ());
@@ -1962,9 +1687,7 @@ mod references {
     #[test]
 
     fn reference_inputs_and_void_pointer_reference_results_preserve_storage() {
-
         unsafe {
-
             for (binding, address) in [
                 (
                     Native::__UNCHAINED_TARGET_read.binding(),
@@ -1983,12 +1706,10 @@ mod references {
                     original_nothing as *const () as usize,
                 ),
             ] {
-
                 binding.initialize_address(NonZeroUsize::new(address).unwrap()).unwrap();
             }
 
             for listener in listener_inventory_for::<Backend>() {
-
                 listener.attach(true).unwrap();
             }
 

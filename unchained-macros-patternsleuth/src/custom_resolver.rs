@@ -66,6 +66,5 @@ macro_rules! define_custom_resolver {
 #[doc(hidden)]
 
 pub fn single_address<P>(node: binary_bloodhound::Trace<u64, P>) -> u64 {
-
     *node.value
 }

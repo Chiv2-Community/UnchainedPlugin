@@ -74,7 +74,6 @@ static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_OFF_CONDITION_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 fn borrow_condition() -> bool {
-
     assert!(unchained_macros_core::SupportsDetour::physical_detour(Native::__UNCHAINED_TARGET_borrow).is_some());
 
     let binding = Native::__UNCHAINED_TARGET_borrow.binding();
@@ -85,7 +84,6 @@ fn borrow_condition() -> bool {
 }
 
 fn global_off_condition() -> bool {
-
     GLOBAL_OFF_CONDITION_CALLS.fetch_add(1, Ordering::SeqCst);
 
     true
@@ -94,55 +92,35 @@ fn global_off_condition() -> bool {
 #[unchained_macros_core::bind_func_detour(model::Native::add, || CONDITION.load(Ordering::SeqCst))]
 
 unsafe fn plugin_add(value: i32) -> i32 {
-
     ADD_CALLS.fetch_add(1, Ordering::SeqCst);
 
-    unsafe {
-
-        Native::add(value) + 100
-    }
+    unsafe { Native::add(value) + 100 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::add)]
 
 unsafe fn duplicate(value: i32) -> i32 {
-
-    unsafe {
-
-        Native::add(value) + 200
-    }
+    unsafe { Native::add(value) + 200 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::alias)]
 
 unsafe fn aliased(value: i32) -> i32 {
-
-    unsafe {
-
-        Native::alias(value) + 300
-    }
+    unsafe { Native::alias(value) + 300 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::borrow, borrow_condition)]
 
 unsafe fn plugin_borrow<'a>(this: &'a Native) -> &'a Native {
-
     BORROW_CALLS.fetch_add(1, Ordering::SeqCst);
 
-    unsafe {
-
-        this.borrow()
-    }
+    unsafe { this.borrow() }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::storage)]
 
 unsafe fn plugin_storage<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
-
-    let result = unsafe {
-
-        this.storage(out)
-    };
+    let result = unsafe { this.storage(out) };
 
     *result += 10;
 
@@ -152,31 +130,19 @@ unsafe fn plugin_storage<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i
 #[unchained_macros_core::bind_func_detour(Native::global_off, global_off_condition)]
 
 unsafe fn plugin_global_off(value: i32) -> i32 {
-
-    unsafe {
-
-        Native::global_off(value) + 400
-    }
+    unsafe { Native::global_off(value) + 400 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::zero)]
 
 unsafe fn plugin_zero() -> i32 {
-
-    unsafe {
-
-        Native::zero() + 1
-    }
+    unsafe { Native::zero() + 1 }
 }
 
 #[unchained_macros_core::bind_func_detour(Native::request)]
 
 unsafe fn plugin_request(value: i32) -> i32 {
-
-    unsafe {
-
-        Native::request(value) + 600
-    }
+    unsafe { Native::request(value) + 600 }
 }
 
 #[cfg(any())]
@@ -187,25 +153,19 @@ unsafe fn excluded() {}
 #[inline(never)]
 
 unsafe extern "C" fn add_target(value: i32) -> i32 {
-
     std::hint::black_box(value) + 3
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn borrow_target(this: &Native) -> &Native {
-
     std::hint::black_box(this)
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn storage_target<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
-
-    *out = unsafe {
-
-        (*std::hint::black_box(this)).value
-    };
+    *out = unsafe { (*std::hint::black_box(this)).value };
 
     std::hint::black_box(out)
 }
@@ -213,39 +173,27 @@ unsafe extern "C" fn storage_target<'a>(this: *const Native, out: &'a mut i32) -
 #[inline(never)]
 
 unsafe extern "C" fn global_off_target(value: i32) -> i32 {
-
     std::hint::black_box(value) + 4
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn zero_target() -> i32 {
-
     std::hint::black_box(17)
 }
 
 #[inline(never)]
 
 unsafe extern "C" fn request_target(value: i32) -> i32 {
-
     std::hint::black_box(value) + 6
 }
 
 #[test]
 
 fn detached_replacements_patch_native_entries_but_model_calls_always_use_originals() {
+    assert!(std::panic::catch_unwind(|| unsafe { Native::add(1) }).is_err());
 
-    assert!(std::panic::catch_unwind(|| unsafe {
-
-        Native::add(1)
-    })
-    .is_err());
-
-    assert!(unsafe {
-
-        __UNCHAINED_REGISTRATION_plugin_add.attach(true)
-    }
-    .is_err());
+    assert!(unsafe { __UNCHAINED_REGISTRATION_plugin_add.attach(true) }.is_err());
 
     assert!(!unchained_macros_core::detour_is_initialized("plugin_add"));
 
@@ -283,9 +231,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             global_off_target as *const () as usize,
         ),
     ] {
-
         unsafe {
-
             binding
                 .initialize_address(std::num::NonZeroUsize::new(address).unwrap())
                 .unwrap();
@@ -312,7 +258,6 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
     assert!(registration.condition());
 
     unsafe {
-
         assert_eq!(Native::add(7), 10);
 
         registration.attach(true).unwrap();

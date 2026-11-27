@@ -27,7 +27,6 @@ pub enum ExecThunkParameters {
 }
 
 fn registers(instruction: &Instruction, mnemonic: Mnemonic, left: Register, right: Register) -> bool {
-
     instruction.mnemonic() == mnemonic
         && instruction.op0_kind() == OpKind::Register
         && instruction.op0_register() == left
@@ -36,7 +35,6 @@ fn registers(instruction: &Instruction, mnemonic: Mnemonic, left: Register, righ
 }
 
 fn frame_code(instruction: &Instruction, offset: usize) -> bool {
-
     instruction.memory_base() == Register::RDX
         && instruction.memory_index() == Register::None
         && instruction.memory_displacement64() == offset as u64
@@ -44,11 +42,8 @@ fn frame_code(instruction: &Instruction, offset: usize) -> bool {
 }
 
 fn no_argument_advance(instructions: &[Instruction], offset: usize) -> Result<u64, String> {
-
     for (index, window) in instructions.windows(7).enumerate() {
-
         let [load, zero, test, save, set, add, store] = window else {
-
             unreachable!()
         };
 
@@ -90,18 +85,15 @@ fn no_argument_advance(instructions: &[Instruction], offset: usize) -> Result<u6
             || store.op1_kind() != OpKind::Register
             || store.op1_register() != full_counter
         {
-
             continue;
         }
 
         // The prefix must not call helpers, branch around advancement, or replace the frame.
         if instructions[..index].iter().any(|instruction| {
-
             instruction.flow_control() != FlowControl::Next
                 || (instruction.op0_kind() == OpKind::Register
                     && instruction.op0_register().full_register() == Register::RDX)
         }) {
-
             return Err("Unsupported prefix before no-argument frame advancement".into());
         }
 
@@ -119,7 +111,6 @@ fn candidate(
     module: Range<usize>,
     parameters: ExecThunkParameters,
 ) -> Result<usize, String> {
-
     let instructions: Vec<_> = Decoder::with_ip(64, bytes, thunk as u64, DecoderOptions::NONE)
         .into_iter()
         .collect();
@@ -136,25 +127,19 @@ fn candidate(
     let mut stepped = false;
 
     for instruction in instructions {
-
         if instruction.is_invalid() {
-
             return Err("Invalid instruction in exec thunk".into());
         }
 
         if instruction.mnemonic() == Mnemonic::Call {
-
             if instruction.op0_kind() != OpKind::NearBranch64 {
-
                 return Err("Indirect calls in exec thunks require an explicit receiver resolver".into());
             }
 
             let callee = instruction.near_branch_target() as usize;
 
             if callee == step || callee == explicit {
-
                 if no_arguments.is_some() {
-
                     return Err("Frame stepping contradicts no-argument metadata".into());
                 }
 
@@ -162,9 +147,7 @@ fn candidate(
 
                 target = None;
             } else if (stepped || no_arguments.is_some_and(|ready| instruction.ip() >= ready)) && target.is_none() {
-
                 if !module.contains(&callee) {
-
                     return Err("Exec callee is outside the game module".into());
                 }
 
@@ -174,20 +157,16 @@ fn candidate(
             instruction.flow_control(),
             FlowControl::UnconditionalBranch | FlowControl::ConditionalBranch
         ) {
-
             if no_arguments.is_some() && target.is_none() {
-
                 return Err("Branch before no-argument native body".into());
             }
 
             let destination = instruction.near_branch_target() as usize;
 
             if !(thunk..thunk + bytes.len()).contains(&destination) {
-
                 return Err("Exec thunk has an unsupported tail/external branch".into());
             }
         } else if instruction.flow_control() == FlowControl::IndirectBranch {
-
             return Err("Exec thunk has an indirect tail branch".into());
         }
     }
@@ -196,11 +175,9 @@ fn candidate(
 }
 
 unsafe fn executable_range(address: usize, end: usize) -> bool {
-
     let mut info = MEMORY_BASIC_INFORMATION::default();
 
     let read = unsafe {
-
         VirtualQuery(
             Some(address as *const _),
             &mut info,
@@ -218,14 +195,10 @@ unsafe fn executable_range(address: usize, end: usize) -> bool {
 }
 
 unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
-
     let mut image = 0;
 
-    let entry = unsafe {
-
-        RtlLookupFunctionEntry(address as u64, &mut image, None).as_ref()
-    }
-    .ok_or("Code has no x64 unwind entry; leaf/no-op bodies are unsupported")?;
+    let entry = unsafe { RtlLookupFunctionEntry(address as u64, &mut image, None).as_ref() }
+        .ok_or("Code has no x64 unwind entry; leaf/no-op bodies are unsupported")?;
 
     let start = image
         .checked_add(u64::from(entry.BeginAddress))
@@ -235,15 +208,7 @@ unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
         .checked_add(u64::from(entry.EndAddress))
         .ok_or("Unwind address overflow")? as usize;
 
-    if image as usize != base
-        || start != address
-        || end <= start
-        || !unsafe {
-
-            executable_range(start, end)
-        }
-    {
-
+    if image as usize != base || start != address || end <= start || !unsafe { executable_range(start, end) } {
         return Err("Address is not an executable function entry in the game module".into());
     }
 
@@ -263,11 +228,9 @@ pub unsafe fn native_body(
     explicit: usize,
     parameters: ExecThunkParameters,
 ) -> Result<usize, String> {
-
     let mut module = MODULEINFO::default();
 
     unsafe {
-
         GetModuleInformation(
             GetCurrentProcess(),
             HMODULE(base as isize),
@@ -281,27 +244,17 @@ pub unsafe fn native_body(
         .checked_add(module.SizeOfImage as usize)
         .ok_or("Module range overflow")?;
 
-    let range = unsafe {
-
-        extent(thunk, base)
-    }?;
+    let range = unsafe { extent(thunk, base) }?;
 
     if range.end > end {
-
         return Err("Exec thunk exceeds the game module".into());
     }
 
-    let bytes = unsafe {
-
-        std::slice::from_raw_parts(range.start as *const u8, range.len())
-    };
+    let bytes = unsafe { std::slice::from_raw_parts(range.start as *const u8, range.len()) };
 
     let target = candidate(bytes, thunk, step, explicit, base..end, parameters)?;
 
-    unsafe {
-
-        extent(target, base)
-    }?;
+    unsafe { extent(target, base) }?;
 
     Ok(target)
 }
@@ -313,7 +266,6 @@ mod tests {
     use super::{candidate, ExecThunkParameters};
 
     fn call(bytes: &mut Vec<u8>, target: usize) {
-
         let next = 0x1000 + bytes.len() + 5;
 
         bytes.push(0xe8);
@@ -324,7 +276,6 @@ mod tests {
     #[test]
 
     fn direct_body_precedes_cleanup_after_the_final_step() {
-
         let mut bytes = Vec::new();
 
         call(&mut bytes, 0x1100);
@@ -373,7 +324,6 @@ mod tests {
     ];
 
     fn no_arguments(bytes: &[u8]) -> Result<usize, String> {
-
         candidate(
             bytes,
             0x1000,
@@ -390,7 +340,6 @@ mod tests {
     #[test_case::test_case(ALTERNATE_ADVANCE; "instance return storage")]
 
     fn no_arguments_selects_body_before_conditional_cleanup(advance: &[u8]) {
-
         let mut bytes = advance.to_vec();
 
         call(&mut bytes, 0x1300);
@@ -428,7 +377,6 @@ mod tests {
     #[test]
 
     fn no_arguments_does_not_accept_an_arbitrary_first_call() {
-
         let mut bytes = Vec::new();
 
         call(&mut bytes, 0x1300);
@@ -463,7 +411,6 @@ mod tests {
     #[test_case::test_case(0x3000; "outside module")]
 
     fn no_arguments_rejects_invalid_callees(target: usize) {
-
         let mut bytes = ADVANCE.to_vec();
 
         call(&mut bytes, target);
@@ -479,7 +426,6 @@ mod tests {
     #[test_case::test_case(&[0xe8, 0, 0]; "invalid instruction")]
 
     fn no_arguments_rejects_unsupported_bodies(body: &[u8]) {
-
         let mut bytes = ADVANCE.to_vec();
 
         bytes.extend_from_slice(body);
@@ -490,7 +436,6 @@ mod tests {
     #[test]
 
     fn no_arguments_rejects_changed_advancement_semantics() {
-
         for (offset, replacement) in [
             (5, 0xc0),  // Zero a different counter.
             (8, 0xc9),  // Test a different pointer.
@@ -498,7 +443,6 @@ mod tests {
             (17, 0xc9), // Add the wrong pointer.
             (21, 0x40), // Store to another field.
         ] {
-
             let mut bytes = ADVANCE.to_vec();
 
             bytes[offset] = replacement;
@@ -518,14 +462,12 @@ mod tests {
     #[test_case::test_case(&[0xc3]; "inlined or shared leaf")]
 
     fn unsupported_shapes_do_not_become_callable_addresses(bytes: &[u8]) {
-
         for parameters in [
             ExecThunkParameters::Stepped,
             ExecThunkParameters::NoArguments {
                 frame_code_offset: 0x20,
             },
         ] {
-
             assert!(candidate(bytes, 0x1000, 0x1100, 0x1200, 0x1000..0x2000, parameters).is_err());
         }
     }

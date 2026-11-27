@@ -15,7 +15,6 @@ macro_rules! backend {
                 type Context = $context;
 
                 unsafe fn resolve(&self, _: &Self::Context) -> Result<std::num::NonZeroUsize, String> {
-
                     panic!("discovery must not resolve")
                 }
             }
@@ -31,10 +30,7 @@ macro_rules! backend {
 
             type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), (), Backend>;
 
-            static TARGET: Target = unsafe {
-
-                Target::new(&BINDING, || {}, |_| panic!("discovery must not attach"))
-            };
+            static TARGET: Target = unsafe { Target::new(&BINDING, || {}, |_| panic!("discovery must not attach")) };
 
             pub static HOOK: bindings::DetourRegistration<Target> = bindings::DetourRegistration::new(
                 "SameHook",
@@ -45,7 +41,6 @@ macro_rules! backend {
 
             pub static LISTENER: bindings::ListenerRegistration =
                 bindings::ListenerRegistration::entry("SameListener", &(&TARGET, |_| {}), || {
-
                     panic!("discovery must not evaluate conditions")
                 });
 
@@ -78,10 +73,8 @@ backend!(second, std::rc::Rc<()>);
 #[test]
 
 fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
-
     macro_rules! check {
         ($module:ident) => {
-
             let resolvers = bindings::resolver_inventory_for::<$module::Backend>().collect::<Vec<_>>();
 
             assert_eq!(resolvers.len(), 1);
@@ -134,7 +127,6 @@ fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
 #[test]
 
 fn erased_queries_preserve_concrete_identity_and_do_not_invoke_native_work() {
-
     assert_eq!(
         bindings::__private::inventory::iter::<&dyn ResolverInfo>
             .into_iter()
