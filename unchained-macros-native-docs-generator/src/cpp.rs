@@ -62,6 +62,7 @@ impl SourceFile {
             definitions(tree.root_node(), source, None, &mut declarations.functions);
             self.declarations = Some(declarations);
         }
+
         Ok((source, self.declarations.as_ref().unwrap()))
     }
 }
@@ -91,13 +92,13 @@ impl SourceIndex {
     }
 
     fn load(&mut self, path: &Path) -> Result<()> {
-        if let std::collections::btree_map::Entry::Vacant(entry) = self.files.entry(path.to_owned())
-        {
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.files.entry(path.to_owned()) {
             entry.insert(SourceFile {
                 bytes: fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?,
                 declarations: None,
             });
         }
+
         Ok(())
     }
 
@@ -116,9 +117,7 @@ impl SourceIndex {
             .entry(module.to_owned())
             .or_default()
             .insert(target.to_owned());
-        if let std::collections::btree_map::Entry::Vacant(entry) =
-            self.modules.entry(module.to_owned())
-        {
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.modules.entry(module.to_owned()) {
             let mut files = BTreeSet::new();
             cpp_files(module, &mut files)?;
             entry.insert(ModuleIndex {
@@ -126,9 +125,9 @@ impl SourceIndex {
                 functions: BTreeMap::new(),
             });
         }
+
         let indexed = &self.modules[module];
-        let mut pending: BTreeMap<_, std::result::Result<Vec<IndexedFunction>, String>> = self
-            .requests[module]
+        let mut pending: BTreeMap<_, std::result::Result<Vec<IndexedFunction>, String>> = self.requests[module]
             .iter()
             .filter(|target| !indexed.functions.contains_key(*target))
             .map(|target| (target.clone(), Ok(Vec::new())))
@@ -136,19 +135,17 @@ impl SourceIndex {
         if pending.is_empty() {
             return Ok(());
         }
+
         let wanted: BTreeSet<_> = pending
             .keys()
             .map(|target| target.rsplit("::").next().unwrap().to_owned())
             .collect();
         for path in &indexed.files {
-            let bytes =
-                fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
-            if !pending
-                .keys()
-                .any(|target| may_contain_implementation(&bytes, target))
-            {
+            let bytes = fs::read(path).with_context(|| format!("Cannot read {}", path.display()))?;
+            if !pending.keys().any(|target| may_contain_implementation(&bytes, target)) {
                 continue;
             }
+
             let parsed = (|| -> Result<Vec<Definition>> {
                 let source = std::str::from_utf8(&bytes)
                     .with_context(|| format!("Native source is not UTF-8: {}", path.display()))?;
@@ -173,6 +170,7 @@ impl SourceIndex {
                         }
                     }
                 }
+
                 Err(error) => {
                     for (target, functions) in &mut pending {
                         if may_contain_implementation(&bytes, target) {
@@ -182,11 +180,8 @@ impl SourceIndex {
                 }
             }
         }
-        self.modules
-            .get_mut(module)
-            .unwrap()
-            .functions
-            .extend(pending);
+
+        self.modules.get_mut(module).unwrap().functions.extend(pending);
         Ok(())
     }
 }
@@ -205,6 +200,7 @@ fn may_contain_implementation(bytes: &[u8], target: &str) -> bool {
     if memchr::memmem::find(bytes, method.as_bytes()).is_none() {
         return false;
     }
+
     // Namespace blocks and inline definitions need not spell Owner::Method.
     // Only require a plain owner identifier; unfamiliar spellings scan broadly.
     let owner = owner.rsplit("::").next().unwrap();
@@ -232,6 +228,7 @@ fn cpp_files(directory: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
             files.insert(entry.path());
         }
     }
+
     Ok(())
 }
 
@@ -247,10 +244,12 @@ pub(crate) fn module_directory(header: &Path, root: &Path) -> PathBuf {
                 .unwrap_or(root)
                 .to_path_buf();
         }
+
         if directory == root {
             break;
         }
     }
+
     header.parent().unwrap_or(root).to_path_buf()
 }
 
@@ -265,6 +264,7 @@ fn function_declarator(node: Node<'_>) -> Option<Node<'_>> {
             found
         })?;
     }
+
     Some(declarator)
 }
 
@@ -284,6 +284,7 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
         if Some(node.start_byte()) == skip || node.kind() == "comment" {
             return;
         }
+
         if node.child_count() == 0 {
             out.push(source[node.byte_range()].to_owned());
         } else {
@@ -302,42 +303,45 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
         if matches!(parameter.kind(), "(" | ")" | "," | "comment") {
             continue;
         }
+
         if parameter.kind() == "..." {
             key.push(vec!["...".to_owned()]);
             continue;
         }
+
         let mut name = parameter.child_by_field_name("declarator");
         while let Some(node) = name {
             // Complex callable declarators need a richer type model.
             if node.kind() == "function_declarator" {
                 return None;
             }
+
             if node.kind() == "identifier" {
                 break;
             }
+
             name = node.child_by_field_name("declarator").or_else(|| {
                 let mut cursor = node.walk();
-                let found = node.named_children(&mut cursor).find(|child| {
-                    child.kind() == "identifier" || child.kind().ends_with("_declarator")
-                });
+                let found = node
+                    .named_children(&mut cursor)
+                    .find(|child| child.kind() == "identifier" || child.kind().ends_with("_declarator"));
                 found
             });
         }
+
         let mut parameter_key = Vec::new();
         let mut cursor = parameter.walk();
         for child in parameter.children(&mut cursor) {
             if child.kind() == "=" {
                 break;
             }
-            tokens(
-                child,
-                source,
-                name.map(|node| node.start_byte()),
-                &mut parameter_key,
-            );
+
+            tokens(child, source, name.map(|node| node.start_byte()), &mut parameter_key);
         }
+
         key.push(parameter_key);
     }
+
     let mut qualifiers = Vec::new();
     let mut cursor = declarator.walk();
     for child in declarator.named_children(&mut cursor) {
@@ -345,6 +349,7 @@ fn overload_key(node: Node<'_>, source: &str) -> Option<Vec<Vec<String>>> {
             tokens(child, source, None, &mut qualifiers);
         }
     }
+
     key.push(qualifiers);
     Some(key)
 }
@@ -369,8 +374,10 @@ fn scoped_name(node: Node<'_>, name: String, source: &str) -> Option<String> {
                 return None;
             }
         }
+
         parent = node.parent();
     }
+
     scopes.reverse();
     scopes.push(name);
     Some(scopes.join("::"))
@@ -385,17 +392,17 @@ fn parser_input(source: &str) -> Vec<u8> {
         if source[end..].starts_with(identifier) {
             continue;
         }
+
         let start = source[..offset]
             .rfind(|c: char| !identifier(c))
-            .map_or(0, |index| {
-                index + source[index..].chars().next().unwrap().len_utf8()
-            });
+            .map_or(0, |index| index + source[index..].chars().next().unwrap().len_utf8());
         let prefix = source[..start].trim_end();
         let keyword = prefix.rsplit(|c: char| !identifier(c)).next().unwrap_or("");
         if matches!(keyword, "class" | "struct") {
             input[start..end].fill(b' ');
         }
     }
+
     input
 }
 
@@ -418,8 +425,7 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
                 .child_by_field_name("type")
                 .and_then(|ty| ty.child_by_field_name("name"))
                 .is_some_and(|tag| source[tag.byte_range()] == source[name.byte_range()]);
-            if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source)
-                .filter(|_| !repeats_tag)
+            if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source).filter(|_| !repeats_tag)
             {
                 found.push(Definition {
                     name,
@@ -430,20 +436,17 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
             }
         }
     }
+
     if matches!(
         node.kind(),
         "class_specifier" | "struct_specifier" | "union_specifier" | "enum_specifier"
     ) {
-        if let (Some(name), Some(body)) = (
-            node.child_by_field_name("name"),
-            node.child_by_field_name("body"),
-        ) {
+        if let (Some(name), Some(body)) = (node.child_by_field_name("name"), node.child_by_field_name("body")) {
             let closed = body
                 .child(body.child_count().saturating_sub(1))
                 .is_some_and(|end| end.kind() == "}" && !end.is_missing());
             if closed {
-                if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source)
-                {
+                if let Some(name) = scoped_name(node, source[name.byte_range()].to_owned(), source) {
                     let declaration = node
                         .parent()
                         .filter(|parent| parent.kind() == "template_declaration")
@@ -454,6 +457,7 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
                     if suffix[whitespace..].starts_with(';') {
                         end += whitespace + 1;
                     }
+
                     found.push(Definition {
                         name,
                         line: declaration.start_position().row + 1,
@@ -464,6 +468,7 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
             }
         }
     }
+
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         class_definitions(child, source, found);
@@ -472,14 +477,8 @@ fn class_definitions(node: Node<'_>, source: &str, found: &mut Vec<Definition>) 
 
 fn native_header(root: &Path, header: &Path) -> Result<(PathBuf, PathBuf)> {
     let root = root.canonicalize().context("Cannot open source root")?;
-    let header = root
-        .join(header)
-        .canonicalize()
-        .context("Cannot open native header")?;
-    anyhow::ensure!(
-        header.starts_with(&root),
-        "Native header is outside the source root"
-    );
+    let header = root.join(header).canonicalize().context("Cannot open native header")?;
+    anyhow::ensure!(header.starts_with(&root), "Native header is outside the source root");
     Ok((root, header))
 }
 
@@ -488,12 +487,7 @@ pub fn find_class(root: &Path, header: &Path, target: &str) -> Result<Option<Imp
 }
 
 impl SourceIndex {
-    pub fn find_class(
-        &mut self,
-        root: &Path,
-        header: &Path,
-        target: &str,
-    ) -> Result<Option<Implementation>> {
+    pub fn find_class(&mut self, root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
         let (_, header) = native_header(root, header)?;
         self.load(&header)?;
         let (source, declarations) = self.files.get_mut(&header).unwrap().parse(&header)?;
@@ -510,20 +504,14 @@ impl SourceIndex {
     }
 }
 
-fn definitions(
-    node: Node<'_>,
-    source: &str,
-    wanted: Option<&BTreeSet<String>>,
-    found: &mut Vec<Definition>,
-) {
+fn definitions(node: Node<'_>, source: &str, wanted: Option<&BTreeSet<String>>, found: &mut Vec<Definition>) {
     if node.kind() == "function_definition" {
         if !node.has_error() && node.child_by_field_name("body").is_some() {
             if let Some(name) = qualified_name(node, source) {
-                if wanted
-                    .is_some_and(|methods| !methods.contains(name.rsplit("::").next().unwrap()))
-                {
+                if wanted.is_some_and(|methods| !methods.contains(name.rsplit("::").next().unwrap())) {
                     return;
                 }
+
                 let declaration = node
                     .parent()
                     .filter(|parent| parent.kind() == "template_declaration")
@@ -536,29 +524,22 @@ fn definitions(
                 });
             }
         }
+
         return;
     }
+
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         definitions(child, source, wanted, found);
     }
 }
 
-pub fn find_implementation(
-    root: &Path,
-    header: &Path,
-    target: &str,
-) -> Result<Option<Implementation>> {
+pub fn find_implementation(root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
     SourceIndex::new().find_implementation(root, header, target)
 }
 
 impl SourceIndex {
-    pub fn find_implementation(
-        &mut self,
-        root: &Path,
-        header: &Path,
-        target: &str,
-    ) -> Result<Option<Implementation>> {
+    pub fn find_implementation(&mut self, root: &Path, header: &Path, target: &str) -> Result<Option<Implementation>> {
         self.find_implementation_for_binding(root, header, target, None)
     }
 
@@ -571,9 +552,7 @@ impl SourceIndex {
     ) -> Result<Option<Implementation>> {
         let (target, selector) = target
             .split_once('(')
-            .map_or((target, None), |(name, parameters)| {
-                (name.trim(), Some(parameters))
-            });
+            .map_or((target, None), |(name, parameters)| (name.trim(), Some(parameters)));
         anyhow::ensure!(
             target
                 .rsplit_once("::")
@@ -585,18 +564,13 @@ impl SourceIndex {
         let overload = if let Some(selector) = selector {
             let source = format!("void selected({selector} {{}}");
             let tree = parse_source(&source)?;
-            anyhow::ensure!(
-                !tree.root_node().has_error(),
-                "Invalid C++ overload selector"
-            );
-            let function = tree
-                .root_node()
-                .named_child(0)
-                .context("Missing overload selector")?;
+            anyhow::ensure!(!tree.root_node().has_error(), "Invalid C++ overload selector");
+            let function = tree.root_node().named_child(0).context("Missing overload selector")?;
             Some(overload_key(function, &source).context("Unsupported C++ overload selector")?)
         } else {
             None
         };
+
         let target = implementation_target(target);
         let method = target.rsplit("::").next().unwrap();
         let mut implementations = Vec::new();
@@ -614,14 +588,10 @@ impl SourceIndex {
                                 .as_ref()
                                 .is_none_or(|key| definition.overload.as_ref() == Some(key))
                     })
-                    .map(|definition| {
-                        (
-                            definition.overload.clone(),
-                            definition.implementation(&header, source),
-                        )
-                    }),
+                    .map(|definition| (definition.overload.clone(), definition.implementation(&header, source))),
             );
         }
+
         self.index_module(&module, &target)?;
         let functions = self.modules[&module].functions[&target]
             .as_ref()
@@ -636,24 +606,17 @@ impl SourceIndex {
                             .as_ref()
                             .is_none_or(|key| function.definition.overload.as_ref() == Some(key))
                 })
-                .map(|function| {
-                    (
-                        function.definition.overload.clone(),
-                        function.implementation.clone(),
-                    )
-                }),
+                .map(|function| (function.definition.overload.clone(), function.implementation.clone())),
         );
         if overload.is_none() && implementations.len() > 1 {
             if let Some(binding) = binding {
-                implementations
-                    .retain(|(key, _)| key.as_ref().is_some_and(|key| binding.matches(key)));
+                implementations.retain(|(key, _)| key.as_ref().is_some_and(|key| binding.matches(key)));
             }
         }
+
         // Never choose an overload or preprocessor branch by directory order.
         Ok(if implementations.len() == 1 {
-            implementations
-                .pop()
-                .map(|(_, implementation)| implementation)
+            implementations.pop().map(|(_, implementation)| implementation)
         } else {
             None
         })
@@ -669,18 +632,23 @@ mod tests {
         let fixture = Fixture::new();
         let header = Path::new("Source/Test/Public/Native.h");
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
-        fixture.write("Source/Test/Private/Native.cpp",
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
             "void Native::Call(FString* const** Value) { Correct(); }\n\
-             void Native::Call(const FString*** Value) { Wrong(); }");
+             void Native::Call(const FString*** Value) { Wrong(); }",
+        );
         let signature = crate::signature::BindingSignature::from_rust(
             &syn::parse_quote! { unsafe fn Call(value: *mut *const *mut FString) },
             "Native",
-        ).unwrap();
+        )
+        .unwrap();
         let selected = SourceIndex::new()
             .find_implementation_for_binding(&fixture.0, header, "Native::Call", Some(&signature))
-            .unwrap().unwrap();
+            .unwrap()
+            .unwrap();
         assert!(selected.code.contains("Correct()"), "Selected {}", selected.code);
     }
+
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -729,16 +697,9 @@ mod tests {
         );
         fixture.write("Source/Test/Private/Unrelated.cpp", "void Unrelated() {}");
         let mut index = SourceIndex::new();
-        index
-            .plan_implementation(&fixture.0, header, "Native::Call()")
-            .unwrap();
-        index
-            .plan_implementation(&fixture.0, header, "Native::Other")
-            .unwrap();
-        assert!(index
-            .find_class(&fixture.0, header, "Native")
-            .unwrap()
-            .is_some());
+        index.plan_implementation(&fixture.0, header, "Native::Call()").unwrap();
+        index.plan_implementation(&fixture.0, header, "Native::Other").unwrap();
+        assert!(index.find_class(&fixture.0, header, "Native").unwrap().is_some());
         assert!(index
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
@@ -758,18 +719,11 @@ mod tests {
         assert_eq!(module.functions["Native::Call"].as_ref().unwrap().len(), 1);
         assert_eq!(module.functions["Native::Other"].as_ref().unwrap().len(), 1);
         assert_eq!(
-            index
-                .files
-                .values()
-                .filter(|file| file.declarations.is_some())
-                .count(),
+            index.files.values().filter(|file| file.declarations.is_some()).count(),
             1
         );
 
-        fixture.write(
-            "Source/Test/Private/Native.cpp",
-            "int Native::Call() { return 3; }",
-        );
+        fixture.write("Source/Test/Private/Native.cpp", "int Native::Call() { return 3; }");
         assert!(index
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
@@ -783,10 +737,7 @@ mod tests {
             .unwrap()
             .code
             .contains("return 3;"));
-        fixture.write(
-            "Source/Test/Private/Duplicate.cpp",
-            "int Native::Call() { return 4; }",
-        );
+        fixture.write("Source/Test/Private/Duplicate.cpp", "int Native::Call() { return 4; }");
         assert!(SourceIndex::new()
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
@@ -806,20 +757,16 @@ mod tests {
             "Source/Test/Private/Second.cpp",
             "namespace Game { struct Second { int Call() { return 2; } }; }",
         );
-        fixture.write(
-            "Source/Test/Private/Third.cpp",
-            "int Game::Third::Call() { return 3; }",
-        );
+        fixture.write("Source/Test/Private/Third.cpp", "int Game::Third::Call() { return 3; }");
         for planned in [false, true] {
             let mut index = SourceIndex::new();
             if planned {
                 index
                     .plan_implementation(&fixture.0, header, "Game::First::Call()")
                     .unwrap();
-                index
-                    .plan_implementation(&fixture.0, header, "Second::Call")
-                    .unwrap();
+                index.plan_implementation(&fixture.0, header, "Second::Call").unwrap();
             }
+
             for (target, body) in [
                 ("Game::First::Call", "return 1;"),
                 ("Second::Call", "return 2;"),
@@ -832,10 +779,9 @@ mod tests {
                     .code
                     .contains(body));
             }
+
             // Planning after a previous lookup must also extend the owner set.
-            index
-                .plan_implementation(&fixture.0, header, "Third::Call")
-                .unwrap();
+            index.plan_implementation(&fixture.0, header, "Third::Call").unwrap();
             assert!(index
                 .find_implementation(&fixture.0, header, "Third::Call")
                 .unwrap()
@@ -849,24 +795,17 @@ mod tests {
         let header = Path::new("Source/Test/Public/Native.h");
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
         fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() {}");
-        fs::write(
-            fixture.0.join("Source/Test/Private/Other.cpp"),
-            b"\xff Other::Call",
-        )
-        .unwrap();
+        fs::write(fixture.0.join("Source/Test/Private/Other.cpp"), b"\xff Other::Call").unwrap();
         let mut index = SourceIndex::new();
         for target in ["Native::Call", "Other::Call"] {
-            index
-                .plan_implementation(&fixture.0, header, target)
-                .unwrap();
+            index.plan_implementation(&fixture.0, header, target).unwrap();
         }
+
         assert!(index
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
             .is_some());
-        assert!(index
-            .find_implementation(&fixture.0, header, "Other::Call")
-            .is_err());
+        assert!(index.find_implementation(&fixture.0, header, "Other::Call").is_err());
     }
 
     #[test]
@@ -881,10 +820,9 @@ mod tests {
         );
         let mut index = SourceIndex::new();
         for target in ["Game::Native::Destructor()", "Box<int>::Call()"] {
-            index
-                .plan_implementation(&fixture.0, header, target)
-                .unwrap();
+            index.plan_implementation(&fixture.0, header, target).unwrap();
         }
+
         assert_eq!(
             index
                 .find_implementation(&fixture.0, header, "Game::Native::Destructor")
@@ -942,50 +880,30 @@ mod tests {
         let header = Path::new("Source/Test/Public/Native.h");
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
         fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() {}");
-        fs::write(
-            fixture.0.join("Source/Test/Private/Other.cpp"),
-            b"\xff Native::Other",
-        )
-        .unwrap();
+        fs::write(fixture.0.join("Source/Test/Private/Other.cpp"), b"\xff Native::Other").unwrap();
         let mut index = SourceIndex::new();
-        index
-            .plan_implementation(&fixture.0, header, "Native::Call")
-            .unwrap();
-        index
-            .plan_implementation(&fixture.0, header, "Native::Other")
-            .unwrap();
+        index.plan_implementation(&fixture.0, header, "Native::Call").unwrap();
+        index.plan_implementation(&fixture.0, header, "Native::Other").unwrap();
         assert!(index
             .find_implementation(&fixture.0, header, "Native::Call")
             .unwrap()
             .is_some());
-        assert!(index
-            .find_implementation(&fixture.0, header, "Native::Other")
-            .is_err());
+        assert!(index.find_implementation(&fixture.0, header, "Native::Other").is_err());
     }
 
     #[test]
     fn unrelated_non_utf8_sources_are_not_parsed() {
         let fixture = Fixture::new();
         fixture.write("Source/Test/Public/Native.h", "struct Native {};");
-        fixture.write(
-            "Source/Test/Private/Native.cpp",
-            "int Native::Call() { return 1; }",
-        );
-        fs::write(
-            fixture.0.join("Source/Test/Private/Unrelated.cpp"),
-            [0xff, 0xfe],
-        )
-        .unwrap();
+        fixture.write("Source/Test/Private/Native.cpp", "int Native::Call() { return 1; }");
+        fs::write(fixture.0.join("Source/Test/Private/Unrelated.cpp"), [0xff, 0xfe]).unwrap();
         assert!(fixture.find("Native::Call").is_some());
     }
 
     #[test]
     fn extracts_complete_body_without_matching_calls_comments_or_strings() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { int Call(); };",
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { int Call(); };");
         fixture.write(
             "Source/Test/Private/DifferentFilename.cpp",
             r#"
@@ -1028,8 +946,10 @@ struct Native { int* Call() const { return nullptr; } };
             "Source/Test/Public/Native.h",
             "struct Native { const FString& Call() const; };",
         );
-        fixture.write("Source/Test/Private/Native.cpp",
-            "const FString& Native::Call() const\n{\n    Rebuild();\n    return TextData->GetDisplayString();\n}");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "const FString& Native::Call() const\n{\n    Rebuild();\n    return TextData->GetDisplayString();\n}",
+        );
         assert!(fixture
             .find("Native::Call")
             .unwrap()
@@ -1043,12 +963,15 @@ struct Native { int* Call() const { return nullptr; } };
         let header = Path::new("Source/Test/Public/Native.h");
         fixture.write("Source/Test/Public/Native.h",
             "class TEST_API Native { public: static void Call(const String& Address, float Timeout, Delegate Result) { Forward(Result); } };");
-        fixture.write("Source/Test/Private/Native.cpp",
-            "void Native::Call(const String& Address, float Timeout, Callback Result) { Send(Result); }");
+        fixture.write(
+            "Source/Test/Private/Native.cpp",
+            "void Native::Call(const String& Address, float Timeout, Callback Result) { Send(Result); }",
+        );
         let signature = crate::signature::BindingSignature::from_rust(
             &syn::parse_quote! {
             unsafe fn Call(address: *const String, timeout: f32, #[native_by_value] callback: *mut Callback)
             },
+
             "Native",
         )
         .unwrap();
@@ -1063,6 +986,7 @@ struct Native { int* Call() const { return nullptr; } };
             &syn::parse_quote! {
             unsafe fn Call(address: *mut String, timeout: f32, #[native_by_value] callback: *mut Callback)
             },
+
             "Native",
         )
         .unwrap();
@@ -1085,6 +1009,7 @@ struct Native { int* Call() const { return nullptr; } };
             &syn::parse_quote! {
                 unsafe fn Call(value: *const String)
             },
+
             "Native",
         )
         .unwrap();
@@ -1106,11 +1031,9 @@ struct Native { int* Call() const { return nullptr; } };
             ("Callback", "typedef Function<void(Result)> Callback;"),
             ("Alias", "using Alias = Array<Element>;"),
         ] {
-            assert_eq!(
-                find_class(&fixture.0, header, name).unwrap().unwrap().code,
-                definition
-            );
+            assert_eq!(find_class(&fixture.0, header, name).unwrap().unwrap().code, definition);
         }
+
         fixture.write(
             "Source/Test/Public/Native.h",
             "typedef struct Tagged { int Value; } Tagged;",
@@ -1130,14 +1053,10 @@ struct Native { int* Call() const { return nullptr; } };
             "void Native::Call(const String& Address, float Timeout, Callback Result) { Send(Result); }",
         );
         assert!(fixture.find("Native::Call").is_none());
-        let callback = fixture
-            .find("Native::Call(const String&, float, Callback)")
-            .unwrap();
+        let callback = fixture.find("Native::Call(const String&, float, Callback)").unwrap();
         assert!(callback.path.ends_with("Native.cpp"));
         assert!(callback.code.contains("Send(Result);"));
-        let delegate = fixture
-            .find("Native::Call(const String&, float, Delegate)")
-            .unwrap();
+        let delegate = fixture.find("Native::Call(const String&, float, Delegate)").unwrap();
         assert!(delegate.path.ends_with("Native.h"));
         assert!(delegate.code.contains("Forward(Result);"));
     }
@@ -1168,6 +1087,7 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
                 .unwrap_or_else(|| panic!("No match for {selector}"));
             assert!(found.code.contains(body), "{selector}: {}", found.code);
         }
+
         assert!(fixture.find("Native::Call").is_none());
         assert!(fixture.find("Native::Call(String&)").is_none());
         assert!(fixture.find("Native::Call()").is_none());
@@ -1182,21 +1102,9 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
             "Source/Test/Private/Native.cpp",
             "int Native::Call() { return 1; }\nint Native::Call() const { return 2; }\nint Native::Call() && { return 3; }",
         );
-        assert!(fixture
-            .find("Native::Call()")
-            .unwrap()
-            .code
-            .contains("return 1;"));
-        assert!(fixture
-            .find("Native::Call() const")
-            .unwrap()
-            .code
-            .contains("return 2;"));
-        assert!(fixture
-            .find("Native::Call() &&")
-            .unwrap()
-            .code
-            .contains("return 3;"));
+        assert!(fixture.find("Native::Call()").unwrap().code.contains("return 1;"));
+        assert!(fixture.find("Native::Call() const").unwrap().code.contains("return 2;"));
+        assert!(fixture.find("Native::Call() &&").unwrap().code.contains("return 3;"));
         fixture.write(
             "Source/Test/Private/Other.cpp",
             "int Native::Call() const { return 4; }",
@@ -1213,10 +1121,7 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
     fn refuses_overloads_and_duplicate_implementations() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { void Call(); };",
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
         fixture.write(
             "Source/Test/Private/Native.cpp",
             "void Native::Call() {}\nvoid Native::Call(int value) {}",
@@ -1227,10 +1132,7 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
     fn does_not_treat_declarations_as_implementations() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { void Call(); };",
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
         assert!(fixture.find("Native::Call").is_none());
     }
 
@@ -1255,51 +1157,33 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
     #[test]
     fn refuses_alternative_preprocessor_definitions_and_malformed_bodies() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { void Call(); };",
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
         fixture.write(
             "Source/Test/Private/Native.cpp",
             "#if STEAM\nvoid Native::Call() {}\n#else\nvoid Native::Call() {}\n#endif",
         );
         assert!(fixture.find("Native::Call").is_none());
-        fixture.write(
-            "Source/Test/Private/Native.cpp",
-            "void Native::Call() { if ( }",
-        );
+        fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() { if ( }");
         assert!(fixture.find("Native::Call").is_none());
     }
 
     #[test]
     fn supports_destructor_binding_names() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { ~Native() {} };",
-        );
-        assert_eq!(
-            fixture.find("Native::Destructor").unwrap().code,
-            "~Native() {}"
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { ~Native() {} };");
+        assert_eq!(fixture.find("Native::Destructor").unwrap().code, "~Native() {}");
     }
 
     #[test]
     fn refuses_headers_outside_the_root() {
         let fixture = Fixture::new();
-        assert!(
-            find_implementation(&fixture.0, Path::new("../../../Cargo.toml"), "Native::Call")
-                .is_err()
-        );
+        assert!(find_implementation(&fixture.0, Path::new("../../../Cargo.toml"), "Native::Call").is_err());
     }
 
     #[test]
     fn does_not_search_outside_a_public_directory_root() {
         let fixture = Fixture::new();
-        fixture.write(
-            "Source/Test/Public/Native.h",
-            "struct Native { void Call(); };",
-        );
+        fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
         fixture.write("Source/Test/Private/Native.cpp", "void Native::Call() {}");
         assert!(find_implementation(
             &fixture.0.join("Source/Test/Public"),
@@ -1327,13 +1211,9 @@ private:
             "Source/Test/Public/Native.h",
             &format!("class Native;\nUCLASS(Blueprintable)\n{class}\nstruct Other {{}};"),
         );
-        let found = find_class(
-            &fixture.0,
-            Path::new("Source/Test/Public/Native.h"),
-            "Native",
-        )
-        .unwrap()
-        .unwrap();
+        let found = find_class(&fixture.0, Path::new("Source/Test/Public/Native.h"), "Native")
+            .unwrap()
+            .unwrap();
         assert_eq!(found.code, class);
         assert_eq!(found.line, 3);
     }
@@ -1345,13 +1225,9 @@ private:
             "Source/Test/Public/Native.h",
             "namespace Game {\ntemplate<class T> struct Native { T Value; };\n}",
         );
-        let found = find_class(
-            &fixture.0,
-            Path::new("Source/Test/Public/Native.h"),
-            "Game::Native",
-        )
-        .unwrap()
-        .unwrap();
+        let found = find_class(&fixture.0, Path::new("Source/Test/Public/Native.h"), "Game::Native")
+            .unwrap()
+            .unwrap();
         assert_eq!(found.code, "template<class T> struct Native { T Value; };");
     }
 
@@ -1363,13 +1239,9 @@ private:
             "union Native { int Value; void* Pointer; };",
         ] {
             fixture.write("Source/Test/Public/Native.h", source);
-            let found = find_class(
-                &fixture.0,
-                Path::new("Source/Test/Public/Native.h"),
-                "Native",
-            )
-            .unwrap()
-            .unwrap();
+            let found = find_class(&fixture.0, Path::new("Source/Test/Public/Native.h"), "Native")
+                .unwrap()
+                .unwrap();
             assert_eq!(found.code, source);
         }
     }
@@ -1384,13 +1256,9 @@ private:
         ] {
             fixture.write("Source/Test/Public/Native.h", source);
             assert!(
-                find_class(
-                    &fixture.0,
-                    Path::new("Source/Test/Public/Native.h"),
-                    "Native"
-                )
-                .unwrap()
-                .is_none(),
+                find_class(&fixture.0, Path::new("Source/Test/Public/Native.h"), "Native")
+                    .unwrap()
+                    .is_none(),
                 "{source}"
             );
         }

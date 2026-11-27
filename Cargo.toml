@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 default-members = ["unchained-plugin"]
-members = ["unchained-plugin", "build/plan", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "unchained-plugin/build/unchained-native-docs", "xtask", "tests/backend-integration"]
+members = ["unchained-plugin", "build/plan", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "unchained-macros-native-docs-generator", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
 unchained-build-plan = { path = "build/plan" }

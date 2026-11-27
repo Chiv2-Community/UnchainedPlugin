@@ -57,8 +57,8 @@ dependencies = [
  "unchained-build-plan",
  "unchained-macros-core",
  "unchained-macros-kismet",
+ "unchained-macros-native-docs-generator",
  "unchained-macros-patternsleuth",
- "unchained-native-docs",
  "unicode-segmentation",
  "widestring",
  "winapi 0.3.9",
@@ -3993,7 +3993,7 @@ dependencies = [
  "unchained-build-plan",
  "unchained-macros-core",
  "unchained-macros-kismet-impl",
- "unchained-native-docs",
+ "unchained-macros-native-docs-generator",
  "windows 0.52.0",
 ]
 
@@ -4005,6 +4005,24 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "unchained-build-plan",
+]
+
+[[package]]
+name = "unchained-macros-native-docs-generator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "memchr",
+ "proc-macro2",
+ "quote",
+ "serde_json",
+ "syn 2.0.117",
+ "toml 0.8.23",
+ "tree-sitter",
+ "tree-sitter-cpp",
+ "unchained-build-plan",
+ "url",
 ]
 
 [[package]]
@@ -4033,24 +4051,6 @@ dependencies = [
  "syn 2.0.117",
  "test-case",
  "unchained-build-plan",
-]
-
-[[package]]
-name = "unchained-native-docs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "memchr",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn 2.0.117",
- "toml 0.8.23",
- "tree-sitter",
- "tree-sitter-cpp",
- "unchained-build-plan",
- "url",
 ]
 
 [[package]]

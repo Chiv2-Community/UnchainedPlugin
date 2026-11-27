@@ -64,7 +64,7 @@ changing them; editors that run Cargo build scripts refresh the same Rustdoc.
 Link-opening behavior is provided by the editor, not custom project mappings.
 
 With a local root, binding and detour docs append the native implementation as
-C++. `unchained-native-docs` uses Tree-sitter C++ as a host build dependency; it
+C++. `unchained-macros-native-docs-generator` uses Tree-sitter C++ as a host build dependency; it
 is not linked into the plugin. It searches the linked header and C++ files in
 its owning module without compiling engine code or fetching native sources.
 It requires a unique definition; ambiguous overloads and declarations alone are
@@ -88,10 +88,10 @@ Macro names themselves retain their generic macro documentation. The same
 content is available through LSP and `cargo doc`. To test generation and parsing:
 
 ```sh
-cargo test --locked -p unchained-native-docs
+cargo test --locked -p unchained-macros-native-docs-generator
 ```
 
-Generation lives in `unchained-plugin/build/unchained-native-docs`; shared `build/build.rs` delegates to
+Generation lives in `unchained-macros-native-docs-generator`; shared `build/build.rs` delegates to
 `unchained-plugin/build/generate_native_binding_docs.rs`. A build-local module/file index shares extracted declarations,
 not syntax trees. Rebuilding reads changed native sources; no persistent index
 is trusted.

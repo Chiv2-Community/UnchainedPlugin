@@ -10,6 +10,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
 use syn::{spanned::Spanned, Attribute, Item};
 use url::Url;
 
@@ -53,12 +54,9 @@ struct Detour {
 }
 
 fn attr<'a>(attrs: &'a [Attribute], name: &str) -> Option<&'a Attribute> {
-    attrs.iter().find(|attr| {
-        attr.path()
-            .segments
-            .last()
-            .is_some_and(|part| part.ident == name)
-    })
+    attrs
+        .iter()
+        .find(|attr| attr.path().segments.last().is_some_and(|part| part.ident == name))
 }
 
 fn notes(attrs: &[Attribute]) -> String {
@@ -68,15 +66,19 @@ fn notes(attrs: &[Attribute]) -> String {
             if !attr.path().is_ident("doc") {
                 return None;
             }
+
             let syn::Meta::NameValue(value) = &attr.meta else {
                 return None;
             };
+
             let syn::Expr::Lit(value) = &value.value else {
                 return None;
             };
+
             let syn::Lit::Str(value) = &value.lit else {
                 return None;
             };
+
             let value = value.value();
             Some(value.strip_prefix(' ').unwrap_or(&value).to_owned())
         })
@@ -87,19 +89,24 @@ fn notes(attrs: &[Attribute]) -> String {
 fn text(source: &str, span: Span) -> &str {
     let offset = |position: proc_macro2::LineColumn| {
         let mut lines = source.split_inclusive('\n');
-        let preceding = lines.by_ref()
+        let preceding = lines
+            .by_ref()
             .take(position.line.saturating_sub(1))
-            .map(str::len).sum::<usize>();
+            .map(str::len)
+            .sum::<usize>();
         let line = lines.next().unwrap_or("");
-        preceding + line.char_indices().nth(position.column)
-            .map_or(line.len(), |(byte, _)| byte)
+        preceding
+            + line
+                .char_indices()
+                .nth(position.column)
+                .map_or(line.len(), |(byte, _)| byte)
     };
+
     &source[offset(span.start())..offset(span.end())]
 }
 
 fn file_link(path: &Path, line: usize) -> Result<String> {
-    let url = Url::from_file_path(path)
-        .map_err(|_| anyhow::anyhow!("Invalid source path: {}", path.display()))?;
+    let url = Url::from_file_path(path).map_err(|_| anyhow::anyhow!("Invalid source path: {}", path.display()))?;
     Ok(format!("{url}#L{line}"))
 }
 
@@ -122,12 +129,7 @@ fn preview(code: &str) -> String {
     }
 }
 
-fn configured_root(
-    manifest: &Path,
-    name: &str,
-    default: &str,
-    local: &toml::Value,
-) -> Result<String> {
+fn configured_root(manifest: &Path, name: &str, default: &str, local: &toml::Value) -> Result<String> {
     let entry = local.get("env").and_then(|env| env.get(name));
     let value = entry.and_then(|value| value.as_str().or_else(|| value.get("value")?.as_str()));
     let force = entry
@@ -145,12 +147,11 @@ fn configured_root(
             .or(value)
             .unwrap_or(default)
     };
-    if selected.starts_with("http://")
-        || selected.starts_with("https://")
-        || selected.starts_with("file://")
-    {
+
+    if selected.starts_with("http://") || selected.starts_with("https://") || selected.starts_with("file://") {
         return Ok(selected.to_owned());
     }
+
     let path = PathBuf::from(selected);
     let relative = entry
         .and_then(|value| value.get("relative"))
@@ -172,9 +173,11 @@ fn native_source(source: &str, roots: &BTreeMap<&str, String>) -> Result<Option<
                 .split_once('>')
                 .map(|pair| pair.0)
         })
+
     else {
         return Ok(None);
     };
+
     let parsed = Url::parse(url)?;
     let parts = parsed
         .path_segments()
@@ -190,12 +193,14 @@ fn native_source(source: &str, roots: &BTreeMap<&str, String>) -> Result<Option<
             }))
         }
     };
+
     if parsed.host_str() != Some("github.com") {
         return Ok(Some(Source {
             url: url.to_owned(),
             local: None,
         }));
     }
+
     let relative = parts[4..].join("/");
     let root = &roots[key];
     if root.starts_with("file://") {
@@ -221,14 +226,11 @@ fn rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
             rust_files(&entry.path(), files)?;
-        } else if entry
-            .path()
-            .extension()
-            .is_some_and(|extension| extension == "rs")
-        {
+        } else if entry.path().extension().is_some_and(|extension| extension == "rs") {
             files.push(entry.path());
         }
     }
+
     Ok(())
 }
 
@@ -250,6 +252,7 @@ fn binding_resolver(attribute: &Attribute) -> syn::Result<(syn::Path, Option<syn
             input.parse::<syn::Token![,]>()?;
             Some(input.parse()?)
         };
+
         Ok((path, descriptor))
     })
 }
@@ -267,6 +270,7 @@ fn native_implementation(
     if !class {
         watches.insert(cpp::module_directory(&root.join(header), root));
     }
+
     if class {
         sources.find_class(root, header, target).ok().flatten()
     } else {
@@ -296,15 +300,11 @@ fn append_native(
     } else {
         docs.push_str(NO_CPP_SOURCES);
     }
+
     Ok(())
 }
 
-fn write_document(
-    directory: &Path,
-    key: &str,
-    docs: &str,
-    written: &mut BTreeSet<String>,
-) -> Result<()> {
+fn write_document(directory: &Path, key: &str, docs: &str, written: &mut BTreeSet<String>) -> Result<()> {
     anyhow::ensure!(
         written.insert(key.to_owned()),
         "Duplicate native documentation key: {key}"
@@ -313,6 +313,7 @@ fn write_document(
     if fs::read_to_string(&path).ok().as_deref() != Some(docs) {
         fs::write(path, docs)?;
     }
+
     Ok(())
 }
 
@@ -326,6 +327,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
     } else {
         toml::Value::Table(Default::default())
     };
+
     let roots = BTreeMap::from([
         (
             "ARGON_SDK_SOURCE_LOCATION",
@@ -351,8 +353,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
     let mut sources = cpp::SourceIndex::new();
     for path in files {
         let source = fs::read_to_string(&path)?;
-        let file =
-            syn::parse_file(&source).with_context(|| format!("Cannot parse {}", path.display()))?;
+        let file = syn::parse_file(&source).with_context(|| format!("Cannot parse {}", path.display()))?;
         let file_source = native_source(&source, &roots)?;
         for item in file.items {
             let native_type = match &item {
@@ -362,6 +363,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                 Item::Type(item) => Some((&item.ident, &item.attrs, "type")),
                 _ => None,
             };
+
             if let Some((name, attrs, label)) = native_type {
                 if attr(attrs, "runtime_bindings").is_some() {
                     let documentation = notes(attrs);
@@ -379,31 +381,25 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                             .filter(|line| !line.starts_with("Native source: <"))
                             .collect::<Vec<_>>()
                             .join("\n"),
-                        source: native_source(&item_source, &roots)?
-                            .or_else(|| file_source.clone()),
+                        source: native_source(&item_source, &roots)?.or_else(|| file_source.clone()),
                     });
                 }
             }
+
             match item {
                 Item::Macro(item)
                     if item.mac.path.segments.last().is_some_and(|part| {
                         matches!(
                             part.ident.to_string().as_str(),
-                            "define_pattern_resolver"
-                                | "define_custom_resolver"
-                                | "define_offset_resolver"
+                            "define_pattern_resolver" | "define_custom_resolver" | "define_offset_resolver"
                         )
                     }) =>
                 {
-                    let mut identifiers =
-                        item.mac
-                            .tokens
-                            .clone()
-                            .into_iter()
-                            .filter_map(|token| match token {
-                                TokenTree::Ident(name) => Some(name.to_string()),
-                                _ => None,
-                            });
+                    let mut identifiers = item.mac.tokens.clone().into_iter().filter_map(|token| match token {
+                        TokenTree::Ident(name) => Some(name.to_string()),
+                        _ => None,
+                    });
+
                     if let Some(name) = identifiers.next() {
                         anyhow::ensure!(
                             resolvers
@@ -419,21 +415,26 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                         );
                     }
                 }
+
                 Item::Impl(item) => {
                     let owner = item.self_ty.to_token_stream().to_string().replace(' ', "");
                     let runtime_owner = attr(&item.attrs, "kismet_runtime_bindings")
-                        .map(|attribute| attribute.parse_args::<syn::LitStr>()).transpose()?;
+                        .map(|attribute| attribute.parse_args::<syn::LitStr>())
+                        .transpose()?;
                     let method_owner = match item.self_ty.as_ref() {
                         syn::Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
                         _ => owner.clone(),
                     };
+
                     for method in item.items {
                         let syn::ImplItem::Fn(method) = method else {
                             continue;
                         };
+
                         if runtime_owner.is_some() && attr(&method.attrs, "dummy").is_some() {
                             continue;
                         }
+
                         let binding = attr(&method.attrs, "bind_resolved_func");
                         if binding.is_some() || runtime_owner.is_some() {
                             let documentation = notes(&method.attrs);
@@ -454,29 +455,31 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                             } else {
                                 (format!("{method_owner}__{}", method.sig.ident), None)
                             };
-                            if let Some(reflected_path) =
-                                runtime_owner.as_ref().filter(|_| descriptor.is_none())
-                            {
-                                resolvers.insert(resolver_name.clone(), (
-                                    file_link(&path, method.sig.ident.span().start().line)?,
-                                    format!("Reflection native body: {}::{}", reflected_path.value(), method.sig.ident),
-                                ));
+
+                            if let Some(reflected_path) = runtime_owner.as_ref().filter(|_| descriptor.is_none()) {
+                                resolvers.insert(
+                                    resolver_name.clone(),
+                                    (
+                                        file_link(&path, method.sig.ident.span().start().line)?,
+                                        format!(
+                                            "Reflection native body: {}::{}",
+                                            reflected_path.value(),
+                                            method.sig.ident
+                                        ),
+                                    ),
+                                );
                             }
+
                             let native_owner = resolver_name
                                 .strip_suffix(&format!("__{}", method.sig.ident))
                                 .unwrap_or(&method_owner);
-                            let signature_span = if matches!(method.vis, syn::Visibility::Inherited)
-                            {
+                            let signature_span = if matches!(method.vis, syn::Visibility::Inherited) {
                                 method.sig.span()
                             } else {
-                                method
-                                    .vis
-                                    .span()
-                                    .join(method.sig.span())
-                                    .unwrap_or(method.sig.span())
+                                method.vis.span().join(method.sig.span()).unwrap_or(method.sig.span())
                             };
-                            let parameter_types =
-                                signature::BindingSignature::from_rust(&method.sig, native_owner);
+
+                            let parameter_types = signature::BindingSignature::from_rust(&method.sig, native_owner);
                             bindings.push(Binding {
                                 target: format!("{native_owner}::{}", method.sig.ident),
                                 overload: documentation
@@ -485,9 +488,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                                     .map(|selector| selector.trim().trim_matches('`').to_owned()),
                                 rpc_implementation: documentation
                                     .lines()
-                                    .find_map(|line| {
-                                        line.strip_prefix("Native RPC implementation: ")
-                                    })
+                                    .find_map(|line| line.strip_prefix("Native RPC implementation: "))
                                     .map(|target| target.trim().trim_matches('`').to_owned()),
                                 resolver: resolver_name,
                                 descriptor,
@@ -504,6 +505,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                         }
                     }
                 }
+
                 Item::Fn(item) => {
                     if let Some(attribute) = attr(&item.attrs, "bind_func_detour") {
                         use syn::parse::Parser;
@@ -512,27 +514,23 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                         let Some(syn::Expr::Path(target)) = args.first() else {
                             continue;
                         };
-                        detours
-                            .entry(native_target(&target.path))
-                            .or_default()
-                            .push(Detour {
-                                name: item.sig.ident.to_string(),
-                                notes: notes(&item.attrs),
-                                link: file_link(&path, item.sig.ident.span().start().line)?,
-                                declaration: text(&source, item.span()).to_owned(),
-                            });
+
+                        detours.entry(native_target(&target.path)).or_default().push(Detour {
+                            name: item.sig.ident.to_string(),
+                            notes: notes(&item.attrs),
+                            link: file_link(&path, item.sig.ident.span().start().line)?,
+                            declaration: text(&source, item.span()).to_owned(),
+                        });
                     }
                 }
+
                 _ => {}
             }
         }
     }
+
     for binding in &bindings {
-        if let Some((root, header)) = binding
-            .source
-            .as_ref()
-            .and_then(|source| source.local.as_ref())
-        {
+        if let Some((root, header)) = binding.source.as_ref().and_then(|source| source.local.as_ref()) {
             // Unavailable roots/headers retain the usual unavailable-source footer.
             let _ = sources.plan_implementation(root, header, &binding.target);
             if let Some(target) = &binding.rpc_implementation {
@@ -540,6 +538,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
             }
         }
     }
+
     let directory = output.join("native-docs");
     fs::create_dir_all(&directory)?;
     let mut written = BTreeSet::new();
@@ -567,6 +566,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
             &mut written,
         )?;
     }
+
     for binding in bindings {
         let source_link = binding
             .source
@@ -585,11 +585,12 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
         } else {
             format!("`{}` (upstream resolver)", binding.resolver)
         };
-        let mut docs = format!("Native binding to {}.\nResolved by {resolution}", linked(&binding.target, source_link));
-        let matching = detours
-            .get(&binding.target)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+
+        let mut docs = format!(
+            "Native binding to {}.\nResolved by {resolution}",
+            linked(&binding.target, source_link)
+        );
+        let matching = detours.get(&binding.target).map(Vec::as_slice).unwrap_or_default();
         for detour in matching {
             docs.push_str(&format!(
                 "\n\nOverwritten by {}.\n\n{}",
@@ -597,21 +598,18 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                 block("rust,ignore", &detour.declaration)
             ));
         }
+
         if !matching.is_empty() {
-            docs.push_str(
-                "\n\nDetours apply only when installed and enabled; direct binding calls bypass them.",
-            );
+            docs.push_str("\n\nDetours apply only when installed and enabled; direct binding calls bypass them.");
         }
+
         if !binding.notes.is_empty() {
             docs.push_str(&format!("\n\n{}", binding.notes));
         }
+
         let mut implementation = native_implementation(
             binding.source.as_ref(),
-            &format!(
-                "{}{}",
-                binding.target,
-                binding.overload.as_deref().unwrap_or("")
-            ),
+            &format!("{}{}", binding.target, binding.overload.as_deref().unwrap_or("")),
             false,
             &mut watches,
             &mut sources,
@@ -636,6 +634,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                 }
             }
         }
+
         append_native(
             &mut docs,
             implementation.as_ref(),
@@ -655,6 +654,7 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
             if !detour.notes.is_empty() {
                 docs.push_str(&format!("\n\n{}", detour.notes));
             }
+
             append_native(
                 &mut docs,
                 implementation.as_ref(),
@@ -662,24 +662,19 @@ pub fn generate(manifest: &Path, workspace: &Path, output: &Path) -> Result<()> 
                 implementation_title,
                 implementation_name,
             )?;
-            write_document(
-                &directory,
-                &format!("detour-{}", detour.name),
-                &docs,
-                &mut written,
-            )?;
+            write_document(&directory, &format!("detour-{}", detour.name), &docs, &mut written)?;
         }
     }
+
     for path in watches {
         println!("cargo:rerun-if-changed={}", path.display());
     }
+
     for key in ["ARGON_SDK_SOURCE_LOCATION", "UE_SOURCE_LOCATION"] {
         println!("cargo:rerun-if-env-changed={key}");
     }
-    println!(
-        "cargo:rustc-env=UNCHAINED_NATIVE_DOCS_DIR={}",
-        directory.display()
-    );
+
+    println!("cargo:rustc-env=UNCHAINED_NATIVE_DOCS_DIR={}", directory.display());
     Ok(())
 }
 
@@ -696,6 +691,7 @@ mod tests {
         ] {
             assert!(binding_resolver(&attribute).is_ok());
         }
+
         for attribute in [
             syn::parse_quote!(#[bind_resolved_func()]),
             syn::parse_quote!(#[bind_resolved_func(Backend,)]),
@@ -736,8 +732,11 @@ mod tests {
         let root = std::env::temp_dir().join(format!("native-doc-unicode-{}", std::process::id()));
         fs::create_dir_all(root.join("src/Chivalry2")).unwrap();
         fs::create_dir_all(root.join("src/unchained/patches")).unwrap();
-        fs::write(root.join("src/Chivalry2/Native.rs"),
-            "impl Native { #[bind_resolved_func(Native__Call)] unsafe fn Call() {} }").unwrap();
+        fs::write(
+            root.join("src/Chivalry2/Native.rs"),
+            "impl Native { #[bind_resolved_func(Native__Call)] unsafe fn Call() {} }",
+        )
+        .unwrap();
         for payload in ["λ", "λλλλλλλλλλλλλλλλλλλλ", "日本語 /* λ */"] {
             let declaration = format!(
                 "#[bind_func_detour(Native::Call)] unsafe fn unicode_detour() {{ /* λ */ trace!(\"{payload}\"); }}"
@@ -747,28 +746,21 @@ mod tests {
             let docs = fs::read_to_string(root.join("out/native-docs/binding-Native__Call.md")).unwrap();
             assert!(docs.contains(&declaration), "{docs}");
         }
+
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn missing_source_links_do_not_request_local_configuration() {
         let mut docs = String::new();
-        append_native(
-            &mut docs,
-            None,
-            None,
-            "Native implementation",
-            "Native::Call",
-        )
-        .unwrap();
+        append_native(&mut docs, None, None, "Native implementation", "Native::Call").unwrap();
         assert!(docs.ends_with(NO_CPP_SOURCES));
         assert!(!docs.contains(CONFIGURATION_NOTE));
     }
 
     #[test]
     fn generates_native_type_binding_and_detour_docs_without_an_editor() {
-        let root =
-            std::env::temp_dir().join(format!("native-doc-generation-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("native-doc-generation-{}", std::process::id()));
         for path in [
             "src/Chivalry2",
             "src/unchained/patches",
@@ -778,6 +770,7 @@ mod tests {
         ] {
             fs::create_dir_all(root.join(path)).unwrap();
         }
+
         let cpp_root = Url::from_directory_path(root.join("cpp")).unwrap();
         fs::write(
             root.join(".cargo/config.local.toml"),
@@ -883,9 +876,7 @@ impl Unannotated {
             .unwrap();
         assert_eq!(resolver_preview.chars().count(), 80);
         assert!(resolver_preview.ends_with('…'));
-        assert!(binding.contains(
-            "#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }"
-        ));
+        assert!(binding.contains("#[bind_func_detour(Native::Call)]\nunsafe fn call_detour() { replacement(); }"));
         let other = fs::read_to_string(directory.join("binding-Native__Other.md")).unwrap();
         assert!(!other.contains("Overwritten by"));
         assert!(!other.contains("Detours apply only when"));
@@ -908,13 +899,15 @@ impl Unannotated {
         let provided = fs::read_to_string(directory.join("binding-Native__Provided.md")).unwrap();
         assert!(provided.contains("define_offset_resolver!(Native__Provided)"));
         assert!(!provided.contains("upstream resolver"));
-        assert!(typed.contains("void Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }"));
+        assert!(typed
+            .contains("void Native::Typed(const FString& Address, float Timeout, Callback Result) { Send(Result); }"));
         assert!(!typed.contains("Native overload:"));
         assert!(!typed.contains("Forward(Result)"));
         for name in ["Helper", "GlobalHelper", "PrivateGlobal"] {
             assert!(!directory.join(format!("method-Native__{name}.md")).exists());
             assert!(!directory.join(format!("binding-Native__{name}.md")).exists());
         }
+
         assert!(!directory.join("method-Unannotated__Ignored.md").exists());
         for (name, source) in [("Call", "ReflectedSource();"), ("Hidden", "HiddenSource();")] {
             let method = fs::read_to_string(directory.join(format!("binding-Reflected__{name}.md"))).unwrap();
@@ -922,6 +915,7 @@ impl Unannotated {
             assert!(method.contains(source));
             assert!(method.contains("Native.cpp#L"));
         }
+
         let reflected = fs::read_to_string(directory.join("binding-Reflected__Call.md")).unwrap();
         assert!(reflected.contains("Reflected safety notes."));
         assert!(!directory.join("binding-Reflected__Observed.md").exists());

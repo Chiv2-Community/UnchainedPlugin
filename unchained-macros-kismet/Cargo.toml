@@ -23,4 +23,4 @@ windows = { version = "0.52.0", features = ["Win32_Foundation", "Win32_System_Di
 test-case = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
-unchained-native-docs = { path = "../unchained-plugin/build/unchained-native-docs" }
+unchained-macros-native-docs-generator = { path = "../unchained-macros-native-docs-generator" }
