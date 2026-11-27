@@ -2,12 +2,7 @@
 mod provenance;
 
 pub fn run() {
-    unchained_native_docs::generate(
-        std::path::Path::new(&std::env::var_os("CARGO_MANIFEST_DIR").unwrap()),
-        std::path::Path::new(&std::env::var_os("OUT_DIR").unwrap()),
-    )
-    .expect("Failed to generate native documentation");
-    println!("cargo:rerun-if-changed=build/generate_plugin_artifacts.rs");
+    println!("cargo:rerun-if-changed=build/embed_build_metadata.rs");
     println!("cargo:rerun-if-changed=build/provenance.rs");
     println!("cargo:rerun-if-changed=resources/plugin.rc");
     let (commit, dirty) = provenance::generate();

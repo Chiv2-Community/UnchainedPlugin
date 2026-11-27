@@ -23,7 +23,8 @@ struct Metadata {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum PreBuildStep {
-    GeneratePluginArtifacts,
+    GenerateNativeBindingDocs,
+    EmbedBuildMetadata,
     Format,
 }
 
@@ -36,7 +37,8 @@ pub fn build_script(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut calls = String::new();
     for step in manifest.package.metadata.pre_build_steps {
         let (name, path) = match step {
-            PreBuildStep::GeneratePluginArtifacts => ("generate_plugin_artifacts", "build/generate_plugin_artifacts.rs"),
+            PreBuildStep::GenerateNativeBindingDocs => ("generate_native_binding_docs", "build/generate_native_binding_docs.rs"),
+            PreBuildStep::EmbedBuildMetadata => ("embed_build_metadata", "build/embed_build_metadata.rs"),
             PreBuildStep::Format => ("format", "build/format.rs"),
         };
         modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));

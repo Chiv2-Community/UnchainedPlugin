@@ -28,8 +28,8 @@ Extend the plugin through native hooks, commands, votes, and event subscribers.
   Leave a blank line after a multiline block before the next statement or item.
   Keep consecutive closing braces, expression continuations, and single-line blocks together.
   The shared `build.rs` reads `pre-build-steps` from each crate's `[package.metadata]`
-  table. The macro crates select `["format"]`; the plugin selects `["generate-plugin-artifacts"]`
-  to generate native documentation, record Git provenance, and compile Windows version resources.
+  table. The macro crates select `format`. The plugin selects `generate-native-binding-docs`
+  for native documentation and `embed-build-metadata` for Git provenance and Windows version resources.
   Cargo compiles the crate after these steps, even if the list is empty or omitted.
   Rustfmt settings live in the root `rustfmt.toml`.
 - Keep native declarations separate from plugin behavior.
