@@ -44,7 +44,7 @@ was explicitly supplied.
 ### Building the plugin
 
 The root `Cargo.toml` is a virtual workspace. `unchained-plugin/` contains the
-DLL crate, its sources, and resources. Workspace pre-build steps live in `build/`. On Windows,
+DLL crate, its sources, and resources. Workspace pre-build steps live in [`build/`](build/README.md). On Windows,
 run `cargo build` from the workspace root; the plugin is the default member.
 
 ### Building the Windows DLL on Linux
