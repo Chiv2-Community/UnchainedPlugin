@@ -7,12 +7,12 @@ pub fn build_script(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let manifest: toml::Table = fs::read_to_string(manifest).unwrap().parse().unwrap();
     let mut modules = String::new();
     let mut calls = String::new();
-    if let Some(steps) = manifest["package"].get("metadata").and_then(|m| m.get("build-steps")) {
-        for step in steps.as_array().expect("package.metadata.build-steps must be an array") {
+    if let Some(steps) = manifest["package"].get("metadata").and_then(|m| m.get("pre-build-steps")) {
+        for step in steps.as_array().expect("package.metadata.pre-build-steps must be an array") {
             let (name, path) = match step.as_str() {
                 Some("plugin") => ("plugin", "build/mod.rs"),
                 Some("format") => ("format", "build/format.rs"),
-                _ => panic!("unknown build step: {step}"),
+                _ => panic!("unknown pre-build step: {step}"),
             };
             modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));
             calls.push_str(&format!("{name}::run();"));

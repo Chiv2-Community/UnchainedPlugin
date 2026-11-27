@@ -27,9 +27,10 @@ Extend the plugin through native hooks, commands, votes, and event subscribers.
   command with `--check`. These crates use standard rustfmt with a 120-column target.
   Leave a blank line after a multiline block before the next statement or item.
   Keep consecutive closing braces, expression continuations, and single-line blocks together.
-  The shared `build.rs` reads `[package.metadata] build-steps` from each crate's
-  manifest. The macro crates select `["format"]`; the plugin selects `["plugin"]`.
-  Omitting the list runs no steps. Rustfmt settings live in the root `rustfmt.toml`.
+  The shared `build.rs` reads `pre-build-steps` from each crate's `[package.metadata]`
+  table. The macro crates select `["format"]`; the plugin selects `["plugin"]`.
+  Cargo compiles the crate after these steps, even if the list is empty or omitted.
+  Rustfmt settings live in the root `rustfmt.toml`.
 - Keep native declarations separate from plugin behavior.
 - Use the [build instructions](README.md#building-the-windows-dll-on-linux) for Linux cross-builds.
 

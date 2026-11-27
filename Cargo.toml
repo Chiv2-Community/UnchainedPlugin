@@ -4,7 +4,7 @@ version = "1.0.1"
 edition = "2021"
 
 [package.metadata]
-build-steps = ["plugin"]
+pre-build-steps = ["plugin"]
 
 [workspace]
 members = [".", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "build/unchained-native-docs", "xtask", "tests/backend-integration"]

@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--"]);
         let mut selected = vec![];
         for pkg in workspace.workspace_packages() {
-            if pkg.metadata["build-steps"]
+            if pkg.metadata["pre-build-steps"]
                 .as_array()
                 .is_some_and(|s| s.iter().any(|v| v == "format"))
             {
