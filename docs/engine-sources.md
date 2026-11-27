@@ -92,7 +92,7 @@ cargo test --locked -p unchained-macros-native-docs-generator
 ```
 
 Generation lives in `unchained-macros-native-docs-generator`; shared `build/build.rs` delegates to
-`unchained-plugin/build/generate_native_binding_docs.rs`. A build-local module/file index shares extracted declarations,
+`build/generate_native_binding_docs.rs`. A build-local module/file index shares extracted declarations,
 not syntax trees. Rebuilding reads changed native sources; no persistent index
 is trusted.
 

@@ -109,8 +109,8 @@ pub(super) fn generate() -> (String, String) {
     // the full Git status, including unrelated staged, unstaged and untracked files.
     for path in [
         "src",
-        "build",
         "resources",
+        "../unchained-macros-native-docs-generator",
         "../unchained-macros-core",
         "../unchained-macros-patternsleuth",
         "../unchained-macros-kismet",

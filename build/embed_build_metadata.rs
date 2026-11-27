@@ -2,8 +2,6 @@
 mod provenance;
 
 pub fn run() {
-    println!("cargo:rerun-if-changed=build/embed_build_metadata.rs");
-    println!("cargo:rerun-if-changed=build/provenance.rs");
     println!("cargo:rerun-if-changed=resources/plugin.rc");
     let (commit, dirty) = provenance::generate();
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
