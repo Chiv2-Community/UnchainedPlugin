@@ -9,56 +9,114 @@ static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patterns
             filter: None,
         },
     );
+
 inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::FunctionInfo }
 
 #[inline(never)]
+
 unsafe extern "C" fn target(value: i32) -> i32 {
-    unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
+
+    unsafe {
+
+        std::ptr::read_volatile(&value)
+    }
+    .wrapping_add(1)
 }
 
 unsafe extern "C" fn replacement(value: i32) -> i32 {
+
     value + 2
 }
 
 unsafe extern "C" fn dispatch(value: i32) -> i32 {
+
     let call: unsafe extern "C" fn(i32) -> i32 = unchained_macros_core::SupportsDetour::replacement_slot(&TARGET)
         .get()
-        .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
-    unsafe { call(value) }
+        .unwrap_or_else(|| unsafe {
+
+            std::mem::transmute(BINDING.address().unwrap().get())
+        });
+
+    unsafe {
+
+        call(value)
+    }
 }
 
 type Target =
     NativeTarget<unsafe extern "C" fn(i32) -> i32, (), (), (), unchained_macros_patternsleuth::PatternsleuthResolver>;
-static TARGET: Target = unsafe { Target::new(&BINDING, dispatch, |f| f as *const ()) };
+
+static TARGET: Target = unsafe {
+
+    Target::new(&BINDING, dispatch, |f| f as *const ())
+};
+
 static REGISTRATION: DetourRegistration<Target> =
     DetourRegistration::new("FixtureDetour", &TARGET, replacement, || true);
+
 inventory::submit! { &REGISTRATION as &dyn DetourInfo }
 
 #[test]
+
 fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
+
     assert!(!detour_is_initialized("Unknown"));
+
     assert!(!detour_is_enabled("Unknown"));
+
     assert!(!detour_is_initialized("FixtureDetour"));
+
     assert!(!detour_is_enabled("FixtureDetour"));
+
     unsafe {
+
         BINDING
             .initialize_address(std::num::NonZeroUsize::new(target as *const () as usize).unwrap())
             .unwrap();
+
         REGISTRATION.attach(false).unwrap();
     }
 
     assert!(detour_is_initialized("FixtureDetour"));
+
     assert!(!detour_is_enabled("FixtureDetour"));
+
     let call = std::hint::black_box(target as unsafe extern "C" fn(i32) -> i32);
-    assert_eq!(unsafe { call(3) }, 4);
+
+    assert_eq!(
+        unsafe {
+
+            call(3)
+        },
+        4
+    );
+
     REGISTRATION.set_enabled(true);
+
     assert!(detour_is_enabled("FixtureDetour"));
-    assert_eq!(unsafe { call(3) }, 5);
+
+    assert_eq!(
+        unsafe {
+
+            call(3)
+        },
+        5
+    );
+
     unsafe {
+
         REGISTRATION.detour().unwrap().disable().unwrap();
     }
 
     assert!(detour_is_initialized("FixtureDetour"));
+
     assert!(!detour_is_enabled("FixtureDetour"));
-    assert_eq!(unsafe { call(3) }, 4);
+
+    assert_eq!(
+        unsafe {
+
+            call(3)
+        },
+        4
+    );
 }

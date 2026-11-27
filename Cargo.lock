@@ -3963,7 +3963,6 @@ dependencies = [
  "inventory",
  "log",
  "paste",
- "proc-macro2",
  "retour",
  "serde",
  "test-case",
@@ -3988,7 +3987,6 @@ version = "0.1.0"
 dependencies = [
  "iced-x86",
  "log",
- "proc-macro2",
  "test-case",
  "unchained-build-plan",
  "unchained-macros-core",
@@ -4033,7 +4031,6 @@ dependencies = [
  "inventory",
  "object",
  "patternsleuth",
- "proc-macro2",
  "retour",
  "serde",
  "test-case",
@@ -4762,7 +4759,6 @@ dependencies = [
  "clap",
  "dotenvy",
  "fs_extra",
- "proc-macro2",
  "unchained-build-plan",
 ]
 

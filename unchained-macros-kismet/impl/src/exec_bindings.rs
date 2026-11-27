@@ -4,8 +4,11 @@ use quote::{format_ident, quote};
 use syn::{FnArg, ReturnType, Type};
 
 fn value_type(ty: &Type) -> syn::Result<Type> {
+
     if let Type::Reference(reference) = ty {
+
         if reference.mutability.is_some() || reference.lifetime.is_some() {
+
             return Err(syn::Error::new_spanned(
                 ty,
                 "exec observations require immutable call-scoped borrows",
@@ -14,11 +17,13 @@ fn value_type(ty: &Type) -> syn::Result<Type> {
 
         Ok((*reference.elem).clone())
     } else {
+
         Ok(ty.clone())
     }
 }
 
 fn parameter(ty: &Type) -> syn::Result<Tokens> {
+
     let kind = match ty {
         Type::Ptr(pointer) if matches!(&*pointer.elem, Type::Path(path) if path.path.segments.last().unwrap().ident == "UObject") => {
             "ObjectProperty"
@@ -48,7 +53,9 @@ pub fn expand_method(
     class: &syn::Ident,
     method: &syn::ImplItemFn,
 ) -> syn::Result<(Vec<syn::ImplItem>, Tokens)> {
+
     let signature = &method.sig;
+
     if signature.unsafety.is_none()
         || signature.abi.is_some()
         || signature.asyncness.is_some()
@@ -58,6 +65,7 @@ pub fn expand_method(
         || signature.generics.where_clause.is_some()
         || !method.block.stmts.is_empty()
     {
+
         return Err(syn::Error::new_spanned(
             method,
             "use an empty unsafe non-generic exec declaration without an ABI",
@@ -65,7 +73,9 @@ pub fn expand_method(
     }
 
     let annotations: Vec<_> = method.attrs.iter().filter(|a| a.path().is_ident("dummy")).collect();
+
     if annotations.len() != 1 {
+
         return Err(syn::Error::new_spanned(
             method,
             "exec observation requires exactly one #[dummy] declaration and current binary evidence",
@@ -73,29 +83,50 @@ pub fn expand_method(
     }
 
     if !matches!(&annotations[0].meta, syn::Meta::Path(_)) {
+
         return Err(syn::Error::new_spanned(annotations[0], "#[dummy] takes no parameters"));
     }
 
     let method_name = &signature.ident;
+
     let member = method_name.to_string();
+
     let prefix = format!("__UNCHAINED_EXEC_{class}_{method_name}");
+
     let resolver = format_ident!("{prefix}_RESOLVER");
+
     let arguments = format_ident!("{prefix}_ARGUMENTS");
+
     let binding = format_ident!("{prefix}_BINDING");
+
     let descriptor = format_ident!("{prefix}_LISTENERS");
+
     let dispatch = format_ident!("{prefix}_dispatch");
+
     let entry = format_ident!("{prefix}_entry");
+
     let associated = format_ident!("__UNCHAINED_TARGET_{method_name}");
+
     let visibility = &method.vis;
+
     let mut attributes = method.attrs.clone();
+
     attributes.retain(|a| !a.path().is_ident("dummy"));
+
     let attributes_cfg: Vec<_> = cfg_attributes(&attributes).collect();
+
     let mut types = Vec::new();
+
     let mut parameters = Vec::new();
+
     let mut decode = Vec::new();
+
     let mut borrowed = Vec::new();
+
     for (index, input) in signature.inputs.iter().enumerate() {
+
         let FnArg::Typed(input) = input else {
+
             return Err(syn::Error::new_spanned(
                 input,
                 "exec declarations have explicit inputs, not Rust receivers",
@@ -103,15 +134,22 @@ pub fn expand_method(
         };
 
         let ty = value_type(&input.ty)?;
+
         parameters.push(parameter(&ty)?);
+
         let local = format_ident!("argument_{index}");
+
         if matches!(&ty, Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "bool")) {
+
             decode.push(
                 quote! { let #local = unsafe { inputs.get(#index).expect("validated exec argument").boolean() }; },
             );
+
             borrowed.push(quote!(&#local));
         } else {
+
             decode.push(quote! { let #local = inputs.get(#index).expect("validated exec argument"); let #local = unsafe { #local.borrow::<#ty>() }; });
+
             borrowed.push(quote!(#local));
         }
 
@@ -126,12 +164,15 @@ pub fn expand_method(
         }
 
         ReturnType::Type(_, ty) => {
+
             let parameter = parameter(ty)?;
+
             quote!(Some(#parameter))
         }
     };
 
     let listener_type = quote!(::unchained_macros_kismet::DummyExecTarget<unsafe fn(#(&#types),*)>);
+
     let metadata = vec![
         syn::parse2(quote! {
             #(#attributes)*
@@ -146,6 +187,7 @@ pub fn expand_method(
             #visibility const #associated: &'static #listener_type = &#descriptor;
         })?,
     ];
+
     Ok((
         metadata,
         quote! {
@@ -215,12 +257,16 @@ pub fn expand_method(
 }
 
 #[cfg(test)]
+
 mod tests {
+
     use super::*;
     use crate::expand;
 
     #[test]
+
     fn dummy_marker_keeps_exec_dispatch() {
+
         let output = expand(
             quote!("/Script/Fixture.Library"),
             quote! {
@@ -232,18 +278,28 @@ mod tests {
         )
         .unwrap()
         .to_string();
+
         assert!(output.contains("DummyExecTarget"));
+
         assert!(!output.contains("ExitObservation"));
+
         assert!(!output.contains("prepare_exit"));
+
         assert!(!output.contains("finish_exit"));
+
         assert!(output.contains("observe_exec"));
+
         assert!(output.contains("original (context , frame , result)"));
+
         assert!(!output.contains("RawDetour"));
+
         syn::parse2::<syn::File>(output.parse().unwrap()).unwrap();
     }
 
     #[test]
+
     fn dummy_rejects_parameters_and_duplicates() {
+
         for attributes in [
             quote!(#[dummy()]),
             quote!(#[dummy(verified)]),
@@ -251,6 +307,7 @@ mod tests {
             quote!(#[dummy = "verified"]),
             quote!(#[dummy] #[dummy]),
         ] {
+
             assert!(expand(
                 quote!("/Script/Fixture.Library"),
                 quote! {
@@ -262,7 +319,9 @@ mod tests {
     }
 
     #[test]
+
     fn unsupported_results_and_mutable_borrows_are_rejected() {
+
         for declaration in [
             quote!(impl Library { #[dummy] unsafe fn Call(value: &mut FString) {} }),
             quote!(impl Library { #[dummy] unsafe fn Call() -> UnsupportedAggregate {} }),
@@ -270,12 +329,15 @@ mod tests {
             quote!(impl Library { #[dummy] unsafe fn Call() { todo!() } }),
             quote!(impl Library { #[dummy] unsafe fn Call<T>(value: T) {} }),
         ] {
+
             assert!(expand(quote!("/Script/Fixture.Library"), declaration).is_err());
         }
     }
 
     #[test]
+
     fn cfgs_cover_resolver_descriptor_dispatch_and_inventory() {
+
         let output = expand(
             quote!("/Script/Fixture.Library"),
             quote! {
@@ -288,23 +350,32 @@ mod tests {
             },
         )
         .unwrap();
+
         let file = syn::parse2::<syn::File>(output).unwrap();
+
         let syn::Item::Const(scope) = &file.items[0] else {
+
             panic!("expected isolated helpers")
         };
 
         assert_eq!(cfg_attributes(&scope.attrs).count(), 1);
+
         let syn::Expr::Block(block) = &*scope.expr else {
+
             panic!("expected block")
         };
 
         for statement in &block.block.stmts {
+
             if let syn::Stmt::Macro(item) = statement {
+
                 assert_eq!(cfg_attributes(&item.attrs).count(), 1);
+
                 continue;
             }
 
             let syn::Stmt::Item(item) = statement else {
+
                 panic!("expected item")
             };
 
@@ -318,6 +389,7 @@ mod tests {
 
             if matches!(item, syn::Item::Impl(_))
                 && attributes.iter().any(|attribute| {
+
                     attribute
                         .path()
                         .segments
@@ -325,13 +397,18 @@ mod tests {
                         .is_some_and(|segment| segment.ident == "runtime_bindings")
                 })
             {
+
                 let syn::Item::Impl(implementation) = item else {
+
                     unreachable!()
                 };
 
                 assert_eq!(cfg_attributes(&implementation.attrs).count(), 1);
+
                 for associated in &implementation.items {
+
                     let syn::ImplItem::Const(item) = associated else {
+
                         panic!("expected dummy metadata")
                     };
 
@@ -346,7 +423,9 @@ mod tests {
     }
 
     #[test]
+
     fn qualified_bool_inputs_always_decode_vm_bool32() {
+
         let output = expand(
             quote!("/Script/Fixture.Library"),
             quote! {
@@ -358,7 +437,9 @@ mod tests {
         )
         .unwrap()
         .to_string();
+
         assert!(output.contains(". boolean ()"));
+
         assert!(!output.contains("borrow :: < std :: primitive :: bool >"));
     }
 }

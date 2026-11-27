@@ -13,6 +13,7 @@ pub struct ScanContext {
 
 impl ScanContext {
     pub fn new(base: usize, offsets: &HashMap<String, u64>) -> Self {
+
         Self {
             base,
             offsets: offsets.clone(),
@@ -27,6 +28,7 @@ pub struct PatternsleuthResolver {
 
 impl PatternsleuthResolver {
     pub const fn named(named: NamedResolver) -> Self {
+
         Self {
             key: named.name,
             named: Some(named),
@@ -34,13 +36,16 @@ impl PatternsleuthResolver {
     }
 
     pub const fn offset(key: &'static str) -> Self {
+
         Self { key, named: None }
     }
 }
 
 impl AddressResolver for PatternsleuthResolver {
     type Context = ScanContext;
+
     unsafe fn resolve(&self, context: &ScanContext) -> Result<NonZeroUsize, String> {
+
         context
             .offsets
             .get(self.key)
@@ -62,19 +67,27 @@ pub struct OffsetProvider {
 }
 
 inventory::collect!(RequiredResolver);
+
 inventory::collect!(OffsetProvider);
 
 /// Declare a typed resolver for an RVA supplied by an offset-map provider.
 #[macro_export]
+
 macro_rules! define_offset_resolver {
     ($name:ident) => {
         #[allow(non_camel_case_types)]
+
         pub struct $name;
+
         impl ::unchained_macros_core::ResolverDeclaration for $name {
             type Backend = $crate::PatternsleuthResolver;
+
             const NAME: &'static str = stringify!($name);
+
             const UNRESTRICTED: bool = true;
+
             const DESCRIPTOR: &'static ::unchained_macros_core::Resolver<Self::Backend> = {
+
                 static DESCRIPTOR: ::unchained_macros_core::Resolver<$crate::PatternsleuthResolver> =
                     ::unchained_macros_core::Resolver {
                         name: stringify!($name),
@@ -98,6 +111,7 @@ macro_rules! define_offset_resolver {
 }
 
 #[macro_export]
+
 macro_rules! require_resolver {
     ($name:ident) => {
         $crate::__private::inventory::submit! { $crate::RequiredResolver { name: stringify!($name) } }
@@ -105,12 +119,17 @@ macro_rules! require_resolver {
 }
 
 pub fn startup_resolvers(snapshot: &SelectorSnapshot) -> Result<Vec<&'static NamedResolver>, String> {
+
     snapshot.validate_registered()?;
+
     validate_patch_registrations()?;
+
     let declared: Vec<_> = resolver_inventory_for::<PatternsleuthResolver>()
         .filter_map(|resolver| resolver.implementation.named.as_ref())
         .collect();
+
     let available: Vec<_> = patternsleuth::resolvers::resolvers().collect();
+
     let names = inventory::iter::<RequiredResolver>
         .into_iter()
         .map(|root| root.name)
@@ -119,26 +138,35 @@ pub fn startup_resolvers(snapshot: &SelectorSnapshot) -> Result<Vec<&'static Nam
                 .into_iter()
                 .map(|entry| entry.name()),
         );
+
     let mut roots = select(names, &declared, &available)?;
+
     roots.retain(|resolver| snapshot.supports_resolver_for::<PatternsleuthResolver>(resolver.name));
+
     roots.extend(
         binding_inventory_for::<PatternsleuthResolver>()
             .filter(|entry| entry.supports(snapshot))
             .filter_map(|entry| entry.resolver.implementation.named.as_ref()),
     );
+
     roots.extend(
         patch_inventory_for::<PatternsleuthResolver>()
             .filter(|entry| snapshot.supports_patch(*entry))
             .filter_map(|entry| entry.resolver.implementation.named.as_ref()),
     );
+
     roots.sort_by_key(|resolver| resolver.name);
+
     for pair in roots.windows(2) {
+
         if pair[0].name == pair[1].name && !std::ptr::eq(pair[0], pair[1]) {
+
             return Err(format!("Required startup resolver {} is ambiguous", pair[0].name));
         }
     }
 
     roots.dedup_by_key(|resolver| resolver.name);
+
     Ok(roots)
 }
 
@@ -147,18 +175,23 @@ fn select<'a>(
     declared: &[&'static NamedResolver],
     available: &[&'static NamedResolver],
 ) -> Result<Vec<&'static NamedResolver>, String> {
+
     names
         .into_iter()
         .collect::<BTreeSet<_>>()
         .into_iter()
         .map(|name| {
+
             let candidates = if declared.iter().any(|resolver| resolver.name == name) {
+
                 declared
             } else {
+
                 available
             };
 
             let mut matches = candidates.iter().copied().filter(|resolver| resolver.name == name);
+
             match (matches.next(), matches.next()) {
                 (Some(resolver), None) => Ok(resolver),
                 (None, _) => Err(format!("Required startup resolver {name} is not registered")),
@@ -169,9 +202,13 @@ fn select<'a>(
 }
 
 #[cfg(test)]
+
 mod tests {
+
     use super::*;
+
     fn unused_getter() -> &'static patternsleuth::resolvers::DynResolverFactory {
+
         panic!("selection must not evaluate resolvers")
     }
 
@@ -191,28 +228,39 @@ mod tests {
     };
 
     #[test]
+
     fn selects_only_consumed_roots_once_in_stable_order() {
+
         let roots = select(["Second", "First", "First"], &[], &[&FIRST, &SECOND]).unwrap();
+
         assert_eq!(
             roots.iter().map(|root| root.name).collect::<Vec<_>>(),
             ["First", "Second"]
         );
+
         assert!(select([], &[], &[&FIRST]).unwrap().is_empty());
     }
 
     #[test]
+
     fn local_declarations_win_over_upstream_namesakes() {
+
         let roots = select(["First"], &[&FIRST], &[&SHADOW, &FIRST]).unwrap();
+
         assert!(std::ptr::eq(roots[0], &FIRST));
     }
 
     #[test]
+
     fn missing_and_ambiguous_roots_are_errors() {
+
         assert!(select(["Missing"], &[], &[&FIRST]).err().unwrap().contains("Missing"));
+
         assert!(select(["First"], &[], &[&FIRST, &SHADOW])
             .err()
             .unwrap()
             .contains("ambiguous"));
+
         assert!(select(["First"], &[&FIRST, &SHADOW], &[])
             .err()
             .unwrap()

@@ -4,13 +4,19 @@ use quote::quote;
 use syn::{ItemFn, Path, ReturnType, Type};
 
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
+
     use syn::parse::Parser;
+
     let args = syn::punctuated::Punctuated::<Path, syn::Token![,]>::parse_terminated.parse2(args)?;
+
     let mut args = args.into_iter();
+
     let resolver = args
         .next()
         .ok_or_else(|| syn::Error::new(Span::call_site(), "expected resolver path"))?;
+
     let resolver = resolver_path(quote!(#resolver))?;
+
     let address = match args.next() {
         Some(mode) if mode.is_ident("Value") => false,
         Some(mode) if mode.is_ident("Address") => true,
@@ -24,6 +30,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
 
     if args.next().is_some() {
+
         return Err(syn::Error::new(
             Span::call_site(),
             "unexpected native value binding arguments",
@@ -31,8 +38,11 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
+
     if let Ok(declaration) = syn::parse2::<syn::ForeignItemStatic>(item.clone()) {
+
         if !matches!(declaration.mutability, syn::StaticMutability::None) {
+
             return Err(syn::Error::new_spanned(
                 declaration,
                 "native global bindings must not be static mut",
@@ -40,6 +50,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
 
         let Type::Ptr(pointer) = declaration.ty.as_ref() else {
+
             return Err(syn::Error::new_spanned(
                 &declaration.ty,
                 "static global bindings require a raw native pointer type",
@@ -47,6 +58,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         };
 
         if pointer.mutability.is_none() {
+
             return Err(syn::Error::new_spanned(
                 pointer,
                 "static native globals require *mut T; use an unsafe accessor for read-only values",
@@ -54,10 +66,15 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
 
         let target = &pointer.elem;
+
         let name = &declaration.ident;
+
         let vis = &declaration.vis;
+
         let attributes = &declaration.attrs;
+
         let constructor = if address { quote!(inline) } else { quote!(pointer_slot) };
+
         return Ok(quote! {
             #(#attributes)*
             #[allow(non_upper_case_globals)]
@@ -75,8 +92,11 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     let mut function: ItemFn = syn::parse2(item)?;
+
     let signature = &function.sig;
+
     if signature.unsafety.is_none() {
+
         return Err(syn::Error::new_spanned(
             signature,
             "native value bindings require unsafe fn",
@@ -91,6 +111,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         || signature.abi.is_some()
         || signature.variadic.is_some()
     {
+
         return Err(syn::Error::new_spanned(
             signature,
             "native value bindings require a non-generic, non-async zero-argument Rust accessor",
@@ -98,6 +119,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     if !function.block.stmts.is_empty() {
+
         return Err(syn::Error::new_spanned(
             &function.block,
             "native binding bodies must be empty",
@@ -105,6 +127,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     let ReturnType::Type(_, ty) = &signature.output else {
+
         return Err(syn::Error::new_spanned(
             signature,
             "native value bindings require an explicit Copy value return type",
@@ -114,6 +137,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     if matches!(ty.as_ref(), Type::Reference(_))
         || matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option" || segment.ident == "Result"))
     {
+
         return Err(syn::Error::new_spanned(
             ty,
             "return the native Copy value directly, not a reference, Option or Result",
@@ -121,6 +145,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     if address && !matches!(ty.as_ref(), Type::Ptr(_)) {
+
         return Err(syn::Error::new_spanned(
             ty,
             "Address bindings require a raw pointer return type",
@@ -128,14 +153,18 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
 
     let binding = syn::Ident::new("__UNCHAINED_VALUE_BINDING", Span::mixed_site());
+
     let value = syn::Ident::new("__unchained_value", Span::mixed_site());
+
     let check_pointer = matches!(ty.as_ref(), Type::Ptr(_)).then(|| quote! {
         assert!(!#value.is_null(), concat!("Required native value ", #resolver_name, " is null; the engine must initialize it before access"));
     });
 
     let read = if address {
+
         quote!(#binding.address() as #ty)
     } else {
+
         quote!(unsafe { (#binding.address() as *const #ty).read() })
     };
 
@@ -153,11 +182,13 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #check_pointer
         #value
     }))?);
+
     if !function
         .attrs
         .iter()
         .any(|attribute| attribute.path().is_ident("inline"))
     {
+
         function.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
 
@@ -165,15 +196,21 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 #[cfg(test)]
+
 mod tests {
+
     use super::*;
+
     #[test_case::test_case(quote!(Objects, Address), quote!(unsafe fn objects() -> u32 {}), "raw pointer return type"; "scalar address")]
     #[test_case::test_case(quote!(Objects, unknown), quote!(unsafe fn objects() -> *const u32 {}), "expected Value or Address"; "unknown mode")]
     #[test_case::test_case(quote!(Objects, Address, Address), quote!(unsafe fn objects() -> *const u32 {}), "unexpected native value binding arguments"; "extra mode")]
     #[test_case::test_case(quote!(Objects), quote!(unsafe fn objects() -> *const u32 {}), "explicit Value or Address"; "missing mode")]
     #[test_case::test_case(quote!(Objects, address), quote!(unsafe fn objects() -> *const u32 {}), "expected Value or Address"; "lowercase mode")]
+
     fn rejects_invalid_value_binding_modes(args: Tokens, item: Tokens, message: &str) {
+
         let error = expand(args, item).unwrap_err();
+
         assert!(error.to_string().contains(message), "{error}");
     }
 
@@ -190,7 +227,9 @@ mod tests {
     #[test_case::test_case(quote!(unsafe fn value() -> &'static u32 {}), "not a reference"; "reference")]
     #[test_case::test_case(quote!(unsafe fn value() -> Option<u32> {}), "Option or Result"; "optional value")]
     #[test_case::test_case(quote!(unsafe fn value() -> Result<u32, ()> {}), "Option or Result"; "fallible value")]
+
     fn rejects_unsupported_native_value_declarations(item: Tokens, message: &str) {
+
         assert!(expand(quote!(NativeValue, Value), item)
             .unwrap_err()
             .to_string()

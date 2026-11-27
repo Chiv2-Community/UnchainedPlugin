@@ -3,8 +3,11 @@ use quote::quote;
 use syn::parse::{Parse, Parser};
 
 pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
+
     let mut declaration: syn::DeriveInput = syn::parse2(item)?;
+
     if !declaration.generics.params.is_empty() || declaration.generics.where_clause.is_some() {
+
         return Err(syn::Error::new_spanned(
             &declaration.generics,
             "selection keys must be non-generic",
@@ -12,6 +15,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     }
 
     let syn::Data::Enum(data) = &declaration.data else {
+
         return Err(syn::Error::new_spanned(
             &declaration.ident,
             "selection keys must be fieldless enums",
@@ -19,7 +23,9 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     };
 
     for variant in &data.variants {
+
         if !matches!(variant.fields, syn::Fields::Unit) {
+
             return Err(syn::Error::new_spanned(
                 variant,
                 "selection variants must have no fields",
@@ -28,41 +34,59 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     }
 
     let mut required = None;
+
     let mut fallback = None;
+
     syn::meta::parser(|meta| {
+
         if meta.path.is_ident("fallback") {
+
             if fallback.is_some() {
+
                 return Err(meta.error("duplicate fallback option"));
             }
 
             let key: syn::Ident = meta.value()?.parse()?;
+
             if !data.variants.iter().any(|variant| variant.ident == key) {
+
                 return Err(syn::Error::new_spanned(key, "unknown fallback selection variant"));
             }
 
             fallback = Some(key);
+
             return Ok(());
         }
 
         if !meta.path.is_ident("require") {
+
             return Err(meta.error("expected require = [Variant, ...] or fallback = Variant"));
         }
 
         if required.is_some() {
+
             return Err(meta.error("duplicate require option"));
         }
 
         let content;
+
         let value = meta.value()?;
+
         syn::bracketed!(content in value);
+
         let keys = content.parse_terminated(syn::Ident::parse, syn::Token![,])?;
+
         let mut checked = Vec::new();
+
         for key in keys {
+
             if !data.variants.iter().any(|variant| variant.ident == key) {
+
                 return Err(syn::Error::new_spanned(key, "unknown required selection variant"));
             }
 
             if checked.contains(&key) {
+
                 return Err(syn::Error::new_spanned(key, "duplicate required selection"));
             }
 
@@ -70,13 +94,17 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         }
 
         required = Some(checked);
+
         Ok(())
     })
     .parse2(args)?;
+
     let required = required.unwrap_or_default();
+
     let fallback_body = fallback.map_or_else(
         || quote!(::core::option::Option::None),
         |key| {
+
             quote! {
                 if self.__unchained_key_eq(Self::#key) {
                     ::core::option::Option::None
@@ -86,30 +114,42 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             }
         },
     );
+
     let equality_arms = data
         .variants
         .iter()
         .map(|variant| {
+
             let name = &variant.ident;
+
             let cfg = crate::common::cfg_attributes(&variant.attrs);
+
             quote!(#(#cfg)* Self::#name => matches!(other, Self::#name),)
         })
         .collect::<Vec<_>>();
+
     let name_arms = data
         .variants
         .iter()
         .map(|variant| {
+
             let name = &variant.ident;
+
             let cfg = crate::common::cfg_attributes(&variant.attrs);
+
             quote!(#(#cfg)* Self::#name => stringify!(#name),)
         })
         .collect::<Vec<_>>();
+
     let duplicate_checks = data
         .variants
         .iter()
         .map(|variant| {
+
             let name = &variant.ident;
+
             let cfg = crate::common::cfg_attributes(&variant.attrs);
+
             quote! {
                 #(#cfg)*
                 {
@@ -128,17 +168,21 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             }
         })
         .collect::<Vec<_>>();
+
     let existing = declaration
         .attrs
         .iter()
         .filter(|attribute| attribute.path().is_ident("derive"))
         .map(|attribute| {
+
             attribute.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated)
         })
         .collect::<syn::Result<Vec<_>>>()?;
+
     let missing: Vec<syn::Path> = ["Clone", "Copy", "PartialEq", "Eq"]
         .into_iter()
         .filter(|name| {
+
             !existing
                 .iter()
                 .flatten()
@@ -146,11 +190,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         })
         .map(|name| syn::parse_str(name).unwrap())
         .collect();
+
     if !missing.is_empty() {
+
         declaration.attrs.push(syn::parse_quote!(#[derive(#(#missing),*)]));
     }
 
     let name = &declaration.ident;
+
     Ok(quote! {
         #declaration
         impl ::unchained_macros_core::SelectionKey for #name {
@@ -213,7 +260,9 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
 }
 
 #[cfg(test)]
+
 mod tests {
+
     use super::*;
     use quote::quote;
 
@@ -222,7 +271,9 @@ mod tests {
     #[test_case::test_case(quote!(require = [First, Second]), quote!(enum Key { First, Second }); "required variants")]
     #[test_case::test_case(quote!(require = []), quote!(enum Key { First }); "no required variants")]
     #[test_case::test_case(quote!(require = [First], fallback = Second), quote!(enum Key { First, Second }); "default fallback")]
+
     fn accepts_fieldless_enums(args: TokenStream, item: TokenStream) {
+
         syn::parse2::<syn::File>(expand(args, item).unwrap()).unwrap();
     }
 
@@ -235,7 +286,9 @@ mod tests {
     #[test_case::test_case(quote!(enum Key<T> { Value(T) }); "type generic")]
     #[test_case::test_case(quote!(enum Key<const N: usize> { Value }); "const generic")]
     #[test_case::test_case(quote!(enum Key<'a> { Value(&'a u8) }); "lifetime generic")]
+
     fn rejects_non_fieldless_or_generic_keys(item: TokenStream) {
+
         assert!(expand(quote!(), item).is_err());
     }
 
@@ -246,7 +299,9 @@ mod tests {
     #[test_case::test_case(quote!(require = First); "not an array")]
     #[test_case::test_case(quote!(fallback = Missing); "unknown fallback")]
     #[test_case::test_case(quote!(fallback = First, fallback = First); "duplicate fallback")]
+
     fn rejects_invalid_required_selections(args: TokenStream) {
+
         assert!(expand(
             args,
             quote!(

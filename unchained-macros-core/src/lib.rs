@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+
 pub use unchained_macros_core_impl::{
     bind_func_detour, bind_func_entry_listener, bind_func_exit_listener, bind_resolved_func, bind_resolved_value,
     register_patch, resolver_selection_key, runtime_bindings,
@@ -12,6 +13,7 @@ mod registry;
 mod resolver;
 mod selection;
 mod target;
+
 pub use target::{NativeTarget, SupportsDetour};
 
 pub use binding::{
@@ -39,7 +41,9 @@ pub use selection::{
 };
 
 #[doc(hidden)]
+
 pub mod __private {
+
     pub use crate::binding::FunctionInfo;
     pub use crate::detour::{attach_function_detour, claim_detour_address};
     pub use crate::patch::validate_patch_coverage;

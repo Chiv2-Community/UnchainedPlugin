@@ -5,12 +5,17 @@ use patternsleuth::{
 };
 
 pub const BASE: u64 = 0x1_4000_0000;
+
 pub const TEXT: u64 = BASE + 0x1000;
 
 pub fn image(matches: &[usize]) -> Image<'static> {
+
     let mut text = vec![0x90; 0x80];
+
     text[..2].copy_from_slice(&[0x11, 0x22]);
+
     for &offset in matches {
+
         text[offset..offset + 2].copy_from_slice(&[0xAA, 0xBB]);
     }
 
@@ -18,6 +23,7 @@ pub fn image(matches: &[usize]) -> Image<'static> {
         .into_iter()
         .flat_map(u32::to_le_bytes)
         .collect();
+
     Image::from_memory(
         BASE,
         Memory::from_sections(vec![

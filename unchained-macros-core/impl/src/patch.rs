@@ -12,12 +12,15 @@ struct Arguments {
 
 impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+
         let resolver: Path = input.parse()?;
+
         if resolver
             .segments
             .iter()
             .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
         {
+
             return Err(syn::Error::new_spanned(
                 resolver,
                 "patch targets must be non-generic resolver types",
@@ -25,14 +28,21 @@ impl Parse for Arguments {
         }
 
         let selection = if input.is_empty() {
+
             None
         } else {
+
             input.parse::<Token![,]>()?;
+
             if input.is_empty() {
+
                 None
             } else {
+
                 let selection = input.parse()?;
+
                 if input.peek(Token![,]) {
+
                     input.parse::<Token![,]>()?;
                 }
 
@@ -45,11 +55,16 @@ impl Parse for Arguments {
 }
 
 pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
+
     let Arguments { resolver, selection } = syn::parse2(args)?;
+
     let declaration: syn::Item = syn::parse2(item)?;
+
     let (name, attributes, factory) = match &declaration {
         syn::Item::Fn(function) => {
+
             let signature = &function.sig;
+
             if signature.asyncness.is_some()
                 || signature.constness.is_some()
                 || signature.unsafety.is_some()
@@ -60,16 +75,20 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                 || signature.inputs.len() != 1
                 || matches!(signature.inputs.first(), Some(syn::FnArg::Receiver(_)))
             {
+
                 return Err(syn::Error::new_spanned(signature,
                     "patch factories must be safe, non-generic Rust functions taking one u64 address and returning Patch"));
             }
 
             let name = &signature.ident;
+
             (name, &function.attrs, quote!(#name))
         }
 
         syn::Item::Static(value) => {
+
             if matches!(value.mutability, syn::StaticMutability::Mut(_)) {
+
                 return Err(syn::Error::new_spanned(
                     value,
                     "registered patches must be immutable statics",
@@ -77,6 +96,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             }
 
             let name = &value.ident;
+
             (name, &value.attrs, quote!(|_| #name.clone()))
         }
 
@@ -89,12 +109,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     };
 
     if attributes.iter().any(|attribute| {
+
         attribute
             .path()
             .segments
             .last()
             .is_some_and(|segment| segment.ident == "register_patch")
     }) {
+
         return Err(syn::Error::new_spanned(
             &declaration,
             "register each patch item only once",
@@ -102,6 +124,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     }
 
     let cfg: Vec<_> = crate::common::cfg_attributes(attributes).collect();
+
     let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
             quote!(
@@ -122,13 +145,11 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                     &[(#key, true)],
                 );
             },
-
             quote! {
                 ::unchained_macros_core::__private::inventory::submit! {
                     ::unchained_macros_core::__private::SelectorProvider::for_key(#key)
                 }
             },
-
             quote!(::core::option::Option::Some(::unchained_macros_core::__private::selector_type(#key))),
             quote!(|selection| ::unchained_macros_core::__private::selection_matches(selection, #key)),
             quote!(|patches| ::unchained_macros_core::__private::validate_patch_coverage::<#resolver, _>(#key, patches)),
@@ -154,12 +175,16 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
 }
 
 #[cfg(test)]
+
 mod tests {
+
     use super::*;
 
     #[test_case::test_case(quote!(Target), quote!(pub fn patch(address: u64) -> Patch { make(address) }); "factory")]
     #[test_case::test_case(quote!(Target, Key::First), quote!(static PATCH: Patch = Patch::nop(0, 1);); "selected static")]
+
     fn accepts_patch_items(args: TokenStream, item: TokenStream) {
+
         syn::parse2::<syn::File>(expand(args, item).unwrap()).unwrap();
     }
 
@@ -171,7 +196,9 @@ mod tests {
     #[test_case::test_case(quote!(Target), quote!(unsafe fn patch(address: u64) -> Patch {}); "unsafe")]
     #[test_case::test_case(quote!(Target), quote!(fn patch<T>(address: u64) -> Patch {}); "generic")]
     #[test_case::test_case(quote!(Target), quote!(#[register_patch(Other)] fn patch(address: u64) -> Patch {}); "duplicate attribute")]
+
     fn rejects_invalid_patches(args: TokenStream, item: TokenStream) {
+
         assert!(expand(args, item).is_err());
     }
 }

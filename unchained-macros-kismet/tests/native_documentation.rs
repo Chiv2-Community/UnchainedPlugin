@@ -4,9 +4,13 @@
 use std::{fs, path::Path, process::Command};
 
 #[test]
+
 fn generated_native_documents_reach_method_hovers() {
+
     let root = std::env::temp_dir().join(format!("kismet-native-docs-{}", std::process::id()));
+
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+
     for directory in [
         "src/Chivalry2",
         "src/unchained/patches",
@@ -14,10 +18,12 @@ fn generated_native_documents_reach_method_hovers() {
         "cpp/Engine/Source/Test/Public",
         "cpp/Engine/Source/Test/Private",
     ] {
+
         fs::create_dir_all(root.join(directory)).unwrap();
     }
 
     let workspace_manifest = fs::read_to_string(repository.join("Cargo.toml")).unwrap();
+
     let patches = workspace_manifest
         .split_once("[patch.crates-io]")
         .unwrap()
@@ -25,6 +31,7 @@ fn generated_native_documents_reach_method_hovers() {
         .split("\n[")
         .next()
         .unwrap();
+
     fs::write(
         root.join("Cargo.toml"),
         format!(
@@ -48,7 +55,9 @@ unchained-macros-native-docs-generator = {{ path = "{}/unchained-macros-native-d
         ),
     )
     .unwrap();
+
     fs::copy(repository.join("Cargo.lock"), root.join("Cargo.lock")).unwrap();
+
     fs::write(
         root.join("build.rs"),
         r#"
@@ -63,6 +72,7 @@ fn main() {
 "#,
     )
     .unwrap();
+
     fs::write(
         root.join(".cargo/config.local.toml"),
         format!(
@@ -71,18 +81,22 @@ fn main() {
         ),
     )
     .unwrap();
+
     fs::write(
         root.join("src/lib.rs"),
         include_str!("fixtures/native_documentation.rs"),
     )
     .unwrap();
+
     fs::write(
         root.join("src/Chivalry2/Fixture.rs"),
         include_str!("fixtures/native_documentation.rs"),
     )
     .unwrap();
+
     fs::write(root.join("cpp/Engine/Source/Test/Public/Fixture.h"),
         "class Reflected { public: static int Call(); static int Call(int Value); static int Typed(int Value); static void Observed(); }; class Named { public: static void Scan(); static void Provided(); }; class Explicit { public: static int Direct(int Value); };").unwrap();
+
     fs::write(
         root.join("cpp/Engine/Source/Test/Private/Fixture.cpp"),
         r#"
@@ -107,14 +121,17 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         .env_remove("UNCHAINED_NATIVE_DOCS_DIR")
         .output()
         .unwrap();
+
     assert!(
         output.status.success(),
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+
     let reflected =
         fs::read_to_string(root.join("target/doc/native_hover_fixture/qualified/struct.Reflected.html")).unwrap();
+
     for expected in [
         "SelectedOverload",
         "SelectedSignature",
@@ -126,11 +143,14 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "Dummy entry safety note.",
         "Entry-only dummy observation marker.",
     ] {
+
         assert!(reflected.contains(expected), "missing {expected}");
     }
 
     assert_eq!(reflected.matches("Keep the native receiver alive.").count(), 1);
+
     assert_eq!(reflected.matches("Authored method comment.").count(), 1);
+
     for unexpected in [
         "WrongOverload",
         "WrongSignature",
@@ -139,22 +159,32 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "DummyMustNotBeDiscovered",
         "Reflected::Observed",
     ] {
+
         assert!(!reflected.contains(unexpected), "unexpected {unexpected}");
     }
 
     let generated = root.join("generated/native-docs");
+
     assert!(generated.join("binding-Reflected__Call.md").exists());
+
     assert!(!generated.join("binding-Reflected__Observed.md").exists());
+
     let named = fs::read_to_string(root.join("target/doc/native_hover_fixture/struct.Named.html")).unwrap();
+
     for expected in ["ScanImplementation", "ProviderImplementation", "ScanKey", "ProviderKey"] {
+
         assert!(named.contains(expected), "missing {expected}");
     }
 
     let free = fs::read_to_string(root.join("target/doc/native_hover_fixture/fn.free_descriptor.html")).unwrap();
+
     assert!(free.contains("Direct calls invoke the original implementation"));
+
     assert!(free.contains("Free-function safety note."));
+
     let explicit =
         fs::read_to_string(root.join("target/doc/native_hover_fixture/qualified/struct.Explicit.html")).unwrap();
+
     for expected in [
         "Explicit::Direct",
         "DescriptorImplementation",
@@ -166,6 +196,7 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "explicit descriptor",
         "Fixture.rs#L",
     ] {
+
         assert!(explicit.contains(expected), "missing {expected}");
     }
 
@@ -174,9 +205,11 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         "upstream resolver",
         "Reflection native body:",
     ] {
+
         assert!(!explicit.contains(unexpected), "unexpected {unexpected}");
     }
 
     assert_eq!(explicit.matches("Explicit descriptor safety note.").count(), 1);
+
     fs::remove_dir_all(root).unwrap();
 }
