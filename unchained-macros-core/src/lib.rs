@@ -44,6 +44,8 @@ pub use selection::{
 
 pub mod __private {
 
+    pub use crate::target::detour_signature;
+
     pub use crate::binding::FunctionInfo;
     pub use crate::detour::claim_detour_address;
     pub use crate::patch::validate_patch_coverage;

@@ -182,8 +182,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     } else {
 
         quote! {
-            const fn signature<T: ::unchained_macros_core::SupportsDetour>(_: &T) -> ::unchained_macros_core::NativeSignature<T::Callback> { ::core::marker::PhantomData }
-            let _: ::unchained_macros_core::NativeSignature<#native> = signature(#capability);
+            let _: ::unchained_macros_core::NativeSignature<#native> =
+                ::unchained_macros_core::__private::detour_signature(#capability);
         }
     };
 
@@ -198,12 +198,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     Ok(quote! {
         #function
         #(#cfg)*
-        const _: () = {
-            // Invariant signature metadata makes mismatches compiler errors.
-            #signature_check
-        };
-
-        #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
             unsafe { #ident(#(#names),*) }
@@ -212,8 +206,9 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: &dyn ::unchained_macros_core::DetourInfo = {
+            #signature_check
             let registration = ::unchained_macros_core::DetourRegistration::new(
-                stringify!(#ident), #capability, #callback, || (#condition)(),
+                stringify!(#ident), #capability, #callback, #condition,
             );
             &unsafe {
                 static INITIALIZED: ::core::sync::atomic::AtomicBool = ::core::sync::atomic::AtomicBool::new(false);
@@ -381,7 +376,7 @@ mod tests {
     #[test_case::test_case(quote!(Native::call, || true), quote!(|| true); "enabled")]
     #[test_case::test_case(quote!(Native::call, || false), quote!(|| false); "disabled")]
     #[test_case::test_case(quote!(Native::call, || enabled()), quote!(|| enabled()); "closure")]
-    #[test_case::test_case(quote!(Native::call, enabled), quote!(enabled); "function")]
+    #[test_case::test_case(quote!(Native::call, enabled), quote!(|| (enabled)()); "function")]
 
     fn conditions_default_to_enabled_and_preserve_explicit_predicates(args: Tokens, expected: Tokens) {
 
@@ -395,7 +390,7 @@ mod tests {
 
         let expected: syn::Expr = syn::parse2(expected).unwrap();
 
-        let expected = quote!(|| (#expected)()).to_string();
+        let expected = quote!(#expected).to_string();
 
         assert!(expanded.to_string().contains(&expected));
 

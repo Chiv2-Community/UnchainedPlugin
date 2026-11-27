@@ -257,7 +257,7 @@ pub(crate) fn expand_method(
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
 
     let (target_type, target_storage, target_setup) =
-        native_dispatch(&signature, &storage, &resolver, &function.attrs)?;
+        native_dispatch(&signature, self_ty, &storage, &resolver, &function.attrs)?;
 
     let registration = quote!(#registration #target_setup);
 
@@ -292,6 +292,7 @@ pub(crate) fn expand_method(
 
 fn native_dispatch(
     signature: &syn::Signature,
+    owner: &Type,
     binding: &syn::Ident,
     resolver: &BindingResolver,
     attrs: &[syn::Attribute],
@@ -349,8 +350,6 @@ fn native_dispatch(
 
     let output = &signature.output;
 
-    let native = quote!(unsafe extern "C" fn(#(#types),*) #output);
-
     let generics = &signature.generics;
 
     let callback = fresh_local(signature, "callback");
@@ -378,11 +377,10 @@ fn native_dispatch(
             use ::unchained_macros_core::{SupportsEntry as _, SupportsExit as _, SupportsDetour as _};
             #target.observe_entry(|#callback| unsafe { #callback(#(&#names),*) });
             let #observation = #target.prepare_exit(|#prepare| unsafe { #prepare(#(&#names),*) });
-            let #call: #native = #target.replacement_slot().get().unwrap_or_else(|| unsafe {
-                ::core::mem::transmute(#binding.address().expect("Attached native binding has no trampoline").get())
-            });
-
-            let #returned = unsafe { #call(#(#names),*) };
+            let #returned = match #target.replacement_slot().get() {
+                Some(#call) => unsafe { #call(#(#names),*) },
+                None => unsafe { <#owner>::#name(#(#names),*) },
+            };
             if let Some(#observation) = #observation {
                 unsafe { #target.finish_exit(#observation, (&#returned as *const #result).cast()); }
             }

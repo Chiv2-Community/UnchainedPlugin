@@ -39,6 +39,11 @@ pub trait SupportsDetour: CallbackTarget {
     }
 }
 
+pub const fn detour_signature<T: SupportsDetour>(_: &T) -> crate::NativeSignature<T::Callback> {
+
+    std::marker::PhantomData
+}
+
 /// One dispatcher's exact replacement, entry, exit and exit-preparation signatures.
 /// Function pointers stay typed all the way to dispatch, including higher-ranked lifetimes.
 

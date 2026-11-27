@@ -167,7 +167,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: ::unchained_macros_core::ListenerRegistration =
-            ::unchained_macros_core::ListenerRegistration::#phase(stringify!(#ident), &#action, || (#condition)());
+            ::unchained_macros_core::ListenerRegistration::#phase(stringify!(#ident), &#action, #condition);
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
             &#registration

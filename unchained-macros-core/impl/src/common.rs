@@ -30,26 +30,25 @@ impl Parse for CallbackArguments {
 
         let target = input.parse()?;
 
+        if !input.is_empty() {
+
+            input.parse::<syn::Token![,]>()?;
+        }
+
         let condition = if input.is_empty() {
 
             syn::parse_quote!(|| true)
         } else {
 
-            input.parse::<syn::Token![,]>()?;
+            let expr: syn::Expr = input.parse()?;
 
-            if input.is_empty() {
+            input.parse::<Option<syn::Token![,]>>()?;
 
-                syn::parse_quote!(|| true)
-            } else {
-
-                input.parse()?
+            match expr {
+                syn::Expr::Closure(_) => expr,
+                _ => syn::parse_quote!(|| (#expr)()),
             }
         };
-
-        if !input.is_empty() {
-
-            input.parse::<syn::Token![,]>()?;
-        }
 
         Ok(Self { target, condition })
     }
