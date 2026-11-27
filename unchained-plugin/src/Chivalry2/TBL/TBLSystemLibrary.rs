@@ -1,5 +1,4 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBL/Public/TBLSystemLibrary.h>.
-//! Native owner: TBL/Source/TBL/TBLSystemLibrary.h.
 
 use crate::Chivalry2::Engine::UObject;
 use crate::Chivalry2::TBL::ATBLGameMode;

@@ -79,39 +79,23 @@ pub fn expand_method(
     }
 
     let method_name = &signature.ident;
-
     let member = method_name.to_string();
-
     let prefix = format!("__UNCHAINED_EXEC_{class}_{method_name}");
-
     let resolver = format_ident!("{prefix}_RESOLVER");
-
     let arguments = format_ident!("{prefix}_ARGUMENTS");
-
     let binding = format_ident!("{prefix}_BINDING");
-
     let descriptor = format_ident!("{prefix}_LISTENERS");
-
     let dispatch = format_ident!("{prefix}_dispatch");
-
     let entry = format_ident!("{prefix}_entry");
-
     let associated = format_ident!("__UNCHAINED_TARGET_{method_name}");
-
     let visibility = &method.vis;
 
     let mut attributes = method.attrs.clone();
-
     attributes.retain(|a| !a.path().is_ident("dummy"));
-
     let attributes_cfg: Vec<_> = cfg_attributes(&attributes).collect();
-
     let mut types = Vec::new();
-
     let mut parameters = Vec::new();
-
     let mut decode = Vec::new();
-
     let mut borrowed = Vec::new();
 
     for (index, input) in signature.inputs.iter().enumerate() {
@@ -123,20 +107,21 @@ pub fn expand_method(
         };
 
         let ty = value_type(&input.ty)?;
+        let local = format_ident!("argument_{index}");
 
         parameters.push(parameter(&ty)?);
 
-        let local = format_ident!("argument_{index}");
-
         if matches!(&ty, Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "bool")) {
-            decode.push(
-                quote! { let #local = unsafe { inputs.get(#index).expect("validated exec argument").boolean() }; },
-            );
+            decode.push(quote! {
+                let #local = unsafe { inputs.get(#index).expect("validated exec argument").boolean() };
+            });
 
             borrowed.push(quote!(&#local));
         } else {
-            decode.push(quote! { let #local = inputs.get(#index).expect("validated exec argument"); let #local = unsafe { #local.borrow::<#ty>() }; });
-
+            decode.push(quote! {
+                let #local = inputs.get(#index).expect("validated exec argument");
+                let #local = unsafe { #local.borrow::<#ty>() };
+            });
             borrowed.push(quote!(#local));
         }
 

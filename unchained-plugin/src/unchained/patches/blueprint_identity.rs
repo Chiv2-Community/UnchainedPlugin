@@ -10,7 +10,6 @@ unsafe fn observe_server(_context: &*mut UObject) {}
 #[unchained_macros_core::bind_func_entry_listener(UKismetSystemLibrary::IsStandalone)]
 unsafe fn observe_standalone(_context: &*mut UObject) {}
 
-#[cfg(feature = "force_kismet_is_dedicated_server")]
 #[unchained_macros_core::bind_func_detour(UKismetSystemLibrary::IsDedicatedServer)]
 unsafe fn force_dedicated_server(context: *mut UObject) -> bool {
     unsafe { UKismetSystemLibrary::IsDedicatedServer(context); }

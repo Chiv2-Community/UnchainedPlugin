@@ -66,6 +66,13 @@ unsafe fn add_entry(config: &mut UMapSpecificLoadingScreenConfig, extra: &Loadin
     ];
 }
 
+/// Rust adapter for GetDataForMap's non-DemoMode key normalization.
+/// Strip through the last '/', then from the first '?'.
+pub(crate) fn normalize_map_key(raw: &str) -> &str {
+    let name = raw.rsplit('/').next().unwrap_or(raw);
+    name.split('?').next().unwrap_or(name)
+}
+
 /// A per-map loading screen to inject into
 /// `UMapSpecificLoadingScreenConfig::Configs`, taken from a map marker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,5 +194,27 @@ mod tests {
     fn lookup_finds_nothing_for_a_map_without_marker_data() {
         assert!(LoadingScreen::lookup("/Game/Maps/Frontend/Frontend?startup").is_none());
         assert!(LoadingScreen::lookup("").is_none());
+    }
+
+    #[test]
+    fn map_key_strips_path_then_options() {
+        for (raw, expected) in [
+            ("TDM_QuarryKP", "TDM_QuarryKP"),
+            ("/Game/Maps/Frontend/Frontend", "Frontend"),
+            ("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM", "TDM_QuarryKP"),
+            ("TDM_QuarryKP?listen", "TDM_QuarryKP"),
+            ("", ""),
+            ("/Game/Maps/", ""),
+            ("?listen", ""),
+            ("/Game?option/Map?listen", "Map"),
+            ("/Game/Maps/地图?listen", "地图"),
+        ] {
+            let key = normalize_map_key(raw);
+            assert_eq!(key, expected);
+            // Normalization borrows the input rather than allocating.
+            let start = raw.as_ptr() as usize;
+            let key_start = key.as_ptr() as usize;
+            assert!(key_start >= start && key_start + key.len() <= start + raw.len());
+        }
     }
 }

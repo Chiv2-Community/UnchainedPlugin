@@ -1,16 +1,8 @@
 //! Native source: <https://github.com/Chiv2-Community/ArgonSDK/blob/main/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h>.
-//! Native owner: TBL/Source/TBLLoadingScreen/Public/MapSpecificLoadingScreenConfig.h.
 
 use super::MapSpecificLoadingScreenConfigData::FMapSpecificLoadingScreenConfigData;
 use crate::Chivalry2::Engine::FString;
 use crate::Chivalry2::Engine::TArray;
-
-/// Rust adapter for GetDataForMap's non-DemoMode key normalization.
-/// Strip through the last '/', then from the first '?'.
-pub(crate) fn normalize_map_key(raw: &str) -> &str {
-    let name = raw.rsplit('/').next().unwrap_or(raw);
-    name.split('?').next().unwrap_or(name)
-}
 
 define_pattern_resolver!(
     UMapSpecificLoadingScreenConfig__GetDataForMap,
@@ -45,31 +37,3 @@ const _: () = assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, conf
 
 const _: () =
     assert!(std::mem::offset_of!(UMapSpecificLoadingScreenConfig, default_screen) == 0x38);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn map_key_strips_path_then_options() {
-        for (raw, expected) in [
-            ("TDM_QuarryKP", "TDM_QuarryKP"),
-            ("/Game/Maps/Frontend/Frontend", "Frontend"),
-            ("/Game/Mods/Foo/TDM_QuarryKP?listen?Game=TDM", "TDM_QuarryKP"),
-            ("TDM_QuarryKP?listen", "TDM_QuarryKP"),
-            ("", ""),
-            ("/Game/Maps/", ""),
-            ("?listen", ""),
-            ("/Game?option/Map?listen", "Map"),
-            ("/Game/Maps/地图?listen", "地图"),
-        ] {
-            let key = normalize_map_key(raw);
-            assert_eq!(key, expected);
-            // Normalization borrows the input rather than allocating.
-            let start = raw.as_ptr() as usize;
-            let key_start = key.as_ptr() as usize;
-            assert!(key_start >= start && key_start + key.len() <= start + raw.len());
-        }
-    }
-
-}

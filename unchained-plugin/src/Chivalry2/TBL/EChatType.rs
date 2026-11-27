@@ -5,7 +5,6 @@ use std::str::FromStr;
 use strum::Display;
 
 // Chat type enum
-// FIXME: More compact, wtf is this
 #[unchained_macros_core::runtime_bindings]
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]

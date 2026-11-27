@@ -1,7 +1,15 @@
 [workspace]
 resolver = "2"
 default-members = ["unchained-plugin"]
-members = ["unchained-plugin", "build/plan", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "unchained-macros-native-docs-generator", "xtask", "tests/backend-integration"]
+members = [
+    "xtask",
+    "build/plan",
+    "unchained-plugin",
+    "unchained-macros-core", "unchained-macros-core/impl",
+    "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl",
+    "unchained-macros-kismet", "unchained-macros-kismet/impl",
+    "unchained-macros-native-docs-generator",
+    "tests/backend-integration"]
 
 [workspace.dependencies]
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
