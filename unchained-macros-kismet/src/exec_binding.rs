@@ -80,9 +80,26 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
     }
 }
 
-/// Exec-only methods deliberately provide no native-call/detour descriptor.
-/// This includes shared no-op and cleanup-only bodies; never patch those bodies.
-pub struct DummyExecMethodCannotBeDetoured;
-
-/// Dummy exec methods support entry observation only.
-pub enum DummyExecMethodHasNoExitListener {}
+/// Observation target for a verified dummy exec wrapper. Only entry is supported.
+pub struct DummyExecTarget<E> {
+    binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
+    hook: unchained_macros_core::NativeHook,
+    dispatcher: ExecDispatcher,
+    pub entry: unchained_macros_core::CallbackSlot<E>,
+}
+type ExecDispatcher = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, *mut std::ffi::c_void);
+impl<E: Copy> DummyExecTarget<E> {
+    /// # Safety
+    /// The VM dispatcher must forward the real wrapper and invoke E only with verified live step locals.
+    pub const unsafe fn new(binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>, dispatcher: ExecDispatcher) -> Self {
+        Self { binding, hook: unchained_macros_core::NativeHook::new(), dispatcher, entry: unchained_macros_core::CallbackSlot::new() }
+    }
+}
+impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for DummyExecTarget<E> {
+    fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo { self.binding.resolver }
+    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> { unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) } }
+}
+impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for DummyExecTarget<E> {
+    type Entry = E;
+    fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> { &self.entry }
+}

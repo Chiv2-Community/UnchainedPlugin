@@ -88,11 +88,11 @@ unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
 fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
     assert_ne!(original_shared as *const (), original_exclusive as *const ());
     unsafe {
-        Native::__UNCHAINED_BINDING_borrowed.binding()
+        Native::__UNCHAINED_TARGET_borrowed.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_borrowed as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_BINDING_shared_read.binding()
+        Native::__UNCHAINED_TARGET_shared_read.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_shared as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_BINDING_exclusive_read.binding()
+        Native::__UNCHAINED_TARGET_exclusive_read.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_exclusive as *const () as usize).unwrap()).unwrap();
         let number = 17;
         let borrowed_number = &number;
@@ -143,11 +143,11 @@ unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) 
 #[test]
 fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
     unsafe {
-        Native::__UNCHAINED_BINDING_mut_read.binding()
+        Native::__UNCHAINED_TARGET_mut_read.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_mut as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_BINDING_const_match.binding()
+        Native::__UNCHAINED_TARGET_const_match.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_const_match as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_BINDING_mut_match.binding()
+        Native::__UNCHAINED_TARGET_mut_match.binding()
             .initialize_address(std::num::NonZeroUsize::new(original_mut_match as *const () as usize).unwrap()).unwrap();
         let mut value = Native(42);
         let pointer = &raw mut value;
@@ -188,7 +188,7 @@ unsafe extern "C" fn original(value: *const Native) -> i32 {
 #[test]
 fn mutability_override_preserves_original_calls_and_const_native_entry() {
     unsafe {
-        Native::__UNCHAINED_BINDING_read
+        Native::__UNCHAINED_TARGET_read
             .binding()
             .initialize_address(std::num::NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();

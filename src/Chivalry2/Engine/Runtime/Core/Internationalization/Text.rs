@@ -58,7 +58,7 @@ unsafe impl unchained_macros_core::ObserverSnapshot for FText {
     type Snapshot = FTextObservation;
 
     fn snapshot(&self) -> FTextObservation {
-        FText::__UNCHAINED_BINDING_Destructor.binding().address()
+        FText::__UNCHAINED_TARGET_Destructor.binding().address()
             .expect("FText snapshot requires its native destructor binding");
         if !self.shared_reference.is_null() {
             // Same controller layout and atomic retain as the PrintText thunk.

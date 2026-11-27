@@ -43,7 +43,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         return Err(syn::Error::new_spanned(&function.sig, "exit input snapshots require ObserverSnapshot, not native reference inputs"));
     }
     let method = target.segments.last_mut().unwrap();
-    method.ident = format_ident!("__UNCHAINED_LISTENERS_{}", method.ident, span = Span::mixed_site());
+    method.ident = format_ident!("__UNCHAINED_TARGET_{}", method.ident, span = Span::mixed_site());
     let ident = &function.sig.ident;
     let registration = format_ident!("__UNCHAINED_REGISTRATION_{}", ident);
     let condition_fn = format_ident!("__unchained_condition_{}", ident);
@@ -53,14 +53,11 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     let indices: Vec<_> = (0..types.len()).map(syn::Index::from).collect();
     let snapshot_types: Vec<_> = types.iter().map(|ty|
         quote!(<#ty as ::unchained_macros_core::ObserverSnapshot>::Snapshot)).collect();
-    let slot = if exit { quote!(exit) } else { quote!(entry) };
-    let activate = fresh_local(&function.sig, "activate");
+    let phase = if exit { quote!(exit) } else { quote!(entry) };
+    let action = if exit { quote!((#target, #ident, #prepare)) } else { quote!((#target, #ident)) };
     let snapshot = fresh_local(&function.sig, "snapshot");
     let state = fresh_local(&function.sig, "state");
     let returned = fresh_local(&function.sig, "result");
-    let register = if exit {
-        quote!(#target.register_exit(#ident, #prepare, #activate, #condition_fn))
-    } else { quote!(#target.register_entry(#ident, #activate, #condition_fn)) };
     let helpers = result.map(|result| quote! {
         #(#cfg)*
         #[allow(non_snake_case)]
@@ -89,11 +86,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: ::unchained_macros_core::ListenerRegistration =
-            ::unchained_macros_core::ListenerRegistration::new(
-            stringify!(#ident), #target.resolver, &#target.#slot,
-            |#activate| unsafe { #register },
-            || #target.activation(true, #condition_fn),
-        );
+            ::unchained_macros_core::ListenerRegistration::#phase(stringify!(#ident), &#action, #condition_fn);
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
             &#registration
@@ -122,14 +115,13 @@ mod tests {
             quote!(unsafe fn observe(value: &Owned, result: &()) {}), true).unwrap();
         let text = expanded.to_string();
         assert!(text.contains("Owned as :: unchained_macros_core :: ObserverSnapshot"));
-        assert!(text.contains("register_exit"));
         assert!(text.contains("ExitObservation :: from_snapshot"));
-        assert!(text.contains("ListenerRegistration :: new"));
+        assert!(text.contains("ListenerRegistration :: exit"));
         assert!(!text.contains("__unchained_release_"));
         assert!(!text.contains("Box ::"));
         assert!(!text.contains("AtomicBool"));
         assert!(!text.contains("__unchained_attach_"));
-        assert!(text.contains("__UNCHAINED_LISTENERS_Call"));
+        assert!(text.contains("__UNCHAINED_TARGET_Call"));
         assert!(!text.contains("__UNCHAINED_BINDING"));
         syn::parse2::<syn::File>(expanded).unwrap();
     }

@@ -25,10 +25,10 @@ mod actual_host_adapter;
 
 #[test]
 fn raw_receiver_signatures_match_without_mutability_overrides() {
-    let _: unchained_macros_core::NativeFunction<
-        unsafe extern "C" fn(*mut FFrame, *mut UObject, *mut c_void), _,
-    > = FFrame::__UNCHAINED_BINDING_Step;
-    let _: unchained_macros_core::NativeFunction<
-        unsafe extern "C" fn(*mut FFrame, *mut c_void, *const FProperty), _,
-    > = FFrame::__UNCHAINED_BINDING_StepExplicitProperty;
+    let _: &unchained_macros_core::NativeTarget<
+        unsafe extern "C" fn(*mut FFrame, *mut UObject, *mut c_void), _, _, _, _,
+    > = FFrame::__UNCHAINED_TARGET_Step;
+    let _: &unchained_macros_core::NativeTarget<
+        unsafe extern "C" fn(*mut FFrame, *mut c_void, *const FProperty), _, _, _, _,
+    > = FFrame::__UNCHAINED_TARGET_StepExplicitProperty;
 }

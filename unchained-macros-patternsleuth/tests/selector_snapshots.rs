@@ -113,12 +113,11 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     assert!(!next.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("AlphaResolver"));
     assert!(next.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("BetaResolver"));
     assert!(next.get::<Beta>().unwrap() == Beta::Leaf);
-    let alpha_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|hook| hook.name == "alpha_detour").unwrap();
-    let beta_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|hook| hook.name == "beta_detour").unwrap();
-    let alpha_binding = alpha_hook.binding::<unchained_macros_patternsleuth::PatternsleuthResolver>().unwrap();
-    assert!(std::ptr::eq(alpha_binding, Native::__UNCHAINED_BINDING_alpha.binding()));
+    let alpha_hook = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+        .find(|hook| hook.name() == "alpha_detour").unwrap();
+    let beta_hook = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+        .find(|hook| hook.name() == "beta_detour").unwrap();
+    let alpha_binding = Native::__UNCHAINED_TARGET_alpha.binding();
     assert!(alpha_hook.resolver().supports(&snapshot));
     assert!(!alpha_hook.resolver().supports(&next));
     assert!(beta_hook.resolver().supports(&snapshot));

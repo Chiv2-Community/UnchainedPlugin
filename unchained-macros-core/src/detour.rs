@@ -1,41 +1,29 @@
-use crate::HookRegistration;
+use crate::DetourInfo;
 
 pub fn detour_is_initialized(name: &str) -> bool {
-    inventory::iter::<&'static HookRegistration>
+    inventory::iter::<&'static dyn DetourInfo>
         .into_iter()
-        .any(|binding| binding.name == name && binding.initialized())
+        .any(|binding| binding.name() == name && binding.initialized())
 }
 
 pub fn detour_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static HookRegistration>
+    inventory::iter::<&'static dyn DetourInfo>
         .into_iter()
-        .any(|binding| binding.name == name && binding.enabled())
+        .any(|binding| binding.name() == name && binding.enabled())
 }
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-/// Shared physical attachment and optional behavior-changing callback.
+/// Shared physical attachment. Logical callbacks belong to the typed target.
 pub struct NativeHook {
     hook: OnceLock<retour::RawDetour>,
-    replacement: crate::CallbackSlot<usize>,
 }
 impl NativeHook {
     pub const fn new() -> Self {
-        Self { hook: OnceLock::new(), replacement: crate::CallbackSlot::new() }
+        Self { hook: OnceLock::new() }
     }
     pub fn detour(&self) -> Option<&retour::RawDetour> { self.hook.get() }
-    pub fn replacement_address(&self) -> Option<usize> { self.replacement.get() }
-    pub fn has_replacement(&self) -> bool { self.replacement.is_registered() }
-    pub fn set_enabled(&self, enabled: bool) { self.replacement.set_enabled(enabled); }
-    /// # Safety
-    /// `replacement` must have the binding dispatcher's complete native ABI and
-    /// lifetime contract and remain live for the process.
-    pub unsafe fn register_replacement(
-        &self, replacement: usize, activate: bool,
-    ) -> Result<(), String> {
-        unsafe { self.replacement.register(replacement, activate, || true) }
-    }
     /// # Safety
     /// Dispatcher ABI must match binding; all native callers must be quiescent.
     pub unsafe fn attach<R: crate::AddressResolver>(
@@ -85,7 +73,7 @@ pub unsafe fn attach_function_detour<R: crate::AddressResolver>(
     storage.set(detour).map_err(|_| retour::Error::AlreadyInitialized)?;
     let hook = storage.get().expect("Hook was just initialized");
     claim.commit();
-    unsafe { crate::binding::publish_function_detours(address, hook)?; }
+    unsafe { crate::binding::publish_function_detours(binding, hook)?; }
     if auto_activate && condition() { unsafe { hook.enable()?; } }
     Ok(())
 }

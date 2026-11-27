@@ -20,8 +20,8 @@ selection. `bind_resolved_func(Backend, &DESCRIPTOR)` instead accepts a typed
 resolver for discovery; both forms share native calls, signature metadata, and hooks.
 
 - `FunctionBinding<R>` references `Resolver<R>` and stores the native target name.
-- `NativeFunction<F, R>` preserves the native signature independently of the backend.
-- `HookRegistration` references its binding/shared hook and owns callback initialization.
+- `NativeTarget<F, E, X, P, R>` binds typed callback slots to that same function binding.
+- `DetourRegistration<T>` pairs a `SupportsDetour` target with its exact replacement type and owns callback initialization.
 - `ListenerRegistration` references the actual callback slot and owns initialization.
 - `PatchRegistration<R>` references its resolver and names the patch factory/static.
 
@@ -30,7 +30,7 @@ Discover typed registrations:
 ```rust,ignore
 resolver_inventory_for::<Backend>()
 binding_inventory_for::<Backend>()
-hook_inventory_for::<Backend>()
+detour_inventory_for::<Backend>()
 listener_inventory_for::<Backend>()
 patch_inventory_for::<Backend>()
 ```
@@ -38,9 +38,9 @@ patch_inventory_for::<Backend>()
 Function inventory stores direct `&FunctionBinding<R>` trait-object references.
 Typed discovery downcasts the accessor's exact storage, without registration
 wrappers. Required-value inventory stores direct `&ValueBinding` references.
-Hook/listener inventories reference named registration statics and filter by
-their concrete binding/resolver backend. `hook.binding::<Backend>()` retrieves
-the typed binding.
+Detour discovery erases the callback type to `&dyn DetourInfo`. Both detour and
+listener discovery filter by the target resolver’s backend. Neither resolves an
+address or evaluates a condition.
 Selection and required patch coverage do not combine unrelated backend types.
 Patch IDs remain globally unique.
 
@@ -53,7 +53,7 @@ unsafe {
     initialize_bindings_for::<Backend>(&context, &selectors)?;
     apply_patches_for::<Backend, _>(&context, &selectors, &mut writer, &mut patch_state)?;
 }
-for hook in hook_inventory_for::<Backend>() {
+for hook in detour_inventory_for::<Backend>() {
     if hook.resolver().supports(&selectors) && !hook.initialized() {
         unsafe { hook.attach(true)?; }
     }
@@ -123,8 +123,8 @@ unsafe fn returned(value: &u32, output: &*mut u32, result: &bool) {}
   Conditions use the target's observer guard, including failure-policy queries;
   condition-induced native calls execute without recursive observation.
   Slot/registration `set_enabled` changes logical activation without reevaluation.
-  `HookRegistration::enabled` / `set_enabled` refer to the detour callback only.
-  `HookRegistration::detour` exposes the **shared physical** hook for inspection:
+  `DetourInfo::enabled` / `set_enabled` refer to the detour callback only.
+  `DetourInfo::detour` exposes the **shared physical** hook for inspection:
   directly disabling it disables every callback at that address.
 - Addresses remain globally owned across backends. A second independently
   described alias cannot attach another dispatcher; late aliases still share
@@ -143,54 +143,43 @@ ordinary Rust partial-initialization cleanup if a later snapshot fails.
 
 ### Backend-specific listener targets
 
-Backends may publish only `__UNCHAINED_LISTENERS_Method`, a reference to
-`ListenerDescriptor<E, X, P, R>`. No callable method or `NativeFunction` is needed;
-without native binding metadata `bind_func_detour` is unavailable. This lets a
-surviving per-method wrapper observe a folded native body without patching its
-shared stub.
+Callback attributes use the method’s `__UNCHAINED_TARGET_Method` reference. A
+`CallbackTarget` supplies its resolver, physical attachment, and guard identity.
+Implement only the supported capabilities:
 
-- `E`: `unsafe fn(&Input, ...)`.
-- `X`: `unsafe fn(&Input, ..., &Result)`.
-- `P`: `unsafe fn(&Input, ...) -> ExitObservation`.
-- Constructor: `unsafe ListenerDescriptor::new(&resolver, attach_fn)`.
-  Attachment must preserve backend ownership, readiness, and original execution.
-  Native attachment retries resume a retained but physically disabled hook before
-  publishing callbacks or reporting success.
-- Dispatch with `observe_entry`, `prepare_exit`, and `finish_exit`; these include
-  panic isolation and the per-method reentry guard. Supply the actual live
-  caller-visible result storage to `finish_exit`.
-- `ListenerRegistration` discovery references the resolver, not a native
-  binding. Each registration tracks its own successful publication; an occupied
-  target slot never makes a competing registration appear initialized/enabled.
-  The host selects and retries these registrations independently.
+- `SupportsDetour`: replacement callback slot and physical hook inspection.
+- `SupportsEntry`: entry callback slot; dispatch with `observe_entry`.
+- `SupportsExit`: typed exit result/callback and snapshot-preparation slot;
+  use `prepare_exit` before execution and `finish_exit` with the actual result.
+
+Both native backends generate the same `NativeTarget<F, E, X, P, R>`: `F` is
+its verified native ABI, `E` is `unsafe fn(&Input, ...)`, `X` adds a final
+borrowed result, and `P` returns `ExitObservation`. Kismet’s `DummyExecTarget`
+implements only entry. It has no callable native body, replacement, or exit slot.
 
 ### Handwritten registrations
 
-The low-level API needs no proc macros:
-
 ```rust,ignore
-static BINDING: FunctionBinding<Backend> = FunctionBinding::new("Call", &RESOLVER);
-inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::FunctionInfo }
-static ENTRY: ListenerRegistration = ListenerRegistration::new(
-    "entered", &RESOLVER, &LISTENERS.entry,
-    |activate| unsafe { LISTENERS.register_entry(entered, activate, condition) },
-    || LISTENERS.activation(true, condition),
-);
-inventory::submit! { &ENTRY }
-unsafe { ENTRY.attach(true)?; }
-ENTRY.set_enabled(false);
-assert!(ENTRY.initialized());
-assert!(!ENTRY.enabled());
+use unchained_macros_core::{DetourInfo, DetourRegistration, NativeTarget};
+
+type Call = unsafe extern "C" fn(usize) -> usize;
+type Target = NativeTarget<Call, unsafe fn(&usize), unsafe fn(&usize, &usize),
+    unsafe fn(&usize) -> ExitObservation, Backend>;
+static TARGET: Target = unsafe { Target::new(&BINDING, dispatch, |f| f as *const ()) };
+static REPLACEMENT: DetourRegistration<Target> =
+    DetourRegistration::new("replacement", &TARGET, replacement, condition);
+// Optional discovery; direct attachment doesn't consult inventory.
+inventory::submit! { &REPLACEMENT as &dyn DetourInfo }
 ```
 
-`HookRegistration::new(name, &binding, &native_hook, install, condition)` uses
-the same attach/control lifecycle. Installers remain signature-specific: reject
-duplicate replacements, ensure attachment, evaluate guarded activation, then
-publish the typed callback. Attach is unsafe, startup-only, and not concurrently
-safe. Failed/duplicate registrations remain uninitialized and cannot toggle an
-owner's slot or shared replacement.
-Callback macros emit `__UNCHAINED_REGISTRATION_callback_name` handles with these
-same methods; startup hosts normally discover them through the inventories.
+During quiescent startup, `unsafe { REPLACEMENT.attach(true)? }` attaches the
+shared dispatcher and publishes the typed callback. A failed or duplicate owner
+cannot toggle another registration’s callback. `set_enabled` controls only the
+logical replacement. Generated registrations use the same lifecycle.
+
+For a listener, use `ListenerRegistration::entry(name, &(&TARGET, entered), condition)`
+or `ListenerRegistration::exit(name, &(&TARGET, returned, prepare), condition)`.
+The exit adapter must snapshot the inputs and deliver the actual result to `returned`.
 
 `ExitObservation::from_snapshot(snapshot, finish)` owns and releases a boxed
 snapshot. The unsafe finish adapter borrows that exact snapshot type and the

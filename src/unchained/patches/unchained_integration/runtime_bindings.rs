@@ -35,9 +35,9 @@ pub(super) unsafe fn initialize() {
     let result = (|| -> Result<(), String> {
         let environment = ExecEnvironment {
             module_base: *crate::unchained::startup::BASE_ADDR,
-            frame_step: FFrame::__UNCHAINED_BINDING_Step.binding().entry_address()
+            frame_step: FFrame::__UNCHAINED_TARGET_Step.binding().entry_address()
                 .ok_or("FFrame::Step is unbound")?.get(),
-            frame_step_explicit: FFrame::__UNCHAINED_BINDING_StepExplicitProperty.binding().entry_address()
+            frame_step_explicit: FFrame::__UNCHAINED_TARGET_StepExplicitProperty.binding().entry_address()
                 .ok_or("FFrame::StepExplicitProperty is unbound")?.get(),
             frame_code_offset: std::mem::offset_of!(FFrame, code),
         };

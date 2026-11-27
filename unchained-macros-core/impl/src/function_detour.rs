@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Type};
 use crate::{
-    common::{cfg_attributes, CallbackArguments, fresh_local},
+    common::{cfg_attributes, CallbackArguments},
     docs::attach_native_documentation,
     signature::{validate_native_signature, native_type,
         normalized_mutability, parameter_type},
@@ -10,7 +10,7 @@ use crate::{
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut function: ItemFn = syn::parse2(item)?;
-    let CallbackArguments { mut target, condition } = syn::parse2(args)?;
+    let CallbackArguments { target, condition } = syn::parse2(args)?;
     if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
         return Err(syn::Error::new_spanned(
             target,
@@ -18,24 +18,15 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ));
     }
     let native_target = target.clone();
-    let mut listener_target = target.clone();
-    let listener_method = listener_target.segments.last_mut().unwrap();
-    listener_method.ident = format_ident!("__UNCHAINED_LISTENERS_{}", listener_method.ident, span = Span::mixed_site());
-    let mut hook_target = target.clone();
-    let hook_method = hook_target.segments.last_mut().unwrap();
-    hook_method.ident = format_ident!("__UNCHAINED_HOOK_{}", hook_method.ident, span = Span::mixed_site());
+    let method = &target.segments.last().unwrap().ident;
+    let mut capability = target.clone();
+    capability.segments.last_mut().unwrap().ident = format_ident!("__UNCHAINED_TARGET_{method}");
     let mut normalized_target = target.clone();
     let normalized_method = normalized_target.segments.last_mut().unwrap();
     normalized_method.ident = format_ident!("__UNCHAINED_MUTABILITY_{}", normalized_method.ident, span = Span::mixed_site());
     let mut parameter_target = target.clone();
     let parameter_method = parameter_target.segments.last_mut().unwrap();
     parameter_method.ident = format_ident!("__UNCHAINED_PARAMETERS_{}", parameter_method.ident, span = Span::mixed_site());
-    // Keep the user's target span on the native method, not its internal descriptor.
-    for segment in &mut target.segments {
-        segment.ident.set_span(Span::mixed_site());
-    }
-    let method = target.segments.last_mut().unwrap();
-    method.ident = format_ident!("__UNCHAINED_BINDING_{}", method.ident, span = Span::mixed_site());
     validate_native_signature(&function.sig)?;
     if function
         .sig
@@ -82,8 +73,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let ident = &function.sig.ident;
     let registration = format_ident!("__UNCHAINED_REGISTRATION_{}", ident, span = Span::mixed_site());
     let replacement = format_ident!("__unchained_replacement_{}", ident, span = Span::mixed_site());
-    let activate = fresh_local(signature, "activate");
-    let native_replacement = fresh_local(signature, "replacement");
     let condition_fn = format_ident!("__unchained_condition_{}", ident, span = Span::mixed_site());
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
     let (names, types): (Vec<_>, Vec<_>) = signature
@@ -117,13 +106,18 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             #(#parameter_checks)*
         }
     } else {
-        quote! { let _: ::unchained_macros_core::NativeFunction<#native, _> = #target; }
+        quote! {
+            const fn signature<T: ::unchained_macros_core::SupportsDetour>(_: &T) -> ::unchained_macros_core::NativeSignature<T::Callback> { ::core::marker::PhantomData }
+            let _: ::unchained_macros_core::NativeSignature<#native> = signature(#capability);
+        }
     };
+    let callback = if has_override {
+        quote!(unsafe { ::core::mem::transmute(#replacement as #native) })
+    } else { quote!(#replacement) };
     Ok(quote! {
         #function
         #(#cfg)*
         const _: () = {
-            let _ = #native_target;
             // Invariant signature metadata makes mismatches compiler errors.
             #signature_check
         };
@@ -137,26 +131,16 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
         #(#cfg)*
         #[allow(non_upper_case_globals)]
-        static #registration: ::unchained_macros_core::HookRegistration =
-            ::unchained_macros_core::HookRegistration::new(
-            stringify!(#ident), #target.binding(), #hook_target,
-            |#activate| {
-            // Checked outer mutability differences preserve the native ABI.
-            // Reference validity and aliasing remain the detour author's obligation.
-            let #native_replacement: #native = #replacement;
-            if #hook_target.has_replacement() {
-                return Err("Only one behavior-changing detour is supported per method".into());
-            }
-            unsafe { #listener_target.ensure_attached()?; }
-            let #activate = #listener_target.activation(#activate, #condition_fn);
-            unsafe { #hook_target.register_replacement(#native_replacement as usize, #activate)?; }
-            Ok(())
-            },
-            || #listener_target.activation(true, #condition_fn),
-        );
+        static #registration: &dyn ::unchained_macros_core::DetourInfo = {
+            static INITIALIZED: ::core::sync::atomic::AtomicBool = ::core::sync::atomic::AtomicBool::new(false);
+            let registration = ::unchained_macros_core::DetourRegistration::new(
+                stringify!(#ident), #capability, #callback, #condition_fn,
+            );
+            &unsafe { registration.with_inventory_state(&INITIALIZED) }
+        };
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
-            &#registration
+            #registration
         }
     })
 }
@@ -171,9 +155,9 @@ mod tests {
         let expanded = expand(
             quote!(Native::Call), quote!(unsafe fn replacement(value: i32) -> i32 { value }),
         ).unwrap().to_string();
-        assert!(expanded.contains("ensure_attached"));
+        assert!(!expanded.contains("ensure_attached"));
         assert!(expanded.contains(":: unchained_macros_core :: __private :: inventory :: submit"));
-        assert!(expanded.contains("HookRegistration :: new"));
+        assert!(expanded.contains("DetourRegistration :: new"));
         assert!(expanded.contains("__UNCHAINED_REGISTRATION_replacement"));
         assert!(!expanded.contains("OnceLock"));
         assert!(!expanded.contains("__unchained_attach_replacement"));

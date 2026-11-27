@@ -31,7 +31,7 @@ fn functions_initialize_with_the_host_supplied_base() {
     assert!(require_function_bindings_for::<PatternsleuthResolver>(&["FixtureRead"]).is_ok());
     assert!(require_function_bindings_for::<PatternsleuthResolver>(&["Unregistered"]).is_err());
     assert_eq!(unsafe { read() }, 42);
-    assert_eq!(unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>().count(), 0);
+    assert_eq!(unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>().count(), 0);
 }
 
 #[test]

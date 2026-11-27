@@ -314,7 +314,11 @@ Target the binding method from a functional module under `src/unchained/patches/
   concrete virtual implementation, resolve its entry and declare a separate
   `runtime_bindings` method. Calling through the vtable may re-enter the hook;
   use the resolver-backed binding for original calls.
-- Only one detour may own a native address.
+- Native Patternsleuth and Kismet bindings support a replacement, an entry
+  listener, and an exit listener. Kismet `#[dummy]` declarations support entry only.
+- Only one detour may own a native address. For handwritten registration, pass the
+  verified target and typed replacement to `DetourRegistration::new`; see the
+  [core example](unchained-macros-core/README.md#handwritten-registrations).
 - The condition defaults to `|| true`; activation also requires global
   auto-activation. Conditions run during attachment, not on each call.
 - Preserve native thread, ownership, pointer, and callback-lifetime rules.

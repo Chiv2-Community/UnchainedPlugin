@@ -176,10 +176,10 @@ impl PatchWriter for Writer {
 fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_ownership() {
     let snapshot = SelectorSnapshot::from_selection(Mode::Disabled).unwrap();
     let context = unsafe { KismetContext::new(FixtureReflection, environment()) };
-    assert_eq!(bindings::hook_inventory_for::<OtherResolver>().count(), 0);
+    assert_eq!(bindings::detour_inventory_for::<OtherResolver>().count(), 0);
     assert_eq!(bindings::patch_inventory_for::<OtherResolver>().count(), 0);
     assert_eq!(bindings::binding_inventory_for::<OtherResolver>().count(), 1);
-    assert_eq!(bindings::hook_inventory_for::<KismetReflectionResolver>().count(), 1);
+    assert_eq!(bindings::detour_inventory_for::<KismetReflectionResolver>().count(), 1);
     assert_eq!(bindings::resolver_inventory_for::<KismetReflectionResolver>().count(), 3);
     assert!(snapshot.supports_resolver_for::<OtherResolver>("Native__add"));
     assert!(snapshot.supports_resolver_for::<KismetReflectionResolver>("Native__add"));
@@ -193,7 +193,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
 
     let initialize = || unsafe { bindings::initialize_bindings_for::<KismetReflectionResolver>(&context, &snapshot) };
     assert!(initialize().unwrap_err().contains("not ready"));
-    assert!(Native::__UNCHAINED_BINDING_add.binding().entry_address().is_none());
+    assert!(Native::__UNCHAINED_TARGET_add.binding().entry_address().is_none());
     READY.store(true, Ordering::SeqCst);
     initialize().unwrap();
     let reads = READS.load(Ordering::SeqCst);
@@ -225,7 +225,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
         assert_eq!(other(5), 6);
         assert_ne!(OTHER_BINDING.address(), OTHER_BINDING.entry_address());
         assert!(bindings::__private::claim_detour_address(OTHER_BINDING.entry_address().unwrap().get()).is_err());
-        let hook = bindings::hook_inventory_for::<KismetReflectionResolver>().next().unwrap();
+        let hook = bindings::detour_inventory_for::<KismetReflectionResolver>().next().unwrap();
         hook.detour().unwrap().disable().unwrap();
         assert_eq!(Native::add(5), 6);
     }

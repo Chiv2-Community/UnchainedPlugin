@@ -1,5 +1,5 @@
 //! Handwritten native dispatch: no binding, detour, or listener proc macros.
-use std::{num::NonZeroUsize, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
+use std::{num::NonZeroUsize, sync::atomic::{AtomicUsize, Ordering}};
 use unchained_macros_core::*;
 
 struct Backend;
@@ -12,14 +12,10 @@ impl AddressResolver for Backend {
 static RESOLVER: Resolver<Backend> = Resolver { name: "manual", implementation: Backend, filter: None };
 static BINDING: FunctionBinding<Backend> = FunctionBinding::new("manual", &RESOLVER);
 static ALIAS: FunctionBinding<Backend> = FunctionBinding::new("late alias", &RESOLVER);
-static NATIVE: NativeFunction<unsafe extern "C" fn(usize) -> usize, Backend> =
-    unsafe { NativeFunction::new(&BINDING) };
-static HOOK: NativeHook = NativeHook::new();
-type Descriptor = ListenerDescriptor<
+type Descriptor = NativeTarget<unsafe extern "C" fn(usize) -> usize,
     unsafe fn(&usize), unsafe fn(&usize, &usize), unsafe fn(&usize) -> ExitObservation, Backend,
 >;
-static LISTENERS: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach_dispatch) };
-static FAIL_INSTALL: AtomicBool = AtomicBool::new(true);
+static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, dispatch, |f| f as *const ()) };
 static ENTRIES: AtomicUsize = AtomicUsize::new(0);
 static EXITS: AtomicUsize = AtomicUsize::new(0);
 static CONDITIONS: AtomicUsize = AtomicUsize::new(0);
@@ -32,21 +28,18 @@ unsafe extern "C" fn original(value: usize) -> usize { std::hint::black_box(valu
 
 unsafe fn call_original(value: usize) -> usize {
     let call: unsafe extern "C" fn(usize) -> usize =
-        unsafe { std::mem::transmute(NATIVE.binding().address().unwrap().get()) };
+        unsafe { std::mem::transmute(TARGET.binding().address().unwrap().get()) };
     unsafe { call(value) }
 }
-unsafe fn attach_dispatch() -> Result<(), Box<dyn std::error::Error>> {
-    if FAIL_INSTALL.load(Ordering::SeqCst) { return Err("injected install failure".into()); }
-    unsafe { HOOK.attach(&BINDING, dispatch as *const ()) }
-}
 unsafe extern "C" fn dispatch(value: usize) -> usize {
-    LISTENERS.observe_entry(|callback| unsafe { callback(&value) });
-    let snapshot = LISTENERS.prepare_exit(|prepare| unsafe { prepare(&value) });
-    let address = HOOK.replacement_address().unwrap_or_else(|| BINDING.address().unwrap().get());
-    let call: unsafe extern "C" fn(usize) -> usize = unsafe { std::mem::transmute(address) };
+    TARGET.observe_entry(|callback| unsafe { callback(&value) });
+    let snapshot = TARGET.prepare_exit(|prepare| unsafe { prepare(&value) });
+    let call: unsafe extern "C" fn(usize) -> usize =
+        TARGET.replacement_slot().get()
+            .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
     let result = unsafe { call(value) };
     if let Some(snapshot) = snapshot {
-        unsafe { LISTENERS.finish_exit(snapshot, (&result as *const usize).cast()); }
+        unsafe { TARGET.finish_exit(snapshot, (&result as *const usize).cast()); }
     }
     result
 }
@@ -64,41 +57,19 @@ unsafe fn prepare(value: &usize) -> ExitObservation {
 unsafe extern "C" fn replacement(value: usize) -> usize { unsafe { call_original(value) + 10 } }
 fn gate() -> bool { CONDITIONS.fetch_add(1, Ordering::SeqCst); true }
 
-static ENTRY: ListenerRegistration = ListenerRegistration::new(
-    "entry", &RESOLVER, &LISTENERS.entry,
-    |activate| unsafe { LISTENERS.register_entry(entered, activate, gate) },
-    || LISTENERS.activation(true, gate),
-);
-static EXIT: ListenerRegistration = ListenerRegistration::new(
-    "exit", &RESOLVER, &LISTENERS.exit,
-    |activate| unsafe { LISTENERS.register_exit(returned, prepare, activate, gate) },
-    || LISTENERS.activation(true, gate),
-);
-static DUPLICATE: ListenerRegistration = ListenerRegistration::new(
-    "duplicate entry", &RESOLVER, &LISTENERS.entry,
-    |activate| unsafe { LISTENERS.register_entry(entered, activate, gate) },
-    || LISTENERS.activation(true, gate),
-);
-static DETOUR: HookRegistration = HookRegistration::new(
-    "detour", &BINDING, &HOOK,
-    |activate| unsafe {
-        if HOOK.has_replacement() { return Err("duplicate detour".into()); }
-        LISTENERS.ensure_attached()?;
-        let activate = LISTENERS.activation(activate, gate);
-        HOOK.register_replacement(replacement as *const () as usize, activate)?;
-        Ok(())
-    },
-    || LISTENERS.activation(true, gate),
-);
+static ENTRY: ListenerRegistration = ListenerRegistration::entry("entry", &(&TARGET, entered), gate);
+static EXIT: ListenerRegistration = ListenerRegistration::exit("exit", &(&TARGET, returned, prepare), gate);
+static DUPLICATE: ListenerRegistration = ListenerRegistration::entry("duplicate entry", &(&TARGET, entered), gate);
+static DETOUR: DetourRegistration<Descriptor> = DetourRegistration::new("detour", &TARGET, replacement, gate);
 inventory::submit! { &ENTRY }
 inventory::submit! { &EXIT }
 inventory::submit! { &DUPLICATE }
-inventory::submit! { &DETOUR }
+// Direct attachment does not require submitting the detour registration.
 
 #[test]
 fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
     assert!(binding_inventory_for::<Backend>().any(|binding| std::ptr::eq(binding, &BINDING)));
-    assert!(std::ptr::eq(DETOUR.binding::<Backend>().unwrap(), &BINDING));
+    assert!(std::ptr::eq(DETOUR.target().binding(), &BINDING));
     assert_eq!(ENTRY.slot_identity(), DUPLICATE.slot_identity());
     assert_ne!(ENTRY.slot_identity(), EXIT.slot_identity());
     unsafe {
@@ -107,7 +78,6 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
         ENTRY.set_enabled(true);
         assert!(!ENTRY.enabled());
         BINDING.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
-        FAIL_INSTALL.store(false, Ordering::SeqCst);
         ENTRY.attach(false).unwrap();
         assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
         assert!(ENTRY.initialized());

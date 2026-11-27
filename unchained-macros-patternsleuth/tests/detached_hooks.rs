@@ -46,8 +46,8 @@ static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_OFF_CONDITION_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 fn borrow_condition() -> bool {
-    assert!(Native::__UNCHAINED_HOOK_borrow.detour().is_some());
-    let binding = Native::__UNCHAINED_BINDING_borrow.binding();
+    assert!(unchained_macros_core::SupportsDetour::physical_detour(Native::__UNCHAINED_TARGET_borrow).is_some());
+    let binding = Native::__UNCHAINED_TARGET_borrow.binding();
     assert_ne!(binding.address(), binding.entry_address());
     false
 }
@@ -140,31 +140,31 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
     assert!(!unchained_macros_core::detour_is_initialized("MissingDetour"));
     for (binding, address) in [
         (
-            Native::__UNCHAINED_BINDING_zero.binding(),
+            Native::__UNCHAINED_TARGET_zero.binding(),
             zero_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_request.binding(),
+            Native::__UNCHAINED_TARGET_request.binding(),
             request_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_add.binding(),
+            Native::__UNCHAINED_TARGET_add.binding(),
             add_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_alias.binding(),
+            Native::__UNCHAINED_TARGET_alias.binding(),
             add_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_borrow.binding(),
+            Native::__UNCHAINED_TARGET_borrow.binding(),
             borrow_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_storage.binding(),
+            Native::__UNCHAINED_TARGET_storage.binding(),
             storage_target as *const () as usize,
         ),
         (
-            Native::__UNCHAINED_BINDING_global_off.binding(),
+            Native::__UNCHAINED_TARGET_global_off.binding(),
             global_off_target as *const () as usize,
         ),
     ] {
@@ -172,17 +172,16 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             binding.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap();
         }
     }
-    let registration = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|r| r.name == "plugin_add")
+    let registration = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+        .find(|r| r.name() == "plugin_add")
         .unwrap();
-    assert_eq!(registration.name, "plugin_add");
-    let binding = registration.binding::<unchained_macros_patternsleuth::PatternsleuthResolver>().unwrap();
-    assert!(std::ptr::eq(binding, Native::__UNCHAINED_BINDING_add.binding()));
+    assert_eq!(registration.name(), "plugin_add");
+    let binding = Native::__UNCHAINED_TARGET_add.binding();
     assert_eq!(binding.name(), "Native::add");
     assert_eq!(binding.resolver_name(), "DetachedAdd");
-    assert!(!(registration.condition)());
+    assert!(!registration.condition());
     CONDITION.store(true, Ordering::SeqCst);
-    assert!((registration.condition)());
+    assert!(registration.condition());
     unsafe {
         assert_eq!(Native::add(7), 10);
         registration.attach(true).unwrap();
@@ -223,8 +222,8 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             std::hint::black_box(borrow_target as unsafe extern "C" fn(&Native) -> &Native);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 0);
-        let borrow_hook = unchained_macros_core::hook_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-            .find(|hook| hook.name == "plugin_borrow").unwrap();
+        let borrow_hook = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+            .find(|hook| hook.name() == "plugin_borrow").unwrap();
         borrow_hook.set_enabled(true);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert!(std::ptr::eq(native.borrow(), &native));
@@ -245,7 +244,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             5
         );
 
-        let original_address = Native::__UNCHAINED_BINDING_add.binding().address();
+        let original_address = Native::__UNCHAINED_TARGET_add.binding().address();
         __UNCHAINED_REGISTRATION_plugin_add
             .detour().unwrap()
             .disable()
@@ -255,7 +254,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert!(unchained_macros_core::detour_is_initialized("plugin_add"));
         assert_eq!(Native::add(7), 10);
         assert_eq!(
-            Native::__UNCHAINED_BINDING_add.binding().address(),
+            Native::__UNCHAINED_TARGET_add.binding().address(),
             original_address
         );
         __UNCHAINED_REGISTRATION_plugin_borrow

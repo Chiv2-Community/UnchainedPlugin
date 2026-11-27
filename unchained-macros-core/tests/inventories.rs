@@ -18,16 +18,13 @@ macro_rules! backend {
             };
             pub static BINDING: bindings::FunctionBinding<Backend> =
                 bindings::FunctionBinding::new("SameBinding", &RESOLVER);
-            static NATIVE_HOOK: bindings::NativeHook = bindings::NativeHook::new();
-            pub static HOOK: bindings::HookRegistration = bindings::HookRegistration::new(
-                "SameHook", &BINDING, &NATIVE_HOOK,
-                |_| panic!("discovery must not attach"),
-                || panic!("discovery must not evaluate conditions"),
+            type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), (), Backend>;
+            static TARGET: Target = unsafe { Target::new(&BINDING, || {}, |_| panic!("discovery must not attach")) };
+            pub static HOOK: bindings::DetourRegistration<Target> = bindings::DetourRegistration::new(
+                "SameHook", &TARGET, || {}, || panic!("discovery must not evaluate conditions"),
             );
-            static SLOT: bindings::CallbackSlot<unsafe fn(&u32)> = bindings::CallbackSlot::new();
-            pub static LISTENER: bindings::ListenerRegistration = bindings::ListenerRegistration::new(
-                "SameListener", &RESOLVER, &SLOT,
-                |_| panic!("discovery must not attach"),
+            pub static LISTENER: bindings::ListenerRegistration = bindings::ListenerRegistration::entry(
+                "SameListener", &(&TARGET, |_| {}),
                 || panic!("discovery must not evaluate conditions"),
             );
             pub static PATCH: bindings::PatchRegistration<Backend> = bindings::PatchRegistration {
@@ -37,7 +34,7 @@ macro_rules! backend {
             };
             bindings::__private::inventory::submit! { &RESOLVER as &dyn ResolverInfo }
             bindings::__private::inventory::submit! { &BINDING as &dyn FunctionInfo }
-            bindings::__private::inventory::submit! { &HOOK }
+            bindings::__private::inventory::submit! { &HOOK as &dyn bindings::DetourInfo }
             bindings::__private::inventory::submit! { &LISTENER }
             bindings::__private::inventory::submit! { &PATCH as &dyn PatchInfo }
         }
@@ -56,10 +53,10 @@ fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
             let functions = bindings::binding_inventory_for::<$module::Backend>().collect::<Vec<_>>();
             assert_eq!(functions.len(), 1);
             assert!(std::ptr::eq(functions[0], &$module::BINDING));
-            let hooks = bindings::hook_inventory_for::<$module::Backend>().collect::<Vec<_>>();
+            let hooks = bindings::detour_inventory_for::<$module::Backend>().collect::<Vec<_>>();
             assert_eq!(hooks.len(), 1);
-            assert!(std::ptr::eq(hooks[0], &$module::HOOK));
-            assert!(std::ptr::eq(hooks[0].binding::<$module::Backend>().unwrap(), &$module::BINDING));
+            assert!(std::ptr::addr_eq(hooks[0], &$module::HOOK as &dyn bindings::DetourInfo));
+            assert!(std::ptr::eq($module::HOOK.target().binding(), &$module::BINDING));
             assert_eq!(hooks[0].resolver().identity(),
                 resolvers[0] as *const bindings::Resolver<$module::Backend> as *const ());
             let listeners = bindings::listener_inventory_for::<$module::Backend>().collect::<Vec<_>>();
@@ -73,14 +70,13 @@ fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
     check!(first);
     check!(second);
     assert_ne!(first::LISTENER.slot_identity(), second::LISTENER.slot_identity());
-    assert!(first::HOOK.binding::<second::Backend>().is_none());
 }
 
 #[test]
 fn erased_queries_preserve_concrete_identity_and_do_not_invoke_native_work() {
     assert_eq!(bindings::__private::inventory::iter::<&dyn ResolverInfo>.into_iter().count(), 2);
     assert_eq!(bindings::__private::inventory::iter::<&dyn FunctionInfo>.into_iter().count(), 2);
-    assert_eq!(bindings::__private::inventory::iter::<&bindings::HookRegistration>.into_iter().count(), 2);
+    assert_eq!(bindings::__private::inventory::iter::<&dyn bindings::DetourInfo>.into_iter().count(), 2);
     assert_eq!(bindings::__private::inventory::iter::<&bindings::ListenerRegistration>.into_iter().count(), 2);
     assert_eq!(bindings::__private::inventory::iter::<&dyn PatchInfo>.into_iter().count(), 2);
     assert!(!bindings::detour_is_initialized("SameHook"));

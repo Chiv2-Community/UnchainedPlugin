@@ -116,7 +116,7 @@ mod tests {
                 unsafe fn call(&self) {}
             }); "duplicate bindings")]
     #[test_case::test_case(quote!(), quote!(impl Native {
-                const __UNCHAINED_BINDING_call: () = ();
+                const __UNCHAINED_TARGET_call: () = ();
                 #[bind_resolved_func(Resolver)]
                 unsafe fn call(&self) {}
             }); "binding collision")]
@@ -131,7 +131,7 @@ mod tests {
                 unsafe fn call(&self) {}
             }); "parameters collision")]
     #[test_case::test_case(quote!(), quote!(impl Native {
-                const __UNCHAINED_BINDING_call: () = ();
+                const __UNCHAINED_TARGET_call: () = ();
                 #[bind_resolved_func(Backend, &DESCRIPTOR)]
                 unsafe fn call(&self) {}
             }); "descriptor binding collision")]
@@ -186,7 +186,7 @@ mod tests {
         )
         .unwrap();
         let text = expanded.to_string();
-        assert!(text.contains("pub (crate) const __UNCHAINED_BINDING_call"));
+        assert!(text.contains("pub (crate) const __UNCHAINED_TARGET_call"));
         assert!(text.contains("for < '__unchained_receiver >"));
         assert!(text.matches("cfg (feature = \"example\")").count() >= 3);
         syn::parse2::<syn::File>(expanded).unwrap();
@@ -209,7 +209,7 @@ mod tests {
             if let syn::Stmt::Item(syn::Item::Impl(item)) = statement { Some(item) } else { None }
         }).collect();
         assert_eq!(implementations.len(), 1);
-        assert_eq!(implementations[0].items.iter().filter(|item| matches!(item, syn::ImplItem::Const(_))).count(), 10);
+        assert_eq!(implementations[0].items.iter().filter(|item| matches!(item, syn::ImplItem::Const(_))).count(), 6);
         let text = quote!(#file).to_string();
         assert!(!text.contains("PhantomData :: <"));
         assert!(!text.contains("let _ : :: core :: marker :: PhantomData"));

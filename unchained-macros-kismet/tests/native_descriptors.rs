@@ -74,13 +74,13 @@ fn reflection_descriptors_preserve_names_backend_signatures_and_lifetimes() {
     assert_eq!(core::binding_inventory_for::<KismetExecResolver>().count(), 3);
     assert_eq!(UKismetSystemLibrary::AUTHORED, 42);
     let _: () = UKismetSystemLibrary::Observed;
-    let _: core::NativeFunction<
-        unsafe extern "C" fn(*const ()) -> bool, KismetReflectionResolver,
-    > = UKismetSystemLibrary::__UNCHAINED_BINDING_IsDedicatedServer;
-    let _: core::NativeFunction<
-        for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, KismetReflectionResolver,
-    > = Borrowed::__UNCHAINED_BINDING_identity;
-    let binding = Borrowed::__UNCHAINED_BINDING_identity.binding();
+    let _: &core::NativeTarget<
+        unsafe extern "C" fn(*const ()) -> bool, _, _, _, KismetReflectionResolver,
+    > = UKismetSystemLibrary::__UNCHAINED_TARGET_IsDedicatedServer;
+    let _: &core::NativeTarget<
+        for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, _, _, _, KismetReflectionResolver,
+    > = Borrowed::__UNCHAINED_TARGET_identity;
+    let binding = Borrowed::__UNCHAINED_TARGET_identity.binding();
     unsafe {
         binding.initialize_address(std::num::NonZeroUsize::new(identity as *const () as usize).unwrap()).unwrap();
         let value = 42;

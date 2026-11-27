@@ -62,7 +62,7 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
     }) };
     let address = unsafe { Library::__UNCHAINED_EXEC_Library_Owners_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_Owners.entry.register(owners_entry, true, || true) }.unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_Owners.entry.register(owners_entry, true, || true) }.unwrap();
     unsafe { (Library::__UNCHAINED_EXEC_Library_Owners_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
     assert_eq!(ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);

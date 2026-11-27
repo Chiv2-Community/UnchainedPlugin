@@ -35,7 +35,7 @@ impl UGameplayStatics {
 - Initialize with `initialize_bindings_for::<KismetReflectionResolver>` on the game
   thread while callers are quiescent. The context is not Send or Sync.
   Resolve and publish aliases before attaching this backend's hooks.
-- Use `hook_inventory_for::<KismetReflectionResolver>()` and
+- Use `detour_inventory_for::<KismetReflectionResolver>()` and
   `patch_inventory_for::<KismetReflectionResolver>()` for typed discovery.
 - Successful native addresses are cached for the process; failures remain retryable.
   These addresses are not scan-cache requirements or persisted UObject pointers.
@@ -70,6 +70,10 @@ Virtual/interface native calls are unsupported by this decoder; use a separately
 verified rust-ctables declaration, never an inferred C++ ABI.
 
 ## Dummy entry listeners
+
+Verified native bodies use core’s `NativeTarget` with replacement, entry, and
+exit capabilities. `#[dummy]` generates a Kismet-owned `DummyExecTarget` with
+only `SupportsEntry`; exit and detour attributes fail to type-check.
 
 ```rust
 use unchained_macros_kismet::kismet_runtime_bindings;

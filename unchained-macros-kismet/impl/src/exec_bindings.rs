@@ -54,13 +54,10 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
     let resolver = format_ident!("{prefix}_RESOLVER");
     let arguments = format_ident!("{prefix}_ARGUMENTS");
     let binding = format_ident!("{prefix}_BINDING");
-    let hook = format_ident!("{prefix}_HOOK");
     let descriptor = format_ident!("{prefix}_LISTENERS");
-    let attach = format_ident!("{prefix}_attach");
     let dispatch = format_ident!("{prefix}_dispatch");
     let entry = format_ident!("{prefix}_entry");
-    let associated = format_ident!("__UNCHAINED_LISTENERS_{method_name}");
-    let rejected = format_ident!("__UNCHAINED_BINDING_{method_name}");
+    let associated = format_ident!("__UNCHAINED_TARGET_{method_name}");
     let visibility = &method.vis;
     let mut attributes = method.attrs.clone();
     attributes.retain(|a| !a.path().is_ident("dummy"));
@@ -95,12 +92,7 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
             quote!(Some(#parameter))
         },
     };
-    let listener_type = quote!(::unchained_macros_core::ListenerDescriptor<
-        unsafe fn(#(&#types),*),
-        ::unchained_macros_kismet::DummyExecMethodHasNoExitListener,
-        (),
-        ::unchained_macros_kismet::KismetExecResolver,
-    >);
+    let listener_type = quote!(::unchained_macros_kismet::DummyExecTarget<unsafe fn(#(&#types),*)>);
     let metadata = vec![
         syn::parse2(quote! {
             #(#attributes)*
@@ -113,13 +105,6 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
             #[allow(non_upper_case_globals)]
             #[doc(hidden)]
             #visibility const #associated: &'static #listener_type = &#descriptor;
-        })?,
-        syn::parse2(quote! {
-            #(#attributes_cfg)*
-            #[allow(non_upper_case_globals)]
-            #[doc(hidden)]
-            #visibility const #rejected: ::unchained_macros_kismet::DummyExecMethodCannotBeDetoured =
-                ::unchained_macros_kismet::DummyExecMethodCannotBeDetoured;
         })?,
     ];
     Ok((metadata, quote! {
@@ -142,19 +127,12 @@ pub fn expand_method(owner: &syn::LitStr, class: &syn::Ident, method: &syn::Impl
             ::unchained_macros_core::FunctionBinding::new(concat!(stringify!(#class), "::", #member, " [exec]"), &#resolver);
         #(#attributes_cfg)*
         #[allow(non_upper_case_globals)]
-        static #hook: ::unchained_macros_core::NativeHook = ::unchained_macros_core::NativeHook::new();
-        #(#attributes_cfg)*
-        #[allow(non_upper_case_globals)]
         static #descriptor: #listener_type =
-            unsafe { ::unchained_macros_core::ListenerDescriptor::new(&#resolver, #attach) };
-        #(#attributes_cfg)*
-        #[allow(non_snake_case)]
-        unsafe fn #attach() -> Result<(), Box<dyn ::std::error::Error>> {
-            unsafe { #hook.attach(&#binding, #dispatch as *const ()) }
-        }
+            unsafe { ::unchained_macros_kismet::DummyExecTarget::new(&#binding, #dispatch) };
         #(#attributes_cfg)*
         #[allow(non_snake_case)]
         unsafe fn #entry(inputs: ::unchained_macros_kismet::observation::Inputs<'_>) {
+            use ::unchained_macros_core::SupportsEntry as _;
             #descriptor.observe_entry(|callback| {
                 #(#decode)*
                 unsafe { callback(#(#borrowed),*); }
@@ -202,8 +180,7 @@ mod tests {
                 pub unsafe fn PrintWarning(message: &FString) {}
             }
         }).unwrap().to_string();
-        assert!(output.contains("DummyExecMethodCannotBeDetoured"));
-        assert!(output.contains("DummyExecMethodHasNoExitListener"));
+        assert!(output.contains("DummyExecTarget"));
         assert!(!output.contains("ExitObservation"));
         assert!(!output.contains("prepare_exit"));
         assert!(!output.contains("finish_exit"));

@@ -4,7 +4,7 @@ pub use unchained_macros_kismet_impl::kismet_runtime_bindings;
 pub mod observation;
 pub mod schema;
 mod exec_binding;
-pub use exec_binding::{KismetExecResolver, DummyExecMethodCannotBeDetoured, DummyExecMethodHasNoExitListener};
+pub use exec_binding::{KismetExecResolver, DummyExecTarget};
 use std::{num::NonZeroUsize, sync::{Mutex, OnceLock}};
 
 /// Copied UFunction metadata; the exec address is raw storage, not a Rust fn value.

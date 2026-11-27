@@ -125,43 +125,9 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
     }
 }
 
-/// Typed metadata emitted beside a native binding, not a callable Rust wrapper.
-/// Invariance prevents replacing a higher-ranked native signature with a
-/// narrower lifetime contract.
-///
-/// ```compile_fail
-/// use unchained_macros_core::NativeFunction;
-/// fn wrong_arguments<R: unchained_macros_core::AddressResolver>(binding: NativeFunction<unsafe extern "C" fn(u32), R>) {
-///     let _: NativeFunction<unsafe extern "C" fn(u64), R> = binding;
-/// }
-/// ```
-///
-/// ```compile_fail
-/// use unchained_macros_core::NativeFunction;
-/// fn narrowed_lifetime<R: unchained_macros_core::AddressResolver>(binding: NativeFunction<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, R>) {
-///     let _: NativeFunction<unsafe extern "C" fn(&'static i32) -> &'static i32, R> = binding;
-/// }
-/// ```
-#[doc(hidden)]
-pub struct NativeFunction<F, R: crate::AddressResolver> {
-    binding: &'static FunctionBinding<R>,
-    signature: std::marker::PhantomData<fn(F) -> F>,
-}
-
 /// Invariant signature equality witness; carries no callable address or contract.
 #[doc(hidden)]
 pub type NativeSignature<F> = std::marker::PhantomData<fn(F) -> F>;
-
-impl<F, R: crate::AddressResolver> NativeFunction<F, R> {
-    /// # Safety
-    /// Every address published by `binding` must have the native signature `F`.
-    pub const unsafe fn new(binding: &'static FunctionBinding<R>) -> Self {
-        Self { binding, signature: std::marker::PhantomData }
-    }
-
-    pub const fn binding(&self) -> &'static FunctionBinding<R> { self.binding }
-    pub const fn name(&self) -> &'static str { self.binding.name() }
-}
 
 #[doc(hidden)]
 pub trait FunctionInfo: std::any::Any + Send + Sync {
@@ -225,14 +191,20 @@ pub fn require_function_bindings_for<R: crate::AddressResolver>(names: &[&str]) 
 /// Call during quiescent startup before enabling the patch. The trampoline must
 /// satisfy every binding's native contract and remain live for the process.
 #[doc(hidden)]
-pub unsafe fn publish_function_detours(entry: usize, detour: &'static retour::RawDetour) -> Result<(), String> {
+pub(crate) unsafe fn publish_function_detours<R: crate::AddressResolver>(
+    owner: &FunctionBinding<R>, detour: &'static retour::RawDetour,
+) -> Result<(), String> {
+    let entry = owner.entry_address().ok_or("Detour owner has no entry address")?;
     let mut attached = ATTACHED_DETOURS.lock().map_err(|_| "Detour publication lock poisoned")?;
-    if attached.get(&entry).is_some_and(|existing| !std::ptr::eq(*existing, detour)) {
+    if attached.get(&entry.get()).is_some_and(|existing| !std::ptr::eq(*existing, detour)) {
         return Err(format!("A different trampoline is already published for {entry:#x}"));
     }
-    attached.insert(entry, detour);
+    // Manual targets need an original-call trampoline even without inventory.
+    unsafe { owner.publish_detour(detour)?; }
+    attached.insert(entry.get(), detour);
     for binding in inventory::iter::<&'static dyn FunctionInfo> {
-        if binding.entry_address().is_some_and(|address| address.get() == entry) {
+        let same_storage = std::ptr::addr_eq(*binding as *const dyn FunctionInfo, owner as *const _);
+        if !same_storage && binding.entry_address() == Some(entry) {
             unsafe { binding.publish_detour(detour)?; }
         }
     }

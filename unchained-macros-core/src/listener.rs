@@ -3,8 +3,6 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::{AddressResolver, Resolver};
 
-pub type ListenerAttach = unsafe fn() -> Result<(), Box<dyn std::error::Error>>;
-
 /// Own entry-time input storage until exit observation completes.
 ///
 /// # Safety
@@ -163,18 +161,16 @@ impl Drop for ExitObservation {
     fn drop(&mut self) { isolate_observer(|| unsafe { (self.release)(self.state) }); }
 }
 
-/// Per-method extension point for native or backend-specific observation.
-///
-/// `E` is the immutable entry callback, `X` the immutable exit callback, and `P`
-/// the snapshot factory taking the same borrowed inputs as `E`. Signatures are
-/// invariant: adapters must not narrow the callback's observation lifetimes.
+/// Attachment, resolver identity, and the shared guard for all callbacks on a target.
+/// Each method needs distinct, process-lifetime target storage. Its resolver and
+/// callback slots must be stable across discovery, attachment, and dispatch.
 ///
 /// Owned arguments and narrowed borrow lifetimes cannot be registered:
 /// ```compile_fail
 /// use unchained_macros_core::*;
 /// unsafe fn owns(_: String) {}
-/// fn invalid<R: AddressResolver>(
-///     descriptor: &ListenerDescriptor<unsafe fn(&String), (), (), R>,
+/// fn invalid(
+///     descriptor: &'static impl SupportsEntry<Entry = unsafe fn(&String)>,
 /// ) {
 ///     unsafe { descriptor.register_entry(owns, true, || true).unwrap(); }
 /// }
@@ -182,8 +178,8 @@ impl Drop for ExitObservation {
 /// ```compile_fail
 /// use unchained_macros_core::*;
 /// unsafe fn retains(_: &'static u32) {}
-/// fn invalid<R: AddressResolver>(
-///     descriptor: &ListenerDescriptor<unsafe fn(&u32), (), (), R>,
+/// fn invalid(
+///     descriptor: &'static impl SupportsEntry<Entry = unsafe fn(&u32)>,
 /// ) {
 ///     unsafe { descriptor.register_entry(retains, true, || true).unwrap(); }
 /// }
@@ -193,10 +189,9 @@ impl Drop for ExitObservation {
 /// use unchained_macros_core::*;
 /// unsafe fn wrong_result(_: &u32, _: &u64) {}
 /// unsafe fn prepare(_: &u32) -> ExitObservation { unreachable!() }
-/// fn invalid<R: AddressResolver>(
-///     descriptor: &ListenerDescriptor<
-///         unsafe fn(&u32), unsafe fn(&u32, &u32),
-///         unsafe fn(&u32) -> ExitObservation, R,
+/// fn invalid(
+///     descriptor: &'static impl SupportsExit<
+///         Exit = unsafe fn(&u32, &u32), Prepare = unsafe fn(&u32) -> ExitObservation,
 ///     >,
 /// ) {
 ///     unsafe { descriptor.register_exit(wrong_result, prepare, true, || true).unwrap(); }
@@ -211,79 +206,57 @@ impl Drop for ExitObservation {
 /// #     unsafe fn resolve(&self, _: &()) -> Result<std::num::NonZeroUsize, String> { unreachable!() }
 /// # }
 /// # static RESOLVER: Resolver<Backend> = Resolver { name: "owned", implementation: Backend, filter: None };
-/// # unsafe fn attach() -> Result<(), Box<dyn std::error::Error>> { Ok(()) }
-/// # type Descriptor = ListenerDescriptor<unsafe fn(&String), unsafe fn(&String, &()), unsafe fn(&String) -> ExitObservation, Backend>;
-/// # static DESCRIPTOR: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 /// # struct Native;
-/// # impl Native {
-/// #     const __UNCHAINED_LISTENERS_Call: &'static Descriptor = &DESCRIPTOR;
-/// # }
+/// # #[runtime_bindings] impl Native { #[bind_resolved_func(Backend, &RESOLVER)] unsafe fn Call(value: String) {} }
 /// #[bind_func_exit_listener(Native::Call)]
 /// unsafe fn cannot_snapshot(value: &String, result: &()) {}
 /// ```
-pub struct ListenerDescriptor<E, X, P, R: AddressResolver> {
-    pub resolver: &'static Resolver<R>,
-    pub entry: CallbackSlot<E>,
-    pub exit: CallbackSlot<P>,
-    attach: ListenerAttach,
-    signature: std::marker::PhantomData<fn(X) -> X>,
-}
-
-impl<E: Copy, X, P: Copy, R: AddressResolver> ListenerDescriptor<E, X, P, R> {
+pub trait CallbackTarget: Sync + 'static {
+    fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
     /// # Safety
-    /// Attachment and dispatch must honor E/X/P, preserve original execution,
-    /// and finish snapshots only with the declared caller-visible result.
-    pub const unsafe fn new(resolver: &'static Resolver<R>, attach: ListenerAttach) -> Self {
-        Self { resolver, entry: CallbackSlot::new(), exit: CallbackSlot::new(), attach,
-            signature: std::marker::PhantomData }
+    /// Satisfy backend quiescence and readiness requirements.
+    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>>;
+    fn activation(&self, activate: bool, condition: fn() -> bool) -> bool {
+        activate && observe(std::ptr::from_ref(self).cast::<()>() as usize, condition).unwrap_or(false)
+    }
+}
+pub trait SupportsEntry: CallbackTarget {
+    type Entry: Copy + Send + Sync + 'static;
+    fn entry_slot(&self) -> &CallbackSlot<Self::Entry>;
+    fn observe_entry<T>(&self, invoke: impl FnOnce(Self::Entry) -> T) -> Option<T> {
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || self.entry_slot().get().map(invoke)).flatten()
     }
     /// # Safety
     /// The backend's quiescence/readiness requirements must hold.
-    pub unsafe fn ensure_attached(&self) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe { (self.attach)() }
-    }
-    /// Evaluate an attachment-time gate under the same observer guard as dispatch.
-    /// Global auto-activation off skips evaluation entirely.
-    pub fn activation(&self, activate: bool, condition: fn() -> bool) -> bool {
-        activate && observe(self as *const Self as usize, condition).unwrap_or(false)
-    }
-    /// Invoke the active entry observer. Reentry into this method while an
-    /// observer/condition runs suppresses observation, not native execution.
-    pub fn observe_entry<T>(&self, invoke: impl FnOnce(E) -> T) -> Option<T> {
-        observe(self as *const Self as usize, || self.entry.get().map(invoke)).flatten()
-    }
-    /// Snapshot inputs before execution. No slot/guard borrow survives this call.
-    pub fn prepare_exit(&self, prepare: impl FnOnce(P) -> ExitObservation) -> Option<ExitObservation> {
-        observe(self as *const Self as usize, || self.exit.get().map(prepare)).flatten()
-    }
-    /// Deliver the actual caller-visible result after normal execution.
-    ///
-    /// # Safety
-    /// Result storage must match X and remain live during the callback.
-    pub unsafe fn finish_exit(&self, observation: ExitObservation, result: *const ()) {
-        observe(self as *const Self as usize, || unsafe { observation.finish(result) });
-    }
-    /// # Safety
-    /// The backend's quiescence/readiness requirements must hold.
-    pub unsafe fn register_entry(&self, callback: E, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.entry.is_registered() { return Err("Only one entry listener is supported per method".into()); }
-        unsafe { (self.attach)()?; }
-        let activate = self.activation(activate, condition);
-        unsafe { self.entry.register(callback, activate, || true)?; }
-        Ok(())
-    }
-    /// # Safety
-    /// `prepare` must own safe snapshots and invoke `callback` with matching
-    /// inputs/result. The backend's attachment requirements must hold.
-    pub unsafe fn register_exit(&self, _callback: X, prepare: P, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.exit.is_registered() { return Err("Only one exit listener is supported per method".into()); }
-        unsafe { (self.attach)()?; }
-        let activate = self.activation(activate, condition);
-        unsafe { self.exit.register(prepare, activate, || true)?; }
+    unsafe fn register_entry(&'static self, callback: Self::Entry, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
+        if self.entry_slot().is_registered() { return Err("Only one entry listener is supported per method".into()); }
+        unsafe { self.ensure_attached()?; }
+        unsafe { self.entry_slot().register(callback, self.activation(activate, condition), || true)?; }
         Ok(())
     }
 }
-
+pub trait SupportsExit: CallbackTarget {
+    type Exit: Copy + Sync + 'static;
+    type Prepare: Copy + Send + Sync + 'static;
+    fn exit_slot(&self) -> &CallbackSlot<Self::Prepare>;
+    fn prepare_exit(&self, prepare: impl FnOnce(Self::Prepare) -> ExitObservation) -> Option<ExitObservation> {
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || self.exit_slot().get().map(prepare)).flatten()
+    }
+    /// # Safety
+    /// Result storage must match the target and remain live during the callback.
+    unsafe fn finish_exit(&self, observation: ExitObservation, result: *const ()) {
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || unsafe { observation.finish(result) });
+    }
+    /// # Safety
+    /// `prepare` must own safe snapshots and deliver the matching inputs/result to `callback`.
+    /// Satisfy target attachment requirements.
+    unsafe fn register_exit(&'static self, _callback: Self::Exit, prepare: Self::Prepare, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
+        if self.exit_slot().is_registered() { return Err("Only one exit listener is supported per method".into()); }
+        unsafe { self.ensure_attached()?; }
+        unsafe { self.exit_slot().register(prepare, self.activation(activate, condition), || true)?; }
+        Ok(())
+    }
+}
 trait CallbackControl: Send + Sync {
     fn enabled(&self) -> bool;
     fn set_enabled(&self, enabled: bool);
@@ -295,39 +268,59 @@ impl<T: Copy + Send + Sync + 'static> CallbackControl for CallbackSlot<T> {
     fn storage_identity(&self) -> *const () { self as *const Self as *const () }
 }
 
+// These immutable tuples can be promoted in a static without naming the target's
+// concrete type. Both attachment and inspection use the same target and phase.
+trait ListenerAction: Sync {
+    fn target(&self) -> &'static dyn CallbackTarget;
+    fn slot(&self) -> &dyn CallbackControl;
+    unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>>;
+}
+impl<T: SupportsEntry> ListenerAction for (&'static T, T::Entry) {
+    fn target(&self) -> &'static dyn CallbackTarget { self.0 }
+    fn slot(&self) -> &dyn CallbackControl { self.0.entry_slot() }
+    unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.0.register_entry(self.1, activate, condition) }
+    }
+}
+impl<T: SupportsExit> ListenerAction for (&'static T, T::Exit, T::Prepare) {
+    fn target(&self) -> &'static dyn CallbackTarget { self.0 }
+    fn slot(&self) -> &dyn CallbackControl { self.0.exit_slot() }
+    unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.0.register_exit(self.1, self.2, activate, condition) }
+    }
+}
+
 /// Process-lifetime listener ownership. Attach only during quiescent startup.
 pub struct ListenerRegistration {
     pub name: &'static str,
-    pub resolver: &'static dyn crate::resolver::ResolverInfo,
-    install: crate::CreateHookFn,
-    pub condition: fn() -> bool,
-    slot: &'static dyn CallbackControl,
+    action: &'static dyn ListenerAction,
+    condition: fn() -> bool,
     initialized: AtomicBool,
 }
 impl ListenerRegistration {
-    pub const fn new<R: AddressResolver, T: Copy + Send + Sync + 'static>(
-        name: &'static str, resolver: &'static Resolver<R>, slot: &'static CallbackSlot<T>,
-        install: crate::CreateHookFn, condition: fn() -> bool,
-    ) -> Self {
-        Self { name, resolver, slot, install, condition, initialized: AtomicBool::new(false) }
+    pub const fn entry<T: SupportsEntry>(name: &'static str, action: &'static (&'static T, T::Entry), condition: fn() -> bool) -> Self {
+        Self { name, action, condition, initialized: AtomicBool::new(false) }
+    }
+    pub const fn exit<T: SupportsExit>(name: &'static str, action: &'static (&'static T, T::Exit, T::Prepare), condition: fn() -> bool) -> Self {
+        Self { name, action, condition, initialized: AtomicBool::new(false) }
     }
     /// # Safety
-    /// Callers must be quiescent. The installer must publish this slot's typed
-    /// process-lifetime callback and reject duplicate ownership before publication.
-    /// It must not publish the callback on failure.
-    /// Do not attach concurrently.
+    /// Callers must be quiescent. Callbacks (including exit preparation) must
+    /// uphold the target's ABI and ownership contracts. Do not attach concurrently.
     pub unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
         if self.initialized() { return Err("Listener callback is already initialized".into()); }
-        unsafe { (self.install)(activate)?; }
+        unsafe { self.action.install(activate, self.condition)?; }
         self.initialized.store(true, Ordering::Release);
         Ok(())
     }
     pub fn initialized(&self) -> bool { self.initialized.load(Ordering::Acquire) }
-    pub fn enabled(&self) -> bool { self.initialized() && self.slot.enabled() }
+    pub fn enabled(&self) -> bool { self.initialized() && self.action.slot().enabled() }
     pub fn set_enabled(&self, enabled: bool) {
-        if self.initialized() { self.slot.set_enabled(enabled); }
+        if self.initialized() { self.action.slot().set_enabled(enabled); }
     }
-    pub fn slot_identity(&self) -> *const () { self.slot.storage_identity() }
+    pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo { self.action.target().resolver() }
+    pub fn condition(&self) -> bool { self.action.target().activation(true, self.condition) }
+    pub fn slot_identity(&self) -> *const () { self.action.slot().storage_identity() }
 }
 
 inventory::collect!(&'static ListenerRegistration);
@@ -343,7 +336,7 @@ pub fn listener_is_enabled(name: &str) -> bool {
 
 pub fn listener_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static ListenerRegistration> {
     inventory::iter::<&'static ListenerRegistration>.into_iter().copied()
-        .filter(|entry| (entry.resolver as &dyn std::any::Any).is::<Resolver<R>>())
+        .filter(|entry| (entry.resolver() as &dyn std::any::Any).is::<Resolver<R>>())
 }
 
 /// Reject excess registrations before any physical attachment or slot publication.
@@ -352,11 +345,11 @@ pub fn validate_listener_registrations_for<R: AddressResolver>(
     snapshot: &crate::SelectorSnapshot,
 ) -> Result<(), String> {
     let mut slots = std::collections::BTreeMap::new();
-    for listener in listener_inventory_for::<R>().filter(|listener| listener.resolver.supports(snapshot)) {
+    for listener in listener_inventory_for::<R>().filter(|listener| listener.resolver().supports(snapshot)) {
         if let Some(previous) = slots.insert(listener.slot_identity() as usize, listener.name) {
             return Err(format!(
                 "Only one listener per method phase is supported: {previous} and {} both register for {}",
-                listener.name, listener.resolver.name(),
+                listener.name, listener.resolver().name(),
             ));
         }
     }

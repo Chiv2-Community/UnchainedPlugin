@@ -53,7 +53,6 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
         "/Script/Fixture.Library", "PrintWarning", &[Parameter { kind: "StrProperty", size: std::mem::size_of::<FString>() }], None,
     ) };
     assert_eq!(unsafe { resolver.resolve(&context) }.unwrap().get(), 123);
-    let _: unchained_macros_kismet::DummyExecMethodCannotBeDetoured = Library::__UNCHAINED_BINDING_PrintWarning;
 }
 
 #[test]
@@ -138,7 +137,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     }) };
     let address = unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_Predicate.entry.register(runtime_entry, true, || true) }.unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_Predicate.entry.register(runtime_entry, true, || true) }.unwrap();
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
@@ -196,7 +195,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     }) };
     let address = unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_NoArgs.entry.register(noargs_reentrant_entry, true, || true) }.unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_NoArgs.entry.register(noargs_reentrant_entry, true, || true) }.unwrap();
     unsafe { invoke_noargs(); }
     NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));
     NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));

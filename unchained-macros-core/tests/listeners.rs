@@ -1,6 +1,36 @@
 use std::{num::NonZeroUsize, sync::{Mutex, atomic::{AtomicBool, AtomicUsize, Ordering}}};
 use unchained_macros_core::*;
 
+struct ObservationTarget<E, X, P, R: AddressResolver> {
+    pub resolver: &'static Resolver<R>,
+    pub entry: CallbackSlot<E>,
+    pub exit: CallbackSlot<P>,
+    attach: unsafe fn() -> Result<(), Box<dyn std::error::Error>>,
+    signature: std::marker::PhantomData<fn(X) -> X>,
+}
+impl<E: Copy, X, P: Copy, R: AddressResolver> ObservationTarget<E, X, P, R> {
+    /// # Safety
+    /// Attachment and dispatch must honor E/X/P, preserve original execution,
+    /// and finish snapshots only with the declared caller-visible result.
+    pub const unsafe fn new(resolver: &'static Resolver<R>, attach: unsafe fn() -> Result<(), Box<dyn std::error::Error>>) -> Self {
+        Self { resolver, entry: CallbackSlot::new(), exit: CallbackSlot::new(), attach, signature: std::marker::PhantomData }
+    }
+}
+
+impl<E: Copy + Send + Sync + 'static, X: 'static, P: Copy + Send + Sync + 'static, R: AddressResolver> CallbackTarget for ObservationTarget<E,X,P,R> {
+    fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo { self.resolver }
+    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> { unsafe { (self.attach)() } }
+}
+impl<E: Copy + Send + Sync + 'static, X: 'static, P: Copy + Send + Sync + 'static, R: AddressResolver> SupportsEntry for ObservationTarget<E,X,P,R> {
+    type Entry = E;
+    fn entry_slot(&self) -> &CallbackSlot<E> { &self.entry }
+}
+impl<E: Copy + Send + Sync + 'static, X: Copy + Sync + 'static, P: Copy + Send + Sync + 'static, R: AddressResolver> SupportsExit for ObservationTarget<E,X,P,R> {
+    type Exit = X;
+    type Prepare = P;
+    fn exit_slot(&self) -> &CallbackSlot<P> { &self.exit }
+}
+
 struct Backend;
 impl AddressResolver for Backend {
     type Context = ();
@@ -94,7 +124,7 @@ unsafe fn duplicate_detour(value: i32, output: *mut i32) -> i32 { unsafe { Nativ
 
 #[test]
 fn native_coexistence_bypass_conditions_and_aliases() {
-    let binding = Native::__UNCHAINED_BINDING_call.binding();
+    let binding = Native::__UNCHAINED_TARGET_call.binding();
     let listeners = listener_inventory_for::<Backend>()
         .filter(|listener| !listener.name.starts_with("duplicate_")).collect::<Vec<_>>();
     // Failed unresolved attachment does not publish slots; retry after resolution works.
@@ -107,7 +137,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     for registration in &listeners { unsafe { registration.attach(true).unwrap(); } }
     assert!(listener_is_initialized("native_entry"));
     assert!(listener_is_enabled("native_entry"));
-    let hook = hook_inventory_for::<Backend>().find(|hook| hook.name == "coexistence_detour").unwrap();
+    let hook = detour_inventory_for::<Backend>().find(|hook| hook.name() == "coexistence_detour").unwrap();
     unsafe { hook.attach(true).unwrap(); }
     assert!(detour_is_enabled("coexistence_detour"));
     let mut output = 0;
@@ -123,7 +153,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     assert_eq!(*EVENTS.lock().unwrap(), [('o',5)]);
     EVENTS.lock().unwrap().clear();
     // Descriptor bindings inherit the same trampoline, including late aliases.
-    let alias = Native::__UNCHAINED_BINDING_descriptor_alias.binding();
+    let alias = Native::__UNCHAINED_TARGET_descriptor_alias.binding();
     unsafe { alias.initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap(); }
     assert_eq!(alias.address(), binding.address());
     assert_eq!(unsafe { Native::descriptor_alias(5, &mut output) }, 6);
@@ -139,7 +169,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     assert_eq!(*EVENTS.lock().unwrap(), [('e',6),('d',6),('o',6),('x',6),('r',17)]);
     EVENTS.lock().unwrap().clear();
     hook.set_enabled(false);
-    Native::__UNCHAINED_LISTENERS_call.entry.set_enabled(false);
+    Native::__UNCHAINED_TARGET_call.entry_slot().set_enabled(false);
     assert!(!listener_is_enabled("native_entry"));
     assert!(listener_is_enabled("native_exit"));
     assert!(!detour_is_enabled("coexistence_detour"));
@@ -149,7 +179,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     EVENTS.lock().unwrap().clear();
     DETOUR_CONDITION.store(true, Ordering::SeqCst);
     ENTRY_CONDITION.store(true, Ordering::SeqCst);
-    Native::__UNCHAINED_LISTENERS_call.entry.set_enabled(true);
+    Native::__UNCHAINED_TARGET_call.entry_slot().set_enabled(true);
     hook.set_enabled(false);
     assert!(!detour_is_enabled("coexistence_detour"));
     output = 0;
@@ -215,7 +245,7 @@ fn native_coexistence_bypass_conditions_and_aliases() {
     for registration in listener_inventory_for::<Backend>().filter(|listener| listener.name.starts_with("duplicate_")) {
         assert!(unsafe { registration.attach(true) }.unwrap_err().to_string().contains("Only one"));
     }
-    let duplicate = hook_inventory_for::<Backend>().find(|hook| hook.name == "duplicate_detour").unwrap();
+    let duplicate = detour_inventory_for::<Backend>().find(|hook| hook.name() == "duplicate_detour").unwrap();
     assert!(unsafe { duplicate.attach(true) }.unwrap_err().to_string().contains("Only one behavior-changing"));
     assert!(duplicate.detour().is_none());
     duplicate.set_enabled(false);
@@ -263,7 +293,7 @@ fn callback_panics_and_dropped_snapshots_are_isolated() {
 
 #[test]
 fn descriptor_guard_is_thread_local_and_restored_after_panics() {
-    type Descriptor = ListenerDescriptor<unsafe fn(&u32), (), (), Backend>;
+    type Descriptor = ObservationTarget<unsafe fn(&u32), (), (), Backend>;
     unsafe fn attach() -> Result<(), Box<dyn std::error::Error>> { Ok(()) }
     unsafe fn callback(_: &u32) {}
     static FIRST: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
@@ -305,7 +335,7 @@ mod backend_specific {
     fixture_resolver!();
     static ATTACHED: AtomicBool = AtomicBool::new(false);
     static CALLS: AtomicUsize = AtomicUsize::new(0);
-    type Descriptor = ListenerDescriptor<
+    type Descriptor = ObservationTarget<
         unsafe fn(&u32), unsafe fn(&u32, &bool),
         unsafe fn(&u32) -> ExitObservation, Backend,
     >;
@@ -317,7 +347,7 @@ mod backend_specific {
     struct VmOnly;
     impl VmOnly {
         #[allow(non_upper_case_globals)]
-        const __UNCHAINED_LISTENERS_call: &'static Descriptor = &DESCRIPTOR;
+        const __UNCHAINED_TARGET_call: &'static Descriptor = &DESCRIPTOR;
     }
     #[bind_func_entry_listener(VmOnly::call)]
     unsafe fn entry(value: &u32) { CALLS.fetch_add(*value as usize, Ordering::SeqCst); }
@@ -334,7 +364,7 @@ mod backend_specific {
         }
         assert!(ATTACHED.load(Ordering::SeqCst));
         assert_eq!(binding_inventory_for::<Backend>().count(), 0);
-        assert_eq!(hook_inventory_for::<Backend>().count(), 0);
+        assert_eq!(detour_inventory_for::<Backend>().count(), 0);
         DESCRIPTOR.observe_entry(|callback| unsafe { callback(&3) });
         let observation = DESCRIPTOR.prepare_exit(|prepare| unsafe { prepare(&3) }).unwrap();
         // Backend execution remains independent of core's native ABI machinery.
@@ -349,7 +379,7 @@ mod duplicate_discovery {
     fixture_resolver!();
     static ATTACHED: AtomicBool = AtomicBool::new(false);
     static ATTACHMENTS: AtomicUsize = AtomicUsize::new(0);
-    type Descriptor = ListenerDescriptor<
+    type Descriptor = ObservationTarget<
         unsafe fn(&u32), unsafe fn(&u32, &u32),
         unsafe fn(&u32) -> ExitObservation, Backend,
     >;
@@ -361,7 +391,7 @@ mod duplicate_discovery {
     struct VmOnly;
     impl VmOnly {
         #[allow(non_upper_case_globals)]
-        const __UNCHAINED_LISTENERS_call: &'static Descriptor = &DESCRIPTOR;
+        const __UNCHAINED_TARGET_call: &'static Descriptor = &DESCRIPTOR;
     }
     // Identical bodies may be linker-folded; identity must come from slot storage.
     #[bind_func_entry_listener(VmOnly::call)]
@@ -376,7 +406,7 @@ mod duplicate_discovery {
     unsafe fn host_loop(snapshot: &SelectorSnapshot, preflight: bool) -> Result<(), Box<dyn std::error::Error>> {
         if preflight { validate_listener_registrations_for::<Backend>(snapshot)?; }
         for listener in listener_inventory_for::<Backend>() {
-            if !listener.resolver.supports(snapshot) || listener.initialized() { continue; }
+            if !listener.resolver().supports(snapshot) || listener.initialized() { continue; }
             unsafe { listener.attach(true)?; }
         }
         Ok(())
@@ -441,12 +471,12 @@ mod activation {
     #[test]
     fn global_autoactivation_off_skips_condition_and_conditions_are_not_dispatch_predicates() {
         unsafe {
-            Native::__UNCHAINED_BINDING_off.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_off.binding().initialize_address(
                 NonZeroUsize::new(original_off as *const () as usize).unwrap()).unwrap();
-            Native::__UNCHAINED_BINDING_gated.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_gated.binding().initialize_address(
                 NonZeroUsize::new(original_gated as *const () as usize).unwrap()).unwrap();
-            let off = hook_inventory_for::<Backend>().find(|hook| hook.name == "off").unwrap();
-            let gated = hook_inventory_for::<Backend>().find(|hook| hook.name == "gated").unwrap();
+            let off = detour_inventory_for::<Backend>().find(|hook| hook.name() == "off").unwrap();
+            let gated = detour_inventory_for::<Backend>().find(|hook| hook.name() == "gated").unwrap();
             off.attach(false).unwrap();
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
             gated.attach(true).unwrap();
@@ -501,13 +531,13 @@ mod condition_reentry {
     #[test]
     fn exit_and_detour_attachment_conditions_suppress_existing_observers_not_execution() {
         unsafe {
-            Native::__UNCHAINED_BINDING_call.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_call.binding().initialize_address(
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
             let entry = listener_inventory_for::<Backend>().find(|listener| listener.name == "entry").unwrap();
             let exit = listener_inventory_for::<Backend>().find(|listener| listener.name == "exit").unwrap();
             entry.attach(true).unwrap();
             exit.attach(true).unwrap();
-            let detour = hook_inventory_for::<Backend>().next().unwrap();
+            let detour = detour_inventory_for::<Backend>().next().unwrap();
             detour.attach(true).unwrap();
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
             assert_eq!(ORIGINAL.load(Ordering::SeqCst), 2);
@@ -597,7 +627,7 @@ mod local_hygiene {
     #[test]
     fn user_parameter_names_do_not_alias_dispatcher_snapshot_or_original_wrapper_locals() {
         unsafe {
-            Native::__UNCHAINED_BINDING_call.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_call.binding().initialize_address(
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
             validate_listener_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
             for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
@@ -647,9 +677,9 @@ mod ownership {
     #[test]
     fn owned_input_and_aggregate_return_are_borrowed_without_extra_drops() {
         unsafe {
-            Native::__UNCHAINED_BINDING_echo.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_echo.binding().initialize_address(
                 NonZeroUsize::new(original_echo as *const () as usize).unwrap()).unwrap();
-            Native::__UNCHAINED_BINDING_make.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_make.binding().initialize_address(
                 NonZeroUsize::new(original_make as *const () as usize).unwrap()).unwrap();
             for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             // Keep calls opaque: optimized direct calls can bypass the patched entry.
@@ -722,9 +752,9 @@ mod custom_snapshots {
     #[test]
     fn custom_owned_snapshots_preserve_inputs_and_release_once_on_every_delivery_path() {
         unsafe {
-            Native::__UNCHAINED_BINDING_call.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_call.binding().initialize_address(
                 NonZeroUsize::new(original as *const () as usize).unwrap()).unwrap();
-            Native::__UNCHAINED_BINDING_two.binding().initialize_address(
+            Native::__UNCHAINED_TARGET_two.binding().initialize_address(
                 NonZeroUsize::new(original_two as *const () as usize).unwrap()).unwrap();
             for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             let call = std::hint::black_box(original as unsafe extern "C" fn(Owned) -> Owned);
@@ -740,9 +770,9 @@ mod custom_snapshots {
             drop(result);
             assert_eq!(DROPS.load(Ordering::SeqCst), 4);
         }
-        let descriptor = Native::__UNCHAINED_LISTENERS_call;
+        let descriptor = Native::__UNCHAINED_TARGET_call;
         let value = Owned { value: 10 };
-        let prepare = descriptor.exit.get().unwrap();
+        let prepare = descriptor.exit_slot().get().unwrap();
         let observation = unsafe { prepare(&value) };
         drop(observation); // Skipped delivery still owns/releases exactly one snapshot.
         assert_eq!(DROPS.load(Ordering::SeqCst), 5);
@@ -750,7 +780,7 @@ mod custom_snapshots {
         descriptor.observe_entry(|_| unreachable!()); // Entry slot is absent.
         // Install an entry slot only to exercise suppressed reentrant delivery.
         unsafe fn entry(_value: &Owned) {}
-        unsafe { descriptor.entry.register(entry, true, || true).unwrap(); }
+        unsafe { descriptor.entry_slot().register(entry, true, || true).unwrap(); }
         descriptor.observe_entry(|_| unsafe {
             descriptor.finish_exit(observation, (&value as *const Owned).cast());
         });
@@ -803,10 +833,10 @@ mod references {
     fn reference_inputs_and_void_pointer_reference_results_preserve_storage() {
         unsafe {
             for (binding, address) in [
-                (Native::__UNCHAINED_BINDING_read.binding(), original_read as *const () as usize),
-                (Native::__UNCHAINED_BINDING_reference.binding(), original_reference as *const () as usize),
-                (Native::__UNCHAINED_BINDING_pointer.binding(), original_pointer as *const () as usize),
-                (Native::__UNCHAINED_BINDING_nothing.binding(), original_nothing as *const () as usize),
+                (Native::__UNCHAINED_TARGET_read.binding(), original_read as *const () as usize),
+                (Native::__UNCHAINED_TARGET_reference.binding(), original_reference as *const () as usize),
+                (Native::__UNCHAINED_TARGET_pointer.binding(), original_pointer as *const () as usize),
+                (Native::__UNCHAINED_TARGET_nothing.binding(), original_nothing as *const () as usize),
             ] { binding.initialize_address(NonZeroUsize::new(address).unwrap()).unwrap(); }
             for listener in listener_inventory_for::<Backend>() { listener.attach(true).unwrap(); }
             let mut value = 7;

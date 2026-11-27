@@ -113,11 +113,11 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
         };
     }
     initialize!(__UNCHAINED_EXEC_Library_StringResult_RESOLVER, __UNCHAINED_EXEC_Library_StringResult_BINDING,
-        __UNCHAINED_LISTENERS_StringResult, string_result);
+        __UNCHAINED_TARGET_StringResult, string_result);
     initialize!(__UNCHAINED_EXEC_Library_TextResult_RESOLVER, __UNCHAINED_EXEC_Library_TextResult_BINDING,
-        __UNCHAINED_LISTENERS_TextResult, text_result);
+        __UNCHAINED_TARGET_TextResult, text_result);
     initialize!(__UNCHAINED_EXEC_Library_ColorResult_RESOLVER, __UNCHAINED_EXEC_Library_ColorResult_BINDING,
-        __UNCHAINED_LISTENERS_ColorResult, color_result);
+        __UNCHAINED_TARGET_ColorResult, color_result);
     let mut string = MaybeUninit::<FString>::uninit();
     let mut text = MaybeUninit::<FText>::uninit();
     let mut color = MaybeUninit::<FLinearColor>::uninit();
@@ -147,7 +147,7 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
     let context = context();
     let address = unsafe { Library::__UNCHAINED_EXEC_Library_NullStringResult_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_NullStringResult_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_NullStringResult.entry.register(null_result, true, || true) }.unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_NullStringResult.entry.register(null_result, true, || true) }.unwrap();
     unsafe { (Library::__UNCHAINED_EXEC_Library_NullStringResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut()); }
     assert_eq!(NULL_ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(NULL_OBSERVED.load(Ordering::SeqCst), 1);
@@ -160,7 +160,7 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
     let context = context();
     let address = unsafe { Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_RESOLVER.implementation.resolve(&context) }.unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_LISTENERS_MisalignedColorResult.entry.register(misaligned_result, true, || true) }.unwrap();
+    unsafe { Library::__UNCHAINED_TARGET_MisalignedColorResult.entry.register(misaligned_result, true, || true) }.unwrap();
     let mut buffer = Buffer([0; 32]);
     let result = unsafe { buffer.0.as_mut_ptr().add(1).cast::<c_void>() };
     unsafe { (Library::__UNCHAINED_EXEC_Library_MisalignedColorResult_dispatch)(std::ptr::null_mut(), std::ptr::dangling_mut(), result); }

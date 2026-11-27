@@ -1,6 +1,5 @@
-use unchained_macros_core::{detour_is_enabled, detour_is_initialized, HookRegistration, NativeHook};
+use unchained_macros_core::{detour_is_enabled, detour_is_initialized, NativeTarget, DetourInfo, DetourRegistration};
 
-static HOOK: NativeHook = NativeHook::new();
 static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patternsleuth::PatternsleuthResolver> =
     unchained_macros_core::FunctionBinding::new("Fixture::target", &unchained_macros_core::Resolver {
         name: "FixtureTarget", implementation: unchained_macros_patternsleuth::PatternsleuthResolver::offset("FixtureTarget"), filter: None,
@@ -13,22 +12,16 @@ unsafe extern "C" fn target(value: i32) -> i32 {
 }
 unsafe extern "C" fn replacement(value: i32) -> i32 { value + 2 }
 unsafe extern "C" fn dispatch(value: i32) -> i32 {
-    let address = HOOK.replacement_address().unwrap_or_else(|| BINDING.address().unwrap().get());
-    let call: unsafe extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(address) };
+    let call: unsafe extern "C" fn(i32) -> i32 =
+        unchained_macros_core::SupportsDetour::replacement_slot(&TARGET).get()
+            .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
     unsafe { call(value) }
 }
 
-static REGISTRATION: HookRegistration = HookRegistration::new(
-    "FixtureDetour", &BINDING, &HOOK,
-    |activate| unsafe {
-        if HOOK.has_replacement() { return Err("duplicate replacement".into()); }
-        HOOK.attach(&BINDING, dispatch as *const ())?;
-        HOOK.register_replacement(replacement as *const () as usize, activate)?;
-        Ok(())
-    },
-    || true,
-);
-inventory::submit! { &REGISTRATION }
+type Target = NativeTarget<unsafe extern "C" fn(i32) -> i32, (), (), (), unchained_macros_patternsleuth::PatternsleuthResolver>;
+static TARGET: Target = unsafe { Target::new(&BINDING, dispatch, |f| f as *const ()) };
+static REGISTRATION: DetourRegistration<Target> = DetourRegistration::new("FixtureDetour", &TARGET, replacement, || true);
+inventory::submit! { &REGISTRATION as &dyn DetourInfo }
 
 #[test]
 fn state_queries_share_hook_registration_and_track_disabled_trampolines() {

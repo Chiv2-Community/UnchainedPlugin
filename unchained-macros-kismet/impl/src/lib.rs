@@ -56,16 +56,13 @@ mod tests {
 
     #[test]
     fn dummy_metadata_cannot_collide_with_authored_items() {
-        for name in ["__UNCHAINED_BINDING_Call", "__UNCHAINED_LISTENERS_Call"] {
-            let name = format_ident!("{name}");
-            assert!(expand(quote!("/Script/Fixture.Native"), quote! {
-                impl Native {
-                    const #name: () = ();
-                    #[dummy]
-                    unsafe fn Call() {}
-                }
-            }).unwrap_err().to_string().contains("conflicts"));
-        }
+        assert!(expand(quote!("/Script/Fixture.Native"), quote! {
+            impl Native {
+                const __UNCHAINED_TARGET_Call: () = ();
+                #[dummy]
+                unsafe fn Call() {}
+            }
+        }).unwrap_err().to_string().contains("conflicts"));
     }
 
     #[test]
@@ -134,10 +131,8 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             return Err(syn::Error::new_spanned(method, "Kismet methods cannot also declare an address binding"));
         }
         if method.attrs.iter().any(|attribute| attribute.path().is_ident("dummy")) {
-            for prefix in ["__UNCHAINED_LISTENERS_", "__UNCHAINED_BINDING_"] {
-                if !names.insert(format!("{prefix}{}", method.sig.ident)) {
-                    return Err(syn::Error::new_spanned(method, "generated binding metadata conflicts with an associated item"));
-                }
+            if !names.insert(format!("__UNCHAINED_TARGET_{}", method.sig.ident)) {
+                return Err(syn::Error::new_spanned(method, "generated binding metadata conflicts with an associated item"));
             }
             let (metadata, helpers) = exec_bindings::expand_method(&owner, class, method)?;
             items.extend(metadata);
