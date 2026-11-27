@@ -1,3 +1,4 @@
+#[path = "provenance.rs"]
 mod provenance;
 
 pub fn run() {
@@ -6,7 +7,7 @@ pub fn run() {
         std::path::Path::new(&std::env::var_os("OUT_DIR").unwrap()),
     )
     .expect("Failed to generate native documentation");
-    println!("cargo:rerun-if-changed=build/mod.rs");
+    println!("cargo:rerun-if-changed=build/generate_plugin_artifacts.rs");
     println!("cargo:rerun-if-changed=build/provenance.rs");
     println!("cargo:rerun-if-changed=resources/plugin.rc");
     let (commit, dirty) = provenance::generate();

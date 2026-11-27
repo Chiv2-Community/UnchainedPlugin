@@ -92,7 +92,7 @@ cargo test --locked -p unchained-native-docs
 ```
 
 Generation lives in `build/unchained-native-docs`; root `build.rs` delegates to
-`build/mod.rs`. A build-local module/file index shares extracted declarations,
+`build/generate_plugin_artifacts.rs`. A build-local module/file index shares extracted declarations,
 not syntax trees. Rebuilding reads changed native sources; no persistent index
 is trusted.
 
