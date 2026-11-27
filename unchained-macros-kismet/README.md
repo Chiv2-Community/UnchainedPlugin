@@ -204,4 +204,4 @@ impl Native {
 }
 ```
 
-See [integration and binary evidence](../docs/kismet-runtime-bindings.md).
+See [reflection binding usage and limits](../docs/kismet-runtime-bindings.md).
