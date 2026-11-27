@@ -8,4 +8,5 @@ publish = false
 proc-macro = true
 
 [dependencies]
+serde.workspace = true
 toml = "0.8"

@@ -1,22 +1,46 @@
 //! Select build modules at compile time, so each package needs only its own build dependencies.
+use serde::Deserialize;
 use std::{env, fs, path::Path};
+
+#[derive(Deserialize)]
+struct Manifest {
+    package: Package,
+}
+
+#[derive(Deserialize)]
+struct Package {
+    #[serde(default)]
+    metadata: Metadata,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct Metadata {
+    #[serde(default)]
+    pre_build_steps: Vec<PreBuildStep>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum PreBuildStep {
+    Plugin,
+    Format,
+}
 
 #[proc_macro]
 pub fn build_script(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let manifest = Path::new(&env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("Cargo.toml");
-    let manifest: toml::Table = fs::read_to_string(manifest).unwrap().parse().unwrap();
+    let path = Path::new(&env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("Cargo.toml");
+    let source = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let manifest: Manifest = toml::from_str(&source).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let mut modules = String::new();
     let mut calls = String::new();
-    if let Some(steps) = manifest["package"].get("metadata").and_then(|m| m.get("pre-build-steps")) {
-        for step in steps.as_array().expect("package.metadata.pre-build-steps must be an array") {
-            let (name, path) = match step.as_str() {
-                Some("plugin") => ("plugin", "build/mod.rs"),
-                Some("format") => ("format", "build/format.rs"),
-                _ => panic!("unknown pre-build step: {step}"),
-            };
-            modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));
-            calls.push_str(&format!("{name}::run();"));
-        }
+    for step in manifest.package.metadata.pre_build_steps {
+        let (name, path) = match step {
+            PreBuildStep::Plugin => ("plugin", "build/mod.rs"),
+            PreBuildStep::Format => ("format", "build/format.rs"),
+        };
+        modules.push_str(&format!("#[path = \"{path}\"] mod {name};"));
+        calls.push_str(&format!("{name}::run();"));
     }
     // Recompile the build script when the task list changes, even if Cargo
     // considers the metadata-only manifest edit irrelevant to compilation.
