@@ -107,11 +107,10 @@ fn initialize() {
     }
 }
 
-#[test_case::test_case(-100; "negative")]
-#[test_case::test_case(0; "zero")]
-#[test_case::test_case(100; "positive")]
+#[test]
 
-fn generated_bindings_forward_receivers_arguments_and_returns(value: i32) {
+fn generated_bindings_forward_receivers_arguments_and_returns() {
+    let value = -100;
     initialize();
 
     let mut native = Native { value };

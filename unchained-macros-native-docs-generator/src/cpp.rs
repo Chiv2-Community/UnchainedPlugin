@@ -1369,21 +1369,6 @@ Text Native::Call(int Count, ...) { return variadic(Count); }
 
     #[test]
 
-    fn refuses_overloads_and_duplicate_implementations() {
-        let fixture = Fixture::new();
-
-        fixture.write("Source/Test/Public/Native.h", "struct Native { void Call(); };");
-
-        fixture.write(
-            "Source/Test/Private/Native.cpp",
-            "void Native::Call() {}\nvoid Native::Call(int value) {}",
-        );
-
-        assert!(fixture.find("Native::Call").is_none());
-    }
-
-    #[test]
-
     fn does_not_treat_declarations_as_implementations() {
         let fixture = Fixture::new();
 

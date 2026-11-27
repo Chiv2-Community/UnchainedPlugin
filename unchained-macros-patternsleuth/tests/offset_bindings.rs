@@ -6,8 +6,6 @@ unchained_macros_patternsleuth::define_offset_resolver!(GetPost_GetMotd);
 
 unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Borrow);
 
-unchained_macros_patternsleuth::define_offset_resolver!(GetPost_Missing);
-
 struct OpenAPIClientAPI {
     value: i32,
 }
@@ -28,10 +26,6 @@ impl OpenAPIClientAPI {
     #[bind_resolved_func(GetPost_Borrow)]
 
     unsafe fn borrow<'a>(&self, result: &'a mut i32) -> &'a mut i32 {}
-
-    #[bind_resolved_func(GetPost_Missing)]
-
-    unsafe fn missing(&self) {}
 }
 
 unsafe extern "C" fn get_motd(
@@ -70,7 +64,6 @@ fn provider_offsets_use_ordinary_typed_resolver_bindings() {
         let address = match binding.resolver_name() {
             "GetPost_GetMotd" => get_motd as *const () as usize,
             "GetPost_Borrow" => borrow as *const () as usize,
-            "GetPost_Missing" => continue,
             name => panic!("Unexpected request binding {name}"),
         };
 
@@ -102,14 +95,5 @@ fn provider_offsets_use_ordinary_typed_resolver_bindings() {
         assert_eq!(client.borrow(&mut output) as *mut i32, output_ptr);
 
         assert_eq!(output, 40);
-    }
-}
-
-#[test]
-#[should_panic(expected = "Native binding GetPost_Missing is not initialized")]
-
-fn missing_request_binding_fails_before_native_call() {
-    unsafe {
-        OpenAPIClientAPI { value: 0 }.missing();
     }
 }

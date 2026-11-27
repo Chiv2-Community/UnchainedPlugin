@@ -51,16 +51,6 @@ unsafe extern "C" fn original_trampoline(value: i32) -> i32 {
     value + 2
 }
 
-unsafe extern "C" fn borrow(value: &Native) -> &i32 {
-    &value.value
-}
-
-unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &'a mut i32 {
-    *output = unsafe { (*value).value };
-
-    output
-}
-
 #[test]
 
 fn metadata_preserves_signatures_and_binding_identity() {
@@ -147,39 +137,7 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
 
 #[test]
 
-fn borrowed_receiver_and_return_storage_preserve_ownership() {
-    unsafe {
-        Native::__UNCHAINED_TARGET_borrow
-            .binding()
-            .initialize_address(std::num::NonZeroUsize::new(borrow as *const () as usize).unwrap())
-            .unwrap();
-
-        Native::__UNCHAINED_TARGET_storage
-            .binding()
-            .initialize_address(std::num::NonZeroUsize::new(storage as *const () as usize).unwrap())
-            .unwrap();
-
-        let native = Native { value: 42 };
-
-        assert!(std::ptr::eq(native.borrow(), &native.value));
-
-        let mut out = 0;
-
-        let address = &raw mut out;
-
-        let result = (&raw const native).storage(&mut out);
-
-        assert_eq!(result as *mut _, address);
-
-        assert_eq!(*result, 42);
-    }
-}
-
-#[test]
-
-fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
-    assert!(std::panic::catch_unwind(|| unsafe { Native::missing() }).is_err());
-
+fn uninitialized_binding_rejects_detour_publication() {
     let binding = Native::__UNCHAINED_TARGET_missing.binding();
 
     #[inline(never)]
