@@ -5,7 +5,7 @@ C++ source layout, names, and native types. It is not a complete or authoritativ
 SDK. Keep plugin behavior under `unchained-plugin/src/unchained/`, not in native
 declarations. See [source layout](engine-sources.md).
 
-## Native functions: `runtime_bindings`
+## Resolving Native functions: `runtime_bindings`
 
 Use `runtime_bindings` on an existing native type's inherent impl. Each bound
 method has an empty unsafe body and a `bind_resolved_func` resolver:
@@ -54,7 +54,7 @@ Read explicitly with `unsafe { GMalloc.read() }` or `unsafe { GUObjectArray.read
 `Value` reloads the current pointer; `Address` returns the inline object's pointer.
 Neither transfers ownership or synchronizes access with native writes.
 
-## Reflection: `kismet_runtime_bindings`
+## Resolving methods with reflection: `kismet_runtime_bindings`
 
 Use a reflected class path instead of a scan resolver:
 
@@ -69,7 +69,7 @@ Do not add `runtime_bindings` or `bind_resolved_func` to these declarations.
 Reflection locates the native body, not its ABI. Startup initializes these
 bindings on the game thread once reflection is ready.
 
-For a verified dummied body, use the same macro with parameterless `#[dummy]`:
+For a dummied body, add `#[dummy]` to the method declaration:
 
 ```rust,ignore
 #[unchained_macros_kismet::kismet_runtime_bindings("/Script/Engine.KismetSystemLibrary")]
@@ -79,14 +79,16 @@ impl UKismetSystemLibrary {
 }
 ```
 
-This exposes **entry observation only** through the unique exec wrapper. It
+This exposes **entry observation only** through the exec wrapper. It
 cannot be called, detoured, or given an exit listener. Blueprint-only functions
 are unsupported. See [reflection requirements and limits](kismet-runtime-bindings.md).
 
 ## Detours
 
-Target the method, not its resolver. Use its native signature, with an explicit
-first argument for an instance receiver:
+Detours target methods that have native resolvers/bindings in the Chivalry2 module.
+
+Find a native method in Chivalry2/ that you want to detour, then reference it in `bind_func_detour`.
+Copy the signature from the method in the Chivalry2 module exactly.
 
 ```rust,ignore
 #[unchained_macros_core::bind_func_detour(UKismetSystemLibrary::IsServer)]
@@ -97,10 +99,12 @@ unsafe fn log_server_check(context: *mut UObject) -> bool {
 }
 ```
 
-Call the binding inside the detour to call the original without reentering the
-hook. `#[mutability_override]` on a pointer/reference parameter permits an outer
-mutability difference, not a different pointee type or lifetime. The callback
-must still uphold native validity, aliasing, and write-access requirements.
+Call the binding inside the detour to call the original method from the game.
+`#[mutability_override]` on a pointer/reference parameter permits a mutability
+difference. The callback must still uphold native validity, aliasing, and
+write-access requirements.
+
+Dummied blueprints cannot have detours. They may have entry listeners, however. See below.
 
 ## Listeners
 
