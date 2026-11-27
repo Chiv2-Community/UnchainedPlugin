@@ -526,17 +526,18 @@ pub fn validate_listener_registrations_for<R: AddressResolver>(
 ) -> Result<(), String> {
     let mut slots = std::collections::BTreeMap::new();
 
-    for listener in listener_inventory_for::<R>().filter(|listener| listener.resolver().supports(snapshot)) {
-        if let Some(previous) = slots.insert(listener.slot_identity() as usize, listener.name) {
-            return Err(format!(
-                "Only one listener per method phase is supported: {previous} and {} both register for {}",
-                listener.name,
-                listener.resolver().name(),
-            ));
-        }
-    }
-
-    Ok(())
+    listener_inventory_for::<R>()
+        .filter(|listener| listener.resolver().supports(snapshot))
+        .try_for_each(
+            |listener| match slots.insert(listener.slot_identity() as usize, listener.name) {
+                None => Ok(()),
+                Some(previous) => Err(format!(
+                    "Only one listener per method phase is supported: {previous} and {} both register for {}",
+                    listener.name,
+                    listener.resolver().name(),
+                )),
+            },
+        )
 }
 
 #[cfg(test)]
