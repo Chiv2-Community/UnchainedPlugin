@@ -16,7 +16,7 @@ jobs:
         with:
           components: rustfmt
           cache: false
-      - run: bash scripts/fmt-macros.sh --check
+      - run: cargo fmt-macros --check
 
   backend-contracts:
     runs-on: ubuntu-latest

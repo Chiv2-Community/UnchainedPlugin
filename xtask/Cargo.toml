@@ -13,4 +13,4 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 
 [[bin]]
 name = "fmt-macros"
-path = "../build/macro-format.rs"
+path = "../build/format.rs"

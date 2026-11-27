@@ -68,7 +68,29 @@ fn main() -> Result<()> {
     let mut args = env::args_os().skip(1).peekable();
     let check = args.next_if(|arg| arg == "--check").is_some();
     let mut files: Vec<PathBuf> = args.map(PathBuf::from).collect();
-    if files.is_empty() {
+    if files.is_empty() && env!("CARGO_PKG_NAME") == "xtask" {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let output = Command::new("git")
+            .current_dir(root)
+            .args([
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--",
+                "unchained-macros-*/*.rs",
+            ])
+            .output()?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).into_owned().into());
+        }
+        files.extend(
+            std::str::from_utf8(&output.stdout)?
+                .split_terminator('\0')
+                .map(|path| root.join(path)),
+        );
+    } else if files.is_empty() {
         // Cargo build script: only write sources in the configuring checkout.
         let dir = env::current_dir()?;
         println!("cargo:rerun-if-env-changed=UNCHAINED_FORMAT_ROOT");
@@ -126,7 +148,7 @@ fn main() -> Result<()> {
         }
     }
     if stale {
-        return Err("run bash scripts/fmt-macros.sh".into());
+        return Err("run cargo fmt-macros".into());
     }
     Ok(())
 }

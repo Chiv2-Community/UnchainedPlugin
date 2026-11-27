@@ -1,4 +1,5 @@
 ﻿[alias]
+fmt-macros = "run --quiet --locked -p xtask --bin fmt-macros --"
 xtask = "run --package xtask --bin xtask --"
 
 [env]
