@@ -1,5 +1,8 @@
-use std::{num::NonZeroUsize, sync::{Mutex, OnceLock}};
-use crate::{KismetContext, schema::Parameter};
+use crate::{schema::Parameter, KismetContext};
+use std::{
+    num::NonZeroUsize,
+    sync::{Mutex, OnceLock},
+};
 
 pub(crate) fn current_thread_id() -> u32 {
     unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }
@@ -27,21 +30,35 @@ impl KismetExecResolver {
     /// The wrapper must remain unique to this UFunction, including native
     /// functions not yet loaded at initialization; reflected aliases are rejected.
     pub const unsafe fn new(
-        owner: &'static str, member: &'static str,
-        arguments: &'static [Parameter], result: Option<Parameter>,
+        owner: &'static str,
+        member: &'static str,
+        arguments: &'static [Parameter],
+        result: Option<Parameter>,
     ) -> Self {
-        Self { owner, member, arguments, result, address: OnceLock::new(),
-            properties: OnceLock::new(), observation_thread: OnceLock::new(), lock: Mutex::new(()) }
+        Self {
+            owner,
+            member,
+            arguments,
+            result,
+            address: OnceLock::new(),
+            properties: OnceLock::new(),
+            observation_thread: OnceLock::new(),
+            lock: Mutex::new(()),
+        }
     }
 
     pub fn properties(&'static self) -> &'static [usize] {
-        self.properties.get().expect("Exec schema must be published before attachment")
+        self.properties
+            .get()
+            .expect("Exec schema must be published before attachment")
     }
 
     /// Foreign threads must forward the real wrapper without observing native
     /// text/history or invoking entry callbacks.
     pub fn is_observation_thread(&self) -> bool {
-        self.observation_thread.get().is_some_and(|thread| *thread == current_thread_id())
+        self.observation_thread
+            .get()
+            .is_some_and(|thread| *thread == current_thread_id())
     }
 }
 
@@ -49,7 +66,9 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
     type Context = KismetContext;
     unsafe fn resolve(&self, context: &KismetContext) -> Result<NonZeroUsize, String> {
         let _guard = self.lock.lock().map_err(|_| "Exec resolver lock poisoned")?;
-        if let Some(address) = self.address.get() { return Ok(*address); }
+        if let Some(address) = self.address.get() {
+            return Ok(*address);
+        }
         let thread = context.observation_thread;
         if thread != current_thread_id() {
             return Err("Exec observation must resolve on the context's game thread".into());
@@ -60,11 +79,22 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
             .map_err(|error| format!("{}::{}: {error}", self.owner, self.member))?;
         let address = NonZeroUsize::new(function.exec_thunk).ok_or("Exec wrapper address is null")?;
         let parameters = properties.len();
-        self.properties.set(properties.into_boxed_slice()).map_err(|_| "Exec schema already published")?;
-        self.observation_thread.set(thread).map_err(|_| "Exec observation thread already published")?;
-        self.address.set(address).map_err(|_| "Exec address already published")?;
-        log::info!("Reflected exec {}::{}: thunk {:#x}, {} arguments",
-            self.owner, self.member, address.get(), parameters);
+        self.properties
+            .set(properties.into_boxed_slice())
+            .map_err(|_| "Exec schema already published")?;
+        self.observation_thread
+            .set(thread)
+            .map_err(|_| "Exec observation thread already published")?;
+        self.address
+            .set(address)
+            .map_err(|_| "Exec address already published")?;
+        log::info!(
+            "Reflected exec {}::{}: thunk {:#x}, {} arguments",
+            self.owner,
+            self.member,
+            address.get(),
+            parameters
+        );
         Ok(address)
     }
 }
@@ -80,15 +110,29 @@ type ExecDispatcher = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std:
 impl<E: Copy> DummyExecTarget<E> {
     /// # Safety
     /// The VM dispatcher must forward the real wrapper and invoke E only with verified live step locals.
-    pub const unsafe fn new(binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>, dispatcher: ExecDispatcher) -> Self {
-        Self { binding, hook: unchained_macros_core::NativeHook::new(), dispatcher, entry: unchained_macros_core::CallbackSlot::new() }
+    pub const unsafe fn new(
+        binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
+        dispatcher: ExecDispatcher,
+    ) -> Self {
+        Self {
+            binding,
+            hook: unchained_macros_core::NativeHook::new(),
+            dispatcher,
+            entry: unchained_macros_core::CallbackSlot::new(),
+        }
     }
 }
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for DummyExecTarget<E> {
-    fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo { self.binding.resolver }
-    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> { unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) } }
+    fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo {
+        self.binding.resolver
+    }
+    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) }
+    }
 }
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for DummyExecTarget<E> {
     type Entry = E;
-    fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> { &self.entry }
+    fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> {
+        &self.entry
+    }
 }

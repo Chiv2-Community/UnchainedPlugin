@@ -1,7 +1,7 @@
 //! Typed observation slots. Backends supply attachment and invoke these slots.
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, Ordering};
 use crate::{AddressResolver, Resolver};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 /// Own entry-time input storage until exit observation completes.
 ///
@@ -31,8 +31,12 @@ pub unsafe trait ObserverSnapshot: Sized {
 // Copy snapshots preserve values, not the lifetime of pointees/native resources.
 unsafe impl<T: Copy + 'static> ObserverSnapshot for T {
     type Snapshot = T;
-    fn snapshot(&self) -> T { *self }
-    fn borrow(snapshot: &T) -> &T { snapshot }
+    fn snapshot(&self) -> T {
+        *self
+    }
+    fn borrow(snapshot: &T) -> &T {
+        snapshot
+    }
 }
 
 thread_local! {
@@ -41,20 +45,26 @@ thread_local! {
 }
 
 // Fixed storage avoids recursively allocating while observing allocator calls.
-struct ObservationStack { targets: [usize; 64], depth: usize }
+struct ObservationStack {
+    targets: [usize; 64],
+    depth: usize,
+}
 struct ObservationGuard(usize);
 impl ObservationGuard {
     fn enter(target: usize) -> Option<Self> {
-        OBSERVING.try_with(|active| {
-            let mut active = active.try_borrow_mut().ok()?;
-            if active.depth == active.targets.len() || active.targets[..active.depth].contains(&target) {
-                return None;
-            }
-            let depth = active.depth;
-            active.targets[depth] = target;
-            active.depth += 1;
-            Some(Self(target))
-        }).ok().flatten()
+        OBSERVING
+            .try_with(|active| {
+                let mut active = active.try_borrow_mut().ok()?;
+                if active.depth == active.targets.len() || active.targets[..active.depth].contains(&target) {
+                    return None;
+                }
+                let depth = active.depth;
+                active.targets[depth] = target;
+                active.depth += 1;
+                Some(Self(target))
+            })
+            .ok()
+            .flatten()
     }
 }
 impl Drop for ObservationGuard {
@@ -79,8 +89,15 @@ pub struct CallbackSlot<T> {
 }
 
 impl<T: Copy> CallbackSlot<T> {
-    pub const fn new() -> Self { Self { value: OnceLock::new(), enabled: AtomicBool::new(false) } }
-    pub fn is_registered(&self) -> bool { self.value.get().is_some() }
+    pub const fn new() -> Self {
+        Self {
+            value: OnceLock::new(),
+            enabled: AtomicBool::new(false),
+        }
+    }
+    pub fn is_registered(&self) -> bool {
+        self.value.get().is_some()
+    }
     /// Publish a low-level callback without descriptor signature/attachment checks.
     ///
     /// # Safety
@@ -95,21 +112,31 @@ impl<T: Copy> CallbackSlot<T> {
     /// slot.register(123_usize, true, || true).unwrap();
     /// ```
     pub unsafe fn register(&self, value: T, activate: bool, condition: fn() -> bool) -> Result<(), String> {
-        if self.is_registered() { return Err("Only one callback of each kind is supported per method".into()); }
+        if self.is_registered() {
+            return Err("Only one callback of each kind is supported per method".into());
+        }
         let enabled = activate && isolate_observer(condition).unwrap_or(false);
-        self.value.set(value)
+        self.value
+            .set(value)
             .map_err(|_| "Only one callback of each kind is supported per method".to_string())?;
         self.set_enabled(enabled);
         Ok(())
     }
-    pub fn set_enabled(&self, enabled: bool) { self.enabled.store(enabled, Ordering::Release); }
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::Release);
+    }
     pub fn get(&self) -> Option<T> {
-        self.enabled.load(Ordering::Acquire).then(|| self.value.get().copied()).flatten()
+        self.enabled
+            .load(Ordering::Acquire)
+            .then(|| self.value.get().copied())
+            .flatten()
     }
 }
 
 impl<T: Copy> Default for CallbackSlot<T> {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Catch Rust observer/condition panics; native exceptions and aborts are not caught.
@@ -141,13 +168,17 @@ impl ExitObservation {
     /// # Safety
     /// `finish` must borrow state as `S`, without freeing, moving it out, or
     /// retaining references. Result storage must match the descriptor's result.
-    pub unsafe fn from_snapshot<S: 'static>(
-        snapshot: S, finish: unsafe fn(*mut (), *const ()),
-    ) -> Self {
+    pub unsafe fn from_snapshot<S: 'static>(snapshot: S, finish: unsafe fn(*mut (), *const ())) -> Self {
         unsafe fn release<S>(state: *mut ()) {
-            unsafe { drop(Box::from_raw(state.cast::<S>())); }
+            unsafe {
+                drop(Box::from_raw(state.cast::<S>()));
+            }
         }
-        Self { state: Box::into_raw(Box::new(snapshot)).cast(), finish, release: release::<S> }
+        Self {
+            state: Box::into_raw(Box::new(snapshot)).cast(),
+            finish,
+            release: release::<S>,
+        }
     }
 
     /// # Safety
@@ -158,7 +189,9 @@ impl ExitObservation {
 }
 
 impl Drop for ExitObservation {
-    fn drop(&mut self) { isolate_observer(|| unsafe { (self.release)(self.state) }); }
+    fn drop(&mut self) {
+        isolate_observer(|| unsafe { (self.release)(self.state) });
+    }
 }
 
 /// Attachment, resolver identity, and the shared guard for all callbacks on a target.
@@ -224,14 +257,29 @@ pub trait SupportsEntry: CallbackTarget {
     type Entry: Copy + Send + Sync + 'static;
     fn entry_slot(&self) -> &CallbackSlot<Self::Entry>;
     fn observe_entry<T>(&self, invoke: impl FnOnce(Self::Entry) -> T) -> Option<T> {
-        observe(std::ptr::from_ref(self).cast::<()>() as usize, || self.entry_slot().get().map(invoke)).flatten()
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || {
+            self.entry_slot().get().map(invoke)
+        })
+        .flatten()
     }
     /// # Safety
     /// The backend's quiescence/readiness requirements must hold.
-    unsafe fn register_entry(&'static self, callback: Self::Entry, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.entry_slot().is_registered() { return Err("Only one entry listener is supported per method".into()); }
-        unsafe { self.ensure_attached()?; }
-        unsafe { self.entry_slot().register(callback, self.activation(activate, condition), || true)?; }
+    unsafe fn register_entry(
+        &'static self,
+        callback: Self::Entry,
+        activate: bool,
+        condition: fn() -> bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.entry_slot().is_registered() {
+            return Err("Only one entry listener is supported per method".into());
+        }
+        unsafe {
+            self.ensure_attached()?;
+        }
+        unsafe {
+            self.entry_slot()
+                .register(callback, self.activation(activate, condition), || true)?;
+        }
         Ok(())
     }
 }
@@ -240,20 +288,38 @@ pub trait SupportsExit: CallbackTarget {
     type Prepare: Copy + Send + Sync + 'static;
     fn exit_slot(&self) -> &CallbackSlot<Self::Prepare>;
     fn prepare_exit(&self, prepare: impl FnOnce(Self::Prepare) -> ExitObservation) -> Option<ExitObservation> {
-        observe(std::ptr::from_ref(self).cast::<()>() as usize, || self.exit_slot().get().map(prepare)).flatten()
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || {
+            self.exit_slot().get().map(prepare)
+        })
+        .flatten()
     }
     /// # Safety
     /// Result storage must match the target and remain live during the callback.
     unsafe fn finish_exit(&self, observation: ExitObservation, result: *const ()) {
-        observe(std::ptr::from_ref(self).cast::<()>() as usize, || unsafe { observation.finish(result) });
+        observe(std::ptr::from_ref(self).cast::<()>() as usize, || unsafe {
+            observation.finish(result)
+        });
     }
     /// # Safety
     /// `prepare` must own safe snapshots and deliver the matching inputs/result to `callback`.
     /// Satisfy target attachment requirements.
-    unsafe fn register_exit(&'static self, _callback: Self::Exit, prepare: Self::Prepare, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.exit_slot().is_registered() { return Err("Only one exit listener is supported per method".into()); }
-        unsafe { self.ensure_attached()?; }
-        unsafe { self.exit_slot().register(prepare, self.activation(activate, condition), || true)?; }
+    unsafe fn register_exit(
+        &'static self,
+        _callback: Self::Exit,
+        prepare: Self::Prepare,
+        activate: bool,
+        condition: fn() -> bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.exit_slot().is_registered() {
+            return Err("Only one exit listener is supported per method".into());
+        }
+        unsafe {
+            self.ensure_attached()?;
+        }
+        unsafe {
+            self.exit_slot()
+                .register(prepare, self.activation(activate, condition), || true)?;
+        }
         Ok(())
     }
 }
@@ -263,9 +329,15 @@ trait CallbackControl: Send + Sync {
     fn storage_identity(&self) -> *const ();
 }
 impl<T: Copy + Send + Sync + 'static> CallbackControl for CallbackSlot<T> {
-    fn enabled(&self) -> bool { self.get().is_some() }
-    fn set_enabled(&self, enabled: bool) { self.set_enabled(enabled); }
-    fn storage_identity(&self) -> *const () { self as *const Self as *const () }
+    fn enabled(&self) -> bool {
+        self.get().is_some()
+    }
+    fn set_enabled(&self, enabled: bool) {
+        self.set_enabled(enabled);
+    }
+    fn storage_identity(&self) -> *const () {
+        self as *const Self as *const ()
+    }
 }
 
 // These immutable tuples can be promoted in a static without naming the target's
@@ -276,15 +348,23 @@ trait ListenerAction: Sync {
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>>;
 }
 impl<T: SupportsEntry> ListenerAction for (&'static T, T::Entry) {
-    fn target(&self) -> &'static dyn CallbackTarget { self.0 }
-    fn slot(&self) -> &dyn CallbackControl { self.0.entry_slot() }
+    fn target(&self) -> &'static dyn CallbackTarget {
+        self.0
+    }
+    fn slot(&self) -> &dyn CallbackControl {
+        self.0.entry_slot()
+    }
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.0.register_entry(self.1, activate, condition) }
     }
 }
 impl<T: SupportsExit> ListenerAction for (&'static T, T::Exit, T::Prepare) {
-    fn target(&self) -> &'static dyn CallbackTarget { self.0 }
-    fn slot(&self) -> &dyn CallbackControl { self.0.exit_slot() }
+    fn target(&self) -> &'static dyn CallbackTarget {
+        self.0
+    }
+    fn slot(&self) -> &dyn CallbackControl {
+        self.0.exit_slot()
+    }
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.0.register_exit(self.1, self.2, activate, condition) }
     }
@@ -298,44 +378,82 @@ pub struct ListenerRegistration {
     initialized: AtomicBool,
 }
 impl ListenerRegistration {
-    pub const fn entry<T: SupportsEntry>(name: &'static str, action: &'static (&'static T, T::Entry), condition: fn() -> bool) -> Self {
-        Self { name, action, condition, initialized: AtomicBool::new(false) }
+    pub const fn entry<T: SupportsEntry>(
+        name: &'static str,
+        action: &'static (&'static T, T::Entry),
+        condition: fn() -> bool,
+    ) -> Self {
+        Self {
+            name,
+            action,
+            condition,
+            initialized: AtomicBool::new(false),
+        }
     }
-    pub const fn exit<T: SupportsExit>(name: &'static str, action: &'static (&'static T, T::Exit, T::Prepare), condition: fn() -> bool) -> Self {
-        Self { name, action, condition, initialized: AtomicBool::new(false) }
+    pub const fn exit<T: SupportsExit>(
+        name: &'static str,
+        action: &'static (&'static T, T::Exit, T::Prepare),
+        condition: fn() -> bool,
+    ) -> Self {
+        Self {
+            name,
+            action,
+            condition,
+            initialized: AtomicBool::new(false),
+        }
     }
     /// # Safety
     /// Callers must be quiescent. Callbacks (including exit preparation) must
     /// uphold the target's ABI and ownership contracts. Do not attach concurrently.
     pub unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.initialized() { return Err("Listener callback is already initialized".into()); }
-        unsafe { self.action.install(activate, self.condition)?; }
+        if self.initialized() {
+            return Err("Listener callback is already initialized".into());
+        }
+        unsafe {
+            self.action.install(activate, self.condition)?;
+        }
         self.initialized.store(true, Ordering::Release);
         Ok(())
     }
-    pub fn initialized(&self) -> bool { self.initialized.load(Ordering::Acquire) }
-    pub fn enabled(&self) -> bool { self.initialized() && self.action.slot().enabled() }
-    pub fn set_enabled(&self, enabled: bool) {
-        if self.initialized() { self.action.slot().set_enabled(enabled); }
+    pub fn initialized(&self) -> bool {
+        self.initialized.load(Ordering::Acquire)
     }
-    pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo { self.action.target().resolver() }
-    pub fn condition(&self) -> bool { self.action.target().activation(true, self.condition) }
-    pub fn slot_identity(&self) -> *const () { self.action.slot().storage_identity() }
+    pub fn enabled(&self) -> bool {
+        self.initialized() && self.action.slot().enabled()
+    }
+    pub fn set_enabled(&self, enabled: bool) {
+        if self.initialized() {
+            self.action.slot().set_enabled(enabled);
+        }
+    }
+    pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
+        self.action.target().resolver()
+    }
+    pub fn condition(&self) -> bool {
+        self.action.target().activation(true, self.condition)
+    }
+    pub fn slot_identity(&self) -> *const () {
+        self.action.slot().storage_identity()
+    }
 }
 
 inventory::collect!(&'static ListenerRegistration);
 
 pub fn listener_is_initialized(name: &str) -> bool {
-    inventory::iter::<&'static ListenerRegistration>.into_iter()
+    inventory::iter::<&'static ListenerRegistration>
+        .into_iter()
         .any(|listener| listener.name == name && listener.initialized())
 }
 pub fn listener_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static ListenerRegistration>.into_iter()
+    inventory::iter::<&'static ListenerRegistration>
+        .into_iter()
         .any(|listener| listener.name == name && listener.enabled())
 }
 
 pub fn listener_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static ListenerRegistration> {
-    inventory::iter::<&'static ListenerRegistration>.into_iter().copied()
+    inventory::iter::<&'static ListenerRegistration>
+        .into_iter()
+        .copied()
         .filter(|entry| (entry.resolver() as &dyn std::any::Any).is::<Resolver<R>>())
 }
 
@@ -349,7 +467,8 @@ pub fn validate_listener_registrations_for<R: AddressResolver>(
         if let Some(previous) = slots.insert(listener.slot_identity() as usize, listener.name) {
             return Err(format!(
                 "Only one listener per method phase is supported: {previous} and {} both register for {}",
-                listener.name, listener.resolver().name(),
+                listener.name,
+                listener.resolver().name(),
             ));
         }
     }

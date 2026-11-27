@@ -2,7 +2,7 @@
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, dead_code)]
 
 use unchained_macros_core as core;
-use unchained_macros_kismet::{kismet_runtime_bindings, KismetReflectionResolver, KismetExecResolver};
+use unchained_macros_kismet::{kismet_runtime_bindings, KismetExecResolver, KismetReflectionResolver};
 
 struct UKismetSystemLibrary;
 // These authored names must not conflict with generated module-level types.
@@ -52,37 +52,52 @@ impl MissingType {
     unsafe fn excluded(value: MissingType) {}
 }
 
-unsafe extern "C" fn identity(value: &i32) -> &i32 { value }
+unsafe extern "C" fn identity(value: &i32) -> &i32 {
+    value
+}
 
 #[test]
 fn reflection_descriptors_preserve_names_backend_signatures_and_lifetimes() {
     let mut names: Vec<_> = core::resolver_inventory_for::<KismetReflectionResolver>()
-        .map(|resolver| resolver.name).collect();
+        .map(|resolver| resolver.name)
+        .collect();
     names.sort_unstable();
-    assert_eq!(names, [
-        "Borrowed__identity", "Borrowed__receiver", "OtherLibrary__IsServer", "UKismetSystemLibrary__IsDedicatedServer",
-        "UKismetSystemLibrary__IsServer", "UKismetSystemLibrary__IsStandalone",
-    ]);
+    assert_eq!(
+        names,
+        [
+            "Borrowed__identity",
+            "Borrowed__receiver",
+            "OtherLibrary__IsServer",
+            "UKismetSystemLibrary__IsDedicatedServer",
+            "UKismetSystemLibrary__IsServer",
+            "UKismetSystemLibrary__IsStandalone",
+        ]
+    );
     assert_eq!(core::binding_inventory_for::<KismetReflectionResolver>().count(), 6);
     let mut dummy_names: Vec<_> = core::resolver_inventory_for::<KismetExecResolver>()
-        .map(|resolver| resolver.name).collect();
+        .map(|resolver| resolver.name)
+        .collect();
     dummy_names.sort_unstable();
-    assert_eq!(dummy_names, [
-        "Borrowed__Observed__exec", "OtherLibrary__Observed__exec",
-        "UKismetSystemLibrary__Observed__exec",
-    ]);
+    assert_eq!(
+        dummy_names,
+        [
+            "Borrowed__Observed__exec",
+            "OtherLibrary__Observed__exec",
+            "UKismetSystemLibrary__Observed__exec",
+        ]
+    );
     assert_eq!(core::binding_inventory_for::<KismetExecResolver>().count(), 3);
     assert_eq!(UKismetSystemLibrary::AUTHORED, 42);
     let _: () = UKismetSystemLibrary::Observed;
-    let _: &core::NativeTarget<
-        unsafe extern "C" fn(*const ()) -> bool, _, _, _, KismetReflectionResolver,
-    > = UKismetSystemLibrary::__UNCHAINED_TARGET_IsDedicatedServer;
-    let _: &core::NativeTarget<
-        for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, _, _, _, KismetReflectionResolver,
-    > = Borrowed::__UNCHAINED_TARGET_identity;
+    let _: &core::NativeTarget<unsafe extern "C" fn(*const ()) -> bool, _, _, _, KismetReflectionResolver> =
+        UKismetSystemLibrary::__UNCHAINED_TARGET_IsDedicatedServer;
+    let _: &core::NativeTarget<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, _, _, _, KismetReflectionResolver> =
+        Borrowed::__UNCHAINED_TARGET_identity;
     let binding = Borrowed::__UNCHAINED_TARGET_identity.binding();
     unsafe {
-        binding.initialize_address(std::num::NonZeroUsize::new(identity as *const () as usize).unwrap()).unwrap();
+        binding
+            .initialize_address(std::num::NonZeroUsize::new(identity as *const () as usize).unwrap())
+            .unwrap();
         let value = 42;
         assert!(std::ptr::eq(Borrowed::identity(&value), &value));
     }

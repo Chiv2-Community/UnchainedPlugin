@@ -169,12 +169,15 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         ),
     ] {
         unsafe {
-            binding.initialize_address(std::num::NonZeroUsize::new(address).unwrap()).unwrap();
+            binding
+                .initialize_address(std::num::NonZeroUsize::new(address).unwrap())
+                .unwrap();
         }
     }
-    let registration = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|r| r.name() == "plugin_add")
-        .unwrap();
+    let registration =
+        unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+            .find(|r| r.name() == "plugin_add")
+            .unwrap();
     assert_eq!(registration.name(), "plugin_add");
     let binding = Native::__UNCHAINED_TARGET_add.binding();
     assert_eq!(binding.name(), "Native::add");
@@ -194,10 +197,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         __UNCHAINED_REGISTRATION_plugin_zero.attach(true).unwrap();
         __UNCHAINED_REGISTRATION_plugin_request.attach(true).unwrap();
         assert_eq!(Native::zero(), 17);
-        assert_eq!(
-            std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(),
-            18
-        );
+        assert_eq!(std::hint::black_box(zero_target as unsafe extern "C" fn() -> i32)(), 18);
         assert_eq!(Native::request(1), 7);
         assert_eq!(
             std::hint::black_box(request_target as unsafe extern "C" fn(i32) -> i32)(1),
@@ -218,19 +218,19 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         assert!(__UNCHAINED_REGISTRATION_plugin_add.attach(true).is_err());
 
         let native = Native { value: 42 };
-        let borrow_call =
-            std::hint::black_box(borrow_target as unsafe extern "C" fn(&Native) -> &Native);
+        let borrow_call = std::hint::black_box(borrow_target as unsafe extern "C" fn(&Native) -> &Native);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 0);
-        let borrow_hook = unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-            .find(|hook| hook.name() == "plugin_borrow").unwrap();
+        let borrow_hook =
+            unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+                .find(|hook| hook.name() == "plugin_borrow")
+                .unwrap();
         borrow_hook.set_enabled(true);
         assert!(std::ptr::eq(borrow_call(&native), &native));
         assert!(std::ptr::eq(native.borrow(), &native));
         assert_eq!(BORROW_CALLS.load(Ordering::SeqCst), 1);
         let storage_call = std::hint::black_box(
-            storage_target
-                as for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32,
+            storage_target as for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32,
         );
         let mut out = 0;
         let address = &raw mut out;
@@ -245,32 +245,30 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
         );
 
         let original_address = Native::__UNCHAINED_TARGET_add.binding().address();
-        __UNCHAINED_REGISTRATION_plugin_add
-            .detour().unwrap()
-            .disable()
-            .unwrap();
+        __UNCHAINED_REGISTRATION_plugin_add.detour().unwrap().disable().unwrap();
         assert_eq!(call(7), 10);
         assert!(!unchained_macros_core::detour_is_enabled("plugin_add"));
         assert!(unchained_macros_core::detour_is_initialized("plugin_add"));
         assert_eq!(Native::add(7), 10);
-        assert_eq!(
-            Native::__UNCHAINED_TARGET_add.binding().address(),
-            original_address
-        );
+        assert_eq!(Native::__UNCHAINED_TARGET_add.binding().address(), original_address);
         __UNCHAINED_REGISTRATION_plugin_borrow
-            .detour().unwrap()
+            .detour()
+            .unwrap()
             .disable()
             .unwrap();
         __UNCHAINED_REGISTRATION_plugin_storage
-            .detour().unwrap()
+            .detour()
+            .unwrap()
             .disable()
             .unwrap();
         __UNCHAINED_REGISTRATION_plugin_zero
-            .detour().unwrap()
+            .detour()
+            .unwrap()
             .disable()
             .unwrap();
         __UNCHAINED_REGISTRATION_plugin_request
-            .detour().unwrap()
+            .detour()
+            .unwrap()
             .disable()
             .unwrap();
     }

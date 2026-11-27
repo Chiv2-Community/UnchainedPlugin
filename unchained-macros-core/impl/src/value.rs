@@ -1,33 +1,52 @@
+use crate::common::resolver_path;
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::quote;
 use syn::{ItemFn, Path, ReturnType, Type};
-use crate::common::resolver_path;
 
 pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     use syn::parse::Parser;
     let args = syn::punctuated::Punctuated::<Path, syn::Token![,]>::parse_terminated.parse2(args)?;
     let mut args = args.into_iter();
-    let resolver = args.next().ok_or_else(|| syn::Error::new(Span::call_site(), "expected resolver path"))?;
+    let resolver = args
+        .next()
+        .ok_or_else(|| syn::Error::new(Span::call_site(), "expected resolver path"))?;
     let resolver = resolver_path(quote!(#resolver))?;
     let address = match args.next() {
         Some(mode) if mode.is_ident("Value") => false,
         Some(mode) if mode.is_ident("Address") => true,
         Some(mode) => return Err(syn::Error::new_spanned(mode, "expected Value or Address binding mode")),
-        None => return Err(syn::Error::new(Span::call_site(), "explicit Value or Address binding mode is required")),
+        None => {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "explicit Value or Address binding mode is required",
+            ))
+        }
     };
     if args.next().is_some() {
-        return Err(syn::Error::new(Span::call_site(), "unexpected native value binding arguments"));
+        return Err(syn::Error::new(
+            Span::call_site(),
+            "unexpected native value binding arguments",
+        ));
     }
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     if let Ok(declaration) = syn::parse2::<syn::ForeignItemStatic>(item.clone()) {
         if !matches!(declaration.mutability, syn::StaticMutability::None) {
-            return Err(syn::Error::new_spanned(declaration, "native global bindings must not be static mut"));
+            return Err(syn::Error::new_spanned(
+                declaration,
+                "native global bindings must not be static mut",
+            ));
         }
         let Type::Ptr(pointer) = declaration.ty.as_ref() else {
-            return Err(syn::Error::new_spanned(&declaration.ty, "static global bindings require a raw native pointer type"));
+            return Err(syn::Error::new_spanned(
+                &declaration.ty,
+                "static global bindings require a raw native pointer type",
+            ));
         };
         if pointer.mutability.is_none() {
-            return Err(syn::Error::new_spanned(pointer, "static native globals require *mut T; use an unsafe accessor for read-only values"));
+            return Err(syn::Error::new_spanned(
+                pointer,
+                "static native globals require *mut T; use an unsafe accessor for read-only values",
+            ));
         }
         let target = &pointer.elem;
         let name = &declaration.ident;
@@ -51,27 +70,49 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut function: ItemFn = syn::parse2(item)?;
     let signature = &function.sig;
     if signature.unsafety.is_none() {
-        return Err(syn::Error::new_spanned(signature, "native value bindings require unsafe fn"));
+        return Err(syn::Error::new_spanned(
+            signature,
+            "native value bindings require unsafe fn",
+        ));
     }
-    if !signature.inputs.is_empty() || !signature.generics.params.is_empty()
-        || signature.generics.where_clause.is_some() || signature.asyncness.is_some()
-        || signature.constness.is_some() || signature.abi.is_some() || signature.variadic.is_some()
+    if !signature.inputs.is_empty()
+        || !signature.generics.params.is_empty()
+        || signature.generics.where_clause.is_some()
+        || signature.asyncness.is_some()
+        || signature.constness.is_some()
+        || signature.abi.is_some()
+        || signature.variadic.is_some()
     {
-        return Err(syn::Error::new_spanned(signature, "native value bindings require a non-generic, non-async zero-argument Rust accessor"));
+        return Err(syn::Error::new_spanned(
+            signature,
+            "native value bindings require a non-generic, non-async zero-argument Rust accessor",
+        ));
     }
     if !function.block.stmts.is_empty() {
-        return Err(syn::Error::new_spanned(&function.block, "native binding bodies must be empty"));
+        return Err(syn::Error::new_spanned(
+            &function.block,
+            "native binding bodies must be empty",
+        ));
     }
     let ReturnType::Type(_, ty) = &signature.output else {
-        return Err(syn::Error::new_spanned(signature, "native value bindings require an explicit Copy value return type"));
+        return Err(syn::Error::new_spanned(
+            signature,
+            "native value bindings require an explicit Copy value return type",
+        ));
     };
     if matches!(ty.as_ref(), Type::Reference(_))
         || matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option" || segment.ident == "Result"))
     {
-        return Err(syn::Error::new_spanned(ty, "return the native Copy value directly, not a reference, Option or Result"));
+        return Err(syn::Error::new_spanned(
+            ty,
+            "return the native Copy value directly, not a reference, Option or Result",
+        ));
     }
     if address && !matches!(ty.as_ref(), Type::Ptr(_)) {
-        return Err(syn::Error::new_spanned(ty, "Address bindings require a raw pointer return type"));
+        return Err(syn::Error::new_spanned(
+            ty,
+            "Address bindings require a raw pointer return type",
+        ));
     }
     let binding = syn::Ident::new("__UNCHAINED_VALUE_BINDING", Span::mixed_site());
     let value = syn::Ident::new("__unchained_value", Span::mixed_site());
@@ -96,12 +137,15 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         #check_pointer
         #value
     }))?);
-    if !function.attrs.iter().any(|attribute| attribute.path().is_ident("inline")) {
+    if !function
+        .attrs
+        .iter()
+        .any(|attribute| attribute.path().is_ident("inline"))
+    {
         function.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
     Ok(quote!(#function))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -130,6 +174,9 @@ mod tests {
     #[test_case::test_case(quote!(unsafe fn value() -> Option<u32> {}), "Option or Result"; "optional value")]
     #[test_case::test_case(quote!(unsafe fn value() -> Result<u32, ()> {}), "Option or Result"; "fallible value")]
     fn rejects_unsupported_native_value_declarations(item: Tokens, message: &str) {
-        assert!(expand(quote!(NativeValue, Value), item).unwrap_err().to_string().contains(message));
+        assert!(expand(quote!(NativeValue, Value), item)
+            .unwrap_err()
+            .to_string()
+            .contains(message));
     }
 }

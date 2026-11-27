@@ -1,8 +1,11 @@
 //! Typed registrations indexed through backend-independent discovery records.
-use std::{any::{Any, TypeId}, borrow::Borrow};
-use crate::{AddressResolver, Resolver, SelectorSnapshot};
 use crate::resolver::ResolverInfo;
+use crate::{AddressResolver, Resolver, SelectorSnapshot};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    any::{Any, TypeId},
+    borrow::Borrow,
+};
 
 /// A replacement and the target whose callback contract it satisfies.
 /// Inventory is optional; attachment always uses the referenced target.
@@ -31,17 +34,34 @@ pub struct DetourRegistration<T: crate::SupportsDetour + 'static, State = Atomic
 }
 impl<T: crate::SupportsDetour> DetourRegistration<T> {
     pub const fn new(name: &'static str, target: &'static T, callback: T::Callback, condition: fn() -> bool) -> Self {
-        Self { name, target, callback, condition, initialized: AtomicBool::new(false) }
+        Self {
+            name,
+            target,
+            callback,
+            condition,
+            initialized: AtomicBool::new(false),
+        }
     }
-    pub const fn target(&self) -> &'static T { self.target }
+    pub const fn target(&self) -> &'static T {
+        self.target
+    }
 
     /// Name only the mutable storage in generated inventory statics; the compiler
     /// can then infer and promote the immutable target/callback pair (including HRTBs).
     /// # Safety
     /// `initialized` must be fresh, false, and reserved solely for this registration.
     #[doc(hidden)]
-    pub const unsafe fn with_inventory_state(self, initialized: &'static AtomicBool) -> DetourRegistration<T, &'static AtomicBool> {
-        DetourRegistration { name: self.name, target: self.target, callback: self.callback, condition: self.condition, initialized }
+    pub const unsafe fn with_inventory_state(
+        self,
+        initialized: &'static AtomicBool,
+    ) -> DetourRegistration<T, &'static AtomicBool> {
+        DetourRegistration {
+            name: self.name,
+            target: self.target,
+            callback: self.callback,
+            condition: self.condition,
+            initialized,
+        }
     }
 }
 /// Object-safe discovery/control surface. Callback types stay on the registration.
@@ -59,16 +79,28 @@ pub trait DetourInfo: Sync {
     fn detour(&self) -> Option<&'static retour::RawDetour>;
 }
 impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for DetourRegistration<T, S> {
-    fn name(&self) -> &'static str { self.name }
-    fn resolver(&self) -> &'static dyn ResolverInfo { self.target.resolver() }
-    fn condition(&self) -> bool { self.target.activation(true, self.condition) }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn resolver(&self) -> &'static dyn ResolverInfo {
+        self.target.resolver()
+    }
+    fn condition(&self) -> bool {
+        self.target.activation(true, self.condition)
+    }
     unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
-        if self.initialized() { return Err("Detour callback is already initialized".into()); }
-        unsafe { self.target.register_detour(self.callback, activate, self.condition)?; }
+        if self.initialized() {
+            return Err("Detour callback is already initialized".into());
+        }
+        unsafe {
+            self.target.register_detour(self.callback, activate, self.condition)?;
+        }
         self.initialized.borrow().store(true, Ordering::Release);
         Ok(())
     }
-    fn initialized(&self) -> bool { self.initialized.borrow().load(Ordering::Acquire) }
+    fn initialized(&self) -> bool {
+        self.initialized.borrow().load(Ordering::Acquire)
+    }
     fn detour(&self) -> Option<&'static retour::RawDetour> {
         self.initialized().then(|| self.target.physical_detour()).flatten()
     }
@@ -76,7 +108,9 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
         self.detour().is_some_and(|hook| hook.is_enabled()) && self.target.replacement_slot().get().is_some()
     }
     fn set_enabled(&self, enabled: bool) {
-        if self.initialized() { self.target.replacement_slot().set_enabled(enabled); }
+        if self.initialized() {
+            self.target.replacement_slot().set_enabled(enabled);
+        }
     }
 }
 
@@ -98,23 +132,39 @@ pub trait PatchInfo: Any + Send + Sync {
     fn validate_group(&self, group: &[&dyn PatchInfo]) -> Result<(), String>;
 }
 impl<R: AddressResolver> PatchInfo for PatchRegistration<R> {
-    fn name(&self) -> &'static str { self.name }
-    fn resolver(&self) -> &dyn ResolverInfo { self.resolver }
-    fn selector(&self) -> Option<fn() -> TypeId> { self.selector }
-    fn applies_to(&self, selection: &dyn Any) -> bool { (self.applies_to)(selection) }
-    fn validate_group(&self, group: &[&dyn PatchInfo]) -> Result<(), String> { (self.validate_group)(group) }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn resolver(&self) -> &dyn ResolverInfo {
+        self.resolver
+    }
+    fn selector(&self) -> Option<fn() -> TypeId> {
+        self.selector
+    }
+    fn applies_to(&self, selection: &dyn Any) -> bool {
+        (self.applies_to)(selection)
+    }
+    fn validate_group(&self, group: &[&dyn PatchInfo]) -> Result<(), String> {
+        (self.validate_group)(group)
+    }
 }
 impl<R: AddressResolver> PatchRegistration<R> {
-    pub fn supports(&self, snapshot: &SelectorSnapshot) -> bool { snapshot.supports_patch(self) }
+    pub fn supports(&self, snapshot: &SelectorSnapshot) -> bool {
+        snapshot.supports_patch(self)
+    }
 }
 
 inventory::collect!(&'static dyn DetourInfo);
 inventory::collect!(&'static dyn PatchInfo);
 
 pub fn detour_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static dyn DetourInfo> {
-    inventory::iter::<&'static dyn DetourInfo>.into_iter().copied()
+    inventory::iter::<&'static dyn DetourInfo>
+        .into_iter()
+        .copied()
         .filter(|entry| entry.resolver().backend() == TypeId::of::<R>())
 }
 pub fn patch_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static PatchRegistration<R>> {
-    inventory::iter::<&'static dyn PatchInfo>.into_iter().filter_map(|entry| (*entry as &dyn Any).downcast_ref())
+    inventory::iter::<&'static dyn PatchInfo>
+        .into_iter()
+        .filter_map(|entry| (*entry as &dyn Any).downcast_ref())
 }

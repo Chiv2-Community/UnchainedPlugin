@@ -1,8 +1,8 @@
 use binary_bloodhound::BinaryMatcher;
 use object::SectionKind;
 use patternsleuth::{
+    image::{pe::PEImage, Image, ImageType},
     Memory, NamedMemorySection,
-    image::{Image, ImageType, pe::PEImage},
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unchained_macros_core::{bind_resolved_func, bind_resolved_value};
@@ -11,18 +11,23 @@ use unchained_macros_patternsleuth::{define_custom_resolver, define_pattern_reso
 static DEPENDENCIES: AtomicUsize = AtomicUsize::new(0);
 static SIDE_EFFECTS: AtomicUsize = AtomicUsize::new(0);
 
-define_custom_resolver!(Dependency, BinaryMatcher::from_sync(|()| {
-    DEPENDENCIES.fetch_add(1, Ordering::SeqCst);
-    Ok(vec![0x1000])
-}).ensure_one());
+define_custom_resolver!(
+    Dependency,
+    BinaryMatcher::from_sync(|()| {
+        DEPENDENCIES.fetch_add(1, Ordering::SeqCst);
+        Ok(vec![0x1000])
+    })
+    .ensure_one()
+);
 
 define_pattern_resolver!(BoundFixture, ["AA BB"], |ctx, _patterns| {
     Ok(ctx.resolve(Dependency::resolver()).await?.0)
 });
 
-define_custom_resolver!(UnusedFixture, BinaryMatcher::from_sync(|()| {
-    panic!("unconsumed declarations must not run")
-}).ensure_one());
+define_custom_resolver!(
+    UnusedFixture,
+    BinaryMatcher::from_sync(|()| { panic!("unconsumed declarations must not run") }).ensure_one()
+);
 
 define_pattern_resolver!(SideEffectFixture, ["AA BB"], |ctx, _patterns| {
     SIDE_EFFECTS.fetch_add(1, Ordering::SeqCst);
@@ -75,9 +80,7 @@ mod upstream {
     });
     #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct ExternalFixture(pub u64);
-    patternsleuth::resolvers::impl_resolver_singleton!(all, ExternalFixture, |_ctx| async {
-        Ok(Self(0x3000))
-    });
+    patternsleuth::resolvers::impl_resolver_singleton!(all, ExternalFixture, |_ctx| async { Ok(Self(0x3000)) });
 }
 
 define_custom_resolver!(ExternalFixture, delegate upstream::ExternalFixture);
@@ -90,13 +93,27 @@ unsafe fn disabled() {}
 
 #[test]
 fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
-    let roots = unchained_macros_patternsleuth::startup_resolvers(&unchained_macros_core::SelectorSnapshot::default()).unwrap();
+    let roots =
+        unchained_macros_patternsleuth::startup_resolvers(&unchained_macros_core::SelectorSnapshot::default()).unwrap();
     let names: Vec<_> = roots.iter().map(|root| root.name).collect();
-    assert_eq!(names, ["BoundFixture", "ExternalFixture", "MethodResolver", "PatchFixture", "SideEffectFixture", "ValueFixture"]);
+    assert_eq!(
+        names,
+        [
+            "BoundFixture",
+            "ExternalFixture",
+            "MethodResolver",
+            "PatchFixture",
+            "SideEffectFixture",
+            "ValueFixture"
+        ]
+    );
     let image = Image::from_memory(
         0x1000,
         Memory::from_sections(vec![NamedMemorySection::new(
-            ".text".into(), 0x1000, SectionKind::Text, vec![0xAA, 0xBB],
+            ".text".into(),
+            0x1000,
+            SectionKind::Text,
+            vec![0xAA, 0xBB],
         )]),
         ImageType::PEImage(PEImage {
             exception_directory_range: 0..0,
@@ -108,5 +125,13 @@ fn only_consumers_and_explicit_roots_run_with_shared_transitive_dependencies() {
     assert_eq!(DEPENDENCIES.load(Ordering::SeqCst), 1);
     assert_eq!(SIDE_EFFECTS.load(Ordering::SeqCst), 1);
     // Keep the synthetic binding declarations reachable without invoking native code.
-    let _ = (bound, alias, value, request, external, MethodFixture::call, MethodFixture::request);
+    let _ = (
+        bound,
+        alias,
+        value,
+        request,
+        external,
+        MethodFixture::call,
+        MethodFixture::request,
+    );
 }

@@ -1,12 +1,14 @@
+use crate::{
+    common::{cfg_attributes, fresh_local, resolver_path},
+    docs::attach_native_documentation,
+    signature::{
+        concrete_signature, consume_native_parameter_metadata, native_type, normalized_mutability, parameter_type,
+        validate_binding,
+    },
+};
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Path, Type};
-use crate::{
-    common::{cfg_attributes, resolver_path, fresh_local},
-    docs::attach_native_documentation,
-    signature::{validate_binding, consume_native_parameter_metadata, concrete_signature,
-        native_type, normalized_mutability, parameter_type},
-};
 
 struct BindingResolver {
     backend: Tokens,
@@ -16,7 +18,9 @@ struct BindingResolver {
 
 impl BindingResolver {
     fn documentation_key(&self, fallback: &str) -> String {
-        let name = self.declaration.as_ref()
+        let name = self
+            .declaration
+            .as_ref()
             .map(|path| path.segments.last().unwrap().ident.to_string())
             .unwrap_or_else(|| fallback.to_owned());
         format!("binding-{name}")
@@ -36,7 +40,11 @@ impl syn::parse::Parse for BindingResolver {
         } else {
             input.parse::<syn::Token![,]>()?;
             let descriptor: syn::Expr = input.parse()?;
-            Ok(Self { backend: quote!(#path), descriptor: quote!(#descriptor), declaration: None })
+            Ok(Self {
+                backend: quote!(#path),
+                descriptor: quote!(#descriptor),
+                declaration: None,
+            })
         }
     }
 }
@@ -48,7 +56,10 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let binding = format_ident!("__UNCHAINED_BINDING", span = Span::mixed_site());
     let storage = binding_storage(&binding, &resolver, &function.sig.ident.to_string(), &[]);
     let documentation = syn::LitStr::new(
-        &format!("Native binding `{}`. Direct calls invoke the original implementation, bypassing detours.", function.sig.ident),
+        &format!(
+            "Native binding `{}`. Direct calls invoke the original implementation, bypassing detours.",
+            function.sig.ident
+        ),
         function.sig.ident.span(),
     );
     let key = resolver.documentation_key(&function.sig.ident.to_string());
@@ -57,7 +68,10 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 }
 
 fn binding_storage(
-    name: &syn::Ident, resolver: &BindingResolver, target_name: &str, attributes: &[syn::Attribute],
+    name: &syn::Ident,
+    resolver: &BindingResolver,
+    target_name: &str,
+    attributes: &[syn::Attribute],
 ) -> Tokens {
     let backend = &resolver.backend;
     let descriptor = &resolver.descriptor;
@@ -78,24 +92,35 @@ fn binding_storage(
 }
 
 fn call_wrapper(
-    function: &ItemFn, resolver: &BindingResolver, binding: &syn::Ident, setup: Tokens, documentation: &syn::LitStr,
+    function: &ItemFn,
+    resolver: &BindingResolver,
+    binding: &syn::Ident,
+    setup: Tokens,
+    documentation: &syn::LitStr,
     documentation_key: &str,
 ) -> syn::Result<ItemFn> {
-    let resolver_name = resolver.declaration.as_ref().map(|path| path.segments.last().unwrap().ident.to_string())
+    let resolver_name = resolver
+        .declaration
+        .as_ref()
+        .map(|path| path.segments.last().unwrap().ident.to_string())
         .unwrap_or_else(|| function.sig.ident.to_string());
     let mut expanded = function.clone();
     consume_native_parameter_metadata(&mut expanded.sig)?;
     let signature = &expanded.sig;
-    let (arguments, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|argument| {
-        match argument {
+    let (arguments, types): (Vec<_>, Vec<_>) = signature
+        .inputs
+        .iter()
+        .map(|argument| match argument {
             FnArg::Receiver(receiver) => (quote!(self), &receiver.ty),
             FnArg::Typed(argument) => {
-                let Pat::Ident(name) = argument.pat.as_ref() else { unreachable!() };
+                let Pat::Ident(name) = argument.pat.as_ref() else {
+                    unreachable!()
+                };
                 let name = &name.ident;
                 (quote!(#name), &argument.ty)
             }
-        }
-    }).unzip();
+        })
+        .unzip();
     let output = &signature.output;
     let native = fresh_local(signature, "native_call");
     expanded.block = Box::new(syn::parse2(quote!({
@@ -106,18 +131,18 @@ fn call_wrapper(
         };
         unsafe { #native(#(#arguments),*) }
     }))?);
-    if !expanded.attrs.iter().any(|attribute| attribute.path().is_ident("inline")) {
+    if !expanded
+        .attrs
+        .iter()
+        .any(|attribute| attribute.path().is_ident("inline"))
+    {
         expanded.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
     attach_native_documentation(&mut expanded.attrs, documentation_key, documentation);
     Ok(expanded)
 }
 
-fn binding_documentation(
-    function: &ItemFn,
-    self_ty: &Type,
-    resolver: &BindingResolver,
-) -> syn::LitStr {
+fn binding_documentation(function: &ItemFn, self_ty: &Type, resolver: &BindingResolver) -> syn::LitStr {
     let name = &function.sig.ident;
     let native_name = format!("{}::{name}", self_ty.to_token_stream().to_string().replace(' ', ""));
     let mut documentation = format!("Native binding to [`{native_name}`](Self::{name}).");
@@ -150,7 +175,11 @@ pub(crate) fn expand_method(
     let target_descriptor = format_ident!("__UNCHAINED_TARGET_{}", name, span = Span::mixed_site());
     let vis = &function.vis;
     let cfg: Vec<_> = cfg_attributes(&function.attrs).collect();
-    let target_name = format!("{}::{}", self_ty.to_token_stream().to_string().replace(' ', ""), function.sig.ident);
+    let target_name = format!(
+        "{}::{}",
+        self_ty.to_token_stream().to_string().replace(' ', ""),
+        function.sig.ident
+    );
     // Match the native-doc generator's owner/member key, independent of the backend.
     let owner = match self_ty {
         Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
@@ -183,23 +212,33 @@ pub(crate) fn expand_method(
             #[allow(non_upper_case_globals)]
             #vis const #target_descriptor: &'static #target_type = &#target_storage;
         },
-    ].into_iter().map(syn::parse2).collect::<syn::Result<Vec<_>>>()?;
+    ]
+    .into_iter()
+    .map(syn::parse2)
+    .collect::<syn::Result<Vec<_>>>()?;
     Ok((expanded, descriptors, registration))
 }
 
 fn native_dispatch(
-    signature: &syn::Signature, binding: &syn::Ident, resolver: &BindingResolver, attrs: &[syn::Attribute],
+    signature: &syn::Signature,
+    binding: &syn::Ident,
+    resolver: &BindingResolver,
+    attrs: &[syn::Attribute],
 ) -> syn::Result<(Tokens, syn::Ident, Tokens)> {
     let name = &signature.ident;
     let target = format_ident!("__UNCHAINED_NATIVE_TARGET_{}", name);
     let dispatch = format_ident!("__unchained_dispatch_{}", name);
     let backend = &resolver.backend;
     let cfg: Vec<_> = cfg_attributes(attrs).collect();
-    let (names, types): (Vec<_>, Vec<_>) = signature.inputs.iter().map(|input| {
-        let FnArg::Typed(arg) = input else { unreachable!() };
-        let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
-        (&pat.ident, &arg.ty)
-    }).unzip();
+    let (names, types): (Vec<_>, Vec<_>) = signature
+        .inputs
+        .iter()
+        .map(|input| {
+            let FnArg::Typed(arg) = input else { unreachable!() };
+            let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
+            (&pat.ident, &arg.ty)
+        })
+        .unzip();
     let lifetimes: Vec<_> = signature.generics.lifetimes().map(|p| &p.lifetime).collect();
     let binder = (!lifetimes.is_empty()).then(|| quote!(for<#(#lifetimes),*>));
     let result: Type = match &signature.output {
@@ -248,7 +287,6 @@ fn native_dispatch(
     Ok((descriptor_type, target, setup))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,8 +308,20 @@ mod tests {
 
     #[test]
     fn rejects_generic_resolver_paths() {
-        assert!(expand(quote!(Release<u8>), quote!(unsafe fn release() {})).is_err());
-        assert!(crate::value::expand(quote!(NativeValue<u8>, Value), quote!(unsafe fn value() -> u32 {})).is_err());
+        assert!(expand(
+            quote!(Release<u8>),
+            quote!(
+                unsafe fn release() {}
+            )
+        )
+        .is_err());
+        assert!(crate::value::expand(
+            quote!(NativeValue<u8>, Value),
+            quote!(
+                unsafe fn value() -> u32 {}
+            )
+        )
+        .is_err());
     }
 
     #[test]
@@ -283,11 +333,12 @@ mod tests {
                 Result: &'a mut FString,
             ) -> &'a mut FString {}
         };
-        let (binding, descriptors, _) = expand_method(
-            quote!(self::Native__Call), &function, &syn::parse_quote!(Native),
-        ).unwrap();
+        let (binding, descriptors, _) =
+            expand_method(quote!(self::Native__Call), &function, &syn::parse_quote!(Native)).unwrap();
         let docs = documentation(&binding.attrs);
-        assert!(descriptors.iter().all(|descriptor| documentation(&descriptor.attrs).is_empty()));
+        assert!(descriptors
+            .iter()
+            .all(|descriptor| documentation(&descriptor.attrs).is_empty()));
         assert!(docs.starts_with("Native binding to [`Native::Call`](Self::Call)."));
         assert!(docs.contains("](Self::Call).\nResolved by "));
         assert!(docs.contains("Resolved by [`Native__Call`](self::Native__Call)."));
@@ -302,9 +353,7 @@ mod tests {
         let function = syn::parse_quote! {
             pub unsafe fn Call(value: i32) -> i32 {}
         };
-        let (binding, _, _) = expand_method(
-            quote!(OtherBackend__Call), &function, &syn::parse_quote!(Client),
-        ).unwrap();
+        let (binding, _, _) = expand_method(quote!(OtherBackend__Call), &function, &syn::parse_quote!(Client)).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(docs.contains("Resolved by [`OtherBackend__Call`](OtherBackend__Call)."));
     }
@@ -316,8 +365,11 @@ mod tests {
             pub unsafe fn Call<'a>(value: &'a mut i32) -> &'a mut i32 {}
         };
         let (binding, metadata, storage) = expand_method(
-            quote!(backend::Native, &DESCRIPTOR), &function, &syn::parse_quote!(Client),
-        ).unwrap();
+            quote!(backend::Native, &DESCRIPTOR),
+            &function,
+            &syn::parse_quote!(Client),
+        )
+        .unwrap();
         let docs = documentation(&binding.attrs);
         assert!(docs.starts_with("Native binding to [`Client::Call`](Self::Call)."));
         assert!(docs.contains("Keep the native safety contract."));
@@ -330,6 +382,12 @@ mod tests {
         assert!(expanded.contains("& DESCRIPTOR"));
         assert!(!expanded.contains("ResolverDeclaration"));
         assert!(!expanded.contains("ResolverSelection"));
-        assert!(expand(quote!(backend::Native, &DESCRIPTOR), quote!(unsafe fn call() {})).is_ok());
+        assert!(expand(
+            quote!(backend::Native, &DESCRIPTOR),
+            quote!(
+                unsafe fn call() {}
+            )
+        )
+        .is_ok());
     }
 }

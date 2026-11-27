@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse::{Parse, ParseStream}, Ident, Path, Token};
+use syn::{
+    parse::{Parse, ParseStream},
+    Ident, Path, Token,
+};
 
 enum Patterns {
     List(TokenStream),
@@ -23,7 +26,9 @@ impl Parse for Declaration {
             let mode: Ident = input.parse()?;
             input.parse::<Token![,]>()?;
             mode
-        } else { syn::parse_quote!(Simple) };
+        } else {
+            syn::parse_quote!(Simple)
+        };
         let patterns = if input.peek(syn::token::Bracket) {
             let content;
             syn::bracketed!(content in input);
@@ -51,21 +56,33 @@ impl Parse for Declaration {
                     quote!(None)
                 };
                 entries.push((key, value));
-                if !content.is_empty() { content.parse::<Token![,]>()?; }
+                if !content.is_empty() {
+                    content.parse::<Token![,]>()?;
+                }
             }
-            let mut selector = entries.iter().find(|(key, _)| key.segments.len() > 1)
+            let mut selector = entries
+                .iter()
+                .find(|(key, _)| key.segments.len() > 1)
                 .map(|(key, _)| key.clone())
                 .ok_or_else(|| input.error("qualify a dictionary key with its selector enum, e.g. Key::Variant"))?;
             selector.segments.pop();
             selector.segments.pop_punct();
-            if selector.segments.iter().any(|segment| !matches!(segment.arguments, syn::PathArguments::None)) {
+            if selector
+                .segments
+                .iter()
+                .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
+            {
                 return Err(syn::Error::new_spanned(selector, "selector enums must be non-generic"));
             }
             Patterns::Dictionary(selector, entries)
         };
-        let body = if input.is_empty() { None } else {
+        let body = if input.is_empty() {
+            None
+        } else {
             input.parse::<Token![,]>()?;
-            if input.is_empty() { None } else {
+            if input.is_empty() {
+                None
+            } else {
                 if explicit_mode {
                     return Err(input.error("inline resolver bodies do not take a scan mode"));
                 }
@@ -75,24 +92,41 @@ impl Parse for Declaration {
                 let patterns = input.parse()?;
                 input.parse::<Token![|]>()?;
                 let body = input.parse()?;
-                if input.peek(Token![,]) { input.parse::<Token![,]>()?; }
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
                 Some((ctx, patterns, body))
             }
         };
-        Ok(Self { name, mode, patterns, body })
+        Ok(Self {
+            name,
+            mode,
+            patterns,
+            body,
+        })
     }
 }
 
 pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
-    let Declaration { name, mode, patterns, body } = syn::parse2(input)?;
+    let Declaration {
+        name,
+        mode,
+        patterns,
+        body,
+    } = syn::parse2(input)?;
     Ok(match (patterns, body) {
-        (Patterns::List(values), None) => quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, [#values]);),
-        (Patterns::List(values), Some((ctx, patterns, body))) =>
-            quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);),
+        (Patterns::List(values), None) => {
+            quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, [#values]);)
+        }
+        (Patterns::List(values), Some((ctx, patterns, body))) => {
+            quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);)
+        }
         (Patterns::Dictionary(selector, entries), body) => {
             let (keys, values): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
             match body {
-                None => quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });),
+                None => {
+                    quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });)
+                }
                 Some((ctx, patterns, body)) => quote!(
                     ::unchained_macros_patternsleuth::__pattern_resolver!(#name, #selector, { #(#keys: #values),* }, |#ctx, #patterns| #body);
                 ),
@@ -114,5 +148,7 @@ mod tests {
     #[test_case::test_case(quote!(Target, { Key::First: false }); "invalid entry")]
     #[test_case::test_case(quote!(Target, {}); "empty dictionary")]
     #[test_case::test_case(quote!(Target, { Key::First: [] }); "empty entry")]
-    fn rejects_invalid_resolvers(input: TokenStream) { assert!(expand(input).is_err()); }
+    fn rejects_invalid_resolvers(input: TokenStream) {
+        assert!(expand(input).is_err());
+    }
 }

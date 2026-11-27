@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  format-macros:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
+        with:
+          components: rustfmt
+          cache: false
+      - run: bash scripts/fmt-macros.sh --check
+
   backend-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15

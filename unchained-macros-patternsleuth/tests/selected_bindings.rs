@@ -1,11 +1,19 @@
 use std::collections::HashMap;
-use unchained_macros_core::{bind_resolved_func, bind_resolved_value, function_is_bound_for, initialize_bindings_for, initialize_value_bindings_where};
+use unchained_macros_core::{
+    bind_resolved_func, bind_resolved_value, function_is_bound_for, initialize_bindings_for,
+    initialize_value_bindings_where,
+};
 use unchained_macros_patternsleuth::{define_pattern_resolver, PatternsleuthResolver, ScanContext};
 
 #[unchained_macros_core::resolver_selection_key(require = [Allow, Deny])]
-enum Mode { Allow, Deny }
+enum Mode {
+    Allow,
+    Deny,
+}
 impl unchained_macros_core::ResolverSelector for Mode {
-    fn current() -> Self { Self::Allow }
+    fn current() -> Self {
+        Self::Allow
+    }
 }
 
 define_pattern_resolver!(Enabled, {
@@ -30,7 +38,9 @@ unsafe fn enabled_value() -> u32 {}
 #[bind_resolved_value(DisabledValue, Value)]
 unsafe fn disabled_value() -> u32 {}
 
-unsafe extern "C" fn fixture() -> u32 { 42 }
+unsafe extern "C" fn fixture() -> u32 {
+    42
+}
 static VALUE: u32 = 7;
 
 #[test_case::test_case(false; "missing disabled offsets")]

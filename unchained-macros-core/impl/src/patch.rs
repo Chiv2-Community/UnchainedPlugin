@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse::{Parse, ParseStream}, Path, Token};
+use syn::{
+    parse::{Parse, ParseStream},
+    Path, Token,
+};
 
 struct Arguments {
     resolver: Path,
@@ -10,16 +13,27 @@ struct Arguments {
 impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let resolver: Path = input.parse()?;
-        if resolver.segments.iter().any(|segment| !matches!(segment.arguments, syn::PathArguments::None)) {
-            return Err(syn::Error::new_spanned(resolver, "patch targets must be non-generic resolver types"));
+        if resolver
+            .segments
+            .iter()
+            .any(|segment| !matches!(segment.arguments, syn::PathArguments::None))
+        {
+            return Err(syn::Error::new_spanned(
+                resolver,
+                "patch targets must be non-generic resolver types",
+            ));
         }
         let selection = if input.is_empty() {
             None
         } else {
             input.parse::<Token![,]>()?;
-            if input.is_empty() { None } else {
+            if input.is_empty() {
+                None
+            } else {
                 let selection = input.parse()?;
-                if input.peek(Token![,]) { input.parse::<Token![,]>()?; }
+                if input.peek(Token![,]) {
+                    input.parse::<Token![,]>()?;
+                }
                 Some(selection)
             }
         };
@@ -33,10 +47,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     let (name, attributes, factory) = match &declaration {
         syn::Item::Fn(function) => {
             let signature = &function.sig;
-            if signature.asyncness.is_some() || signature.constness.is_some()
-                || signature.unsafety.is_some() || signature.abi.is_some()
-                || !signature.generics.params.is_empty() || signature.generics.where_clause.is_some()
-                || signature.variadic.is_some() || signature.inputs.len() != 1
+            if signature.asyncness.is_some()
+                || signature.constness.is_some()
+                || signature.unsafety.is_some()
+                || signature.abi.is_some()
+                || !signature.generics.params.is_empty()
+                || signature.generics.where_clause.is_some()
+                || signature.variadic.is_some()
+                || signature.inputs.len() != 1
                 || matches!(signature.inputs.first(), Some(syn::FnArg::Receiver(_)))
             {
                 return Err(syn::Error::new_spanned(signature,
@@ -47,25 +65,42 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         }
         syn::Item::Static(value) => {
             if matches!(value.mutability, syn::StaticMutability::Mut(_)) {
-                return Err(syn::Error::new_spanned(value, "registered patches must be immutable statics"));
+                return Err(syn::Error::new_spanned(
+                    value,
+                    "registered patches must be immutable statics",
+                ));
             }
             let name = &value.ident;
             (name, &value.attrs, quote!(|_| #name.clone()))
         }
-        _ => return Err(syn::Error::new_spanned(declaration, "register_patch requires a function or immutable Patch static")),
+        _ => {
+            return Err(syn::Error::new_spanned(
+                declaration,
+                "register_patch requires a function or immutable Patch static",
+            ))
+        }
     };
-    if attributes.iter().any(|attribute| attribute.path().segments.last()
-        .is_some_and(|segment| segment.ident == "register_patch"))
-    {
-        return Err(syn::Error::new_spanned(&declaration, "register each patch item only once"));
+    if attributes.iter().any(|attribute| {
+        attribute
+            .path()
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "register_patch")
+    }) {
+        return Err(syn::Error::new_spanned(
+            &declaration,
+            "register each patch item only once",
+        ));
     }
     let cfg: Vec<_> = crate::common::cfg_attributes(attributes).collect();
     let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
-            quote!(const _: () = assert!(
-                <#resolver as ::unchained_macros_core::ResolverDeclaration>::UNRESTRICTED,
-                "universal patch targets a restricted resolver; declare its selection explicitly"
-            );),
+            quote!(
+                const _: () = assert!(
+                    <#resolver as ::unchained_macros_core::ResolverDeclaration>::UNRESTRICTED,
+                    "universal patch targets a restricted resolver; declare its selection explicitly"
+                );
+            ),
             quote!(),
             quote!(::core::option::Option::None),
             quote!(|_| true),

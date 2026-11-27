@@ -1,6 +1,6 @@
-use unchained_macros_kismet::{kismet_runtime_bindings, FunctionMetadata, Reflection, KismetContext, ExecEnvironment};
-use unchained_macros_kismet::schema::*;
 use unchained_macros_core::AddressResolver;
+use unchained_macros_kismet::schema::*;
+use unchained_macros_kismet::{kismet_runtime_bindings, ExecEnvironment, FunctionMetadata, KismetContext, Reflection};
 
 struct Library;
 struct FString;
@@ -18,8 +18,16 @@ impl Library {
     pub unsafe fn Predicate(context: *mut UObject, flag: std::primitive::bool) -> bool {}
     #[dummy]
     pub unsafe fn NoArgs() {}
-    exec_access!(__UNCHAINED_EXEC_Library_Predicate_RESOLVER, __UNCHAINED_EXEC_Library_Predicate_BINDING, __UNCHAINED_EXEC_Library_Predicate_dispatch);
-    exec_access!(__UNCHAINED_EXEC_Library_NoArgs_RESOLVER, __UNCHAINED_EXEC_Library_NoArgs_BINDING, __UNCHAINED_EXEC_Library_NoArgs_dispatch);
+    exec_access!(
+        __UNCHAINED_EXEC_Library_Predicate_RESOLVER,
+        __UNCHAINED_EXEC_Library_Predicate_BINDING,
+        __UNCHAINED_EXEC_Library_Predicate_dispatch
+    );
+    exec_access!(
+        __UNCHAINED_EXEC_Library_NoArgs_RESOLVER,
+        __UNCHAINED_EXEC_Library_NoArgs_BINDING,
+        __UNCHAINED_EXEC_Library_NoArgs_dispatch
+    );
 }
 
 #[unchained_macros_core::bind_func_entry_listener(Library::PrintWarning)]
@@ -28,17 +36,29 @@ unsafe fn warning(_message: &FString) {}
 #[unchained_macros_core::bind_func_entry_listener(Library::Predicate)]
 unsafe fn predicate(_context: &*mut UObject, _flag: &bool) {}
 
-struct Fixture { shared: bool }
+struct Fixture {
+    shared: bool,
+}
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-        Ok(FunctionMetadata { is_native: true, exec_thunk: 123, num_parms: 1, return_value_offset: u16::MAX })
+        Ok(FunctionMetadata {
+            is_native: true,
+            exec_thunk: 123,
+            num_parms: 1,
+            return_value_offset: u16::MAX,
+        })
     }
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
-            function_identity: 42, unique_exec_thunk: !self.shared,
+            function_identity: 42,
+            unique_exec_thunk: !self.shared,
             parameters: vec![PropertyMetadata {
-                identity: 99, kind: PropertyKind::String, size: std::mem::size_of::<FString>(),
-                array_dim: 1, flags: PARM | CONST_PARM, offset: 0,
+                identity: 99,
+                kind: PropertyKind::String,
+                size: std::mem::size_of::<FString>(),
+                array_dim: 1,
+                flags: PARM | CONST_PARM,
+                offset: 0,
             }],
         })
     }
@@ -46,24 +66,58 @@ unsafe impl Reflection for Fixture {
 
 #[test]
 fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
-    let context = unsafe { KismetContext::new(Fixture { shared: false }, ExecEnvironment {
-        module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
-    }) };
-    let resolver = unsafe { unchained_macros_kismet::KismetExecResolver::new(
-        "/Script/Fixture.Library", "PrintWarning", &[Parameter { kind: "StrProperty", size: std::mem::size_of::<FString>() }], None,
-    ) };
+    let context = unsafe {
+        KismetContext::new(
+            Fixture { shared: false },
+            ExecEnvironment {
+                module_base: 1,
+                frame_step: 2,
+                frame_step_explicit: 3,
+                frame_code_offset: 0,
+            },
+        )
+    };
+    let resolver = unsafe {
+        unchained_macros_kismet::KismetExecResolver::new(
+            "/Script/Fixture.Library",
+            "PrintWarning",
+            &[Parameter {
+                kind: "StrProperty",
+                size: std::mem::size_of::<FString>(),
+            }],
+            None,
+        )
+    };
     assert_eq!(unsafe { resolver.resolve(&context) }.unwrap().get(), 123);
 }
 
 #[test]
 fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
-    let context = unsafe { KismetContext::new(Fixture { shared: true }, ExecEnvironment {
-        module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
-    }) };
-    let resolver = unsafe { unchained_macros_kismet::KismetExecResolver::new(
-        "/Script/Fixture.Library", "PrintWarning", &[Parameter { kind: "StrProperty", size: std::mem::size_of::<FString>() }], None,
-    ) };
-    assert!(unsafe { resolver.resolve(&context) }.unwrap_err().contains("Shared exec wrappers"));
+    let context = unsafe {
+        KismetContext::new(
+            Fixture { shared: true },
+            ExecEnvironment {
+                module_base: 1,
+                frame_step: 2,
+                frame_step_explicit: 3,
+                frame_code_offset: 0,
+            },
+        )
+    };
+    let resolver = unsafe {
+        unchained_macros_kismet::KismetExecResolver::new(
+            "/Script/Fixture.Library",
+            "PrintWarning",
+            &[Parameter {
+                kind: "StrProperty",
+                size: std::mem::size_of::<FString>(),
+            }],
+            None,
+        )
+    };
+    assert!(unsafe { resolver.resolve(&context) }
+        .unwrap_err()
+        .contains("Shared exec wrappers"));
 }
 
 #[derive(Default)]
@@ -75,23 +129,37 @@ struct Frame {
 thread_local! {
     static RUNTIME_EVENTS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
 }
-fn event(value: &'static str) { RUNTIME_EVENTS.with(|events| events.borrow_mut().push(value)); }
+fn event(value: &'static str) {
+    RUNTIME_EVENTS.with(|events| events.borrow_mut().push(value));
+}
 unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
     assert_eq!(*context as usize, 0x123);
     assert!(*flag);
     event("entry");
-    unsafe { invoke_reentrant_predicate(); }
+    unsafe {
+        invoke_reentrant_predicate();
+    }
 }
 unsafe fn invoke_reentrant_predicate() {
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
-        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
-            (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
+        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
+            std::ptr::null_mut(),
+            (&mut frame as *mut Frame).cast(),
+            (&mut result as *mut u8).cast(),
+        );
     }
-    assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
+    assert_eq!(
+        (frame.evaluations, frame.original_calls, frame.cleanup, result),
+        (2, 1, 1, 1)
+    );
 }
-unsafe extern "system" fn original_exec(_: *mut std::ffi::c_void, frame: *mut std::ffi::c_void, result: *mut std::ffi::c_void) {
+unsafe extern "system" fn original_exec(
+    _: *mut std::ffi::c_void,
+    frame: *mut std::ffi::c_void,
+    result: *mut std::ffi::c_void,
+) {
     use unchained_macros_kismet::observation::observe_step;
     let state = unsafe { &mut *frame.cast::<Frame>() };
     state.original_calls += 1;
@@ -115,16 +183,42 @@ unsafe extern "system" fn original_exec(_: *mut std::ffi::c_void, frame: *mut st
 struct RuntimeReflection;
 unsafe impl Reflection for RuntimeReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-        Ok(FunctionMetadata { is_native: true, exec_thunk: original_exec as *const () as usize,
-            num_parms: 3, return_value_offset: 16 })
+        Ok(FunctionMetadata {
+            is_native: true,
+            exec_thunk: original_exec as *const () as usize,
+            num_parms: 3,
+            return_value_offset: 16,
+        })
     }
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
-            function_identity: 42, unique_exec_thunk: true,
+            function_identity: 42,
+            unique_exec_thunk: true,
             parameters: vec![
-                PropertyMetadata { identity: 11, kind: PropertyKind::Object, size: 8, array_dim: 1, flags: PARM, offset: 0 },
-                PropertyMetadata { identity: 12, kind: PropertyKind::Bool, size: 1, array_dim: 1, flags: PARM, offset: 8 },
-                PropertyMetadata { identity: 13, kind: PropertyKind::Bool, size: 1, array_dim: 1, flags: PARM | RETURN_PARM, offset: 16 },
+                PropertyMetadata {
+                    identity: 11,
+                    kind: PropertyKind::Object,
+                    size: 8,
+                    array_dim: 1,
+                    flags: PARM,
+                    offset: 0,
+                },
+                PropertyMetadata {
+                    identity: 12,
+                    kind: PropertyKind::Bool,
+                    size: 1,
+                    array_dim: 1,
+                    flags: PARM,
+                    offset: 8,
+                },
+                PropertyMetadata {
+                    identity: 13,
+                    kind: PropertyKind::Bool,
+                    size: 1,
+                    array_dim: 1,
+                    flags: PARM | RETURN_PARM,
+                    offset: 16,
+                },
             ],
         })
     }
@@ -132,31 +226,62 @@ unsafe impl Reflection for RuntimeReflection {
 
 #[test]
 fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
-    let context = unsafe { KismetContext::new(RuntimeReflection, ExecEnvironment {
-        module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
-    }) };
-    let address = unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER.implementation.resolve(&context) }.unwrap();
+    let context = unsafe {
+        KismetContext::new(
+            RuntimeReflection,
+            ExecEnvironment {
+                module_base: 1,
+                frame_step: 2,
+                frame_step_explicit: 3,
+                frame_code_offset: 0,
+            },
+        )
+    };
+    let address = unsafe {
+        Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER
+            .implementation
+            .resolve(&context)
+    }
+    .unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_Predicate_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_TARGET_Predicate.entry.register(runtime_entry, true, || true) }.unwrap();
+    unsafe {
+        Library::__UNCHAINED_TARGET_Predicate
+            .entry
+            .register(runtime_entry, true, || true)
+    }
+    .unwrap();
     let mut frame = Frame::default();
     let mut result = 0u8;
     unsafe {
-        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
-            (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
+        (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
+            std::ptr::null_mut(),
+            (&mut frame as *mut Frame).cast(),
+            (&mut result as *mut u8).cast(),
+        );
     }
-    assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
-    RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(),
-        ["entry", "body", "cleanup", "body", "cleanup"]));
+    assert_eq!(
+        (frame.evaluations, frame.original_calls, frame.cleanup, result),
+        (2, 1, 1, 1)
+    );
+    RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body", "cleanup", "body", "cleanup"]));
     std::thread::spawn(|| {
         let mut frame = Frame::default();
         let mut result = 0u8;
         unsafe {
-            (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(std::ptr::null_mut(),
-                (&mut frame as *mut Frame).cast(), (&mut result as *mut u8).cast());
+            (Library::__UNCHAINED_EXEC_Library_Predicate_dispatch)(
+                std::ptr::null_mut(),
+                (&mut frame as *mut Frame).cast(),
+                (&mut result as *mut u8).cast(),
+            );
         }
-        assert_eq!((frame.evaluations, frame.original_calls, frame.cleanup, result), (2, 1, 1, 1));
+        assert_eq!(
+            (frame.evaluations, frame.original_calls, frame.cleanup, result),
+            (2, 1, 1, 1)
+        );
         RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(), ["body", "cleanup"]));
-    }).join().unwrap();
+    })
+    .join()
+    .unwrap();
 }
 
 thread_local! {
@@ -166,42 +291,86 @@ thread_local! {
 unsafe fn invoke_noargs() {
     unsafe {
         (Library::__UNCHAINED_EXEC_Library_NoArgs_dispatch)(
-            std::ptr::null_mut(), std::ptr::dangling_mut(), std::ptr::null_mut());
+            std::ptr::null_mut(),
+            std::ptr::dangling_mut(),
+            std::ptr::null_mut(),
+        );
     }
 }
 unsafe fn noargs_reentrant_entry() {
     NOARGS_ENTRIES.with(|count| count.set(count.get() + 1));
-    unsafe { invoke_noargs(); } // Unconditional: the descriptor must stop recursion.
+    unsafe {
+        invoke_noargs();
+    } // Unconditional: the descriptor must stop recursion.
 }
-unsafe extern "system" fn noargs_original(_: *mut std::ffi::c_void, _: *mut std::ffi::c_void, result: *mut std::ffi::c_void) {
-    assert!(result.is_null(), "Original receives untouched native void result storage");
+unsafe extern "system" fn noargs_original(
+    _: *mut std::ffi::c_void,
+    _: *mut std::ffi::c_void,
+    result: *mut std::ffi::c_void,
+) {
+    assert!(
+        result.is_null(),
+        "Original receives untouched native void result storage"
+    );
     NOARGS_ORIGINALS.with(|count| count.set(count.get() + 1));
 }
 struct NoArgsReflection;
 unsafe impl Reflection for NoArgsReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
-        Ok(FunctionMetadata { is_native: true, exec_thunk: noargs_original as *const () as usize,
-            num_parms: 0, return_value_offset: u16::MAX })
+        Ok(FunctionMetadata {
+            is_native: true,
+            exec_thunk: noargs_original as *const () as usize,
+            num_parms: 0,
+            return_value_offset: u16::MAX,
+        })
     }
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-        Ok(FunctionSchema { function_identity: 43, unique_exec_thunk: true, parameters: vec![] })
+        Ok(FunctionSchema {
+            function_identity: 43,
+            unique_exec_thunk: true,
+            parameters: vec![],
+        })
     }
 }
 
 #[test]
 fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
-    let context = unsafe { KismetContext::new(NoArgsReflection, ExecEnvironment {
-        module_base: 1, frame_step: 2, frame_step_explicit: 3, frame_code_offset: 0,
-    }) };
-    let address = unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER.implementation.resolve(&context) }.unwrap();
+    let context = unsafe {
+        KismetContext::new(
+            NoArgsReflection,
+            ExecEnvironment {
+                module_base: 1,
+                frame_step: 2,
+                frame_step_explicit: 3,
+                frame_code_offset: 0,
+            },
+        )
+    };
+    let address = unsafe {
+        Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER
+            .implementation
+            .resolve(&context)
+    }
+    .unwrap();
     unsafe { Library::__UNCHAINED_EXEC_Library_NoArgs_BINDING.initialize_address(address) }.unwrap();
-    unsafe { Library::__UNCHAINED_TARGET_NoArgs.entry.register(noargs_reentrant_entry, true, || true) }.unwrap();
-    unsafe { invoke_noargs(); }
+    unsafe {
+        Library::__UNCHAINED_TARGET_NoArgs
+            .entry
+            .register(noargs_reentrant_entry, true, || true)
+    }
+    .unwrap();
+    unsafe {
+        invoke_noargs();
+    }
     NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));
     NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));
     std::thread::spawn(|| {
-        unsafe { invoke_noargs(); }
+        unsafe {
+            invoke_noargs();
+        }
         NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 1));
         NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 0));
-    }).join().unwrap();
+    })
+    .join()
+    .unwrap();
 }

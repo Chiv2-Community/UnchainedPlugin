@@ -22,6 +22,8 @@
 Extend the plugin through native hooks, commands, votes, and event subscribers.
 
 - Follow existing modules and feature gates.
+- Format `unchained-macros-*` with `bash scripts/fmt-macros.sh`. CI runs the same
+  command with `--check`. These crates use standard rustfmt with a 120-column target.
 - Keep native declarations separate from plugin behavior.
 - Use the [build instructions](README.md#building-the-windows-dll-on-linux) for Linux cross-builds.
 

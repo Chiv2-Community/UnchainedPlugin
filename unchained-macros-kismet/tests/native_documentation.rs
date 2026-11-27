@@ -111,10 +111,8 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let reflected = fs::read_to_string(
-        root.join("target/doc/native_hover_fixture/qualified/struct.Reflected.html"),
-    )
-    .unwrap();
+    let reflected =
+        fs::read_to_string(root.join("target/doc/native_hover_fixture/qualified/struct.Reflected.html")).unwrap();
     for expected in [
         "SelectedOverload",
         "SelectedSignature",
@@ -128,10 +126,7 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
     ] {
         assert!(reflected.contains(expected), "missing {expected}");
     }
-    assert_eq!(
-        reflected.matches("Keep the native receiver alive.").count(),
-        1
-    );
+    assert_eq!(reflected.matches("Keep the native receiver alive.").count(), 1);
     assert_eq!(reflected.matches("Authored method comment.").count(), 1);
     for unexpected in [
         "WrongOverload",
@@ -146,25 +141,15 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
     let generated = root.join("generated/native-docs");
     assert!(generated.join("binding-Reflected__Call.md").exists());
     assert!(!generated.join("binding-Reflected__Observed.md").exists());
-    let named =
-        fs::read_to_string(root.join("target/doc/native_hover_fixture/struct.Named.html")).unwrap();
-    for expected in [
-        "ScanImplementation",
-        "ProviderImplementation",
-        "ScanKey",
-        "ProviderKey",
-    ] {
+    let named = fs::read_to_string(root.join("target/doc/native_hover_fixture/struct.Named.html")).unwrap();
+    for expected in ["ScanImplementation", "ProviderImplementation", "ScanKey", "ProviderKey"] {
         assert!(named.contains(expected), "missing {expected}");
     }
-    let free =
-        fs::read_to_string(root.join("target/doc/native_hover_fixture/fn.free_descriptor.html"))
-            .unwrap();
+    let free = fs::read_to_string(root.join("target/doc/native_hover_fixture/fn.free_descriptor.html")).unwrap();
     assert!(free.contains("Direct calls invoke the original implementation"));
     assert!(free.contains("Free-function safety note."));
-    let explicit = fs::read_to_string(
-        root.join("target/doc/native_hover_fixture/qualified/struct.Explicit.html"),
-    )
-    .unwrap();
+    let explicit =
+        fs::read_to_string(root.join("target/doc/native_hover_fixture/qualified/struct.Explicit.html")).unwrap();
     for expected in [
         "Explicit::Direct",
         "DescriptorImplementation",
@@ -185,9 +170,6 @@ int Explicit::Direct() { return WrongDescriptorSignature(); }
     ] {
         assert!(!explicit.contains(unexpected), "unexpected {unexpected}");
     }
-    assert_eq!(
-        explicit.matches("Explicit descriptor safety note.").count(),
-        1
-    );
+    assert_eq!(explicit.matches("Explicit descriptor safety note.").count(), 1);
     fs::remove_dir_all(root).unwrap();
 }

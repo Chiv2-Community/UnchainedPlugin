@@ -1,6 +1,6 @@
 #![feature(arbitrary_self_types_pointers)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use unchained_macros_core::{bind_resolved_value, runtime_bindings, initialize_value_bindings};
+use unchained_macros_core::{bind_resolved_value, initialize_value_bindings, runtime_bindings};
 
 mod resolvers {
     pub struct Allocator;
@@ -15,11 +15,15 @@ struct TestAllocator {
 #[runtime_bindings]
 impl TestAllocator {
     pub unsafe fn allocate(self: *mut Self, amount: usize) -> *mut Self {
-        unsafe { (*self).calls.fetch_add(amount, Ordering::Relaxed); }
+        unsafe {
+            (*self).calls.fetch_add(amount, Ordering::Relaxed);
+        }
         self
     }
 
-    pub unsafe fn identity(self: *const Self) -> *const Self { self }
+    pub unsafe fn identity(self: *const Self) -> *const Self {
+        self
+    }
 
     #[unchained_macros_core::bind_resolved_func(resolvers::Probe)]
     pub unsafe fn probe(self: *const Self) -> usize {}
@@ -32,8 +36,12 @@ struct InlineObject(AtomicUsize);
 
 #[runtime_bindings]
 impl InlineObject {
-    pub fn borrow<'a>(&'a self) -> &'a AtomicUsize { &self.0 }
-    pub fn address(&self) -> *const Self { self }
+    pub fn borrow<'a>(&'a self) -> &'a AtomicUsize {
+        &self.0
+    }
+    pub fn address(&self) -> *const Self {
+        self
+    }
 }
 
 #[bind_resolved_value(resolvers::Allocator, Value)]
@@ -57,18 +65,29 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
         ("Inline".into(), ((&raw const object) as usize - 1) as u64),
     ]);
     // The registry does not dereference the slot during binding.
-    unsafe { initialize_value_bindings(1, &offsets); }
+    unsafe {
+        initialize_value_bindings(1, &offsets);
+    }
     unsafe extern "C" fn probe(allocator: *const TestAllocator) -> usize {
         unsafe { (*allocator).calls.load(Ordering::Relaxed) }
     }
     unsafe {
-        unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&unchained_macros_patternsleuth::ScanContext::new(1, &std::collections::HashMap::from([
-            ("Probe".into(), (probe as *const () as usize - 1) as u64),
-        ])), &unchained_macros_core::SelectorSnapshot::capture_registered().unwrap()).unwrap();
+        unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(
+            &unchained_macros_patternsleuth::ScanContext::new(
+                1,
+                &std::collections::HashMap::from([("Probe".into(), (probe as *const () as usize - 1) as u64)]),
+            ),
+            &unchained_macros_core::SelectorSnapshot::capture_registered().unwrap(),
+        )
+        .unwrap();
     }
     assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
-    let mut first = TestAllocator { calls: AtomicUsize::new(0) };
-    let mut second = TestAllocator { calls: AtomicUsize::new(0) };
+    let mut first = TestAllocator {
+        calls: AtomicUsize::new(0),
+    };
+    let mut second = TestAllocator {
+        calls: AtomicUsize::new(0),
+    };
     // Native-style ordinary writes and reads are sequential here, never racing.
     slot = &raw mut first;
     assert_eq!(slot, &raw mut first);

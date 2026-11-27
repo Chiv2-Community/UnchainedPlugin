@@ -1,12 +1,11 @@
-use proc_macro2::{Span, TokenStream as Tokens};
-use quote::{format_ident, quote, ToTokens};
-use syn::{FnArg, ItemFn, Pat, Type};
 use crate::{
     common::{cfg_attributes, CallbackArguments},
     docs::attach_native_documentation,
-    signature::{validate_native_signature, native_type,
-        normalized_mutability, parameter_type},
+    signature::{native_type, normalized_mutability, parameter_type, validate_native_signature},
 };
+use proc_macro2::{Span, TokenStream as Tokens};
+use quote::{format_ident, quote, ToTokens};
+use syn::{FnArg, ItemFn, Pat, Type};
 
 pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut function: ItemFn = syn::parse2(item)?;
@@ -23,17 +22,20 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     capability.segments.last_mut().unwrap().ident = format_ident!("__UNCHAINED_TARGET_{method}");
     let mut normalized_target = target.clone();
     let normalized_method = normalized_target.segments.last_mut().unwrap();
-    normalized_method.ident = format_ident!("__UNCHAINED_MUTABILITY_{}", normalized_method.ident, span = Span::mixed_site());
+    normalized_method.ident = format_ident!(
+        "__UNCHAINED_MUTABILITY_{}",
+        normalized_method.ident,
+        span = Span::mixed_site()
+    );
     let mut parameter_target = target.clone();
     let parameter_method = parameter_target.segments.last_mut().unwrap();
-    parameter_method.ident = format_ident!("__UNCHAINED_PARAMETERS_{}", parameter_method.ident, span = Span::mixed_site());
+    parameter_method.ident = format_ident!(
+        "__UNCHAINED_PARAMETERS_{}",
+        parameter_method.ident,
+        span = Span::mixed_site()
+    );
     validate_native_signature(&function.sig)?;
-    if function
-        .sig
-        .inputs
-        .iter()
-        .any(|a| matches!(a, FnArg::Receiver(_)))
-    {
+    if function.sig.inputs.iter().any(|a| matches!(a, FnArg::Receiver(_))) {
         return Err(syn::Error::new_spanned(
             &function.sig,
             "detours must be free functions with explicit native receiver arguments",
@@ -54,16 +56,26 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut checked_parameters = Vec::new();
     for (index, input) in function.sig.inputs.iter_mut().enumerate() {
         let FnArg::Typed(local) = input else { unreachable!() };
-        let annotations: Vec<_> = local.attrs.iter().filter(|attr| attr.path().is_ident("mutability_override")).collect();
+        let annotations: Vec<_> = local
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("mutability_override"))
+            .collect();
         if annotations.is_empty() {
             checked_parameters.push(index);
             continue;
         }
         if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
-            return Err(syn::Error::new_spanned(annotations[0], "use one bare #[mutability_override] annotation"));
+            return Err(syn::Error::new_spanned(
+                annotations[0],
+                "use one bare #[mutability_override] annotation",
+            ));
         }
         if !matches!(&*local.ty, Type::Ptr(_) | Type::Reference(_)) {
-            return Err(syn::Error::new_spanned(&local.ty, "#[mutability_override] requires a raw pointer or reference detour parameter"));
+            return Err(syn::Error::new_spanned(
+                &local.ty,
+                "#[mutability_override] requires a raw pointer or reference detour parameter",
+            ));
         };
         has_override = true;
         local.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
@@ -79,12 +91,8 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         .inputs
         .iter()
         .map(|input| {
-            let FnArg::Typed(arg) = input else {
-                unreachable!()
-            };
-            let Pat::Ident(pat) = &*arg.pat else {
-                unreachable!()
-            };
+            let FnArg::Typed(arg) = input else { unreachable!() };
+            let Pat::Ident(pat) = &*arg.pat else { unreachable!() };
             (&pat.ident, &arg.ty)
         })
         .unzip();
@@ -92,13 +100,16 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let generics = &signature.generics;
     let signature_check = if has_override {
         let normalized = native_type(&normalized_mutability(signature))?;
-        let parameter_checks = checked_parameters.into_iter().map(|index| {
-            let parameter = parameter_type(signature, index)?;
-            let index = syn::Index::from(index);
-            Ok(quote! {
-                let _: ::unchained_macros_core::NativeSignature<#parameter> = #parameter_target.#index;
+        let parameter_checks = checked_parameters
+            .into_iter()
+            .map(|index| {
+                let parameter = parameter_type(signature, index)?;
+                let index = syn::Index::from(index);
+                Ok(quote! {
+                    let _: ::unchained_macros_core::NativeSignature<#parameter> = #parameter_target.#index;
+                })
             })
-        }).collect::<syn::Result<Vec<_>>>()?;
+            .collect::<syn::Result<Vec<_>>>()?;
         quote! {
             // Only outer pointer/reference mutability is erased. The complete
             // invariant signature still checks every lifetime relationship.
@@ -113,7 +124,9 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     };
     let callback = if has_override {
         quote!(unsafe { ::core::mem::transmute(#replacement as #native) })
-    } else { quote!(#replacement) };
+    } else {
+        quote!(#replacement)
+    };
     Ok(quote! {
         #function
         #(#cfg)*
@@ -153,8 +166,15 @@ mod tests {
     #[test]
     fn attachment_delegates_to_core_without_consumer_dependency_paths() {
         let expanded = expand(
-            quote!(Native::Call), quote!(unsafe fn replacement(value: i32) -> i32 { value }),
-        ).unwrap().to_string();
+            quote!(Native::Call),
+            quote!(
+                unsafe fn replacement(value: i32) -> i32 {
+                    value
+                }
+            ),
+        )
+        .unwrap()
+        .to_string();
         assert!(!expanded.contains("ensure_attached"));
         assert!(expanded.contains(":: unchained_macros_core :: __private :: inventory :: submit"));
         assert!(expanded.contains("DetourRegistration :: new"));
@@ -171,20 +191,42 @@ mod tests {
     fn mutability_override_checks_only_the_annotated_raw_pointer() {
         let expanded = expand(
             quote!(Native::Call),
-            quote!(unsafe fn replacement(#[mutability_override] value: *mut u32, other: *mut u8) {}),
-        ).unwrap();
+            quote!(
+                unsafe fn replacement(#[mutability_override] value: *mut u32, other: *mut u8) {}
+            ),
+        )
+        .unwrap();
         let file = syn::parse2::<syn::File>(expanded).unwrap();
-        let functions: Vec<_> = file.items.iter().filter_map(|item| {
-            if let syn::Item::Fn(function) = item { Some(function) } else { None }
-        }).collect();
+        let functions: Vec<_> = file
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let syn::Item::Fn(function) = item {
+                    Some(function)
+                } else {
+                    None
+                }
+            })
+            .collect();
         let local = functions.iter().find(|f| f.sig.ident == "replacement").unwrap();
-        let native = functions.iter().find(|f| f.sig.ident == "__unchained_replacement_replacement").unwrap();
-        let FnArg::Typed(local_arg) = &local.sig.inputs[0] else { unreachable!() };
-        let FnArg::Typed(native_arg) = &native.sig.inputs[0] else { unreachable!() };
+        let native = functions
+            .iter()
+            .find(|f| f.sig.ident == "__unchained_replacement_replacement")
+            .unwrap();
+        let FnArg::Typed(local_arg) = &local.sig.inputs[0] else {
+            unreachable!()
+        };
+        let FnArg::Typed(native_arg) = &native.sig.inputs[0] else {
+            unreachable!()
+        };
         assert!(local_arg.attrs.is_empty());
         assert_eq!(local_arg.ty.to_token_stream().to_string(), "* mut u32");
         assert_eq!(native_arg.ty.to_token_stream().to_string(), "* mut u32");
-        assert!(native.block.to_token_stream().to_string().contains("replacement (value , other)"));
+        assert!(native
+            .block
+            .to_token_stream()
+            .to_string()
+            .contains("replacement (value , other)"));
         assert_eq!(native.sig.inputs[1].to_token_stream().to_string(), "other : * mut u8");
         let text = file.to_token_stream().to_string();
         assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
@@ -203,7 +245,8 @@ mod tests {
                 #[mutability_override] first: #ty,
                 #[mutability_override] second: #ty,
             ) {}),
-        ).unwrap();
+        )
+        .unwrap();
         let text = expanded.to_string();
         assert!(text.contains("__UNCHAINED_MUTABILITY_Call"));
         assert!(!text.contains("__UNCHAINED_PARAMETERS_Call"));
@@ -225,13 +268,24 @@ mod tests {
     #[test_case::test_case(quote!(Native::call, || enabled()), quote!(|| enabled()); "closure")]
     #[test_case::test_case(quote!(Native::call, enabled), quote!(enabled); "function")]
     fn conditions_default_to_enabled_and_preserve_explicit_predicates(args: Tokens, expected: Tokens) {
-        let expanded = expand(args, quote!(unsafe fn replacement() {})).unwrap();
+        let expanded = expand(
+            args,
+            quote!(
+                unsafe fn replacement() {}
+            ),
+        )
+        .unwrap();
         let file = syn::parse2::<syn::File>(expanded).unwrap();
-        let condition = file.items.iter().find_map(|item| match item {
-            syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" =>
-                Some(&function.block),
-            _ => None,
-        }).unwrap();
+        let condition = file
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" => {
+                    Some(&function.block)
+                }
+                _ => None,
+            })
+            .unwrap();
         let expected: syn::Block = syn::parse2(quote!({ (#expected)() })).unwrap();
         assert_eq!(quote!(#condition).to_string(), quote!(#expected).to_string());
     }
@@ -244,12 +298,17 @@ mod tests {
                 /// Existing safety note.
                 unsafe fn replacement(value: i32) -> i32 { value }
             },
-        ).unwrap();
+        )
+        .unwrap();
         let file = syn::parse2::<syn::File>(expanded).unwrap();
-        let function = file.items.iter().find_map(|item| match item {
-            syn::Item::Fn(function) if function.sig.ident == "replacement" => Some(function),
-            _ => None,
-        }).unwrap();
+        let function = file
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Fn(function) if function.sig.ident == "replacement" => Some(function),
+                _ => None,
+            })
+            .unwrap();
         let docs = documentation(&function.attrs);
         assert!(docs.starts_with("## Native detour"));
         assert!(docs.contains(" Existing safety note."));
@@ -264,7 +323,13 @@ mod tests {
     #[test_case::test_case(quote!(Type::<u8>::call); "generic type")]
     #[test_case::test_case(quote!(Type::call::<u8>); "generic method")]
     fn rejects_non_method_targets(target: Tokens) {
-        assert!(expand(target, quote!(unsafe fn replacement() {})).is_err());
+        assert!(expand(
+            target,
+            quote!(
+                unsafe fn replacement() {}
+            )
+        )
+        .is_err());
     }
 
     #[test_case::test_case(quote!(fn replacement() {}); "safe")]

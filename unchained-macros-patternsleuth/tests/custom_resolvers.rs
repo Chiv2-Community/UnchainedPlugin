@@ -56,25 +56,31 @@ fn malformed_patterns_propagate_errors() {
 #[test]
 fn arbitrary_matchers_share_the_resolver_cache_and_preserve_u64_addresses() {
     let image = image(&[]);
-    patternsleuth::resolvers::eval(&image, |ctx| Box::pin(async {
-        let first = ctx.resolve(CachedAddress::resolver()).await.unwrap();
-        let second = ctx.resolve(CachedAddress::resolver()).await.unwrap();
-        assert!(std::sync::Arc::ptr_eq(&first, &second));
-        assert_eq!(first.0, TEXT);
-    }));
+    patternsleuth::resolvers::eval(&image, |ctx| {
+        Box::pin(async {
+            let first = ctx.resolve(CachedAddress::resolver()).await.unwrap();
+            let second = ctx.resolve(CachedAddress::resolver()).await.unwrap();
+            assert!(std::sync::Arc::ptr_eq(&first, &second));
+            assert_eq!(first.0, TEXT);
+        })
+    });
     assert_eq!(EVALUATIONS.load(Ordering::SeqCst), 1);
 }
 
 #[test_case::test_case(Flavor::First, TEXT + 0x10; "first")]
 #[test_case::test_case(Flavor::Second, TEXT; "second")]
 fn selection_factory_selects_the_matching_signature(flavor: Flavor, expected: u64) {
-    if !initialize_selection(flavor) { return; }
+    if !initialize_selection(flavor) {
+        return;
+    }
     assert_eq!(image(&[0x10]).resolve(SelectedAddress::resolver()).unwrap().0, expected);
 }
 
 #[test]
 fn selection_factory_construction_errors_keep_resolver_context() {
-    if !initialize_selection(Flavor::Shared) { return; }
+    if !initialize_selection(Flavor::Shared) {
+        return;
+    }
     let error = image(&[]).resolve(SelectedAddress::resolver()).unwrap_err().to_string();
     assert!(error.contains("SelectedAddress"), "{error}");
     assert!(error.contains("invalid pattern"), "{error}");

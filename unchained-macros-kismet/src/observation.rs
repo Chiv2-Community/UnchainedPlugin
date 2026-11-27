@@ -24,7 +24,10 @@ impl Argument<'_> {
     /// `T` must match the validated VM slot layout. Do not move from the slot,
     /// retain the borrow, mutate native storage, or release native ownership.
     pub unsafe fn borrow<T>(&self) -> &T {
-        assert!(self.pointer.as_ptr().cast::<T>().is_aligned(), "Misaligned VM argument slot");
+        assert!(
+            self.pointer.as_ptr().cast::<T>().is_aligned(),
+            "Misaligned VM argument slot"
+        );
         unsafe { &*self.pointer.as_ptr().cast::<T>() }
     }
 
@@ -33,7 +36,10 @@ impl Argument<'_> {
     /// # Safety
     /// The validated parameter must be a VM boolean.
     pub unsafe fn boolean(&self) -> bool {
-        assert!(self.pointer.as_ptr().cast::<u32>().is_aligned(), "Misaligned VM bool32 slot");
+        assert!(
+            self.pointer.as_ptr().cast::<u32>().is_aligned(),
+            "Misaligned VM bool32 slot"
+        );
         unsafe { self.pointer.as_ptr().cast::<u32>().read() != 0 }
     }
 }
@@ -45,11 +51,17 @@ pub struct Inputs<'a> {
 }
 
 impl Inputs<'_> {
-    pub fn len(&self) -> usize { self.slots.len() }
-    pub fn is_empty(&self) -> bool { self.slots.is_empty() }
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
     pub fn get(&self, index: usize) -> Option<Argument<'_>> {
         self.slots.get(index).copied().map(|pointer| Argument {
-            pointer, _borrow: PhantomData, _game_thread: PhantomData,
+            pointer,
+            _borrow: PhantomData,
+            _game_thread: PhantomData,
         })
     }
 }
@@ -61,7 +73,9 @@ fn report(message: &str) {
     // A logger may panic (including a panicking payload destructor) or reenter
     // the same failing VM hook. Neither may escape or recursively log forever.
     REPORTING.with(|active| {
-        if active.replace(true) { return; }
+        if active.replace(true) {
+            return;
+        }
         unchained_macros_core::isolate_observer(|| log::error!("{message}"));
         active.set(false);
     });
@@ -96,13 +110,20 @@ impl Drop for Scope {
 fn ready(call: &Rc<RefCell<Invocation>>) {
     let (entry, slots) = {
         let mut state = call.borrow_mut();
-        if state.failed || state.completed || state.slots.len() != state.properties.len() { return; }
+        if state.failed || state.completed || state.slots.len() != state.properties.len() {
+            return;
+        }
         state.completed = true;
-        let Some(entry) = state.entry else { return; };
+        let Some(entry) = state.entry else {
+            return;
+        };
         (entry, state.slots.clone())
     };
     // No TLS/state borrow is held while executing arbitrary callback code.
-    let inputs = Inputs { slots: &slots, _game_thread: PhantomData };
+    let inputs = Inputs {
+        slots: &slots,
+        _game_thread: PhantomData,
+    };
     if unchained_macros_core::isolate_observer(|| unsafe { entry(inputs) }).is_none() {
         report("Kismet entry listener panicked");
     }
@@ -124,9 +145,13 @@ pub unsafe fn observe_exec(
     original: impl FnOnce(),
 ) {
     let call = Rc::new(RefCell::new(Invocation {
-        frame: frame as usize, properties,
-        depth: 0, slots: Vec::with_capacity(properties.len()), completed: false,
-        failed: false, entry,
+        frame: frame as usize,
+        properties,
+        depth: 0,
+        slots: Vec::with_capacity(properties.len()),
+        completed: false,
+        failed: false,
+        entry,
     }));
     if CALLS.try_with(|calls| calls.borrow_mut().push(call.clone())).is_err() {
         original();
@@ -135,7 +160,10 @@ pub unsafe fn observe_exec(
     let _scope = Scope(call.clone());
     ready(&call); // No-argument thunks have no Step completion.
     original();
-    let valid = { let state = call.borrow(); state.completed && !state.failed };
+    let valid = {
+        let state = call.borrow();
+        state.completed && !state.failed
+    };
     if !valid {
         report("Kismet exec observation did not match its verified step contract");
     }
@@ -145,7 +173,9 @@ struct StepScope {
     call: Rc<RefCell<Invocation>>,
 }
 impl Drop for StepScope {
-    fn drop(&mut self) { self.call.borrow_mut().depth -= 1; }
+    fn drop(&mut self) {
+        self.call.borrow_mut().depth -= 1;
+    }
 }
 
 /// Forward a real Step call and observe only its top-level completion.
@@ -155,15 +185,22 @@ impl Drop for StepScope {
 /// `property` is zero for Step, and the actual FProperty identity for
 /// StepExplicitProperty. `result` is the original, initialized result slot after
 /// the original returns. This function must cover recursive Step calls as well.
-pub unsafe fn observe_step(
-    frame: *mut c_void,
-    result: *mut c_void,
-    property: usize,
-    original: impl FnOnce(),
-) {
-    let call = CALLS.try_with(|calls| calls.borrow().iter().rev()
-        .find(|call| call.borrow().frame == frame as usize).cloned()).ok().flatten();
-    let Some(call) = call else { original(); return; };
+pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: usize, original: impl FnOnce()) {
+    let call = CALLS
+        .try_with(|calls| {
+            calls
+                .borrow()
+                .iter()
+                .rev()
+                .find(|call| call.borrow().frame == frame as usize)
+                .cloned()
+        })
+        .ok()
+        .flatten();
+    let Some(call) = call else {
+        original();
+        return;
+    };
     let top_level = {
         let mut state = call.borrow_mut();
         state.depth += 1;
@@ -172,11 +209,16 @@ pub unsafe fn observe_step(
     let scope = StepScope { call: call.clone() };
     original();
     drop(scope);
-    if !top_level { return; }
+    if !top_level {
+        return;
+    }
     {
         let mut state = call.borrow_mut();
         let index = state.slots.len();
-        let Some(pointer) = NonNull::new(result) else { state.failed = true; return; };
+        let Some(pointer) = NonNull::new(result) else {
+            state.failed = true;
+            return;
+        };
         if index >= state.properties.len() || (property != 0 && state.properties[index] != property) {
             state.failed = true;
             return;
@@ -196,13 +238,19 @@ mod tests {
         static EVENTS: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
         static ENTRIES: Cell<usize> = const { Cell::new(0) };
     }
-    fn event(name: &'static str) { EVENTS.with(|events| events.borrow_mut().push(name)); }
+    fn event(name: &'static str) {
+        EVENTS.with(|events| events.borrow_mut().push(name));
+    }
     unsafe fn entry(inputs: Inputs<'_>) {
         assert_eq!(unsafe { *inputs.get(0).unwrap().borrow::<u32>() }, 42);
         event("entry");
     }
     struct Cleanup;
-    impl Drop for Cleanup { fn drop(&mut self) { event("cleanup"); } }
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            event("cleanup");
+        }
+    }
 
     #[test]
     fn original_real_frame_evaluation_body_and_cleanup_run_once() {
@@ -301,7 +349,10 @@ mod tests {
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["body"]));
     }
 
-    unsafe fn noargs(inputs: Inputs<'_>) { assert!(inputs.is_empty()); event("entry"); }
+    unsafe fn noargs(inputs: Inputs<'_>) {
+        assert!(inputs.is_empty());
+        event("entry");
+    }
     #[test]
     fn no_arguments_need_no_step_and_keep_original() {
         EVENTS.with(|events| events.borrow_mut().clear());
@@ -323,7 +374,11 @@ mod tests {
     }
 
     struct NativeOwner(String);
-    impl Drop for NativeOwner { fn drop(&mut self) { event("owner-drop"); } }
+    impl Drop for NativeOwner {
+        fn drop(&mut self) {
+            event("owner-drop");
+        }
+    }
     unsafe fn borrow_owner_then_panic(inputs: Inputs<'_>) {
         let argument = inputs.get(0).unwrap();
         let owner = unsafe { argument.borrow::<NativeOwner>() };

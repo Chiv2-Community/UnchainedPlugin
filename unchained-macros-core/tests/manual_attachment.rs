@@ -9,16 +9,23 @@ impl AddressResolver for ExplicitAddress {
     }
 }
 
-static RESOLVER: Resolver<ExplicitAddress> =
-    Resolver { name: "explicit", implementation: ExplicitAddress, filter: None };
+static RESOLVER: Resolver<ExplicitAddress> = Resolver {
+    name: "explicit",
+    implementation: ExplicitAddress,
+    filter: None,
+};
 static OWNER: FunctionBinding<ExplicitAddress> = FunctionBinding::new("owner", &RESOLVER);
 static ALIAS: FunctionBinding<ExplicitAddress> = FunctionBinding::new("late alias", &RESOLVER);
 static HOOK: NativeHook = NativeHook::new();
 
 type Call = unsafe extern "C" fn(usize) -> usize;
 #[inline(never)]
-unsafe extern "C" fn original(n: usize) -> usize { black_box(n).wrapping_add(1) }
-unsafe extern "C" fn replacement(n: usize) -> usize { n.wrapping_add(10) }
+unsafe extern "C" fn original(n: usize) -> usize {
+    black_box(n).wrapping_add(1)
+}
+unsafe extern "C" fn replacement(n: usize) -> usize {
+    n.wrapping_add(10)
+}
 
 #[test]
 fn unlisted_owner_and_late_alias_receive_original_trampoline() {

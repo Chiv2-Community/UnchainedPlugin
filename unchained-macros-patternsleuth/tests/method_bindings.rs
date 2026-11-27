@@ -48,15 +48,32 @@ unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &
 
 #[test]
 fn metadata_preserves_signatures_and_binding_identity() {
-    let _: &NativeTarget<unsafe extern "C" fn(i32) -> i32, _, _, _, unchained_macros_patternsleuth::PatternsleuthResolver> = Native::__UNCHAINED_TARGET_add;
-    let _: &NativeTarget<for<'a> unsafe extern "C" fn(&'a Native) -> &'a i32, _, _, _, unchained_macros_patternsleuth::PatternsleuthResolver> =
-        Native::__UNCHAINED_TARGET_borrow;
-    let _: &NativeTarget<for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32, _, _, _, unchained_macros_patternsleuth::PatternsleuthResolver> =
-        Native::__UNCHAINED_TARGET_storage;
+    let _: &NativeTarget<
+        unsafe extern "C" fn(i32) -> i32,
+        _,
+        _,
+        _,
+        unchained_macros_patternsleuth::PatternsleuthResolver,
+    > = Native::__UNCHAINED_TARGET_add;
+    let _: &NativeTarget<
+        for<'a> unsafe extern "C" fn(&'a Native) -> &'a i32,
+        _,
+        _,
+        _,
+        unchained_macros_patternsleuth::PatternsleuthResolver,
+    > = Native::__UNCHAINED_TARGET_borrow;
+    let _: &NativeTarget<
+        for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32,
+        _,
+        _,
+        _,
+        unchained_macros_patternsleuth::PatternsleuthResolver,
+    > = Native::__UNCHAINED_TARGET_storage;
     let binding = Native::__UNCHAINED_TARGET_add.binding();
-    let registration = unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
-        .find(|r| r.name() == "Native::add")
-        .unwrap();
+    let registration =
+        unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
+            .find(|r| r.name() == "Native::add")
+            .unwrap();
     assert!(std::ptr::eq(binding, registration));
     assert!(
         !unchained_macros_core::binding_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
@@ -69,16 +86,20 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
     let binding = Native::__UNCHAINED_TARGET_add.binding();
     let entry = add as *const () as usize;
     unsafe {
-        binding.initialize_address(std::num::NonZeroUsize::new(entry).unwrap()).unwrap();
+        binding
+            .initialize_address(std::num::NonZeroUsize::new(entry).unwrap())
+            .unwrap();
         assert_eq!(Native::add(10), 11);
-        let detour = Box::leak(Box::new(retour::RawDetour::new(
-            add as *const (), original_trampoline as *const (),
-        ).unwrap()));
+        let detour = Box::leak(Box::new(
+            retour::RawDetour::new(add as *const (), original_trampoline as *const ()).unwrap(),
+        ));
         binding.publish_detour(detour).unwrap();
         detour.enable().unwrap();
         assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(10), 12);
         assert_eq!(Native::add(10), 11);
-        binding.initialize_address(std::num::NonZeroUsize::new(entry).unwrap()).unwrap();
+        binding
+            .initialize_address(std::num::NonZeroUsize::new(entry).unwrap())
+            .unwrap();
         assert_eq!(Native::add(10), 11);
         assert!(binding.publish_detour(detour).is_err());
         detour.disable().unwrap();
@@ -116,9 +137,9 @@ fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
     unsafe extern "C" fn unbound_target(value: i32) -> i32 {
         unsafe { std::ptr::read_volatile(&value) }.wrapping_add(3)
     }
-    let detour = Box::leak(Box::new(unsafe { retour::RawDetour::new(
-        unbound_target as *const (), original_trampoline as *const (),
-    ).unwrap() }));
+    let detour = Box::leak(Box::new(unsafe {
+        retour::RawDetour::new(unbound_target as *const (), original_trampoline as *const ()).unwrap()
+    }));
     assert!(unsafe { binding.publish_detour(detour) }.is_err());
 }
 

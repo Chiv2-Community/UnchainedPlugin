@@ -71,7 +71,8 @@ pub fn validate(
     if !schema.unique_exec_thunk {
         return Err("Shared exec wrappers are unsupported without verified frame-to-function identity".into());
     }
-    if schema.function_identity == 0 || count != arguments.len()
+    if schema.function_identity == 0
+        || count != arguments.len()
         || schema.parameters.len() != function.num_parms as usize
     {
         return Err("Exec observation function identity/parameter count mismatch".into());
@@ -95,14 +96,25 @@ pub fn validate(
             {
                 return Err("Exec observation does not support mutable reference/out parameters".into());
             }
-            *arguments.get(properties.len()).ok_or("Exec observation has excess parameters")?
+            *arguments
+                .get(properties.len())
+                .ok_or("Exec observation has excess parameters")?
         };
         // A VM bool input uses bool32, but reflected property/result size is bool8.
-        let size = if !is_result && matches!(property.kind, PropertyKind::Bool) { 1 } else { expected.size };
+        let size = if !is_result && matches!(property.kind, PropertyKind::Bool) {
+            1
+        } else {
+            expected.size
+        };
         if !matches(&property.kind, expected.kind) || property.size != size {
-            return Err(format!("Exec observation parameter type/layout mismatch: expected {}, reflected {:?}", expected.kind, property.kind));
+            return Err(format!(
+                "Exec observation parameter type/layout mismatch: expected {}, reflected {:?}",
+                expected.kind, property.kind
+            ));
         }
-        if !is_result { properties.push(property.identity); }
+        if !is_result {
+            properties.push(property.identity);
+        }
     }
     if properties.len() != arguments.len() || returned != result.is_some() {
         return Err("Exec observation argument/result schema mismatch".into());
@@ -114,13 +126,41 @@ pub fn validate(
 mod tests {
     use super::*;
     fn fixture() -> (crate::FunctionMetadata, FunctionSchema) {
-        (crate::FunctionMetadata { is_native: true, exec_thunk: 1, num_parms: 2, return_value_offset: 8 },
-         FunctionSchema { function_identity: 2, unique_exec_thunk: true, parameters: vec![
-             PropertyMetadata { identity: 3, kind: PropertyKind::Bool, size: 1, array_dim: 1, flags: PARM, offset: 0 },
-             PropertyMetadata { identity: 4, kind: PropertyKind::Bool, size: 1, array_dim: 1, flags: PARM | RETURN_PARM, offset: 8 },
-         ] })
+        (
+            crate::FunctionMetadata {
+                is_native: true,
+                exec_thunk: 1,
+                num_parms: 2,
+                return_value_offset: 8,
+            },
+            FunctionSchema {
+                function_identity: 2,
+                unique_exec_thunk: true,
+                parameters: vec![
+                    PropertyMetadata {
+                        identity: 3,
+                        kind: PropertyKind::Bool,
+                        size: 1,
+                        array_dim: 1,
+                        flags: PARM,
+                        offset: 0,
+                    },
+                    PropertyMetadata {
+                        identity: 4,
+                        kind: PropertyKind::Bool,
+                        size: 1,
+                        array_dim: 1,
+                        flags: PARM | RETURN_PARM,
+                        offset: 8,
+                    },
+                ],
+            },
+        )
     }
-    const BOOL: Parameter = Parameter { kind: "BoolProperty", size: 1 };
+    const BOOL: Parameter = Parameter {
+        kind: "BoolProperty",
+        size: 1,
+    };
     #[test]
     fn return_is_not_stepped_and_bool_input_uses_separate_vm_layout() {
         let (function, schema) = fixture();
@@ -161,14 +201,28 @@ mod tests {
         for (kind, name, size) in [
             (PropertyKind::String, "StrProperty", 16),
             (PropertyKind::Text, "TextProperty", 24),
-            (PropertyKind::Struct("LinearColor".into()), "StructProperty:LinearColor", 16),
+            (
+                PropertyKind::Struct("LinearColor".into()),
+                "StructProperty:LinearColor",
+                16,
+            ),
         ] {
             let function = crate::FunctionMetadata {
-                is_native: true, exec_thunk: 1, num_parms: 1, return_value_offset: 0,
+                is_native: true,
+                exec_thunk: 1,
+                num_parms: 1,
+                return_value_offset: 0,
             };
-            let mut schema = FunctionSchema { function_identity: 2, unique_exec_thunk: true,
+            let mut schema = FunctionSchema {
+                function_identity: 2,
+                unique_exec_thunk: true,
                 parameters: vec![PropertyMetadata {
-                    identity: 3, kind, size, array_dim: 1, flags: PARM | RETURN_PARM, offset: 0,
+                    identity: 3,
+                    kind,
+                    size,
+                    array_dim: 1,
+                    flags: PARM | RETURN_PARM,
+                    offset: 0,
                 }],
             };
             let result = Parameter { kind: name, size };

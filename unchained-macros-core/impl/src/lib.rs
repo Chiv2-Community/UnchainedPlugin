@@ -16,7 +16,9 @@ mod value;
 /// by resolver and excludes selections explicitly disabled by that resolver.
 #[proc_macro_attribute]
 pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
-    patch::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+    patch::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Declare a fieldless selection enum with optional `require = [Variant, ...]`
@@ -24,7 +26,9 @@ pub fn register_patch(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Supplies `SelectionKey`, `Clone`, `Copy`, `PartialEq`, and `Eq`.
 #[proc_macro_attribute]
 pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStream {
-    selection::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+    selection::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Bind an unsafe Rust method/function to a named resolver, or to
@@ -34,7 +38,9 @@ pub fn resolver_selection_key(args: TokenStream, item: TokenStream) -> TokenStre
 /// types and declared per-call lifetime relationships are preserved.
 #[proc_macro_attribute]
 pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
-    function::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+    function::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Register a replacement for a typed method binding, not a resolver.
@@ -45,19 +51,22 @@ pub fn bind_resolved_func(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn bind_func_detour(args: TokenStream, item: TokenStream) -> TokenStream {
     function_detour::expand(args.into(), item.into())
-        .unwrap_or_else(|error| error.to_compile_error()).into()
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 #[proc_macro_attribute]
 pub fn bind_func_entry_listener(args: TokenStream, item: TokenStream) -> TokenStream {
     function_listener::expand(args.into(), item.into(), false)
-        .unwrap_or_else(|error| error.to_compile_error()).into()
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 #[proc_macro_attribute]
 pub fn bind_func_exit_listener(args: TokenStream, item: TokenStream) -> TokenStream {
     function_listener::expand(args.into(), item.into(), true)
-        .unwrap_or_else(|error| error.to_compile_error()).into()
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Mark a native type for source documentation, or expose bindings in a concrete impl.
@@ -67,7 +76,8 @@ pub fn bind_func_exit_listener(args: TokenStream, item: TokenStream) -> TokenStr
 #[proc_macro_attribute]
 pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
     runtime::expand(args.into(), item.into())
-        .unwrap_or_else(|error| error.to_compile_error()).into()
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Bind native data to an explicit unsafe read.
@@ -75,5 +85,7 @@ pub fn runtime_bindings(args: TokenStream, item: TokenStream) -> TokenStream {
 /// `Address` returns inline storage's pointer. Neither form generates native methods.
 #[proc_macro_attribute]
 pub fn bind_resolved_value(args: TokenStream, item: TokenStream) -> TokenStream {
-    value::expand(args.into(), item.into()).unwrap_or_else(|error| error.to_compile_error()).into()
+    value::expand(args.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }

@@ -35,7 +35,8 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
 
     let failure = std::panic::catch_unwind(|| unsafe {
         initialize_value_bindings(1, &std::collections::HashMap::new());
-    }).unwrap_err();
+    })
+    .unwrap_err();
     assert!(panic_message(failure).contains("could not be resolved; no offset is available"));
 
     let offsets = std::collections::HashMap::from([
@@ -66,7 +67,9 @@ fn required_values_bind_slots_read_current_contents_and_fail_loudly() {
 }
 
 fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = error.downcast_ref::<String>() { return message.clone(); }
+    if let Some(message) = error.downcast_ref::<String>() {
+        return message.clone();
+    }
     error.downcast_ref::<&str>().expect("string panic").to_string()
 }
 
@@ -74,7 +77,9 @@ fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
 #[test_case::test_case(usize::MAX, 1; "address overflow")]
 #[should_panic(expected = "Failed to bind required native value Invalid")]
 fn invalid_required_binding_panics(base: usize, offset: u64) {
-    unsafe { ValueBinding::new("Invalid").initialize(base, offset); }
+    unsafe {
+        ValueBinding::new("Invalid").initialize(base, offset);
+    }
 }
 
 #[test]

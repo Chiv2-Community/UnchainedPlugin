@@ -5,21 +5,32 @@ use syn::parse::{Parse, Parser};
 pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
     let mut declaration: syn::DeriveInput = syn::parse2(item)?;
     if !declaration.generics.params.is_empty() || declaration.generics.where_clause.is_some() {
-        return Err(syn::Error::new_spanned(&declaration.generics, "selection keys must be non-generic"));
+        return Err(syn::Error::new_spanned(
+            &declaration.generics,
+            "selection keys must be non-generic",
+        ));
     }
     let syn::Data::Enum(data) = &declaration.data else {
-        return Err(syn::Error::new_spanned(&declaration.ident, "selection keys must be fieldless enums"));
+        return Err(syn::Error::new_spanned(
+            &declaration.ident,
+            "selection keys must be fieldless enums",
+        ));
     };
     for variant in &data.variants {
         if !matches!(variant.fields, syn::Fields::Unit) {
-            return Err(syn::Error::new_spanned(variant, "selection variants must have no fields"));
+            return Err(syn::Error::new_spanned(
+                variant,
+                "selection variants must have no fields",
+            ));
         }
     }
     let mut required = None;
     let mut fallback = None;
     syn::meta::parser(|meta| {
         if meta.path.is_ident("fallback") {
-            if fallback.is_some() { return Err(meta.error("duplicate fallback option")); }
+            if fallback.is_some() {
+                return Err(meta.error("duplicate fallback option"));
+            }
             let key: syn::Ident = meta.value()?.parse()?;
             if !data.variants.iter().any(|variant| variant.ident == key) {
                 return Err(syn::Error::new_spanned(key, "unknown fallback selection variant"));
@@ -49,51 +60,79 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
         }
         required = Some(checked);
         Ok(())
-    }).parse2(args)?;
+    })
+    .parse2(args)?;
     let required = required.unwrap_or_default();
-    let fallback_body = fallback.map_or_else(|| quote!(::core::option::Option::None), |key| quote! {
-        if self.__unchained_key_eq(Self::#key) {
-            ::core::option::Option::None
-        } else {
-            ::core::option::Option::Some(Self::#key)
-        }
-    });
-    let equality_arms = data.variants.iter().map(|variant| {
-        let name = &variant.ident;
-        let cfg = crate::common::cfg_attributes(&variant.attrs);
-        quote!(#(#cfg)* Self::#name => matches!(other, Self::#name),)
-    }).collect::<Vec<_>>();
-    let name_arms = data.variants.iter().map(|variant| {
-        let name = &variant.ident;
-        let cfg = crate::common::cfg_attributes(&variant.attrs);
-        quote!(#(#cfg)* Self::#name => stringify!(#name),)
-    }).collect::<Vec<_>>();
-    let duplicate_checks = data.variants.iter().map(|variant| {
-        let name = &variant.ident;
-        let cfg = crate::common::cfg_attributes(&variant.attrs);
-        quote! {
-            #(#cfg)*
-            {
-                let mut index = 0;
-                let mut count = 0;
-                while index < keys.len() {
-                    if matches!(keys[index], Self::#name) {
-                        count += 1;
-                    }
-                    index += 1;
+    let fallback_body = fallback.map_or_else(
+        || quote!(::core::option::Option::None),
+        |key| {
+            quote! {
+                if self.__unchained_key_eq(Self::#key) {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(Self::#key)
                 }
-                assert!(count <= 1, concat!("duplicate selection ", stringify!(#name)));
             }
-        }
-    }).collect::<Vec<_>>();
-    let existing = declaration.attrs.iter().filter(|attribute| attribute.path().is_ident("derive"))
-        .map(|attribute| attribute.parse_args_with(
-            syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated))
+        },
+    );
+    let equality_arms = data
+        .variants
+        .iter()
+        .map(|variant| {
+            let name = &variant.ident;
+            let cfg = crate::common::cfg_attributes(&variant.attrs);
+            quote!(#(#cfg)* Self::#name => matches!(other, Self::#name),)
+        })
+        .collect::<Vec<_>>();
+    let name_arms = data
+        .variants
+        .iter()
+        .map(|variant| {
+            let name = &variant.ident;
+            let cfg = crate::common::cfg_attributes(&variant.attrs);
+            quote!(#(#cfg)* Self::#name => stringify!(#name),)
+        })
+        .collect::<Vec<_>>();
+    let duplicate_checks = data
+        .variants
+        .iter()
+        .map(|variant| {
+            let name = &variant.ident;
+            let cfg = crate::common::cfg_attributes(&variant.attrs);
+            quote! {
+                #(#cfg)*
+                {
+                    let mut index = 0;
+                    let mut count = 0;
+                    while index < keys.len() {
+                        if matches!(keys[index], Self::#name) {
+                            count += 1;
+                        }
+                        index += 1;
+                    }
+                    assert!(count <= 1, concat!("duplicate selection ", stringify!(#name)));
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+    let existing = declaration
+        .attrs
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("derive"))
+        .map(|attribute| {
+            attribute.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated)
+        })
         .collect::<syn::Result<Vec<_>>>()?;
-    let missing: Vec<syn::Path> = ["Clone", "Copy", "PartialEq", "Eq"].into_iter()
-        .filter(|name| !existing.iter().flatten().any(|path| path.is_ident(name)
-            || path.segments.last().is_some_and(|segment| segment.ident == *name)))
-        .map(|name| syn::parse_str(name).unwrap()).collect();
+    let missing: Vec<syn::Path> = ["Clone", "Copy", "PartialEq", "Eq"]
+        .into_iter()
+        .filter(|name| {
+            !existing
+                .iter()
+                .flatten()
+                .any(|path| path.is_ident(name) || path.segments.last().is_some_and(|segment| segment.ident == *name))
+        })
+        .map(|name| syn::parse_str(name).unwrap())
+        .collect();
     if !missing.is_empty() {
         declaration.attrs.push(syn::parse_quote!(#[derive(#(#missing),*)]));
     }
@@ -189,6 +228,14 @@ mod tests {
     #[test_case::test_case(quote!(fallback = Missing); "unknown fallback")]
     #[test_case::test_case(quote!(fallback = First, fallback = First); "duplicate fallback")]
     fn rejects_invalid_required_selections(args: TokenStream) {
-        assert!(expand(args, quote!(enum Key { First })).is_err());
+        assert!(expand(
+            args,
+            quote!(
+                enum Key {
+                    First,
+                }
+            )
+        )
+        .is_err());
     }
 }

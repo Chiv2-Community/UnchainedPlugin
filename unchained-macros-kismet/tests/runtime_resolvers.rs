@@ -1,10 +1,13 @@
 //! Backend isolation, retries, and cross-backend original-call publication.
 #![cfg(windows)]
 
-use std::{num::NonZeroUsize, sync::atomic::{AtomicBool, AtomicUsize, Ordering}};
-use unchained_macros_core as bindings;
-use bindings::{AddressResolver, Resolver, SelectorSnapshot, Patch, PatchState, PatchWriter};
 use bindings::__private::inventory;
+use bindings::{AddressResolver, Patch, PatchState, PatchWriter, Resolver, SelectorSnapshot};
+use std::{
+    num::NonZeroUsize,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+use unchained_macros_core as bindings;
 use unchained_macros_kismet::{ExecEnvironment, FunctionMetadata, KismetContext, KismetReflectionResolver, Reflection};
 
 static READY: AtomicBool = AtomicBool::new(false);
@@ -20,7 +23,9 @@ unsafe extern "C" fn plain(value: i32) -> i32 {
 }
 // Synthetic thunks are decoded, never executed. Their first call models parameter
 // stepping; the second calls the same native body used by the direct bindings.
-struct Frame { value: i32 }
+struct Frame {
+    value: i32,
+}
 #[inline(never)]
 unsafe extern "C" fn step(frame: *const Frame) -> i32 {
     unsafe { std::ptr::read_volatile(std::ptr::addr_of!((*frame).value)) }
@@ -33,13 +38,17 @@ unsafe extern "C" fn explicit_step(frame: *const Frame) -> i32 {
 unsafe extern "C" fn add_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
     let value = unsafe { step(frame) };
     let value = unsafe { add(value) };
-    unsafe { result.write(value); }
+    unsafe {
+        result.write(value);
+    }
 }
 #[inline(never)]
 unsafe extern "C" fn plain_thunk(_: *mut (), frame: *const Frame, result: *mut i32) {
     let value = unsafe { step(frame) };
     let value = unsafe { plain(value) };
-    unsafe { result.write(value); }
+    unsafe {
+        result.write(value);
+    }
 }
 
 struct FixtureReflection;
@@ -48,21 +57,32 @@ unsafe impl Reflection for FixtureReflection {
     unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String> {
         assert_eq!(owner, "/Script/Fixture.Native");
         READS.fetch_add(1, Ordering::SeqCst);
-        if !READY.load(Ordering::SeqCst) { return Err("not ready".into()); }
+        if !READY.load(Ordering::SeqCst) {
+            return Err("not ready".into());
+        }
         let exec_thunk = match member {
             "add" | "alias" => add_thunk as *const () as usize,
             "plain" => plain_thunk as *const () as usize,
             _ => panic!("excluded lookup must not run"),
         };
-        Ok(FunctionMetadata { is_native: true, exec_thunk, num_parms: 2, return_value_offset: 0 })
+        Ok(FunctionMetadata {
+            is_native: true,
+            exec_thunk,
+            num_parms: 2,
+            return_value_offset: 0,
+        })
     }
 }
 
 fn environment() -> ExecEnvironment {
     let mut image = 0;
-    let entry = unsafe { windows::Win32::System::Diagnostics::Debug::RtlLookupFunctionEntry(
-        add_thunk as *const () as u64, &mut image, None,
-    ) };
+    let entry = unsafe {
+        windows::Win32::System::Diagnostics::Debug::RtlLookupFunctionEntry(
+            add_thunk as *const () as u64,
+            &mut image,
+            None,
+        )
+    };
     assert!(!entry.is_null(), "synthetic thunk must have unwind metadata");
     ExecEnvironment {
         module_base: image as usize,
@@ -86,11 +106,19 @@ impl Native {
     unsafe fn plain(value: i32) -> i32 {}
 }
 #[bindings::bind_func_detour(Native::add)]
-unsafe fn replacement(value: i32) -> i32 { unsafe { Native::add(value) + 10 } }
+unsafe fn replacement(value: i32) -> i32 {
+    unsafe { Native::add(value) + 10 }
+}
 
 #[bindings::resolver_selection_key]
-enum Mode { Disabled }
-impl bindings::ResolverSelector for Mode { fn current() -> Self { Self::Disabled } }
+enum Mode {
+    Disabled,
+}
+impl bindings::ResolverSelector for Mode {
+    fn current() -> Self {
+        Self::Disabled
+    }
+}
 static FILTERED: Resolver<KismetReflectionResolver> = Resolver {
     name: "Filtered",
     implementation: KismetReflectionResolver::new("/Script/Fixture.Native", "filtered"),
@@ -120,13 +148,21 @@ impl AddressResolver for LateResolver {
         Ok(NonZeroUsize::new(add as *const () as usize).unwrap())
     }
 }
-static LATE: Resolver<LateResolver> = Resolver { name: "Late", implementation: LateResolver, filter: None };
+static LATE: Resolver<LateResolver> = Resolver {
+    name: "Late",
+    implementation: LateResolver,
+    filter: None,
+};
 static LATE_BINDING: bindings::FunctionBinding<LateResolver> = bindings::FunctionBinding::new("Late::alias", &LATE);
 inventory::submit! {
     &LATE_BINDING
         as &dyn bindings::__private::FunctionInfo
 }
-static OTHER: Resolver<OtherResolver> = Resolver { name: "Native__add", implementation: OtherResolver, filter: None };
+static OTHER: Resolver<OtherResolver> = Resolver {
+    name: "Native__add",
+    implementation: OtherResolver,
+    filter: None,
+};
 static OTHER_BINDING: bindings::FunctionBinding<OtherResolver> = bindings::FunctionBinding::new("Other::alias", &OTHER);
 inventory::submit! {
     &OTHER_BINDING
@@ -137,10 +173,13 @@ inventory::submit! { &OTHER as &dyn bindings::__private::ResolverInfo }
 struct SuppressedResolver;
 impl AddressResolver for SuppressedResolver {
     type Context = ();
-    unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> { panic!("excluded backend must not run") }
+    unsafe fn resolve(&self, _: &()) -> Result<NonZeroUsize, String> {
+        panic!("excluded backend must not run")
+    }
 }
 static SUPPRESSED: Resolver<SuppressedResolver> = Resolver {
-    name: "Native__add", implementation: SuppressedResolver,
+    name: "Native__add",
+    implementation: SuppressedResolver,
     filter: Some(bindings::ResolverFilter {
         selector: std::any::TypeId::of::<Mode>,
         lookup: |key| bindings::__private::dictionary_lookup(key, &[(Mode::Disabled, false)]),
@@ -167,9 +206,18 @@ static EDIT: Patch = Patch::nop(0, 1);
 #[derive(Default)]
 struct Writer(Vec<u64>);
 impl PatchWriter for Writer {
-    unsafe fn bytes(&mut self, address: u64, _: &[u8]) -> Result<(), String> { self.0.push(address); Ok(()) }
-    unsafe fn nop(&mut self, address: u64, _: usize) -> Result<(), String> { self.0.push(address); Ok(()) }
-    unsafe fn write(&mut self, address: u64, _: &bindings::WriteValue) -> Result<(), String> { self.0.push(address); Ok(()) }
+    unsafe fn bytes(&mut self, address: u64, _: &[u8]) -> Result<(), String> {
+        self.0.push(address);
+        Ok(())
+    }
+    unsafe fn nop(&mut self, address: u64, _: usize) -> Result<(), String> {
+        self.0.push(address);
+        Ok(())
+    }
+    unsafe fn write(&mut self, address: u64, _: &bindings::WriteValue) -> Result<(), String> {
+        self.0.push(address);
+        Ok(())
+    }
 }
 
 #[test]
@@ -180,14 +228,21 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert_eq!(bindings::patch_inventory_for::<OtherResolver>().count(), 0);
     assert_eq!(bindings::binding_inventory_for::<OtherResolver>().count(), 1);
     assert_eq!(bindings::detour_inventory_for::<KismetReflectionResolver>().count(), 1);
-    assert_eq!(bindings::resolver_inventory_for::<KismetReflectionResolver>().count(), 3);
+    assert_eq!(
+        bindings::resolver_inventory_for::<KismetReflectionResolver>().count(),
+        3
+    );
     assert!(snapshot.supports_resolver_for::<OtherResolver>("Native__add"));
     assert!(snapshot.supports_resolver_for::<KismetReflectionResolver>("Native__add"));
     assert!(!snapshot.supports_resolver_for::<SuppressedResolver>("Native__add"));
-    unsafe { bindings::initialize_bindings_for::<OtherResolver>(&(), &snapshot).unwrap(); }
+    unsafe {
+        bindings::initialize_bindings_for::<OtherResolver>(&(), &snapshot).unwrap();
+    }
     assert_eq!(READS.load(Ordering::SeqCst), 0);
     assert!(bindings::function_is_bound_for::<OtherResolver>("Native__add"));
-    assert!(!bindings::function_is_bound_for::<KismetReflectionResolver>("Native__add"));
+    assert!(!bindings::function_is_bound_for::<KismetReflectionResolver>(
+        "Native__add"
+    ));
     bindings::require_function_bindings_for::<OtherResolver>(&["Native__add"]).unwrap();
     assert!(bindings::require_function_bindings_for::<KismetReflectionResolver>(&["Native__add"]).is_err());
 
@@ -205,7 +260,10 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     let mut writer = Writer::default();
     let mut state = PatchState::default();
     for _ in 0..2 {
-        unsafe { bindings::apply_patches_for::<KismetReflectionResolver, _>(&context, &snapshot, &mut writer, &mut state).unwrap(); }
+        unsafe {
+            bindings::apply_patches_for::<KismetReflectionResolver, _>(&context, &snapshot, &mut writer, &mut state)
+                .unwrap();
+        }
     }
     assert_eq!(writer.0, [plain as *const () as u64]);
     assert_eq!(READS.load(Ordering::SeqCst), reads);
@@ -225,7 +283,9 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
         assert_eq!(other(5), 6);
         assert_ne!(OTHER_BINDING.address(), OTHER_BINDING.entry_address());
         assert!(bindings::__private::claim_detour_address(OTHER_BINDING.entry_address().unwrap().get()).is_err());
-        let hook = bindings::detour_inventory_for::<KismetReflectionResolver>().next().unwrap();
+        let hook = bindings::detour_inventory_for::<KismetReflectionResolver>()
+            .next()
+            .unwrap();
         hook.detour().unwrap().disable().unwrap();
         assert_eq!(Native::add(5), 6);
     }

@@ -88,15 +88,22 @@ unsafe extern "C" fn original_exclusive(value: &mut Native) -> &i32 {
 fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
     assert_ne!(original_shared as *const (), original_exclusive as *const ());
     unsafe {
-        Native::__UNCHAINED_TARGET_borrowed.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_borrowed as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_TARGET_shared_read.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_shared as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_TARGET_exclusive_read.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_exclusive as *const () as usize).unwrap()).unwrap();
+        Native::__UNCHAINED_TARGET_borrowed
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_borrowed as *const () as usize).unwrap())
+            .unwrap();
+        Native::__UNCHAINED_TARGET_shared_read
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_shared as *const () as usize).unwrap())
+            .unwrap();
+        Native::__UNCHAINED_TARGET_exclusive_read
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_exclusive as *const () as usize).unwrap())
+            .unwrap();
         let number = 17;
         let borrowed_number = &number;
-        let borrowed_call = std::hint::black_box(original_borrowed as for<'a> unsafe extern "C" fn(*const &'a i32) -> &'a i32);
+        let borrowed_call =
+            std::hint::black_box(original_borrowed as for<'a> unsafe extern "C" fn(*const &'a i32) -> &'a i32);
         __UNCHAINED_REGISTRATION_borrowed.attach(true).unwrap();
         assert!(std::ptr::eq(borrowed_call(&borrowed_number), &number));
         assert!(std::ptr::eq(Native::borrowed(&borrowed_number), &number));
@@ -116,8 +123,16 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
         assert_eq!(*Native::shared_read(&value), 43);
         assert_eq!(*Native::exclusive_read(&mut value), 45);
         __UNCHAINED_REGISTRATION_borrowed.detour().unwrap().disable().unwrap();
-        __UNCHAINED_REGISTRATION_shared_read.detour().unwrap().disable().unwrap();
-        __UNCHAINED_REGISTRATION_exclusive_read.detour().unwrap().disable().unwrap();
+        __UNCHAINED_REGISTRATION_shared_read
+            .detour()
+            .unwrap()
+            .disable()
+            .unwrap();
+        __UNCHAINED_REGISTRATION_exclusive_read
+            .detour()
+            .unwrap()
+            .disable()
+            .unwrap();
         let pointer = &raw mut value;
         assert_eq!(*shared_call(pointer), 45);
         assert_eq!(*exclusive_call(pointer), 47);
@@ -143,18 +158,25 @@ unsafe extern "C" fn original_mut_match<'a>(value: *mut Native, other: &'a i32) 
 #[test]
 fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
     unsafe {
-        Native::__UNCHAINED_TARGET_mut_read.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_mut as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_TARGET_const_match.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_const_match as *const () as usize).unwrap()).unwrap();
-        Native::__UNCHAINED_TARGET_mut_match.binding()
-            .initialize_address(std::num::NonZeroUsize::new(original_mut_match as *const () as usize).unwrap()).unwrap();
+        Native::__UNCHAINED_TARGET_mut_read
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_mut as *const () as usize).unwrap())
+            .unwrap();
+        Native::__UNCHAINED_TARGET_const_match
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_const_match as *const () as usize).unwrap())
+            .unwrap();
+        Native::__UNCHAINED_TARGET_mut_match
+            .binding()
+            .initialize_address(std::num::NonZeroUsize::new(original_mut_match as *const () as usize).unwrap())
+            .unwrap();
         let mut value = Native(42);
         let pointer = &raw mut value;
         let other = 7;
         let reverse_call = std::hint::black_box(original_mut as unsafe extern "C" fn(*mut Native, *const i32) -> i32);
         let const_call = std::hint::black_box(original_const_match as unsafe extern "C" fn(*const Native) -> i32);
-        let mut_call = std::hint::black_box(original_mut_match as for<'a> unsafe extern "C" fn(*mut Native, &'a i32) -> &'a i32);
+        let mut_call =
+            std::hint::black_box(original_mut_match as for<'a> unsafe extern "C" fn(*mut Native, &'a i32) -> &'a i32);
         __UNCHAINED_REGISTRATION_reverse.attach(true).unwrap();
         __UNCHAINED_REGISTRATION_const_match.attach(true).unwrap();
         __UNCHAINED_REGISTRATION_mut_match.attach(true).unwrap();
@@ -166,7 +188,11 @@ fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
         assert!(std::ptr::eq(Native::mut_match(pointer, &other), &other));
         assert_eq!(value.0, 42);
         __UNCHAINED_REGISTRATION_reverse.detour().unwrap().disable().unwrap();
-        __UNCHAINED_REGISTRATION_const_match.detour().unwrap().disable().unwrap();
+        __UNCHAINED_REGISTRATION_const_match
+            .detour()
+            .unwrap()
+            .disable()
+            .unwrap();
         __UNCHAINED_REGISTRATION_mut_match.detour().unwrap().disable().unwrap();
         assert_eq!(reverse_call(pointer, &other), 49);
         assert_eq!(const_call(pointer), 44);
@@ -201,7 +227,8 @@ fn mutability_override_preserves_original_calls_and_const_native_entry() {
         assert_eq!(Native::read(pointer), 43);
         assert_eq!(value.0, 42);
         __UNCHAINED_REGISTRATION_replacement
-            .detour().unwrap()
+            .detour()
+            .unwrap()
             .disable()
             .unwrap();
         assert_eq!(call(pointer), 43);
