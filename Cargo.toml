@@ -3,10 +3,14 @@ name = "UnchainedPlugin"
 version = "1.0.1"
 edition = "2021"
 
+[package.metadata]
+build-steps = ["plugin"]
+
 [workspace]
 members = [".", "unchained-macros-core", "unchained-macros-core/impl", "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl", "unchained-macros-kismet", "unchained-macros-kismet/impl", "build/unchained-native-docs", "xtask", "tests/backend-integration"]
 
 [workspace.dependencies]
+unchained-build-plan = { path = "build/plan" }
 binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
 # Share Bloodhound's scan context; Cargo.lock pins this branch to a commit.
 patternsleuth = { git = "https://github.com/Jacoby6000/patternsleuth", branch = "feature/memory-testkit", features = ["process-internal", "serde-resolvers", "image-pe"] }
@@ -47,6 +51,7 @@ lto = false
 
 
 [build-dependencies]
+unchained-build-plan.workspace = true
 unchained-native-docs = { path = "build/unchained-native-docs" }
 embed-resource = "3.0"
 git2 = { version = "0.21", default-features = false }

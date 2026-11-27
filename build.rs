@@ -1,6 +1,2 @@
-#[path = "build/mod.rs"]
-mod build;
-
-fn main() {
-    build::run();
-}
+// Cargo compiles this entry point separately for each workspace package.
+unchained_build_plan::build_script!();

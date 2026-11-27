@@ -54,6 +54,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "unchained-build-plan",
  "unchained-macros-core",
  "unchained-macros-kismet",
  "unchained-macros-patternsleuth",
@@ -2308,6 +2309,7 @@ dependencies = [
  "testcontainers",
  "tokio",
  "tokio-util",
+ "unchained-build-plan",
 ]
 
 [[package]]
@@ -3947,6 +3949,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "unchained-build-plan"
+version = "0.1.0"
+dependencies = [
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "unchained-macros-core"
 version = "0.1.0"
 dependencies = [
@@ -3957,6 +3966,7 @@ dependencies = [
  "retour",
  "serde",
  "test-case",
+ "unchained-build-plan",
  "unchained-macros-core-impl",
 ]
 
@@ -3968,6 +3978,7 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "test-case",
+ "unchained-build-plan",
 ]
 
 [[package]]
@@ -3978,6 +3989,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "test-case",
+ "unchained-build-plan",
  "unchained-macros-core",
  "unchained-macros-kismet-impl",
  "unchained-native-docs",
@@ -3991,6 +4003,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+ "unchained-build-plan",
 ]
 
 [[package]]
@@ -4005,6 +4018,7 @@ dependencies = [
  "retour",
  "serde",
  "test-case",
+ "unchained-build-plan",
  "unchained-macros-core",
  "unchained-macros-patternsleuth-impl",
 ]
@@ -4017,6 +4031,7 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "test-case",
+ "unchained-build-plan",
 ]
 
 [[package]]
@@ -4033,6 +4048,7 @@ dependencies = [
  "toml 0.8.23",
  "tree-sitter",
  "tree-sitter-cpp",
+ "unchained-build-plan",
  "url",
 ]
 
@@ -4746,6 +4762,7 @@ dependencies = [
  "dotenvy",
  "fs_extra",
  "proc-macro2",
+ "unchained-build-plan",
 ]
 
 [[package]]

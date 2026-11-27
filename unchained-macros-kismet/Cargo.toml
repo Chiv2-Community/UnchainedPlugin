@@ -2,9 +2,13 @@
 name = "unchained-macros-kismet"
 version = "0.1.0"
 edition = "2021"
-build = "../build/format.rs"
+build = "../build.rs"
+
+[package.metadata]
+build-steps = ["format"]
 
 [build-dependencies]
+unchained-build-plan.workspace = true
 proc-macro2 = { version = "1", features = ["span-locations"] }
 
 [dependencies]

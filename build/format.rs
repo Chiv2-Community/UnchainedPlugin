@@ -64,56 +64,38 @@ fn collect(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
-    let mut args = env::args_os().skip(1).peekable();
-    let check = args.next_if(|arg| arg == "--check").is_some();
-    let mut files: Vec<PathBuf> = args.map(PathBuf::from).collect();
-    if files.is_empty() && env!("CARGO_PKG_NAME") == "xtask" {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        let output = Command::new("git")
-            .current_dir(root)
-            .args([
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-                "--",
-                "unchained-macros-*/*.rs",
-            ])
-            .output()?;
-        if !output.status.success() {
-            return Err(String::from_utf8_lossy(&output.stderr).into_owned().into());
-        }
-        files.extend(
-            std::str::from_utf8(&output.stdout)?
-                .split_terminator('\0')
-                .map(|path| root.join(path)),
-        );
-    } else if files.is_empty() {
-        // Cargo build script: only write sources in the configuring checkout.
-        let dir = env::current_dir()?;
-        println!("cargo:rerun-if-env-changed=UNCHAINED_FORMAT_ROOT");
-        let Some(root) = env::var_os("UNCHAINED_FORMAT_ROOT") else {
-            return Ok(());
-        };
-        if !dir.starts_with(Path::new(&root)) {
-            return Ok(());
-        }
-        let config = dir
-            .ancestors()
-            .map(|p| p.join("rustfmt.toml"))
-            .find(|p| p.is_file())
-            .ok_or("missing macro crate rustfmt.toml")?;
-        println!("cargo:rerun-if-changed={}", config.display());
-        for name in ["src", "tests", "examples", "benches"] {
-            let path = dir.join(name);
-            if path.is_dir() {
-                println!("cargo:rerun-if-changed={name}");
-                collect(&path, &mut files)?;
-            }
+pub fn run() {
+    run_for_package().expect("failed to format package");
+}
+
+fn run_for_package() -> Result<()> {
+    let mut files = Vec::new();
+    // Cargo build script: only write sources in the configuring checkout.
+    let dir = env::current_dir()?;
+    println!("cargo:rerun-if-env-changed=UNCHAINED_FORMAT_ROOT");
+    let Some(root) = env::var_os("UNCHAINED_FORMAT_ROOT") else {
+        return Ok(());
+    };
+    if !dir.starts_with(Path::new(&root)) {
+        return Ok(());
+    }
+    let config = dir
+        .ancestors()
+        .map(|p| p.join("rustfmt.toml"))
+        .find(|p| p.is_file())
+        .ok_or("missing macro crate rustfmt.toml")?;
+    println!("cargo:rerun-if-changed={}", config.display());
+    for name in ["src", "tests", "examples", "benches"] {
+        let path = dir.join(name);
+        if path.is_dir() {
+            println!("cargo:rerun-if-changed={name}");
+            collect(&path, &mut files)?;
         }
     }
+    format_files(files, false)
+}
+
+pub fn format_files(files: Vec<PathBuf>, check: bool) -> Result<()> {
     let mut stale = false;
     for path in files {
         let source = fs::read_to_string(&path)?;
@@ -130,12 +112,7 @@ fn main() -> Result<()> {
             .arg(&path)
             .output()?;
         if !output.status.success() {
-            return Err(format!(
-                "{}: {}",
-                path.display(),
-                String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
+            return Err(format!("{}: {}", path.display(), String::from_utf8_lossy(&output.stderr)).into());
         }
         let formatted = spaced(std::str::from_utf8(&output.stdout)?)?;
         if formatted != source {
