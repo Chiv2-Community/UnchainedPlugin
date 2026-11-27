@@ -35,12 +35,15 @@ impl Native {
 unsafe extern "C" fn add(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
+
 unsafe extern "C" fn original_trampoline(value: i32) -> i32 {
     value + 2
 }
+
 unsafe extern "C" fn borrow(value: &Native) -> &i32 {
     &value.value
 }
+
 unsafe extern "C" fn storage<'a>(value: *const Native, output: &'a mut i32) -> &'a mut i32 {
     *output = unsafe { (*value).value };
     output
@@ -104,6 +107,7 @@ fn wrappers_use_the_entry_then_the_published_trampoline() {
         assert!(binding.publish_detour(detour).is_err());
         detour.disable().unwrap();
     }
+
     assert_eq!(binding.entry_address().unwrap().get(), entry);
     assert_ne!(binding.entry_address(), binding.address());
 }
@@ -137,9 +141,11 @@ fn uninitialized_calls_and_detour_publication_fail_before_native_execution() {
     unsafe extern "C" fn unbound_target(value: i32) -> i32 {
         unsafe { std::ptr::read_volatile(&value) }.wrapping_add(3)
     }
+
     let detour = Box::leak(Box::new(unsafe {
         retour::RawDetour::new(unbound_target as *const (), original_trampoline as *const ()).unwrap()
     }));
+
     assert!(unsafe { binding.publish_detour(detour) }.is_err());
 }
 

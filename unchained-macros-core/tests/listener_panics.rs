@@ -6,11 +6,14 @@ impl log::Log for PanickingLogger {
     fn enabled(&self, _: &log::Metadata<'_>) -> bool {
         true
     }
+
     fn log(&self, _: &log::Record<'_>) {
         panic!("logger failure");
     }
+
     fn flush(&self) {}
 }
+
 static LOGGER: PanickingLogger = PanickingLogger;
 static DROPS: AtomicUsize = AtomicUsize::new(0);
 struct Payload(bool);

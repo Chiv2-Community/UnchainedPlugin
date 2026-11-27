@@ -22,8 +22,11 @@
 Extend the plugin through native hooks, commands, votes, and event subscribers.
 
 - Follow existing modules and feature gates.
-- Format `unchained-macros-*` with `bash scripts/fmt-macros.sh`. CI runs the same
+- Cargo builds automatically format each `unchained-macros-*` crate in this checkout
+  before compiling it. To format all six at once, run `bash scripts/fmt-macros.sh`. CI runs the same
   command with `--check`. These crates use standard rustfmt with a 120-column target.
+  Leave a blank line after a multiline block before the next statement or item.
+  Keep consecutive closing braces, expression continuations, and single-line blocks together.
 - Keep native declarations separate from plugin behavior.
 - Use the [build instructions](README.md#building-the-windows-dll-on-linux) for Linux cross-builds.
 

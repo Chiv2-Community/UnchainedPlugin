@@ -4,6 +4,7 @@ use patternsleuth::{
     image::{pe::PEImage, Image, ImageType},
     Memory, NamedMemorySection,
 };
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unchained_macros_core::{bind_resolved_func, bind_resolved_value};
 use unchained_macros_patternsleuth::{define_custom_resolver, define_pattern_resolver};
@@ -33,6 +34,7 @@ define_pattern_resolver!(SideEffectFixture, ["AA BB"], |ctx, _patterns| {
     SIDE_EFFECTS.fetch_add(1, Ordering::SeqCst);
     Ok(ctx.resolve(Dependency::resolver()).await?.0 + 0x1000)
 });
+
 unchained_macros_patternsleuth::require_resolver!(SideEffectFixture);
 
 define_pattern_resolver!(ValueFixture, ["AA BB"]);
@@ -78,6 +80,7 @@ mod upstream {
     patternsleuth::resolvers::impl_resolver_singleton!(all, BoundFixture, |_ctx| async {
         panic!("the upstream namesake must not run")
     });
+
     #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
     pub struct ExternalFixture(pub u64);
     patternsleuth::resolvers::impl_resolver_singleton!(all, ExternalFixture, |_ctx| async { Ok(Self(0x3000)) });

@@ -3,6 +3,7 @@ use std::{
     ffi::c_void,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
 use unchained_macros_kismet::observation::{self, Inputs};
 
 struct PanickingLogger;
@@ -12,15 +13,19 @@ impl Drop for PanickingPayload {
         panic!("panic payload destructor fixture");
     }
 }
+
 impl log::Log for PanickingLogger {
     fn enabled(&self, _: &log::Metadata<'_>) -> bool {
         true
     }
+
     fn log(&self, _: &log::Record<'_>) {
         std::panic::panic_any(PanickingPayload);
     }
+
     fn flush(&self) {}
 }
+
 static LOGGER: PanickingLogger = PanickingLogger;
 static ORIGINALS: AtomicUsize = AtomicUsize::new(0);
 
@@ -36,10 +41,12 @@ fn panicking_entry_and_logger_keep_original_execution_and_scope() {
         observation::observe_exec(std::ptr::dangling_mut::<c_void>(), &[], Some(entry), || {
             ORIGINALS.fetch_add(1, Ordering::SeqCst);
         });
+
         // The previous scope must have been restored despite callback/logger panics.
         observation::observe_exec(std::ptr::dangling_mut::<c_void>(), &[], None, || {
             ORIGINALS.fetch_add(1, Ordering::SeqCst);
         });
     }
+
     assert_eq!(ORIGINALS.load(Ordering::SeqCst), 2);
 }

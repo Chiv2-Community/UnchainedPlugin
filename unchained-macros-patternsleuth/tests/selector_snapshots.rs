@@ -8,6 +8,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Mutex,
 };
+
 use unchained_macros_core::{register_patch, Patch, PatchWriter, ResolverSelector, SelectorSnapshot};
 use unchained_macros_patternsleuth::{
     define_custom_resolver, define_pattern_resolver, require_resolver, startup_resolvers,
@@ -26,6 +27,7 @@ enum Alpha {
     Second,
     Default,
 }
+
 impl ResolverSelector for Alpha {
     fn current() -> Self {
         ALPHA_READS.fetch_add(1, Ordering::SeqCst);
@@ -43,6 +45,7 @@ enum Beta {
     Middle,
     Leaf,
 }
+
 impl ResolverSelector for Beta {
     fn current() -> Self {
         BETA_READS.fetch_add(1, Ordering::SeqCst);
@@ -52,6 +55,7 @@ impl ResolverSelector for Beta {
             Self::Leaf
         }
     }
+
     fn fallback(self) -> Option<Self> {
         match self {
             Self::Missing => Some(Self::Middle),
@@ -64,10 +68,12 @@ impl ResolverSelector for Beta {
 define_pattern_resolver!(AlphaResolver, {
     Alpha::First: ["AA BB"], Alpha::Second: None, Alpha::Default: ["11 22"],
 });
+
 define_pattern_resolver!(BetaResolver, { Beta::Leaf: ["11 22"] });
 define_custom_resolver!(BetaValue, using Beta, |key| {
     BinaryMatcher::address(if key == Beta::Missing { TEXT + 0x30 } else { TEXT + 0x40 }).ensure_one()
 });
+
 require_resolver!(AlphaResolver);
 require_resolver!(BetaResolver);
 
@@ -79,12 +85,14 @@ impl Native {
     #[bind_resolved_func(BetaResolver)]
     unsafe fn beta() {}
 }
+
 #[unchained_macros_core::bind_func_detour(Native::alpha)]
 unsafe fn alpha_detour() {
     unsafe {
         Native::alpha();
     }
 }
+
 #[unchained_macros_core::bind_func_detour(Native::beta)]
 unsafe fn beta_detour() {
     unsafe {
@@ -138,6 +146,7 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
     let value = snapshot.eval(&image, |ctx| {
         Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
     });
+
     assert_eq!(value, TEXT + 0x30);
     assert_eq!(ALPHA_READS.load(Ordering::SeqCst), 1);
     assert_eq!(BETA_READS.load(Ordering::SeqCst), 1);
@@ -176,14 +185,17 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
                 Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
             })
         });
+
         let new = scope.spawn(|| {
             next.eval(&image, |ctx| {
                 Box::pin(async { ctx.resolve(BetaValue::resolver()).await.unwrap().0 })
             })
         });
+
         assert_eq!(old.join().unwrap(), TEXT + 0x30);
         assert_eq!(new.join().unwrap(), TEXT + 0x40);
     });
+
     assert_eq!(BETA_READS.load(Ordering::SeqCst), 2);
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _: () = snapshot.eval(&image, |_| {
@@ -192,6 +204,7 @@ fn independent_selectors_freeze_values_and_fallbacks_once_per_session() {
             })
         });
     }));
+
     assert!(panicked.is_err());
     // An ordinary fresh context must capture current providers, not a leaked seed.
     assert_eq!(image.resolve(BetaValue::resolver()).unwrap().0, TEXT + 0x40);
@@ -234,10 +247,12 @@ impl PatchWriter for Writer {
         self.0 += 1;
         Ok(())
     }
+
     unsafe fn nop(&mut self, _: u64, _: usize) -> Result<(), String> {
         self.0 += 1;
         Ok(())
     }
+
     unsafe fn write(&mut self, _: u64, _: &unchained_macros_core::WriteValue) -> Result<(), String> {
         self.0 += 1;
         Ok(())
@@ -267,10 +282,12 @@ enum Cycle {
     First,
     Second,
 }
+
 impl ResolverSelector for Cycle {
     fn current() -> Self {
         Self::First
     }
+
     fn fallback(self) -> Option<Self> {
         Some(match self {
             Self::First => Self::Second,

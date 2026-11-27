@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use unchained_macros_core::{
     apply_patches_for, register_patch, validate_patch_registrations, Patch, PatchRegistration, PatchState, PatchWriter,
 };
+
 use unchained_macros_patternsleuth::define_pattern_resolver;
 use unchained_macros_patternsleuth::{PatternsleuthResolver, ScanContext};
 
@@ -12,6 +13,7 @@ enum Key {
     Second,
     Optional,
 }
+
 impl unchained_macros_core::ResolverSelector for Key {
     fn current() -> Self {
         Self::First
@@ -74,10 +76,12 @@ impl PatchWriter for Writer {
         self.0.push((address, bytes.to_vec()));
         Ok(())
     }
+
     unsafe fn nop(&mut self, address: u64, count: usize) -> Result<(), String> {
         self.0.push((address, vec![0x90; count]));
         Ok(())
     }
+
     unsafe fn write(&mut self, address: u64, value: &unchained_macros_core::WriteValue) -> Result<(), String> {
         // This fixture records initialized scalar values only.
         let bytes = unsafe { std::slice::from_raw_parts(value.as_ptr(), value.size()) };
@@ -112,6 +116,7 @@ fn statics_and_factories_use_patch_names_not_resolver_names() {
             .apply(300, &mut writer)
             .unwrap();
     }
+
     assert_eq!(
         writer.0,
         [
@@ -209,5 +214,6 @@ fn relative_address_overflow_never_writes(enabled: bool) {
     } else {
         assert_eq!(result.unwrap(), false);
     }
+
     assert!(writer.0.is_empty());
 }

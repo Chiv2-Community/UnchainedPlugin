@@ -13,11 +13,13 @@ macro_rules! backend {
                     panic!("discovery must not resolve")
                 }
             }
+
             pub static RESOLVER: bindings::Resolver<Backend> = bindings::Resolver {
                 name: "SameResolver",
                 implementation: Backend,
                 filter: None,
             };
+
             pub static BINDING: bindings::FunctionBinding<Backend> =
                 bindings::FunctionBinding::new("SameBinding", &RESOLVER);
             type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), (), Backend>;
@@ -32,6 +34,7 @@ macro_rules! backend {
                 bindings::ListenerRegistration::entry("SameListener", &(&TARGET, |_| {}), || {
                     panic!("discovery must not evaluate conditions")
                 });
+
             pub static PATCH: bindings::PatchRegistration<Backend> = bindings::PatchRegistration {
                 name: stringify!($module),
                 resolver: &RESOLVER,
@@ -40,6 +43,7 @@ macro_rules! backend {
                 applies_to: |_| true,
                 validate_group: |_| Ok(()),
             };
+
             bindings::__private::inventory::submit! { &RESOLVER as &dyn ResolverInfo }
             bindings::__private::inventory::submit! { &BINDING as &dyn FunctionInfo }
             bindings::__private::inventory::submit! { &HOOK as &dyn bindings::DetourInfo }
@@ -48,6 +52,7 @@ macro_rules! backend {
         }
     };
 }
+
 backend!(first, ());
 backend!(second, std::rc::Rc<()>);
 
@@ -80,6 +85,7 @@ fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
             assert!(std::ptr::eq(patches[0], &$module::PATCH));
         };
     }
+
     check!(first);
     check!(second);
     assert_ne!(first::LISTENER.slot_identity(), second::LISTENER.slot_identity());

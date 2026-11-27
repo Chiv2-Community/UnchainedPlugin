@@ -3,6 +3,7 @@ use unchained_macros_core::{
     bind_resolved_func, bind_resolved_value, function_is_bound_for, initialize_bindings_for,
     initialize_value_bindings_where,
 };
+
 use unchained_macros_patternsleuth::{define_pattern_resolver, PatternsleuthResolver, ScanContext};
 
 #[unchained_macros_core::resolver_selection_key(require = [Allow, Deny])]
@@ -10,6 +11,7 @@ enum Mode {
     Allow,
     Deny,
 }
+
 impl unchained_macros_core::ResolverSelector for Mode {
     fn current() -> Self {
         Self::Allow
@@ -19,12 +21,15 @@ impl unchained_macros_core::ResolverSelector for Mode {
 define_pattern_resolver!(Enabled, {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
+
 define_pattern_resolver!(Disabled, {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
+
 define_pattern_resolver!(EnabledValue, {
     Mode::Allow: ["AA BB"], Mode::Deny: None,
 });
+
 define_pattern_resolver!(DisabledValue, {
     Mode::Allow: None, Mode::Deny: ["AA BB"],
 });
@@ -41,6 +46,7 @@ unsafe fn disabled_value() -> u32 {}
 unsafe extern "C" fn fixture() -> u32 {
     42
 }
+
 static VALUE: u32 = 7;
 
 #[test_case::test_case(false; "missing disabled offsets")]
@@ -55,6 +61,7 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
         offsets.insert("Disabled".into(), fixture as *const () as u64 - 1);
         offsets.insert("DisabledValue".into(), (&raw const VALUE) as u64 - 1);
     }
+
     let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(Mode::Allow).unwrap();
     let applicable = |name: &str| snapshot.supports_resolver_for::<PatternsleuthResolver>(name);
     unsafe {
@@ -63,6 +70,7 @@ fn disabled_bindings_are_not_initialized(cached: bool) {
         assert_eq!(enabled(), 42);
         assert_eq!(enabled_value(), 7);
     }
+
     assert!(function_is_bound_for::<PatternsleuthResolver>("Enabled"));
     assert!(!function_is_bound_for::<PatternsleuthResolver>("Disabled"));
     assert!(std::panic::catch_unwind(|| unsafe { disabled() }).is_err());

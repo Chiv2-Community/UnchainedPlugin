@@ -7,6 +7,7 @@ use std::{
         Arc,
     },
 };
+
 use unchained_macros_core::AddressResolver;
 use unchained_macros_kismet::schema::*;
 use unchained_macros_kismet::{kismet_runtime_bindings, ExecEnvironment, FunctionMetadata, KismetContext, Reflection};
@@ -24,12 +25,14 @@ impl Drop for FString {
         STRING_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
+
 struct FText(Arc<()>);
 impl Drop for FText {
     fn drop(&mut self) {
         TEXT_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
+
 #[repr(C)]
 struct FLinearColor {
     red: f32,
@@ -37,6 +40,7 @@ struct FLinearColor {
     blue: f32,
     alpha: f32,
 }
+
 struct Library;
 include!("fixtures/exec_access.rs");
 #[kismet_runtime_bindings("/Script/Fixture.Results")]
@@ -77,24 +81,29 @@ impl Library {
     #[dummy]
     unsafe fn MisalignedColorResult() -> FLinearColor {}
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::StringResult)]
 unsafe fn string_result() {
     assert_eq!(STRING_DROPS.load(Ordering::SeqCst), 0);
     OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::TextResult)]
 unsafe fn text_result() {
     assert_eq!(TEXT_DROPS.load(Ordering::SeqCst), 0);
     OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::ColorResult)]
 unsafe fn color_result() {
     OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::NullStringResult)]
 unsafe fn null_result() {
     NULL_OBSERVED.fetch_add(1, Ordering::SeqCst);
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::MisalignedColorResult)]
 unsafe fn misaligned_result() {
     MISALIGNED_OBSERVED.fetch_add(1, Ordering::SeqCst);
@@ -105,11 +114,13 @@ unsafe extern "system" fn string_original(_: *mut c_void, _: *mut c_void, result
         result.cast::<FString>().write(FString("caller-owned".into()));
     }
 }
+
 unsafe extern "system" fn text_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
     unsafe {
         result.cast::<FText>().write(FText(Arc::new(())));
     }
 }
+
 unsafe extern "system" fn color_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
     unsafe {
         result.cast::<FLinearColor>().write(FLinearColor {
@@ -120,11 +131,13 @@ unsafe extern "system" fn color_original(_: *mut c_void, _: *mut c_void, result:
         });
     }
 }
+
 unsafe extern "system" fn null_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
     // Invalid caller storage is tolerated only by this failure-path fixture.
     assert!(result.is_null());
     NULL_ORIGINALS.fetch_add(1, Ordering::SeqCst);
 }
+
 unsafe extern "system" fn unaligned_original(_: *mut c_void, _: *mut c_void, result: *mut c_void) {
     unsafe {
         result.cast::<FLinearColor>().write_unaligned(FLinearColor {
@@ -134,8 +147,10 @@ unsafe extern "system" fn unaligned_original(_: *mut c_void, _: *mut c_void, res
             alpha: 1.0,
         });
     }
+
     MISALIGNED_ORIGINALS.fetch_add(1, Ordering::SeqCst);
 }
+
 struct Fixture;
 fn native(member: &str) -> (usize, PropertyKind, usize) {
     match member {
@@ -167,6 +182,7 @@ fn native(member: &str) -> (usize, PropertyKind, usize) {
         _ => unreachable!(),
     }
 }
+
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, member: &str) -> Result<FunctionMetadata, String> {
         Ok(FunctionMetadata {
@@ -176,6 +192,7 @@ unsafe impl Reflection for Fixture {
             return_value_offset: 0,
         })
     }
+
     unsafe fn find_exec_schema(&self, _: &str, member: &str) -> Result<FunctionSchema, String> {
         let (identity, kind, size) = native(member);
         Ok(FunctionSchema {
@@ -192,6 +209,7 @@ unsafe impl Reflection for Fixture {
         })
     }
 }
+
 fn context() -> KismetContext {
     unsafe {
         KismetContext::new(
@@ -216,6 +234,7 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
             unsafe { Library::$descriptor.entry.register($callback, true, || true) }.unwrap();
         };
     }
+
     initialize!(
         __UNCHAINED_EXEC_Library_StringResult_RESOLVER,
         __UNCHAINED_EXEC_Library_StringResult_BINDING,
@@ -266,6 +285,7 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
         drop(string);
         drop(text);
     }
+
     assert_eq!(STRING_DROPS.load(Ordering::SeqCst), 1);
     assert_eq!(TEXT_DROPS.load(Ordering::SeqCst), 1);
 }
@@ -293,6 +313,7 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
             std::ptr::null_mut(),
         );
     }
+
     assert_eq!(NULL_ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(NULL_OBSERVED.load(Ordering::SeqCst), 1);
 }
@@ -324,6 +345,7 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
             result,
         );
     }
+
     assert_eq!(MISALIGNED_ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(MISALIGNED_OBSERVED.load(Ordering::SeqCst), 1);
     let result = unsafe { result.cast::<FLinearColor>().read_unaligned() };

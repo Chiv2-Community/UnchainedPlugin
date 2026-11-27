@@ -43,6 +43,7 @@ mod nested {
         Missing,
         Declared,
     }
+
     impl unchained_macros_core::ResolverSelector for Fallback {
         fn current() -> Self {
             Self::Missing
@@ -54,6 +55,7 @@ mod nested {
         Flavor::Second: ["CC DD"],
         Flavor::Shared: ["11 22"],
     });
+
     define_pattern_resolver!(InlineDictionary, {
         Flavor::First: ["AA BB"],
         Flavor::Second: ["CC DD"],
@@ -62,11 +64,13 @@ mod nested {
     define_pattern_resolver!(Ordered, First, {
         Fallback::Declared: ["11 22"],
     });
+
     define_pattern_resolver!(Disabled, {
         Flavor::First: None,
         Flavor::Second: [super::shared_pattern()],
         Flavor::Shared: [super::shared_pattern()],
     });
+
     define_pattern_resolver!(DisabledInline, {
         Flavor::First: None,
         Flavor::Second: [super::shared_pattern()],
@@ -75,12 +79,15 @@ mod nested {
         super::BODY_EVALUATIONS.fetch_add(1, super::Ordering::SeqCst);
         Ok(patterns.len() as u64)
     });
+
     define_pattern_resolver!(AllDisabled, {
         Flavor::First: None, Flavor::Second: None,
     });
+
     define_pattern_resolver!(AllDisabledXref, XrefFirst, {
         Flavor::First: None, Flavor::Second: None,
     });
+
     define_pattern_resolver!(AllDisabledInline, {
         Flavor::First: None, Flavor::Second: None,
     }, |_ctx, patterns| { Ok(patterns.len() as u64) });
@@ -91,6 +98,7 @@ fn all_none_dictionaries_compile_and_cannot_resolve() {
     if !initialize_selection(Flavor::First) {
         return;
     }
+
     let image = image(&[]);
     assert!(image
         .resolve(nested::AllDisabled::resolver())
@@ -115,6 +123,7 @@ fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, ena
     if !initialize_selection(flavor) {
         return;
     }
+
     let snapshot = unchained_macros_core::SelectorSnapshot::from_selection(flavor).unwrap();
     assert_eq!(
         snapshot.supports_resolver_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("Disabled"),
@@ -134,6 +143,7 @@ fn disabled_keys_skip_pattern_construction_and_inline_bodies(flavor: Flavor, ena
         assert!(standard.unwrap_err().to_string().contains("disabled"));
         assert!(inline.unwrap_err().to_string().contains("disabled"));
     }
+
     assert_eq!(PATTERN_EVALUATIONS.load(Ordering::SeqCst), if enabled { 2 } else { 0 });
     assert_eq!(BODY_EVALUATIONS.load(Ordering::SeqCst), usize::from(enabled));
 }
@@ -163,6 +173,7 @@ fn references_image(references: bool) -> Image<'static> {
             text[offset + 3..offset + 7].copy_from_slice(&displacement.to_le_bytes());
         }
     }
+
     let mut data = b"primary\0".to_vec();
     data.resize(16, 0);
     data.extend_from_slice(b"secondary\0");
@@ -194,6 +205,7 @@ fn selection_dictionary_uses_first_declared_key(flavor: Flavor, expected: Option
     if !initialize_selection(flavor) {
         return;
     }
+
     let image = image(&[0x10]);
     assert_eq!(image.resolve(nested::InlineDictionary::resolver()).unwrap().0, 1);
     let result = image.resolve(nested::Dictionary::resolver());
@@ -201,5 +213,6 @@ fn selection_dictionary_uses_first_declared_key(flavor: Flavor, expected: Option
         Some(address) => assert_eq!(result.unwrap().0, address),
         None => assert!(result.is_err()),
     }
+
     assert_eq!(image.resolve(nested::Ordered::resolver()).unwrap().0, TEXT);
 }

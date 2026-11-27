@@ -3,6 +3,7 @@ use crate::{
     docs::attach_native_documentation,
     signature::{native_type, normalized_mutability, parameter_type, validate_native_signature},
 };
+
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Type};
@@ -16,6 +17,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "detour target must be a non-generic Type::method binding path",
         ));
     }
+
     let native_target = target.clone();
     let method = &target.segments.last().unwrap().ident;
     let mut capability = target.clone();
@@ -41,6 +43,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "detours must be free functions with explicit native receiver arguments",
         ));
     }
+
     let native_link = native_target.to_token_stream().to_string().replace(' ', "");
     let documentation = syn::LitStr::new(
         &format!(
@@ -65,21 +68,25 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             checked_parameters.push(index);
             continue;
         }
+
         if annotations.len() != 1 || !matches!(annotations[0].meta, syn::Meta::Path(_)) {
             return Err(syn::Error::new_spanned(
                 annotations[0],
                 "use one bare #[mutability_override] annotation",
             ));
         }
+
         if !matches!(&*local.ty, Type::Ptr(_) | Type::Reference(_)) {
             return Err(syn::Error::new_spanned(
                 &local.ty,
                 "#[mutability_override] requires a raw pointer or reference detour parameter",
             ));
         };
+
         has_override = true;
         local.attrs.retain(|attr| !attr.path().is_ident("mutability_override"));
     }
+
     let signature = &function.sig;
     let native = native_type(signature)?;
     let ident = &function.sig.ident;
@@ -122,11 +129,13 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             let _: ::unchained_macros_core::NativeSignature<#native> = signature(#capability);
         }
     };
+
     let callback = if has_override {
         quote!(unsafe { ::core::mem::transmute(#replacement as #native) })
     } else {
         quote!(#replacement)
     };
+
     Ok(quote! {
         #function
         #(#cfg)*
@@ -134,6 +143,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             // Invariant signature metadata makes mismatches compiler errors.
             #signature_check
         };
+
         #(#cfg)*
         #[allow(non_snake_case)]
         fn #condition_fn() -> bool { (#condition)() }
@@ -142,6 +152,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         unsafe extern "C" fn #replacement #generics (#(#names: #types),*) #output {
             unsafe { #ident(#(#names),*) }
         }
+
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #registration: &dyn ::unchained_macros_core::DetourInfo = {
@@ -151,6 +162,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             );
             &unsafe { registration.with_inventory_state(&INITIALIZED) }
         };
+
         #(#cfg)*
         ::unchained_macros_core::__private::inventory::submit! {
             #registration
@@ -216,9 +228,11 @@ mod tests {
         let FnArg::Typed(local_arg) = &local.sig.inputs[0] else {
             unreachable!()
         };
+
         let FnArg::Typed(native_arg) = &native.sig.inputs[0] else {
             unreachable!()
         };
+
         assert!(local_arg.attrs.is_empty());
         assert_eq!(local_arg.ty.to_token_stream().to_string(), "* mut u32");
         assert_eq!(native_arg.ty.to_token_stream().to_string(), "* mut u32");
@@ -283,6 +297,7 @@ mod tests {
                 syn::Item::Fn(function) if function.sig.ident == "__unchained_condition_replacement" => {
                     Some(&function.block)
                 }
+
                 _ => None,
             })
             .unwrap();

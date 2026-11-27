@@ -69,10 +69,12 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
         if let Some(address) = self.address.get() {
             return Ok(*address);
         }
+
         let thread = context.observation_thread;
         if thread != current_thread_id() {
             return Err("Exec observation must resolve on the context's game thread".into());
         }
+
         let function = unsafe { context.reflection.find_function(self.owner, self.member) }?;
         let schema = unsafe { context.reflection.find_exec_schema(self.owner, self.member) }?;
         let properties = crate::schema::validate(&function, &schema, self.arguments, self.result)
@@ -106,6 +108,7 @@ pub struct DummyExecTarget<E> {
     dispatcher: ExecDispatcher,
     pub entry: unchained_macros_core::CallbackSlot<E>,
 }
+
 type ExecDispatcher = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, *mut std::ffi::c_void);
 impl<E: Copy> DummyExecTarget<E> {
     /// # Safety
@@ -122,14 +125,17 @@ impl<E: Copy> DummyExecTarget<E> {
         }
     }
 }
+
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for DummyExecTarget<E> {
     fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo {
         self.binding.resolver
     }
+
     unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) }
     }
 }
+
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for DummyExecTarget<E> {
     type Entry = E;
     fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> {

@@ -8,6 +8,7 @@ enum Mode {
     Write,
     Shared,
 }
+
 impl unchained_macros_core::ResolverSelector for Mode {
     fn current() -> Self {
         Self::Read
@@ -18,6 +19,7 @@ impl unchained_macros_core::ResolverSelector for Mode {
 enum Other {
     Read,
 }
+
 impl unchained_macros_core::ResolverSelector for Other {
     fn current() -> Self {
         Self::Read
@@ -48,18 +50,22 @@ fn selection_attribute_preserves_existing_derives_and_discriminants() {
 define_pattern_resolver!(ReadOnly, {
     Mode::Read: ["AA BB"], Mode::Write: None, Mode::Shared: None,
 });
+
 define_pattern_resolver!(WriteOnly, Simple, {
     Mode::Read: None, Mode::Write: ["CC DD"], Mode::Shared: None,
 });
+
 define_pattern_resolver!(ReadCall, Call, {
     Mode::Read: ["E8 | ?? ?? ?? ??"], Mode::Write: None, Mode::Shared: None,
 });
+
 define_pattern_resolver!(ReadInline, {
     Mode::Read: ["EE FF"], Mode::Write: None, Mode::Shared: None,
 }, |ctx, patterns| {
     let matches = ctx.scan(patternsleuth::scanner::Pattern::new(patterns[0]).unwrap()).await;
     patternsleuth::resolvers::ensure_one(matches)
 });
+
 define_pattern_resolver!(Unrestricted, ["11 22"]);
 
 use Mode::Read as ReadAlias;
@@ -118,6 +124,7 @@ inventory::submit! {
         }),
     } as &dyn unchained_macros_core::__private::ResolverInfo
 }
+
 inventory::submit! {
     &unchained_macros_core::Resolver {
         name: "Conflicting",

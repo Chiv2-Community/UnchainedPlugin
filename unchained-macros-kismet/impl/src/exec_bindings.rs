@@ -11,6 +11,7 @@ fn value_type(ty: &Type) -> syn::Result<Type> {
                 "exec observations require immutable call-scoped borrows",
             ));
         }
+
         Ok((*reference.elem).clone())
     } else {
         Ok(ty.clone())
@@ -22,6 +23,7 @@ fn parameter(ty: &Type) -> syn::Result<Tokens> {
         Type::Ptr(pointer) if matches!(&*pointer.elem, Type::Path(path) if path.path.segments.last().unwrap().ident == "UObject") => {
             "ObjectProperty"
         }
+
         Type::Path(path) => match path.path.segments.last().unwrap().ident.to_string().as_str() {
             "bool" => "BoolProperty",
             "u8" => "ByteProperty",
@@ -32,8 +34,10 @@ fn parameter(ty: &Type) -> syn::Result<Tokens> {
             "FLinearColor" => "StructProperty:LinearColor",
             _ => return Err(syn::Error::new_spanned(&ty, "unsupported exec observation type")),
         },
+
         _ => return Err(syn::Error::new_spanned(&ty, "unsupported exec observation type")),
     };
+
     Ok(quote!(::unchained_macros_kismet::schema::Parameter {
         kind: #kind, size: ::core::mem::size_of::<#ty>(),
     }))
@@ -59,6 +63,7 @@ pub fn expand_method(
             "use an empty unsafe non-generic exec declaration without an ABI",
         ));
     }
+
     let annotations: Vec<_> = method.attrs.iter().filter(|a| a.path().is_ident("dummy")).collect();
     if annotations.len() != 1 {
         return Err(syn::Error::new_spanned(
@@ -66,9 +71,11 @@ pub fn expand_method(
             "exec observation requires exactly one #[dummy] declaration and current binary evidence",
         ));
     }
+
     if !matches!(&annotations[0].meta, syn::Meta::Path(_)) {
         return Err(syn::Error::new_spanned(annotations[0], "#[dummy] takes no parameters"));
     }
+
     let method_name = &signature.ident;
     let member = method_name.to_string();
     let prefix = format!("__UNCHAINED_EXEC_{class}_{method_name}");
@@ -94,6 +101,7 @@ pub fn expand_method(
                 "exec declarations have explicit inputs, not Rust receivers",
             ));
         };
+
         let ty = value_type(&input.ty)?;
         parameters.push(parameter(&ty)?);
         let local = format_ident!("argument_{index}");
@@ -106,19 +114,23 @@ pub fn expand_method(
             decode.push(quote! { let #local = inputs.get(#index).expect("validated exec argument"); let #local = unsafe { #local.borrow::<#ty>() }; });
             borrowed.push(quote!(#local));
         }
+
         types.push(ty);
     }
+
     let result_parameter = match &signature.output {
         ReturnType::Default => quote!(None),
         ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(tuple) if tuple.elems.is_empty()) => quote!(None),
         ReturnType::Type(_, ty) if matches!(&**ty, Type::Reference(_)) => {
             return Err(syn::Error::new_spanned(ty, "exec result references are unsupported"))
         }
+
         ReturnType::Type(_, ty) => {
             let parameter = parameter(ty)?;
             quote!(Some(#parameter))
         }
     };
+
     let listener_type = quote!(::unchained_macros_kismet::DummyExecTarget<unsafe fn(#(&#types),*)>);
     let metadata = vec![
         syn::parse2(quote! {
@@ -150,6 +162,7 @@ pub fn expand_method(
                     ) },
                     filter: None,
                 };
+
             #(#attributes_cfg)*
             #[allow(non_upper_case_globals)]
             static #binding: ::unchained_macros_core::FunctionBinding<::unchained_macros_kismet::KismetExecResolver> =
@@ -167,6 +180,7 @@ pub fn expand_method(
                     unsafe { callback(#(#borrowed),*); }
                 });
             }
+
             #(#attributes_cfg)*
             #[allow(non_snake_case)]
             unsafe extern "system" fn #dispatch(context: *mut ::core::ffi::c_void, frame: *mut ::core::ffi::c_void, result: *mut ::core::ffi::c_void) {
@@ -176,6 +190,7 @@ pub fn expand_method(
                     unsafe { original(context, frame, result); }
                     return;
                 }
+
                 unsafe {
                     ::unchained_macros_kismet::observation::observe_exec(
                         frame, #resolver.implementation.properties(),
@@ -184,10 +199,12 @@ pub fn expand_method(
                     );
                 }
             }
+
             #(#attributes_cfg)*
             ::unchained_macros_core::__private::inventory::submit! {
                 &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
             }
+
             #(#attributes_cfg)*
             ::unchained_macros_core::__private::inventory::submit! {
                 &#binding
@@ -275,18 +292,22 @@ mod tests {
         let syn::Item::Const(scope) = &file.items[0] else {
             panic!("expected isolated helpers")
         };
+
         assert_eq!(cfg_attributes(&scope.attrs).count(), 1);
         let syn::Expr::Block(block) = &*scope.expr else {
             panic!("expected block")
         };
+
         for statement in &block.block.stmts {
             if let syn::Stmt::Macro(item) = statement {
                 assert_eq!(cfg_attributes(&item.attrs).count(), 1);
                 continue;
             }
+
             let syn::Stmt::Item(item) = statement else {
                 panic!("expected item")
             };
+
             let attributes = match item {
                 syn::Item::Static(item) => &item.attrs,
                 syn::Item::Fn(item) => &item.attrs,
@@ -294,6 +315,7 @@ mod tests {
                 syn::Item::Macro(item) => &item.attrs,
                 _ => panic!("unexpected generated item"),
             };
+
             if matches!(item, syn::Item::Impl(_))
                 && attributes.iter().any(|attribute| {
                     attribute
@@ -306,15 +328,19 @@ mod tests {
                 let syn::Item::Impl(implementation) = item else {
                     unreachable!()
                 };
+
                 assert_eq!(cfg_attributes(&implementation.attrs).count(), 1);
                 for associated in &implementation.items {
                     let syn::ImplItem::Const(item) = associated else {
                         panic!("expected dummy metadata")
                     };
+
                     assert_eq!(cfg_attributes(&item.attrs).count(), 1);
                 }
+
                 continue;
             }
+
             assert_eq!(cfg_attributes(attributes).count(), 1);
         }
     }

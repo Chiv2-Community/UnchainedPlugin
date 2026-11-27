@@ -23,6 +23,7 @@ impl Parse for Arguments {
                 "patch targets must be non-generic resolver types",
             ));
         }
+
         let selection = if input.is_empty() {
             None
         } else {
@@ -34,9 +35,11 @@ impl Parse for Arguments {
                 if input.peek(Token![,]) {
                     input.parse::<Token![,]>()?;
                 }
+
                 Some(selection)
             }
         };
+
         Ok(Self { resolver, selection })
     }
 }
@@ -60,9 +63,11 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                 return Err(syn::Error::new_spanned(signature,
                     "patch factories must be safe, non-generic Rust functions taking one u64 address and returning Patch"));
             }
+
             let name = &signature.ident;
             (name, &function.attrs, quote!(#name))
         }
+
         syn::Item::Static(value) => {
             if matches!(value.mutability, syn::StaticMutability::Mut(_)) {
                 return Err(syn::Error::new_spanned(
@@ -70,9 +75,11 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                     "registered patches must be immutable statics",
                 ));
             }
+
             let name = &value.ident;
             (name, &value.attrs, quote!(|_| #name.clone()))
         }
+
         _ => {
             return Err(syn::Error::new_spanned(
                 declaration,
@@ -80,6 +87,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             ))
         }
     };
+
     if attributes.iter().any(|attribute| {
         attribute
             .path()
@@ -92,6 +100,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             "register each patch item only once",
         ));
     }
+
     let cfg: Vec<_> = crate::common::cfg_attributes(attributes).collect();
     let (validation, provider, selector, applicability, coverage) = match selection {
         None => (
@@ -113,16 +122,19 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                     &[(#key, true)],
                 );
             },
+
             quote! {
                 ::unchained_macros_core::__private::inventory::submit! {
                     ::unchained_macros_core::__private::SelectorProvider::for_key(#key)
                 }
             },
+
             quote!(::core::option::Option::Some(::unchained_macros_core::__private::selector_type(#key))),
             quote!(|selection| ::unchained_macros_core::__private::selection_matches(selection, #key)),
             quote!(|patches| ::unchained_macros_core::__private::validate_patch_coverage::<#resolver, _>(#key, patches)),
         ),
     };
+
     Ok(quote! {
         #declaration
         #(#cfg)* #validation

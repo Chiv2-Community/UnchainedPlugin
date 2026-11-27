@@ -11,6 +11,7 @@ pub fn detour_is_enabled(name: &str) -> bool {
         .into_iter()
         .any(|binding| binding.name() == name && binding.enabled())
 }
+
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -19,13 +20,16 @@ use std::sync::OnceLock;
 pub struct NativeHook {
     hook: OnceLock<retour::RawDetour>,
 }
+
 impl NativeHook {
     pub const fn new() -> Self {
         Self { hook: OnceLock::new() }
     }
+
     pub fn detour(&self) -> Option<&retour::RawDetour> {
         self.hook.get()
     }
+
     /// # Safety
     /// Dispatcher ABI must match binding; all native callers must be quiescent.
     pub unsafe fn attach<R: crate::AddressResolver>(
@@ -52,10 +56,12 @@ impl NativeHook {
                 attach_function_detour(binding, &self.hook, dispatcher, false, || true)?;
             }
         }
+
         let hook = self.hook.get().expect("Native detour was just constructed");
         if !hook.is_enabled() {
             activate(hook)?;
         }
+
         Ok(())
     }
 }
@@ -86,6 +92,7 @@ pub unsafe fn attach_function_detour<R: crate::AddressResolver>(
     if storage.get().is_some() {
         return Err(retour::Error::AlreadyInitialized.into());
     }
+
     let claim = claim_detour_address(address)?;
     let detour = unsafe { retour::RawDetour::new(address as *const (), replacement)? };
     storage.set(detour).map_err(|_| retour::Error::AlreadyInitialized)?;
@@ -94,11 +101,13 @@ pub unsafe fn attach_function_detour<R: crate::AddressResolver>(
     unsafe {
         crate::binding::publish_function_detours(binding, hook)?;
     }
+
     if auto_activate && condition() {
         unsafe {
             hook.enable()?;
         }
     }
+
     Ok(())
 }
 
@@ -134,6 +143,7 @@ pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String
     if address == 0 {
         return Err("Native detour address is null".into());
     }
+
     if !CLAIMED_ADDRESSES
         .lock()
         .map_err(|_| "Detour address registry poisoned")?
@@ -141,6 +151,7 @@ pub fn claim_detour_address(address: usize) -> Result<DetourAddressClaim, String
     {
         return Err(format!("A detour already owns native address {address:#x}"));
     }
+
     Ok(DetourAddressClaim {
         address,
         committed: false,
@@ -160,20 +171,24 @@ mod tests {
             unreachable!()
         }
     }
+
     static RESOLVER: Resolver<Backend> = Resolver {
         name: "activation retry",
         implementation: Backend,
         filter: None,
     };
+
     static BINDING: FunctionBinding<Backend> = FunctionBinding::new("activation retry", &RESOLVER);
     static HOOK: NativeHook = NativeHook::new();
     inventory::submit! {
         &BINDING as &dyn crate::binding::FunctionInfo
     }
+
     #[inline(never)]
     unsafe extern "C" fn original(value: usize) -> usize {
         std::hint::black_box(value).wrapping_add(1)
     }
+
     unsafe extern "C" fn replacement(value: usize) -> usize {
         value + 10
     }

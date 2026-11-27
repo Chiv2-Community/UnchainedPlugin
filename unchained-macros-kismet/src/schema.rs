@@ -71,23 +71,27 @@ pub fn validate(
     if !schema.unique_exec_thunk {
         return Err("Shared exec wrappers are unsupported without verified frame-to-function identity".into());
     }
+
     if schema.function_identity == 0
         || count != arguments.len()
         || schema.parameters.len() != function.num_parms as usize
     {
         return Err("Exec observation function identity/parameter count mismatch".into());
     }
+
     let mut properties = Vec::new();
     let mut returned = false;
     for property in &schema.parameters {
         if property.identity == 0 || property.flags & PARM == 0 || property.array_dim != 1 {
             return Err("Exec observation requires scalar reflected parameter properties".into());
         }
+
         let is_result = property.flags & RETURN_PARM != 0;
         let expected = if is_result {
             if returned || property.offset != function.return_value_offset as usize {
                 return Err("Exec observation return metadata mismatch".into());
             }
+
             returned = true;
             result.ok_or("Exec observation declaration omits reflected result")?
         } else {
@@ -96,29 +100,35 @@ pub fn validate(
             {
                 return Err("Exec observation does not support mutable reference/out parameters".into());
             }
+
             *arguments
                 .get(properties.len())
                 .ok_or("Exec observation has excess parameters")?
         };
+
         // A VM bool input uses bool32, but reflected property/result size is bool8.
         let size = if !is_result && matches!(property.kind, PropertyKind::Bool) {
             1
         } else {
             expected.size
         };
+
         if !matches(&property.kind, expected.kind) || property.size != size {
             return Err(format!(
                 "Exec observation parameter type/layout mismatch: expected {}, reflected {:?}",
                 expected.kind, property.kind
             ));
         }
+
         if !is_result {
             properties.push(property.identity);
         }
     }
+
     if properties.len() != arguments.len() || returned != result.is_some() {
         return Err("Exec observation argument/result schema mismatch".into());
     }
+
     Ok(properties)
 }
 
@@ -133,6 +143,7 @@ mod tests {
                 num_parms: 2,
                 return_value_offset: 8,
             },
+
             FunctionSchema {
                 function_identity: 2,
                 unique_exec_thunk: true,
@@ -145,6 +156,7 @@ mod tests {
                         flags: PARM,
                         offset: 0,
                     },
+
                     PropertyMetadata {
                         identity: 4,
                         kind: PropertyKind::Bool,
@@ -157,15 +169,18 @@ mod tests {
             },
         )
     }
+
     const BOOL: Parameter = Parameter {
         kind: "BoolProperty",
         size: 1,
     };
+
     #[test]
     fn return_is_not_stepped_and_bool_input_uses_separate_vm_layout() {
         let (function, schema) = fixture();
         assert_eq!(validate(&function, &schema, &[BOOL], Some(BOOL)).unwrap(), [3]);
     }
+
     #[test]
     fn mismatched_counts_results_types_and_layouts_fail_closed() {
         let (function, schema) = fixture();
@@ -181,6 +196,7 @@ mod tests {
         wrong.parameters[1].size = 4;
         assert!(validate(&function, &wrong, &[BOOL], Some(BOOL)).is_err());
     }
+
     #[test]
     fn mutable_references_out_parameters_and_arrays_are_rejected() {
         let (function, schema) = fixture();
@@ -189,6 +205,7 @@ mod tests {
             wrong.parameters[0].flags = flags;
             assert!(validate(&function, &wrong, &[BOOL], Some(BOOL)).is_err());
         }
+
         let mut wrong = schema.clone();
         wrong.parameters[0].array_dim = 2;
         assert!(validate(&function, &wrong, &[BOOL], Some(BOOL)).is_err());
@@ -196,6 +213,7 @@ mod tests {
         constant.parameters[0].flags = PARM | REFERENCE_PARM | CONST_PARM;
         assert!(validate(&function, &constant, &[BOOL], Some(BOOL)).is_ok());
     }
+
     #[test]
     fn owned_results_require_exact_native_storage_size_and_kind() {
         for (kind, name, size) in [
@@ -213,6 +231,7 @@ mod tests {
                 num_parms: 1,
                 return_value_offset: 0,
             };
+
             let mut schema = FunctionSchema {
                 function_identity: 2,
                 unique_exec_thunk: true,
@@ -225,6 +244,7 @@ mod tests {
                     offset: 0,
                 }],
             };
+
             let result = Parameter { kind: name, size };
             assert!(validate(&function, &schema, &[], Some(result)).is_ok());
             schema.parameters[0].size -= 1;

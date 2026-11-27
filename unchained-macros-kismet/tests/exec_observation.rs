@@ -39,6 +39,7 @@ unsafe fn predicate(_context: &*mut UObject, _flag: &bool) {}
 struct Fixture {
     shared: bool,
 }
+
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
         Ok(FunctionMetadata {
@@ -48,6 +49,7 @@ unsafe impl Reflection for Fixture {
             return_value_offset: u16::MAX,
         })
     }
+
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
             function_identity: 42,
@@ -77,6 +79,7 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
             },
         )
     };
+
     let resolver = unsafe {
         unchained_macros_kismet::KismetExecResolver::new(
             "/Script/Fixture.Library",
@@ -85,9 +88,11 @@ fn exec_resolver_uses_unique_wrapper_not_shared_dummy_body() {
                 kind: "StrProperty",
                 size: std::mem::size_of::<FString>(),
             }],
+
             None,
         )
     };
+
     assert_eq!(unsafe { resolver.resolve(&context) }.unwrap().get(), 123);
 }
 
@@ -104,6 +109,7 @@ fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
             },
         )
     };
+
     let resolver = unsafe {
         unchained_macros_kismet::KismetExecResolver::new(
             "/Script/Fixture.Library",
@@ -112,9 +118,11 @@ fn ambiguous_exec_wrapper_is_rejected_before_attachment() {
                 kind: "StrProperty",
                 size: std::mem::size_of::<FString>(),
             }],
+
             None,
         )
     };
+
     assert!(unsafe { resolver.resolve(&context) }
         .unwrap_err()
         .contains("Shared exec wrappers"));
@@ -126,12 +134,15 @@ struct Frame {
     original_calls: usize,
     cleanup: usize,
 }
+
 thread_local! {
     static RUNTIME_EVENTS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
 }
+
 fn event(value: &'static str) {
     RUNTIME_EVENTS.with(|events| events.borrow_mut().push(value));
 }
+
 unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
     assert_eq!(*context as usize, 0x123);
     assert!(*flag);
@@ -140,6 +151,7 @@ unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
         invoke_reentrant_predicate();
     }
 }
+
 unsafe fn invoke_reentrant_predicate() {
     let mut frame = Frame::default();
     let mut result = 0u8;
@@ -150,11 +162,13 @@ unsafe fn invoke_reentrant_predicate() {
             (&mut result as *mut u8).cast(),
         );
     }
+
     assert_eq!(
         (frame.evaluations, frame.original_calls, frame.cleanup, result),
         (2, 1, 1, 1)
     );
 }
+
 unsafe extern "system" fn original_exec(
     _: *mut std::ffi::c_void,
     frame: *mut std::ffi::c_void,
@@ -170,16 +184,20 @@ unsafe extern "system" fn original_exec(
             state.evaluations += 1;
             context = 0x123usize as *mut UObject;
         });
+
         observe_step(frame, (&mut boolean as *mut u32).cast(), 12, || {
             state.evaluations += 1;
             boolean = 0x100; // Must read bool32, not its low byte.
         });
+
         event("body");
         result.cast::<u8>().write(1);
     }
+
     state.cleanup += 1;
     event("cleanup");
 }
+
 struct RuntimeReflection;
 unsafe impl Reflection for RuntimeReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
@@ -190,6 +208,7 @@ unsafe impl Reflection for RuntimeReflection {
             return_value_offset: 16,
         })
     }
+
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
             function_identity: 42,
@@ -203,6 +222,7 @@ unsafe impl Reflection for RuntimeReflection {
                     flags: PARM,
                     offset: 0,
                 },
+
                 PropertyMetadata {
                     identity: 12,
                     kind: PropertyKind::Bool,
@@ -211,6 +231,7 @@ unsafe impl Reflection for RuntimeReflection {
                     flags: PARM,
                     offset: 8,
                 },
+
                 PropertyMetadata {
                     identity: 13,
                     kind: PropertyKind::Bool,
@@ -237,6 +258,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
             },
         )
     };
+
     let address = unsafe {
         Library::__UNCHAINED_EXEC_Library_Predicate_RESOLVER
             .implementation
@@ -259,6 +281,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
             (&mut result as *mut u8).cast(),
         );
     }
+
     assert_eq!(
         (frame.evaluations, frame.original_calls, frame.cleanup, result),
         (2, 1, 1, 1)
@@ -274,6 +297,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
                 (&mut result as *mut u8).cast(),
             );
         }
+
         assert_eq!(
             (frame.evaluations, frame.original_calls, frame.cleanup, result),
             (2, 1, 1, 1)
@@ -288,6 +312,7 @@ thread_local! {
     static NOARGS_ORIGINALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static NOARGS_ENTRIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
+
 unsafe fn invoke_noargs() {
     unsafe {
         (Library::__UNCHAINED_EXEC_Library_NoArgs_dispatch)(
@@ -297,12 +322,14 @@ unsafe fn invoke_noargs() {
         );
     }
 }
+
 unsafe fn noargs_reentrant_entry() {
     NOARGS_ENTRIES.with(|count| count.set(count.get() + 1));
     unsafe {
         invoke_noargs();
     } // Unconditional: the descriptor must stop recursion.
 }
+
 unsafe extern "system" fn noargs_original(
     _: *mut std::ffi::c_void,
     _: *mut std::ffi::c_void,
@@ -314,6 +341,7 @@ unsafe extern "system" fn noargs_original(
     );
     NOARGS_ORIGINALS.with(|count| count.set(count.get() + 1));
 }
+
 struct NoArgsReflection;
 unsafe impl Reflection for NoArgsReflection {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
@@ -324,6 +352,7 @@ unsafe impl Reflection for NoArgsReflection {
             return_value_offset: u16::MAX,
         })
     }
+
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
             function_identity: 43,
@@ -346,6 +375,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
             },
         )
     };
+
     let address = unsafe {
         Library::__UNCHAINED_EXEC_Library_NoArgs_RESOLVER
             .implementation
@@ -362,12 +392,14 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     unsafe {
         invoke_noargs();
     }
+
     NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));
     NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));
     std::thread::spawn(|| {
         unsafe {
             invoke_noargs();
         }
+
         NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 1));
         NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 0));
     })

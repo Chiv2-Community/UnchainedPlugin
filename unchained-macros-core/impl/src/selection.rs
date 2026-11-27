@@ -10,12 +10,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             "selection keys must be non-generic",
         ));
     }
+
     let syn::Data::Enum(data) = &declaration.data else {
         return Err(syn::Error::new_spanned(
             &declaration.ident,
             "selection keys must be fieldless enums",
         ));
     };
+
     for variant in &data.variants {
         if !matches!(variant.fields, syn::Fields::Unit) {
             return Err(syn::Error::new_spanned(
@@ -24,6 +26,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             ));
         }
     }
+
     let mut required = None;
     let mut fallback = None;
     syn::meta::parser(|meta| {
@@ -31,19 +34,24 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             if fallback.is_some() {
                 return Err(meta.error("duplicate fallback option"));
             }
+
             let key: syn::Ident = meta.value()?.parse()?;
             if !data.variants.iter().any(|variant| variant.ident == key) {
                 return Err(syn::Error::new_spanned(key, "unknown fallback selection variant"));
             }
+
             fallback = Some(key);
             return Ok(());
         }
+
         if !meta.path.is_ident("require") {
             return Err(meta.error("expected require = [Variant, ...] or fallback = Variant"));
         }
+
         if required.is_some() {
             return Err(meta.error("duplicate require option"));
         }
+
         let content;
         let value = meta.value()?;
         syn::bracketed!(content in value);
@@ -53,11 +61,14 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             if !data.variants.iter().any(|variant| variant.ident == key) {
                 return Err(syn::Error::new_spanned(key, "unknown required selection variant"));
             }
+
             if checked.contains(&key) {
                 return Err(syn::Error::new_spanned(key, "duplicate required selection"));
             }
+
             checked.push(key);
         }
+
         required = Some(checked);
         Ok(())
     })
@@ -108,8 +119,10 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                         if matches!(keys[index], Self::#name) {
                             count += 1;
                         }
+
                         index += 1;
                     }
+
                     assert!(count <= 1, concat!("duplicate selection ", stringify!(#name)));
                 }
             }
@@ -136,6 +149,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
     if !missing.is_empty() {
         declaration.attrs.push(syn::parse_quote!(#[derive(#(#missing),*)]));
     }
+
     let name = &declaration.ident;
     Ok(quote! {
         #declaration
@@ -144,6 +158,7 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
             fn name(self) -> &'static str { match self { #(#name_arms)* } }
             fn default_fallback(self) -> ::core::option::Option<Self> { #fallback_body }
         }
+
         impl #name {
             #[doc(hidden)]
             pub const fn __unchained_validate_patch(self, resolver: &[(Self, bool)], patch: &[(Self, bool)]) {
@@ -159,8 +174,10 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                             target += 1;
                         }
                     }
+
                     index += 1;
                 }
+
                 let _ = self;
             }
 
@@ -180,8 +197,10 @@ pub(super) fn expand(args: TokenStream, item: TokenStream) -> syn::Result<TokenS
                             found = true;
                             break;
                         }
+
                         index += 1;
                     }
+
                     assert!(found, concat!(
                         "missing required selection ", stringify!(#required),
                         "; specify patterns or None"

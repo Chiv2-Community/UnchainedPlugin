@@ -19,15 +19,18 @@ pub use binding::{
     initialize_value_bindings_where, is_required_value, require_function_bindings_for, FunctionBinding, NativeGlobal,
     NativeSignature, ResolvedAddress, ValueBinding,
 };
+
 pub use detour::{detour_is_enabled, detour_is_initialized, NativeHook};
 pub use listener::{
     isolate_observer, listener_inventory_for, listener_is_enabled, listener_is_initialized,
     validate_listener_registrations_for, CallbackSlot, CallbackTarget, ExitObservation, ListenerRegistration,
     ObserverSnapshot, SupportsEntry, SupportsExit,
 };
+
 pub use patch::{
     apply_patches_for, validate_patch_registrations, Patch, PatchApplication, PatchState, PatchWriter, WriteValue,
 };
+
 pub use registry::{detour_inventory_for, patch_inventory_for, DetourInfo, DetourRegistration, PatchRegistration};
 pub use resolver::{resolver_inventory_for, AddressResolver, Resolver};
 pub use selection::{
@@ -46,6 +49,7 @@ pub mod __private {
         dictionary_allows, dictionary_lookup, resolver_selections, selection_key, selection_matches, selector_type,
         SelectorProvider,
     };
+
     pub use inventory;
     pub use log;
     pub use paste;

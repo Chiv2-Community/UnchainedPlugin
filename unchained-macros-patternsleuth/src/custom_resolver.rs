@@ -36,6 +36,7 @@ macro_rules! define_custom_resolver {
             Ok(Self(ctx.resolve(<$resolver>::resolver()).await?.0))
         });
     };
+
     ($name:ident, using $selector:ty, |$key:ident| $matcher:expr $(,)?) => {
         $crate::__private::inventory::submit! { $crate::__private::SelectorProvider::of::<$selector>() }
         $crate::__pattern_resolver!(@emit_header $name);
@@ -45,12 +46,14 @@ macro_rules! define_custom_resolver {
             Ok(Self($crate::__private::single_address(($matcher).resolve(ctx).await?)))
         });
     };
+
     ($name:ident, with($selection:expr), |$key:ident| $matcher:expr $(,)?) => {
         $crate::define_custom_resolver!($name, {
             let $key = $selection;
             $matcher
         });
     };
+
     ($name:ident, $matcher:expr $(,)?) => {
         $crate::__pattern_resolver!(@emit_header $name);
         ::patternsleuth::resolvers::impl_resolver_singleton!(all, $name, |ctx| async {

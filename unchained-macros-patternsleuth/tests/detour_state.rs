@@ -15,9 +15,11 @@ inventory::submit! { &BINDING as &dyn unchained_macros_core::__private::Function
 unsafe extern "C" fn target(value: i32) -> i32 {
     unsafe { std::ptr::read_volatile(&value) }.wrapping_add(1)
 }
+
 unsafe extern "C" fn replacement(value: i32) -> i32 {
     value + 2
 }
+
 unsafe extern "C" fn dispatch(value: i32) -> i32 {
     let call: unsafe extern "C" fn(i32) -> i32 = unchained_macros_core::SupportsDetour::replacement_slot(&TARGET)
         .get()
@@ -44,6 +46,7 @@ fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
             .unwrap();
         REGISTRATION.attach(false).unwrap();
     }
+
     assert!(detour_is_initialized("FixtureDetour"));
     assert!(!detour_is_enabled("FixtureDetour"));
     let call = std::hint::black_box(target as unsafe extern "C" fn(i32) -> i32);
@@ -54,6 +57,7 @@ fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
     unsafe {
         REGISTRATION.detour().unwrap().disable().unwrap();
     }
+
     assert!(detour_is_initialized("FixtureDetour"));
     assert!(!detour_is_enabled("FixtureDetour"));
     assert_eq!(unsafe { call(3) }, 4);

@@ -17,13 +17,16 @@ pub trait SupportsDetour: CallbackTarget {
         if self.replacement_slot().is_registered() {
             return Err("Only one behavior-changing detour is supported per method".into());
         }
+
         unsafe {
             self.ensure_attached()?;
         }
+
         unsafe {
             self.replacement_slot()
                 .register(callback, self.activation(activate, condition), || true)?;
         }
+
         Ok(())
     }
 }
@@ -40,6 +43,7 @@ pub struct NativeTarget<F, E, X, P, R: AddressResolver> {
     exit: CallbackSlot<P>,
     signature: std::marker::PhantomData<fn(X) -> X>,
 }
+
 impl<F: Copy, E: Copy, X, P: Copy, R: AddressResolver> NativeTarget<F, E, X, P, R> {
     /// # Safety
     /// `binding` and `dispatcher` must honor F/E/X/P and original-call bypass.
@@ -60,10 +64,12 @@ impl<F: Copy, E: Copy, X, P: Copy, R: AddressResolver> NativeTarget<F, E, X, P, 
             signature: std::marker::PhantomData,
         }
     }
+
     pub const fn binding(&self) -> &'static FunctionBinding<R> {
         self.binding
     }
 }
+
 impl<F, E, X: 'static, P, R: AddressResolver> CallbackTarget for NativeTarget<F, E, X, P, R>
 where
     F: Copy + Send + Sync + 'static,
@@ -73,10 +79,12 @@ where
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
         self.binding.resolver
     }
+
     unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.hook.attach(self.binding, (self.code_pointer)(self.dispatcher)) }
     }
 }
+
 impl<F, E, X: 'static, P, R: AddressResolver> SupportsEntry for NativeTarget<F, E, X, P, R>
 where
     F: Copy + Send + Sync + 'static,
@@ -88,6 +96,7 @@ where
         &self.entry
     }
 }
+
 impl<F, E, X: Copy + Sync + 'static, P, R: AddressResolver> SupportsExit for NativeTarget<F, E, X, P, R>
 where
     F: Copy + Send + Sync + 'static,
@@ -100,6 +109,7 @@ where
         &self.exit
     }
 }
+
 impl<F, E, X: 'static, P, R: AddressResolver> SupportsDetour for NativeTarget<F, E, X, P, R>
 where
     F: Copy + Send + Sync + 'static,
@@ -110,6 +120,7 @@ where
     fn replacement_slot(&self) -> &CallbackSlot<F> {
         &self.replacement
     }
+
     fn physical_detour(&self) -> Option<&retour::RawDetour> {
         self.hook.detour()
     }

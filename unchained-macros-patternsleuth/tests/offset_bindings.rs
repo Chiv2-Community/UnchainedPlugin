@@ -37,6 +37,7 @@ unsafe extern "C" fn get_motd(
     unsafe {
         *result = (*this).value + *request;
     }
+
     result
 }
 
@@ -59,12 +60,14 @@ fn provider_offsets_use_ordinary_typed_resolver_bindings() {
             "GetPost_Missing" => continue,
             name => panic!("Unexpected request binding {name}"),
         };
+
         unsafe {
             binding
                 .initialize_address(std::num::NonZeroUsize::new(address).unwrap())
                 .unwrap();
         }
     }
+
     let mut client = OpenAPIClientAPI { value: 40 };
     let mut output = 0;
     let output_ptr = &raw mut output;

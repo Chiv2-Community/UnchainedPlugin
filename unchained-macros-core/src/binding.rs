@@ -21,6 +21,7 @@ impl ResolvedAddress {
     pub const fn name(&self) -> &'static str {
         self.name
     }
+
     pub fn get(&self) -> Option<NonZeroUsize> {
         self.address.get().copied()
     }
@@ -125,6 +126,7 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
         if self.entry_address().is_none() {
             return Err(format!("Native binding {} is not initialized", self.name()));
         }
+
         self.detour
             .set(detour)
             .map_err(|_| format!("Native binding {} already has a detour", self.name()))
@@ -153,6 +155,7 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -167,17 +170,21 @@ pub trait FunctionInfo: std::any::Any + Send + Sync {
     fn entry_address(&self) -> Option<NonZeroUsize>;
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
 }
+
 impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
         self.resolver
     }
+
     fn entry_address(&self) -> Option<NonZeroUsize> {
         self.entry_address()
     }
+
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String> {
         unsafe { self.publish_detour(detour) }
     }
 }
+
 inventory::collect!(&'static dyn FunctionInfo);
 pub fn binding_inventory_for<R: crate::AddressResolver>() -> impl Iterator<Item = &'static FunctionBinding<R>> {
     inventory::iter::<&'static dyn FunctionInfo>
@@ -202,11 +209,13 @@ pub unsafe fn initialize_bindings_for<R: crate::AddressResolver>(
             .map_err(|error| format!("Binding {} ({}): {error}", binding.name(), binding.resolver_name()))?;
         resolved.push((binding, address));
     }
+
     for (binding, address) in resolved {
         unsafe {
             binding.initialize_address(address)?;
         }
     }
+
     Ok(())
 }
 
@@ -221,6 +230,7 @@ pub fn require_function_bindings_for<R: crate::AddressResolver>(names: &[&str]) 
             return Err(format!("Native binding {name} is not initialized"));
         }
     }
+
     Ok(())
 }
 
@@ -244,10 +254,12 @@ pub(crate) unsafe fn publish_function_detours<R: crate::AddressResolver>(
     {
         return Err(format!("A different trampoline is already published for {entry:#x}"));
     }
+
     // Manual targets need an original-call trampoline even without inventory.
     unsafe {
         owner.publish_detour(detour)?;
     }
+
     attached.insert(entry.get(), detour);
     for binding in inventory::iter::<&'static dyn FunctionInfo> {
         let same_storage = std::ptr::addr_eq(*binding as *const dyn FunctionInfo, owner as *const _);
@@ -257,6 +269,7 @@ pub(crate) unsafe fn publish_function_detours<R: crate::AddressResolver>(
             }
         }
     }
+
     Ok(())
 }
 
@@ -305,6 +318,7 @@ impl<T> NativeGlobal<T> {
         } else {
             address as *mut T
         };
+
         assert!(
             !pointer.is_null(),
             "Required native value {} is null; the engine must initialize it before access",
@@ -347,6 +361,7 @@ pub unsafe fn initialize_value_bindings_where(
                 binding.name()
             )
         });
+
         unsafe {
             binding.initialize(base, *offset);
         }

@@ -18,6 +18,7 @@ impl TestAllocator {
         unsafe {
             (*self).calls.fetch_add(amount, Ordering::Relaxed);
         }
+
         self
     }
 
@@ -39,6 +40,7 @@ impl InlineObject {
     pub fn borrow<'a>(&'a self) -> &'a AtomicUsize {
         &self.0
     }
+
     pub fn address(&self) -> *const Self {
         self
     }
@@ -68,9 +70,11 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
     unsafe {
         initialize_value_bindings(1, &offsets);
     }
+
     unsafe extern "C" fn probe(allocator: *const TestAllocator) -> usize {
         unsafe { (*allocator).calls.load(Ordering::Relaxed) }
     }
+
     unsafe {
         unchained_macros_core::initialize_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(
             &unchained_macros_patternsleuth::ScanContext::new(
@@ -81,13 +85,16 @@ fn static_globals_reload_pointer_slots_and_preserve_inline_storage() {
         )
         .unwrap();
     }
+
     assert!(std::panic::catch_unwind(|| unsafe { Allocator.read() }).is_err());
     let mut first = TestAllocator {
         calls: AtomicUsize::new(0),
     };
+
     let mut second = TestAllocator {
         calls: AtomicUsize::new(0),
     };
+
     // Native-style ordinary writes and reads are sequential here, never racing.
     slot = &raw mut first;
     assert_eq!(slot, &raw mut first);

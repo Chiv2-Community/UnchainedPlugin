@@ -2,6 +2,10 @@
 name = "unchained-macros-kismet"
 version = "0.1.0"
 edition = "2021"
+build = "../build/macro-format.rs"
+
+[build-dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
 
 [dependencies]
 unchained-macros-core = { path = "../unchained-macros-core" }

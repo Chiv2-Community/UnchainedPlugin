@@ -17,6 +17,7 @@ pub(crate) fn fresh_local(signature: &syn::Signature, role: &str) -> syn::Ident 
     {
         name.push('_');
     }
+
     syn::Ident::new(&name, Span::mixed_site())
 }
 
@@ -33,9 +34,11 @@ impl Parse for CallbackArguments {
                 input.parse()?
             }
         };
+
         if !input.is_empty() {
             input.parse::<syn::Token![,]>()?;
         }
+
         Ok(Self { target, condition })
     }
 }
@@ -62,5 +65,6 @@ pub(crate) fn resolver_path(args: Tokens) -> syn::Result<Path> {
             "resolver paths cannot have generic arguments",
         ));
     }
+
     Ok(resolver)
 }

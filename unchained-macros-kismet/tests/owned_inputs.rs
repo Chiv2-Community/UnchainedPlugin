@@ -7,6 +7,7 @@ use std::{
         Arc,
     },
 };
+
 use unchained_macros_core::AddressResolver;
 use unchained_macros_kismet::schema::*;
 use unchained_macros_kismet::{kismet_runtime_bindings, ExecEnvironment, FunctionMetadata, KismetContext, Reflection};
@@ -21,12 +22,14 @@ impl Drop for FString {
         STRING_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
+
 struct FText(Arc<String>);
 impl Drop for FText {
     fn drop(&mut self) {
         TEXT_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
+
 struct Library;
 include!("fixtures/exec_access.rs");
 #[kismet_runtime_bindings("/Script/Fixture.Inputs")]
@@ -39,6 +42,7 @@ impl Library {
     #[dummy]
     unsafe fn Owners(string: &FString, text: &FText) {}
 }
+
 #[unchained_macros_core::bind_func_entry_listener(Library::Owners)]
 unsafe fn owners_entry(string: &FString, text: &FText) {
     assert_eq!(string.0, "entry-string");
@@ -48,6 +52,7 @@ unsafe fn owners_entry(string: &FString, text: &FText) {
     assert_eq!(TEXT_DROPS.load(Ordering::SeqCst), 0);
     ENTRIES.fetch_add(1, Ordering::SeqCst);
 }
+
 unsafe extern "system" fn original(_: *mut c_void, frame: *mut c_void, result: *mut c_void) {
     assert!(result.is_null(), "Void original receives unchanged result pointer");
     let mut string = FString("entry-string".into());
@@ -56,10 +61,12 @@ unsafe extern "system" fn original(_: *mut c_void, frame: *mut c_void, result: *
         unchained_macros_kismet::observation::observe_step(frame, (&mut string as *mut FString).cast(), 11, || {});
         unchained_macros_kismet::observation::observe_step(frame, (&mut text as *mut FText).cast(), 12, || {});
     }
+
     string.0.clear();
     ORIGINALS.fetch_add(1, Ordering::SeqCst);
     // The original wrapper destroys both VM temporaries.
 }
+
 struct Fixture;
 unsafe impl Reflection for Fixture {
     unsafe fn find_function(&self, _: &str, _: &str) -> Result<FunctionMetadata, String> {
@@ -70,6 +77,7 @@ unsafe impl Reflection for Fixture {
             return_value_offset: u16::MAX,
         })
     }
+
     unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
         Ok(FunctionSchema {
             function_identity: 42,
@@ -83,6 +91,7 @@ unsafe impl Reflection for Fixture {
                     flags: PARM | CONST_PARM,
                     offset: 0,
                 },
+
                 PropertyMetadata {
                     identity: 12,
                     kind: PropertyKind::Text,
@@ -109,6 +118,7 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
             },
         )
     };
+
     let address = unsafe {
         Library::__UNCHAINED_EXEC_Library_Owners_RESOLVER
             .implementation
@@ -129,6 +139,7 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
             std::ptr::null_mut(),
         );
     }
+
     assert_eq!(ORIGINALS.load(Ordering::SeqCst), 1);
     assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);
     assert_eq!(STRING_DROPS.load(Ordering::SeqCst), 1);

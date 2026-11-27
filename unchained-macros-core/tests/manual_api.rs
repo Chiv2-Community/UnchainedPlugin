@@ -3,6 +3,7 @@ use std::{
     num::NonZeroUsize,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
 use unchained_macros_core::*;
 
 struct Backend;
@@ -12,11 +13,13 @@ impl AddressResolver for Backend {
         Ok(NonZeroUsize::new(original as *const () as usize).unwrap())
     }
 }
+
 static RESOLVER: Resolver<Backend> = Resolver {
     name: "manual",
     implementation: Backend,
     filter: None,
 };
+
 static BINDING: FunctionBinding<Backend> = FunctionBinding::new("manual", &RESOLVER);
 static ALIAS: FunctionBinding<Backend> = FunctionBinding::new("late alias", &RESOLVER);
 type Descriptor = NativeTarget<
@@ -44,6 +47,7 @@ unsafe fn call_original(value: usize) -> usize {
         unsafe { std::mem::transmute(TARGET.binding().address().unwrap().get()) };
     unsafe { call(value) }
 }
+
 unsafe extern "C" fn dispatch(value: usize) -> usize {
     TARGET.observe_entry(|callback| unsafe { callback(&value) });
     let snapshot = TARGET.prepare_exit(|prepare| unsafe { prepare(&value) });
@@ -57,26 +61,33 @@ unsafe extern "C" fn dispatch(value: usize) -> usize {
             TARGET.finish_exit(snapshot, (&result as *const usize).cast());
         }
     }
+
     result
 }
+
 unsafe fn entered(_: &usize) {
     ENTRIES.fetch_add(1, Ordering::SeqCst);
 }
+
 unsafe fn returned(value: &usize, result: &usize) {
     assert!(*result == value + 1 || *result == value + 11);
     EXITS.fetch_add(1, Ordering::SeqCst);
 }
+
 unsafe fn finish(state: *mut (), result: *const ()) {
     unsafe {
         returned(&*state.cast::<usize>(), &*result.cast::<usize>());
     }
 }
+
 unsafe fn prepare(value: &usize) -> ExitObservation {
     unsafe { ExitObservation::from_snapshot(*value, finish) }
 }
+
 unsafe extern "C" fn replacement(value: usize) -> usize {
     unsafe { call_original(value) + 10 }
 }
+
 fn gate() -> bool {
     CONDITIONS.fetch_add(1, Ordering::SeqCst);
     true
@@ -162,6 +173,7 @@ fn required_inventory_references_accessor_storage_and_reads_current_slot() {
         initialize_value_bindings_where((slot as *mut *mut usize) as usize, &offsets, |name| {
             name == VALUE.name()
         });
+
         assert!(SKIPPED.get().is_none());
         assert_eq!(GLOBAL.read(), first);
         *slot = second;

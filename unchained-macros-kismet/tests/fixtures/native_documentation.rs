@@ -41,16 +41,19 @@ macro_rules! named_resolver {
         }
     };
 }
+
 macro_rules! define_pattern_resolver {
     ($name:ident, $pattern:tt) => {
         named_resolver!($name);
     };
 }
+
 macro_rules! define_offset_resolver {
     ($name:ident) => {
         named_resolver!($name);
     };
 }
+
 define_pattern_resolver!(ScanKey, ["00"]);
 define_offset_resolver!(ProviderKey);
 

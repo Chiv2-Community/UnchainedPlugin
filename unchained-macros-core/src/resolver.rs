@@ -33,16 +33,20 @@ pub trait ResolverInfo: Any + Send + Sync {
     fn identity(&self) -> *const ();
     fn supports(&self, snapshot: &SelectorSnapshot) -> bool;
 }
+
 impl<R: AddressResolver> ResolverInfo for Resolver<R> {
     fn name(&self) -> &'static str {
         self.name
     }
+
     fn backend(&self) -> TypeId {
         TypeId::of::<R>()
     }
+
     fn identity(&self) -> *const () {
         (self as *const Self).cast()
     }
+
     fn supports(&self, snapshot: &SelectorSnapshot) -> bool {
         self.supports(snapshot)
     }

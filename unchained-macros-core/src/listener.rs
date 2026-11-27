@@ -34,6 +34,7 @@ unsafe impl<T: Copy + 'static> ObserverSnapshot for T {
     fn snapshot(&self) -> T {
         *self
     }
+
     fn borrow(snapshot: &T) -> &T {
         snapshot
     }
@@ -49,6 +50,7 @@ struct ObservationStack {
     targets: [usize; 64],
     depth: usize,
 }
+
 struct ObservationGuard(usize);
 impl ObservationGuard {
     fn enter(target: usize) -> Option<Self> {
@@ -58,6 +60,7 @@ impl ObservationGuard {
                 if active.depth == active.targets.len() || active.targets[..active.depth].contains(&target) {
                     return None;
                 }
+
                 let depth = active.depth;
                 active.targets[depth] = target;
                 active.depth += 1;
@@ -67,6 +70,7 @@ impl ObservationGuard {
             .flatten()
     }
 }
+
 impl Drop for ObservationGuard {
     fn drop(&mut self) {
         let _ = OBSERVING.try_with(|active| {
@@ -95,9 +99,11 @@ impl<T: Copy> CallbackSlot<T> {
             enabled: AtomicBool::new(false),
         }
     }
+
     pub fn is_registered(&self) -> bool {
         self.value.get().is_some()
     }
+
     /// Publish a low-level callback without descriptor signature/attachment checks.
     ///
     /// # Safety
@@ -115,6 +121,7 @@ impl<T: Copy> CallbackSlot<T> {
         if self.is_registered() {
             return Err("Only one callback of each kind is supported per method".into());
         }
+
         let enabled = activate && isolate_observer(condition).unwrap_or(false);
         self.value
             .set(value)
@@ -122,9 +129,11 @@ impl<T: Copy> CallbackSlot<T> {
         self.set_enabled(enabled);
         Ok(())
     }
+
     pub fn set_enabled(&self, enabled: bool) {
         self.enabled.store(enabled, Ordering::Release);
     }
+
     pub fn get(&self) -> Option<T> {
         self.enabled
             .load(Ordering::Acquire)
@@ -149,6 +158,7 @@ pub fn isolate_observer<T>(callback: impl FnOnce() -> T) -> Option<T> {
             if let Err(nested) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(payload))) {
                 std::mem::forget(nested);
             }
+
             None
         }
     }
@@ -174,6 +184,7 @@ impl ExitObservation {
                 drop(Box::from_raw(state.cast::<S>()));
             }
         }
+
         Self {
             state: Box::into_raw(Box::new(snapshot)).cast(),
             finish,
@@ -253,6 +264,7 @@ pub trait CallbackTarget: Sync + 'static {
         activate && observe(std::ptr::from_ref(self).cast::<()>() as usize, condition).unwrap_or(false)
     }
 }
+
 pub trait SupportsEntry: CallbackTarget {
     type Entry: Copy + Send + Sync + 'static;
     fn entry_slot(&self) -> &CallbackSlot<Self::Entry>;
@@ -262,6 +274,7 @@ pub trait SupportsEntry: CallbackTarget {
         })
         .flatten()
     }
+
     /// # Safety
     /// The backend's quiescence/readiness requirements must hold.
     unsafe fn register_entry(
@@ -273,16 +286,20 @@ pub trait SupportsEntry: CallbackTarget {
         if self.entry_slot().is_registered() {
             return Err("Only one entry listener is supported per method".into());
         }
+
         unsafe {
             self.ensure_attached()?;
         }
+
         unsafe {
             self.entry_slot()
                 .register(callback, self.activation(activate, condition), || true)?;
         }
+
         Ok(())
     }
 }
+
 pub trait SupportsExit: CallbackTarget {
     type Exit: Copy + Sync + 'static;
     type Prepare: Copy + Send + Sync + 'static;
@@ -293,6 +310,7 @@ pub trait SupportsExit: CallbackTarget {
         })
         .flatten()
     }
+
     /// # Safety
     /// Result storage must match the target and remain live during the callback.
     unsafe fn finish_exit(&self, observation: ExitObservation, result: *const ()) {
@@ -300,6 +318,7 @@ pub trait SupportsExit: CallbackTarget {
             observation.finish(result)
         });
     }
+
     /// # Safety
     /// `prepare` must own safe snapshots and deliver the matching inputs/result to `callback`.
     /// Satisfy target attachment requirements.
@@ -313,28 +332,35 @@ pub trait SupportsExit: CallbackTarget {
         if self.exit_slot().is_registered() {
             return Err("Only one exit listener is supported per method".into());
         }
+
         unsafe {
             self.ensure_attached()?;
         }
+
         unsafe {
             self.exit_slot()
                 .register(prepare, self.activation(activate, condition), || true)?;
         }
+
         Ok(())
     }
 }
+
 trait CallbackControl: Send + Sync {
     fn enabled(&self) -> bool;
     fn set_enabled(&self, enabled: bool);
     fn storage_identity(&self) -> *const ();
 }
+
 impl<T: Copy + Send + Sync + 'static> CallbackControl for CallbackSlot<T> {
     fn enabled(&self) -> bool {
         self.get().is_some()
     }
+
     fn set_enabled(&self, enabled: bool) {
         self.set_enabled(enabled);
     }
+
     fn storage_identity(&self) -> *const () {
         self as *const Self as *const ()
     }
@@ -347,24 +373,30 @@ trait ListenerAction: Sync {
     fn slot(&self) -> &dyn CallbackControl;
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>>;
 }
+
 impl<T: SupportsEntry> ListenerAction for (&'static T, T::Entry) {
     fn target(&self) -> &'static dyn CallbackTarget {
         self.0
     }
+
     fn slot(&self) -> &dyn CallbackControl {
         self.0.entry_slot()
     }
+
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.0.register_entry(self.1, activate, condition) }
     }
 }
+
 impl<T: SupportsExit> ListenerAction for (&'static T, T::Exit, T::Prepare) {
     fn target(&self) -> &'static dyn CallbackTarget {
         self.0
     }
+
     fn slot(&self) -> &dyn CallbackControl {
         self.0.exit_slot()
     }
+
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.0.register_exit(self.1, self.2, activate, condition) }
     }
@@ -377,6 +409,7 @@ pub struct ListenerRegistration {
     condition: fn() -> bool,
     initialized: AtomicBool,
 }
+
 impl ListenerRegistration {
     pub const fn entry<T: SupportsEntry>(
         name: &'static str,
@@ -390,6 +423,7 @@ impl ListenerRegistration {
             initialized: AtomicBool::new(false),
         }
     }
+
     pub const fn exit<T: SupportsExit>(
         name: &'static str,
         action: &'static (&'static T, T::Exit, T::Prepare),
@@ -402,6 +436,7 @@ impl ListenerRegistration {
             initialized: AtomicBool::new(false),
         }
     }
+
     /// # Safety
     /// Callers must be quiescent. Callbacks (including exit preparation) must
     /// uphold the target's ABI and ownership contracts. Do not attach concurrently.
@@ -409,29 +444,37 @@ impl ListenerRegistration {
         if self.initialized() {
             return Err("Listener callback is already initialized".into());
         }
+
         unsafe {
             self.action.install(activate, self.condition)?;
         }
+
         self.initialized.store(true, Ordering::Release);
         Ok(())
     }
+
     pub fn initialized(&self) -> bool {
         self.initialized.load(Ordering::Acquire)
     }
+
     pub fn enabled(&self) -> bool {
         self.initialized() && self.action.slot().enabled()
     }
+
     pub fn set_enabled(&self, enabled: bool) {
         if self.initialized() {
             self.action.slot().set_enabled(enabled);
         }
     }
+
     pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
         self.action.target().resolver()
     }
+
     pub fn condition(&self) -> bool {
         self.action.target().activation(true, self.condition)
     }
+
     pub fn slot_identity(&self) -> *const () {
         self.action.slot().storage_identity()
     }
@@ -444,6 +487,7 @@ pub fn listener_is_initialized(name: &str) -> bool {
         .into_iter()
         .any(|listener| listener.name == name && listener.initialized())
 }
+
 pub fn listener_is_enabled(name: &str) -> bool {
     inventory::iter::<&'static ListenerRegistration>
         .into_iter()
@@ -472,6 +516,7 @@ pub fn validate_listener_registrations_for<R: AddressResolver>(
             ));
         }
     }
+
     Ok(())
 }
 
@@ -484,6 +529,7 @@ mod tests {
         fn nest(target: usize) -> usize {
             observe(target, || 1 + nest(target + 1)).unwrap_or(0)
         }
+
         assert_eq!(nest(1), 64);
         assert!(observe(1, || ()).is_some());
     }

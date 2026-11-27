@@ -11,6 +11,7 @@ use windows::Win32::{
             VirtualQuery, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
             PAGE_EXECUTE_WRITECOPY, PAGE_GUARD,
         },
+
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         Threading::GetCurrentProcess,
     },
@@ -45,6 +46,7 @@ fn no_argument_advance(instructions: &[Instruction], offset: usize) -> Result<u6
         let [load, zero, test, save, set, add, store] = window else {
             unreachable!()
         };
+
         let code = load.op0_register();
         let counter = zero.op0_register();
         let full_counter = counter.full_register();
@@ -82,6 +84,7 @@ fn no_argument_advance(instructions: &[Instruction], offset: usize) -> Result<u6
         {
             continue;
         }
+
         // The prefix must not call helpers, branch around advancement, or replace the frame.
         if instructions[..index].iter().any(|instruction| {
             instruction.flow_control() != FlowControl::Next
@@ -90,8 +93,10 @@ fn no_argument_advance(instructions: &[Instruction], offset: usize) -> Result<u6
         }) {
             return Err("Unsupported prefix before no-argument frame advancement".into());
         }
+
         return Ok(store.next_ip());
     }
+
     Err("No supported no-argument frame advancement".into())
 }
 
@@ -112,27 +117,32 @@ fn candidate(
             Some(no_argument_advance(&instructions, frame_code_offset)?)
         }
     };
+
     let mut target = None;
     let mut stepped = false;
     for instruction in instructions {
         if instruction.is_invalid() {
             return Err("Invalid instruction in exec thunk".into());
         }
+
         if instruction.mnemonic() == Mnemonic::Call {
             if instruction.op0_kind() != OpKind::NearBranch64 {
                 return Err("Indirect calls in exec thunks require an explicit receiver resolver".into());
             }
+
             let callee = instruction.near_branch_target() as usize;
             if callee == step || callee == explicit {
                 if no_arguments.is_some() {
                     return Err("Frame stepping contradicts no-argument metadata".into());
                 }
+
                 stepped = true;
                 target = None;
             } else if (stepped || no_arguments.is_some_and(|ready| instruction.ip() >= ready)) && target.is_none() {
                 if !module.contains(&callee) {
                     return Err("Exec callee is outside the game module".into());
                 }
+
                 target = Some(callee);
             }
         } else if matches!(
@@ -142,6 +152,7 @@ fn candidate(
             if no_arguments.is_some() && target.is_none() {
                 return Err("Branch before no-argument native body".into());
             }
+
             let destination = instruction.near_branch_target() as usize;
             if !(thunk..thunk + bytes.len()).contains(&destination) {
                 return Err("Exec thunk has an unsupported tail/external branch".into());
@@ -150,6 +161,7 @@ fn candidate(
             return Err("Exec thunk has an indirect tail branch".into());
         }
     }
+
     target.ok_or_else(|| "No direct native body after parameter handling; inlined thunks are unsupported".into())
 }
 
@@ -162,6 +174,7 @@ unsafe fn executable_range(address: usize, end: usize) -> bool {
             size_of::<MEMORY_BASIC_INFORMATION>(),
         )
     };
+
     read != 0
         && info.State == MEM_COMMIT
         && !info.Protect.contains(PAGE_GUARD)
@@ -184,6 +197,7 @@ unsafe fn extent(address: usize, base: usize) -> Result<Range<usize>, String> {
     if image as usize != base || start != address || end <= start || !unsafe { executable_range(start, end) } {
         return Err("Address is not an executable function entry in the game module".into());
     }
+
     Ok(start..end)
 }
 
@@ -216,6 +230,7 @@ pub unsafe fn native_body(
     if range.end > end {
         return Err("Exec thunk exceeds the game module".into());
     }
+
     let bytes = unsafe { std::slice::from_raw_parts(range.start as *const u8, range.len()) };
     let target = candidate(bytes, thunk, step, explicit, base..end, parameters)?;
     unsafe { extent(target, base) }?;

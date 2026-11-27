@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use unchained_macros_core::{
     bind_resolved_func, function_is_bound_for, initialize_bindings_for, require_function_bindings_for, SelectorSnapshot,
 };
+
 use unchained_macros_patternsleuth::{OffsetProvider, PatternsleuthResolver, ScanContext};
 
 unchained_macros_patternsleuth::define_pattern_resolver!(FixtureRead, ["AA"]);
@@ -34,9 +35,11 @@ fn functions_initialize_with_the_host_supplied_base() {
     unsafe {
         initialize_bindings_for::<PatternsleuthResolver>(&context, &snapshot).unwrap();
     }
+
     unsafe {
         initialize_bindings_for::<PatternsleuthResolver>(&context, &snapshot).unwrap();
     }
+
     assert!(function_is_bound_for::<PatternsleuthResolver>("FixtureRead"));
     assert!(require_function_bindings_for::<PatternsleuthResolver>(&["FixtureRead"]).is_ok());
     assert!(require_function_bindings_for::<PatternsleuthResolver>(&["Unregistered"]).is_err());

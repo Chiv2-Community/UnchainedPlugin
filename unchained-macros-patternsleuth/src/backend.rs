@@ -3,12 +3,14 @@ use std::{
     collections::{BTreeSet, HashMap},
     num::NonZeroUsize,
 };
+
 use unchained_macros_core::*;
 
 pub struct ScanContext {
     pub base: usize,
     pub offsets: HashMap<String, u64>,
 }
+
 impl ScanContext {
     pub fn new(base: usize, offsets: &HashMap<String, u64>) -> Self {
         Self {
@@ -22,6 +24,7 @@ pub struct PatternsleuthResolver {
     pub key: &'static str,
     pub named: Option<NamedResolver>,
 }
+
 impl PatternsleuthResolver {
     pub const fn named(named: NamedResolver) -> Self {
         Self {
@@ -29,10 +32,12 @@ impl PatternsleuthResolver {
             named: Some(named),
         }
     }
+
     pub const fn offset(key: &'static str) -> Self {
         Self { key, named: None }
     }
 }
+
 impl AddressResolver for PatternsleuthResolver {
     type Context = ScanContext;
     unsafe fn resolve(&self, context: &ScanContext) -> Result<NonZeroUsize, String> {
@@ -50,10 +55,12 @@ impl AddressResolver for PatternsleuthResolver {
 pub struct RequiredResolver {
     pub name: &'static str,
 }
+
 pub struct OffsetProvider {
     pub name: &'static str,
     pub map: fn() -> HashMap<String, u64>,
 }
+
 inventory::collect!(RequiredResolver);
 inventory::collect!(OffsetProvider);
 
@@ -74,12 +81,15 @@ macro_rules! define_offset_resolver {
                         implementation: $crate::PatternsleuthResolver::offset(stringify!($name)),
                         filter: None,
                     };
+
                 &DESCRIPTOR
             };
         }
+
         impl<E: ::unchained_macros_core::SelectionKey> ::unchained_macros_core::ResolverSelection<E> for $name {
             const SELECTIONS: &'static [(E, bool)] = &[];
         }
+
         $crate::__private::inventory::submit! {
             <$name as ::unchained_macros_core::ResolverDeclaration>::DESCRIPTOR
                 as &dyn $crate::__private::ResolverInfo
@@ -127,9 +137,11 @@ pub fn startup_resolvers(snapshot: &SelectorSnapshot) -> Result<Vec<&'static Nam
             return Err(format!("Required startup resolver {} is ambiguous", pair[0].name));
         }
     }
+
     roots.dedup_by_key(|resolver| resolver.name);
     Ok(roots)
 }
+
 fn select<'a>(
     names: impl IntoIterator<Item = &'a str>,
     declared: &[&'static NamedResolver],
@@ -145,6 +157,7 @@ fn select<'a>(
             } else {
                 available
             };
+
             let mut matches = candidates.iter().copied().filter(|resolver| resolver.name == name);
             match (matches.next(), matches.next()) {
                 (Some(resolver), None) => Ok(resolver),
@@ -154,24 +167,29 @@ fn select<'a>(
         })
         .collect()
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     fn unused_getter() -> &'static patternsleuth::resolvers::DynResolverFactory {
         panic!("selection must not evaluate resolvers")
     }
+
     static FIRST: NamedResolver = NamedResolver {
         name: "First",
         getter: unused_getter,
     };
+
     static SECOND: NamedResolver = NamedResolver {
         name: "Second",
         getter: unused_getter,
     };
+
     static SHADOW: NamedResolver = NamedResolver {
         name: "First",
         getter: unused_getter,
     };
+
     #[test]
     fn selects_only_consumed_roots_once_in_stable_order() {
         let roots = select(["Second", "First", "First"], &[], &[&FIRST, &SECOND]).unwrap();
@@ -181,11 +199,13 @@ mod tests {
         );
         assert!(select([], &[], &[&FIRST]).unwrap().is_empty());
     }
+
     #[test]
     fn local_declarations_win_over_upstream_namesakes() {
         let roots = select(["First"], &[&FIRST], &[&SHADOW, &FIRST]).unwrap();
         assert!(std::ptr::eq(roots[0], &FIRST));
     }
+
     #[test]
     fn missing_and_ambiguous_roots_are_errors() {
         assert!(select(["Missing"], &[], &[&FIRST]).err().unwrap().contains("Missing"));

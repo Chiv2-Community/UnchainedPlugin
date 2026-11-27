@@ -13,6 +13,7 @@ pub fn image(matches: &[usize]) -> Image<'static> {
     for &offset in matches {
         text[offset..offset + 2].copy_from_slice(&[0xAA, 0xBB]);
     }
+
     let pdata: Vec<u8> = [0x1000u32, 0x1040, 0x3000, 0x1040, 0x1080, 0x3004]
         .into_iter()
         .flat_map(u32::to_le_bytes)

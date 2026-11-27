@@ -29,6 +29,7 @@ impl Parse for Declaration {
         } else {
             syn::parse_quote!(Simple)
         };
+
         let patterns = if input.peek(syn::token::Bracket) {
             let content;
             syn::bracketed!(content in input);
@@ -47,19 +48,23 @@ impl Parse for Declaration {
                     if values.is_empty() {
                         return Err(content.error("pattern entries must not be empty; omit an optional key for fallback or use None to disable it"));
                     }
+
                     quote!([#values])
                 } else {
                     let value: Ident = content.parse()?;
                     if value != "None" {
                         return Err(syn::Error::new_spanned(value, "expected a pattern list or None"));
                     }
+
                     quote!(None)
                 };
+
                 entries.push((key, value));
                 if !content.is_empty() {
                     content.parse::<Token![,]>()?;
                 }
             }
+
             let mut selector = entries
                 .iter()
                 .find(|(key, _)| key.segments.len() > 1)
@@ -74,8 +79,10 @@ impl Parse for Declaration {
             {
                 return Err(syn::Error::new_spanned(selector, "selector enums must be non-generic"));
             }
+
             Patterns::Dictionary(selector, entries)
         };
+
         let body = if input.is_empty() {
             None
         } else {
@@ -86,6 +93,7 @@ impl Parse for Declaration {
                 if explicit_mode {
                     return Err(input.error("inline resolver bodies do not take a scan mode"));
                 }
+
                 input.parse::<Token![|]>()?;
                 let ctx = input.parse()?;
                 input.parse::<Token![,]>()?;
@@ -95,9 +103,11 @@ impl Parse for Declaration {
                 if input.peek(Token![,]) {
                     input.parse::<Token![,]>()?;
                 }
+
                 Some((ctx, patterns, body))
             }
         };
+
         Ok(Self {
             name,
             mode,
@@ -118,15 +128,18 @@ pub(super) fn expand(input: TokenStream) -> syn::Result<TokenStream> {
         (Patterns::List(values), None) => {
             quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, [#values]);)
         }
+
         (Patterns::List(values), Some((ctx, patterns, body))) => {
             quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, [#values], |#ctx, #patterns| #body);)
         }
+
         (Patterns::Dictionary(selector, entries), body) => {
             let (keys, values): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
             match body {
                 None => {
                     quote!(::unchained_macros_patternsleuth::__pattern_resolver!(#name, #mode, #selector, { #(#keys: #values),* });)
                 }
+
                 Some((ctx, patterns, body)) => quote!(
                     ::unchained_macros_patternsleuth::__pattern_resolver!(#name, #selector, { #(#keys: #values),* }, |#ctx, #patterns| #body);
                 ),
@@ -144,6 +157,7 @@ mod tests {
     fn accepts_resolvers(input: TokenStream) {
         syn::parse2::<syn::File>(expand(input).unwrap()).unwrap();
     }
+
     #[test_case::test_case(quote!(Target, { First: ["AA BB"] }); "unqualified selector")]
     #[test_case::test_case(quote!(Target, { Key::First: false }); "invalid entry")]
     #[test_case::test_case(quote!(Target, {}); "empty dictionary")]

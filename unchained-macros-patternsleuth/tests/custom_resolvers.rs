@@ -30,6 +30,7 @@ define_custom_resolver!(SelectedAddress, using Flavor, |flavor| {
         Flavor::Second => "11 22",
         Flavor::Shared => "not hex",
     };
+
     BinaryMatcher::patterns([pattern])?.ensure_one()
 });
 
@@ -64,6 +65,7 @@ fn arbitrary_matchers_share_the_resolver_cache_and_preserve_u64_addresses() {
             assert_eq!(first.0, TEXT);
         })
     });
+
     assert_eq!(EVALUATIONS.load(Ordering::SeqCst), 1);
 }
 
@@ -73,6 +75,7 @@ fn selection_factory_selects_the_matching_signature(flavor: Flavor, expected: u6
     if !initialize_selection(flavor) {
         return;
     }
+
     assert_eq!(image(&[0x10]).resolve(SelectedAddress::resolver()).unwrap().0, expected);
 }
 
@@ -81,6 +84,7 @@ fn selection_factory_construction_errors_keep_resolver_context() {
     if !initialize_selection(Flavor::Shared) {
         return;
     }
+
     let error = image(&[]).resolve(SelectedAddress::resolver()).unwrap_err().to_string();
     assert!(error.contains("SelectedAddress"), "{error}");
     assert!(error.contains("invalid pattern"), "{error}");

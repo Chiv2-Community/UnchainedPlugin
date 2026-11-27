@@ -6,6 +6,7 @@ use crate::{
         validate_binding,
     },
 };
+
 use proc_macro2::{Span, TokenStream as Tokens};
 use quote::{format_ident, quote, ToTokens};
 use syn::{FnArg, ItemFn, Pat, Path, Type};
@@ -116,6 +117,7 @@ fn call_wrapper(
                 let Pat::Ident(name) = argument.pat.as_ref() else {
                     unreachable!()
                 };
+
                 let name = &name.ident;
                 (quote!(#name), &argument.ty)
             }
@@ -129,6 +131,7 @@ fn call_wrapper(
             ::core::mem::transmute(#binding.address()
                 .expect(concat!("Native binding ", #resolver_name, " is not initialized")).get())
         };
+
         unsafe { #native(#(#arguments),*) }
     }))?);
     if !expanded
@@ -138,6 +141,7 @@ fn call_wrapper(
     {
         expanded.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
+
     attach_native_documentation(&mut expanded.attrs, documentation_key, documentation);
     Ok(expanded)
 }
@@ -151,6 +155,7 @@ fn binding_documentation(function: &ItemFn, self_ty: &Type, resolver: &BindingRe
         let path = path.to_token_stream().to_string().replace(' ', "");
         documentation.push_str(&format!("\nResolved by [`{key}`]({path})."));
     }
+
     syn::LitStr::new(&documentation, name.span())
 }
 
@@ -185,6 +190,7 @@ pub(crate) fn expand_method(
         Type::Path(path) => path.path.segments.last().unwrap().ident.to_string(),
         _ => self_ty.to_token_stream().to_string().replace(' ', ""),
     };
+
     let key = resolver.documentation_key(&format!("{owner}__{name}"));
     let expanded = call_wrapper(function, &resolver, &storage, quote!(), &documentation, &key)?;
     let registration = binding_storage(&storage, &resolver, &target_name, &function.attrs);
@@ -199,6 +205,7 @@ pub(crate) fn expand_method(
             #vis const #normalized_descriptor: ::unchained_macros_core::NativeSignature<#normalized> =
                 ::core::marker::PhantomData;
         },
+
         quote! {
             #(#cfg)*
             #[doc(hidden)]
@@ -206,6 +213,7 @@ pub(crate) fn expand_method(
             #vis const #parameter_descriptor: (#(::unchained_macros_core::NativeSignature<#parameters>,)*) =
                 (#(#parameter_values,)*);
         },
+
         quote! {
             #(#cfg)*
             #[doc(hidden)]
@@ -245,6 +253,7 @@ fn native_dispatch(
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, ty) => *ty.clone(),
     };
+
     let entry_type = quote!(#binder unsafe fn(#(&#types),*));
     let exit_type = quote!(#binder unsafe fn(#(&#types,)* &#result));
     let prepare_type = quote!(#binder unsafe fn(#(&#types),*) -> ::unchained_macros_core::ExitObservation);
@@ -268,6 +277,7 @@ fn native_dispatch(
                 &#binding, #dispatch, |dispatch| dispatch as *const (),
             )
         };
+
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #dispatch #generics (#(#names: #types),*) #output {
@@ -277,13 +287,16 @@ fn native_dispatch(
             let #call: #native = #target.replacement_slot().get().unwrap_or_else(|| unsafe {
                 ::core::mem::transmute(#binding.address().expect("Attached native binding has no trampoline").get())
             });
+
             let #returned = unsafe { #call(#(#names),*) };
             if let Some(#observation) = #observation {
                 unsafe { #target.finish_exit(#observation, (&#returned as *const #result).cast()); }
             }
+
             #returned
         }
     };
+
     Ok((descriptor_type, target, setup))
 }
 
@@ -333,6 +346,7 @@ mod tests {
                 Result: &'a mut FString,
             ) -> &'a mut FString {}
         };
+
         let (binding, descriptors, _) =
             expand_method(quote!(self::Native__Call), &function, &syn::parse_quote!(Native)).unwrap();
         let docs = documentation(&binding.attrs);
@@ -353,6 +367,7 @@ mod tests {
         let function = syn::parse_quote! {
             pub unsafe fn Call(value: i32) -> i32 {}
         };
+
         let (binding, _, _) = expand_method(quote!(OtherBackend__Call), &function, &syn::parse_quote!(Client)).unwrap();
         let docs = documentation(&binding.attrs);
         assert!(docs.contains("Resolved by [`OtherBackend__Call`](OtherBackend__Call)."));
@@ -364,6 +379,7 @@ mod tests {
             /// Keep the native safety contract.
             pub unsafe fn Call<'a>(value: &'a mut i32) -> &'a mut i32 {}
         };
+
         let (binding, metadata, storage) = expand_method(
             quote!(backend::Native, &DESCRIPTOR),
             &function,

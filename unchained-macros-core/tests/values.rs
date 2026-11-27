@@ -70,6 +70,7 @@ fn panic_message(error: Box<dyn std::any::Any + Send>) -> String {
     if let Some(message) = error.downcast_ref::<String>() {
         return message.clone();
     }
+
     error.downcast_ref::<&str>().expect("string panic").to_string()
 }
 

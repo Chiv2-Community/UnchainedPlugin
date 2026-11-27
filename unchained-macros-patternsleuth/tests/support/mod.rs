@@ -15,6 +15,7 @@ static FLAVOR: OnceLock<Flavor> = OnceLock::new();
 pub fn current_flavor() -> Flavor {
     *FLAVOR.get().expect("fixture selection not initialized")
 }
+
 impl unchained_macros_core::ResolverSelector for Flavor {
     fn current() -> Self {
         current_flavor()
@@ -27,6 +28,7 @@ pub fn initialize_selection(flavor: Flavor) -> bool {
         FLAVOR.set(flavor).unwrap();
         return true;
     }
+
     let thread = std::thread::current();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", thread.name().unwrap(), "--nocapture"])

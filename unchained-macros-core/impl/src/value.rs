@@ -22,12 +22,14 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             ))
         }
     };
+
     if args.next().is_some() {
         return Err(syn::Error::new(
             Span::call_site(),
             "unexpected native value binding arguments",
         ));
     }
+
     let resolver_name = resolver.segments.last().unwrap().ident.to_string();
     if let Ok(declaration) = syn::parse2::<syn::ForeignItemStatic>(item.clone()) {
         if !matches!(declaration.mutability, syn::StaticMutability::None) {
@@ -36,18 +38,21 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 "native global bindings must not be static mut",
             ));
         }
+
         let Type::Ptr(pointer) = declaration.ty.as_ref() else {
             return Err(syn::Error::new_spanned(
                 &declaration.ty,
                 "static global bindings require a raw native pointer type",
             ));
         };
+
         if pointer.mutability.is_none() {
             return Err(syn::Error::new_spanned(
                 pointer,
                 "static native globals require *mut T; use an unsafe accessor for read-only values",
             ));
         }
+
         let target = &pointer.elem;
         let name = &declaration.ident;
         let vis = &declaration.vis;
@@ -63,10 +68,12 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 ::unchained_macros_core::__private::inventory::submit! {
                     &BINDING as &'static ::unchained_macros_core::ValueBinding
                 }
+
                 ::unchained_macros_core::NativeGlobal::#constructor(&BINDING)
             };
         });
     }
+
     let mut function: ItemFn = syn::parse2(item)?;
     let signature = &function.sig;
     if signature.unsafety.is_none() {
@@ -75,6 +82,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "native value bindings require unsafe fn",
         ));
     }
+
     if !signature.inputs.is_empty()
         || !signature.generics.params.is_empty()
         || signature.generics.where_clause.is_some()
@@ -88,18 +96,21 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "native value bindings require a non-generic, non-async zero-argument Rust accessor",
         ));
     }
+
     if !function.block.stmts.is_empty() {
         return Err(syn::Error::new_spanned(
             &function.block,
             "native binding bodies must be empty",
         ));
     }
+
     let ReturnType::Type(_, ty) = &signature.output else {
         return Err(syn::Error::new_spanned(
             signature,
             "native value bindings require an explicit Copy value return type",
         ));
     };
+
     if matches!(ty.as_ref(), Type::Reference(_))
         || matches!(ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option" || segment.ident == "Result"))
     {
@@ -108,22 +119,26 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "return the native Copy value directly, not a reference, Option or Result",
         ));
     }
+
     if address && !matches!(ty.as_ref(), Type::Ptr(_)) {
         return Err(syn::Error::new_spanned(
             ty,
             "Address bindings require a raw pointer return type",
         ));
     }
+
     let binding = syn::Ident::new("__UNCHAINED_VALUE_BINDING", Span::mixed_site());
     let value = syn::Ident::new("__unchained_value", Span::mixed_site());
     let check_pointer = matches!(ty.as_ref(), Type::Ptr(_)).then(|| quote! {
         assert!(!#value.is_null(), concat!("Required native value ", #resolver_name, " is null; the engine must initialize it before access"));
     });
+
     let read = if address {
         quote!(#binding.address() as #ty)
     } else {
         quote!(unsafe { (#binding.address() as *const #ty).read() })
     };
+
     function.block = Box::new(syn::parse2(quote!({
         let _: ::core::marker::PhantomData<#resolver> = ::core::marker::PhantomData;
         static #binding: ::unchained_macros_core::ValueBinding =
@@ -131,6 +146,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ::unchained_macros_core::__private::inventory::submit! {
             &#binding as &'static ::unchained_macros_core::ValueBinding
         }
+
         fn __require_copy<T: ::core::marker::Copy>() {}
         __require_copy::<#ty>();
         let #value: #ty = #read;
@@ -144,6 +160,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     {
         function.attrs.push(syn::parse_quote!(#[inline(always)]));
     }
+
     Ok(quote!(#function))
 }
 

@@ -12,6 +12,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
             "listener target must be a non-generic Type::method descriptor path",
         ));
     }
+
     crate::signature::validate_native_signature(&function.sig)?;
     if !function.sig.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
@@ -19,6 +20,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
             "listeners use call-scoped elided borrows, not explicit lifetime parameters",
         ));
     }
+
     if !matches!(function.sig.output, syn::ReturnType::Default)
         && !matches!(&function.sig.output, syn::ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(t) if t.elems.is_empty()))
     {
@@ -27,6 +29,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
             "listeners must return ()",
         ));
     }
+
     let mut names = Vec::new();
     let mut types = Vec::new();
     for input in &function.sig.inputs {
@@ -36,38 +39,45 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
                 "listeners are free functions with explicit borrowed receiver arguments",
             ));
         };
+
         let Type::Reference(reference) = &*arg.ty else {
             return Err(syn::Error::new_spanned(
                 &arg.ty,
                 "listener parameters must be immutable borrowed observations (&T)",
             ));
         };
+
         if reference.mutability.is_some() || reference.lifetime.is_some() {
             return Err(syn::Error::new_spanned(
                 &arg.ty,
                 "listener observations require call-scoped immutable &T borrows",
             ));
         }
+
         let Pat::Ident(name) = &*arg.pat else { unreachable!() };
         names.push(name.ident.clone());
         types.push((*reference.elem).clone());
     }
+
     if exit && types.is_empty() {
         return Err(syn::Error::new_spanned(
             &function.sig,
             "exit listeners require a final borrowed result parameter (including &() for void)",
         ));
     }
+
     let result = exit.then(|| types.pop().unwrap());
     if exit {
         names.pop();
     }
+
     if exit && types.iter().any(|ty| matches!(ty, Type::Reference(_))) {
         return Err(syn::Error::new_spanned(
             &function.sig,
             "exit input snapshots require ObserverSnapshot, not native reference inputs",
         ));
     }
+
     let method = target.segments.last_mut().unwrap();
     method.ident = format_ident!("__UNCHAINED_TARGET_{}", method.ident, span = Span::mixed_site());
     let ident = &function.sig.ident;
@@ -87,6 +97,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
     } else {
         quote!((#target, #ident))
     };
+
     let snapshot = fresh_local(&function.sig, "snapshot");
     let state = fresh_local(&function.sig, "state");
     let returned = fresh_local(&function.sig, "result");
@@ -99,6 +110,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
                     (#(<#types as ::unchained_macros_core::ObserverSnapshot>::snapshot(#names),)*);
                 unsafe { ::unchained_macros_core::ExitObservation::from_snapshot(#snapshot, #finish) }
             }
+
             #(#cfg)*
             #[allow(non_snake_case)]
             unsafe fn #finish(#state: *mut (), #returned: *const ()) {
@@ -111,6 +123,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens, exit: bool) -> syn::Result<Toke
             }
         }
     });
+
     Ok(quote! {
         #function
         #helpers
@@ -143,6 +156,7 @@ mod tests {
         let error = expand(quote!(Native::Call), item, exit).unwrap_err();
         assert!(error.to_string().contains(message), "{error}");
     }
+
     #[test]
     fn exit_snapshots_require_owned_snapshot_contract_and_include_void_result() {
         let expanded = expand(
@@ -165,6 +179,7 @@ mod tests {
         assert!(!text.contains("__UNCHAINED_BINDING"));
         syn::parse2::<syn::File>(expanded).unwrap();
     }
+
     #[test]
     fn entry_does_not_require_a_callable_native_binding_or_owned_copy() {
         let expanded = expand(

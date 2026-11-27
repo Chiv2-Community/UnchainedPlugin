@@ -9,6 +9,7 @@ use std::mem::{align_of, size_of, MaybeUninit};
 trait StaticWriteSource: Sync {
     fn source(&self) -> *const u8;
 }
+
 impl<T: Copy + Sync> StaticWriteSource for T {
     fn source(&self) -> *const u8 {
         (self as *const T).cast()
@@ -50,6 +51,7 @@ impl WriteValue {
             );
             storage.set_len(size_of::<T>());
         }
+
         Self {
             storage: WriteStorage::Owned(storage),
             size: size_of::<T>(),
@@ -63,9 +65,11 @@ impl WriteValue {
             WriteStorage::Static(source) => StaticWriteSource::source(*source),
         }
     }
+
     pub fn size(&self) -> usize {
         self.size
     }
+
     pub fn alignment(&self) -> usize {
         self.alignment
     }
@@ -129,6 +133,7 @@ impl Patch {
                 size: size_of::<T>(),
                 alignment: align_of::<T>(),
             }),
+
             enabled: true,
         }
     }
@@ -146,6 +151,7 @@ impl Patch {
         if !self.enabled {
             return Ok(false);
         }
+
         let address = resolved_address
             .checked_add(self.offset)
             .ok_or_else(|| "Patch address overflow".to_string())?;
@@ -153,18 +159,22 @@ impl Patch {
             Operation::Bytes(bytes) => unsafe {
                 writer.bytes(address, bytes)?;
             },
+
             Operation::Nop(count) => unsafe {
                 writer.nop(address, *count)?;
             },
+
             Operation::Write(value) => {
                 if address % value.alignment() as u64 != 0 {
                     return Err("Unaligned typed patch address".into());
                 }
+
                 unsafe {
                     writer.write(address, value)?;
                 }
             }
         }
+
         Ok(true)
     }
 }
@@ -205,6 +215,7 @@ pub fn validate_patch_coverage<R: ResolverSelection<E>, E: SelectionKey>(
             ));
         }
     }
+
     Ok(())
 }
 
@@ -215,11 +226,13 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
         if !names.insert(patch.name()) {
             return Err(format!("Duplicate patch name {}", patch.name()));
         }
+
         groups
             .entry((patch.resolver().backend(), patch.resolver().name()))
             .or_default()
             .push(*patch);
     }
+
     for group in groups.values() {
         if group
             .iter()
@@ -230,10 +243,12 @@ fn validate(patches: &[&dyn PatchInfo]) -> Result<(), String> {
                 group[0].resolver().name()
             ));
         }
+
         for patch in group {
             patch.validate_group(group)?;
         }
     }
+
     Ok(())
 }
 
@@ -280,6 +295,7 @@ pub unsafe fn apply_patches_for<R: crate::AddressResolver, W: PatchWriter>(
                     patch.name, patch.resolver.name
                 ));
             }
+
             let address = unsafe { patch.resolver.implementation.resolve(context) }
                 .map_err(|error| {
                     format!(
@@ -317,6 +333,7 @@ mod tests {
             panic!("validation must not resolve")
         }
     }
+
     type PatchRegistration = crate::PatchRegistration<Mock>;
 
     #[derive(Clone, Copy, PartialEq, Eq)]
@@ -324,6 +341,7 @@ mod tests {
         First,
         Second,
     }
+
     impl SelectionKey for Key {
         const REQUIRED: &'static [Self] = &[Self::First, Self::Second];
         fn name(self) -> &'static str {
@@ -341,9 +359,11 @@ mod tests {
         const UNRESTRICTED: bool = true;
         const DESCRIPTOR: &'static crate::Resolver<Mock> = &BOTH;
     }
+
     impl ResolverSelection<Key> for Both {
         const SELECTIONS: &'static [(Key, bool)] = &[];
     }
+
     struct FirstOnly;
     impl ResolverDeclaration for FirstOnly {
         type Backend = Mock;
@@ -351,6 +371,7 @@ mod tests {
         const UNRESTRICTED: bool = false;
         const DESCRIPTOR: &'static crate::Resolver<Mock> = &FIRST_DESCRIPTOR;
     }
+
     impl ResolverSelection<Key> for FirstOnly {
         const SELECTIONS: &'static [(Key, bool)] = &[(Key::First, true), (Key::Second, false)];
     }
@@ -360,33 +381,41 @@ mod tests {
         implementation: Mock,
         filter: None,
     };
+
     static FIRST_DESCRIPTOR: crate::Resolver<Mock> = crate::Resolver {
         name: "FirstOnly",
         implementation: Mock,
         filter: None,
     };
+
     static OTHER: crate::Resolver<Mock> = crate::Resolver {
         name: "Other",
         implementation: Mock,
         filter: None,
     };
+
     static NAMESAKE: crate::Resolver<Mock> = crate::Resolver {
         name: "Both",
         implementation: Mock,
         filter: None,
     };
+
     fn never_construct(_: u64) -> Patch {
         panic!("validation must not construct patches")
     }
+
     fn first(key: &dyn std::any::Any) -> bool {
         crate::__private::selection_matches(key, Key::First)
     }
+
     fn second(key: &dyn std::any::Any) -> bool {
         crate::__private::selection_matches(key, Key::Second)
     }
+
     fn both(group: &[&dyn PatchInfo]) -> Result<(), String> {
         validate_patch_coverage::<Both, _>(Key::First, group)
     }
+
     static FIRST: PatchRegistration = PatchRegistration {
         name: "first",
         resolver: &BOTH,
@@ -395,6 +424,7 @@ mod tests {
         validate_group: both,
         selector: Some(std::any::TypeId::of::<Key>),
     };
+
     static SECOND: PatchRegistration = PatchRegistration {
         name: "second",
         resolver: &BOTH,
@@ -403,6 +433,7 @@ mod tests {
         validate_group: both,
         selector: Some(std::any::TypeId::of::<Key>),
     };
+
     static FIRST_ONLY: PatchRegistration = PatchRegistration {
         name: "only_first",
         resolver: &FIRST_DESCRIPTOR,
@@ -411,6 +442,7 @@ mod tests {
         selector: Some(std::any::TypeId::of::<Key>),
         validate_group: |group| validate_patch_coverage::<FirstOnly, _>(Key::First, group),
     };
+
     static DUPLICATE: PatchRegistration = PatchRegistration {
         name: "first",
         resolver: &BOTH,
@@ -419,6 +451,7 @@ mod tests {
         validate_group: both,
         selector: Some(std::any::TypeId::of::<Key>),
     };
+
     static OTHER_RESOLVER: PatchRegistration = PatchRegistration {
         name: "other",
         resolver: &OTHER,
@@ -427,6 +460,7 @@ mod tests {
         validate_group: both,
         selector: Some(std::any::TypeId::of::<Key>),
     };
+
     static CONFLICTING_DESCRIPTOR: PatchRegistration = PatchRegistration {
         name: "namesake",
         resolver: &NAMESAKE,

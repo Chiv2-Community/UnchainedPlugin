@@ -80,6 +80,7 @@ fn initialize() {
             "ReturnStorage" => return_storage as *const () as usize,
             name => panic!("Unexpected binding {name}"),
         };
+
         unsafe {
             registration
                 .initialize_address(std::num::NonZeroUsize::new(address).unwrap())
@@ -126,11 +127,13 @@ fn binding_initialization_is_idempotent_but_not_rebindable() {
             .initialize_address(std::num::NonZeroUsize::new(30).unwrap())
             .unwrap();
     }
+
     unsafe {
         binding
             .initialize_address(std::num::NonZeroUsize::new(30).unwrap())
             .unwrap();
     }
+
     assert_eq!(binding.address().unwrap().get(), 30);
     assert!(unsafe { binding.initialize_address(std::num::NonZeroUsize::new(31).unwrap()) }.is_err());
     assert_eq!(binding.address().unwrap().get(), 30);
@@ -175,6 +178,7 @@ fn one_time_address_publication_supports_cross_thread_readers() {
     unsafe {
         binding.try_initialize(1, (address - 1) as u64).unwrap();
     }
+
     std::thread::scope(|scope| {
         for _ in 0..4 {
             scope.spawn(|| assert_eq!(binding.get().unwrap().get(), address));

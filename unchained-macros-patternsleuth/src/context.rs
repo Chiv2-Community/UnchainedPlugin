@@ -4,6 +4,7 @@ use patternsleuth::{
     image::Image,
     resolvers::{AsyncContext, DynResolverFactory, Resolution, ResolverFactory},
 };
+
 use std::{cell::RefCell, sync::Arc};
 use unchained_macros_core::SelectorSnapshot;
 
@@ -17,6 +18,7 @@ pub trait SelectorSnapshotExt {
         resolvers: &[fn() -> &'static DynResolverFactory],
     ) -> Vec<patternsleuth::resolvers::Result<Arc<dyn Resolution>>>;
 }
+
 impl SelectorSnapshotExt for SelectorSnapshot {
     fn eval<'env, F, T: Send + Sync>(&self, image: &'env Image<'_>, f: F) -> T
     where
@@ -32,6 +34,7 @@ impl SelectorSnapshotExt for SelectorSnapshot {
             })
         })
     }
+
     fn resolve_many(
         &self,
         image: &Image<'_>,
@@ -43,15 +46,18 @@ impl SelectorSnapshotExt for SelectorSnapshot {
         })
     }
 }
+
 thread_local! {
     static ACTIVE_SNAPSHOT: RefCell<Option<SelectorSnapshot>> = const { RefCell::new(None) };
 }
+
 struct SnapshotScope(Option<SelectorSnapshot>);
 impl Drop for SnapshotScope {
     fn drop(&mut self) {
         ACTIVE_SNAPSHOT.with(|active| active.replace(self.0.take()));
     }
 }
+
 static SNAPSHOT: ResolverFactory<SelectorSnapshot> = ResolverFactory {
     name: "SelectorSnapshot",
     factory: |_| {
@@ -63,6 +69,7 @@ static SNAPSHOT: ResolverFactory<SelectorSnapshot> = ResolverFactory {
         })
     },
 };
+
 #[doc(hidden)]
 pub async fn context_snapshot(ctx: &AsyncContext<'_>) -> patternsleuth::resolvers::Result<Arc<SelectorSnapshot>> {
     ctx.resolve(&SNAPSHOT).await

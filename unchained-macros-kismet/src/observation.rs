@@ -54,9 +54,11 @@ impl Inputs<'_> {
     pub fn len(&self) -> usize {
         self.slots.len()
     }
+
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
+
     pub fn get(&self, index: usize) -> Option<Argument<'_>> {
         self.slots.get(index).copied().map(|pointer| Argument {
             pointer,
@@ -76,6 +78,7 @@ fn report(message: &str) {
         if active.replace(true) {
             return;
         }
+
         unchained_macros_core::isolate_observer(|| log::error!("{message}"));
         active.set(false);
     });
@@ -113,17 +116,21 @@ fn ready(call: &Rc<RefCell<Invocation>>) {
         if state.failed || state.completed || state.slots.len() != state.properties.len() {
             return;
         }
+
         state.completed = true;
         let Some(entry) = state.entry else {
             return;
         };
+
         (entry, state.slots.clone())
     };
+
     // No TLS/state borrow is held while executing arbitrary callback code.
     let inputs = Inputs {
         slots: &slots,
         _game_thread: PhantomData,
     };
+
     if unchained_macros_core::isolate_observer(|| unsafe { entry(inputs) }).is_none() {
         report("Kismet entry listener panicked");
     }
@@ -153,10 +160,12 @@ pub unsafe fn observe_exec(
         failed: false,
         entry,
     }));
+
     if CALLS.try_with(|calls| calls.borrow_mut().push(call.clone())).is_err() {
         original();
         return;
     }
+
     let _scope = Scope(call.clone());
     ready(&call); // No-argument thunks have no Step completion.
     original();
@@ -164,6 +173,7 @@ pub unsafe fn observe_exec(
         let state = call.borrow();
         state.completed && !state.failed
     };
+
     if !valid {
         report("Kismet exec observation did not match its verified step contract");
     }
@@ -172,6 +182,7 @@ pub unsafe fn observe_exec(
 struct StepScope {
     call: Rc<RefCell<Invocation>>,
 }
+
 impl Drop for StepScope {
     fn drop(&mut self) {
         self.call.borrow_mut().depth -= 1;
@@ -201,17 +212,20 @@ pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: us
         original();
         return;
     };
+
     let top_level = {
         let mut state = call.borrow_mut();
         state.depth += 1;
         state.depth == 1 && !state.completed && !state.failed
     };
+
     let scope = StepScope { call: call.clone() };
     original();
     drop(scope);
     if !top_level {
         return;
     }
+
     {
         let mut state = call.borrow_mut();
         let index = state.slots.len();
@@ -219,12 +233,15 @@ pub unsafe fn observe_step(frame: *mut c_void, result: *mut c_void, property: us
             state.failed = true;
             return;
         };
+
         if index >= state.properties.len() || (property != 0 && state.properties[index] != property) {
             state.failed = true;
             return;
         }
+
         state.slots.push(pointer);
     }
+
     ready(&call);
 }
 
@@ -238,13 +255,16 @@ mod tests {
         static EVENTS: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
         static ENTRIES: Cell<usize> = const { Cell::new(0) };
     }
+
     fn event(name: &'static str) {
         EVENTS.with(|events| events.borrow_mut().push(name));
     }
+
     unsafe fn entry(inputs: Inputs<'_>) {
         assert_eq!(unsafe { *inputs.get(0).unwrap().borrow::<u32>() }, 42);
         event("entry");
     }
+
     struct Cleanup;
     impl Drop for Cleanup {
         fn drop(&mut self) {
@@ -268,11 +288,13 @@ mod tests {
                     frame += 1;
                     argument = 42;
                 });
+
                 event("body");
                 assert_eq!(argument, 42);
                 result = 1;
             });
         }
+
         assert_eq!(frame, 1);
         assert_eq!(result, 1);
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["evaluate", "entry", "body", "cleanup"]));
@@ -293,6 +315,7 @@ mod tests {
                 });
             });
         }
+
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry"]));
     }
 
@@ -325,6 +348,7 @@ mod tests {
                 observe_step(pointer, (&mut slot as *mut u32).cast(), 11, || {});
             });
         }
+
         ENTRIES.with(|entries| assert_eq!(entries.get(), 2));
         CALLS.with(|calls| assert!(calls.borrow().is_empty()));
     }
@@ -342,9 +366,11 @@ mod tests {
                     evaluated += 1;
                     argument = 42;
                 });
+
                 event("body");
             });
         }
+
         assert_eq!(evaluated, 1);
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["body"]));
     }
@@ -353,12 +379,14 @@ mod tests {
         assert!(inputs.is_empty());
         event("entry");
     }
+
     #[test]
     fn no_arguments_need_no_step_and_keep_original() {
         EVENTS.with(|events| events.borrow_mut().clear());
         unsafe {
             observe_exec(std::ptr::dangling_mut(), &[], Some(noargs), || event("body"));
         }
+
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body"]));
     }
 
@@ -369,6 +397,7 @@ mod tests {
         let result = catch_unwind(AssertUnwindSafe(|| unsafe {
             observe_exec(pointer, &[], None, || panic!("fixture"));
         }));
+
         assert!(result.is_err());
         CALLS.with(|calls| assert!(calls.borrow().is_empty()));
     }
@@ -379,6 +408,7 @@ mod tests {
             event("owner-drop");
         }
     }
+
     unsafe fn borrow_owner_then_panic(inputs: Inputs<'_>) {
         let argument = inputs.get(0).unwrap();
         let owner = unsafe { argument.borrow::<NativeOwner>() };
@@ -386,6 +416,7 @@ mod tests {
         event("entry");
         panic!("isolated observer");
     }
+
     #[test]
     fn borrowed_owner_is_destroyed_only_by_original_after_panicking_listener() {
         EVENTS.with(|events| events.borrow_mut().clear());
@@ -400,6 +431,7 @@ mod tests {
                 assert_eq!(owner.0, "engine-owned");
             });
         }
+
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body", "owner-drop"]));
         CALLS.with(|calls| assert!(calls.borrow().is_empty()));
     }
@@ -417,10 +449,12 @@ mod tests {
                         let mut inner = 0u32;
                         observe_step(pointer, (&mut inner as *mut u32).cast(), 11, || inner = 42);
                     });
+
                     outer = 42;
                 });
             });
         }
+
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "entry"]));
     }
 
@@ -439,6 +473,7 @@ mod tests {
                 event("body");
             });
         }
+
         EVENTS.with(|events| assert_eq!(*events.borrow(), ["body"]));
     }
 }

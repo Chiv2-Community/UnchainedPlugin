@@ -1,6 +1,7 @@
 ﻿[alias]
-xtask = "run --package xtask --"
+xtask = "run --package xtask --bin xtask --"
 
 [env]
+UNCHAINED_FORMAT_ROOT = { value = ".", relative = true }
 ARGON_SDK_SOURCE_LOCATION = { value = "https://github.com/Chiv2-Community/ArgonSDK/blob/main", force = false }
 UE_SOURCE_LOCATION = { value = "https://github.com/EpicGames/UnrealEngine/blob/4.25-plus", force = false }

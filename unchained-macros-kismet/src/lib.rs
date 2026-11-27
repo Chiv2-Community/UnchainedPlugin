@@ -59,6 +59,7 @@ pub struct KismetContext {
     observation_thread: u32,
     _game_thread: std::marker::PhantomData<std::rc::Rc<()>>,
 }
+
 impl KismetContext {
     /// # Safety
     /// Construct and use on the game thread once reflection is ready.
@@ -95,9 +96,11 @@ impl FunctionMetadata {
         if !self.is_native {
             return Err("Reflected function is not native".into());
         }
+
         if self.exec_thunk == 0 {
             return Err("Reflected exec thunk is null".into());
         }
+
         self.num_parms
             .checked_sub(u8::from(self.return_value_offset != u16::MAX))
             .ok_or_else(|| "Invalid reflected parameter count".into())
@@ -108,6 +111,7 @@ unsafe fn decode_native(thunk: usize, arguments: u8, environment: ExecEnvironmen
     if environment.module_base == 0 || environment.frame_step == 0 || environment.frame_step_explicit == 0 {
         return Err("Kismet executable environment contains a null address".into());
     }
+
     let parameters = if arguments == 0 {
         ExecThunkParameters::NoArguments {
             frame_code_offset: environment.frame_code_offset,
@@ -115,6 +119,7 @@ unsafe fn decode_native(thunk: usize, arguments: u8, environment: ExecEnvironmen
     } else {
         ExecThunkParameters::Stepped
     };
+
     unsafe {
         native_body(
             thunk,
@@ -132,6 +137,7 @@ pub struct KismetReflectionResolver {
     address: OnceLock<NonZeroUsize>,
     lock: Mutex<()>,
 }
+
 impl KismetReflectionResolver {
     pub const fn new(owner: &'static str, member: &'static str) -> Self {
         Self {
@@ -142,6 +148,7 @@ impl KismetReflectionResolver {
         }
     }
 }
+
 impl unchained_macros_core::AddressResolver for KismetReflectionResolver {
     type Context = KismetContext;
     unsafe fn resolve(&self, context: &KismetContext) -> Result<NonZeroUsize, String> {
@@ -149,6 +156,7 @@ impl unchained_macros_core::AddressResolver for KismetReflectionResolver {
         if let Some(address) = self.address.get() {
             return Ok(*address);
         }
+
         let address = unsafe { context.resolve_native(self.owner, self.member)? };
         self.address
             .set(address)
@@ -200,6 +208,7 @@ mod tests {
         reads: Rc<Cell<usize>>,
         ready: Rc<Cell<bool>>,
     }
+
     // SAFETY: Only copied invalid metadata is returned; tests reject it before decoding.
     unsafe impl Reflection for MetadataReflection {
         unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String> {
@@ -208,6 +217,7 @@ mod tests {
             if !self.ready.get() {
                 return Err("class not loaded".into());
             }
+
             Ok(FunctionMetadata {
                 exec_thunk: 0,
                 ..function(1, 0)
@@ -225,23 +235,28 @@ mod tests {
                 reads: reads.clone(),
                 ready: ready.clone(),
             }),
+
             environment: ExecEnvironment {
                 module_base: 0,
                 frame_step: 0,
                 frame_step_explicit: 0,
                 frame_code_offset: 0,
             },
+
             observation_thread: exec_binding::current_thread_id(),
             _game_thread: std::marker::PhantomData,
         };
+
         let resolver = KismetReflectionResolver::new("/Script/Fixture.Native", "Call");
         for expected in ["class not loaded", "class not loaded", "null", "null"] {
             if reads.get() == 2 {
                 ready.set(true);
             }
+
             assert!(unsafe { resolver.resolve(&context) }.unwrap_err().contains(expected));
             assert!(resolver.address.get().is_none());
         }
+
         assert_eq!(reads.get(), 4);
     }
 
@@ -253,15 +268,18 @@ mod tests {
             frame_step_explicit: 3,
             frame_code_offset: 0,
         };
+
         for environment in [
             ExecEnvironment {
                 module_base: 0,
                 ..environment
             },
+
             ExecEnvironment {
                 frame_step: 0,
                 ..environment
             },
+
             ExecEnvironment {
                 frame_step_explicit: 0,
                 ..environment

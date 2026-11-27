@@ -3,6 +3,7 @@ use crate::{
     docs::attach_native_documentation,
     function,
 };
+
 use proc_macro2::TokenStream as Tokens;
 use quote::quote;
 use syn::ItemFn;
@@ -11,6 +12,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
     if !args.is_empty() {
         return Err(syn::Error::new_spanned(args, "runtime_bindings takes no arguments"));
     }
+
     let mut declaration: syn::Item = syn::parse2(item)?;
     let (name, attributes) = match &mut declaration {
         syn::Item::Impl(implementation) => return expand_impl(implementation),
@@ -25,6 +27,7 @@ pub(crate) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             ))
         }
     };
+
     let documentation = syn::LitStr::new(
         &format!("Native type `{name}`. See the module's native source header."),
         name.span(),
@@ -43,6 +46,7 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
             "runtime_bindings requires a non-generic inherent impl",
         ));
     }
+
     let self_ty = &implementation.self_ty;
     let mut names: std::collections::HashSet<_> = implementation
         .items
@@ -67,12 +71,14 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
         if attributes.is_empty() {
             continue;
         }
+
         if attributes.len() != 1 {
             return Err(syn::Error::new_spanned(
                 method,
                 "duplicate or conflicting native binding attributes",
             ));
         }
+
         let attribute = method.attrs.remove(attributes[0]);
         let args = attribute.meta.require_list()?.tokens.clone();
         let function = ItemFn {
@@ -81,6 +87,7 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
             sig: method.sig.clone(),
             block: Box::new(method.block.clone()),
         };
+
         let (expanded, metadata, helper) = function::expand_method(args, &function, self_ty)?;
         for descriptor in &metadata {
             if !names.insert(descriptor.ident.to_string()) {
@@ -90,6 +97,7 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
                 ));
             }
         }
+
         method.attrs = expanded.attrs;
         method.vis = expanded.vis;
         method.sig = expanded.sig;
@@ -97,9 +105,11 @@ fn expand_impl(implementation: &mut syn::ItemImpl) -> syn::Result<Tokens> {
         descriptors.extend(metadata.into_iter().map(syn::ImplItem::Const));
         helpers.push(helper);
     }
+
     if descriptors.is_empty() {
         return Ok(quote!(#implementation));
     }
+
     implementation.items.extend(descriptors);
     let cfg: Vec<_> = cfg_attributes(&implementation.attrs).collect();
     // Isolate helper names without changing module paths or method visibility.
@@ -125,11 +135,13 @@ mod tests {
                 fn helper() -> u32 { 7 }
             }
         };
+
         let expanded = expand(quote!(), quote!(#original)).unwrap();
         let file: syn::File = syn::parse2(expanded).unwrap();
         let syn::Item::Impl(implementation) = &file.items[0] else {
             panic!("expected unchanged impl")
         };
+
         assert_eq!(
             implementation.to_token_stream().to_string(),
             original.to_token_stream().to_string()
@@ -185,6 +197,7 @@ mod tests {
             syn::Item::Type(item) => &mut item.attrs,
             _ => unreachable!(),
         };
+
         assert!(attributes
             .remove(0)
             .to_token_stream()
@@ -243,9 +256,11 @@ mod tests {
         let syn::Item::Const(container) = &file.items[0] else {
             panic!("expected storage scope")
         };
+
         let syn::Expr::Block(block) = container.expr.as_ref() else {
             panic!("expected block")
         };
+
         let implementations: Vec<_> = block
             .block
             .stmts

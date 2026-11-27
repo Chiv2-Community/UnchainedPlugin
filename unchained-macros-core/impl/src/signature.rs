@@ -11,6 +11,7 @@ pub(crate) fn validate_native_signature(signature: &syn::Signature) -> syn::Resu
             "native resolver bindings require unsafe fn",
         ));
     }
+
     if signature.asyncness.is_some()
         || signature.constness.is_some()
         || signature.abi.is_some()
@@ -27,6 +28,7 @@ pub(crate) fn validate_native_signature(signature: &syn::Signature) -> syn::Resu
             "native bindings must be non-generic (except lifetimes), non-async Rust functions",
         ));
     }
+
     for argument in &signature.inputs {
         match argument {
             FnArg::Receiver(receiver) => {
@@ -40,10 +42,12 @@ pub(crate) fn validate_native_signature(signature: &syn::Signature) -> syn::Resu
                         ))
                     }
                 };
+
                 if !matches!(element, Type::Path(path) if path.path.is_ident("Self")) {
                     return Err(syn::Error::new_spanned(receiver, "native receivers must point to Self"));
                 }
             }
+
             FnArg::Typed(argument) => {
                 let Pat::Ident(name) = argument.pat.as_ref() else {
                     return Err(syn::Error::new_spanned(
@@ -51,6 +55,7 @@ pub(crate) fn validate_native_signature(signature: &syn::Signature) -> syn::Resu
                         "native parameters must use plain identifiers",
                     ));
                 };
+
                 if name.by_ref.is_some() || name.subpat.is_some() {
                     return Err(syn::Error::new_spanned(
                         name,
@@ -60,6 +65,7 @@ pub(crate) fn validate_native_signature(signature: &syn::Signature) -> syn::Resu
             }
         }
     }
+
     Ok(())
 }
 
@@ -71,6 +77,7 @@ pub(crate) fn validate_binding(function: &ItemFn) -> syn::Result<()> {
             "native binding bodies must be empty",
         ));
     }
+
     Ok(())
 }
 
@@ -85,6 +92,7 @@ pub(crate) fn consume_native_parameter_metadata(signature: &mut syn::Signature) 
         if annotations.is_empty() {
             continue;
         }
+
         if annotations.len() != 1
             || !matches!(annotations[0].meta, syn::Meta::Path(_))
             || !matches!(argument.ty.as_ref(), Type::Ptr(pointer) if pointer.mutability.is_some())
@@ -94,10 +102,12 @@ pub(crate) fn consume_native_parameter_metadata(signature: &mut syn::Signature) 
                 "#[native_by_value] requires one bare annotation on verified *mut T ABI storage",
             ));
         }
+
         argument
             .attrs
             .retain(|attribute| !attribute.path().is_ident("native_by_value"));
     }
+
     Ok(())
 }
 
@@ -113,6 +123,7 @@ impl Fold for ConcreteSelf<'_> {
             let concrete = self.0;
             return syn::parse_quote!(<#concrete>::#tail);
         }
+
         syn::fold::fold_expr_path(self, path)
     }
 
@@ -120,6 +131,7 @@ impl Fold for ConcreteSelf<'_> {
         if matches!(&ty, Type::Path(path) if path.qself.is_none() && path.path.is_ident("Self")) {
             return self.0.clone();
         }
+
         if let Type::Path(path) = &ty {
             if path.qself.is_none() && path.path.segments.first().is_some_and(|s| s.ident == "Self") {
                 let tail: syn::punctuated::Punctuated<_, Token![::]> =
@@ -128,6 +140,7 @@ impl Fold for ConcreteSelf<'_> {
                 return syn::parse_quote!(<#concrete>::#tail);
             }
         }
+
         syn::fold::fold_type(self, ty)
     }
 }
@@ -149,6 +162,7 @@ impl VisitMut for ElidedOutput {
         if reference.lifetime.is_none() || reference.lifetime.as_ref().is_some_and(|l| l.ident == "_") {
             reference.lifetime = Some(self.0.clone());
         }
+
         syn::visit_mut::visit_type_reference_mut(self, reference);
     }
 }
@@ -168,13 +182,16 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: &Type) -> syn::Sign
                     while function.sig.generics.lifetimes().any(|p| p.lifetime.ident == name) {
                         name.push('_');
                     }
+
                     let lifetime = syn::Lifetime::new(&format!("'{name}"), ident.span());
                     native_signature.generics.params.push(syn::parse_quote!(#lifetime));
                     lifetime
                 });
+
             reference.lifetime = Some(lifetime.clone());
             ElidedOutput(lifetime).visit_return_type_mut(&mut native_signature.output);
         }
+
         let ty = &receiver.ty;
         let mut receiver_name = "__unchained_this".to_string();
         while function.sig.inputs.iter().any(|input| {
@@ -183,9 +200,11 @@ pub(super) fn concrete_signature(function: &ItemFn, self_ty: &Type) -> syn::Sign
         }) {
             receiver_name.push('_');
         }
+
         let receiver_name = format_ident!("{}", receiver_name);
         native_signature.inputs[0] = syn::parse_quote!(#receiver_name: #ty);
     }
+
     ConcreteSelf(self_ty).fold_signature(native_signature)
 }
 
@@ -196,12 +215,14 @@ pub(crate) fn native_type(signature: &syn::Signature) -> syn::Result<Tokens> {
             "native binding lifetimes cannot have bounds",
         ));
     }
+
     let lifetimes: Vec<_> = signature.generics.lifetimes().map(|p| &p.lifetime).collect();
     let binder = (!lifetimes.is_empty()).then(|| quote!(for<#(#lifetimes),*>));
     let types = signature.inputs.iter().map(|input| match input {
         FnArg::Typed(arg) => &arg.ty,
         _ => unreachable!(),
     });
+
     let output = &signature.output;
     Ok(quote!(#binder unsafe extern "C" fn(#(#types),*) #output))
 }
@@ -215,10 +236,12 @@ pub(crate) fn normalized_mutability(signature: &syn::Signature) -> syn::Signatur
                 pointer.mutability = None;
                 pointer.const_token = Some(Default::default());
             }
+
             Type::Reference(reference) => reference.mutability = None,
             _ => {}
         }
     }
+
     signature
 }
 
@@ -238,10 +261,12 @@ mod tests {
         let mut signature: syn::Signature = syn::parse_quote! {
             unsafe fn Call(#[native_by_value] callback: *mut Callback)
         };
+
         super::consume_native_parameter_metadata(&mut signature).unwrap();
         let syn::FnArg::Typed(argument) = &signature.inputs[0] else {
             unreachable!()
         };
+
         assert!(argument.attrs.is_empty());
         assert!(matches!(argument.ty.as_ref(), syn::Type::Ptr(pointer) if pointer.mutability.is_some()));
     }
@@ -263,6 +288,7 @@ mod tests {
                 exclusive: &'a mut *mut u32,
             ) -> &'a mut u32
         };
+
         let normalized = normalized_mutability(&signature);
         let expected: syn::Signature = syn::parse_quote! {
             unsafe fn replacement<'a>(
@@ -271,6 +297,7 @@ mod tests {
                 exclusive: &'a *mut u32,
             ) -> &'a mut u32
         };
+
         assert_eq!(
             normalized.to_token_stream().to_string(),
             expected.to_token_stream().to_string()
@@ -284,6 +311,7 @@ mod tests {
                 unsafe fn call(&self, callback: fn(&u8) -> &u8)
                     -> (&Self, fn(&u8) -> &u8) {}
             },
+
             &syn::parse_quote!(Native),
         );
         let expected: syn::Signature = syn::parse_quote! {
@@ -292,6 +320,7 @@ mod tests {
                 callback: fn(&u8) -> &u8
             ) -> (&'__unchained_receiver Native, fn(&u8) -> &u8)
         };
+
         use quote::ToTokens;
         assert_eq!(
             signature.to_token_stream().to_string(),

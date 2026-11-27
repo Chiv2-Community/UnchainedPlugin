@@ -109,23 +109,28 @@ unsafe fn excluded() {}
 unsafe extern "C" fn add_target(value: i32) -> i32 {
     std::hint::black_box(value) + 3
 }
+
 #[inline(never)]
 unsafe extern "C" fn borrow_target(this: &Native) -> &Native {
     std::hint::black_box(this)
 }
+
 #[inline(never)]
 unsafe extern "C" fn storage_target<'a>(this: *const Native, out: &'a mut i32) -> &'a mut i32 {
     *out = unsafe { (*std::hint::black_box(this)).value };
     std::hint::black_box(out)
 }
+
 #[inline(never)]
 unsafe extern "C" fn global_off_target(value: i32) -> i32 {
     std::hint::black_box(value) + 4
 }
+
 #[inline(never)]
 unsafe extern "C" fn zero_target() -> i32 {
     std::hint::black_box(17)
 }
+
 #[inline(never)]
 unsafe extern "C" fn request_target(value: i32) -> i32 {
     std::hint::black_box(value) + 6
@@ -174,6 +179,7 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
                 .unwrap();
         }
     }
+
     let registration =
         unchained_macros_core::detour_inventory_for::<unchained_macros_patternsleuth::PatternsleuthResolver>()
             .find(|r| r.name() == "plugin_add")

@@ -90,9 +90,11 @@ impl CapturedSelector {
                     next.name()
                 ));
             }
+
             chain.push(next);
             current = next;
         }
+
         Ok(Self {
             value: Arc::new(value),
             fallback: chain
@@ -153,6 +155,7 @@ impl SelectorSnapshot {
         if identities.windows(2).any(|pair| pair[0].provider == pair[1].provider) {
             return Err("Different selector types have the same cache identity".into());
         }
+
         Ok(Self {
             values: Arc::new(values),
             identities: Arc::new(identities),
@@ -166,6 +169,7 @@ impl SelectorSnapshot {
                 entry.insert((provider.capture)()?);
             }
         }
+
         Self::from_values(values)
     }
 
@@ -180,6 +184,7 @@ impl SelectorSnapshot {
         if values.contains_key(&TypeId::of::<E>()) {
             return Err(format!("Selector {} is already captured", std::any::type_name::<E>()));
         }
+
         values.insert(TypeId::of::<E>(), CapturedSelector::new(value)?);
         Self::from_values(values)
     }
@@ -216,6 +221,7 @@ impl SelectorSnapshot {
                 return Err("Snapshot is missing a registered selector provider".into());
             }
         }
+
         for patch in inventory::iter::<&'static dyn crate::registry::PatchInfo> {
             if self.supports_patch(*patch) && !patch.resolver().supports(self) {
                 return Err(format!(
@@ -225,6 +231,7 @@ impl SelectorSnapshot {
                 ));
             }
         }
+
         Ok(())
     }
 

@@ -29,6 +29,7 @@ mod tests {
             assert!(text.contains(&format!("\"UKismetSystemLibrary__{method}\"")));
             assert!(text.contains(&format!("static __UNCHAINED_KISMET_RESOLVER_{method}")));
         }
+
         assert_eq!(text.matches("static __UNCHAINED_KISMET_RESOLVER_").count(), 3);
         assert_eq!(text.matches("bind_resolved_func").count(), 3);
         assert_eq!(
@@ -135,6 +136,7 @@ fn class_path(args: Tokens) -> syn::Result<syn::LitStr> {
             "expected a /Script/Package.Class path without NUL",
         ));
     }
+
     Ok(owner)
 }
 
@@ -150,12 +152,14 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "kismet_runtime_bindings requires a non-generic inherent impl",
         ));
     }
+
     let Type::Path(ty) = implementation.self_ty.as_ref() else {
         return Err(syn::Error::new_spanned(
             &implementation.self_ty,
             "expected a named native type",
         ));
     };
+
     let class = &ty.path.segments.last().unwrap().ident;
     let implementation_cfg: Vec<_> = cfg_attributes(&implementation.attrs).cloned().collect();
     let mut declarations = Vec::new();
@@ -174,6 +178,7 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
             items.push(item);
             continue;
         };
+
         if method.attrs.iter().any(|attribute| {
             attribute
                 .path()
@@ -186,6 +191,7 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 "Kismet methods cannot also declare an address binding",
             ));
         }
+
         if method.attrs.iter().any(|attribute| attribute.path().is_ident("dummy")) {
             if !names.insert(format!("__UNCHAINED_TARGET_{}", method.sig.ident)) {
                 return Err(syn::Error::new_spanned(
@@ -193,11 +199,13 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                     "generated binding metadata conflicts with an associated item",
                 ));
             }
+
             let (metadata, helpers) = exec_bindings::expand_method(&owner, class, method)?;
             items.extend(metadata);
             declarations.push(helpers);
             continue;
         }
+
         let method_name = method.sig.ident.to_string();
         let resolver_name = format!("{}__{}", class, method.sig.ident);
         let resolver = format_ident!("__UNCHAINED_KISMET_RESOLVER_{}", method.sig.ident);
@@ -211,16 +219,19 @@ fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
                     implementation: ::unchained_macros_kismet::KismetReflectionResolver::new(#owner, #method_name),
                     filter: ::core::option::Option::None,
                 };
+
             #(#cfg)*
             ::unchained_macros_core::__private::inventory::submit! {
                 &#resolver as &dyn ::unchained_macros_core::__private::ResolverInfo
             }
         });
+
         method.attrs.push(syn::parse_quote!(#[bind_resolved_func(
             ::unchained_macros_kismet::KismetReflectionResolver, &#resolver
         )]));
         items.push(item);
     }
+
     implementation.items = items;
     Ok(quote! {
         #(#implementation_cfg)*
