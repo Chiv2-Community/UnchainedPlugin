@@ -247,7 +247,7 @@ compilation itself became 53 seconds slower.
   413 packages across all target/dependency kinds; this is not a count of
   crates actually compiled for one target.
 - `build/generate_native_binding_docs.rs` generates native docs on ordinary builds, not just Rustdoc.
-  `build/provenance.rs` watches all `src`, so an unrelated Rust edit also
+  `build/embed_build_metadata.rs` watches all `src`, so an unrelated Rust edit also
   reruns documentation generation.
 - `cpp::find_implementation` recursively enumerates and reads a C++ module for
   every bound method. Build a per-generation module/file index and reuse parsed
