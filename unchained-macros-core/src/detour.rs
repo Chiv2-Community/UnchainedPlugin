@@ -226,11 +226,6 @@ mod tests {
     struct RejectingAlias;
 
     impl crate::binding::FunctionInfo for RejectingAlias {
-        fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
-
-            &RESOLVER
-        }
-
         fn entry_address(&self) -> Option<NonZeroUsize> {
 
             NonZeroUsize::new(unpublished_entry as *const () as usize)

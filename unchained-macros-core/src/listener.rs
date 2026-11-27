@@ -422,37 +422,12 @@ pub trait SupportsExit: CallbackTarget {
     }
 }
 
-trait CallbackControl: Send + Sync {
-    fn enabled(&self) -> bool;
-
-    fn set_enabled(&self, enabled: bool);
-
-    fn storage_identity(&self) -> *const ();
-}
-
-impl<T: Copy + Send + Sync + 'static> CallbackControl for CallbackSlot<T> {
-    fn enabled(&self) -> bool {
-
-        self.get().is_some()
-    }
-
-    fn set_enabled(&self, enabled: bool) {
-
-        self.set_enabled(enabled);
-    }
-
-    fn storage_identity(&self) -> *const () {
-
-        self as *const Self as *const ()
-    }
-}
-
 // These immutable tuples can be promoted in a static without naming the target's
 // concrete type. Both attachment and inspection use the same target and phase.
 trait ListenerAction: Sync {
     fn target(&self) -> &'static dyn CallbackTarget;
 
-    fn slot(&self) -> &dyn CallbackControl;
+    fn enabled_flag(&self) -> &AtomicBool;
 
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>>;
 }
@@ -463,9 +438,9 @@ impl<T: SupportsEntry> ListenerAction for (&'static T, T::Entry) {
         self.0
     }
 
-    fn slot(&self) -> &dyn CallbackControl {
+    fn enabled_flag(&self) -> &AtomicBool {
 
-        self.0.entry_slot()
+        &self.0.entry_slot().enabled
     }
 
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -483,9 +458,9 @@ impl<T: SupportsExit> ListenerAction for (&'static T, T::Exit, T::Prepare) {
         self.0
     }
 
-    fn slot(&self) -> &dyn CallbackControl {
+    fn enabled_flag(&self) -> &AtomicBool {
 
-        self.0.exit_slot()
+        &self.0.exit_slot().enabled
     }
 
     unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -563,14 +538,14 @@ impl ListenerRegistration {
 
     pub fn enabled(&self) -> bool {
 
-        self.initialized() && self.action.slot().enabled()
+        self.initialized() && self.action.enabled_flag().load(Ordering::Acquire)
     }
 
     pub fn set_enabled(&self, enabled: bool) {
 
         if self.initialized() {
 
-            self.action.slot().set_enabled(enabled);
+            self.action.enabled_flag().store(enabled, Ordering::Release);
         }
     }
 
@@ -586,7 +561,7 @@ impl ListenerRegistration {
 
     pub fn slot_identity(&self) -> *const () {
 
-        self.action.slot().storage_identity()
+        std::ptr::from_ref(self.action.enabled_flag()).cast()
     }
 }
 

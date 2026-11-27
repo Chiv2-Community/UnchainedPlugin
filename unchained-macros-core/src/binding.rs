@@ -205,19 +205,12 @@ pub type NativeSignature<F> = std::marker::PhantomData<fn(F) -> F>;
 #[doc(hidden)]
 
 pub trait FunctionInfo: std::any::Any + Send + Sync {
-    fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
-
     fn entry_address(&self) -> Option<NonZeroUsize>;
 
     unsafe fn publish_detour(&self, detour: &'static retour::RawDetour) -> Result<(), String>;
 }
 
 impl<R: crate::AddressResolver> FunctionInfo for FunctionBinding<R> {
-    fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
-
-        self.resolver
-    }
-
     fn entry_address(&self) -> Option<NonZeroUsize> {
 
         self.entry_address()

@@ -6,22 +6,13 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, size_of, MaybeUninit};
 
-trait StaticWriteSource: Sync {
-    fn source(&self) -> *const u8;
-}
+const fn value_bytes<T: Copy>(value: &T) -> &[MaybeUninit<u8>] {
 
-impl<T: Copy + Sync> StaticWriteSource for T {
-    fn source(&self) -> *const u8 {
+    // Borrow the representation, including padding, without requiring initialized bytes.
+    unsafe {
 
-        (self as *const T).cast()
+        std::slice::from_raw_parts(std::ptr::from_ref(value).cast(), size_of::<T>())
     }
-}
-
-#[derive(Clone)]
-
-enum WriteStorage {
-    Owned(Vec<MaybeUninit<u8>>),
-    Static(&'static dyn StaticWriteSource),
 }
 
 /// An erased Copy value. Raw copying preserves pointer provenance and padding;
@@ -29,8 +20,7 @@ enum WriteStorage {
 #[derive(Clone)]
 
 pub struct WriteValue {
-    storage: WriteStorage,
-    size: usize,
+    bytes: Cow<'static, [MaybeUninit<u8>]>,
     alignment: usize,
 }
 
@@ -38,46 +28,21 @@ impl std::fmt::Debug for WriteValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
         f.debug_struct("WriteValue")
-            .field("size", &self.size)
+            .field("size", &self.size())
             .field("alignment", &self.alignment)
             .finish()
     }
 }
 
 impl WriteValue {
-    fn owned<T: Copy + 'static>(value: T) -> Self {
-
-        let mut storage = Vec::<MaybeUninit<u8>>::with_capacity(size_of::<T>());
-
-        unsafe {
-
-            std::ptr::copy_nonoverlapping(
-                (&value as *const T).cast::<MaybeUninit<u8>>(),
-                storage.as_mut_ptr(),
-                size_of::<T>(),
-            );
-
-            storage.set_len(size_of::<T>());
-        }
-
-        Self {
-            storage: WriteStorage::Owned(storage),
-            size: size_of::<T>(),
-            alignment: align_of::<T>(),
-        }
-    }
-
     pub fn as_ptr(&self) -> *const u8 {
 
-        match &self.storage {
-            WriteStorage::Owned(storage) => storage.as_ptr().cast(),
-            WriteStorage::Static(source) => StaticWriteSource::source(*source),
-        }
+        self.bytes.as_ptr().cast()
     }
 
     pub fn size(&self) -> usize {
 
-        self.size
+        self.bytes.len()
     }
 
     pub fn alignment(&self) -> usize {
@@ -104,58 +69,54 @@ pub struct Patch {
 }
 
 impl Patch {
-    pub const fn bytes(offset: u64, bytes: &'static [u8]) -> Self {
+    const fn new(offset: u64, operation: Operation) -> Self {
 
         Self {
             offset,
-            operation: Operation::Bytes(Cow::Borrowed(bytes)),
+            operation,
             enabled: true,
         }
+    }
+
+    pub const fn bytes(offset: u64, bytes: &'static [u8]) -> Self {
+
+        Self::new(offset, Operation::Bytes(Cow::Borrowed(bytes)))
     }
 
     pub fn owned_bytes(offset: u64, bytes: Vec<u8>) -> Self {
 
-        Self {
-            offset,
-            operation: Operation::Bytes(Cow::Owned(bytes)),
-            enabled: true,
-        }
+        Self::new(offset, Operation::Bytes(Cow::Owned(bytes)))
     }
 
     pub const fn nop(offset: u64, count: usize) -> Self {
 
-        Self {
-            offset,
-            operation: Operation::Nop(count),
-            enabled: true,
-        }
+        Self::new(offset, Operation::Nop(count))
     }
 
     /// Write a Copy value without interpreting its representation as initialized bytes.
 
     pub fn write<T: Copy + 'static>(offset: u64, value: T) -> Self {
 
-        Self {
+        Self::new(
             offset,
-            operation: Operation::Write(WriteValue::owned(value)),
-            enabled: true,
-        }
+            Operation::Write(WriteValue {
+                bytes: Cow::Owned(value_bytes(&value).to_vec()),
+                alignment: align_of::<T>(),
+            }),
+        )
     }
 
     /// Const form for statics. Copies the referenced value, not its address.
 
     pub const fn write_ref<T: Copy + Sync + 'static>(offset: u64, value: &'static T) -> Self {
 
-        Self {
+        Self::new(
             offset,
-            operation: Operation::Write(WriteValue {
-                storage: WriteStorage::Static(value),
-                size: size_of::<T>(),
+            Operation::Write(WriteValue {
+                bytes: Cow::Borrowed(value_bytes(value)),
                 alignment: align_of::<T>(),
             }),
-
-            enabled: true,
-        }
+        )
     }
 
     pub const fn when(mut self, enabled: bool) -> Self {
