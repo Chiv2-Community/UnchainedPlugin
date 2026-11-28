@@ -66,19 +66,25 @@ unsafe impl Reflection for Fixture {
         })
     }
 
-    unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-        Ok(FunctionSchema {
-            function_identity: 42,
-            unique_exec_thunk: !self.shared,
-            parameters: vec![PropertyMetadata {
-                identity: 99,
-                kind: PropertyKind::String,
-                size: std::mem::size_of::<FString>(),
-                array_dim: 1,
-                flags: PARM | CONST_PARM,
-                offset: 0,
-            }],
-        })
+    unsafe fn find_exec_schema(&self, owner: &str, member: &str) -> Result<(FunctionMetadata, FunctionSchema), String> {
+        if self.shared {
+            return Err("Shared exec wrappers".into());
+        }
+        Ok((
+            unsafe { self.find_function(owner, member)? },
+            FunctionSchema {
+                function_identity: 42,
+
+                parameters: vec![PropertyMetadata {
+                    identity: 99,
+                    kind: PropertyKind::String,
+                    size: std::mem::size_of::<FString>(),
+                    array_dim: 1,
+                    flags: PARM | CONST_PARM,
+                    offset: 0,
+                }],
+            },
+        ))
     }
 }
 
@@ -243,37 +249,40 @@ unsafe impl Reflection for RuntimeReflection {
         })
     }
 
-    unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-        Ok(FunctionSchema {
-            function_identity: 42,
-            unique_exec_thunk: true,
-            parameters: vec![
-                PropertyMetadata {
-                    identity: 11,
-                    kind: PropertyKind::Object,
-                    size: 8,
-                    array_dim: 1,
-                    flags: PARM,
-                    offset: 0,
-                },
-                PropertyMetadata {
-                    identity: 12,
-                    kind: PropertyKind::Bool,
-                    size: 1,
-                    array_dim: 1,
-                    flags: PARM,
-                    offset: 8,
-                },
-                PropertyMetadata {
-                    identity: 13,
-                    kind: PropertyKind::Bool,
-                    size: 1,
-                    array_dim: 1,
-                    flags: PARM | RETURN_PARM,
-                    offset: 16,
-                },
-            ],
-        })
+    unsafe fn find_exec_schema(&self, owner: &str, member: &str) -> Result<(FunctionMetadata, FunctionSchema), String> {
+        Ok((
+            unsafe { self.find_function(owner, member)? },
+            FunctionSchema {
+                function_identity: 42,
+
+                parameters: vec![
+                    PropertyMetadata {
+                        identity: 11,
+                        kind: PropertyKind::Object,
+                        size: 8,
+                        array_dim: 1,
+                        flags: PARM,
+                        offset: 0,
+                    },
+                    PropertyMetadata {
+                        identity: 12,
+                        kind: PropertyKind::Bool,
+                        size: 1,
+                        array_dim: 1,
+                        flags: PARM,
+                        offset: 8,
+                    },
+                    PropertyMetadata {
+                        identity: 13,
+                        kind: PropertyKind::Bool,
+                        size: 1,
+                        array_dim: 1,
+                        flags: PARM | RETURN_PARM,
+                        offset: 16,
+                    },
+                ],
+            },
+        ))
     }
 }
 
@@ -409,12 +418,15 @@ unsafe impl Reflection for NoArgsReflection {
         })
     }
 
-    unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-        Ok(FunctionSchema {
-            function_identity: 43,
-            unique_exec_thunk: true,
-            parameters: vec![],
-        })
+    unsafe fn find_exec_schema(&self, owner: &str, member: &str) -> Result<(FunctionMetadata, FunctionSchema), String> {
+        Ok((
+            unsafe { self.find_function(owner, member)? },
+            FunctionSchema {
+                function_identity: 43,
+
+                parameters: vec![],
+            },
+        ))
     }
 }
 

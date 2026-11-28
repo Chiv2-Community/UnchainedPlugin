@@ -102,29 +102,32 @@ unsafe impl Reflection for Fixture {
         })
     }
 
-    unsafe fn find_exec_schema(&self, _: &str, _: &str) -> Result<FunctionSchema, String> {
-        Ok(FunctionSchema {
-            function_identity: 42,
-            unique_exec_thunk: true,
-            parameters: vec![
-                PropertyMetadata {
-                    identity: 11,
-                    kind: PropertyKind::String,
-                    size: size_of::<FString>(),
-                    array_dim: 1,
-                    flags: PARM | CONST_PARM,
-                    offset: 0,
-                },
-                PropertyMetadata {
-                    identity: 12,
-                    kind: PropertyKind::Text,
-                    size: size_of::<FText>(),
-                    array_dim: 1,
-                    flags: PARM | CONST_PARM,
-                    offset: size_of::<FString>(),
-                },
-            ],
-        })
+    unsafe fn find_exec_schema(&self, owner: &str, member: &str) -> Result<(FunctionMetadata, FunctionSchema), String> {
+        Ok((
+            unsafe { self.find_function(owner, member)? },
+            FunctionSchema {
+                function_identity: 42,
+
+                parameters: vec![
+                    PropertyMetadata {
+                        identity: 11,
+                        kind: PropertyKind::String,
+                        size: size_of::<FString>(),
+                        array_dim: 1,
+                        flags: PARM | CONST_PARM,
+                        offset: 0,
+                    },
+                    PropertyMetadata {
+                        identity: 12,
+                        kind: PropertyKind::Text,
+                        size: size_of::<FText>(),
+                        array_dim: 1,
+                        flags: PARM | CONST_PARM,
+                        offset: size_of::<FString>(),
+                    },
+                ],
+            },
+        ))
     }
 }
 

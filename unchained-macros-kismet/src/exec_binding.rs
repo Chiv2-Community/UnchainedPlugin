@@ -28,7 +28,7 @@ impl KismetExecResolver {
     /// skipped steps, custom parameter decoding, or inlined execution between
     /// arguments is supported. Reverify this contract when the binary changes.
     /// The wrapper must remain unique to this UFunction, including native
-    /// functions not yet loaded at initialization; reflected aliases are rejected.
+    /// functions not yet loaded at initialization.
     pub const unsafe fn new(
         owner: &'static str,
         member: &'static str,
@@ -78,9 +78,7 @@ impl unchained_macros_core::AddressResolver for KismetExecResolver {
             return Err("Exec observation must resolve on the context's game thread".into());
         }
 
-        let function = unsafe { context.reflection.find_function(self.owner, self.member) }?;
-
-        let schema = unsafe { context.reflection.find_exec_schema(self.owner, self.member) }?;
+        let (function, schema) = unsafe { context.reflection.find_exec_schema(self.owner, self.member) }?;
 
         let properties = crate::schema::validate(&function, &schema, self.arguments, self.result)
             .map_err(|error| format!("{}::{}: {error}", self.owner, self.member))?;

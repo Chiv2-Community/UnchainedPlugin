@@ -95,8 +95,8 @@ unsafe fn warning(message: &FString) {}
   not automatic disassembly proof. Verify the current binary's argument order,
   exact top-level Step count, and live independent slots through the final Step.
   The wrapper must remain unique,
-  including UFunctions loaded later. The adapter rejects currently reflected
-  shared wrappers; no `FFrame::node`/callee relationship is assumed.
+  including UFunctions loaded later. Verify this when declaring the wrapper;
+  reflection checks its layout, not address uniqueness.
 - Native and dummy methods can share one `#[kismet_runtime_bindings]` impl.
 - `#[dummy]` identifies verified no-op **or cleanup-only**
   native bodies. The marker rejects native detours; the exec wrapper, native

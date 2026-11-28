@@ -118,8 +118,8 @@ exactly once. The listener runs after the final argument Step, before body
 execution and cleanup. No-argument listeners run before the wrapper.
 
 Inputs support booleans, bytes, `i32`, `f32`, UObject pointers, and borrowed
-`FString`, `FText`, and `FLinearColor`. Mutable ref/out arguments, arrays, shared
-wrappers, and unsupported layouts are rejected. No argument ownership transfers
+`FString`, `FText`, and `FLinearColor`. Mutable ref/out arguments, arrays, and unsupported layouts
+are rejected. No argument ownership transfers
 to the listener. Original result storage is forwarded untouched.
 
 Coverage includes calls through that exec wrapper, not direct C++ calls.

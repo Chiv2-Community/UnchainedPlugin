@@ -29,9 +29,6 @@ pub struct PropertyMetadata {
 
 pub struct FunctionSchema {
     pub function_identity: usize,
-    /// False when another reflected UFunction shares this wrapper. Shared
-    /// wrappers require a separately verified frame-to-callee identity adapter.
-    pub unique_exec_thunk: bool,
     pub parameters: Vec<PropertyMetadata>,
 }
 
@@ -76,10 +73,6 @@ pub fn validate(
     result: Option<Parameter>,
 ) -> Result<Vec<usize>, String> {
     let count = function.arguments()? as usize;
-
-    if !schema.unique_exec_thunk {
-        return Err("Shared exec wrappers are unsupported without verified frame-to-function identity".into());
-    }
 
     if schema.function_identity == 0
         || count != arguments.len()
@@ -160,7 +153,6 @@ mod tests {
             },
             FunctionSchema {
                 function_identity: 2,
-                unique_exec_thunk: true,
                 parameters: vec![
                     PropertyMetadata {
                         identity: 3,
@@ -271,7 +263,6 @@ mod tests {
 
             let mut schema = FunctionSchema {
                 function_identity: 2,
-                unique_exec_thunk: true,
                 parameters: vec![PropertyMetadata {
                     identity: 3,
                     kind,

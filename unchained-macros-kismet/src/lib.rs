@@ -36,11 +36,15 @@ pub unsafe trait Reflection {
     /// Call on the game thread after the host's reflection prerequisites are ready.
     unsafe fn find_function(&self, owner: &str, member: &str) -> Result<FunctionMetadata, String>;
 
-    /// Copy parameter identity, flags, kind and layout from the same UFunction.
+    /// Return metadata and parameter layout from the same reflected UFunction.
     ///
     /// # Safety
     /// The same game-thread/readiness contract as `find_function` applies.
-    unsafe fn find_exec_schema(&self, _owner: &str, _member: &str) -> Result<schema::FunctionSchema, String> {
+    unsafe fn find_exec_schema(
+        &self,
+        _owner: &str,
+        _member: &str,
+    ) -> Result<(FunctionMetadata, schema::FunctionSchema), String> {
         Err("Reflection adapter does not provide exec observation schemas".into())
     }
 }

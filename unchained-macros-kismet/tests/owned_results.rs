@@ -229,21 +229,24 @@ unsafe impl Reflection for Fixture {
         })
     }
 
-    unsafe fn find_exec_schema(&self, _: &str, member: &str) -> Result<FunctionSchema, String> {
+    unsafe fn find_exec_schema(&self, owner: &str, member: &str) -> Result<(FunctionMetadata, FunctionSchema), String> {
         let (identity, kind, size) = native(member);
 
-        Ok(FunctionSchema {
-            function_identity: identity,
-            unique_exec_thunk: true,
-            parameters: vec![PropertyMetadata {
-                identity,
-                kind,
-                size,
-                array_dim: 1,
-                flags: PARM | RETURN_PARM,
-                offset: 0,
-            }],
-        })
+        Ok((
+            unsafe { self.find_function(owner, member)? },
+            FunctionSchema {
+                function_identity: identity,
+
+                parameters: vec![PropertyMetadata {
+                    identity,
+                    kind,
+                    size,
+                    array_dim: 1,
+                    flags: PARM | RETURN_PARM,
+                    offset: 0,
+                }],
+            },
+        ))
     }
 }
 
