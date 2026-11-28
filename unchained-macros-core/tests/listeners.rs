@@ -42,10 +42,10 @@ impl<E: Copy + Send + Sync + 'static, X: Copy + Send + Sync + 'static, R: Addres
         self.resolver
     }
 
-    unsafe fn ensure_attached(
-        &'static self,
-        _: Callback<Self::Callback, E, X>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn physical_detour(&self) -> Option<&retour::RawDetour> {
+        None
+    }
+    unsafe fn install_hook(&'static self, _: Callback<Self::Callback, E, X>) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { (self.attach)() }
     }
 }
@@ -132,16 +132,15 @@ fn entry_owner_rejects_other_kinds_and_preserves_bypass() {
     let exit = &__UNCHAINED_REGISTRATION_native_exit;
     let hook = &__UNCHAINED_REGISTRATION_replacement;
     assert!(validate_callback_registrations_for::<Backend>(&SelectorSnapshot::default()).is_err());
-    assert!(unsafe { entry.attach(true) }.is_err());
+    assert!(unsafe { entry.attach() }.is_err());
     unsafe {
         binding
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
-        entry.attach(false).unwrap();
+        entry.attach().unwrap();
     }
-    assert!(unsafe { exit.attach(true) }.is_err());
-    assert!(unsafe { hook.attach(true) }.is_err());
-    entry.set_enabled(true);
+    assert!(unsafe { exit.attach() }.is_err());
+    assert!(unsafe { hook.attach() }.is_err());
     let mut output = 0;
     assert_eq!(unsafe { original(4, &mut output) }, 5);
     assert_eq!(unsafe { Native::call(6, &mut output) }, 7);
@@ -191,10 +190,10 @@ fn callback_panics_are_isolated() {
     let slot = CallbackSlot::new();
 
     unsafe {
-        slot.register(12_u32, false).unwrap();
+        slot.register(12_u32).unwrap();
     }
 
-    assert!(slot.get().is_none());
+    assert_eq!(slot.get(), Some(12));
 }
 
 #[test]
@@ -213,9 +212,9 @@ fn same_target_reentry_is_observed_and_panics_remain_isolated() {
     static SECOND: Descriptor = unsafe { Descriptor::new(&RESOLVER, attach) };
 
     unsafe {
-        FIRST.register(Callback::Entry(callback), true, || true).unwrap();
+        FIRST.register(Callback::Entry(callback)).unwrap();
 
-        SECOND.register(Callback::Entry(callback), true, || true).unwrap();
+        SECOND.register(Callback::Entry(callback)).unwrap();
     }
 
     FIRST.observe_entry(|_| {
@@ -318,7 +317,7 @@ mod backend_specific {
 
         for listener in listener_inventory_for::<Backend>() {
             unsafe {
-                listener.attach(true).unwrap();
+                listener.attach().unwrap();
             }
         }
 
@@ -392,7 +391,7 @@ mod duplicate_discovery {
             }
 
             unsafe {
-                listener.attach(true)?;
+                listener.attach()?;
             }
         }
 
@@ -419,7 +418,7 @@ mod duplicate_discovery {
         // Even a host without preflight must not skip a loser as "initialized".
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name == "first_entry") {
             unsafe {
-                listener.attach(true).unwrap();
+                listener.attach().unwrap();
             }
         }
 
@@ -434,8 +433,6 @@ mod duplicate_discovery {
                 assert!(!listener.initialized());
 
                 assert!(!listener.enabled());
-
-                listener.set_enabled(false);
             }
         }
 
@@ -509,7 +506,7 @@ mod activation {
 
     #[test]
 
-    fn global_autoactivation_off_skips_condition_and_conditions_are_not_dispatch_predicates() {
+    fn false_conditions_leave_original_entries_unpatched() {
         unsafe {
             Native::__UNCHAINED_TARGET_off
                 .binding()
@@ -529,43 +526,14 @@ mod activation {
                 .find(|hook| hook.name() == "gated")
                 .unwrap();
 
-            off.attach(false).unwrap();
-
-            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
-
-            gated.attach(true).unwrap();
-
-            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 1);
-
-            for listener in listener_inventory_for::<Backend>() {
-                assert!(listener.attach(true).is_err());
-            }
-
-            assert!(!off.enabled());
-
-            assert!(!gated.enabled());
-
+            assert!(!off.attach().unwrap());
+            assert!(!gated.attach().unwrap());
+            assert!(!off.initialized() && !gated.initialized());
+            assert!(off.detour().is_none() && gated.detour().is_none());
             assert_eq!(original_off(), 11);
-
             assert_eq!(original_gated(), 12);
-
+            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
             assert_eq!(ENTRIES.load(Ordering::SeqCst), 0);
-
-            off.set_enabled(true);
-
-            assert!(off.enabled());
-
-            assert_eq!(original_off(), 99);
-
-            assert_eq!(ENTRIES.load(Ordering::SeqCst), 0);
-
-            assert_eq!(Native::off(), 11);
-
-            assert_eq!(Native::gated(), 12);
-
-            assert_eq!(ENTRIES.load(Ordering::SeqCst), 0);
-
-            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 1);
         }
     }
 }
@@ -629,7 +597,7 @@ mod condition_reentry {
 
     #[test]
 
-    fn conflicting_callbacks_do_not_evaluate_conditions() {
+    fn enabled_conflicting_callbacks_do_not_replace_the_owner() {
         unsafe {
             Native::__UNCHAINED_TARGET_call
                 .binding()
@@ -644,14 +612,14 @@ mod condition_reentry {
                 .find(|listener| listener.name == "exit")
                 .unwrap();
 
-            entry.attach(true).unwrap();
+            entry.attach().unwrap();
 
-            assert!(exit.attach(true).is_err());
-            assert!(detour_inventory_for::<Backend>().next().unwrap().attach(true).is_err());
-            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
+            assert!(exit.attach().is_err());
+            assert!(detour_inventory_for::<Backend>().next().unwrap().attach().is_err());
+            assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
             assert_eq!(original(7), 8);
-            assert_eq!(ORIGINAL.load(Ordering::SeqCst), 1);
-            assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);
+            assert_eq!(ORIGINAL.load(Ordering::SeqCst), 3);
+            assert_eq!(ENTRIES.load(Ordering::SeqCst), 3);
             assert_eq!(EXITS.load(Ordering::SeqCst), 0);
         }
     }
@@ -707,7 +675,7 @@ mod local_hygiene {
             validate_callback_registrations_for::<Backend>(&SelectorSnapshot::default()).unwrap();
 
             for listener in listener_inventory_for::<Backend>() {
-                listener.attach(true).unwrap();
+                listener.attach().unwrap();
             }
 
             let expected = 30;
@@ -801,7 +769,7 @@ mod ownership {
                 .unwrap();
 
             for listener in listener_inventory_for::<Backend>() {
-                listener.attach(true).unwrap();
+                listener.attach().unwrap();
             }
 
             // Keep calls opaque: optimized direct calls can bypass the patched entry.
@@ -939,7 +907,7 @@ mod references {
             }
 
             for listener in listener_inventory_for::<Backend>() {
-                listener.attach(true).unwrap();
+                listener.attach().unwrap();
             }
 
             let mut value = 7;

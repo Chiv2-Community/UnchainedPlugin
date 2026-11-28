@@ -75,18 +75,14 @@ pub trait DetourInfo: Sync {
 
     fn resolver(&self) -> &'static dyn ResolverInfo;
 
-    fn condition(&self) -> bool;
-
     /// # Safety
     /// Attach during quiescent startup, satisfying target readiness and the callback's
     /// ABI, aliasing and lifetime contracts. Do not attach concurrently.
-    unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>>;
+    unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>>;
 
     fn initialized(&self) -> bool;
 
     fn enabled(&self) -> bool;
-
-    fn set_enabled(&self, enabled: bool);
 
     fn detour(&self) -> Option<&'static retour::RawDetour>;
 }
@@ -103,23 +99,20 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
         self.target.resolver()
     }
 
-    fn condition(&self) -> bool {
-        crate::isolate_observer(self.condition).unwrap_or(false)
-    }
-
-    unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
+    unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>> {
         if self.initialized() {
             return Err("Detour callback is already initialized".into());
         }
 
-        unsafe {
-            self.target
-                .register(crate::Callback::Detour(self.callback), activate, self.condition)?;
+        if !crate::isolate_observer(self.condition).unwrap_or(false) {
+            return Ok(false);
         }
-
+        unsafe {
+            self.target.register(crate::Callback::Detour(self.callback))?;
+        }
         self.initialized.borrow().store(true, Ordering::Release);
 
-        Ok(())
+        Ok(true)
     }
 
     fn initialized(&self) -> bool {
@@ -131,13 +124,7 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
     }
 
     fn enabled(&self) -> bool {
-        self.detour().is_some_and(|hook| hook.is_enabled()) && self.target.replacement().is_some()
-    }
-
-    fn set_enabled(&self, enabled: bool) {
-        if self.initialized() {
-            self.target.slot().set_enabled(enabled);
-        }
+        self.detour().is_some_and(|hook| hook.is_enabled())
     }
 }
 

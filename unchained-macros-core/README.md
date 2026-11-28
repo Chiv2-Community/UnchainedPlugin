@@ -55,7 +55,7 @@ unsafe {
 }
 for hook in detour_inventory_for::<Backend>() {
     if hook.resolver().supports(&selectors) && !hook.initialized() {
-        unsafe { hook.attach(true)?; }
+        unsafe { hook.attach()?; }
     }
 }
 ```
@@ -69,9 +69,8 @@ Address claims and trampoline publication are **global across backends**.
 Already-bound aliases receive a newly attached trampoline; aliases bound later
 inherit it during initialization. With the required quiescent callers,
 original-call bypass does not depend on backend discovery order.
-Attachment selects the entry, exit, or replacement wrapper and publishes the
-original trampoline to aliases. The target remains claimed while passive.
-Auto-activation off skips callback conditions, not trampoline publication.
+Attachment selects the replacement itself or an entry/exit listener adapter and
+publishes the original trampoline to aliases only when the condition passes.
 
 `function_is_bound_for::<Backend>(name)` and
 `selectors.supports_resolver_for::<Backend>(name)` scope name queries to a backend.
@@ -89,7 +88,7 @@ unsafe fn returned(result: &bool) {}
 - One callback per method: entry, exit, or detour.
   Call `validate_callback_registrations_for::<Backend>(&selectors)` before any
   attachment. It checks each selected callback's target identity,
-  including passive registrations, without evaluating conditions.
+  including conditional registrations, without evaluating conditions.
 - Entry listeners borrow the live inputs, then the wrapper calls the original once.
   Pointer inputs are borrowed addresses. Exit listeners run after the original
   returns and borrow its result only (`&()` for void). Neither wrapper retains inputs.
@@ -100,11 +99,8 @@ unsafe fn returned(result: &bool) {}
 - Observer/condition panics are caught; original execution continues. No exit is promised for exceptions,
   aborts, panicking detours, or other paths that do not return normally.
 - Conditions and feature gates control activation.
-  Conditions are attachment-time gates, evaluated once when auto-activation is
-  enabled and never by dispatch/status queries. Auto-activation off skips them.
-  Condition-induced native calls invoke enabled observers normally.
-  Slot/registration `set_enabled` changes logical activation without reevaluation.
-  `DetourInfo::enabled` / `set_enabled` refer to the detour callback only.
+  `attach()` returns `Ok(false)` when the condition is false or panics: no hook,
+  address claim, or trampoline is created. An installed callback is never gated on dispatch.
   `DetourInfo::detour` exposes the physical hook for inspection.
 - Addresses remain globally owned across backends. A second independently
   described alias cannot attach another dispatcher; late aliases still share
@@ -120,7 +116,7 @@ Callback attributes use the method’s `__UNCHAINED_TARGET_Method` reference. A
 `CallbackTarget` supplies its resolver and physical attachment.
 Implement only the supported capabilities:
 
-- `SupportsDetour`: read the replacement and inspect the physical hook.
+- `SupportsDetour`: register a native replacement with the target ABI.
 - `SupportsEntry`: dispatch with `observe_entry`.
 - `SupportsExit`: dispatch with `observe_exit` on the returned value.
 
@@ -135,22 +131,20 @@ use unchained_macros_core::{DetourInfo, DetourRegistration, NativeTarget};
 
 type Call = unsafe extern "C" fn(usize) -> usize;
 type Target = NativeTarget<Call, unsafe fn(&usize), unsafe fn(&usize), Backend>;
-static TARGET: Target = unsafe { Target::new(&BINDING, replace, enter, exit, |f| f as *const ()) };
+static TARGET: Target = unsafe { Target::new(&BINDING, enter, exit, |f| f as *const ()) };
 static REPLACEMENT: DetourRegistration<Target> =
     DetourRegistration::new("replacement", &TARGET, replacement, condition);
 // Optional discovery; direct attachment doesn't consult inventory.
 inventory::submit! { &REPLACEMENT as &dyn DetourInfo }
 ```
 
-During quiescent startup, `unsafe { REPLACEMENT.attach(true)? }` attaches the
-replacement wrapper and publishes the typed callback. A failed or duplicate owner
-cannot toggle another registration’s callback. `set_enabled` controls only the
-logical replacement. Generated registrations use the same lifecycle.
+During quiescent startup, `unsafe { REPLACEMENT.attach()? }` attaches the
+replacement directly.
 
 For a listener, use `ListenerRegistration::new(name, &ListenerAction::entry(&TARGET, entered), condition)`
 or `ListenerRegistration::new(name, &ListenerAction::exit(&TARGET, returned), condition)`.
 See [`tests/manual_api.rs`](tests/manual_api.rs) for complete handwritten
-binding submission, dispatch, conflicting registrations, toggles, late aliases,
+binding submission, dispatch, conflicting registrations, late aliases,
 and original-call bypass.
 
 Low-level slot `register` is unsafe: it bypasses descriptor result-signature and

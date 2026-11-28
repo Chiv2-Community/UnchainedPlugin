@@ -4,15 +4,7 @@ use crate::{
     AddressResolver, Callback, CallbackSlot, CallbackTarget, FunctionBinding, NativeHook, SupportsEntry, SupportsExit,
 };
 
-pub trait SupportsDetour: CallbackTarget {
-    fn replacement(&self) -> Option<Self::Callback> {
-        let Callback::Detour(callback) = self.slot().get()? else {
-            return None;
-        };
-        Some(callback)
-    }
-    fn physical_detour(&self) -> Option<&retour::RawDetour>;
-}
+pub trait SupportsDetour: CallbackTarget {}
 
 pub const fn detour_signature<T: SupportsDetour>(_: &T) -> crate::NativeSignature<T::Callback> {
     std::marker::PhantomData
@@ -23,7 +15,6 @@ pub const fn detour_signature<T: SupportsDetour>(_: &T) -> crate::NativeSignatur
 pub struct NativeTarget<F, E, X, R: AddressResolver> {
     binding: &'static FunctionBinding<R>,
     hook: NativeHook,
-    detour_dispatch: F,
     entry_dispatch: F,
     exit_dispatch: F,
     code_pointer: fn(F) -> *const (),
@@ -36,7 +27,6 @@ impl<F: Copy, E: Copy, X: Copy, R: AddressResolver> NativeTarget<F, E, X, R> {
     /// `code_pointer` must convert its argument to the unchanged code pointer.
     pub const unsafe fn new(
         binding: &'static FunctionBinding<R>,
-        detour_dispatch: F,
         entry_dispatch: F,
         exit_dispatch: F,
         code_pointer: fn(F) -> *const (),
@@ -44,7 +34,6 @@ impl<F: Copy, E: Copy, X: Copy, R: AddressResolver> NativeTarget<F, E, X, R> {
         Self {
             binding,
             hook: NativeHook::new(),
-            detour_dispatch,
             entry_dispatch,
             exit_dispatch,
             code_pointer,
@@ -73,9 +62,13 @@ where
         self.binding.resolver
     }
 
-    unsafe fn ensure_attached(&'static self, callback: Callback<F, E, X>) -> Result<(), Box<dyn std::error::Error>> {
+    fn physical_detour(&self) -> Option<&retour::RawDetour> {
+        self.hook.detour()
+    }
+
+    unsafe fn install_hook(&'static self, callback: Callback<F, E, X>) -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = match callback {
-            Callback::Detour(_) => self.detour_dispatch,
+            Callback::Detour(replacement) => replacement,
             Callback::Entry(_) => self.entry_dispatch,
             Callback::Exit(_) => self.exit_dispatch,
         };
@@ -105,7 +98,4 @@ where
     E: Copy + Send + Sync + 'static,
     X: Copy + Send + Sync + 'static,
 {
-    fn physical_detour(&self) -> Option<&retour::RawDetour> {
-        self.hook.detour()
-    }
 }

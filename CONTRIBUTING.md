@@ -330,8 +330,7 @@ Target the binding method from a functional module under `unchained-plugin/src/u
 - Only one detour may own a native address. For handwritten registration, pass the
   verified target and typed replacement to `DetourRegistration::new`; see the
   [core example](unchained-macros-core/README.md#handwritten-registrations).
-- The condition defaults to `|| true`; activation also requires global
-  auto-activation. Conditions run during attachment, not on each call.
+- The condition defaults to `|| true`. A false condition skips hook creation.
 - Preserve native thread, ownership, pointer, and callback-lifetime rules.
 - Do not let Rust panics unwind through native callers.
 - Match binding/replacement feature gates; gate whole modules when appropriate.

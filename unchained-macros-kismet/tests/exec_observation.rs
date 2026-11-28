@@ -313,7 +313,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     unsafe {
         Library::__UNCHAINED_TARGET_Predicate
             .entry
-            .register(unchained_macros_core::Callback::Entry(runtime_entry), true)
+            .register(unchained_macros_core::Callback::Entry(runtime_entry))
     }
     .unwrap();
 
@@ -457,7 +457,7 @@ fn noargs_entry_observes_bounded_callback_reentry() {
     unsafe {
         Library::__UNCHAINED_TARGET_NoArgs
             .entry
-            .register(unchained_macros_core::Callback::Entry(noargs_reentrant_entry), true)
+            .register(unchained_macros_core::Callback::Entry(noargs_reentrant_entry))
     }
     .unwrap();
 

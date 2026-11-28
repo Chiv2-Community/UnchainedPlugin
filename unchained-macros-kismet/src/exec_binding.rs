@@ -152,7 +152,11 @@ impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for 
         self.binding.resolver
     }
 
-    unsafe fn ensure_attached(
+    fn physical_detour(&self) -> Option<&retour::RawDetour> {
+        self.hook.detour()
+    }
+
+    unsafe fn install_hook(
         &'static self,
         _callback: unchained_macros_core::Callback<Self::Callback, E, Self::Exit>,
     ) -> Result<(), Box<dyn std::error::Error>> {

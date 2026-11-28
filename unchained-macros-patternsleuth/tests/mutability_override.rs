@@ -140,7 +140,7 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
         let borrowed_call =
             std::hint::black_box(original_borrowed as for<'a> unsafe extern "C" fn(*const &'a i32) -> &'a i32);
 
-        __UNCHAINED_REGISTRATION_borrowed.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_borrowed.attach().unwrap();
 
         assert!(std::ptr::eq(borrowed_call(&borrowed_number), &number));
 
@@ -158,9 +158,9 @@ fn reference_overrides_and_nested_borrows_preserve_lifetimes() {
 
         let pointer = &raw mut value;
 
-        __UNCHAINED_REGISTRATION_shared_read.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_shared_read.attach().unwrap();
 
-        __UNCHAINED_REGISTRATION_exclusive_read.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_exclusive_read.attach().unwrap();
 
         assert_eq!(*shared_call(pointer), 43);
 
@@ -241,11 +241,11 @@ fn reverse_and_exact_matches_keep_native_signatures_and_original_calls() {
         let mut_call =
             std::hint::black_box(original_mut_match as for<'a> unsafe extern "C" fn(*mut Native, &'a i32) -> &'a i32);
 
-        __UNCHAINED_REGISTRATION_reverse.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_reverse.attach().unwrap();
 
-        __UNCHAINED_REGISTRATION_const_match.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_const_match.attach().unwrap();
 
-        __UNCHAINED_REGISTRATION_mut_match.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_mut_match.attach().unwrap();
 
         assert_eq!(reverse_call(pointer, &other), 69);
 
@@ -308,7 +308,7 @@ fn mutability_override_preserves_original_calls_and_const_native_entry() {
 
         assert_eq!(call(pointer), 43);
 
-        __UNCHAINED_REGISTRATION_replacement.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_replacement.attach().unwrap();
 
         assert_eq!(call(pointer), 53);
 

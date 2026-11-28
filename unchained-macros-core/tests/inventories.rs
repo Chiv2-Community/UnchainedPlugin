@@ -30,15 +30,8 @@ macro_rules! backend {
 
             type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), Backend>;
 
-            static TARGET: Target = unsafe {
-                Target::new(
-                    &BINDING,
-                    || {},
-                    || {},
-                    || {},
-                    |_| panic!("discovery must not attach"),
-                )
-            };
+            static TARGET: Target =
+                unsafe { Target::new(&BINDING, || {}, || {}, |_| panic!("discovery must not attach")) };
 
             pub static HOOK: bindings::DetourRegistration<Target> = bindings::DetourRegistration::new(
                 "SameHook",

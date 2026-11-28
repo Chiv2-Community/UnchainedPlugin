@@ -4,18 +4,14 @@ use crate::{AddressResolver, Resolver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
-/// One installed callback and its runtime enable flag.
+/// One installed callback.
 pub struct CallbackSlot<T> {
     value: OnceLock<T>,
-    enabled: AtomicBool,
 }
 
 impl<T: Copy> CallbackSlot<T> {
     pub const fn new() -> Self {
-        Self {
-            value: OnceLock::new(),
-            enabled: AtomicBool::new(false),
-        }
+        Self { value: OnceLock::new() }
     }
 
     pub fn is_registered(&self) -> bool {
@@ -33,27 +29,18 @@ impl<T: Copy> CallbackSlot<T> {
     /// ```compile_fail
     /// use unchained_macros_core::CallbackSlot;
     /// let slot = CallbackSlot::new();
-    /// slot.register(123_usize, true).unwrap();
+    /// slot.register(123_usize).unwrap();
     /// ```
-    pub unsafe fn register(&self, value: T, enabled: bool) -> Result<(), String> {
+    pub unsafe fn register(&self, value: T) -> Result<(), String> {
         self.value
             .set(value)
             .map_err(|_| "Only one callback per method is supported".to_string())?;
 
-        self.set_enabled(enabled);
-
         Ok(())
     }
 
-    pub fn set_enabled(&self, enabled: bool) {
-        self.enabled.store(enabled, Ordering::Release);
-    }
-
     pub fn get(&self) -> Option<T> {
-        self.enabled
-            .load(Ordering::Acquire)
-            .then(|| self.value.get().copied())
-            .flatten()
+        self.value.get().copied()
     }
 }
 
@@ -90,7 +77,7 @@ pub fn isolate_observer<T>(callback: impl FnOnce() -> T) -> Option<T> {
 /// fn invalid(
 ///     descriptor: &'static impl SupportsEntry<Entry = unsafe fn(&String)>,
 /// ) {
-///     unsafe { descriptor.register(Callback::Entry(owns), true, || true).unwrap(); }
+///     unsafe { descriptor.register(Callback::Entry(owns)).unwrap(); }
 /// }
 /// ```
 /// ```compile_fail
@@ -99,7 +86,7 @@ pub fn isolate_observer<T>(callback: impl FnOnce() -> T) -> Option<T> {
 /// fn invalid(
 ///     descriptor: &'static impl SupportsEntry<Entry = unsafe fn(&u32)>,
 /// ) {
-///     unsafe { descriptor.register(Callback::Entry(retains), true, || true).unwrap(); }
+///     unsafe { descriptor.register(Callback::Entry(retains)).unwrap(); }
 /// }
 /// ```
 /// Exit listeners borrow only the original result:
@@ -107,7 +94,7 @@ pub fn isolate_observer<T>(callback: impl FnOnce() -> T) -> Option<T> {
 /// use unchained_macros_core::*;
 /// unsafe fn wrong_result(_: &u64) {}
 /// fn invalid(target: &'static impl SupportsExit<Exit = unsafe fn(&u32)>) {
-///     unsafe { target.register(Callback::Exit(wrong_result), true, || true).unwrap(); }
+///     unsafe { target.register(Callback::Exit(wrong_result)).unwrap(); }
 /// }
 /// ```
 pub trait CallbackTarget: Sized + Sync + 'static {
@@ -117,10 +104,11 @@ pub trait CallbackTarget: Sized + Sync + 'static {
 
     fn slot(&self) -> &CallbackSlot<Callback<Self::Callback, Self::Entry, Self::Exit>>;
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
+    fn physical_detour(&self) -> Option<&retour::RawDetour>;
 
     /// # Safety
     /// Satisfy backend quiescence and readiness requirements.
-    unsafe fn ensure_attached(
+    unsafe fn install_hook(
         &'static self,
         callback: Callback<Self::Callback, Self::Entry, Self::Exit>,
     ) -> Result<(), Box<dyn std::error::Error>>;
@@ -130,18 +118,15 @@ pub trait CallbackTarget: Sized + Sync + 'static {
     unsafe fn register(
         &'static self,
         callback: Callback<Self::Callback, Self::Entry, Self::Exit>,
-        activate: bool,
-        condition: fn() -> bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.slot().is_registered() {
             return Err("Only one callback per method is supported".into());
         }
         unsafe {
-            self.ensure_attached(callback)?;
+            self.install_hook(callback)?;
         }
-        let enabled = activate && isolate_observer(condition).unwrap_or(false);
         unsafe {
-            self.slot().register(callback, enabled)?;
+            self.slot().register(callback)?;
         }
         Ok(())
     }
@@ -176,9 +161,9 @@ trait ListenerInfo: Sync {
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
     fn identity(&self) -> *const ();
 
-    fn enabled_flag(&self) -> &AtomicBool;
+    fn enabled(&self) -> bool;
 
-    unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>>;
+    unsafe fn install(&self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct ListenerAction<T: CallbackTarget> {
@@ -212,12 +197,12 @@ impl<T: CallbackTarget> ListenerInfo for ListenerAction<T> {
         std::ptr::from_ref(self.target).cast()
     }
 
-    fn enabled_flag(&self) -> &AtomicBool {
-        &self.target.slot().enabled
+    fn enabled(&self) -> bool {
+        self.target.physical_detour().is_none_or(|hook| hook.is_enabled()) && self.target.slot().get().is_some()
     }
 
-    unsafe fn install(&self, activate: bool, condition: fn() -> bool) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe { self.target.register(self.callback, activate, condition) }
+    unsafe fn install(&self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.target.register(self.callback) }
     }
 }
 
@@ -246,18 +231,21 @@ impl ListenerRegistration {
     /// # Safety
     /// Callers must be quiescent. Callbacks must
     /// uphold the target's ABI and ownership contracts. Do not attach concurrently.
-    pub unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>> {
         if self.initialized() {
             return Err("Listener callback is already initialized".into());
         }
 
+        if !isolate_observer(self.condition).unwrap_or(false) {
+            return Ok(false);
+        }
         unsafe {
-            self.action.install(activate, self.condition)?;
+            self.action.install()?;
         }
 
         self.initialized.store(true, Ordering::Release);
 
-        Ok(())
+        Ok(true)
     }
 
     pub fn initialized(&self) -> bool {
@@ -265,21 +253,11 @@ impl ListenerRegistration {
     }
 
     pub fn enabled(&self) -> bool {
-        self.initialized() && self.action.enabled_flag().load(Ordering::Acquire)
-    }
-
-    pub fn set_enabled(&self, enabled: bool) {
-        if self.initialized() {
-            self.action.enabled_flag().store(enabled, Ordering::Release);
-        }
+        self.initialized() && self.action.enabled()
     }
 
     pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
         self.action.resolver()
-    }
-
-    pub fn condition(&self) -> bool {
-        isolate_observer(self.condition).unwrap_or(false)
     }
 
     pub fn target_identity(&self) -> *const () {

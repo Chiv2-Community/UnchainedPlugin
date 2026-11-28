@@ -158,7 +158,7 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
     unsafe {
         Library::__UNCHAINED_TARGET_Owners
             .entry
-            .register(unchained_macros_core::Callback::Entry(owners_entry), true)
+            .register(unchained_macros_core::Callback::Entry(owners_entry))
     }
     .unwrap();
 

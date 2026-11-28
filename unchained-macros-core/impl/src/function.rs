@@ -287,7 +287,6 @@ fn native_dispatch(
 
     let target = format_ident!("__UNCHAINED_NATIVE_TARGET_{}", name);
 
-    let dispatch = format_ident!("__unchained_dispatch_{}", name);
     let entry_dispatch = format_ident!("__unchained_entry_dispatch_{}", name);
     let exit_dispatch = format_ident!("__unchained_exit_dispatch_{}", name);
 
@@ -332,32 +331,16 @@ fn native_dispatch(
 
     let callback = fresh_local(signature, "callback");
 
-    let call = fresh_local(signature, "call");
-
     let returned = fresh_local(signature, "result");
-
-    let invoke = quote! {
-        match #target.replacement() {
-            Some(#call) => unsafe { #call(#(#names),*) },
-            None => unsafe { <#owner>::#name(#(#names),*) },
-        }
-    };
 
     let setup = quote! {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #target: #descriptor_type = unsafe {
             ::unchained_macros_core::NativeTarget::new(
-                &#binding, #dispatch, #entry_dispatch, #exit_dispatch, |dispatch| dispatch as *const (),
+                &#binding, #entry_dispatch, #exit_dispatch, |dispatch| dispatch as *const (),
             )
         };
-
-        #(#cfg)*
-        #[allow(non_snake_case)]
-        unsafe extern "C" fn #dispatch #generics (#(#names: #types),*) #output {
-            use ::unchained_macros_core::SupportsDetour as _;
-            #invoke
-        }
 
         #(#cfg)*
         #[allow(non_snake_case)]

@@ -365,7 +365,7 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
     assert_eq!(READS.load(Ordering::SeqCst), reads);
 
     unsafe {
-        __UNCHAINED_REGISTRATION_replacement.attach(true).unwrap();
+        __UNCHAINED_REGISTRATION_replacement.attach().unwrap();
 
         assert_eq!(std::hint::black_box(add as unsafe extern "C" fn(i32) -> i32)(5), 16);
 

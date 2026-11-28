@@ -71,7 +71,7 @@ For behavior changes, use `#[bind_func_detour(Type::Method)]` with the native
 signature. Call `Type::Method` inside the detour to invoke the original.
 
 Each native binding supports one callback: detour, entry listener, or exit
-listener. Conditions are attachment-time gates; disabling a callback does not free the target.
+listener. Conditions are attachment-time gates; a false condition skips hook creation.
 Listeners take immutable call-scoped borrows and return `()`.
 
 Exit listeners receive only the original result.

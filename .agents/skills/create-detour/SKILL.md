@@ -64,7 +64,7 @@ Use `bind_func_detour` on an unsafe free function.
   entire borrow, even for native `&T`. The annotation does not authorize writes
   to shared or read-only memory.
 - Hooks default to enabled. Add a noncapturing condition only when needed.
-- Conditions run at attachment and also require global auto-activation.
+- Conditions run before attachment. False skips hook creation.
   Put per-call decisions in the body.
 - Only one detour may own a native address; extend an existing replacement
   rather than installing a duplicate.

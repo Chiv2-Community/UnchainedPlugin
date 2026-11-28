@@ -29,7 +29,7 @@ static ALIAS: FunctionBinding<Backend> = FunctionBinding::new("late alias", &RES
 
 type Descriptor = NativeTarget<unsafe extern "C" fn(usize) -> usize, unsafe fn(&usize), unsafe fn(&usize), Backend>;
 
-static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, dispatch, enter, exit, |f| f as *const ()) };
+static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, enter, exit, |f| f as *const ()) };
 
 static ENTRIES: AtomicUsize = AtomicUsize::new(0);
 
@@ -49,14 +49,6 @@ unsafe extern "C" fn original(value: usize) -> usize {
 unsafe fn call_original(value: usize) -> usize {
     let call: unsafe extern "C" fn(usize) -> usize =
         unsafe { std::mem::transmute(TARGET.binding().address().unwrap().get()) };
-
-    unsafe { call(value) }
-}
-
-unsafe extern "C" fn dispatch(value: usize) -> usize {
-    let call: unsafe extern "C" fn(usize) -> usize = TARGET
-        .replacement()
-        .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
 
     unsafe { call(value) }
 }
@@ -119,11 +111,9 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
     assert_eq!(ENTRY.target_identity(), EXIT.target_identity());
 
     unsafe {
-        assert!(ENTRY.attach(true).is_err());
+        assert!(ENTRY.attach().is_err());
 
         assert!(!ENTRY.initialized());
-
-        ENTRY.set_enabled(true);
 
         assert!(!ENTRY.enabled());
 
@@ -131,39 +121,27 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
             .unwrap();
 
-        ENTRY.attach(false).unwrap();
+        ENTRY.attach().unwrap();
 
-        assert_eq!(CONDITIONS.load(Ordering::SeqCst), 0);
+        assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
 
         assert!(ENTRY.initialized());
 
-        assert!(!ENTRY.enabled());
+        assert!(ENTRY.enabled());
 
-        ENTRY.set_enabled(true);
+        assert!(EXIT.attach().is_err());
 
-        assert!(EXIT.attach(true).is_err());
-
-        assert!(DETOUR.attach(true).is_err());
+        assert!(DETOUR.attach().is_err());
 
         assert!(!DETOUR.initialized());
 
         assert!(!DETOUR.enabled());
 
-        assert!(DUPLICATE.attach(true).is_err());
+        assert!(DUPLICATE.attach().is_err());
 
         assert!(!DUPLICATE.initialized());
 
-        DUPLICATE.set_enabled(false);
-
         assert!(ENTRY.enabled());
-
-        ENTRY.set_enabled(false);
-
-        DUPLICATE.set_enabled(true);
-
-        assert!(!ENTRY.enabled());
-
-        ENTRY.set_enabled(true);
 
         let call = std::hint::black_box(original as unsafe extern "C" fn(usize) -> usize);
 
@@ -180,8 +158,6 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
         ALIAS.initialize_address(BINDING.entry_address().unwrap()).unwrap();
 
         assert_eq!(ALIAS.address(), BINDING.address());
-
-        DETOUR.set_enabled(false);
 
         assert!(!DETOUR.enabled());
 
