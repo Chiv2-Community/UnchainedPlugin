@@ -70,6 +70,7 @@ impl<T: crate::SupportsDetour> DetourRegistration<T> {
 
 /// Object-safe discovery/control surface. Callback types stay on the registration.
 pub trait DetourInfo: Sync {
+    fn target_identity(&self) -> *const ();
     fn name(&self) -> &'static str;
 
     fn resolver(&self) -> &'static dyn ResolverInfo;
@@ -91,6 +92,9 @@ pub trait DetourInfo: Sync {
 }
 
 impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for DetourRegistration<T, S> {
+    fn target_identity(&self) -> *const () {
+        std::ptr::from_ref(self.target).cast()
+    }
     fn name(&self) -> &'static str {
         self.name
     }
@@ -100,7 +104,7 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
     }
 
     fn condition(&self) -> bool {
-        self.target.activation(true, self.condition)
+        crate::isolate_observer(self.condition).unwrap_or(false)
     }
 
     unsafe fn attach(&self, activate: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,7 +113,8 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
         }
 
         unsafe {
-            self.target.register_detour(self.callback, activate, self.condition)?;
+            self.target
+                .register(crate::Callback::Detour(self.callback), activate, self.condition)?;
         }
 
         self.initialized.borrow().store(true, Ordering::Release);
@@ -126,12 +131,12 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
     }
 
     fn enabled(&self) -> bool {
-        self.detour().is_some_and(|hook| hook.is_enabled()) && self.target.replacement_slot().get().is_some()
+        self.detour().is_some_and(|hook| hook.is_enabled()) && self.target.replacement().is_some()
     }
 
     fn set_enabled(&self, enabled: bool) {
         if self.initialized() {
-            self.target.replacement_slot().set_enabled(enabled);
+            self.target.slot().set_enabled(enabled);
         }
     }
 }

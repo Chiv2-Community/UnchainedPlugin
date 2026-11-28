@@ -272,7 +272,12 @@ fn caller_keeps_string_text_and_color_results_unchanged_and_owns_cleanup() {
 
             unsafe { Library::$binding.initialize_address(address) }.unwrap();
 
-            unsafe { Library::$descriptor.entry.register($callback, true) }.unwrap();
+            unsafe {
+                Library::$descriptor
+                    .entry
+                    .register(unchained_macros_core::Callback::Entry($callback), true)
+            }
+            .unwrap();
         };
     }
 
@@ -369,7 +374,7 @@ fn null_result_is_forwarded_without_forming_native_owner_reference() {
     unsafe {
         Library::__UNCHAINED_TARGET_NullStringResult
             .entry
-            .register(null_result, true)
+            .register(unchained_macros_core::Callback::Entry(null_result), true)
     }
     .unwrap();
 
@@ -406,7 +411,7 @@ fn misaligned_result_is_forwarded_without_typed_borrow() {
     unsafe {
         Library::__UNCHAINED_TARGET_MisalignedColorResult
             .entry
-            .register(misaligned_result, true)
+            .register(unchained_macros_core::Callback::Entry(misaligned_result), true)
     }
     .unwrap();
 

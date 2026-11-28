@@ -180,18 +180,6 @@ impl From<&str> for FString {
     }
 }
 
-// SAFETY: The snapshot owns a separate engine-allocated UTF-16 array, including
-// all stored terminators. Its buffer outlives the exit callback and drops once.
-unsafe impl unchained_macros_core::ObserverSnapshot for FString {
-    type Snapshot = FString;
-
-    fn snapshot(&self) -> FString {
-        FString { data: TArray::from(self.as_slice()) }
-    }
-
-    fn borrow(snapshot: &FString) -> &FString { snapshot }
-}
-
 impl std::fmt::Display for FString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = FString::trim_trailing_nuls(self.as_slice());

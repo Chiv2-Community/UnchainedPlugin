@@ -118,7 +118,9 @@ pub struct DummyExecTarget<E> {
     binding: &'static unchained_macros_core::FunctionBinding<KismetExecResolver>,
     hook: unchained_macros_core::NativeHook,
     dispatcher: ExecDispatcher,
-    pub entry: unchained_macros_core::CallbackSlot<E>,
+    pub entry: unchained_macros_core::CallbackSlot<
+        unchained_macros_core::Callback<std::convert::Infallible, E, std::convert::Infallible>,
+    >,
 }
 
 type ExecDispatcher = unsafe extern "system" fn(*mut std::ffi::c_void, *mut std::ffi::c_void, *mut std::ffi::c_void);
@@ -140,19 +142,24 @@ impl<E: Copy> DummyExecTarget<E> {
 }
 
 impl<E: Copy + Send + Sync + 'static> unchained_macros_core::CallbackTarget for DummyExecTarget<E> {
+    type Callback = std::convert::Infallible;
+    type Entry = E;
+    type Exit = std::convert::Infallible;
+    fn slot(
+        &self,
+    ) -> &unchained_macros_core::CallbackSlot<unchained_macros_core::Callback<Self::Callback, E, Self::Exit>> {
+        &self.entry
+    }
     fn resolver(&self) -> &'static dyn unchained_macros_core::__private::ResolverInfo {
         self.binding.resolver
     }
 
-    unsafe fn ensure_attached(&'static self) -> Result<(), Box<dyn std::error::Error>> {
+    unsafe fn ensure_attached(
+        &'static self,
+        _callback: unchained_macros_core::Callback<Self::Callback, E, Self::Exit>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.hook.attach(self.binding, self.dispatcher as *const ()) }
     }
 }
 
-impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for DummyExecTarget<E> {
-    type Entry = E;
-
-    fn entry_slot(&self) -> &unchained_macros_core::CallbackSlot<E> {
-        &self.entry
-    }
-}
+impl<E: Copy + Send + Sync + 'static> unchained_macros_core::SupportsEntry for DummyExecTarget<E> {}

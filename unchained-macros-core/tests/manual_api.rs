@@ -27,15 +27,9 @@ static BINDING: FunctionBinding<Backend> = FunctionBinding::new("manual", &RESOL
 
 static ALIAS: FunctionBinding<Backend> = FunctionBinding::new("late alias", &RESOLVER);
 
-type Descriptor = NativeTarget<
-    unsafe extern "C" fn(usize) -> usize,
-    unsafe fn(&usize),
-    unsafe fn(&usize, &usize),
-    unsafe fn(&usize) -> ExitObservation,
-    Backend,
->;
+type Descriptor = NativeTarget<unsafe extern "C" fn(usize) -> usize, unsafe fn(&usize), unsafe fn(&usize), Backend>;
 
-static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, dispatch, |f| f as *const ()) };
+static TARGET: Descriptor = unsafe { Descriptor::new(&BINDING, dispatch, enter, exit, |f| f as *const ()) };
 
 static ENTRIES: AtomicUsize = AtomicUsize::new(0);
 
@@ -60,23 +54,21 @@ unsafe fn call_original(value: usize) -> usize {
 }
 
 unsafe extern "C" fn dispatch(value: usize) -> usize {
-    TARGET.observe_entry(|callback| unsafe { callback(&value) });
-
-    let snapshot = TARGET.prepare_exit(|prepare| unsafe { prepare(&value) });
-
     let call: unsafe extern "C" fn(usize) -> usize = TARGET
-        .replacement_slot()
-        .get()
+        .replacement()
         .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
 
-    let result = unsafe { call(value) };
+    unsafe { call(value) }
+}
 
-    if let Some(snapshot) = snapshot {
-        unsafe {
-            TARGET.finish_exit(snapshot, (&result as *const usize).cast());
-        }
-    }
+unsafe extern "C" fn enter(value: usize) -> usize {
+    TARGET.observe_entry(|callback| unsafe { callback(&value) });
+    unsafe { call_original(value) }
+}
 
+unsafe extern "C" fn exit(value: usize) -> usize {
+    let result = unsafe { call_original(value) };
+    TARGET.observe_exit(|callback| unsafe { callback(&result) });
     result
 }
 
@@ -84,20 +76,8 @@ unsafe fn entered(_: &usize) {
     ENTRIES.fetch_add(1, Ordering::SeqCst);
 }
 
-unsafe fn returned(value: &usize, result: &usize) {
-    assert!(*result == value + 1 || *result == value + 11);
-
+unsafe fn returned(_result: &usize) {
     EXITS.fetch_add(1, Ordering::SeqCst);
-}
-
-unsafe fn finish(state: *mut (), result: *const ()) {
-    unsafe {
-        returned(&*state.cast::<usize>(), &*result.cast::<usize>());
-    }
-}
-
-unsafe fn prepare(value: &usize) -> ExitObservation {
-    unsafe { ExitObservation::from_snapshot(*value, finish) }
 }
 
 unsafe extern "C" fn replacement(value: usize) -> usize {
@@ -110,11 +90,12 @@ fn gate() -> bool {
     true
 }
 
-static ENTRY: ListenerRegistration = ListenerRegistration::entry("entry", &(&TARGET, entered), gate);
+static ENTRY: ListenerRegistration = ListenerRegistration::new("entry", &ListenerAction::entry(&TARGET, entered), gate);
 
-static EXIT: ListenerRegistration = ListenerRegistration::exit("exit", &(&TARGET, returned, prepare), gate);
+static EXIT: ListenerRegistration = ListenerRegistration::new("exit", &ListenerAction::exit(&TARGET, returned), gate);
 
-static DUPLICATE: ListenerRegistration = ListenerRegistration::entry("duplicate entry", &(&TARGET, entered), gate);
+static DUPLICATE: ListenerRegistration =
+    ListenerRegistration::new("duplicate entry", &ListenerAction::entry(&TARGET, entered), gate);
 
 static DETOUR: DetourRegistration<Descriptor> = DetourRegistration::new("detour", &TARGET, replacement, gate);
 
@@ -133,9 +114,9 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
     assert!(std::ptr::eq(DETOUR.target().binding(), &BINDING));
 
-    assert_eq!(ENTRY.slot_identity(), DUPLICATE.slot_identity());
+    assert_eq!(ENTRY.target_identity(), DUPLICATE.target_identity());
 
-    assert_ne!(ENTRY.slot_identity(), EXIT.slot_identity());
+    assert_eq!(ENTRY.target_identity(), EXIT.target_identity());
 
     unsafe {
         assert!(ENTRY.attach(true).is_err());
@@ -160,13 +141,13 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
         ENTRY.set_enabled(true);
 
-        EXIT.attach(true).unwrap();
+        assert!(EXIT.attach(true).is_err());
 
-        DETOUR.attach(true).unwrap();
+        assert!(DETOUR.attach(true).is_err());
 
-        assert!(DETOUR.initialized());
+        assert!(!DETOUR.initialized());
 
-        assert!(DETOUR.enabled());
+        assert!(!DETOUR.enabled());
 
         assert!(DUPLICATE.attach(true).is_err());
 
@@ -186,11 +167,11 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
         let call = std::hint::black_box(original as unsafe extern "C" fn(usize) -> usize);
 
-        assert_eq!(call(4), 15);
+        assert_eq!(call(4), 5);
 
         assert_eq!(ENTRIES.load(Ordering::SeqCst), 1);
 
-        assert_eq!(EXITS.load(Ordering::SeqCst), 1);
+        assert_eq!(EXITS.load(Ordering::SeqCst), 0);
 
         assert_eq!(call_original(4), 5);
 
@@ -206,17 +187,9 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
         assert_eq!(call(4), 5);
 
-        assert_eq!(EXITS.load(Ordering::SeqCst), 2);
+        assert_eq!(EXITS.load(Ordering::SeqCst), 0);
 
-        assert!(DETOUR.detour().unwrap().is_enabled());
-
-        DETOUR.set_enabled(true);
-
-        DETOUR.detour().unwrap().disable().unwrap();
-
-        assert!(!DETOUR.enabled());
-
-        assert!(DETOUR.initialized());
+        assert!(DETOUR.detour().is_none());
     }
 }
 

@@ -56,7 +56,6 @@ fn metadata_preserves_signatures_and_binding_identity() {
         unsafe extern "C" fn(i32) -> i32,
         _,
         _,
-        _,
         unchained_macros_patternsleuth::PatternsleuthResolver,
     > = Native::__UNCHAINED_TARGET_add;
 
@@ -64,13 +63,11 @@ fn metadata_preserves_signatures_and_binding_identity() {
         for<'a> unsafe extern "C" fn(&'a Native) -> &'a i32,
         _,
         _,
-        _,
         unchained_macros_patternsleuth::PatternsleuthResolver,
     > = Native::__UNCHAINED_TARGET_borrow;
 
     let _: &NativeTarget<
         for<'a> unsafe extern "C" fn(*const Native, &'a mut i32) -> &'a mut i32,
-        _,
         _,
         _,
         unchained_macros_patternsleuth::PatternsleuthResolver,

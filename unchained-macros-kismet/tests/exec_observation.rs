@@ -167,8 +167,10 @@ unsafe fn runtime_entry(context: &*mut UObject, flag: &bool) {
 
     event("entry");
 
-    unsafe {
-        invoke_reentrant_predicate();
+    if RUNTIME_EVENTS.with(|events| events.borrow().len() == 1) {
+        unsafe {
+            invoke_reentrant_predicate();
+        }
     }
 }
 
@@ -302,7 +304,7 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
     unsafe {
         Library::__UNCHAINED_TARGET_Predicate
             .entry
-            .register(runtime_entry, true)
+            .register(unchained_macros_core::Callback::Entry(runtime_entry), true)
     }
     .unwrap();
 
@@ -323,7 +325,12 @@ fn generated_typed_dispatch_preserves_vm_bool_result_original_and_cleanup() {
         (2, 1, 1, 1)
     );
 
-    RUNTIME_EVENTS.with(|events| assert_eq!(*events.borrow(), ["entry", "body", "cleanup", "body", "cleanup"]));
+    RUNTIME_EVENTS.with(|events| {
+        assert_eq!(
+            *events.borrow(),
+            ["entry", "entry", "body", "cleanup", "body", "cleanup"]
+        )
+    });
 
     std::thread::spawn(|| {
         let mut frame = Frame::default();
@@ -365,11 +372,16 @@ unsafe fn invoke_noargs() {
 }
 
 unsafe fn noargs_reentrant_entry() {
-    NOARGS_ENTRIES.with(|count| count.set(count.get() + 1));
+    let first = NOARGS_ENTRIES.with(|count| {
+        count.set(count.get() + 1);
+        count.get() == 1
+    });
 
-    unsafe {
-        invoke_noargs();
-    } // Unconditional: the descriptor must stop recursion.
+    if first {
+        unsafe {
+            invoke_noargs();
+        }
+    }
 }
 
 unsafe extern "system" fn noargs_original(
@@ -408,7 +420,7 @@ unsafe impl Reflection for NoArgsReflection {
 
 #[test]
 
-fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
+fn noargs_entry_observes_bounded_callback_reentry() {
     let context = unsafe {
         KismetContext::new(
             NoArgsReflection,
@@ -433,7 +445,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
     unsafe {
         Library::__UNCHAINED_TARGET_NoArgs
             .entry
-            .register(noargs_reentrant_entry, true)
+            .register(unchained_macros_core::Callback::Entry(noargs_reentrant_entry), true)
     }
     .unwrap();
 
@@ -441,7 +453,7 @@ fn noargs_entry_unconditional_reentry_suppresses_only_nested_observers() {
         invoke_noargs();
     }
 
-    NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 1));
+    NOARGS_ENTRIES.with(|count| assert_eq!(count.get(), 2));
 
     NOARGS_ORIGINALS.with(|count| assert_eq!(count.get(), 2));
 

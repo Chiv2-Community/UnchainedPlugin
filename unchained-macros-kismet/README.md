@@ -116,9 +116,9 @@ unsafe fn warning(message: &FString) {}
 - Entry runs at the final original Step completion, before original body/cleanup.
   Noargs entry runs immediately before the original wrapper. Nested same-frame
   expression Steps do not count as arguments; nested exec scopes are independent.
-  Core suppresses same-target observers while a callback/condition runs, but
-  nested original calls still execute. No VM state borrow spans native execution
-  or callbacks; the per-target observer guard never spans the original call.
+  Reentrant calls invoke observers again; callbacks must terminate recursive paths.
+  No recursion guard is provided. No VM state borrow spans native execution
+  or callbacks.
 - Callback inputs are immutable `&T` observations. FString/FText are borrowed:
   no ownership transfer, shallow-frame replay, zero-initialized text, reference
   stealing, or double evaluation. Scalars, VM bool32 inputs, UObject pointers
@@ -140,7 +140,7 @@ impl Library {
     pub unsafe fn RemovedBody(value: i32) {}
 }
 #[unchained_macros_core::bind_func_exit_listener(Library::RemovedBody)]
-unsafe fn returned(value: &i32, result: &()) {}
+unsafe fn returned(result: &()) {}
 ```
 
 Non-void dummy declarations also reject exit listeners:

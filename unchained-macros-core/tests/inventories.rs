@@ -28,9 +28,17 @@ macro_rules! backend {
             pub static BINDING: bindings::FunctionBinding<Backend> =
                 bindings::FunctionBinding::new("SameBinding", &RESOLVER);
 
-            type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), (), Backend>;
+            type Target = bindings::NativeTarget<fn(), unsafe fn(&u32), (), Backend>;
 
-            static TARGET: Target = unsafe { Target::new(&BINDING, || {}, |_| panic!("discovery must not attach")) };
+            static TARGET: Target = unsafe {
+                Target::new(
+                    &BINDING,
+                    || {},
+                    || {},
+                    || {},
+                    |_| panic!("discovery must not attach"),
+                )
+            };
 
             pub static HOOK: bindings::DetourRegistration<Target> = bindings::DetourRegistration::new(
                 "SameHook",
@@ -39,10 +47,11 @@ macro_rules! backend {
                 || panic!("discovery must not evaluate conditions"),
             );
 
-            pub static LISTENER: bindings::ListenerRegistration =
-                bindings::ListenerRegistration::entry("SameListener", &(&TARGET, |_| {}), || {
-                    panic!("discovery must not evaluate conditions")
-                });
+            pub static LISTENER: bindings::ListenerRegistration = bindings::ListenerRegistration::new(
+                "SameListener",
+                &bindings::ListenerAction::entry(&TARGET, |_| {}),
+                || panic!("discovery must not evaluate conditions"),
+            );
 
             pub static PATCH: bindings::PatchRegistration<Backend> = bindings::PatchRegistration {
                 name: stringify!($module),
@@ -121,7 +130,7 @@ fn all_inventories_downcast_to_the_original_registration_for_each_backend() {
 
     check!(second);
 
-    assert_ne!(first::LISTENER.slot_identity(), second::LISTENER.slot_identity());
+    assert_ne!(first::LISTENER.target_identity(), second::LISTENER.target_identity());
 }
 
 #[test]

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{collections::BTreeMap, sync::Mutex};
 use std::{num::NonZeroUsize, sync::OnceLock};
 
@@ -78,6 +79,7 @@ pub struct FunctionBinding<R: crate::AddressResolver> {
     name: &'static str,
     target: ResolvedAddress,
     detour: OnceLock<&'static retour::RawDetour>,
+    callable: AtomicUsize,
     pub resolver: &'static crate::Resolver<R>,
 }
 
@@ -87,6 +89,7 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
             name,
             target: ResolvedAddress::new(resolver.name),
             detour: OnceLock::new(),
+            callable: AtomicUsize::new(0),
             resolver,
         }
     }
@@ -106,10 +109,7 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
 
     /// Original-call address, bypassing this target's registered replacement.
     pub fn address(&self) -> Option<NonZeroUsize> {
-        self.detour
-            .get()
-            .and_then(|detour| NonZeroUsize::new(detour.trampoline() as *const () as usize))
-            .or_else(|| self.entry_address())
+        NonZeroUsize::new(self.callable.load(Ordering::Acquire))
     }
 
     /// Resolved entry to patch, never the Rust binding wrapper or trampoline.
@@ -130,7 +130,10 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
 
         self.detour
             .set(detour)
-            .map_err(|_| format!("Native binding {} already has a detour", self.name()))
+            .map_err(|_| format!("Native binding {} already has a detour", self.name()))?;
+        self.callable
+            .store(detour.trampoline() as *const () as usize, Ordering::Release);
+        Ok(())
     }
 
     /// Publish a verified native address. Repeating it is harmless; rebinding is rejected.
@@ -146,6 +149,10 @@ impl<R: crate::AddressResolver> FunctionBinding<R> {
             .map_err(|_| "Detour publication lock poisoned")?;
 
         self.target.publish(address)?;
+        // A repeated initialization must never replace a published trampoline.
+        let _ = self
+            .callable
+            .compare_exchange(0, address.get(), Ordering::Release, Ordering::Relaxed);
 
         if let Some(detour) = attached.get(&address.get()) {
             if let Some(current) = self.detour.get() {

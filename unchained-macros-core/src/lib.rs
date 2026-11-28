@@ -25,8 +25,8 @@ pub use binding::{
 pub use detour::{detour_is_enabled, detour_is_initialized, NativeHook};
 pub use listener::{
     isolate_observer, listener_inventory_for, listener_is_enabled, listener_is_initialized,
-    validate_listener_registrations_for, CallbackSlot, CallbackTarget, ExitObservation, ListenerRegistration,
-    ObserverSnapshot, SupportsEntry, SupportsExit,
+    validate_callback_registrations_for, Callback, CallbackSlot, CallbackTarget, ListenerAction, ListenerRegistration,
+    SupportsEntry, SupportsExit,
 };
 
 pub use patch::{

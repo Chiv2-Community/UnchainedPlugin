@@ -152,7 +152,12 @@ fn entry_borrows_do_not_steal_retain_or_double_drop_vm_owners() {
 
     unsafe { Library::__UNCHAINED_EXEC_Library_Owners_BINDING.initialize_address(address) }.unwrap();
 
-    unsafe { Library::__UNCHAINED_TARGET_Owners.entry.register(owners_entry, true) }.unwrap();
+    unsafe {
+        Library::__UNCHAINED_TARGET_Owners
+            .entry
+            .register(unchained_macros_core::Callback::Entry(owners_entry), true)
+    }
+    .unwrap();
 
     unsafe {
         (Library::__UNCHAINED_EXEC_Library_Owners_dispatch)(

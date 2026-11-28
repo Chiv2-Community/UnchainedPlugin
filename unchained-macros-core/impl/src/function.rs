@@ -288,6 +288,8 @@ fn native_dispatch(
     let target = format_ident!("__UNCHAINED_NATIVE_TARGET_{}", name);
 
     let dispatch = format_ident!("__unchained_dispatch_{}", name);
+    let entry_dispatch = format_ident!("__unchained_entry_dispatch_{}", name);
+    let exit_dispatch = format_ident!("__unchained_exit_dispatch_{}", name);
 
     let backend = &resolver.backend;
 
@@ -316,14 +318,12 @@ fn native_dispatch(
 
     let entry_type = quote!(#binder unsafe fn(#(&#types),*));
 
-    let exit_type = quote!(#binder unsafe fn(#(&#types,)* &#result));
-
-    let prepare_type = quote!(#binder unsafe fn(#(&#types),*) -> ::unchained_macros_core::ExitObservation);
+    let exit_type = quote!(#binder unsafe fn(&#result));
 
     let full_native = native_type(signature)?;
 
     let descriptor_type = quote!(::unchained_macros_core::NativeTarget<
-        #full_native, #entry_type, #exit_type, #prepare_type, #backend
+        #full_native, #entry_type, #exit_type, #backend
     >);
 
     let output = &signature.output;
@@ -332,37 +332,47 @@ fn native_dispatch(
 
     let callback = fresh_local(signature, "callback");
 
-    let prepare = fresh_local(signature, "prepare");
-
-    let observation = fresh_local(signature, "observation");
-
     let call = fresh_local(signature, "call");
 
     let returned = fresh_local(signature, "result");
+
+    let invoke = quote! {
+        match #target.replacement() {
+            Some(#call) => unsafe { #call(#(#names),*) },
+            None => unsafe { <#owner>::#name(#(#names),*) },
+        }
+    };
 
     let setup = quote! {
         #(#cfg)*
         #[allow(non_upper_case_globals)]
         static #target: #descriptor_type = unsafe {
             ::unchained_macros_core::NativeTarget::new(
-                &#binding, #dispatch, |dispatch| dispatch as *const (),
+                &#binding, #dispatch, #entry_dispatch, #exit_dispatch, |dispatch| dispatch as *const (),
             )
         };
 
         #(#cfg)*
         #[allow(non_snake_case)]
         unsafe extern "C" fn #dispatch #generics (#(#names: #types),*) #output {
-            use ::unchained_macros_core::{SupportsEntry as _, SupportsExit as _, SupportsDetour as _};
-            #target.observe_entry(|#callback| unsafe { #callback(#(&#names),*) });
-            let #observation = #target.prepare_exit(|#prepare| unsafe { #prepare(#(&#names),*) });
-            let #returned = match #target.replacement_slot().get() {
-                Some(#call) => unsafe { #call(#(#names),*) },
-                None => unsafe { <#owner>::#name(#(#names),*) },
-            };
-            if let Some(#observation) = #observation {
-                unsafe { #target.finish_exit(#observation, (&#returned as *const #result).cast()); }
-            }
+            use ::unchained_macros_core::SupportsDetour as _;
+            #invoke
+        }
 
+        #(#cfg)*
+        #[allow(non_snake_case)]
+        unsafe extern "C" fn #entry_dispatch #generics (#(#names: #types),*) #output {
+            use ::unchained_macros_core::SupportsEntry as _;
+            #target.observe_entry(|#callback| unsafe { #callback(#(&#names),*) });
+            unsafe { <#owner>::#name(#(#names),*) }
+        }
+
+        #(#cfg)*
+        #[allow(non_snake_case)]
+        unsafe extern "C" fn #exit_dispatch #generics (#(#names: #types),*) #output {
+            use ::unchained_macros_core::SupportsExit as _;
+            let #returned = unsafe { <#owner>::#name(#(#names),*) };
+            #target.observe_exit(|#callback| unsafe { #callback(&#returned) });
             #returned
         }
     };

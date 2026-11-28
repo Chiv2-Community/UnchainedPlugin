@@ -126,10 +126,10 @@ fn reflection_descriptors_preserve_names_backend_signatures_and_lifetimes() {
 
     let _: () = UKismetSystemLibrary::Observed;
 
-    let _: &core::NativeTarget<unsafe extern "C" fn(*const ()) -> bool, _, _, _, KismetReflectionResolver> =
+    let _: &core::NativeTarget<unsafe extern "C" fn(*const ()) -> bool, _, _, KismetReflectionResolver> =
         UKismetSystemLibrary::__UNCHAINED_TARGET_IsDedicatedServer;
 
-    let _: &core::NativeTarget<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, _, _, _, KismetReflectionResolver> =
+    let _: &core::NativeTarget<for<'a> unsafe extern "C" fn(&'a i32) -> &'a i32, _, _, KismetReflectionResolver> =
         Borrowed::__UNCHAINED_TARGET_identity;
 
     let binding = Borrowed::__UNCHAINED_TARGET_identity.binding();

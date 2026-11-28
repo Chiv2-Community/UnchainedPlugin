@@ -248,12 +248,6 @@ mod tests {
 
         assert!(output.contains("DummyExecTarget"));
 
-        assert!(!output.contains("ExitObservation"));
-
-        assert!(!output.contains("prepare_exit"));
-
-        assert!(!output.contains("finish_exit"));
-
         assert!(output.contains("observe_exec"));
 
         assert!(output.contains("original (context , frame , result)"));

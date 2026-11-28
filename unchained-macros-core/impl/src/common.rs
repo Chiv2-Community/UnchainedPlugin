@@ -24,7 +24,13 @@ pub(crate) fn fresh_local(signature: &syn::Signature, role: &str) -> syn::Ident 
 
 impl Parse for CallbackArguments {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let target = input.parse()?;
+        let target: Path = input.parse()?;
+        if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
+            return Err(syn::Error::new_spanned(
+                target,
+                "callback target must be a non-generic Type::method path",
+            ));
+        }
 
         if !input.is_empty() {
             input.parse::<syn::Token![,]>()?;

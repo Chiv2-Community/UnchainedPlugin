@@ -22,17 +22,16 @@ unsafe extern "C" fn replacement(value: i32) -> i32 {
 }
 
 unsafe extern "C" fn dispatch(value: i32) -> i32 {
-    let call: unsafe extern "C" fn(i32) -> i32 = unchained_macros_core::SupportsDetour::replacement_slot(&TARGET)
-        .get()
+    let call: unsafe extern "C" fn(i32) -> i32 = unchained_macros_core::SupportsDetour::replacement(&TARGET)
         .unwrap_or_else(|| unsafe { std::mem::transmute(BINDING.address().unwrap().get()) });
 
     unsafe { call(value) }
 }
 
 type Target =
-    NativeTarget<unsafe extern "C" fn(i32) -> i32, (), (), (), unchained_macros_patternsleuth::PatternsleuthResolver>;
+    NativeTarget<unsafe extern "C" fn(i32) -> i32, (), (), unchained_macros_patternsleuth::PatternsleuthResolver>;
 
-static TARGET: Target = unsafe { Target::new(&BINDING, dispatch, |f| f as *const ()) };
+static TARGET: Target = unsafe { Target::new(&BINDING, dispatch, dispatch, dispatch, |f| f as *const ()) };
 
 static REGISTRATION: DetourRegistration<Target> =
     DetourRegistration::new("FixtureDetour", &TARGET, replacement, || true);

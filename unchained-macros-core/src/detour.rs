@@ -19,7 +19,7 @@ use std::sync::OnceLock;
 
 /// Shared physical attachment. Logical callbacks belong to the typed target.
 pub struct NativeHook {
-    hook: OnceLock<retour::RawDetour>,
+    hook: OnceLock<(retour::RawDetour, usize)>,
     published: AtomicBool,
 }
 
@@ -36,6 +36,7 @@ impl NativeHook {
             .load(Ordering::Acquire)
             .then(|| self.hook.get())
             .flatten()
+            .map(|(hook, _)| hook)
     }
 
     /// # Safety
@@ -60,7 +61,11 @@ impl NativeHook {
         dispatcher: *const (),
         activate: impl FnOnce(&retour::RawDetour) -> Result<(), Box<dyn std::error::Error>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if self.hook.get().is_none() {
+        if let Some((_, installed)) = self.hook.get() {
+            if *installed != dispatcher as usize {
+                return Err("Hook already prepared for another callback wrapper".into());
+            }
+        } else {
             let address = binding
                 .entry_address()
                 .ok_or_else(|| format!("Native binding {} is not initialized", binding.name()))?
@@ -70,14 +75,16 @@ impl NativeHook {
 
             let hook = unsafe { retour::RawDetour::new(address as *const (), dispatcher)? };
 
-            self.hook.set(hook).map_err(|_| retour::Error::AlreadyInitialized)?;
+            self.hook
+                .set((hook, dispatcher as usize))
+                .map_err(|_| retour::Error::AlreadyInitialized)?;
 
             claim.commit();
 
             // Publication can fail after some aliases have received the trampoline.
             // Retain storage and the address claim, but never enable a partially published hook.
             unsafe {
-                crate::binding::publish_function_detours(binding, self.hook.get().unwrap())?;
+                crate::binding::publish_function_detours(binding, &self.hook.get().unwrap().0)?;
             }
 
             self.published.store(true, Ordering::Release);
@@ -237,7 +244,7 @@ mod tests {
 
             assert!(FAILED.detour().is_none());
 
-            assert!(!FAILED.hook.get().unwrap().is_enabled());
+            assert!(!FAILED.hook.get().unwrap().0.is_enabled());
         }
     }
 

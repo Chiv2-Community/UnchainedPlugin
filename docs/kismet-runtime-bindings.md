@@ -62,7 +62,7 @@ unsafe fn entering_server_check(context: &*mut UObject) {
 }
 
 #[unchained_macros_core::bind_func_exit_listener(UKismetSystemLibrary::IsServer)]
-unsafe fn completed_server_check(_context: &*mut UObject, result: &bool) {
+unsafe fn completed_server_check(result: &bool) {
     log::debug!("IsServer returned {result}");
 }
 ```
@@ -70,16 +70,13 @@ unsafe fn completed_server_check(_context: &*mut UObject, result: &bool) {
 For behavior changes, use `#[bind_func_detour(Type::Method)]` with the native
 signature. Call `Type::Method` inside the detour to invoke the original.
 
-Each native binding supports one detour, one entry listener, and one exit
-listener. Their activation is independent; conditions are attachment-time gates.
+Each native binding supports one callback: detour, entry listener, or exit
+listener. Conditions are attachment-time gates; disabling a callback does not free the target.
 Listeners take immutable call-scoped borrows and return `()`.
 
-Exit listeners receive entry-time input snapshots and the final result, including
-a detour's replacement result. They do not automatically expose post-call out
-parameters. Reference-input snapshots are currently unsupported; copying a raw
-pointer does not extend its pointee's lifetime.
+Exit listeners receive only the original result.
 
-See [native bindings](native-bindings.md) for signature checks, snapshots,
+See [native bindings](native-bindings.md) for signature checks,
 activation, reentry, and original-call contracts.
 
 ## Observe a dummy method

@@ -590,7 +590,7 @@ pub fn attach_hooks(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::erro
 
 fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &SelectorSnapshot) -> Result<(), Box<dyn std::error::Error>> {
     sdebug!("Attaching hooks via auto-discovery:");
-    unchained_macros_core::validate_listener_registrations_for::<R>(snapshot)?;
+    unchained_macros_core::validate_callback_registrations_for::<R>(snapshot)?;
 
     for hook in unchained_macros_core::detour_inventory_for::<R>() {
         if !hook.resolver().supports(snapshot) || hook.initialized() {

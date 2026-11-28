@@ -1,12 +1,11 @@
 //! Optional result overrides; these are detours, not observation callbacks.
 use crate::Chivalry2::Engine::{UKismetSystemLibrary, UObject};
 
-#[unchained_macros_core::bind_func_entry_listener(UKismetSystemLibrary::IsDedicatedServer)]
-unsafe fn observe_dedicated_server(_context: &*mut UObject) {}
-
+#[cfg(not(feature = "force_kismet_is_server"))]
 #[unchained_macros_core::bind_func_entry_listener(UKismetSystemLibrary::IsServer)]
 unsafe fn observe_server(_context: &*mut UObject) {}
 
+#[cfg(not(feature = "force_kismet_is_standalone"))]
 #[unchained_macros_core::bind_func_entry_listener(UKismetSystemLibrary::IsStandalone)]
 unsafe fn observe_standalone(_context: &*mut UObject) {}
 

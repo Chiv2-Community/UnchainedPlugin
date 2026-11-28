@@ -13,15 +13,6 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
 
     let CallbackArguments { target, condition } = syn::parse2(args)?;
 
-    if target.segments.len() < 2 || target.segments.iter().any(|s| !s.arguments.is_empty()) {
-        return Err(syn::Error::new_spanned(
-            target,
-            "detour target must be a non-generic Type::method binding path",
-        ));
-    }
-
-    let native_target = target.clone();
-
     let method = &target.segments.last().unwrap().ident;
 
     let mut capability = target.clone();
@@ -57,7 +48,7 @@ pub(super) fn expand(args: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ));
     }
 
-    let native_link = native_target.to_token_stream().to_string().replace(' ', "");
+    let native_link = target.to_token_stream().to_string().replace(' ', "");
 
     let documentation = syn::LitStr::new(
         &format!(

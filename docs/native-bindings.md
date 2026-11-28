@@ -118,18 +118,18 @@ unsafe fn entered(context: &*mut UObject) {
 }
 
 #[unchained_macros_core::bind_func_exit_listener(UKismetSystemLibrary::IsServer)]
-unsafe fn returned(_context: &*mut UObject, result: &bool) {
+unsafe fn returned(result: &bool) {
     log::debug!("IsServer returned {result}");
 }
 ```
 
-- Exit inputs are entry-time `ObserverSnapshot` snapshots, not post-call out parameters.
-  Native reference inputs are currently unsupported; void results use `&()`.
+- Exit listeners borrow only the returned value (`&()` for void).
 - Borrows are callback-scoped. Pointer observations do not extend pointee lifetimes
   or permit writes. Do not retain borrows or release engine-owned storage.
-- Each native method supports one detour, one entry listener, and one exit listener.
-  They share a physical hook but have independent activation.
+- Choose one callback per method, even if disabled: detour, entry listener, or exit listener.
+  An entry listener runs before the original; an exit listener runs after it returns.
 - All callback attributes accept an optional condition, e.g. `Type::Method, || enabled()`.
   It runs at attachment, not on every call. Startup discovers registrations automatically.
-- Observer-induced reentry suppresses observers, not native execution. Rust observer
-  panics are isolated; exit delivery requires a normally returning native call.
+- Reentrant calls invoke observers again; callbacks must terminate recursive paths.
+  No recursion guard is provided. Rust observer panics are isolated; exit delivery
+  requires a normally returning native call.
