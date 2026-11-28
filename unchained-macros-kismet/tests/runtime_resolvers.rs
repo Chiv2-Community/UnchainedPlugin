@@ -392,13 +392,5 @@ fn typed_discovery_keeps_backend_lifecycles_separate_but_shares_native_address_o
         assert_ne!(OTHER_BINDING.address(), OTHER_BINDING.entry_address());
 
         assert!(bindings::__private::claim_detour_address(OTHER_BINDING.entry_address().unwrap().get()).is_err());
-
-        let hook = bindings::detour_inventory_for::<KismetReflectionResolver>()
-            .next()
-            .unwrap();
-
-        hook.detour().unwrap().disable().unwrap();
-
-        assert_eq!(Native::add(5), 6);
     }
 }

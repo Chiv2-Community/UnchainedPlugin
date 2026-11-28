@@ -434,6 +434,9 @@ fn init_rustlib() {
 }
 
 static ENGINE_READY: AtomicBool = AtomicBool::new(false);
+// Published by the game thread after late initialization. A failed final retry
+// leaves dependent features stopped.
+static NATIVE_READY: OnceLock<bool> = OnceLock::new();
 
 fn postinit_rustlib() {
     let _ = *crate::features::tokio_runtime::TOKIO_RUNTIME;
@@ -445,7 +448,12 @@ fn postinit_rustlib() {
         thread::spawn(move || {
             sinfo!("waiting for engine to start..");
 
-            while !ENGINE_READY.load(Ordering::Relaxed) {
+            loop {
+                match NATIVE_READY.get() {
+                    Some(false) => return,
+                    Some(true) if ENGINE_READY.load(Ordering::Acquire) => break,
+                    _ => {}
+                }
                 thread::sleep(Duration::from_millis(500));
             }
 
@@ -593,14 +601,14 @@ fn attach_hooks_for<R: unchained_macros_core::AddressResolver>(snapshot: &Select
     unchained_macros_core::validate_callback_registrations_for::<R>(snapshot)?;
 
     for hook in unchained_macros_core::detour_inventory_for::<R>() {
-        if !hook.resolver().supports(snapshot) || hook.initialized() {
+        if !hook.resolver().supports(snapshot) || hook.is_attached() {
             continue;
         }
         if unsafe { hook.attach()? } { sinfo!("☑ {} attached", hook.name()); }
     }
 
     for listener in unchained_macros_core::listener_inventory_for::<R>() {
-        if !listener.resolver().supports(snapshot) || listener.initialized() { continue; }
+        if !listener.resolver().supports(snapshot) || listener.is_attached() { continue; }
         if unsafe { listener.attach()? } { sinfo!("☑ {} listener attached", listener.name); }
     }
 

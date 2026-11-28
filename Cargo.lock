@@ -3987,7 +3987,6 @@ version = "0.1.0"
 dependencies = [
  "iced-x86",
  "log",
- "retour",
  "test-case",
  "unchained-build-plan",
  "unchained-macros-core",

@@ -93,9 +93,6 @@ fn display_broadcast(controller: *mut c_void, channel: u32, raw: &str) -> Option
 }
 
 fn native_string(text: *const FText) -> Option<String> {
-    if text.is_null() || !unchained_macros_core::function_is_bound_for::<unchained_macros_patternsleuth::PatternsleuthResolver>("FText__ToString") {
-        return None;
-    }
     let string = unsafe { FText::from_ptr(text)?.ToString() };
     string.copy_to_string().ok()
 }

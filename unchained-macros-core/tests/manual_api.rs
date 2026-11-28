@@ -113,9 +113,7 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
     unsafe {
         assert!(ENTRY.attach().is_err());
 
-        assert!(!ENTRY.initialized());
-
-        assert!(!ENTRY.enabled());
+        assert!(!ENTRY.is_attached());
 
         BINDING
             .initialize_address(NonZeroUsize::new(original as *const () as usize).unwrap())
@@ -125,23 +123,17 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
         assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);
 
-        assert!(ENTRY.initialized());
-
-        assert!(ENTRY.enabled());
+        assert!(ENTRY.is_attached());
 
         assert!(EXIT.attach().is_err());
 
         assert!(DETOUR.attach().is_err());
 
-        assert!(!DETOUR.initialized());
-
-        assert!(!DETOUR.enabled());
+        assert!(!DETOUR.is_attached());
 
         assert!(DUPLICATE.attach().is_err());
 
-        assert!(!DUPLICATE.initialized());
-
-        assert!(ENTRY.enabled());
+        assert!(!DUPLICATE.is_attached());
 
         let call = std::hint::black_box(original as unsafe extern "C" fn(usize) -> usize);
 
@@ -159,13 +151,9 @@ fn handwritten_registration_owns_controls_and_preserves_original_bypass() {
 
         assert_eq!(ALIAS.address(), BINDING.address());
 
-        assert!(!DETOUR.enabled());
-
         assert_eq!(call(4), 5);
 
         assert_eq!(EXITS.load(Ordering::SeqCst), 0);
-
-        assert!(DETOUR.detour().is_none());
     }
 }
 

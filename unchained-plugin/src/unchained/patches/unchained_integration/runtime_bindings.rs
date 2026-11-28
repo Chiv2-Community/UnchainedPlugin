@@ -15,12 +15,14 @@ unsafe fn engine_loop_init_detour(engine: *mut FEngineLoop) -> i32 {
     let result = unsafe { engine.Init() };
     // Retry only unresolved work if some classes were unavailable at entry.
     unsafe { initialize(); }
+    if crate::NATIVE_READY.set(false).is_ok() {
+        serror!("Native initialization failed; dependent features will not start");
+    }
     result
 }
 
 #[derive(Default)]
 struct State {
-    complete: bool,
     patches: PatchState,
     last_error: Option<String>,
 }
@@ -30,7 +32,7 @@ struct State {
 pub(super) unsafe fn initialize() {
     static STATE: OnceLock<Mutex<State>> = OnceLock::new();
     let Ok(mut state) = STATE.get_or_init(Default::default).try_lock() else { return };
-    if state.complete { return; }
+    if crate::NATIVE_READY.get().is_some() { return; }
     let snapshot = crate::selectors();
     let result = (|| -> Result<(), String> {
         let environment = ExecEnvironment {
@@ -49,12 +51,7 @@ pub(super) unsafe fn initialize() {
         crate::attach_hooks_for::<KismetReflectionResolver>(snapshot).map_err(|error| error.to_string())?;
         #[cfg(feature = "blueprint_printstring_log")]
         if snapshot.get::<crate::PlatformType>()? == crate::PlatformType::STEAM {
-            // Step adapters were attached by the early Patternsleuth pass.
-            if !unchained_macros_core::detour_is_enabled("observe_frame_step")
-                || !unchained_macros_core::detour_is_enabled("observe_frame_step_explicit")
-            {
-                return Err("Exec listeners require both active frame-step adapters".into());
-            }
+            // Both Step adapters are unconditional hooks in the early pass.
             unsafe { unchained_macros_core::initialize_bindings_for::<KismetExecResolver>(&context, snapshot)?; }
             crate::attach_hooks_for::<KismetExecResolver>(snapshot).map_err(|error| error.to_string())?;
         } else {
@@ -64,7 +61,7 @@ pub(super) unsafe fn initialize() {
     })();
     match result {
         Ok(()) => {
-            state.complete = true;
+            let _ = crate::NATIVE_READY.set(true);
             sinfo!("Runtime native bindings initialized.");
         }
         Err(error) => {

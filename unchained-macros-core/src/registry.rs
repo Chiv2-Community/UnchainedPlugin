@@ -31,7 +31,7 @@ pub struct DetourRegistration<T: crate::SupportsDetour + 'static, State = Atomic
     target: &'static T,
     callback: T::Callback,
     condition: fn() -> bool,
-    initialized: State,
+    attached: State,
 }
 
 impl<T: crate::SupportsDetour> DetourRegistration<T> {
@@ -41,7 +41,7 @@ impl<T: crate::SupportsDetour> DetourRegistration<T> {
             target,
             callback,
             condition,
-            initialized: AtomicBool::new(false),
+            attached: AtomicBool::new(false),
         }
     }
 
@@ -52,18 +52,18 @@ impl<T: crate::SupportsDetour> DetourRegistration<T> {
     /// Name only the mutable storage in generated inventory statics; the compiler
     /// can then infer and promote the immutable target/callback pair (including HRTBs).
     /// # Safety
-    /// `initialized` must be fresh, false, and reserved solely for this registration.
+    /// `attached` must be fresh, false, and reserved solely for this registration.
     #[doc(hidden)]
     pub const unsafe fn with_inventory_state(
         self,
-        initialized: &'static AtomicBool,
+        attached: &'static AtomicBool,
     ) -> DetourRegistration<T, &'static AtomicBool> {
         DetourRegistration {
             name: self.name,
             target: self.target,
             callback: self.callback,
             condition: self.condition,
-            initialized,
+            attached,
         }
     }
 }
@@ -80,11 +80,7 @@ pub trait DetourInfo: Sync {
     /// ABI, aliasing and lifetime contracts. Do not attach concurrently.
     unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>>;
 
-    fn initialized(&self) -> bool;
-
-    fn enabled(&self) -> bool;
-
-    fn detour(&self) -> Option<&'static retour::RawDetour>;
+    fn is_attached(&self) -> bool;
 }
 
 impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for DetourRegistration<T, S> {
@@ -100,8 +96,8 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
     }
 
     unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        if self.initialized() {
-            return Err("Detour callback is already initialized".into());
+        if self.is_attached() {
+            return Err("Detour callback is already attached".into());
         }
 
         if !crate::isolate_observer(self.condition).unwrap_or(false) {
@@ -110,21 +106,13 @@ impl<T: crate::SupportsDetour, S: Borrow<AtomicBool> + Sync> DetourInfo for Deto
         unsafe {
             self.target.register(crate::Callback::Detour(self.callback))?;
         }
-        self.initialized.borrow().store(true, Ordering::Release);
+        self.attached.borrow().store(true, Ordering::Release);
 
         Ok(true)
     }
 
-    fn initialized(&self) -> bool {
-        self.initialized.borrow().load(Ordering::Acquire)
-    }
-
-    fn detour(&self) -> Option<&'static retour::RawDetour> {
-        self.initialized().then(|| self.target.physical_detour()).flatten()
-    }
-
-    fn enabled(&self) -> bool {
-        self.detour().is_some_and(|hook| hook.is_enabled())
+    fn is_attached(&self) -> bool {
+        self.attached.borrow().load(Ordering::Acquire)
     }
 }
 

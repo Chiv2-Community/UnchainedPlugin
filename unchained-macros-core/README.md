@@ -54,7 +54,7 @@ unsafe {
     apply_patches_for::<Backend, _>(&context, &selectors, &mut writer, &mut patch_state)?;
 }
 for hook in detour_inventory_for::<Backend>() {
-    if hook.resolver().supports(&selectors) && !hook.initialized() {
+    if hook.resolver().supports(&selectors) && !hook.is_attached() {
         unsafe { hook.attach()?; }
     }
 }
@@ -101,7 +101,7 @@ unsafe fn returned(result: &bool) {}
 - Conditions and feature gates control activation.
   `attach()` returns `Ok(false)` when the condition is false or panics: no hook,
   address claim, or trampoline is created. An installed callback is never gated on dispatch.
-  `DetourInfo::detour` exposes the physical hook for inspection.
+  `is_attached()` reports whether installation succeeded for this registration.
 - Addresses remain globally owned across backends. A second independently
   described alias cannot attach another dispatcher; late aliases still share
   the trampoline for original-call bypass.

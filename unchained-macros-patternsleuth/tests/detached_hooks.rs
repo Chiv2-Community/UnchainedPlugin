@@ -73,8 +73,6 @@ static BORROW_CALLS: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_OFF_CONDITION_CALLS: AtomicUsize = AtomicUsize::new(0);
 
 fn borrow_condition() -> bool {
-    assert!(unchained_macros_core::CallbackTarget::physical_detour(Native::__UNCHAINED_TARGET_borrow).is_none());
-
     let binding = Native::__UNCHAINED_TARGET_borrow.binding();
 
     assert_eq!(binding.address(), binding.entry_address());
@@ -188,11 +186,9 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
 
     assert!(!unsafe { __UNCHAINED_REGISTRATION_plugin_add.attach() }.unwrap());
 
-    assert!(!unchained_macros_core::detour_is_initialized("plugin_add"));
+    assert!(!unchained_macros_core::detour_is_attached("plugin_add"));
 
-    assert!(!unchained_macros_core::detour_is_enabled("MissingDetour"));
-
-    assert!(!unchained_macros_core::detour_is_initialized("MissingDetour"));
+    assert!(!unchained_macros_core::detour_is_attached("MissingDetour"));
 
     for (binding, address) in [
         (
@@ -272,13 +268,11 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             607
         );
 
-        assert!(unchained_macros_core::detour_is_enabled("plugin_add"));
+        assert!(unchained_macros_core::detour_is_attached("plugin_add"));
 
-        assert!(!unchained_macros_core::detour_is_initialized("plugin_borrow"));
+        assert!(!unchained_macros_core::detour_is_attached("plugin_borrow"));
 
-        assert!(!unchained_macros_core::detour_is_enabled("plugin_borrow"));
-
-        assert!(!unchained_macros_core::detour_is_enabled("plugin_global_off"));
+        assert!(!unchained_macros_core::detour_is_attached("plugin_global_off"));
 
         let call = std::hint::black_box(add_target as unsafe extern "C" fn(i32) -> i32);
 
@@ -329,38 +323,5 @@ fn detached_replacements_patch_native_entries_but_model_calls_always_use_origina
             std::hint::black_box(global_off_target as unsafe extern "C" fn(i32) -> i32)(1),
             5
         );
-
-        let original_address = Native::__UNCHAINED_TARGET_add.binding().address();
-
-        __UNCHAINED_REGISTRATION_plugin_add.detour().unwrap().disable().unwrap();
-
-        assert_eq!(call(7), 10);
-
-        assert!(!unchained_macros_core::detour_is_enabled("plugin_add"));
-
-        assert!(unchained_macros_core::detour_is_initialized("plugin_add"));
-
-        assert_eq!(Native::add(7), 10);
-
-        assert_eq!(Native::__UNCHAINED_TARGET_add.binding().address(), original_address);
-
-        assert!(__UNCHAINED_REGISTRATION_plugin_borrow.detour().is_none());
-        __UNCHAINED_REGISTRATION_plugin_storage
-            .detour()
-            .unwrap()
-            .disable()
-            .unwrap();
-
-        __UNCHAINED_REGISTRATION_plugin_zero
-            .detour()
-            .unwrap()
-            .disable()
-            .unwrap();
-
-        __UNCHAINED_REGISTRATION_plugin_request
-            .detour()
-            .unwrap()
-            .disable()
-            .unwrap();
     }
 }

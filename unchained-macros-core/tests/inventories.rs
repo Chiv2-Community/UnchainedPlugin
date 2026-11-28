@@ -164,9 +164,7 @@ fn erased_queries_preserve_concrete_identity_and_do_not_invoke_native_work() {
         2
     );
 
-    assert!(!bindings::detour_is_initialized("SameHook"));
-
-    assert!(!bindings::detour_is_enabled("SameHook"));
+    assert!(!bindings::detour_is_attached("SameHook"));
 
     bindings::validate_patch_registrations().unwrap();
 

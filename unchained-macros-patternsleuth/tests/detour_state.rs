@@ -1,4 +1,4 @@
-use unchained_macros_core::{detour_is_enabled, detour_is_initialized, DetourInfo, DetourRegistration, NativeTarget};
+use unchained_macros_core::{detour_is_attached, DetourInfo, DetourRegistration, NativeTarget};
 
 static BINDING: unchained_macros_core::FunctionBinding<unchained_macros_patternsleuth::PatternsleuthResolver> =
     unchained_macros_core::FunctionBinding::new(
@@ -33,14 +33,10 @@ inventory::submit! { &REGISTRATION as &dyn DetourInfo }
 
 #[test]
 
-fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
-    assert!(!detour_is_initialized("Unknown"));
+fn attachment_status_changes_only_after_installation() {
+    assert!(!detour_is_attached("Unknown"));
 
-    assert!(!detour_is_enabled("Unknown"));
-
-    assert!(!detour_is_initialized("FixtureDetour"));
-
-    assert!(!detour_is_enabled("FixtureDetour"));
+    assert!(!detour_is_attached("FixtureDetour"));
 
     unsafe {
         BINDING
@@ -50,18 +46,7 @@ fn state_queries_share_hook_registration_and_track_disabled_trampolines() {
         assert!(REGISTRATION.attach().unwrap());
     }
     let call = std::hint::black_box(target as unsafe extern "C" fn(i32) -> i32);
-    assert!(detour_is_enabled("FixtureDetour"));
+    assert!(detour_is_attached("FixtureDetour"));
 
     assert_eq!(unsafe { call(3) }, 5);
-
-    unsafe {
-        REGISTRATION.detour().unwrap().disable().unwrap();
-        assert!(!REGISTRATION.detour().unwrap().is_enabled());
-    }
-
-    assert!(detour_is_initialized("FixtureDetour"));
-
-    assert!(!detour_is_enabled("FixtureDetour"));
-
-    assert_eq!(unsafe { call(3) }, 4);
 }

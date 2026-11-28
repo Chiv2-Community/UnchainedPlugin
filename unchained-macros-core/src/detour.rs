@@ -1,15 +1,9 @@
 use crate::DetourInfo;
 
-pub fn detour_is_initialized(name: &str) -> bool {
+pub fn detour_is_attached(name: &str) -> bool {
     inventory::iter::<&'static dyn DetourInfo>
         .into_iter()
-        .any(|binding| binding.name() == name && binding.initialized())
-}
-
-pub fn detour_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static dyn DetourInfo>
-        .into_iter()
-        .any(|binding| binding.name() == name && binding.enabled())
+        .any(|binding| binding.name() == name && binding.is_attached())
 }
 
 use std::collections::BTreeSet;
@@ -17,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-/// Shared physical attachment. Logical callbacks belong to the typed target.
+/// Owns the process-lifetime physical hook and its publication state.
 pub struct NativeHook {
     hook: OnceLock<(retour::RawDetour, usize)>,
     published: AtomicBool,
@@ -31,7 +25,7 @@ impl NativeHook {
         }
     }
 
-    pub fn detour(&self) -> Option<&retour::RawDetour> {
+    fn detour(&self) -> Option<&retour::RawDetour> {
         self.published
             .load(Ordering::Acquire)
             .then(|| self.hook.get())

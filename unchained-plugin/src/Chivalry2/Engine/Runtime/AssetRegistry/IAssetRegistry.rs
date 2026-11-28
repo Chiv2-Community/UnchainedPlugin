@@ -47,7 +47,6 @@ impl IAssetRegistry {
     /// Call on the game thread after native registry initialization.
     pub unsafe fn asset_registry_interface() -> Result<*mut Self, String> {
         let mut registry = AssetRegistryScriptInterface::new();
-        unchained_macros_core::require_function_bindings_for::<unchained_macros_kismet::KismetReflectionResolver>(&["UAssetRegistryHelpers__GetAssetRegistry"])?;
         UAssetRegistryHelpers::GetAssetRegistry(&mut registry);
         registry.asset_registry()
     }

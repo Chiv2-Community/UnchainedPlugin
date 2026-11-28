@@ -104,7 +104,6 @@ pub trait CallbackTarget: Sized + Sync + 'static {
 
     fn slot(&self) -> &CallbackSlot<Callback<Self::Callback, Self::Entry, Self::Exit>>;
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
-    fn physical_detour(&self) -> Option<&retour::RawDetour>;
 
     /// # Safety
     /// Satisfy backend quiescence and readiness requirements.
@@ -161,8 +160,6 @@ trait ListenerInfo: Sync {
     fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo;
     fn identity(&self) -> *const ();
 
-    fn enabled(&self) -> bool;
-
     unsafe fn install(&self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
@@ -197,10 +194,6 @@ impl<T: CallbackTarget> ListenerInfo for ListenerAction<T> {
         std::ptr::from_ref(self.target).cast()
     }
 
-    fn enabled(&self) -> bool {
-        self.target.physical_detour().is_none_or(|hook| hook.is_enabled()) && self.target.slot().get().is_some()
-    }
-
     unsafe fn install(&self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { self.target.register(self.callback) }
     }
@@ -211,7 +204,7 @@ pub struct ListenerRegistration {
     pub name: &'static str,
     action: &'static dyn ListenerInfo,
     condition: fn() -> bool,
-    initialized: AtomicBool,
+    attached: AtomicBool,
 }
 
 impl ListenerRegistration {
@@ -224,7 +217,7 @@ impl ListenerRegistration {
             name,
             action,
             condition,
-            initialized: AtomicBool::new(false),
+            attached: AtomicBool::new(false),
         }
     }
 
@@ -232,8 +225,8 @@ impl ListenerRegistration {
     /// Callers must be quiescent. Callbacks must
     /// uphold the target's ABI and ownership contracts. Do not attach concurrently.
     pub unsafe fn attach(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        if self.initialized() {
-            return Err("Listener callback is already initialized".into());
+        if self.is_attached() {
+            return Err("Listener callback is already attached".into());
         }
 
         if !isolate_observer(self.condition).unwrap_or(false) {
@@ -243,17 +236,13 @@ impl ListenerRegistration {
             self.action.install()?;
         }
 
-        self.initialized.store(true, Ordering::Release);
+        self.attached.store(true, Ordering::Release);
 
         Ok(true)
     }
 
-    pub fn initialized(&self) -> bool {
-        self.initialized.load(Ordering::Acquire)
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.initialized() && self.action.enabled()
+    pub fn is_attached(&self) -> bool {
+        self.attached.load(Ordering::Acquire)
     }
 
     pub fn resolver(&self) -> &'static dyn crate::resolver::ResolverInfo {
@@ -267,16 +256,10 @@ impl ListenerRegistration {
 
 inventory::collect!(&'static ListenerRegistration);
 
-pub fn listener_is_initialized(name: &str) -> bool {
+pub fn listener_is_attached(name: &str) -> bool {
     inventory::iter::<&'static ListenerRegistration>
         .into_iter()
-        .any(|listener| listener.name == name && listener.initialized())
-}
-
-pub fn listener_is_enabled(name: &str) -> bool {
-    inventory::iter::<&'static ListenerRegistration>
-        .into_iter()
-        .any(|listener| listener.name == name && listener.enabled())
+        .any(|listener| listener.name == name && listener.is_attached())
 }
 
 pub fn listener_inventory_for<R: AddressResolver>() -> impl Iterator<Item = &'static ListenerRegistration> {

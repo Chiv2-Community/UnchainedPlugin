@@ -11,6 +11,9 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
     unsafe {
         this.Tick(delta, state);
     }
+    if crate::NATIVE_READY.get() != Some(&true) {
+        return;
+    }
     ENABLE_IPV6.call_once(|| {
         NATIVE_COMMAND_QUEUE
             .lock()
@@ -28,10 +31,6 @@ pub(crate) unsafe fn tick_detour(this: *mut UGameEngine, delta: f32, state: u8) 
     }
     if unsafe { IsBadReadPtr(Some(this.cast()), 8) }.into() {
         serror!("IsBadReadPtr UGameEngineTick");
-        return;
-    }
-    if !unchained_macros_core::detour_is_enabled("tick_detour") {
-        serror!("Disabled UGameEngineTick");
         return;
     }
     if let Ok(mut commands) = NATIVE_COMMAND_QUEUE.try_lock() {

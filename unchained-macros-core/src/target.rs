@@ -62,10 +62,6 @@ where
         self.binding.resolver
     }
 
-    fn physical_detour(&self) -> Option<&retour::RawDetour> {
-        self.hook.detour()
-    }
-
     unsafe fn install_hook(&'static self, callback: Callback<F, E, X>) -> Result<(), Box<dyn std::error::Error>> {
         let dispatcher = match callback {
             Callback::Detour(replacement) => replacement,

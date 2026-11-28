@@ -42,9 +42,6 @@ impl<E: Copy + Send + Sync + 'static, X: Copy + Send + Sync + 'static, R: Addres
         self.resolver
     }
 
-    fn physical_detour(&self) -> Option<&retour::RawDetour> {
-        None
-    }
     unsafe fn install_hook(&'static self, _: Callback<Self::Callback, E, X>) -> Result<(), Box<dyn std::error::Error>> {
         unsafe { (self.attach)() }
     }
@@ -178,8 +175,6 @@ fn entry_owner_rejects_other_kinds_and_preserves_bypass() {
         .unwrap_err()
         .to_string()
         .contains("already owns native address"));
-
-    assert!(physical.detour().is_none());
 }
 
 #[test]
@@ -386,7 +381,7 @@ mod duplicate_discovery {
         }
 
         for listener in listener_inventory_for::<Backend>() {
-            if !listener.resolver().supports(snapshot) || listener.initialized() {
+            if !listener.resolver().supports(snapshot) || listener.is_attached() {
                 continue;
             }
 
@@ -410,12 +405,10 @@ mod duplicate_discovery {
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 0);
 
         for listener in listener_inventory_for::<Backend>() {
-            assert!(!listener.initialized());
-
-            assert!(!listener.enabled());
+            assert!(!listener.is_attached());
         }
 
-        // Even a host without preflight must not skip a loser as "initialized".
+        // A conflicting registration must never report itself attached.
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name == "first_entry") {
             unsafe {
                 listener.attach().unwrap();
@@ -430,16 +423,12 @@ mod duplicate_discovery {
 
         for listener in listener_inventory_for::<Backend>() {
             if listener.name != "first_entry" {
-                assert!(!listener.initialized());
-
-                assert!(!listener.enabled());
+                assert!(!listener.is_attached());
             }
         }
 
         for listener in listener_inventory_for::<Backend>().filter(|listener| listener.name == "first_entry") {
-            assert!(listener.initialized());
-
-            assert!(listener.enabled());
+            assert!(listener.is_attached());
         }
 
         assert_eq!(ATTACHMENTS.load(Ordering::SeqCst), 1);
@@ -528,8 +517,8 @@ mod activation {
 
             assert!(!off.attach().unwrap());
             assert!(!gated.attach().unwrap());
-            assert!(!off.initialized() && !gated.initialized());
-            assert!(off.detour().is_none() && gated.detour().is_none());
+            assert!(!off.is_attached() && !gated.is_attached());
+
             assert_eq!(original_off(), 11);
             assert_eq!(original_gated(), 12);
             assert_eq!(CONDITIONS.load(Ordering::SeqCst), 2);

@@ -29,14 +29,6 @@ pub(crate) fn send_ingame_message_with_world(
         {
             return;
         }
-        if let Err(error) = unchained_macros_core::require_function_bindings_for::<unchained_macros_kismet::KismetReflectionResolver>(&[
-            "UTBLSystemLibrary__GetTBLGameMode",
-        ]).and_then(|()| unchained_macros_core::require_function_bindings_for::<unchained_macros_patternsleuth::PatternsleuthResolver>(&[
-            "ATBLGameMode__BroadcastLocalizedChat",
-        ])) {
-            serror!("Cannot send chat: {}", error);
-            return;
-        }
         let Some(world) = world_accessor().filter(|world| !world.is_null()) else {
             return;
         };
