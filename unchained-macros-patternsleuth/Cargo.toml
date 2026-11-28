@@ -1,0 +1,24 @@
+[package]
+name = "unchained-macros-patternsleuth"
+version = "0.1.0"
+edition = "2021"
+build = "../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["format"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+
+[dependencies]
+unchained-macros-core = { workspace = true }
+unchained-macros-patternsleuth-impl = { workspace = true }
+patternsleuth = { workspace = true }
+binary_bloodhound = { workspace = true }
+inventory = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }
+retour = { workspace = true }
+object = { workspace = true }

@@ -1,0 +1,12 @@
+[package]
+name = "unchained-build-plan"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+serde.workspace = true
+toml = { workspace = true }

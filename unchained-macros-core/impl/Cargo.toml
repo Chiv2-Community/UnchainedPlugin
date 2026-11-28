@@ -1,0 +1,22 @@
+[package]
+name = "unchained-macros-core-impl"
+version = "0.1.0"
+edition = "2021"
+build = "../../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["format"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true, features = ["full", "fold", "visit-mut"] }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }

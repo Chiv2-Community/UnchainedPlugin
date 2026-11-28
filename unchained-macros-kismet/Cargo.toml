@@ -1,0 +1,25 @@
+[package]
+name = "unchained-macros-kismet"
+version = "0.1.0"
+edition = "2021"
+build = "../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["format"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+
+[dependencies]
+unchained-macros-core = { workspace = true }
+unchained-macros-kismet-impl = { workspace = true }
+iced-x86 = { workspace = true }
+log = { workspace = true }
+
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+
+[dev-dependencies]
+test-case = { workspace = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+unchained-macros-native-docs-generator = { workspace = true }

@@ -1,0 +1,22 @@
+[package]
+name = "unchained-macros-core"
+version = "0.1.0"
+edition = "2021"
+build = "../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["format"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+
+[dependencies]
+unchained-macros-core-impl = { workspace = true }
+inventory = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }
+paste = { workspace = true }
+retour = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }

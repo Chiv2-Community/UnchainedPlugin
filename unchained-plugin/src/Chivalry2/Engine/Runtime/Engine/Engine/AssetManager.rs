@@ -1,0 +1,24 @@
+//! Native source: <https://github.com/EpicGames/UnrealEngine/blob/4.25-plus/Engine/Source/Runtime/Engine/Classes/Engine/AssetManager.h>.
+
+use crate::Chivalry2::Engine::IAssetRegistry;
+
+
+define_pattern_resolver!(
+    UAssetManager__GetAssetRegistry,
+    ["40 57 48 83 EC 20 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0 75 ?? 44 8D 40 ??"]
+);
+
+/// Opaque native asset manager. No Rust allocation or layout is assumed.
+#[unchained_macros_core::runtime_bindings]
+#[repr(C)]
+pub struct UAssetManager {
+    _opaque: [u8; 0],
+}
+
+#[unchained_macros_core::runtime_bindings]
+impl UAssetManager {
+    /// # Safety
+    /// Self must be a live native asset manager; call on the engine thread.
+    #[bind_resolved_func(self::UAssetManager__GetAssetRegistry)]
+    pub unsafe fn GetAssetRegistry(self: *const Self) -> *mut IAssetRegistry {}
+}

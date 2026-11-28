@@ -1,0 +1,148 @@
+[package]
+name = "UnchainedPlugin"
+version = "1.0.1"
+edition = "2021"
+build = "../build/build.rs"
+
+[package.metadata]
+pre-build-steps = ["generate-native-binding-docs", "embed-build-metadata"]
+
+[[bin]]
+name = "mock_server"
+path = "src/bin/mock_server.rs"
+
+[lib]
+name = "UnchainedPlugin"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+unchained-build-plan.workspace = true
+unchained-macros-native-docs-generator = { workspace = true }
+embed-resource = { workspace = true }
+git2 = { workspace = true }
+
+[lints.rust]
+non_snake_case = "allow"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
+
+[features]
+default = [
+        "serde-resolvers",
+        "dev",
+        # "loose_assets",
+        "verbose_hooks",
+        "cli_commands",
+        "rcon_commands",
+        "server_registration",
+        "mod_management",
+        "discord_integration",
+        "syslog-client",
+        # "config_overrides_verbose_hooks",
+        # "map_profiles",
+        ]
+serde-resolvers = []
+image-elf = []
+dev = []
+syslog-client = [  ]
+kismet_log = [] # Dump kismetexecutionmessage logs
+# Opt-in diagnostics; keep dev/default builds unchanged.
+blueprint_printstring_log = [] # Log Blueprint PrintString/PrintWarning/PrintText
+kismet_diagnostics = ["kismet_log", "blueprint_printstring_log"]
+kismet_server_identity_hooks = [] # Observe identity predicates without forcing results
+force_kismet_is_dedicated_server = ["kismet_server_identity_hooks"]
+force_kismet_is_server = ["kismet_server_identity_hooks"]
+force_kismet_is_standalone = ["kismet_server_identity_hooks"]
+with_pdb = ["pdb"]
+loose_assets = [] # Load assets in addition to paks
+verbose_hooks = [] # print (some) hook triggers to console
+config_overrides_verbose_hooks = [] # print (config_override) hook triggers to console
+map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
+cli_commands = [] # process commands from plugin windows
+rcon_commands = [] # process commands from rcon
+server_registration = ["a2s", "backon", "tokio"] # register server with backend
+mod_management = [] # info about mod markers and actors
+discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
+move-autonomous-desync = []
+loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/found, patch only the texture FName
+
+[dependencies]
+unchained-macros-core = { workspace = true }
+unchained-macros-patternsleuth = { workspace = true }
+unchained-macros-kismet = { workspace = true }
+rust-ctables = { workspace = true }
+backon = { workspace = true, optional = true }
+server-browser-client = { workspace = true }
+server-browser-client-sdk = { workspace = true }
+binary_bloodhound = { workspace = true }
+patternsleuth = { workspace = true }
+anyhow = { workspace = true }
+# Pak index reads for off-thread mod-map discovery. The crates.io `repak`
+# crate is an unrelated name-squatter; use trumank/repak.
+repak = { workspace = true }
+# AES-256 key pass-through for paks with encrypted indexes (must unify with
+# repak's own aes version).
+aes = { workspace = true }
+base64 = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+serde_urlencoded = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+paste = { workspace = true }
+memmap2 = { workspace = true }
+widestring = { workspace = true }
+bitflags = { workspace = true }
+log = { workspace = true, features = ["kv"] }
+log4rs = { workspace = true }
+parking_lot = { workspace = true }
+inventory = { workspace = true }
+regex = { workspace = true }
+itertools = { workspace = true }
+# server registration
+a2s = { workspace = true, optional = true }
+reqwest = { workspace = true }
+get_if_addrs = { workspace = true }
+# discord<
+async-trait = { workspace = true }
+# Symbol-file loading (local tests)
+pdb = { workspace = true, optional = true }
+retour = { workspace = true }
+clap = { workspace = true } # cli arg parsing
+winapi = { workspace = true }
+windows = { workspace = true, features = ["Win32_Foundation",
+            "Win32_System_Console",
+            "Win32_System_Registry",
+            "Win32_System_LibraryLoader",
+            "Win32_System_SystemServices",
+            "Win32_Graphics_Gdi",
+            "Win32_Graphics_Direct3D",
+            "Win32_Graphics_Direct3D11",
+            "Win32_Graphics_Dxgi",
+            "Win32_Graphics_Dxgi_Common",
+            "Win32_UI_WindowsAndMessaging",
+            "Win32_System_Threading",
+            "Win32_System_Diagnostics_Debug",
+            "Win32_Security",
+            "Win32_System_Kernel",
+            "Win32_System_Memory",
+            "Win32_System_ProcessStatus",
+            ]}
+tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true }
+serenity = { workspace = true, optional = true }
+discord-http = { workspace = true, optional = true }
+shlex = { workspace = true }
+crossbeam-channel = { workspace = true, optional = true }
+rand = { workspace = true }
+censor = { workspace = true }
+crc32c = { workspace = true }
+strum = { workspace = true }
+emojis = { workspace = true }
+unicode-segmentation = { workspace = true }
+
+[dev-dependencies]
+object = { workspace = true }
+test-case = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

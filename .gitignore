@@ -16,6 +16,7 @@ target/
 
 # Local configuration and logs
 .env
+.cargo/config.local.toml
 *.log
 
 # Python caches

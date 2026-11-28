@@ -41,6 +41,12 @@ was explicitly supplied.
         - **Install Task**: The **Install UnchainedPlugin** run configuration uses `cargo xtask install` which handles `.env` internally.
 
 
+### Building the plugin
+
+The root `Cargo.toml` is a virtual workspace. `unchained-plugin/` contains the
+DLL crate, its sources, and resources. Workspace pre-build steps live in [`build/`](build/README.md). On Windows,
+run `cargo build` from the workspace root; the plugin is the default member.
+
 ### Building the Windows DLL on Linux
 
 `scripts/build-windows.sh` cross-compiles the Windows DLL with

@@ -1,0 +1,727 @@
+use anyhow::Context;
+use log4rs::config::{Config, Deserializers, RawConfig};
+use console::ConsoleAppenderDeserializer;
+use palette::PaletteEncoderDeserializer;
+use pattern::PatternEncoderDeserializer;
+
+mod console;
+pub(crate) mod palette;
+pub mod pattern;
+mod removals;
+mod panic_report;
+use crate::tools::hook_globals::cli_args;
+use std::path::{Path, PathBuf};
+use std::collections::BTreeSet;
+
+const EMBEDDED_LOG4RS_YAML: &str = include_str!("log4rs.default.yaml");
+const EMBEDDED_LOG4RS_DEFAULT_NAME: &str = "log4rs.default.yaml";
+const UNCHAINED_LOG_PATH_PLACEHOLDER: &str = "__UNCHAINED_LOG_PATH__";
+const KISMET_LOG_PATH_PLACEHOLDER: &str = "__KISMET_LOG_PATH__";
+const CHAT_LOG_PATH_PLACEHOLDER: &str = "__CHAT_LOG_PATH__";
+const BLUEPRINT_LOG_PATH_PLACEHOLDER: &str = "__BLUEPRINT_LOG_PATH__";
+
+/// Write panic diagnostics to stderr and forward them asynchronously to the logger.
+/// Forwarding is best-effort; a full queue or failed logger leaves stderr only.
+pub fn setup_panic_logger() {
+    panic_report::setup(module_path!());
+}
+
+pub fn init() -> anyhow::Result<()> {
+    let cli = cli_args();
+    init_with_path(cli.log4rs_yaml.as_deref(), cli.saved_dir_suffix.as_deref())
+}
+
+fn init_with_path(override_path: Option<&str>, saved_dir_suffix: Option<&str>) -> anyhow::Result<()> {
+    let selected = load_logger_yaml(override_path).and_then(|(source, yaml)|
+        config_from_yaml(&yaml, source, saved_dir_suffix).map(|config| (source, config)));
+    let mut rejected = None;
+    let (config_source_name, (config, warnings)) = match selected {
+        Ok(config) => config,
+        Err(error) => {
+            // No logger is available yet; report the complete error chain on stderr.
+            eprintln!("[UnchainedPlugin ERROR] Failed to load logging configuration: {error:#}");
+            eprintln!("[UnchainedPlugin ERROR] Startup will resume with embedded {EMBEDDED_LOG4RS_DEFAULT_NAME} in 5 seconds.");
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            rejected = Some(error);
+            (EMBEDDED_LOG4RS_DEFAULT_NAME,
+                config_from_yaml(EMBEDDED_LOG4RS_YAML, EMBEDDED_LOG4RS_DEFAULT_NAME, saved_dir_suffix)?)
+        }
+    };
+    log4rs::init_config(config)
+        .with_context(|| format!("Failed to initialize logger from config {}", config_source_name))?;
+    setup_panic_logger();
+    if let Some(error) = rejected {
+        serror!("Rejected logging configuration: {error:#}. Resumed with embedded {EMBEDDED_LOG4RS_DEFAULT_NAME} after a 5-second pause.");
+    }
+    for name in warnings {
+        swarn!(undefined_palette = name.as_str();
+            "Undefined palette reference in a configured encoder: {}", name);
+    }
+    crate::logging::console::report_attachment_failure();
+
+    Ok(())
+}
+
+fn config_from_yaml(yaml: &str, source: &str, saved_dir_suffix: Option<&str>) -> anyhow::Result<(Config, BTreeSet<String>)> {
+    let resolved = apply_logger_placeholders(yaml, saved_dir_suffix);
+    let yaml = serde_yaml::from_str(&resolved)
+        .with_context(|| format!("Failed to parse logger config {source}"))?;
+    config_with_warnings(yaml, source)
+}
+
+fn load_logger_yaml(override_path: Option<&str>) -> anyhow::Result<(&str, String)> {
+    let path = override_path.unwrap_or("log4rs.yaml");
+    match std::fs::read_to_string(path) {
+        Err(error) if override_path.is_none() && error.kind() == std::io::ErrorKind::NotFound =>
+            Ok((EMBEDDED_LOG4RS_DEFAULT_NAME, EMBEDDED_LOG4RS_YAML.to_string())),
+        result => result.map(|yaml| (path, yaml))
+            .with_context(|| format!("Failed to read logger config file: {}", path)),
+    }
+}
+
+fn config_with_warnings(mut yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<(Config, BTreeSet<String>)> {
+    share_structured_appenders(&mut yaml);
+    let warnings = missing_palette_references(&yaml);
+    let raw_config: RawConfig = serde_yaml::from_value(yaml)
+        .with_context(|| format!("Failed to parse logger config {}", config_source_name))?;
+    let mut deserializers = Deserializers::default();
+    register(&mut deserializers);
+    let (appenders, errors) = raw_config.appenders_lossy(&deserializers);
+    anyhow::ensure!(errors.is_empty(), "Invalid logger config {}: {}", config_source_name, errors);
+    let config = Config::builder()
+        .appenders(appenders)
+        .loggers(raw_config.loggers())
+        .build(raw_config.root())
+        .with_context(|| format!("Invalid logger config {}", config_source_name))?;
+    Ok((config, warnings))
+}
+
+#[cfg(test)]
+fn config_from_value(yaml: serde_yaml::Value, config_source_name: &str) -> anyhow::Result<Config> {
+    config_with_warnings(yaml, config_source_name).map(|(config, _)| config)
+}
+
+/// Register encoders and the console appender.
+pub fn register(deserializers: &mut Deserializers) {
+    deserializers.insert("palette", PaletteEncoderDeserializer);
+    deserializers.insert("console", ConsoleAppenderDeserializer);
+    deserializers.insert("pattern", PatternEncoderDeserializer);
+}
+
+fn share_structured_appenders(yaml: &mut serde_yaml::Value) {
+    let shared: Vec<_> = yaml["root"]["appenders"].as_sequence().into_iter().flatten()
+        .filter(|name| name.as_str().is_some_and(|name| yaml["appenders"][name]["encoder"]["kind"] == "json"))
+        .cloned().collect();
+    let Some(loggers) = yaml.get_mut("loggers").and_then(serde_yaml::Value::as_mapping_mut) else { return; };
+    for (name, logger) in loggers {
+        if !name.as_str().is_some_and(|name| name == "chat_log" || name.starts_with("chat_log::"))
+            || logger["additive"].as_bool() != Some(false) { continue; }
+        let Some(logger) = logger.as_mapping_mut() else { continue; };
+        let appenders = logger.entry(serde_yaml::Value::from("appenders"))
+            .or_insert_with(|| serde_yaml::Value::Sequence(Vec::new()));
+        if let Some(appenders) = appenders.as_sequence_mut() {
+            for name in &shared {
+                if !appenders.contains(name) { appenders.push(name.clone()); }
+            }
+        }
+    }
+}
+
+fn missing_palette_references(yaml: &serde_yaml::Value) -> BTreeSet<String> {
+    let references: BTreeSet<_> = inventory::iter::<crate::logging::inline::PaletteReference>
+        .into_iter().map(|reference| reference.0.to_ascii_lowercase())
+        .filter(|name| !name.is_empty()).collect();
+    let encoders = yaml["appenders"].as_mapping().into_iter()
+        .flat_map(|appenders| appenders.values())
+        .filter(|appender| appender["encoder"]["kind"].as_str() == Some("palette"))
+        .map(|appender| &appender["encoder"]);
+    encoders.flat_map(|encoder| {
+        let names = match encoder["palette"].as_mapping() {
+            Some(palette) => palette.keys().filter_map(|key| key.as_str())
+                .map(str::to_ascii_lowercase).collect(),
+            None => palette::PaletteEncoderConfig::default_names().collect::<BTreeSet<_>>(),
+        };
+        references.iter().filter(move |name| !names.contains(*name)).cloned()
+    }).collect()
+}
+
+fn log_dir_for_base(local_app_data: Option<&Path>, saved_dir_suffix: Option<&str>) -> PathBuf {
+    let suffix = saved_dir_suffix
+        .map(|value| format!("_{}", value))
+        .unwrap_or_default();
+
+    local_app_data
+        .map(|base| base.join(format!(r"Chivalry 2\Saved{suffix}")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Logs")
+}
+
+fn log_dir_for(saved_dir_suffix: Option<&str>) -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").ok();
+    log_dir_for_base(base.as_deref().map(Path::new), saved_dir_suffix)
+}
+
+/// Plugin logs and sidecars use `%LOCALAPPDATA%\Chivalry 2\Saved{suffix}\Logs`
+/// (`./Logs` without LOCALAPPDATA), independently of custom appender paths.
+pub fn plugin_log_dir() -> PathBuf {
+    log_dir_for(cli_args().saved_dir_suffix.as_deref())
+}
+
+fn apply_logger_placeholders(yaml: &str, saved_dir_suffix: Option<&str>) -> String {
+    let log_dir = log_dir_for(saved_dir_suffix);
+
+    if let Err(error) = std::fs::create_dir_all(&log_dir) {
+        eprintln!(
+            "[{}] Failed to create log directory {}: {}",
+            module_path!(),
+            log_dir.display(),
+            error
+        );
+    }
+
+    render_logger_placeholders(yaml, &log_dir)
+}
+
+// Keep rendering independent of the environment, CLI, and filesystem.
+fn render_logger_placeholders(yaml: &str, log_dir: &Path) -> String {
+    let log_path = |name: &str| yaml_escape_double_quoted(&log_dir.join(name).to_string_lossy());
+    yaml.replace(UNCHAINED_LOG_PATH_PLACEHOLDER, &log_path("unchained.log"))
+        .replace(KISMET_LOG_PATH_PLACEHOLDER, &log_path("kismet.log"))
+        .replace(CHAT_LOG_PATH_PLACEHOLDER, &log_path("chat.log"))
+        .replace(BLUEPRINT_LOG_PATH_PLACEHOLDER, &log_path("blueprint.log"))
+}
+
+fn yaml_escape_double_quoted(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logging::test_resources as fixtures;
+    use log::{Level, Log, Metadata, Record};
+    use log4rs::encode::{Encode, EncoderConfig, writer::simple::SimpleWriter};
+
+    #[test]
+    fn plugin_log_paths_preserve_saved_suffix_and_fallback() {
+        let base = Path::new(r#"C:\Users\name "quoted""#);
+        assert_eq!(log_dir_for_base(Some(base), None),
+            base.join(r"Chivalry 2\Saved").join("Logs"));
+        assert_eq!(log_dir_for_base(Some(base), Some("server-2")),
+            base.join(r"Chivalry 2\Saved_server-2").join("Logs"));
+        assert_eq!(log_dir_for_base(None, Some("server-2")), PathBuf::from("./Logs"));
+    }
+
+    #[test]
+    fn logger_placeholders_render_all_paths_without_environment_or_io() {
+        let dir = Path::new("not-created/quote\"backslash\\tab\tline\nreturn\r界");
+        let rendered = render_logger_placeholders(EMBEDDED_LOG4RS_YAML, dir);
+        assert!(!rendered.contains("_LOG_PATH__"));
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+        for (appender, file) in [
+            ("file", "unchained.log"), ("kismet", "kismet.log"),
+            ("chat_file", "chat.log"), ("chat_system_file", "chat.log"),
+            ("blueprint_file", "blueprint.log"),
+        ] {
+            assert_eq!(yaml["appenders"][appender]["path"].as_str().unwrap(),
+                dir.join(file).to_str().unwrap());
+        }
+        let custom = "root: {level: off}\n# no placeholders";
+        assert_eq!(render_logger_placeholders(custom, dir), custom);
+    }
+
+    #[test]
+    fn embedded_blueprint_routes_are_isolated_and_render_kind_and_message() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-blueprint-route-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        let rendered = render_logger_placeholders(EMBEDDED_LOG4RS_YAML, &dir.0);
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+        assert_eq!(yaml["loggers"]["blueprint_log"]["appenders"],
+            serde_yaml::to_value(["blueprint_console", "blueprint_file"]).unwrap());
+        assert_eq!(yaml["loggers"]["blueprint_log"]["additive"], false);
+        assert_eq!(yaml["appenders"]["blueprint_console"]["kind"], "console");
+        let mut registry = Deserializers::default();
+        register(&mut registry);
+        let fields = [("kind", "PrintWarning")];
+        let console = render_encoder(&registry, yaml["appenders"]["blueprint_console"]["encoder"].clone(),
+            &Record::builder().level(Level::Info).key_values(&fields)
+                .args(format_args!("exact 界 message")).build());
+        assert!(String::from_utf8(console).unwrap().contains(" | BP PrintWarning - exact 界 message"));
+        let logger = log4rs::Logger::new(config_from_value(yaml, "blueprint-routing").unwrap());
+        logger.log(&Record::builder().target("ordinary").level(Level::Info)
+            .args(format_args!("ordinary marker")).build());
+        for kind in ["PrintString", "PrintWarning", "PrintText"] {
+            let fields = [("kind", kind)];
+            logger.log(&Record::builder().target("blueprint_log").level(Level::Info)
+                .key_values(&fields).args(format_args!("exact 界 message")).build());
+        }
+        logger.flush();
+        let blueprint = std::fs::read_to_string(dir.0.join("blueprint.log")).unwrap();
+        let ordinary = std::fs::read_to_string(dir.0.join("unchained.log")).unwrap();
+        assert_eq!(blueprint.lines().count(), 3);
+        for kind in ["PrintString", "PrintWarning", "PrintText"] {
+            assert!(blueprint.contains(&format!("BP {kind:<12} - exact 界 message")), "{blueprint}");
+        }
+        assert!(!blueprint.contains("ordinary marker"));
+        assert!(ordinary.contains("ordinary marker"));
+        assert!(!ordinary.contains("exact 界 message"));
+        drop(logger);
+    }
+
+    #[test]
+    fn logger_yaml_precedence_and_read_errors() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-logger-source-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        let check = |override_path: Option<&str>, source: &str, yaml: Option<&str>| {
+            // Each child has its own CWD; do not change it for parallel tests.
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::logger_yaml_source_child", module_path!().split_once("::").unwrap().1)])
+                .current_dir(&dir.0)
+                .env_remove("UNCHAINED_TEST_LOGGER_OVERRIDE")
+                .env("UNCHAINED_TEST_LOGGER_EXPECTED", serde_json::to_string(&(source, yaml)).unwrap());
+            if let Some(path) = override_path { command.env("UNCHAINED_TEST_LOGGER_OVERRIDE", path); }
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        };
+        check(None, EMBEDDED_LOG4RS_DEFAULT_NAME, Some(EMBEDDED_LOG4RS_YAML));
+        std::fs::write(dir.0.join("explicit.yaml"), "root: { level: warn }").unwrap();
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::write(dir.0.join("log4rs.yaml"), "root: { level: info }").unwrap();
+        check(None, "log4rs.yaml", Some("root: { level: info }"));
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        check(Some("missing.yaml"), "missing.yaml", None);
+        std::fs::write(dir.0.join("log4rs.yaml"), [0xff]).unwrap();
+        check(None, "log4rs.yaml", None);
+        check(Some("explicit.yaml"), "explicit.yaml", Some("root: { level: warn }"));
+        std::fs::remove_file(dir.0.join("log4rs.yaml")).unwrap();
+        std::fs::create_dir(dir.0.join("log4rs.yaml")).unwrap();
+        check(None, "log4rs.yaml", None);
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for logger YAML source selection"]
+    fn logger_yaml_source_child() {
+        let override_path = std::env::var("UNCHAINED_TEST_LOGGER_OVERRIDE").ok();
+        let expected = std::env::var("UNCHAINED_TEST_LOGGER_EXPECTED").unwrap();
+        let (source, yaml): (String, Option<String>) = serde_json::from_str(&expected).unwrap();
+        let loaded = load_logger_yaml(override_path.as_deref());
+        match yaml {
+            Some(yaml) => assert_eq!(loaded.unwrap(), (source.as_str(), yaml)),
+            None => assert_eq!(loaded.unwrap_err().to_string(), format!("Failed to read logger config file: {source}")),
+        }
+    }
+
+    #[test]
+    fn invalid_logger_config_reports_pauses_and_resumes_with_defaults() {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-logger-recovery-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+        for (name, contents, override_path, error) in [
+            ("read", &b"\xff"[..], None, "Failed to read logger config file"),
+            ("yaml", &b"["[..], None, "Failed to parse logger config"),
+            ("schema", &b"root: { level: invalid }"[..], None, "Failed to parse logger config"),
+            ("appender", &b"appenders: { bad: { kind: missing } }\nroot: { level: info, appenders: [bad] }"[..], None, "Invalid logger config"),
+            ("explicit", &b"root: { level: off }"[..], Some("missing.yaml"), "Failed to read logger config file"),
+        ] {
+            let cwd = dir.0.join(name);
+            std::fs::create_dir(&cwd).unwrap();
+            std::fs::write(cwd.join("log4rs.yaml"), contents).unwrap();
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command.args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::logger_config_recovery_child", module_path!().split_once("::").unwrap().1)])
+                .current_dir(&cwd).env("LOCALAPPDATA", &cwd).env("NO_COLOR", "1")
+                .env_remove("UNCHAINED_TEST_LOGGER_OVERRIDE");
+            if let Some(path) = override_path { command.env("UNCHAINED_TEST_LOGGER_OVERRIDE", path); }
+            let start = std::time::Instant::now();
+            let output = command.output().unwrap();
+            assert!(output.status.success(), "{name}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            assert!(start.elapsed() >= std::time::Duration::from_secs(5), "{name}: skipped pause");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains(error), "{name}: {stderr}");
+            assert!(stderr.contains(override_path.unwrap_or("log4rs.yaml")), "{name}: {stderr}");
+            assert!(stderr.contains("in 5 seconds"), "{name}: {stderr}");
+            let log = std::fs::read_to_string(cwd.join(r"Chivalry 2\Saved").join("Logs/unchained.log")).unwrap();
+            assert!(log.contains("Rejected logging configuration:"), "{name}: {log}");
+            assert!(log.contains("Logging continued after fallback"), "{name}: {log}");
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for logger configuration recovery"]
+    fn logger_config_recovery_child() {
+        let override_path = std::env::var("UNCHAINED_TEST_LOGGER_OVERRIDE").ok();
+        init_with_path(override_path.as_deref(), None).unwrap();
+        assert!(log::logger().enabled(&Metadata::builder().target("UnchainedPlugin").level(Level::Debug).build()));
+        assert!(!log::logger().enabled(&Metadata::builder().target("UnchainedPlugin").level(Level::Trace).build()));
+        sinfo!("Logging continued after fallback");
+        log::logger().flush();
+    }
+
+    #[test]
+    fn inline_palette_switches_color_console_and_preserve_plain_file_messages() {
+        let path = std::env::temp_dir().join(format!("inline-palette-route-{}.jsonl", std::process::id()));
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", "--nocapture",
+                &format!("{}::inline_palette_child", module_path!().split_once("::").unwrap().1)])
+            .env("UNCHAINED_TEST_INLINE_FILE", &path)
+            .env("CLICOLOR_FORCE", "1").env_remove("NO_COLOR").output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("ordinary"));
+        #[cfg(unix)]
+        {
+            assert!(text.contains("\x1b[0;38;2;18;52;86mafter"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;171;205;239mfirst line\r\n"), "{text:?}");
+            assert!(text.contains("\x1b[0;38;2;254;220;186msecond 7\r\n"), "{text:?}");
+        }
+        let file = std::fs::read_to_string(&path).unwrap();
+        let records: Vec<serde_json::Value> = file.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0]["message"], "ordinary");
+        assert!(records[0]["attributes"].get("inline_colors").is_none());
+        assert_eq!(records[1]["message"], "beforeafterend");
+        let colors: serde_json::Value = serde_json::from_str(records[1]["attributes"]["inline_colors"].as_str().unwrap()).unwrap();
+        assert_eq!(colors, serde_json::json!([
+            {"utf8_offset": 6, "palette": "accent"}, {"utf8_offset": 11, "palette": null}
+        ]));
+        assert_eq!(records[2]["message"], "first line\r\nsecond 7\r\n");
+        assert!(!file.contains("\\u001b"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    #[ignore = "subprocess fixture for inline palette messages"]
+    fn inline_palette_child() {
+        let path = std::env::var("UNCHAINED_TEST_INLINE_FILE").unwrap();
+        let mut yaml = fixtures::config("inline-palette");
+        yaml["appenders"]["file"]["path"] = path.into();
+        log4rs::init_config(config_from_value(yaml, "inline-palette").unwrap()).unwrap();
+        sinfo!("ordinary");
+        sinfo!(("before"), palette("accent"), "after", palette(), "end");
+        sinfo!(palette("first"), "first line\r\n", palette("second"), ("second {}", 7), "\r\n");
+        log::logger().flush();
+    }
+
+    fn render_encoder(registry: &Deserializers, yaml: serde_yaml::Value, record: &Record) -> Vec<u8> {
+        let config: EncoderConfig = serde_yaml::from_value(yaml.clone()).unwrap();
+        let encoder: Box<dyn Encode> = registry.deserialize(&config.kind, config.config)
+            .unwrap_or_else(|error| panic!("{yaml:?}: {error}"));
+        let mut output = Vec::new();
+        encoder.encode(&mut SimpleWriter(&mut output), record).unwrap();
+        output
+    }
+
+    fn console_config(encoder: serde_yaml::Value) -> anyhow::Result<Config> {
+        let mut yaml = fixtures::config("console");
+        yaml["appenders"]["console"]["encoder"] = encoder;
+        config_from_value(yaml, "console-test")
+    }
+
+    #[test]
+    fn embedded_configuration_filters() {
+        let mut yaml: serde_yaml::Value = serde_yaml::from_str(EMBEDDED_LOG4RS_YAML).unwrap();
+        // Exercise the shipped console config without opening log files.
+        yaml["appenders"].as_mapping_mut().unwrap()
+            .retain(|name, _| name.as_str() == Some("console"));
+        yaml["root"]["appenders"] = vec!["console"].into();
+        yaml["loggers"].as_mapping_mut().unwrap()
+            .retain(|name, _| !name.as_str().is_some_and(|name|
+                name.starts_with("chat_log") || name.starts_with("blueprint_log")));
+        let config = config_from_value(yaml, "embedded").unwrap();
+        let logger = log4rs::Logger::new(config);
+        assert!(logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::logging::log4rs").level(Level::Debug).build()));
+        assert!(!logger.enabled(&Metadata::builder()
+            .target("UnchainedPlugin::logging::log4rs").level(Level::Trace).build()));
+        assert!(!logger.enabled(&Metadata::builder()
+            .target("serenity::client").level(Level::Info).build()));
+    }
+
+    #[test_case::test_case("pattern"; "pattern_encoder")]
+    #[test_case::test_case("palette"; "palette_encoder")]
+    fn registered_encoders_reject_invalid_removal_patterns(kind: &str) {
+        assert!(console_config(serde_yaml::to_value(serde_json::json!({
+            "kind": kind, "inline-removals": ["["]
+        })).unwrap()).is_err());
+    }
+
+    #[test_case::test_case(false; "automatically_shared")]
+    #[test_case::test_case(true; "already_shared")]
+    fn isolated_chat_still_reaches_shared_json_appenders_once(already_shared: bool) {
+        let prefix = std::env::temp_dir().join(format!("unchained-chat-routing-{}-{}",
+            std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let normal = prefix.with_extension(format!("{already_shared}.normal"));
+        let chat = prefix.with_extension(format!("{already_shared}.chat"));
+        let json = prefix.with_extension(format!("{already_shared}.json"));
+        let mut yaml = serde_yaml::to_value(serde_json::json!({
+            "appenders": {
+                "normal": {"kind": "file", "path": normal, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "chat": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "system": {"kind": "file", "path": chat, "encoder": {"kind": "pattern", "pattern": "{m}{n}"}},
+                "structured": {"kind": "file", "path": json, "encoder": {"kind": "json"}}
+            },
+            "root": {"level": "info", "appenders": ["normal", "structured"]},
+            "loggers": {
+                "chat_log": {"level": "info", "appenders": ["chat"], "additive": false},
+                "chat_log::system": {"level": "info", "appenders": ["system"], "additive": false},
+                "chat_log::system::sender": {"level": "info", "appenders": ["chat"], "additive": false}
+            }
+        })).unwrap();
+        if already_shared {
+            yaml["loggers"]["chat_log"]["appenders"].as_sequence_mut().unwrap().push("structured".into());
+        }
+        let logger = log4rs::Logger::new(config_from_value(yaml, "chat-routing").unwrap());
+        sinfo!(logger: &logger, target: "ordinary", "ordinary");
+        for _ in 0..2 {
+            sinfo!(logger: &logger, target: "chat_log::team", "hello");
+        }
+        sinfo!(logger: &logger, target: "chat_log::system", "notice");
+        sinfo!(logger: &logger, target: "chat_log::system::sender", "console");
+        logger.flush();
+        assert_eq!(std::fs::read_to_string(&normal).unwrap().lines().collect::<Vec<_>>(), ["ordinary"]);
+        assert_eq!(std::fs::read_to_string(&chat).unwrap().lines().collect::<Vec<_>>(), ["hello", "hello", "notice", "console"]);
+        let records: Vec<serde_json::Value> = std::fs::read_to_string(&json).unwrap().lines()
+            .map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(records.iter().map(|record| (record["target"].as_str().unwrap(), record["message"].as_str().unwrap()))
+            .collect::<Vec<_>>(), [("ordinary", "ordinary"), ("chat_log::team", "hello"),
+                ("chat_log::team", "hello"), ("chat_log::system", "notice"), ("chat_log::system::sender", "console")]);
+        drop(logger);
+        for path in [&normal, &chat, &json] { std::fs::remove_file(path).unwrap(); }
+    }
+
+    #[test_case::test_case("{palette(error)}}}{m}", "}message"; "closing_brace")]
+    #[test_case::test_case("{{{palette(error)}{l}{palette()}}}", "{INFO}"; "surrounding_braces")]
+    #[test_case::test_case("{palette(error)}}}}}{m}", "}}message"; "repeated_closing_braces")]
+    #[test_case::test_case(r"{palette(error)}\}{m}", "}message"; "backslash_escape")]
+    #[test_case::test_case("{palette(error)}{{{m}}}", "{message}"; "escaped_message_braces")]
+    #[test_case::test_case("{palette(error)}{palette()}}}{m}", "}message"; "reset_before_escape")]
+    #[test_case::test_case("{palette({l})}}}{m}", "}message"; "dynamic_name")]
+    #[test_case::test_case("{palette(a}}b)}{m}", "message"; "name_closing_brace")]
+    #[test_case::test_case("{palette(a{{b)}{m}", "message"; "name_opening_brace")]
+    #[test_case::test_case("{palette(a))}}b)}}}{m}", "}message"; "name_escaped_delimiters")]
+    #[test_case::test_case(r"{palette(a\)\}b)}}}{m}", "}message"; "name_backslash_delimiters")]
+    #[test_case::test_case(r"\{palette\(missing\)\}{palette()}{h({m})}", "{palette(missing)}message"; "literal_directive")]
+    fn registered_palette_encoder_preserves_directive_boundary_escapes(pattern: &str, expected: &str) {
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        let mut yaml = fixtures::encoder("boundary-escapes");
+        yaml["pattern"] = pattern.into();
+        let output = render_encoder(&deserializers, yaml, &Record::builder()
+            .level(Level::Info).args(format_args!("message")).build());
+        assert_eq!(String::from_utf8(output).unwrap(), expected);
+    }
+
+    #[test_case::test_case("m", '{', '>'; "opening_brace")]
+    #[test_case::test_case("m", '}', '<'; "closing_brace")]
+    #[test_case::test_case("({m})", '{', '<'; "nested_opening_brace")]
+    #[test_case::test_case("h({m})", '}', '>'; "highlight_closing_brace")]
+    #[test_case::test_case("m", '🦀', '>'; "unicode")]
+    #[test_case::test_case("({m})", '🦀', '<'; "nested_unicode")]
+    #[test_case::test_case("({m})", '\\', '<'; "nested_backslash")]
+    #[test_case::test_case("m", '(', '<'; "opening_parenthesis")]
+    #[test_case::test_case("h({m})", ')', '>'; "highlight_closing_parenthesis")]
+    fn registered_palette_encoder_preserves_native_format_fills(formatter: &str, fill: char, align: char) {
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        let record = Record::builder().level(Level::Info).args(format_args!("message")).build();
+        let native = format!("{{{formatter}:{fill}{align}20}}tail");
+        let mut expected = Vec::new();
+        log4rs::encode::pattern::PatternEncoder::new(&native)
+            .encode(&mut SimpleWriter(&mut expected), &record).unwrap();
+        let pattern = format!("{{palette(error)}}{{{formatter}:{fill}{align}20}}{{palette()}}tail");
+        let mut yaml = fixtures::encoder("module-palette");
+        yaml["pattern"] = pattern.as_str().into();
+        let output = render_encoder(&deserializers, yaml, &record);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn native_fill_before_palette_directive_is_preserved() {
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        let output = render_encoder(&deserializers, fixtures::encoder("native-fill"),
+            &Record::builder().args(format_args!("message")).build());
+        assert_eq!(output, b"{{{{{{{{{{{{{messagetail");
+    }
+
+    #[test_case::test_case("l", '{', '>'; "opening_brace")]
+    #[test_case::test_case("level", '}', '<'; "closing_brace")]
+    #[test_case::test_case("level", '🦀', '>'; "unicode")]
+    #[test_case::test_case("l", '\\', '<'; "backslash")]
+    #[test_case::test_case("l", '(', '>'; "opening_parenthesis")]
+    #[test_case::test_case("level", ')', '<'; "closing_parenthesis")]
+    fn registered_palette_names_accept_native_level_format_fills(field: &str, fill: char, align: char) {
+        let mut deserializers = Deserializers::default();
+        register(&mut deserializers);
+        let name = format!("{{{field}:{fill}{align}8}}");
+        let mut palette = std::collections::BTreeMap::<String, Option<String>>::new();
+        for level in [Level::Error, Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+            let mut key = Vec::new();
+            log4rs::encode::pattern::PatternEncoder::new(&name).encode(&mut SimpleWriter(&mut key),
+                &Record::builder().level(level).build()).unwrap();
+            palette.insert(String::from_utf8(key).unwrap(), None);
+        }
+        let pattern = format!("{{palette({name})}}{{m}}{{palette()}}}}}}");
+        let mut yaml = fixtures::encoder("module-palette");
+        yaml["pattern"] = pattern.as_str().into();
+        yaml["palette"] = serde_yaml::to_value(palette).unwrap();
+        let output = render_encoder(&deserializers, yaml,
+            &Record::builder().level(Level::Info).args(format_args!("message")).build());
+        assert_eq!(output, b"message}");
+    }
+
+    #[test]
+    fn invalid_palette_configuration_is_rejected() {
+        for options in fixtures::encoder("invalid").as_sequence().unwrap() {
+            let mut yaml = options.clone();
+            yaml["kind"] = "palette".into();
+            assert!(console_config(yaml).is_err(), "{options:?}");
+        }
+    }
+
+    #[test]
+    fn schema_errors_preserve_config_source_and_cause() {
+        let mut yaml = fixtures::config("console");
+        yaml["root"]["level"] = "invalid-level".into();
+        let error = config_from_value(yaml, "invalid-level-fixture").unwrap_err();
+        assert_eq!(error.to_string(), "Failed to parse logger config invalid-level-fixture");
+        assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("invalid-level")));
+    }
+
+    #[test]
+    fn appender_errors_preserve_config_source_and_kind() {
+        let mut yaml = fixtures::config("console");
+        yaml["appenders"]["console"]["kind"] = "missing-appender-kind".into();
+        let error = config_from_value(yaml, "invalid-appender-fixture").unwrap_err();
+        assert!(error.to_string().starts_with("Invalid logger config invalid-appender-fixture:"));
+        assert!(error.to_string().contains("missing-appender-kind"));
+    }
+
+    #[test]
+    fn missing_appender_errors_preserve_config_source_and_cause() {
+        let mut yaml = fixtures::config("console");
+        yaml["root"]["appenders"] = vec!["missing-appender"].into();
+        let error = config_from_value(yaml, "invalid-root-fixture").unwrap_err();
+        assert_eq!(error.to_string(), "Invalid logger config invalid-root-fixture");
+        assert!(error.chain().skip(1).any(|cause| cause.to_string().contains("missing-appender")));
+    }
+
+    #[test_case::test_matrix(["file", "rolling_file"], [None, Some("pattern")])]
+    fn file_appenders_support_registered_pattern_aliases(appender_kind: &str, encoder_kind: Option<&str>) {
+        struct TempDir(PathBuf);
+        impl Drop for TempDir {
+            fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+        }
+        let dir = TempDir(std::env::temp_dir().join(format!("unchained-file-pattern-{}-{}",
+            std::process::id(), std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())));
+        std::fs::create_dir(&dir.0).unwrap();
+
+        let fields = [("enclosing_function", "file_fixture")];
+        let record = Record::builder().key_values(&fields).args(format_args!("message")).build();
+        let path = dir.0.join("output.log");
+        let mut yaml = fixtures::config("file-pattern");
+        let file = &mut yaml["appenders"]["file"];
+        file["kind"] = appender_kind.into();
+        file["path"] = path.to_string_lossy().as_ref().into();
+        file["encoder"]["pattern"] = "{fn}|{m}{n}".into();
+        if let Some(kind) = encoder_kind { file["encoder"]["kind"] = kind.into(); }
+        if appender_kind == "rolling_file" { file["policy"] = fixtures::config("rolling-policy"); }
+        let config = config_from_value(yaml, "file-pattern-test").unwrap();
+        let logger = log4rs::Logger::new(config);
+        logger.log(&record);
+        logger.flush();
+        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().collect::<Vec<_>>(), ["file_fixture|message"]);
+    }
+
+    #[test]
+    fn console_adapter_preserves_builtin_configuration_validation() {
+        for options in fixtures::appender("valid").as_sequence().unwrap() {
+            let mut yaml = fixtures::config("console");
+            yaml["appenders"]["console"] = options.clone();
+            config_from_value(yaml, "console-options").unwrap();
+        }
+        for options in fixtures::appender("invalid").as_sequence().unwrap() {
+            let mut yaml = fixtures::config("console");
+            yaml["appenders"]["console"] = options.clone();
+            let error = config_from_value(yaml, "invalid-console-options").unwrap_err();
+            assert!(error.to_string().contains("invalid-console-options"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn inherit_only_palettes_preserve_channels_at_real_console_boundary() {
+        let mut failures = Vec::new();
+        for target in ["stdout", "stderr"] {
+            for (fixture, update) in [
+                ("inherit_foreground", "\x1b[49m"),
+                ("inherit_background", "\x1b[39m"),
+                ("inherit_both", ""),
+                ("inherit_reset", "\x1b[0m"),
+            ] {
+                for unused_rgb in [false, true] {
+                    let output = std::process::Command::new(std::env::current_exe().unwrap())
+                        .args(["--ignored", "--exact", "--nocapture",
+                            &format!("{}::inherit_console_child", module_path!().split_once("::").unwrap().1)])
+                        .env("UNCHAINED_TEST_INHERIT_FIXTURE", fixture)
+                        .env("UNCHAINED_TEST_CONSOLE_TARGET", target)
+                        .env("UNCHAINED_TEST_UNUSED_RGB", unused_rgb.to_string())
+                        .env("CLICOLOR_FORCE", "1").env_remove("NO_COLOR").env_remove("CLICOLOR")
+                        .output().unwrap();
+                    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+                    let bytes = if target == "stdout" { &output.stdout } else { &output.stderr };
+                    let expected = format!("inherit-boundary:\x1b[38;2;18;52;86;48;2;171;205;239mA{update}B\x1b[0mC");
+                    let text = String::from_utf8_lossy(bytes);
+                    if !text.contains(&expected) {
+                        failures.push(format!("{target}/{fixture}/unused_rgb={unused_rgb}: {text:?}"));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "subprocess fixture for inherit-only console palettes"]
+    fn inherit_console_child() {
+        let fixture = std::env::var("UNCHAINED_TEST_INHERIT_FIXTURE").unwrap();
+        let mut appender = fixtures::appender(&fixture);
+        appender["target"] = std::env::var("UNCHAINED_TEST_CONSOLE_TARGET").unwrap().into();
+        if std::env::var("UNCHAINED_TEST_UNUSED_RGB").unwrap() == "true" {
+            appender["encoder"]["palette"]["unused"] = "#112233".into();
+        }
+        let mut yaml = fixtures::config("console");
+        yaml["appenders"]["console"] = appender;
+        let logger = log4rs::Logger::new(config_from_value(yaml, "inherit-console-child").unwrap());
+        logger.log(&Record::builder().args(format_args!(
+            "inherit-boundary:\x1b[38;2;18;52;86;48;2;171;205;239mA")).build());
+        logger.flush();
+    }
+}

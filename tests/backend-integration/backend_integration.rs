@@ -1,5 +1,5 @@
 //! Exercise the plugin ban-check bridge against the real backend.
-#[path = "../../src/features/server_browser/http.rs"]
+#[path = "../../unchained-plugin/src/features/server_browser/http.rs"]
 mod http;
 mod support;
 use server_browser_client::{apis::api_v1_api as api, models::IpListRequest};

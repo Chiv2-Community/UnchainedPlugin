@@ -114,7 +114,7 @@ fn clean_build(plugin_name: &str) -> Result<()> {
 fn build(plugin_name: &str) -> Result<()> {
     println!("Building {}...", plugin_name);
     let status = Command::new("cargo")
-        .args(["build"])
+        .args(["build", "-p", plugin_name])
         .status()
         .context("Failed to run cargo build")?;
 
@@ -126,7 +126,7 @@ fn build(plugin_name: &str) -> Result<()> {
 
 fn get_project_info(project_root: &std::path::Path) -> Result<(String, String)> {
     let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(project_root.join("Cargo.toml"))
+        .manifest_path(project_root.join("unchained-plugin/Cargo.toml"))
         .exec()
         .context("Failed to get cargo metadata")?;
 
@@ -147,13 +147,9 @@ fn get_project_info(project_root: &std::path::Path) -> Result<(String, String)> 
 }
 
 fn get_project_root() -> Result<PathBuf> {
-    let mut path = env::current_dir()?;
-    while !path.join("Cargo.toml").exists() {
-        if let Some(parent) = path.parent() {
-            path = parent.to_path_buf();
-        } else {
-            return Err(anyhow!("Could not find project root"));
-        }
-    }
-    Ok(path)
+    Ok(cargo_metadata::MetadataCommand::new()
+        .no_deps()
+        .exec()?
+        .workspace_root
+        .into_std_path_buf())
 }

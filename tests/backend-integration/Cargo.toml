@@ -3,11 +3,15 @@ name = "plugin-backend-integration-tests"
 version = "0.1.0"
 edition = "2021"
 publish = false
+build = "../../build/build.rs"
+
+[build-dependencies]
+unchained-build-plan.workspace = true
 
 # Test-only harness: no adapter library and no runtime consumers.
 [[test]]
 name = "cli_args"
-path = "../../src/tools/cli_args.rs"
+path = "cli_args.rs"
 
 [[test]]
 name = "a2s_transport"
@@ -35,7 +39,7 @@ container-tests = ["dep:testcontainers"]
 move-autonomous-desync = []
 
 [dependencies]
-testcontainers = { version = "=0.28.0", features = ["blocking"], optional = true }
+testcontainers = { workspace = true, optional = true }
 
 [dev-dependencies]
 clap = { workspace = true }

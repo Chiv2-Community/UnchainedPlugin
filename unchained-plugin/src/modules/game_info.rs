@@ -1,0 +1,87 @@
+
+use crate::commands::Command;
+use crate::events::models::{CommandRequest, CommandSource, PermissionFlags};
+use crate::Chivalry2::TBL::ATBLGameMode;
+use crate::Chivalry2::Engine::PlayerFlags;
+use crate::Chivalry2::TBL::UTBLSystemLibrary;
+use crate::Chivalry2::Engine::AsUObject;
+use async_trait::async_trait;
+use clap::Parser;
+use itertools::Itertools;
+
+#[derive(Parser, Clone)]
+#[command(name = "game-info", about = "show game info")]
+pub struct GameInfoArgs {}
+
+pub struct GameInfoCommand;
+
+#[async_trait]
+impl Command<GameInfoArgs> for GameInfoCommand {
+    fn required_permissions(&self) -> PermissionFlags { PermissionFlags::ADMIN }
+    fn required_source(&self) -> Option<CommandSource> { Some(CommandSource::ServerConsole) }
+    async fn execute(&self, _args: GameInfoArgs, _command: &CommandRequest) {
+        use crate::unchained::patches::unchained_integration::game_thread::run_on_game_thread;
+        run_on_game_thread(move || {
+            if let Some(world) = crate::globals().world() {
+                let game_ptr = unsafe { UTBLSystemLibrary::GetTBLGameMode(world.as_uobject()) };
+
+                let game = unsafe { game_ptr.as_mut() };
+                if let Some(g) = &game {
+                    log_game_info(g);
+                }
+
+                match unsafe { (game, world.as_mut().and_then(|w| w.game_state.as_mut())) } {
+                    (Some(_), Some(game_state)) => {
+                        for player_raw in game_state.player_array.as_mut_slice() {
+                            let player_state = match unsafe { (player_raw).as_mut() } {
+                                Some(ps) => ps,
+                                None => {
+                                    swarn!("PlayerState was null");
+                                    continue;
+                                }
+                            };
+                            let pname = player_state.base.player_name_private.to_string();
+                            sinfo!("{}", pname);
+                            let mut flags = "".to_string();
+                            if player_state.base.player_flags.contains(PlayerFlags::IS_SPECTATOR) {
+                                flags.push_str("spectator|");
+                            }
+                            if player_state.base.player_flags.contains(PlayerFlags::ONLY_SPECTATOR) {
+                                flags.push_str("onlyspectator|");
+                            }
+                            if player_state.base.player_flags.contains(PlayerFlags::IS_A_BOT) {
+                                flags.push_str("bot|");
+                            }
+
+                            sinfo!("{}({:?}){}|{}, score: {}, K:{}, A:{}, D:{}, IP:{}",
+                                flags,
+                                player_state.base.player_flags,
+                                player_state.base.player_id,
+                                player_state.base.player_name_private,
+                                player_state.player_score,
+                                player_state.kills,
+                                player_state.assists,
+                                player_state.deaths,
+                                player_state.base.saved_network_address,
+                            );
+                        }
+                    },
+                    (g, gs) => {
+                        if g.is_none() { serror!("GameMode was null"); }
+                        if gs.is_none() { serror!("GameState was null"); }
+                    }
+                }
+            } else {
+                swarn!("globals.world was None; skipping game info collection");
+            }
+        });
+    }
+}
+
+fn log_game_info(game: &ATBLGameMode) {
+    sinfo!("Name:{}", game.server_name);
+    let maplist = game.maplist.as_slice().iter().join(", ");
+    sinfo!("MapList:{}", maplist);
+    sinfo!("Idle disconnect:{}", game.idle_kick_timer_disconnect);
+    sinfo!("Idle spectate:{}", game.idle_kick_timer_spectate);
+}

@@ -1,4 +1,4 @@
-#[path = "../../src/features/server_browser/a2s_query.rs"]
+#[path = "../../unchained-plugin/src/features/server_browser/a2s_query.rs"]
 mod a2s_query;
 use a2s::errors::Error;
 use std::num::NonZeroUsize;

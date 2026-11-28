@@ -1,33 +1,93 @@
-[package]
-name = "UnchainedPlugin"
-version = "1.0.1"
-edition = "2021"
-
 [workspace]
-members = [".", "sleuth_macros", "xtask", "tests/backend-integration"]
+resolver = "2"
+default-members = ["unchained-plugin"]
+members = [
+    "xtask",
+    "build/plan",
+    "unchained-plugin",
+    "unchained-macros-core", "unchained-macros-core/impl",
+    "unchained-macros-patternsleuth", "unchained-macros-patternsleuth/impl",
+    "unchained-macros-kismet", "unchained-macros-kismet/impl",
+    "unchained-macros-native-docs-generator",
+    "tests/backend-integration"]
 
 [workspace.dependencies]
-clap = { version = "4.5.0", features = ["derive"] }
-censor = "0.3.0"
-serde = { version = "1.0.195", features = ["derive"] }
-backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
 a2s = { git = "https://github.com/Knutschbert/a2s-rs.git", rev = "0376331", features = ["async"] }
+# Must unify with repak's AES version for encrypted pak indexes.
+aes = "0.8"
+anyhow = "1.0.79"
+async-trait = "0.1"
+backon = { version = "1.6", default-features = false, features = ["std", "tokio-sleep"] }
+base64 = "0.22"
+binary_bloodhound = { git = "https://github.com/Jacoby6000/binarybloodhound", rev = "4f188fd5dec3d8310351b3dab33d29c74e0ac799", default-features = false, features = ["image-pe"] }
+bitflags = "2.4.1"
+cargo_metadata = "0.19"
+censor = "0.3.0"
+clap = { version = "4.5.0", features = ["derive"] }
+crc32c = "0.6.8"
+crossbeam-channel = "0.5"
+discord-http = { package = "reqwest", version = "0.13", default-features = false, features = ["native-tls"] }
+dotenvy = "0.15"
+embed-resource = "3.0"
+emojis = "0.6"
+fs_extra = "1.3"
+futures = "0.3.31"
+get_if_addrs = "0.5"
+git2 = { version = "0.21", default-features = false }
+hex = "0.4"
+iced-x86 = { version = "1.21.0", default-features = false, features = ["std", "decoder", "instr_info"] }
+inventory = "0.3.14"
+itertools = "0.14.0"
+log = "0.4"
+log4rs = { version = "1.4.0", features = ["log_kv", "json_encoder", "gzip"] }
+memchr = "2"
+memmap2 = "0.9.4"
+object = "0.32.2"
+parking_lot = "0.12.1"
+paste = "1.0"
+# Share Bloodhound's scan context; Cargo.lock pins this branch to a commit.
+patternsleuth = { git = "https://github.com/Jacoby6000/patternsleuth", branch = "feature/memory-testkit", features = ["process-internal", "serde-resolvers", "image-pe"] }
+pdb = "0.8.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+rand = "0.9.2"
+regex = "1.11"
+# The crates.io repak is unrelated; use trumank/repak for pak index reads.
+repak = { git = "https://github.com/trumank/repak" }
+reqwest = "0.12.19"
+retour = "=0.4.0-alpha.4"
+rust-ctables = { git = "https://github.com/Chiv2-Community/rust-ctables.git", rev = "45459669b4e6807ed6fba96bb225a097a65a34a8" }
+serde = { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.111"
+serde_urlencoded = "0.7"
+serde_yaml = "0.9"
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "model", "native_tls_backend"] }
 server-browser-client = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha.3" }
 server-browser-client-sdk = { git = "https://github.com/Chiv2-Community/C2ServerBrowserBackend.git", tag = "v1.3.0-alpha.3" }
-reqwest = "0.12.19"
+shlex = "1.3.0"
+strum = { version = "0.26", features = ["derive"] }
+syn = "2.0"
 test-case = "3.3"
+testcontainers = { version = "=0.28.0", features = ["blocking"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-
-[[bin]]
-name = "mock_server"
-path = "src/bin/mock_server.rs"
-
-[lib]
-name = "UnchainedPlugin"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
-[target.x86_64-pc-windows-msvc]
+toml = "0.8"
+tracing = "0.1.40"
+tree-sitter = "0.24"
+tree-sitter-cpp = "0.23"
+unchained-build-plan = { path = "build/plan" }
+unchained-macros-core = { path = "unchained-macros-core" }
+unchained-macros-core-impl = { path = "unchained-macros-core/impl" }
+unchained-macros-kismet = { path = "unchained-macros-kismet" }
+unchained-macros-kismet-impl = { path = "unchained-macros-kismet/impl" }
+unchained-macros-native-docs-generator = { path = "unchained-macros-native-docs-generator" }
+unchained-macros-patternsleuth = { path = "unchained-macros-patternsleuth" }
+unchained-macros-patternsleuth-impl = { path = "unchained-macros-patternsleuth/impl" }
+unicode-segmentation = "1.12"
+url = "2"
+widestring = "1.0.2"
+winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser", "excpt"] }
+windows = "0.52.0"
 
 [profile.dev]
 debug = "full"
@@ -41,130 +101,6 @@ opt-level = 1
 panic = "unwind"
 lto = false
 
-
-
-[build-dependencies]
-embed-resource = "3.0"
-git2 = { version = "0.21", default-features = false }
-
-[lints.rust]
-non_snake_case = "allow"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(rust_analyzer)'] }
-
-[features]
-default = [
-        "serde-resolvers",
-        "dev",
-        # "loose_assets",
-        "verbose_hooks",
-        "cli_commands",
-        "rcon_commands",
-        "server_registration",
-        "mod_management",
-        "discord_integration",
-        # "request_dummy_hooks",
-        "syslog-client",
-        # "config_overrides_verbose_hooks",
-        # "map_profiles",
-        ]
-serde-resolvers = []
-image-elf = []
-dev = []
-syslog-client = [  ]
-request_dummy_hooks = [] # Enable Get*Post dummy hooks
-kismet_log = [] # Dump kismetexecutionmessage logs
-with_pdb = ["pdb"]
-loose_assets = [] # Load assets in addition to paks
-verbose_hooks = [] # print (some) hook triggers to console
-config_overrides_verbose_hooks = [] # print (config_override) hook triggers to console
-map_profiles = [] # ini-overrides: replace the map-indices layer with map-profiles looked up from unchained.yaml
-cli_commands = [] # process commands from plugin windows
-rcon_commands = [] # process commands from rcon
-server_registration = ["a2s", "backon", "tokio"] # register server with backend
-mod_management = [] # info about mod markers and actors
-discord_integration = [ "tokio", "crossbeam-channel", "serenity", "discord-http" ]
-move-autonomous-desync = []
-loading_screen_texture_fallback = [] # GetDataForMap: if no config is injected/found, patch only the texture FName
-
-
-[dependencies]
-backon = { workspace = true, optional = true }
-server-browser-client = { workspace = true }
-server-browser-client-sdk = { workspace = true }
-# patternsleuth = { git = "https://github.com/trumank/patternsleuth.git", rev = "5786164", features = ["process-internal", "serde-resolvers", "image-pe"] }
-patternsleuth = { git = "https://github.com/Knutschbert/patternsleuth.git", rev = "644f980", features = ["process-internal", "serde-resolvers", "image-pe"] }
-anyhow = "1.0.79"
-# Pak index reads for off-thread mod-map discovery. The crates.io `repak`
-# crate is an unrelated name-squatter; use trumank/repak.
-repak = { git = "https://github.com/trumank/repak" }
-# AES-256 key pass-through for paks with encrypted indexes (must unify with
-# repak's own aes version).
-aes = "0.8"
-base64 = "0.22"
-hex = "0.4"
-serde = { workspace = true }
-serde_json = "1.0.111"
-serde_yaml = "0.9"
-serde_urlencoded = "0.7"
-tracing = "0.1.40"
-futures = "0.3.31"
-paste = "1.0"
-memmap2 = "0.9.4"
-widestring = "1.0.2"
-bitflags = "2.4.1"
-log = { version = "0.4", features = ["kv"] }
-log4rs = { version = "1.4.0", features = ["log_kv", "json_encoder", "gzip"] }
-parking_lot = "0.12.1"
-inventory = "0.3.14"
-regex = "1.11"
-itertools = "0.14.0"
-# server registration
-a2s = { workspace = true, optional = true }
-reqwest = { workspace = true }
-get_if_addrs = "0.5"
-# discord<
-async-trait = "0.1"
-# pdb loading (local tests)
-pdb = { version = "0.8.0", optional = true }
-retour = { version = "=0.4.0-alpha.4", features = ["static-detour"]}
-clap = { workspace = true } # cli arg parsing
-winapi = { version = "0.3.9", features = ["winnt", "wincrypt", "winuser", "excpt"] }
-windows = { version = "0.52.0", features = ["Win32_Foundation",
-            "Win32_System_Console", 
-            "Win32_System_Registry",
-            "Win32_System_LibraryLoader", 
-            "Win32_System_SystemServices",
-            "Win32_Graphics_Gdi", 
-            "Win32_Graphics_Direct3D", 
-            "Win32_Graphics_Direct3D11",
-            "Win32_Graphics_Dxgi", 
-            "Win32_Graphics_Dxgi_Common",
-            "Win32_UI_WindowsAndMessaging",
-            "Win32_System_Threading",
-            "Win32_System_Diagnostics_Debug",
-
-            "Win32_Security",
-            "Win32_System_Kernel",
-            "Win32_System_Memory",
-            "Win32_System_ProcessStatus",
-            ]}
-tokio = { workspace = true, optional = true }
-tokio-util = { workspace = true }
-serenity = { version = "0.12", optional = true, default-features = false, features = ["client", "gateway", "model", "native_tls_backend"] }
-discord-http = { package = "reqwest", version = "0.13", optional = true, default-features = false, features = ["native-tls"] }
-shlex = "1.3.0"
-crossbeam-channel = { version = "0.5", optional = true}
-rand = "0.9.2"
-censor = { workspace = true }
-crc32c = "0.6.8"
-strum = { version = "0.26", features = ["derive"] }
-emojis = "0.6"
-unicode-segmentation = "1.12"
-
-[dev-dependencies]
-test-case = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }
 [patch.crates-io]
-# Pinned fork commit for the trampoline/Box64/Wine fixes used by this project.
-# retour = { path = "vendor/retour" }
-retour = { git = "https://github.com/Chiv2-Community/retour-rs", rev = "61e6cb966c040ace5e5f4ab9964cdae60f7ce0e1" }
+# Lifetime-aware detours; pin the published fork commit for reproducible builds.
+retour = { git = "https://github.com/Chiv2-Community/retour-rs", rev = "7c34b70b60115041bd18ec636cdba9f6d2e97c35" }
